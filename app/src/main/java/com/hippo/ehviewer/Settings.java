@@ -25,6 +25,7 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.net.Uri;
 import android.preference.PreferenceManager;
+import android.text.TextUtils;
 import android.util.Log;
 import androidx.annotation.DimenRes;
 import androidx.annotation.NonNull;
@@ -655,6 +656,15 @@ public class Settings {
 
     public static void putDoubleTapZoom(boolean value) {
         putBoolean(KEY_DOUBLE_TAP_ZOOM, value);
+    }
+
+    public static final String KEY_SEARCH_LANGUAGE = "search_language";
+    private static final String DEFAULT_SEARCH_LANGUAGE = "chinese";
+
+    @NonNull
+    public static String getSearchLanguage() {
+        String language = getString(KEY_SEARCH_LANGUAGE, DEFAULT_SEARCH_LANGUAGE);
+        return TextUtils.isEmpty(language) ? DEFAULT_SEARCH_LANGUAGE : language;
     }
 
     private static final String KEY_KEEP_SCREEN_ON = "keep_screen_on";

@@ -1,53 +1,30 @@
 package com.hippo.ehviewer.updater
 
 import android.app.Activity
-import android.content.Context
-import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.alibaba.fastjson.JSON
-import com.alibaba.fastjson.JSONException
+import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.hippo.ehviewer.Analytics
-import com.hippo.ehviewer.AppConfig
 import com.hippo.ehviewer.BuildConfig
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.ui.dialog.UpdateDialog
-import com.hippo.lib.yorozuya.FileUtils
-import com.hippo.lib.yorozuya.IOUtils
 import com.hippo.util.AppHelper.Companion.compareVersion
 import com.hippo.util.ExceptionUtils
 import com.hippo.util.IoThreadPoolExecutor
-import okhttp3.OkHttpClient
 import okhttp3.Request
-import okio.BufferedSource
-import okio.buffer
-import okio.source
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 import java.util.Date
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.Volatile
 
-class AppUpdater(private val name: String, source: BufferedSource) {
-    private val updateData: JSONObject
-
-
-    init {
-        val jsonObject: JSONObject = try {
-            JSONObject.parseObject(source.readUtf8())
-        } catch (e: JSONException) {
-            JSONObject()
-        }
-        updateData = jsonObject
-    }
+class AppUpdater private constructor() {
 
     companion object {
-        private const val TAG = "AppUpdater"
+        private const val GITHUB_LATEST_RELEASE_API =
+            "https://api.github.com/repos/Nazh1123/Ehviewer_CN_SXJ/releases/latest"
 
         const val VERSION: String = "version"
         const val VERSION_CODE: String = "versionCode"
@@ -57,53 +34,13 @@ class AppUpdater(private val name: String, source: BufferedSource) {
         const val TITLE: String = "title"
         const val CONTENT: String = "content"
 
-        @Volatile
-        private var instance: AppUpdater? = null
-
-        // TODO more lock for different language
         private val lock: Lock = ReentrantLock()
-
-        fun getInstance(context: Context): AppUpdater? {
-            if (isPossible(context)) {
-                return instance
-            } else {
-                instance = null
-                return null
-            }
-        }
-
-        fun isPossible(context: Context): Boolean {
-            return getMetadata(context) != null
-        }
-
-        private fun getMetadata(context: Context): Array<String>? {
-            val metadata = context.resources.getStringArray(R.array.update_metadata)
-            return if (metadata.size == 2) {
-                metadata
-            } else {
-                null
-            }
-        }
+        private val numericVersion = Regex("\\d+(?:\\.\\d+)+")
 
         @JvmStatic
         fun update(activity: Activity, manualChecking: Boolean) {
-            val urls = getMetadata(activity)
-            if (urls == null || urls.size != 2) {
-                // Clear tags if it's not possible
-                instance = null
+            if (!manualChecking && !Settings.getIsUpdateTime()) {
                 return
-            }
-
-
-            if (!Settings.getIsUpdateTime() && !manualChecking) {
-                return
-            }
-            val dataName = urls[0]
-            val dataUrl = urls[1]
-            // Clear tags if name if different
-            val tmp = instance
-            if (tmp != null && tmp.name != dataName) {
-                instance = null
             }
 
             IoThreadPoolExecutor.instance.execute {
@@ -111,140 +48,89 @@ class AppUpdater(private val name: String, source: BufferedSource) {
                     return@execute
                 }
                 try {
-                    val dir = AppConfig.getFilesDir("update-json") ?: return@execute
-
-                    val dataFile = File(dir, dataName)
-                    // Read current AppUpdater
-                    if (instance == null && dataFile.exists()) {
-                        try {
-                            dataFile.source().buffer().use { source ->
-                                instance = AppUpdater(dataName, source)
-                            }
-                        } catch (e: IOException) {
-                            FileUtils.delete(dataFile)
+                    val client = EhApplication.getOkHttpClient(EhApplication.getInstance())
+                    val request = Request.Builder()
+                        .url(GITHUB_LATEST_RELEASE_API)
+                        .header("Accept", "application/vnd.github+json")
+                        .header("User-Agent", "EhViewerNz/${BuildConfig.VERSION_NAME}")
+                        .build()
+                    val release = client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            throw IllegalStateException("GitHub returned HTTP ${response.code()}")
                         }
+                        val body = response.body()?.string()
+                            ?: throw IllegalStateException("GitHub returned an empty response")
+                        JSON.parseObject(body)
                     }
 
-                    val client =
-                        EhApplication.getOkHttpClient(EhApplication.getInstance())
+                    Settings.putUpdateTime(Date().time)
+                    val latestVersion = extractVersion(release.getString("tag_name"))
+                        ?: extractVersion(release.getString("name"))
+                        ?: throw IllegalStateException("Release version is missing")
+                    val currentVersion = extractVersion(BuildConfig.VERSION_NAME)
+                        ?: BuildConfig.VERSION_NAME
 
-                    // Save new json data
-                    val tempDataFile = File(dir, "$dataName.tmp")
-                    if (!save(client, dataUrl, tempDataFile)) {
-                        if (manualChecking) {
-                            UpdateDialog(activity).showCheckFailDialog()
-                        }
-                        FileUtils.delete(tempDataFile)
-                        return@execute
-                    }
-
-                    val needUpdate: Boolean
-                    // 使用FastJSON的parseObject方法解析JSON内容
-                    val tempUpdateData =
-                        JSON.parseObject(FileUtils.read(tempDataFile))
-
-                    // Check new data
-                    needUpdate = if (instance != null) {
-                        checkData(
-                            instance!!.updateData,
-                            tempUpdateData,
-                            manualChecking
-                        )
-                    } else {
-                        checkData(null, tempUpdateData, manualChecking)
-                    }
-
-                    if (!needUpdate) {
-                        FileUtils.delete(tempDataFile)
+                    if (compareVersion(currentVersion, latestVersion) >= 0) {
                         if (manualChecking) {
                             ContextCompat.getMainExecutor(activity).execute {
-                                Toast.makeText(activity, R.string.update_to_date, Toast.LENGTH_LONG)
-                                    .show()
+                                Toast.makeText(
+                                    activity,
+                                    R.string.update_to_date,
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                         return@execute
                     }
 
-                    // Replace current  current data with  new data
-                    FileUtils.delete(dataFile)
-                    tempDataFile.renameTo(dataFile)
-
-                    // Read new AppUpdater
-                    try {
-                        dataFile.source().buffer().use { source ->
-                            instance = AppUpdater(dataName, source)
-                        }
-                    } catch (e: IOException) {
-                        // Ignore
+                    val releaseUrl = release.getString("html_url")
+                        ?: UpdateDialog.GITHUB_RELEASE_URL
+                    UpdateDialog(activity).showUpdateDialog(
+                        createDialogData(release, latestVersion, releaseUrl)
+                    )
+                } catch (t: Throwable) {
+                    ExceptionUtils.throwIfFatal(t)
+                    Analytics.recordException(t)
+                    if (manualChecking) {
+                        UpdateDialog(activity).showCheckFailDialog()
                     }
-                    UpdateDialog(activity).showUpdateDialog(tempUpdateData)
-                    Settings.putUpdateTime(Date().time)
                 } finally {
                     lock.unlock()
                 }
             }
         }
 
-        private fun checkData(
-            updateData: JSONObject?,
-            tempUpdateData: JSONObject,
-            manualChecking: Boolean
-        ): Boolean {
-            try {
-                val currentVersion = BuildConfig.VERSION_NAME
-                val currentVersionCode = BuildConfig.VERSION_CODE
-                var updateResult: Int
-                if (updateData != null) {
-                    val version1 = updateData.getString(VERSION) ?: "0.0.0"
-                    val version2 = tempUpdateData.getString(VERSION) ?: "0.0.0"
-                    updateResult = compareVersion(version1, version2)
-                    if (updateResult < 0) {
-                        return true
-                    } else if (updateResult == 0) {
-                        if (updateData.getInteger(VERSION_CODE) < tempUpdateData.getInteger(
-                                VERSION_CODE
-                            )
-                        ) {
-                            return true
-                        }
-                    }
-                    if (!manualChecking) {
-                        return false
-                    }
-                }
-                updateResult = compareVersion(currentVersion, tempUpdateData.getString(VERSION))
-                return if (updateResult < 0) {
-                    true
-                } else currentVersionCode < tempUpdateData.getInteger(VERSION_CODE)
-            } catch (e: JSONException) {
-                Log.e(TAG, e.message, e)
-                Analytics.recordException(e)
-                return false
-            }
+        private fun extractVersion(value: String?): String? {
+            return value?.let { numericVersion.find(it)?.value }
         }
 
-        private fun save(client: OkHttpClient, url: String, file: File): Boolean {
-            val request = Request.Builder().url(url).build()
-            val call = client.newCall(request)
-            try {
-                call.execute().use { response ->
-                    if (!response.isSuccessful) {
-                        return false
-                    }
-                    val body = response.body() ?: return false
-
-                    body.byteStream().use { `is` ->
-                        FileOutputStream(file).use { os ->
-                            IOUtils.copy(`is`, os)
-                        }
-                    }
-                    return true
-                }
-            } catch (t: Throwable) {
-                ExceptionUtils.throwIfFatal(t)
-                Analytics.recordException(t)
-                return false
+        private fun createDialogData(
+            release: JSONObject,
+            version: String,
+            releaseUrl: String
+        ): JSONObject {
+            val lines = JSONArray()
+            release.getString("body")
+                ?.lineSequence()
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?.forEach { lines.add(it) }
+            if (lines.isEmpty()) {
+                lines.add(releaseUrl)
             }
+
+            val updateContent = JSONObject()
+            updateContent[TITLE] = release.getString("name")
+                ?.takeIf { it.isNotBlank() }
+                ?: "EhViewerNz $version"
+            updateContent[CONTENT] = lines
+            updateContent[FILE_DOWNLOAD_URL] = releaseUrl
+
+            val data = JSONObject()
+            data[VERSION] = version
+            data[MUST_UPDATE] = false
+            data[UPDATE_CONTENT] = updateContent
+            return data
         }
     }
 }

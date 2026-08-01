@@ -147,7 +147,7 @@
     <string name="update_fail_info">点击 是 跳转至Github主页</string>
     <string name="update_to">更新至</string>
     <string name="update_plain">版本：%1$s\n大小：%2$s\n\n%3$s</string>
-    <string name="update_to_date">EhViewer 已是最新版本</string>
+    <string name="update_to_date">EhViewerNz 已是最新版本</string>
     <string name="update_ignore">忽略</string>
     <string name="no_updates_available">已是最新版本</string>
 
@@ -603,7 +603,7 @@
 
     <string name="settings_download">下载</string>
     <string name="settings_download_download_location">下载路径</string>
-    <string name="settings_download_manual_save_location">手动保存图片路径</string>
+    <string name="settings_download_manual_save_location">手动保存路径</string>
     <string name="settings_download_invalid_download_location">无效的下载路径</string>
     <string name="settings_download_cant_get_download_location">无法获取下载路径</string>
     <string name="settings_download_pick_dir_kk">在 KitKat 中您无法把数据写入外置 SD 卡，除非您做了奇怪的事情。不过 &lt;SD card&gt;/Android/data/com.hippo.ehviewer 这个路径比较特殊，是可以写入的。</string>
@@ -657,6 +657,9 @@
     <string name="settings_advanced_clear_memory_cache_summary">清理缩略图、画廊信息的内存缓存</string>
     <string name="settings_advanced_read_cache_size">阅读缓存大小</string>
     <string name="settings_advanced_app_language_title">App 界面语言</string>
+    <string name="settings_search_language">搜索语言项</string>
+    <string name="settings_fork_features">Fork额外功能</string>
+    <string name="settings_fork_gallery_immediate_jump">画廊立即跳转</string>
     <string name="settings_advanced_proxy">代理</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>
@@ -705,6 +708,7 @@
     <string name="settings_close_automatic_updates">关闭自动更新</string>
     <string name="settings_about_beta_update_channel">更新测试版</string>
     <string name="settings_about_beta_update_channel_summary">测试版可能在你的设备上出现不可预知的错误</string>
+    <string name="settings_about_fork_declaration_summary">EhViewerNz 与 E-Hentai.org 无任何联系</string>
 
     <!--  black list  -->
     <string name="blacklist_id">用户ID</string>

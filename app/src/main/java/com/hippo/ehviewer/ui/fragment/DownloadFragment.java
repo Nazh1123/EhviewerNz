@@ -148,6 +148,12 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         mManualImageSaveLocation = null;
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        onUpdateManualImageSaveLocation();
+    }
+
     public void onUpdateDownloadLocation() {
         UniFile file = Settings.getDownloadLocation();
         if (mDownloadLocation != null) {

@@ -80,6 +80,7 @@ import com.hippo.ehviewer.callBack.SubscriptionCallback;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
+import com.hippo.ehviewer.client.SearchLanguageQuery;
 import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUtils;
@@ -2046,6 +2047,23 @@ public class GalleryListScene extends BaseScene
         onUpdateUrlBuilder();
         mHelper.refresh();
         setState(STATE_NORMAL);
+    }
+
+    public void toggleSearchLanguage(@NonNull String language) {
+        if (mUrlBuilder == null || mHelper == null) {
+            return;
+        }
+
+        String query = (mSearchBar != null && mState != STATE_NORMAL)
+                ? mSearchBar.getText()
+                : mUrlBuilder.getKeyword();
+        String updatedQuery = SearchLanguageQuery.toggle(query, language);
+
+        if (mSearchBar != null) {
+            mSearchBar.setText(updatedQuery);
+            mSearchBar.cursorToEnd();
+        }
+        onApplySearch(updatedQuery);
     }
 
     @Override

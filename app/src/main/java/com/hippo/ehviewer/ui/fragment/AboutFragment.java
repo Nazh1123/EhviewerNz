@@ -57,7 +57,7 @@ public class AboutFragment extends BasePreferenceFragmentCompat
 
     private static final String KEY_AUTHOR = "author";
     private static final String KEY_DONATE = "donate";
-    private static final String KEY_CHECK_FOR_UPDATES = "check_for_updates";
+    private static final String KEY_CHECK_FOR_UPDATES = "fork_check_for_updates";
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Preference
+        android:key="manual_image_save_location"
+        android:title="@string/settings_download_manual_save_location"
+        app:allowDividerAbove="true"
+        app:iconSpaceReserved="false" />
+
+    <com.hippo.ehviewer.preference.StartTransferTimePreference
+        android:key="start_transfer_time"
+        android:title="@string/settings_read_auto_transfer_time"
+        app:allowDividerAbove="true" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="gallery_direct_save"
+        android:title="@string/settings_read_direct_save" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="gallery_quick_save_turn_page"
+        android:title="@string/settings_read_quick_save_turn_page" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="gallery_double_tap_zoom"
+        android:title="@string/settings_read_double_tap_zoom" />
+
+    <com.hippo.preference.ListPreference
+        android:defaultValue="chinese"
+        android:key="search_language"
+        android:summary="%s"
+        android:title="@string/settings_search_language"
+        app:allowDividerAbove="true"
+        app:entries="@array/search_language_entries"
+        app:entryValues="@array/search_language_entry_values" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="gallery_preview_immediate_jump"
+        android:summary="@string/settings_eh_gallery_preview_immediate_jump_summary"
+        android:title="@string/settings_fork_gallery_immediate_jump" />
+
+</PreferenceScreen>

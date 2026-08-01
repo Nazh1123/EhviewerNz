@@ -267,13 +267,10 @@ public class SearchBar extends CardView implements View.OnClickListener,
         mEditText.setText(text);
     }
 
-//    public String getText() {
-//        Editable text = mEditText.getText();
-//        if (text != null) {
-//            return text.toString();
-//        }
-//        return null;
-//    }
+    public String getText() {
+        Editable text = mEditText.getText();
+        return text != null ? text.toString() : "";
+    }
 
     public void cursorToEnd() {
         Editable text = mEditText.getText();

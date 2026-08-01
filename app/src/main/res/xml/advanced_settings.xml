@@ -65,6 +65,15 @@
         app:entries="@array/app_language_entries"
         app:entryValues="@array/app_language_entry_values" />
 
+    <com.hippo.preference.ListPreference
+        android:defaultValue="chinese"
+        android:key="search_language"
+        android:summary="%s"
+        android:title="@string/settings_search_language"
+        app:allowDividerAbove="true"
+        app:entries="@array/search_language_entries"
+        app:entryValues="@array/search_language_entry_values" />
+
     <com.hippo.ehviewer.preference.ProxyPreference
         android:key="proxy"
         android:title="@string/settings_advanced_proxy"

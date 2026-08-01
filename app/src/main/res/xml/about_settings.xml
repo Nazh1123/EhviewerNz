@@ -30,12 +30,6 @@
 
 
     <com.hippo.preference.UrlPreference
-        android:key="latest_release"
-        android:title="@string/settings_about_latest_release"
-        app:allowDividerAbove="true"
-        app:url="https://github.com/xiaojieonly/Ehviewer_CN_SXJ/releases" />
-
-    <com.hippo.preference.UrlPreference
         android:ellipsize="end"
         android:key="issue_help"
         android:singleLine="true"
@@ -50,23 +44,42 @@
         app:activity="com.hippo.ehviewer.ui.LicenseActivity"
         app:allowDividerAbove="true" />
 
-    <com.hippo.ehviewer.preference.VersionPreference
-        android:key="version"
-        app:allowDividerAbove="true" />
-
-    <Preference
-        android:key="check_for_updates"
-        android:title="@string/settings_about_check_for_updates"
-        app:allowDividerAbove="true" />
-
-    <com.hippo.preference.SwitchPreference
-        android:defaultValue="false"
-        android:key="close_auto_updates"
-        android:title="@string/settings_close_automatic_updates" />
-
     <Preference
         android:key="donate"
         android:title="@string/settings_about_donate"
         app:allowDividerAbove="true" />
+
+    <PreferenceCategory
+        android:title="@string/settings_about_fork_title"
+        app:allowDividerAbove="true">
+
+        <Preference
+            android:key="fork_declaration"
+            android:summary="@string/settings_about_fork_declaration_summary"
+            android:title="@string/settings_about_fork_name" />
+
+        <Preference
+            android:key="fork_author"
+            android:summary="@string/settings_about_fork_author_summary"
+            android:title="@string/settings_about_author" />
+
+        <com.hippo.preference.UrlPreference
+            android:key="fork_latest_release"
+            android:title="@string/settings_about_latest_release"
+            app:url="https://github.com/Nazh1123/Ehviewer_CN_SXJ/releases" />
+
+        <com.hippo.ehviewer.preference.VersionPreference
+            android:key="fork_version" />
+
+        <Preference
+            android:key="fork_check_for_updates"
+            android:title="@string/settings_about_check_for_updates" />
+
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="false"
+            android:key="close_auto_updates"
+            android:title="@string/settings_close_automatic_updates" />
+
+    </PreferenceCategory>
 
 </PreferenceScreen>

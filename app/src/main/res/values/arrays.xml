@@ -354,6 +354,42 @@
         <item>zh-TW</item>
     </string-array>
 
+    <string-array name="search_language_entries">
+        <item>@string/language_japanese</item>
+        <item>@string/language_english</item>
+        <item>@string/language_chinese</item>
+        <item>@string/language_dutch</item>
+        <item>@string/language_french</item>
+        <item>@string/language_german</item>
+        <item>@string/language_hungarian</item>
+        <item>@string/language_italian</item>
+        <item>@string/language_korean</item>
+        <item>@string/language_polish</item>
+        <item>@string/language_portuguese</item>
+        <item>@string/language_russian</item>
+        <item>@string/language_spanish</item>
+        <item>@string/language_thai</item>
+        <item>@string/language_vietnamese</item>
+    </string-array>
+
+    <string-array name="search_language_entry_values" translatable="false">
+        <item>japanese</item>
+        <item>english</item>
+        <item>chinese</item>
+        <item>dutch</item>
+        <item>french</item>
+        <item>german</item>
+        <item>hungarian</item>
+        <item>italian</item>
+        <item>korean</item>
+        <item>polish</item>
+        <item>portuguese</item>
+        <item>russian</item>
+        <item>spanish</item>
+        <item>thai</item>
+        <item>vietnamese</item>
+    </string-array>
+
     <string-array name="tag_translation_metadata" tools:ignore="InconsistentArrays">
 <!--        <item>tag-translations-zh-rCN.sha1</item>-->
 <!--        <item>https://github.com/Mapaler/EhViewer/tree/tag-translations/tag-translations/tag-translations-zh-rCN.sha1</item>-->
@@ -393,11 +429,5 @@
         <item>@string/wifi_send_download</item>
         <item>@string/wifi_send_download_location</item>
     </string-array>
-
-    <string-array name="update_metadata">
-        <item>update_json</item>
-        <item>https://raw.githubusercontent.com/xiaojieonly/Ehviewer_CN_SXJ/refs/heads/BiLi_PC_Gamer/feedauthor/update.json</item>
-    </string-array>
-
 
 </resources>

@@ -53,7 +53,7 @@
                         android:layout_height="match_parent"
                         android:layout_weight="1"
                         android:background="?android:navigationBarColor"
-                        android:paddingBottom="48dip"
+                        android:paddingBottom="96dip"
                         android:scrollbars="vertical"
                         app:headerLayout="@layout/nav_header_main"
                         app:insetForeground="@android:color/transparent"
@@ -86,6 +86,19 @@
                             android:gravity="center_vertical|center_horizontal"
                             android:minWidth="88dip"
                             android:minHeight="48dip"
+                            app:insetForeground="@android:color/transparent" />
+
+                        <TextView
+                            android:id="@+id/search_language_toggle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center_vertical|center_horizontal"
+                            android:minWidth="88dip"
+                            android:minHeight="48dip"
+                            android:text="@string/settings_search_language"
                             app:insetForeground="@android:color/transparent" />
                     </LinearLayout>
                 </FrameLayout>

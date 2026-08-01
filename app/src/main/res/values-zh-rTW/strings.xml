@@ -138,7 +138,7 @@
     <string name="update_fail">检查更新失败</string>
     <string name="update_plain">版本：%1$s\n大小：%2$s\n\n%3$s</string>
     <string name="update_fail_info">点击 是 跳转至Github主页</string>
-    <string name="update_to_date">EhViewer 已是最新版本</string>
+    <string name="update_to_date">EhViewerNz 已是最新版本</string>
     <string name="no_updates_available">已是最新版本</string>
     <string name="update_to">更新至</string>
     <string name="update_ignore">忽略</string>
@@ -585,7 +585,7 @@
 
     <string name="settings_download">下載</string>
     <string name="settings_download_download_location">下載路徑</string>
-    <string name="settings_download_manual_save_location">手動儲存圖片路徑</string>
+    <string name="settings_download_manual_save_location">手動儲存路徑</string>
     <string name="settings_download_invalid_download_location">無效的下載路徑</string>
     <string name="settings_download_cant_get_download_location">無法取得下載路徑</string>
     <string name="settings_download_pick_dir_kk">在 Android 4.4+  KitKat 中您無法把數據寫到外接 SD 卡裡，除非你駭了他。不過 &lt;SD card&gt;/Android/data/com.hippo.ehviewer 這個路徑比較特別，可以寫入。</string>

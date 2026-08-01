@@ -72,6 +72,7 @@ import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUrlOpener;
 import com.hippo.ehviewer.client.EhUtils;
+import com.hippo.ehviewer.client.SearchLanguageQuery;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.ui.main.UserImageChange;
 import com.hippo.ehviewer.ui.scene.AnalyticsScene;
@@ -405,6 +406,8 @@ public final class MainActivity extends StageActivity
         updateProfile();
         mDisplayName = (TextView) ViewUtils.$$(headerLayout, R.id.display_name);
         TextView mChangeTheme = (TextView) ViewUtils.$$(this, R.id.change_theme);
+        TextView searchLanguageToggle =
+                (TextView) ViewUtils.$$(this, R.id.search_language_toggle);
 
         limitsCountView = (LimitsCountView) ViewUtils.$$(this, R.id.limits_count_view);
 
@@ -420,14 +423,20 @@ public final class MainActivity extends StageActivity
         }
         if (Settings.getTheme() == 0) {
             mChangeTheme.setTextColor(getColor(R.color.theme_change_light));
+            searchLanguageToggle.setTextColor(getColor(R.color.theme_change_light));
 
             mChangeTheme.setBackgroundColor(getColor(R.color.white));
+            searchLanguageToggle.setBackgroundColor(getColor(R.color.white));
         } else if (Settings.getTheme() == 1) {
             mChangeTheme.setTextColor(getColor(R.color.theme_change_other));
+            searchLanguageToggle.setTextColor(getColor(R.color.theme_change_other));
             mChangeTheme.setBackgroundColor(getColor(R.color.grey_850));
+            searchLanguageToggle.setBackgroundColor(getColor(R.color.grey_850));
         } else {
             mChangeTheme.setTextColor(getColor(R.color.theme_change_other));
+            searchLanguageToggle.setTextColor(getColor(R.color.theme_change_other));
             mChangeTheme.setBackgroundColor(getColor(R.color.black));
+            searchLanguageToggle.setBackgroundColor(getColor(R.color.black));
         }
 
         mChangeTheme.setText(getThemeText());
@@ -435,6 +444,7 @@ public final class MainActivity extends StageActivity
             Settings.putTheme(getNextTheme());
             ((EhApplication) getApplication()).recreate();
         });
+        searchLanguageToggle.setOnClickListener(v -> toggleSearchLanguage());
 
         if (savedInstanceState == null) {
             onInit();
@@ -836,6 +846,28 @@ public final class MainActivity extends StageActivity
             return mDrawerLayout.isDrawersVisible();
         } else {
             return false;
+        }
+    }
+
+    private void toggleSearchLanguage() {
+        String language = Settings.getSearchLanguage();
+        SceneFragment topScene = getTopScene();
+        if (topScene instanceof GalleryListScene) {
+            ((GalleryListScene) topScene).toggleSearchLanguage(language);
+        } else {
+            ListUrlBuilder builder = new ListUrlBuilder();
+            builder.setKeyword(SearchLanguageQuery.token(language));
+            Bundle args = new Bundle();
+            args.putString(GalleryListScene.KEY_ACTION,
+                    GalleryListScene.ACTION_LIST_URL_BUILDER);
+            args.putParcelable(GalleryListScene.KEY_LIST_URL_BUILDER, builder);
+            startSceneFirstly(new Announcer(GalleryListScene.class).setArgs(args));
+        }
+        if (mDrawerLayout != null) {
+            mDrawerLayout.closeDrawers();
+        }
+        if (limitsCountView != null) {
+            limitsCountView.hide();
         }
     }
 

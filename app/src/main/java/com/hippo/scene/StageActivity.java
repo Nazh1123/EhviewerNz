@@ -603,6 +603,17 @@ public abstract class StageActivity extends EhActivity {
     }
 
     @Nullable
+    public SceneFragment getTopScene() {
+        int index = mSceneTagList.size() - 1;
+        if (index < 0) {
+            return null;
+        }
+        Fragment fragment = getSupportFragmentManager()
+                .findFragmentByTag(mSceneTagList.get(index));
+        return fragment instanceof SceneFragment ? (SceneFragment) fragment : null;
+    }
+
+    @Nullable
     public Class<?> getTopSceneClass() {
         int index = mSceneTagList.size() - 1;
         if (index < 0) {
