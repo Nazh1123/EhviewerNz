@@ -239,6 +239,7 @@
 
     <string name="quick_search">빠른 검색</string>
     <string name="bookmark_subscription">빠른 검색 구독</string>
+    <string name="global_subscription">글로벌 구독</string>
     <string name="quick_search_tip">빠른 검색을 추가하려면 \"+\" 버튼을 누르세요.</string>
     <string name="add_quick_search_dialog_title">빠른 검색 추가</string>
     <string name="name_is_empty">이름이 비어 있습니다.</string>
@@ -603,6 +604,7 @@
 
     <string name="settings_download">다운로드</string>
     <string name="settings_download_download_location">다운로드 위치</string>
+    <string name="settings_download_manual_save_location">수동 저장 위치</string>
     <string name="settings_download_invalid_download_location">다운로드 위치가 잘못되었습니다.</string>
     <string name="settings_download_cant_get_download_location">다운로드 위치를 가져올 수 없습니다.</string>
     <string name="settings_download_pick_dir_kk">Android 4.4 이상에서는 루트 권한 없이 외장 SD 카드에 데이터를 쓸 수 있는 방법이 없습니다. 그러나 &lt;SD 카드&gt;/Android/data/me.loverain.fleur 폴더만은 쓸 수 있습니다.</string>

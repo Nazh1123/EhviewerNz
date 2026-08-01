@@ -224,6 +224,7 @@
 
     <string name="quick_search">Recherche rapide</string>
     <string name="bookmark_subscription">Abonnements de recherche rapide</string>
+    <string name="global_subscription">Abonnements globaux</string>
     <string name="quick_search_tip">Appuyez sur \"+\" pour ajouter une Recherche rapide</string>
     <string name="add_quick_search_dialog_title">Ajouter la Recherche rapide</string>
     <string name="name_is_empty">Entrez un nom</string>
@@ -549,6 +550,7 @@
 
     <string name="settings_download">Téléchargement</string>
     <string name="settings_download_download_location">Destination de téléchargement</string>
+    <string name="settings_download_manual_save_location">Destination d’enregistrement manuel</string>
     <string name="settings_download_invalid_download_location">Destination de téléchargement invalide</string>
     <string name="settings_download_cant_get_download_location">Impossible d\'obtenir la destination de téléchargement</string>
     <string name="settings_download_pick_dir_kk">Une application ne peut écrire aucune donnée dans la carte SD à moins que vous ne roote et modifie votre appareil, à l\'exception du chemin /Android/data/com.hippo.ehviewer, dans lequel EhViewer a la permission d\'écriture.</string>

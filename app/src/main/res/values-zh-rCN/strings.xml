@@ -33,6 +33,9 @@
     <string name="bookmark_subscription_disabled">已将“%s”移出书签订阅</string>
     <string name="bookmark_subscription_unsupported">此类型的书签无法加入订阅</string>
     <string name="bookmark_subscription_partial_failure">部分书签订阅加载失败</string>
+    <string name="global_subscription">全局订阅</string>
+    <string name="global_subscription_empty">EH 订阅和书签订阅中均未找到画廊。</string>
+    <string name="global_subscription_partial_failure">部分全局订阅来源加载失败</string>
     <string name="search_corresponding_bookmarks">搜索对应书签</string>
     <string name="whats_hot">热门</string>
     <string name="top_lists">排行榜</string>

@@ -80,12 +80,16 @@
     <string-array name="launch_page_entries" translatable="false">
         <item>@string/homepage</item>
         <item>@string/subscription</item>
+        <item>@string/bookmark_subscription</item>
+        <item>@string/global_subscription</item>
         <item>@string/whats_hot</item>
     </string-array>
 
     <string-array name="launch_page_entry_values" translatable="false">
         <item>0</item>
         <item>1</item>
+        <item>3</item>
+        <item>4</item>
         <item>2</item>
     </string-array>
 

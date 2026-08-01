@@ -59,7 +59,7 @@ final class BookmarkSubscriptionCoordinator {
 
     private static final class Source {
         final int id;
-        final QuickSearch quickSearch;
+        @Nullable final QuickSearch quickSearch;
         final ListUrlBuilder builder = new ListUrlBuilder();
         final ArrayList<GalleryInfo> buffer = new ArrayList<>();
 
@@ -78,6 +78,13 @@ final class BookmarkSubscriptionCoordinator {
             this.id = id;
             this.quickSearch = quickSearch;
             builder.set(quickSearch);
+            builder.setPageIndex(0);
+        }
+
+        Source(int id) {
+            this.id = id;
+            quickSearch = null;
+            builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
             builder.setPageIndex(0);
         }
 
@@ -136,8 +143,12 @@ final class BookmarkSubscriptionCoordinator {
         }
     }
 
-    static String getFingerprint(List<QuickSearch> quickSearches) {
+    static String getFingerprint(List<QuickSearch> quickSearches,
+                                 boolean includeEhSubscription) {
         StringBuilder builder = new StringBuilder();
+        if (includeEhSubscription) {
+            builder.append("eh-subscription;");
+        }
         for (QuickSearch quickSearch : quickSearches) {
             if (!quickSearch.subscribed || !isSupported(quickSearch)) {
                 continue;
@@ -154,8 +165,10 @@ final class BookmarkSubscriptionCoordinator {
         return builder.toString();
     }
 
-    boolean matchesSubscriptions(List<QuickSearch> quickSearches) {
-        return mSubscriptionFingerprint.equals(getFingerprint(quickSearches));
+    boolean matchesSubscriptions(List<QuickSearch> quickSearches,
+                                 boolean includeEhSubscription) {
+        return mSubscriptionFingerprint.equals(
+                getFingerprint(quickSearches, includeEhSubscription));
     }
 
     boolean isLoading() {
@@ -228,14 +241,20 @@ final class BookmarkSubscriptionCoordinator {
         return builder;
     }
 
-    void refresh(int taskId, List<QuickSearch> quickSearches) {
+    void refresh(int taskId, List<QuickSearch> quickSearches,
+                 boolean includeEhSubscription) {
         cancel();
         mTaskId = taskId;
         mRefresh = true;
         mLoading = true;
         mFirstFailure = null;
         mBatchSize = 0;
-        mSubscriptionFingerprint = getFingerprint(quickSearches);
+        mSubscriptionFingerprint = getFingerprint(
+                quickSearches, includeEhSubscription);
+
+        if (includeEhSubscription) {
+            mSources.add(new Source(mSources.size()));
+        }
 
         for (QuickSearch quickSearch : quickSearches) {
             if (!quickSearch.subscribed || !isSupported(quickSearch)
@@ -374,12 +393,15 @@ final class BookmarkSubscriptionCoordinator {
         source.bufferIndex = 0;
         source.buffer.addAll(result.galleryInfoList);
         for (GalleryInfo galleryInfo : result.galleryInfoList) {
-            LinkedHashSet<QuickSearch> matches = mMatchingQuickSearches.get(galleryInfo.gid);
-            if (matches == null) {
-                matches = new LinkedHashSet<>();
-                mMatchingQuickSearches.put(galleryInfo.gid, matches);
+            if (source.quickSearch != null) {
+                LinkedHashSet<QuickSearch> matches =
+                        mMatchingQuickSearches.get(galleryInfo.gid);
+                if (matches == null) {
+                    matches = new LinkedHashSet<>();
+                    mMatchingQuickSearches.put(galleryInfo.gid, matches);
+                }
+                matches.add(source.quickSearch);
             }
-            matches.add(source.quickSearch);
         }
         Collections.sort(source.buffer,
                 (first, second) -> -compareGalleryOrder(first, second));

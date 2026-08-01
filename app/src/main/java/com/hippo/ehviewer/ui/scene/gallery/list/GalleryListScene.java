@@ -168,6 +168,7 @@ public class GalleryListScene extends BaseScene
     public final static String ACTION_HOMEPAGE = "action_homepage";
     public final static String ACTION_SUBSCRIPTION = "action_subscription";
     public final static String ACTION_BOOKMARK_SUBSCRIPTION = "action_bookmark_subscription";
+    public final static String ACTION_GLOBAL_SUBSCRIPTION = "action_global_subscription";
     public final static String ACTION_WHATS_HOT = "action_whats_hot";
     public final static String ACTION_TOP_LIST = "action_top_list";
     public final static String ACTION_LIST_URL_BUILDER = "action_list_url_builder";
@@ -330,6 +331,9 @@ public class GalleryListScene extends BaseScene
         } else if (ACTION_BOOKMARK_SUBSCRIPTION.equals(action)) {
             mUrlBuilder.reset();
             mUrlBuilder.setMode(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        } else if (ACTION_GLOBAL_SUBSCRIPTION.equals(action)) {
+            mUrlBuilder.reset();
+            mUrlBuilder.setMode(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
         } else if (ACTION_WHATS_HOT.equals(action)) {
             mUrlBuilder.reset();
             mUrlBuilder.setMode(ListUrlBuilder.MODE_WHATS_HOT);
@@ -584,6 +588,8 @@ public class GalleryListScene extends BaseScene
             return resources.getString(R.string.subscription);
         } else if (ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION == urlBuilder.getMode()) {
             return resources.getString(R.string.bookmark_subscription);
+        } else if (ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION == urlBuilder.getMode()) {
+            return resources.getString(R.string.global_subscription);
         } else if (ListUrlBuilder.MODE_WHATS_HOT == urlBuilder.getMode()) {
             return resources.getString(R.string.whats_hot);
         } else if (!TextUtils.isEmpty(keyword)) {
@@ -660,6 +666,8 @@ public class GalleryListScene extends BaseScene
             checkedItemId = R.id.nav_subscription;
         } else if (ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION == builder.getMode()) {
             checkedItemId = R.id.nav_bookmark_subscription;
+        } else if (ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION == builder.getMode()) {
+            checkedItemId = R.id.nav_global_subscription;
         } else if (ListUrlBuilder.MODE_WHATS_HOT == builder.getMode()) {
             checkedItemId = R.id.nav_whats_hot;
         } else {
@@ -1248,7 +1256,7 @@ public class GalleryListScene extends BaseScene
         if (isBookmarkSubscriptionMode() && mBookmarkSubscriptionCoordinator != null
                 && !mBookmarkSubscriptionCoordinator.isLoading()
                 && !mBookmarkSubscriptionCoordinator.matchesSubscriptions(
-                EhDB.getSubscribedQuickSearch()) && mHelper != null) {
+                EhDB.getSubscribedQuickSearch(), isGlobalSubscriptionMode()) && mHelper != null) {
             mHasFirstRefresh = true;
             mHelper.refresh();
         }
@@ -1696,9 +1704,9 @@ public class GalleryListScene extends BaseScene
                 break;
             case 1: // Go to
                 if (mHelper.canGoTo()) {
-                    if (mUrlBuilder != null && (mUrlBuilder.getMode() == ListUrlBuilder.MODE_TOP_LIST
-                            || mUrlBuilder.getMode()
-                            == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION))
+                    if (mUrlBuilder != null &&
+                            (mUrlBuilder.getMode() == ListUrlBuilder.MODE_TOP_LIST
+                                    || isBookmarkSubscriptionMode()))
                         break;
                     showGoToDialog();
                 }
@@ -2235,7 +2243,13 @@ public class GalleryListScene extends BaseScene
 
     private boolean isBookmarkSubscriptionMode() {
         return mUrlBuilder != null
-                && mUrlBuilder.getMode() == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION;
+                && (mUrlBuilder.getMode() == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
+                || mUrlBuilder.getMode() == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+    }
+
+    private boolean isGlobalSubscriptionMode() {
+        return mUrlBuilder != null
+                && mUrlBuilder.getMode() == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION;
     }
 
     @Nullable
@@ -2262,9 +2276,14 @@ public class GalleryListScene extends BaseScene
         result.galleryInfoList = data;
         if (noSubscriptions) {
             result.customErrorString = getString(R.string.bookmark_subscription_empty);
+        } else if (isGlobalSubscriptionMode() && refresh && data.isEmpty()
+                && !hasMore && !partialFailure) {
+            result.customErrorString = getString(R.string.global_subscription_empty);
         }
         if (partialFailure) {
-            showTip(R.string.bookmark_subscription_partial_failure, LENGTH_SHORT);
+            showTip(isGlobalSubscriptionMode()
+                    ? R.string.global_subscription_partial_failure
+                    : R.string.bookmark_subscription_partial_failure, LENGTH_SHORT);
         }
         onGetGalleryListSuccess(result, taskId);
     }
@@ -2393,11 +2412,12 @@ public class GalleryListScene extends BaseScene
                 return;
             }
 
-            if (ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION == mUrlBuilder.getMode()) {
+            if (isBookmarkSubscriptionMode()) {
                 BookmarkSubscriptionCoordinator coordinator =
                         getBookmarkSubscriptionCoordinator();
                 if (coordinator != null) {
-                    coordinator.refresh(taskId, EhDB.getSubscribedQuickSearch());
+                    coordinator.refresh(taskId, EhDB.getSubscribedQuickSearch(),
+                            isGlobalSubscriptionMode());
                 }
                 return;
             } else if (mBookmarkSubscriptionCoordinator != null
@@ -2437,7 +2457,7 @@ public class GalleryListScene extends BaseScene
             if (null == activity || null == mClient || null == mUrlBuilder) {
                 return;
             }
-            if (ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION == mUrlBuilder.getMode()) {
+            if (isBookmarkSubscriptionMode()) {
                 BookmarkSubscriptionCoordinator coordinator =
                         getBookmarkSubscriptionCoordinator();
                 if (coordinator != null) {

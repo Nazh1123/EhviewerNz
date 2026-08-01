@@ -243,6 +243,7 @@
 
     <string name="quick_search">Quick search</string>
     <string name="bookmark_subscription">Quick Search Subscriptions</string>
+    <string name="global_subscription">Global Subscriptions</string>
     <string name="quick_search_tip">Tap \"+\" to add Quick Search</string>
     <string name="add_quick_search_dialog_title">Add Quick Search</string>
     <string name="name_is_empty">Name is empty</string>
@@ -572,7 +573,7 @@
 
     <string name="settings_download">Download</string>
     <string name="settings_download_download_location">Download location</string>
-    <string name="settings_download_manual_save_location">Manual save path</string>
+    <string name="settings_download_manual_save_location">Manual save locatoin</string>
     <string name="settings_download_invalid_download_location">Invalid download location</string>
     <string name="settings_download_cant_get_download_location">Can\'t get download location</string>
     <string name="settings_download_pick_dir_kk">On Android 4.4+, apps can\'t write any data on your external SD card, unless you root the system and apply a patch. But &lt;SD card&gt;/Android/data/com.hippo.ehviewer is an exception. It is writable for this app.</string>

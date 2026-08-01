@@ -211,6 +211,7 @@
     <string name="delete_downloads">ダウンロードを削除</string>
     <string name="quick_search">クイック検索</string>
     <string name="bookmark_subscription">クイック検索購読</string>
+    <string name="global_subscription">グローバル購読</string>
     <string name="quick_search_tip">「+」をタップしてクイック検索を追加します</string>
     <string name="add_quick_search_dialog_title">クイック検索を追加</string>
     <string name="name_is_empty">タイトルが空です</string>
@@ -555,6 +556,7 @@
     <string name="settings_read_screen_lightness">画面の明るさ</string>
     <string name="settings_download">ダウンロード</string>
     <string name="settings_download_download_location">ダウンロードパス</string>
+    <string name="settings_download_manual_save_location">手動保存パス</string>
     <string name="settings_download_invalid_download_location">無効なダウンロードパス</string>
     <string name="settings_download_cant_get_download_location">ダウンロードパスを取得できません</string>
     <string name="settings_download_pick_dir_kk">デバイスを root 化してパッチを適用しないと、Android 4.4 以降では外部ストレージへ書き込めません。しかし「/Android/data/com.hippo.ehviewer」は例外で書き込み可能です。</string>

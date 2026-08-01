@@ -238,6 +238,7 @@
 
     <string name="quick_search">ค้นหาอย่างด่วน</string>
     <string name="bookmark_subscription">การสมัครรับข้อมูลการค้นหาอย่างด่วน</string>
+    <string name="global_subscription">การสมัครรับข้อมูลทั่วโลก</string>
     <string name="quick_search_tip">แตะ \"+\" เพื่อเพิ่มการค้นหาอย่างด่วน</string>
     <string name="add_quick_search_dialog_title">เพิ่มค้นหาอย่างด่วน</string>
     <string name="name_is_empty">ชื่อห้ามเว้นว่างไว้</string>
@@ -590,6 +591,7 @@
 
     <string name="settings_download">การดาวน์โหลด</string>
     <string name="settings_download_download_location">ตำแหน่งแหล่งดาวน์โหลด</string>
+    <string name="settings_download_manual_save_location">ตำแหน่งบันทึกด้วยตนเอง</string>
     <string name="settings_download_invalid_download_location">ตำแหน่งแหล่งดาวน์โหลดไม่ถูกต้อง</string>
     <string name="settings_download_cant_get_download_location">ไม่สามารถเข้าถึงแหล่งดาวน์โหลดได้</string>
     <string name="settings_download_pick_dir_kk">บน Android เวอร์ชั่น 4.4 (หรือ KitKat) เป็นต้นไป แอพจะไม่สามารถเขียนข้อมูลใดๆก็ตามบนพื้นที่จัดเก็บภายนอกอย่างการ์ด SD ได้ เว้นแต่ว่าคุณจะรูทระบบและเพิ่มแพชต์เข้าไป แต่ &lt;การ์ด SD&gt;/Android/data/com.hippo.ehviewer นั้นเป็นข้อยกเว้น สามารถให้เขียนได้สำหรับแอพนี้</string>

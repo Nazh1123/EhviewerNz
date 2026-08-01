@@ -216,6 +216,7 @@
 
     <string name="quick_search">快速搜尋</string>
     <string name="bookmark_subscription">快速搜尋訂閱</string>
+    <string name="global_subscription">全域訂閱</string>
     <string name="quick_search_tip">點擊“+”以新增快速搜尋</string>
     <string name="add_quick_search_dialog_title">新增快速搜尋</string>
     <string name="name_is_empty">名稱是空的</string>

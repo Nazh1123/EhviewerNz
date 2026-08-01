@@ -225,6 +225,7 @@
 
     <string name="quick_search">Búsqueda rápida</string>
     <string name="bookmark_subscription">Suscripciones de búsqueda rápida</string>
+    <string name="global_subscription">Suscripciones globales</string>
     <string name="quick_search_tip">Pulsar \"+\" para añadir a la búsqueda rápida</string>
     <string name="add_quick_search_dialog_title">Añadir búsqueda rápida</string>
     <string name="name_is_empty">Nombre vacío</string>
@@ -554,6 +555,7 @@
 
     <string name="settings_download">Descargas</string>
     <string name="settings_download_download_location">Ruta de descargas</string>
+    <string name="settings_download_manual_save_location">Ruta de guardado manual</string>
     <string name="settings_download_invalid_download_location">Ruta de descarga invalida</string>
     <string name="settings_download_cant_get_download_location">No se puede obtener ruta de descargas</string>
     <string name="settings_download_pick_dir_kk">No puedes escribir ningún tipo de datos en tu memoria SD externa en Android 4.4+ a no ser que la hayas hackeado. Pero &lt;SD card&gt;/Android/data/com.hippo.ehviewer es especial, puedes escribir en ello.</string>

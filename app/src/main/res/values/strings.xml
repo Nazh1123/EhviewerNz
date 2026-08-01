@@ -91,6 +91,9 @@
     <string name="bookmark_subscription_disabled">Removed “%s” from Quick Search Subscriptions</string>
     <string name="bookmark_subscription_unsupported">This Quick Search type cannot be subscribed to</string>
     <string name="bookmark_subscription_partial_failure">Some Quick Search Subscriptions could not be loaded</string>
+    <string name="global_subscription">Global Subscriptions</string>
+    <string name="global_subscription_empty">No galleries were found in EH subscriptions or Quick Search Subscriptions.</string>
+    <string name="global_subscription_partial_failure">Some Global Subscription sources could not be loaded</string>
     <string name="search_corresponding_bookmarks">Search corresponding bookmarks</string>
     <string name="whats_hot">What\'s hot</string>
     <string name="top_lists">Top Lists</string>
@@ -693,7 +696,7 @@
 
     <string name="settings_download">Download</string>
     <string name="settings_download_download_location">Download location</string>
-    <string name="settings_download_manual_save_location">Manual save path</string>
+    <string name="settings_download_manual_save_location">Manual save locatoin</string>
     <string name="settings_download_invalid_download_location">Invalid download location</string>
     <string name="settings_download_cant_get_download_location">Can\'t get download location</string>
     <string name="settings_download_pick_dir_kk">On Android 4.4+, apps can\'t write any data on your external SD card, unless you root the system and apply a patch. But &lt;SD card&gt;/Android/data/com.hippo.ehviewer is an exception. It is writable for this app.</string>

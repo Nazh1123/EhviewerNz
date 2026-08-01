@@ -190,6 +190,7 @@
     <string name="delete_downloads">Downloads löschen</string>
     <string name="quick_search">Sofortsuche</string>
     <string name="bookmark_subscription">Sofortsuche-Abonnements</string>
+    <string name="global_subscription">Globale Abonnements</string>
     <string name="quick_search_tip">Tippe an +, um eine Sofortsuche hinzuzufügen</string>
     <string name="add_quick_search_dialog_title">Sofortsuche hinzufügen</string>
     <string name="name_is_empty">Gib den Name ein</string>
@@ -501,6 +502,7 @@
     <string name="settings_read_screen_lightness">Helligkeit</string>
     <string name="settings_download">Download</string>
     <string name="settings_download_download_location">Downloadziel</string>
+    <string name="settings_download_manual_save_location">Manueller Speicherort</string>
     <string name="settings_download_invalid_download_location">Ungültiges Downloadziel</string>
     <string name="settings_download_cant_get_download_location">Downloadziel konnte nicht geladen werden</string>
     <string name="settings_download_pick_dir_l">Android 5.0+ stellt eine neue API breit, die erlaubt, Daten auf SD-Karte zu schreiben. Auf DOKUMENT antippen, um SD-Karte als Downloadziel festzulegen</string>
