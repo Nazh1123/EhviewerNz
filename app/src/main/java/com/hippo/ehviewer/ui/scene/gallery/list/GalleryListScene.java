@@ -2413,12 +2413,7 @@ public class GalleryListScene extends BaseScene
             }
 
             if (isBookmarkSubscriptionMode()) {
-                BookmarkSubscriptionCoordinator coordinator =
-                        getBookmarkSubscriptionCoordinator();
-                if (coordinator != null) {
-                    coordinator.refresh(taskId, EhDB.getSubscribedQuickSearch(),
-                            isGlobalSubscriptionMode());
-                }
+                loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode());
                 return;
             } else if (mBookmarkSubscriptionCoordinator != null
                     && mBookmarkSubscriptionCoordinator.isLoading()) {
@@ -2444,6 +2439,35 @@ public class GalleryListScene extends BaseScene
                 request.setArgs(url, mUrlBuilder.getMode());
                 mClient.execute(request);
             }
+        }
+
+        private void loadBookmarkSubscriptions(int taskId, @NonNull MainActivity activity,
+                                               boolean includeEhSubscription) {
+            executorService.execute(() -> {
+                final List<QuickSearch> subscriptions;
+                try {
+                    subscriptions = EhDB.getSubscribedQuickSearch();
+                } catch (Exception e) {
+                    activity.runOnUiThread(() -> {
+                        if (mHelper != null && mHelper.isCurrentTask(taskId)) {
+                            onGetGalleryListFailure(e, taskId);
+                        }
+                    });
+                    return;
+                }
+
+                activity.runOnUiThread(() -> {
+                    if (!isBookmarkSubscriptionMode() || mHelper == null
+                            || !mHelper.isCurrentTask(taskId)) {
+                        return;
+                    }
+                    BookmarkSubscriptionCoordinator coordinator =
+                            getBookmarkSubscriptionCoordinator();
+                    if (coordinator != null) {
+                        coordinator.refresh(taskId, subscriptions, includeEhSubscription);
+                    }
+                });
+            });
         }
 
         @Override
