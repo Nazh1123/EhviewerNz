@@ -1,4 +1,4 @@
-# EhViewerNz 2.2.0.3.0
+# EhViewerNz 2.0.2.3.1
 
 #### 基于 [EhViewer[xiaojieonly] 2.0.2.3 ](https://github.com/xiaojieonly/Ehviewer_CN_SXJ/releases/tag/2.0.2.3)
 
