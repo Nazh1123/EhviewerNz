@@ -48,7 +48,7 @@
         app:fragment="com.hippo.ehviewer.ui.fragment.AdvancedFragment" />
 
     <com.hippo.ehviewer.ui.fragment.BasePreference
-        android:icon="@drawable/v_adb_primary_x24"
+        android:icon="@drawable/v_settings_primary_x24"
         android:title="@string/settings_fork_features"
         app:allowDividerAbove="true"
         app:fragment="com.hippo.ehviewer.ui.fragment.ForkFeaturesFragment" />

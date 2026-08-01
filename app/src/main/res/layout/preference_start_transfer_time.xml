@@ -68,6 +68,6 @@
 
     <Space
         android:layout_width="match_parent"
-        android:layout_height="12dp"/>
+        android:layout_height="36dp"/>
 
 </LinearLayout>

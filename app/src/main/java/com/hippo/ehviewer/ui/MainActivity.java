@@ -406,8 +406,8 @@ public final class MainActivity extends StageActivity
         updateProfile();
         mDisplayName = (TextView) ViewUtils.$$(headerLayout, R.id.display_name);
         TextView mChangeTheme = (TextView) ViewUtils.$$(this, R.id.change_theme);
-        TextView searchLanguageToggle =
-                (TextView) ViewUtils.$$(this, R.id.search_language_toggle);
+        NavigationView searchLanguageNav =
+                (NavigationView) ViewUtils.$$(this, R.id.nav_search_language_view);
 
         limitsCountView = (LimitsCountView) ViewUtils.$$(this, R.id.limits_count_view);
 
@@ -423,20 +423,14 @@ public final class MainActivity extends StageActivity
         }
         if (Settings.getTheme() == 0) {
             mChangeTheme.setTextColor(getColor(R.color.theme_change_light));
-            searchLanguageToggle.setTextColor(getColor(R.color.theme_change_light));
 
             mChangeTheme.setBackgroundColor(getColor(R.color.white));
-            searchLanguageToggle.setBackgroundColor(getColor(R.color.white));
         } else if (Settings.getTheme() == 1) {
             mChangeTheme.setTextColor(getColor(R.color.theme_change_other));
-            searchLanguageToggle.setTextColor(getColor(R.color.theme_change_other));
             mChangeTheme.setBackgroundColor(getColor(R.color.grey_850));
-            searchLanguageToggle.setBackgroundColor(getColor(R.color.grey_850));
         } else {
             mChangeTheme.setTextColor(getColor(R.color.theme_change_other));
-            searchLanguageToggle.setTextColor(getColor(R.color.theme_change_other));
             mChangeTheme.setBackgroundColor(getColor(R.color.black));
-            searchLanguageToggle.setBackgroundColor(getColor(R.color.black));
         }
 
         mChangeTheme.setText(getThemeText());
@@ -444,7 +438,13 @@ public final class MainActivity extends StageActivity
             Settings.putTheme(getNextTheme());
             ((EhApplication) getApplication()).recreate();
         });
-        searchLanguageToggle.setOnClickListener(v -> toggleSearchLanguage());
+        searchLanguageNav.setNavigationItemSelectedListener(item -> {
+            if (item.getItemId() == R.id.nav_search_language) {
+                toggleSearchLanguage();
+                return true;
+            }
+            return false;
+        });
 
         if (savedInstanceState == null) {
             onInit();

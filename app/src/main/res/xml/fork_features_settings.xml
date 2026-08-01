@@ -16,20 +16,28 @@
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="gallery_direct_save"
+        android:summary="@string/settings_fork_quick_save_summary"
         android:title="@string/settings_read_direct_save" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="gallery_quick_save_turn_page"
+        android:summary="@string/settings_fork_save_then_turn_page_summary"
         android:title="@string/settings_read_quick_save_turn_page" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="gallery_double_tap_zoom"
+        android:summary="@string/settings_fork_double_tap_zoom_summary"
         android:title="@string/settings_read_double_tap_zoom" />
 
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="show_thumbnail_download_badge"
+        android:summary="@string/settings_eh_show_thumbnail_download_badge_summary"
+        android:title="@string/settings_eh_show_thumbnail_download_badge" />
+
     <com.hippo.preference.ListPreference
-        android:defaultValue="chinese"
         android:key="search_language"
         android:summary="%s"
         android:title="@string/settings_search_language"

@@ -66,7 +66,6 @@
         app:entryValues="@array/app_language_entry_values" />
 
     <com.hippo.preference.ListPreference
-        android:defaultValue="chinese"
         android:key="search_language"
         android:summary="%s"
         android:title="@string/settings_search_language"

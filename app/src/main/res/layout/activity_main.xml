@@ -53,7 +53,7 @@
                         android:layout_height="match_parent"
                         android:layout_weight="1"
                         android:background="?android:navigationBarColor"
-                        android:paddingBottom="96dip"
+                        android:paddingBottom="168dip"
                         android:scrollbars="vertical"
                         app:headerLayout="@layout/nav_header_main"
                         app:insetForeground="@android:color/transparent"
@@ -69,6 +69,18 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical">
+
+                        <com.google.android.material.navigation.NavigationView
+                            android:id="@+id/nav_search_language_view"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="?android:navigationBarColor"
+                            app:insetForeground="@android:color/transparent"
+                            app:menu="@menu/nav_drawer_search_language" />
+
+                        <Space
+                            android:layout_width="match_parent"
+                            android:layout_height="24dp" />
 
                         <com.hippo.ehviewer.widget.LimitsCountView
                             android:id="@+id/limits_count_view"
@@ -86,19 +98,6 @@
                             android:gravity="center_vertical|center_horizontal"
                             android:minWidth="88dip"
                             android:minHeight="48dip"
-                            app:insetForeground="@android:color/transparent" />
-
-                        <TextView
-                            android:id="@+id/search_language_toggle"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center_vertical|center_horizontal"
-                            android:minWidth="88dip"
-                            android:minHeight="48dip"
-                            android:text="@string/settings_search_language"
                             app:insetForeground="@android:color/transparent" />
                     </LinearLayout>
                 </FrameLayout>

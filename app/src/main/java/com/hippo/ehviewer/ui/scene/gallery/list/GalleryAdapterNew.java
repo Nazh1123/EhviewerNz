@@ -286,6 +286,10 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     ((TriangleDrawable) drawable).setColor(color);
                 }
                 holder.simpleLanguage.setText(gi.simpleLanguage);
+                holder.downloaded.setVisibility(
+                        Settings.getShowThumbnailDownloadBadge() &&
+                                mDownloadManager.containDownloadInfo(gi.gid)
+                                ? View.VISIBLE : View.GONE);
                 break;
             }
         }

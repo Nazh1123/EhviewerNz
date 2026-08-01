@@ -86,6 +86,9 @@ public class Settings {
                 putDF(true);
             }
         }
+        if (!sSettingsPre.contains(KEY_SEARCH_LANGUAGE)) {
+            putString(KEY_SEARCH_LANGUAGE, getInitialSearchLanguage());
+        }
         getStartTransferTime();
     }
 
@@ -412,6 +415,15 @@ public class Settings {
         return getIntFromStr(KEY_LIST_MODE, DEFAULT_LIST_MODE);
     }
 
+    public static final String KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE =
+            "show_thumbnail_download_badge";
+    private static final boolean DEFAULT_SHOW_THUMBNAIL_DOWNLOAD_BADGE = true;
+
+    public static boolean getShowThumbnailDownloadBadge() {
+        return getBoolean(KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE,
+                DEFAULT_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
+    }
+
     public static final String KEY_DETAIL_SIZE = "detail_size";
     private static final int DEFAULT_DETAIL_SIZE = 0;
 
@@ -659,12 +671,43 @@ public class Settings {
     }
 
     public static final String KEY_SEARCH_LANGUAGE = "search_language";
-    private static final String DEFAULT_SEARCH_LANGUAGE = "chinese";
 
     @NonNull
     public static String getSearchLanguage() {
-        String language = getString(KEY_SEARCH_LANGUAGE, DEFAULT_SEARCH_LANGUAGE);
-        return TextUtils.isEmpty(language) ? DEFAULT_SEARCH_LANGUAGE : language;
+        String language = getString(KEY_SEARCH_LANGUAGE, null);
+        return TextUtils.isEmpty(language) ? getInitialSearchLanguage() : language;
+    }
+
+    @NonNull
+    private static String getInitialSearchLanguage() {
+        String appLanguage = getAppLanguage();
+        String language;
+        if (TextUtils.isEmpty(appLanguage) || "system".equalsIgnoreCase(appLanguage)) {
+            language = Locale.getDefault().getLanguage();
+        } else {
+            int separator = appLanguage.indexOf('-');
+            language = separator >= 0 ? appLanguage.substring(0, separator) : appLanguage;
+        }
+
+        switch (language.toLowerCase(Locale.US)) {
+            case "zh":
+                return "chinese";
+            case "ja":
+                return "japanese";
+            case "ko":
+                return "korean";
+            case "de":
+                return "german";
+            case "es":
+                return "spanish";
+            case "fr":
+                return "french";
+            case "th":
+                return "thai";
+            case "en":
+            default:
+                return "english";
+        }
     }
 
     private static final String KEY_KEEP_SCREEN_ON = "keep_screen_on";

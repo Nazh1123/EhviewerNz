@@ -1,5 +1,6 @@
 package com.hippo.ehviewer.ui.fragment;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -50,6 +51,16 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
                                     @Nullable String rootKey) {
         addPreferencesFromResource(R.xml.fork_features_settings);
         mManualImageSaveLocation = findPreference(KEY_MANUAL_IMAGE_SAVE_LOCATION);
+        Preference showThumbnailDownloadBadge =
+                findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
+        if (showThumbnailDownloadBadge != null) {
+            showThumbnailDownloadBadge.setOnPreferenceChangeListener((preference, newValue) -> {
+                if (getActivity() != null) {
+                    getActivity().setResult(Activity.RESULT_OK);
+                }
+                return true;
+            });
+        }
         updateManualSaveLocationSummary();
         if (mManualImageSaveLocation != null) {
             mManualImageSaveLocation.setOnPreferenceClickListener(preference -> {

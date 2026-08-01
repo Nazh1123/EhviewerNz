@@ -614,6 +614,8 @@
     <string name="settings_eh_list_mode">List mode</string>
     <string name="settings_eh_list_mode_detail">Detail</string>
     <string name="settings_eh_list_mode_thumb">Thumb</string>
+    <string name="settings_eh_show_thumbnail_download_badge">Show download badge on thumbnails</string>
+    <string name="settings_eh_show_thumbnail_download_badge_summary">Show the downloaded gallery badge in the lower-right corner in thumbnail mode</string>
     <string name="settings_eh_detail_size">Detail size</string>
     <string name="settings_eh_detail_size_long">Long</string>
     <string name="settings_eh_detail_size_short">Short</string>
@@ -746,8 +748,11 @@
     <string name="settings_advanced_read_cache_size">Read cache size</string>
     <string name="settings_advanced_app_language_title">App language</string>
     <string name="settings_search_language">Search language item</string>
-    <string name="settings_fork_features">Fork extra features</string>
+    <string name="settings_fork_features">Fork Extra Features</string>
     <string name="settings_fork_gallery_immediate_jump">Immediate gallery jump</string>
+    <string name="settings_fork_quick_save_summary">Long-press a page-turn area or tap the lower-left screen area to quickly save the current image locally</string>
+    <string name="settings_fork_save_then_turn_page_summary">Automatically turn to the next page after a quick save</string>
+    <string name="settings_fork_double_tap_zoom_summary">When enabled, double-tap to zoom; when disabled, rapid single-tap page turning is supported</string>
     <string name="settings_advanced_proxy">Proxy</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>

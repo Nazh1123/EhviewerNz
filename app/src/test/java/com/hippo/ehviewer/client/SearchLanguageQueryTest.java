@@ -30,4 +30,32 @@ public class SearchLanguageQueryTest {
                 SearchLanguageQuery.toggle(
                         "artist:test L:\"Chinese$\"", "chinese"));
     }
+
+    @Test
+    public void removesLanguageBeforeCommaSeparatedFilter() {
+        assertEquals("f:\"*****$\"",
+                SearchLanguageQuery.toggle(
+                        "l:\"chinese$\", f:\"*****$\"", "chinese"));
+    }
+
+    @Test
+    public void removesLanguageAfterCommaSeparatedFilter() {
+        assertEquals("f:\"*****$\"",
+                SearchLanguageQuery.toggle(
+                        "f:\"*****$\", l:\"chinese$\"", "chinese"));
+    }
+
+    @Test
+    public void preservesCommaStyleWhenAddingLanguage() {
+        assertEquals("f:\"*****$\", artist:test, l:\"chinese$\"",
+                SearchLanguageQuery.toggle(
+                        "f:\"*****$\", artist:test", "chinese"));
+    }
+
+    @Test
+    public void doesNotRewriteCommaInsideQuotedFilter() {
+        assertEquals("f:\"one,two$\"",
+                SearchLanguageQuery.toggle(
+                        "f:\"one,two$\", l:\"chinese$\"", "chinese"));
+    }
 }
