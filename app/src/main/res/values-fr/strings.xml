@@ -223,6 +223,7 @@
     <string name="delete_downloads">Supprimer les téléchargements</string>
 
     <string name="quick_search">Recherche rapide</string>
+    <string name="bookmark_subscription">Abonnements de recherche rapide</string>
     <string name="quick_search_tip">Appuyez sur \"+\" pour ajouter une Recherche rapide</string>
     <string name="add_quick_search_dialog_title">Ajouter la Recherche rapide</string>
     <string name="name_is_empty">Entrez un nom</string>

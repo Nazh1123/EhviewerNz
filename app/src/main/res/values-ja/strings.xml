@@ -210,6 +210,7 @@
     <string name="stop_downloading">ダウンロードを停止</string>
     <string name="delete_downloads">ダウンロードを削除</string>
     <string name="quick_search">クイック検索</string>
+    <string name="bookmark_subscription">クイック検索購読</string>
     <string name="quick_search_tip">「+」をタップしてクイック検索を追加します</string>
     <string name="add_quick_search_dialog_title">クイック検索を追加</string>
     <string name="name_is_empty">タイトルが空です</string>

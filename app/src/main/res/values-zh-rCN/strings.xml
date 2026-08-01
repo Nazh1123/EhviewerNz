@@ -665,6 +665,7 @@
     <string name="settings_fork_quick_save_summary">长按翻页位置或点击屏幕左下角区域，进行快速本地图片保存</string>
     <string name="settings_fork_save_then_turn_page_summary">自动在执行快速保存后，翻至下一页</string>
     <string name="settings_fork_double_tap_zoom_summary">开启后，双击屏幕将放大图片；关闭后，支持快速单击翻页</string>
+    <string name="settings_fork_bookmark_subscription_summary">点击此项，或在书签栏设置中为书签添加订阅。后可在侧边栏中点击“书签订阅”查看依据时间排序的符合书签条件的所有画廊</string>
     <string name="settings_advanced_proxy">代理</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>

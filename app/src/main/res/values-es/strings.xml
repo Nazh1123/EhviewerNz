@@ -224,6 +224,7 @@
     <string name="search_sft">Etiquetas</string>
 
     <string name="quick_search">Búsqueda rápida</string>
+    <string name="bookmark_subscription">Suscripciones de búsqueda rápida</string>
     <string name="quick_search_tip">Pulsar \"+\" para añadir a la búsqueda rápida</string>
     <string name="add_quick_search_dialog_title">Añadir búsqueda rápida</string>
     <string name="name_is_empty">Nombre vacío</string>

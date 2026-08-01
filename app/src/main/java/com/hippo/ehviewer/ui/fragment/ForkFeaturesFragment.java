@@ -13,6 +13,9 @@ import androidx.preference.Preference;
 
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.ui.MainActivity;
+import com.hippo.ehviewer.ui.scene.gallery.list.QuickSearchScene;
+import com.hippo.scene.StageActivity;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.ExceptionUtils;
 
@@ -20,6 +23,8 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
 
     private static final String KEY_MANUAL_IMAGE_SAVE_LOCATION =
             "manual_image_save_location";
+    private static final String KEY_BOOKMARK_SUBSCRIPTION_SETTINGS =
+            "bookmark_subscription_settings";
 
     @Nullable
     private Preference mManualImageSaveLocation;
@@ -58,6 +63,21 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
                 if (getActivity() != null) {
                     getActivity().setResult(Activity.RESULT_OK);
                 }
+                return true;
+            });
+        }
+        Preference bookmarkSubscriptionSettings =
+                findPreference(KEY_BOOKMARK_SUBSCRIPTION_SETTINGS);
+        if (bookmarkSubscriptionSettings != null) {
+            bookmarkSubscriptionSettings.setOnPreferenceClickListener(preference -> {
+                Intent intent = new Intent(requireContext(), MainActivity.class);
+                intent.setAction(StageActivity.ACTION_START_SCENE);
+                intent.putExtra(StageActivity.KEY_SCENE_NAME,
+                        QuickSearchScene.class.getName());
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP |
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                startActivity(intent);
+                requireActivity().finish();
                 return true;
             });
         }

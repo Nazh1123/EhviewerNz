@@ -237,6 +237,7 @@
     <string name="delete_downloads">ลบการดาวน์โหลด</string>
 
     <string name="quick_search">ค้นหาอย่างด่วน</string>
+    <string name="bookmark_subscription">การสมัครรับข้อมูลการค้นหาอย่างด่วน</string>
     <string name="quick_search_tip">แตะ \"+\" เพื่อเพิ่มการค้นหาอย่างด่วน</string>
     <string name="add_quick_search_dialog_title">เพิ่มค้นหาอย่างด่วน</string>
     <string name="name_is_empty">ชื่อห้ามเว้นว่างไว้</string>

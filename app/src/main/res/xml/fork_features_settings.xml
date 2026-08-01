@@ -45,6 +45,13 @@
         app:entries="@array/search_language_entries"
         app:entryValues="@array/search_language_entry_values" />
 
+    <Preference
+        android:key="bookmark_subscription_settings"
+        android:summary="@string/settings_fork_bookmark_subscription_summary"
+        android:title="@string/bookmark_subscription"
+        app:allowDividerAbove="true"
+        app:iconSpaceReserved="false" />
+
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
         android:key="gallery_preview_immediate_jump"

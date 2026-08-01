@@ -406,8 +406,6 @@ public final class MainActivity extends StageActivity
         updateProfile();
         mDisplayName = (TextView) ViewUtils.$$(headerLayout, R.id.display_name);
         TextView mChangeTheme = (TextView) ViewUtils.$$(this, R.id.change_theme);
-        NavigationView searchLanguageNav =
-                (NavigationView) ViewUtils.$$(this, R.id.nav_search_language_view);
 
         limitsCountView = (LimitsCountView) ViewUtils.$$(this, R.id.limits_count_view);
 
@@ -437,13 +435,6 @@ public final class MainActivity extends StageActivity
         mChangeTheme.setOnClickListener(v -> {
             Settings.putTheme(getNextTheme());
             ((EhApplication) getApplication()).recreate();
-        });
-        searchLanguageNav.setNavigationItemSelectedListener(item -> {
-            if (item.getItemId() == R.id.nav_search_language) {
-                toggleSearchLanguage();
-                return true;
-            }
-            return false;
         });
 
         if (savedInstanceState == null) {
@@ -863,12 +854,6 @@ public final class MainActivity extends StageActivity
             args.putParcelable(GalleryListScene.KEY_LIST_URL_BUILDER, builder);
             startSceneFirstly(new Announcer(GalleryListScene.class).setArgs(args));
         }
-        if (mDrawerLayout != null) {
-            mDrawerLayout.closeDrawers();
-        }
-        if (limitsCountView != null) {
-            limitsCountView.hide();
-        }
     }
 
     public void setNavCheckedItem(@IdRes int resId) {
@@ -957,6 +942,9 @@ public final class MainActivity extends StageActivity
                 break;
             case R.id.nav_history:
                 startScene(new Announcer(HistoryScene.class));
+                break;
+            case R.id.nav_search_language:
+                toggleSearchLanguage();
                 break;
             case R.id.nav_downloads:
                 startScene(new Announcer(DownloadsScene.class));

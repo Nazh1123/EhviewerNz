@@ -38,6 +38,7 @@ import com.hippo.ehviewer.client.data.FavListUrlBuilder;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.ui.CommonOperations;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
+import com.hippo.ehviewer.updater.UpdateCheckPolicy;
 import com.hippo.lib.glgallery.GalleryView;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.ExceptionUtils;
@@ -47,7 +48,6 @@ import com.hippo.lib.yorozuya.MathUtils;
 import com.hippo.lib.yorozuya.NumberUtils;
 
 import java.io.File;
-import java.util.Date;
 import java.util.Locale;
 import java.util.Map;
 
@@ -1705,19 +1705,19 @@ public class Settings {
     }
 
     public static final String KEY_LAST_UPDATE_TIME = "last_update_time";
+    public static final String KEY_LAST_UPDATE_VERSION = "last_update_version";
 
     public static long DEFAULT_LAST_UPDATE_TIME = 0L;
 
     public static boolean getIsUpdateTime() {
         long lastUpdateTime = getLong(KEY_LAST_UPDATE_TIME, DEFAULT_LAST_UPDATE_TIME);
-        Date now = new Date();
-        long nowTime = now.getTime();
-        long msNum = nowTime - lastUpdateTime;
-        long dayNum = msNum / (1000 * 60 * 60 * 24);
-        return dayNum >= 1;
+        String lastUpdateVersion = getString(KEY_LAST_UPDATE_VERSION, null);
+        return UpdateCheckPolicy.shouldCheck(lastUpdateTime, lastUpdateVersion,
+                BuildConfig.VERSION_NAME, System.currentTimeMillis());
     }
 
     public static void putUpdateTime(long updateTime) {
-        putLong(KEY_LAST_UPDATE_TIME,updateTime);
+        putLong(KEY_LAST_UPDATE_TIME, updateTime);
+        putString(KEY_LAST_UPDATE_VERSION, BuildConfig.VERSION_NAME);
     }
 }

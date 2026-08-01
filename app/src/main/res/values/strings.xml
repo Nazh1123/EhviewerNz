@@ -83,14 +83,14 @@
 
     <string name="homepage">Homepage</string>
     <string name="subscription">Subscription</string>
-    <string name="bookmark_subscription">Bookmark subscriptions</string>
-    <string name="bookmark_subscription_empty">No subscribed bookmarks. Open the bookmark manager from the right drawer and enable at least one subscription.</string>
-    <string name="bookmark_subscription_enable">Add to bookmark subscriptions</string>
-    <string name="bookmark_subscription_disable">Remove from bookmark subscriptions</string>
-    <string name="bookmark_subscription_enabled">Added “%s” to bookmark subscriptions</string>
-    <string name="bookmark_subscription_disabled">Removed “%s” from bookmark subscriptions</string>
-    <string name="bookmark_subscription_unsupported">This bookmark type cannot be subscribed to</string>
-    <string name="bookmark_subscription_partial_failure">Some bookmark subscriptions could not be loaded</string>
+    <string name="bookmark_subscription">Quick Search Subscriptions</string>
+    <string name="bookmark_subscription_empty">No subscribed Quick Searches. Open Quick Search settings from the right drawer and enable at least one subscription.</string>
+    <string name="bookmark_subscription_enable">Add to Quick Search Subscriptions</string>
+    <string name="bookmark_subscription_disable">Remove from Quick Search Subscriptions</string>
+    <string name="bookmark_subscription_enabled">Added “%s” to Quick Search Subscriptions</string>
+    <string name="bookmark_subscription_disabled">Removed “%s” from Quick Search Subscriptions</string>
+    <string name="bookmark_subscription_unsupported">This Quick Search type cannot be subscribed to</string>
+    <string name="bookmark_subscription_partial_failure">Some Quick Search Subscriptions could not be loaded</string>
     <string name="search_corresponding_bookmarks">Search corresponding bookmarks</string>
     <string name="whats_hot">What\'s hot</string>
     <string name="top_lists">Top Lists</string>
@@ -753,6 +753,7 @@
     <string name="settings_fork_quick_save_summary">Long-press a page-turn area or tap the lower-left screen area to quickly save the current image locally</string>
     <string name="settings_fork_save_then_turn_page_summary">Automatically turn to the next page after a quick save</string>
     <string name="settings_fork_double_tap_zoom_summary">When enabled, double-tap to zoom; when disabled, rapid single-tap page turning is supported</string>
+    <string name="settings_fork_bookmark_subscription_summary">Tap here, or use Quick Search settings, to subscribe to Quick Searches. You can then tap “Quick Search Subscriptions” in the sidebar to view all matching galleries sorted by time.</string>
     <string name="settings_advanced_proxy">Proxy</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>
