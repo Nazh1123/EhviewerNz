@@ -448,6 +448,7 @@
     <string name="settings_eh_default_categories_summary">Auf Startseite angezeigte Standard-Kategorie</string>
     <string name="settings_eh_excluded_languages">Ausgeschlossene Sprachen</string>
     <string name="settings_advanced_app_language_title">Sprache der App (Language)</string>
+    <string name="settings_search_language">Suchsprachen-Tag</string>
     <string name="torrent_count">Torrent (%d)</string>
     <string name="settings_eh_excluded_languages_summary">Galerie von den ausgeschlossenen Sprachen werden in der Galerieliste und der Suchen versteckt</string>
     <string name="settings_eh_excluded_tag_namespaces">Ausgeschlossene Namensraum-Etiketten</string>

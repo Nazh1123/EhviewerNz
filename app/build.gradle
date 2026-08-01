@@ -26,6 +26,7 @@ if (hasSigningProperties) {
     }
 }
 def hasReleaseSigning = hasReleaseKeystore && hasSigningProperties
+def batchDebugAppName = System.getenv("EHVIEWER_BATCH_DEBUG_APP_NAME") == "1"
 
 android {
     namespace 'com.hippo.ehviewer'
@@ -50,7 +51,8 @@ android {
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 30
         versionCode 111
-        versionName "2.2.0.3.0"
+        versionName "2.2.0.1.9"
+        manifestPlaceholders = [appLabel: "@string/app_name"]
         vectorDrawables.useSupportLibrary = true
         resourceConfigurations += ['zh', 'zh-rCN', 'zh-rHK', 'zh-rTW', 'es', 'ja', 'ko', 'fr', 'de', 'th']
         testOptions.unitTests.includeAndroidResources = true
@@ -96,6 +98,9 @@ android {
         debug {
             applicationIdSuffix ".debug"
             buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"com.nz.ehviewernz.debug.fileprovider"'
+            if (batchDebugAppName) {
+                manifestPlaceholders = [appLabel: "EhViewerNz-debug"]
+            }
         }
     }
 

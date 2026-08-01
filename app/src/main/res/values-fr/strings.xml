@@ -791,6 +791,7 @@
     <string name="invalid_ip">IP invalide</string>
     <string name="page_menu_save_to">Enregistrer sous…</string>
     <string name="settings_advanced_app_language_title">Langue de l\'app (Language)</string>
+    <string name="settings_search_language">Balise de langue de recherche</string>
     <string name="settings_advanced_built_in_hosts_title">hosts.txt integré</string>
     <string name="settings_advanced_proxy">Serveur proxy</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s：%3$d</string>

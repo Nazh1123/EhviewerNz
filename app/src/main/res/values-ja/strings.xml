@@ -604,6 +604,7 @@
     <string name="settings_advanced_clear_memory_cache_summary">サムネイルとギャラリー情報のメモリキャッシュをクリアします</string>
     <string name="settings_advanced_read_cache_size">閲覧キャッシュのサイズ</string>
     <string name="settings_advanced_app_language_title">アプリの言語 (Language)</string>
+    <string name="settings_search_language">検索言語タグ</string>
     <string name="settings_advanced_proxy">プロキシ</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>

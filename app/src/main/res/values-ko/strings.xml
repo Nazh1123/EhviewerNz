@@ -653,6 +653,7 @@
     <string name="settings_advanced_clear_memory_cache_summary">섬네일, 갤러리 정보 메모리 캐시 삭제</string>
     <string name="settings_advanced_read_cache_size">읽기 캐시 크기</string>
     <string name="settings_advanced_app_language_title">앱 언어 (Language)</string>
+    <string name="settings_search_language">검색 언어 태그</string>
     <string name="settings_advanced_proxy">프록시</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>

@@ -25,6 +25,7 @@ import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
@@ -184,9 +185,36 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
             lp.width = mListThumbWidth;
             lp.height = mListThumbHeight;
             holder.thumb.setLayoutParams(lp);
+        } else {
+            configureDownloadBadge(holder.downloaded);
         }
 
         return holder;
+    }
+
+    private void configureDownloadBadge(@NonNull ImageView badge) {
+        int sizeRes;
+        int drawableRes;
+        switch (Settings.getThumbSize()) {
+            case 0:
+                sizeRes = R.dimen.gallery_grid_download_badge_large;
+                drawableRes = R.drawable.v_download_badge_x24;
+                break;
+            case 2:
+                sizeRes = R.dimen.gallery_grid_download_badge_small;
+                drawableRes = R.drawable.v_download_badge_x16;
+                break;
+            default:
+                sizeRes = R.dimen.gallery_grid_download_badge_middle;
+                drawableRes = R.drawable.v_download_badge_x20;
+                break;
+        }
+        int size = mResources.getDimensionPixelSize(sizeRes);
+        ViewGroup.LayoutParams layoutParams = badge.getLayoutParams();
+        layoutParams.width = size;
+        layoutParams.height = size;
+        badge.setLayoutParams(layoutParams);
+        badge.setImageResource(drawableRes);
     }
 
     @Override

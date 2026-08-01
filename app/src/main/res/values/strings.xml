@@ -747,7 +747,7 @@
     <string name="settings_advanced_clear_memory_cache_summary">Clear thumb, gallery info memory cache</string>
     <string name="settings_advanced_read_cache_size">Read cache size</string>
     <string name="settings_advanced_app_language_title">App language</string>
-    <string name="settings_search_language">Search language item</string>
+    <string name="settings_search_language">Search Language Tag</string>
     <string name="settings_fork_features">Fork Extra Features</string>
     <string name="settings_fork_gallery_immediate_jump">Immediate gallery jump</string>
     <string name="settings_fork_quick_save_summary">Long-press a page-turn area or tap the lower-left screen area to quickly save the current image locally</string>

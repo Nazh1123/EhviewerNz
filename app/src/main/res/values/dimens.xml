@@ -69,6 +69,9 @@
 
     <dimen name="gallery_grid_column_width_large">160dp</dimen>
     <dimen name="gallery_grid_column_width_middle">120dp</dimen>
+    <dimen name="gallery_grid_download_badge_large">24dp</dimen>
+    <dimen name="gallery_grid_download_badge_middle">20dp</dimen>
+    <dimen name="gallery_grid_download_badge_small">16dp</dimen>
     <dimen name="gallery_grid_column_width_small">80dp</dimen>
 
     <!-- 4dp - 4dp, 4dp for card padding -->
