@@ -78,6 +78,7 @@ public class GalleryListParser {
         public String customErrorString;
         public boolean noWatchedTags;
         public int rawResultCount;
+        public long rawHeadGid;
         public String rawTailPosted;
         public long rawTailGid;
         public List<GalleryInfo> galleryInfoList = new ArrayList<>();
@@ -233,6 +234,7 @@ public class GalleryListParser {
             result.galleryInfoList = list;
             result.rawResultCount = list.size();
             if (!list.isEmpty()) {
+                result.rawHeadGid = list.get(0).gid;
                 GalleryInfo tail = list.get(list.size() - 1);
                 result.rawTailPosted = tail.posted;
                 result.rawTailGid = tail.gid;

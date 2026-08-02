@@ -94,6 +94,15 @@
     <string name="global_subscription">Global Subscriptions</string>
     <string name="global_subscription_empty">No galleries were found in EH subscriptions or Quick Search Subscriptions.</string>
     <string name="global_subscription_partial_failure">Some Global Subscription sources could not be loaded</string>
+    <string name="update_subscriptions">Update subscriptions</string>
+    <string name="subscription_updates_checking">Checking subscription updates…</string>
+    <string name="subscription_updates_none">No subscription updates</string>
+    <string name="subscription_updates_failed">Subscription update check failed</string>
+    <string name="subscription_updates_already_checking">A subscription update check is already running</string>
+    <string name="subscription_updates_no_sources">No subscription update source is enabled</string>
+    <string name="subscription_updates_eh_message">EH subscription updates: %1$d</string>
+    <string name="subscription_updates_bookmark_message">Quick Search subscription updates: %1$d</string>
+    <string name="subscription_updates_global_message">Global subscription updates: %1$d</string>
     <string name="search_corresponding_bookmarks">Search corresponding bookmarks</string>
     <string name="whats_hot">What\'s hot</string>
     <string name="top_lists">Top Lists</string>
@@ -679,6 +688,9 @@
     <string name="settings_read_start_position_bottom_left">Bottom left</string>
     <string name="settings_read_start_position_bottom_right">Bottom right</string>
     <string name="settings_read_auto_transfer_time">Auto Transfer(ms)</string>
+    <string name="settings_fork_auto_subscription_updates">Automatically fetch subscription updates</string>
+    <string name="settings_fork_auto_subscription_updates_summary">Fetch the number of updated galleries in subscriptions at least once per hour</string>
+    <string name="settings_fork_auto_subscription_updates_eh">EH subscriptions</string>
     <string name="settings_read_direct_save">Quick save</string>
     <string name="settings_read_quick_save_turn_page">Turn page after saving</string>
     <string name="settings_read_double_tap_zoom">Double-tap to zoom</string>

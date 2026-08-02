@@ -36,6 +36,15 @@
     <string name="global_subscription">全局订阅</string>
     <string name="global_subscription_empty">EH 订阅和书签订阅中均未找到画廊。</string>
     <string name="global_subscription_partial_failure">部分全局订阅来源加载失败</string>
+    <string name="update_subscriptions">更新订阅</string>
+    <string name="subscription_updates_checking">正在检查订阅更新…</string>
+    <string name="subscription_updates_none">订阅暂无更新</string>
+    <string name="subscription_updates_failed">订阅更新检查失败</string>
+    <string name="subscription_updates_already_checking">订阅更新检查正在进行</string>
+    <string name="subscription_updates_no_sources">未启用订阅更新来源</string>
+    <string name="subscription_updates_eh_message">EH 订阅更新: %1$d</string>
+    <string name="subscription_updates_bookmark_message">书签订阅更新: %1$d</string>
+    <string name="subscription_updates_global_message">全局订阅更新: %1$d</string>
     <string name="search_corresponding_bookmarks">搜索对应书签</string>
     <string name="whats_hot">热门</string>
     <string name="top_lists">排行榜</string>
@@ -664,6 +673,9 @@
     <string name="settings_advanced_app_language_title">App 界面语言</string>
     <string name="settings_search_language">搜索语言项</string>
     <string name="settings_fork_features">Fork额外功能</string>
+    <string name="settings_fork_auto_subscription_updates">自动获取订阅更新</string>
+    <string name="settings_fork_auto_subscription_updates_summary">至少每一个小时获取订阅内容的更新画廊数量</string>
+    <string name="settings_fork_auto_subscription_updates_eh">EH 订阅</string>
     <string name="settings_fork_gallery_immediate_jump">画廊立即跳转</string>
     <string name="settings_fork_quick_save_summary">长按翻页位置或点击屏幕左下角区域，进行快速本地图片保存</string>
     <string name="settings_fork_save_then_turn_page_summary">自动在执行快速保存后，翻至下一页</string>

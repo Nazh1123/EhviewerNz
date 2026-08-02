@@ -118,6 +118,8 @@ final class BookmarkSubscriptionCoordinator {
     private int mActiveRequests;
     private int mInitialRequestsRemaining;
     private int mBatchSize = DEFAULT_BATCH_SIZE;
+    private long mLatestEhGid;
+    private long mLatestBookmarkGid;
     private boolean mRefresh;
     private boolean mLoading;
     @Nullable private Exception mFirstFailure;
@@ -173,6 +175,14 @@ final class BookmarkSubscriptionCoordinator {
 
     boolean isLoading() {
         return mLoading;
+    }
+
+    long getLatestEhGid() {
+        return mLatestEhGid;
+    }
+
+    long getLatestBookmarkGid() {
+        return mLatestBookmarkGid;
     }
 
     @Nullable
@@ -307,6 +317,8 @@ final class BookmarkSubscriptionCoordinator {
         mPendingBatch.clear();
         mEmittedGids.clear();
         mMatchingQuickSearches.clear();
+        mLatestEhGid = 0L;
+        mLatestBookmarkGid = 0L;
     }
 
     private boolean containsEquivalentSource(QuickSearch quickSearch) {
@@ -393,6 +405,12 @@ final class BookmarkSubscriptionCoordinator {
         source.bufferIndex = 0;
         source.buffer.addAll(result.galleryInfoList);
         for (GalleryInfo galleryInfo : result.galleryInfoList) {
+            if (source.quickSearch == null) {
+                mLatestEhGid = Math.max(mLatestEhGid, galleryInfo.gid);
+            } else {
+                mLatestBookmarkGid = Math.max(
+                        mLatestBookmarkGid, galleryInfo.gid);
+            }
             if (source.quickSearch != null) {
                 LinkedHashSet<QuickSearch> matches =
                         mMatchingQuickSearches.get(galleryInfo.gid);

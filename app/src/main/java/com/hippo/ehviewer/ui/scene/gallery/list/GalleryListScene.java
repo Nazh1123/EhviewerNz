@@ -81,6 +81,7 @@ import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.SearchLanguageQuery;
+import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUtils;
@@ -311,6 +312,8 @@ public class GalleryListScene extends BaseScene
     private FavouriteStatusRouter.Listener mFavouriteStatusRouterListener;
     @Nullable
     private BookmarkSubscriptionCoordinator mBookmarkSubscriptionCoordinator;
+    @Nullable
+    private SubscriptionUpdateManager mSubscriptionUpdateManager;
 
     @Override
     public int getNavCheckedItem() {
@@ -354,6 +357,7 @@ public class GalleryListScene extends BaseScene
             exitMultiSelectMode();
         }
         handleArgs(args);
+        markSubscriptionOpened();
         onUpdateUrlBuilder();
         if (null != mHelper) {
             mHelper.refresh();
@@ -374,6 +378,8 @@ public class GalleryListScene extends BaseScene
         AssertUtils.assertNotNull(context);
         executorService = EhApplication.getExecutorService(context);
         mClient = EhApplication.getEhClient(context);
+        mSubscriptionUpdateManager =
+                EhApplication.getSubscriptionUpdateManager(context);
         mDownloadManager = EhApplication.getDownloadManager(context);
         mFavouriteStatusRouter = EhApplication.getFavouriteStatusRouter(context);
 
@@ -446,6 +452,7 @@ public class GalleryListScene extends BaseScene
         } else {
             onRestore(savedInstanceState);
         }
+        markSubscriptionOpened();
         showReadProgress = Settings.getShowReadProgress();
     }
 
@@ -500,6 +507,7 @@ public class GalleryListScene extends BaseScene
         }
         mClient = null;
         mUrlBuilder = null;
+        mSubscriptionUpdateManager = null;
         mDownloadManager.removeDownloadInfoListener(mDownloadInfoListener);
         mFavouriteStatusRouter.removeListener(mFavouriteStatusRouterListener);
         EventBus.getDefault().unregister(this);
@@ -2219,6 +2227,13 @@ public class GalleryListScene extends BaseScene
     private void onGetGalleryListSuccess(GalleryListParser.Result result, int taskId) {
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
+            if (mUrlBuilder != null
+                    && mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION
+                    && mHelper.isCurrentTaskRefresh(taskId)
+                    && mSubscriptionUpdateManager != null) {
+                mSubscriptionUpdateManager.recordEhPageViewed(
+                        result.galleryInfoList);
+            }
             String emptyString;
             if (result.customErrorString == null) {
                 emptyString = getResources2().getString(mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION && result.noWatchedTags
@@ -2245,6 +2260,18 @@ public class GalleryListScene extends BaseScene
         return mUrlBuilder != null
                 && (mUrlBuilder.getMode() == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
                 || mUrlBuilder.getMode() == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+    }
+
+    private void markSubscriptionOpened() {
+        if (mUrlBuilder == null || mSubscriptionUpdateManager == null) {
+            return;
+        }
+        int mode = mUrlBuilder.getMode();
+        if (mode == ListUrlBuilder.MODE_SUBSCRIPTION
+                || mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
+                || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
+            mSubscriptionUpdateManager.onSubscriptionOpened(mode);
+        }
     }
 
     private boolean isGlobalSubscriptionMode() {
@@ -2284,6 +2311,17 @@ public class GalleryListScene extends BaseScene
             showTip(isGlobalSubscriptionMode()
                     ? R.string.global_subscription_partial_failure
                     : R.string.bookmark_subscription_partial_failure, LENGTH_SHORT);
+        }
+        if (refresh && !partialFailure && mSubscriptionUpdateManager != null
+                && mBookmarkSubscriptionCoordinator != null) {
+            if (isGlobalSubscriptionMode()) {
+                mSubscriptionUpdateManager.recordGlobalPageViewed(
+                        mBookmarkSubscriptionCoordinator.getLatestEhGid(),
+                        mBookmarkSubscriptionCoordinator.getLatestBookmarkGid());
+            } else {
+                mSubscriptionUpdateManager.recordBookmarkPageViewed(
+                        mBookmarkSubscriptionCoordinator.getLatestBookmarkGid());
+            }
         }
         onGetGalleryListSuccess(result, taskId);
     }

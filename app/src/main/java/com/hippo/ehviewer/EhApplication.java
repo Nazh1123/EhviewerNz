@@ -49,6 +49,7 @@ import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhCookieStore;
 import com.hippo.ehviewer.client.EhHosts;
 import com.hippo.ehviewer.client.EhEngine;
+import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.data.EhNewsDetail;
 import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ehviewer.client.data.userTag.UserTagList;
@@ -121,6 +122,7 @@ public class EhApplication extends RecordingApplication {
 
     private EhCookieStore mEhCookieStore;
     private EhClient mEhClient;
+    private SubscriptionUpdateManager mSubscriptionUpdateManager;
     private EhProxySelector mEhProxySelector;
     private OkHttpClient mOkHttpClient;
     private OkHttpClient mImageOkHttpClient;
@@ -363,6 +365,17 @@ public class EhApplication extends RecordingApplication {
             application.mEhClient = new EhClient(application);
         }
         return application.mEhClient;
+    }
+
+    @NonNull
+    public static SubscriptionUpdateManager getSubscriptionUpdateManager(
+            @NonNull Context context) {
+        EhApplication application = ((EhApplication) context.getApplicationContext());
+        if (application.mSubscriptionUpdateManager == null) {
+            application.mSubscriptionUpdateManager =
+                    new SubscriptionUpdateManager(application);
+        }
+        return application.mSubscriptionUpdateManager;
     }
 
     @NonNull

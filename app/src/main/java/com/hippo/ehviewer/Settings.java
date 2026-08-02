@@ -428,6 +428,25 @@ public class Settings {
                 DEFAULT_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
     }
 
+    public static final String KEY_AUTO_SUBSCRIPTION_UPDATES =
+            "auto_subscription_updates";
+    public static final String KEY_AUTO_SUBSCRIPTION_UPDATES_EH =
+            "auto_subscription_updates_eh";
+    public static final String KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK =
+            "auto_subscription_updates_bookmark";
+
+    public static boolean getAutoSubscriptionUpdates() {
+        return getBoolean(KEY_AUTO_SUBSCRIPTION_UPDATES, false);
+    }
+
+    public static boolean getAutoSubscriptionUpdatesEh() {
+        return getBoolean(KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
+    }
+
+    public static boolean getAutoSubscriptionUpdatesBookmark() {
+        return getBoolean(KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, true);
+    }
+
     public static final String KEY_DETAIL_SIZE = "detail_size";
     private static final int DEFAULT_DETAIL_SIZE = 0;
 

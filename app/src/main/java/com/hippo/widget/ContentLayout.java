@@ -442,6 +442,11 @@ public class ContentLayout extends FrameLayout {
             return mCurrentTaskId == taskId;
         }
 
+        public boolean isCurrentTaskRefresh(int taskId) {
+            return mCurrentTaskId == taskId
+                    && mCurrentTaskType == TYPE_REFRESH;
+        }
+
         public int getPages() {
             return mPages;
         }

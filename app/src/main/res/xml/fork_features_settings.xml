@@ -61,6 +61,23 @@
         app:iconSpaceReserved="false" />
 
     <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="auto_subscription_updates"
+        android:summary="@string/settings_fork_auto_subscription_updates_summary"
+        android:title="@string/settings_fork_auto_subscription_updates"
+        app:allowDividerAbove="true" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="auto_subscription_updates_eh"
+        android:title="@string/settings_fork_auto_subscription_updates_eh" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="auto_subscription_updates_bookmark"
+        android:title="@string/bookmark_subscription" />
+
+    <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
         android:key="gallery_preview_immediate_jump"
         android:summary="@string/settings_eh_gallery_preview_immediate_jump_summary"

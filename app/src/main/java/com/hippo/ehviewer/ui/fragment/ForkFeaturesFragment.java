@@ -81,6 +81,23 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
                 return true;
             });
         }
+        Preference autoSubscriptionUpdates =
+                findPreference(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES);
+        Preference autoSubscriptionUpdatesEh =
+                findPreference(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH);
+        Preference autoSubscriptionUpdatesBookmark =
+                findPreference(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK);
+        boolean showAutoSubscriptionSources = Settings.getAutoSubscriptionUpdates();
+        setSubscriptionSourcePreferencesVisible(autoSubscriptionUpdatesEh,
+                autoSubscriptionUpdatesBookmark, showAutoSubscriptionSources);
+        if (autoSubscriptionUpdates != null) {
+            autoSubscriptionUpdates.setOnPreferenceChangeListener((preference, newValue) -> {
+                boolean visible = Boolean.TRUE.equals(newValue);
+                setSubscriptionSourcePreferencesVisible(autoSubscriptionUpdatesEh,
+                        autoSubscriptionUpdatesBookmark, visible);
+                return true;
+            });
+        }
         updateManualSaveLocationSummary();
         if (mManualImageSaveLocation != null) {
             mManualImageSaveLocation.setOnPreferenceClickListener(preference -> {
@@ -121,6 +138,18 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
             Toast.makeText(getContext(),
                     R.string.settings_download_cant_get_download_location,
                     Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private static void setSubscriptionSourcePreferencesVisible(
+            @Nullable Preference ehPreference,
+            @Nullable Preference bookmarkPreference,
+            boolean visible) {
+        if (ehPreference != null) {
+            ehPreference.setVisible(visible);
+        }
+        if (bookmarkPreference != null) {
+            bookmarkPreference.setVisible(visible);
         }
     }
 }

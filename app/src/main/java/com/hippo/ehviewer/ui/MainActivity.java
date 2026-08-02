@@ -73,6 +73,7 @@ import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUrlOpener;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.SearchLanguageQuery;
+import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.ui.main.UserImageChange;
 import com.hippo.ehviewer.ui.scene.AnalyticsScene;
@@ -157,6 +158,49 @@ public final class MainActivity extends StageActivity
     private LimitsCountView limitsCountView;
     @Nullable
     UserImageChange userImageChange;
+    @Nullable
+    private SubscriptionUpdateManager mSubscriptionUpdateManager;
+    @Nullable
+    private TextView mEhSubscriptionBadge;
+    @Nullable
+    private TextView mBookmarkSubscriptionBadge;
+    @Nullable
+    private TextView mGlobalSubscriptionBadge;
+    private boolean mSubscriptionUpdatesStarted;
+
+    private final Handler mSubscriptionUpdateHandler =
+            new Handler(Looper.getMainLooper());
+    private final Runnable mSubscriptionUpdateRunnable = () -> {
+        SubscriptionUpdateManager manager = mSubscriptionUpdateManager;
+        if (!mSubscriptionUpdatesStarted || manager == null
+                || !Settings.getAutoSubscriptionUpdates()) {
+            return;
+        }
+        if (!Settings.getAutoSubscriptionUpdatesEh()
+                && !Settings.getAutoSubscriptionUpdatesBookmark()) {
+            scheduleSubscriptionUpdateCheckAfterInterval();
+            return;
+        }
+        manager.checkForUpdates(false);
+        scheduleSubscriptionUpdateCheck();
+    };
+
+    private final SubscriptionUpdateManager.Listener mSubscriptionUpdateListener =
+            new SubscriptionUpdateManager.Listener() {
+                @Override
+                public void onSubscriptionUpdateStateChanged() {
+                    renderSubscriptionUpdateState();
+                    scheduleSubscriptionUpdateCheck();
+                }
+
+                @Override
+                public void onSubscriptionUpdateCheckFinished(
+                        @NonNull SubscriptionUpdateManager.CheckResult result) {
+                    renderSubscriptionUpdateState();
+                    scheduleSubscriptionUpdateCheck();
+                    showSubscriptionUpdateResult(result);
+                }
+            };
 
     private int mNavCheckedItem = 0;
 
@@ -396,6 +440,9 @@ public final class MainActivity extends StageActivity
         mDrawerLayout = (EhDrawerLayout) ViewUtils.$$(this, R.id.draw_view);
         mDrawerLayout.setDrawerListener(this);
         mNavView = (NavigationView) ViewUtils.$$(this, R.id.nav_view);
+        mSubscriptionUpdateManager =
+                EhApplication.getSubscriptionUpdateManager(this);
+        initSubscriptionUpdateBadges();
         mRightDrawer = (FrameLayout) ViewUtils.$$(this, R.id.right_drawer);
         View headerLayout = mNavView.getHeaderView(0);
         mAvatar = (AvatarImageView) ViewUtils.$$(headerLayout, R.id.avatar);
@@ -452,6 +499,12 @@ public final class MainActivity extends StageActivity
     @Override
     protected void onStart() {
         super.onStart();
+        mSubscriptionUpdatesStarted = true;
+        if (mSubscriptionUpdateManager != null) {
+            mSubscriptionUpdateManager.setListener(mSubscriptionUpdateListener);
+        }
+        renderSubscriptionUpdateState();
+        scheduleSubscriptionUpdateCheck();
         if (!Settings.getCloseAutoUpdate()){
             AppUpdater.update(this,false);
         }
@@ -616,11 +669,17 @@ public final class MainActivity extends StageActivity
     protected void onDestroy() {
         super.onDestroy();
 
+        mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
+
         mDrawerLayout = null;
         mNavView = null;
         mRightDrawer = null;
         mAvatar = null;
         mDisplayName = null;
+        mEhSubscriptionBadge = null;
+        mBookmarkSubscriptionBadge = null;
+        mGlobalSubscriptionBadge = null;
+        mSubscriptionUpdateManager = null;
     }
 
     @Override
@@ -628,8 +687,21 @@ public final class MainActivity extends StageActivity
         super.onResume();
 
         setNavCheckedItem(mNavCheckedItem);
+        renderSubscriptionUpdateState();
+        scheduleSubscriptionUpdateCheck();
 
         checkClipboardUrl();
+    }
+
+    @Override
+    protected void onStop() {
+        mSubscriptionUpdatesStarted = false;
+        mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
+        if (mSubscriptionUpdateManager != null) {
+            mSubscriptionUpdateManager.setListener(null);
+            mSubscriptionUpdateManager.cancelCheck();
+        }
+        super.onStop();
     }
 
     @Override
@@ -867,6 +939,156 @@ public final class MainActivity extends StageActivity
         }
     }
 
+    private void initSubscriptionUpdateBadges() {
+        if (mNavView == null) {
+            return;
+        }
+        mEhSubscriptionBadge = initSubscriptionUpdateBadge(
+                R.id.nav_subscription);
+        mBookmarkSubscriptionBadge = initSubscriptionUpdateBadge(
+                R.id.nav_bookmark_subscription);
+        mGlobalSubscriptionBadge = initSubscriptionUpdateBadge(
+                R.id.nav_global_subscription);
+    }
+
+    @Nullable
+    private TextView initSubscriptionUpdateBadge(@IdRes int itemId) {
+        if (mNavView == null) {
+            return null;
+        }
+        MenuItem item = mNavView.getMenu().findItem(itemId);
+        if (item == null) {
+            return null;
+        }
+        item.setActionView(R.layout.nav_subscription_badge);
+        View actionView = item.getActionView();
+        return actionView == null ? null
+                : actionView.findViewById(R.id.subscription_update_badge);
+    }
+
+    private void renderSubscriptionUpdateState() {
+        SubscriptionUpdateManager manager = mSubscriptionUpdateManager;
+        if (manager == null) {
+            return;
+        }
+        SubscriptionUpdateManager.Snapshot snapshot = manager.getSnapshot();
+        setSubscriptionUpdateBadge(mEhSubscriptionBadge,
+                snapshot.ehCount, snapshot.ehEnabled);
+        setSubscriptionUpdateBadge(mBookmarkSubscriptionBadge,
+                snapshot.bookmarkCount, snapshot.bookmarkEnabled);
+        setSubscriptionUpdateBadge(mGlobalSubscriptionBadge,
+                snapshot.globalCount,
+                snapshot.ehEnabled && snapshot.bookmarkEnabled);
+        if (mNavView != null) {
+            MenuItem updateItem = mNavView.getMenu().findItem(
+                    R.id.nav_update_subscription);
+            if (updateItem != null) {
+                updateItem.setEnabled(!manager.isChecking());
+            }
+        }
+    }
+
+    private static void setSubscriptionUpdateBadge(@Nullable TextView badge,
+                                                    int count,
+                                                    boolean enabled) {
+        if (badge == null) {
+            return;
+        }
+        if (enabled && count > 0) {
+            badge.setText(String.valueOf(count));
+            badge.setVisibility(View.VISIBLE);
+        } else {
+            badge.setText(null);
+            badge.setVisibility(View.GONE);
+        }
+    }
+
+    private void scheduleSubscriptionUpdateCheck() {
+        mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
+        SubscriptionUpdateManager manager = mSubscriptionUpdateManager;
+        if (!mSubscriptionUpdatesStarted || manager == null
+                || !Settings.getAutoSubscriptionUpdates()) {
+            return;
+        }
+        if (manager.isChecking()) {
+            scheduleSubscriptionUpdateCheckAfterInterval();
+            return;
+        }
+        long lastCheckTime = manager.getLastCheckTime();
+        long delay;
+        if (lastCheckTime <= 0L) {
+            delay = 0L;
+        } else {
+            long elapsed = Math.max(0L,
+                    System.currentTimeMillis() - lastCheckTime);
+            delay = Math.max(0L,
+                    SubscriptionUpdateManager.CHECK_INTERVAL_MS - elapsed);
+        }
+        mSubscriptionUpdateHandler.postDelayed(
+                mSubscriptionUpdateRunnable, delay);
+    }
+
+    private void scheduleSubscriptionUpdateCheckAfterInterval() {
+        mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
+        if (mSubscriptionUpdatesStarted
+                && Settings.getAutoSubscriptionUpdates()) {
+            mSubscriptionUpdateHandler.postDelayed(
+                    mSubscriptionUpdateRunnable,
+                    SubscriptionUpdateManager.CHECK_INTERVAL_MS);
+        }
+    }
+
+    private void showSubscriptionUpdateResult(
+            @NonNull SubscriptionUpdateManager.CheckResult result) {
+        String message = formatSubscriptionUpdateCounts(result.snapshot);
+        if (!result.manual) {
+            if (result.hasNewGalleries() && !TextUtils.isEmpty(message)) {
+                showTip(message, BaseScene.LENGTH_LONG);
+            }
+            return;
+        }
+        if (!TextUtils.isEmpty(message)) {
+            showTip(message, BaseScene.LENGTH_LONG);
+        } else if (result.failed) {
+            showTip(R.string.subscription_updates_failed,
+                    BaseScene.LENGTH_SHORT);
+        } else {
+            showTip(R.string.subscription_updates_none,
+                    BaseScene.LENGTH_SHORT);
+        }
+    }
+
+    @NonNull
+    private String formatSubscriptionUpdateCounts(
+            @NonNull SubscriptionUpdateManager.Snapshot snapshot) {
+        StringBuilder builder = new StringBuilder();
+        if (snapshot.ehEnabled && snapshot.ehCount > 0) {
+            appendSubscriptionUpdateLine(builder, getString(
+                    R.string.subscription_updates_eh_message,
+                    snapshot.ehCount));
+        }
+        if (snapshot.bookmarkEnabled && snapshot.bookmarkCount > 0) {
+            appendSubscriptionUpdateLine(builder, getString(
+                    R.string.subscription_updates_bookmark_message,
+                    snapshot.bookmarkCount));
+        }
+        if (snapshot.ehEnabled && snapshot.bookmarkEnabled
+                && snapshot.globalCount > 0) {
+            appendSubscriptionUpdateLine(builder, getString(
+                    R.string.subscription_updates_global_message,
+                    snapshot.globalCount));
+        }
+        return builder.toString();
+    }
+
+    private static void appendSubscriptionUpdateLine(
+            @NonNull StringBuilder builder, @NonNull String line) {
+        if (builder.length() > 0) {
+            builder.append('\n');
+        }
+        builder.append(line);
+    }
+
     public void showTip(@StringRes int id, int length) {
         showTip(getString(id), length);
     }
@@ -931,6 +1153,20 @@ public final class MainActivity extends StageActivity
                         GalleryListScene.ACTION_GLOBAL_SUBSCRIPTION);
                 startSceneFirstly(new Announcer(GalleryListScene.class)
                         .setArgs(navGlobalSubscription));
+                break;
+            case R.id.nav_update_subscription:
+                if (!Settings.getAutoSubscriptionUpdatesEh()
+                        && !Settings.getAutoSubscriptionUpdatesBookmark()) {
+                    showTip(R.string.subscription_updates_no_sources,
+                            BaseScene.LENGTH_SHORT);
+                } else if (mSubscriptionUpdateManager == null
+                        || !mSubscriptionUpdateManager.checkForUpdates(true)) {
+                    showTip(R.string.subscription_updates_already_checking,
+                            BaseScene.LENGTH_SHORT);
+                } else {
+                    showTip(R.string.subscription_updates_checking,
+                            BaseScene.LENGTH_SHORT);
+                }
                 break;
             case R.id.nav_whats_hot:
                 Bundle nav_whats_hot = new Bundle();

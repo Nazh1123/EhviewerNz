@@ -25,3 +25,4 @@ open_source_licenses.html
 *.ps1
 build_*.bat
 _build.bat
+*.lnk
