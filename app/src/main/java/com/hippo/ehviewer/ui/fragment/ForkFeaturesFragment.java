@@ -21,6 +21,7 @@ import com.hippo.util.ExceptionUtils;
 
 public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
 
+    private static final String SUBSCRIPTION_SOURCE_INDENT = "\u3000\u3000";
     private static final String KEY_MANUAL_IMAGE_SAVE_LOCATION =
             "manual_image_save_location";
     private static final String KEY_BOOKMARK_SUBSCRIPTION_SETTINGS =
@@ -87,6 +88,8 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
                 findPreference(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH);
         Preference autoSubscriptionUpdatesBookmark =
                 findPreference(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK);
+        indentPreferenceTitle(autoSubscriptionUpdatesEh);
+        indentPreferenceTitle(autoSubscriptionUpdatesBookmark);
         boolean showAutoSubscriptionSources = Settings.getAutoSubscriptionUpdates();
         setSubscriptionSourcePreferencesVisible(autoSubscriptionUpdatesEh,
                 autoSubscriptionUpdatesBookmark, showAutoSubscriptionSources);
@@ -150,6 +153,16 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         }
         if (bookmarkPreference != null) {
             bookmarkPreference.setVisible(visible);
+        }
+    }
+
+    private static void indentPreferenceTitle(@Nullable Preference preference) {
+        if (preference == null || preference.getTitle() == null) {
+            return;
+        }
+        String title = preference.getTitle().toString();
+        if (!title.startsWith(SUBSCRIPTION_SOURCE_INDENT)) {
+            preference.setTitle(SUBSCRIPTION_SOURCE_INDENT + title);
         }
     }
 }
