@@ -109,12 +109,12 @@
             android:src="@drawable/v_save_x24" />
 
         <ImageButton
-            android:id="@+id/quick_double_tap_zoom"
+            android:id="@+id/quick_page_area_double_tap_zoom"
             android:layout_width="0dp"
             android:layout_height="48dp"
             android:layout_weight="1"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/settings_read_double_tap_zoom"
+            android:contentDescription="@string/settings_read_page_area_double_tap_zoom"
             android:padding="12dp"
             android:src="@drawable/v_magnify_x24" />
 

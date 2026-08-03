@@ -683,15 +683,16 @@ public class Settings {
         putBoolean(KEY_LONG_PRESS_SAVE_TURN_PAGE, value);
     }
 
-    private static final String KEY_DOUBLE_TAP_ZOOM = "gallery_double_tap_zoom";
-    private static final boolean DEFAULT_DOUBLE_TAP_ZOOM = false;
+    // Keep the persisted key for compatibility with the original fork setting.
+    private static final String KEY_PAGE_AREA_DOUBLE_TAP_ZOOM = "gallery_double_tap_zoom";
+    private static final boolean DEFAULT_PAGE_AREA_DOUBLE_TAP_ZOOM = false;
 
-    public static boolean getDoubleTapZoom() {
-        return getBoolean(KEY_DOUBLE_TAP_ZOOM, DEFAULT_DOUBLE_TAP_ZOOM);
+    public static boolean getPageAreaDoubleTapZoom() {
+        return getBoolean(KEY_PAGE_AREA_DOUBLE_TAP_ZOOM, DEFAULT_PAGE_AREA_DOUBLE_TAP_ZOOM);
     }
 
-    public static void putDoubleTapZoom(boolean value) {
-        putBoolean(KEY_DOUBLE_TAP_ZOOM, value);
+    public static void putPageAreaDoubleTapZoom(boolean value) {
+        putBoolean(KEY_PAGE_AREA_DOUBLE_TAP_ZOOM, value);
     }
 
     public static final String KEY_SEARCH_LANGUAGE = "search_language";

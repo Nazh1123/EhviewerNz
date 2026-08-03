@@ -694,7 +694,7 @@
     <string name="settings_fork_auto_subscription_updates_eh">EH subscriptions</string>
     <string name="settings_read_direct_save">Long-press save</string>
     <string name="settings_read_long_press_save_turn_page">Turn page after saving</string>
-    <string name="settings_read_double_tap_zoom">Double-tap to zoom</string>
+    <string name="settings_read_page_area_double_tap_zoom">Double-tap zoom in page-turn areas</string>
     <string name="settings_read_start_position_center">Center</string>
     <string name="settings_read_keep_screen_on">Keep screen on</string>
     <string name="settings_read_show_clock">Show clock</string>
@@ -768,7 +768,7 @@
     <string name="settings_fork_gallery_immediate_jump">Immediate gallery jump</string>
     <string name="settings_fork_long_press_save_summary">Long-press the next-page area to save the current image locally</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Automatically turn to the next page after a long-press save</string>
-    <string name="settings_fork_double_tap_zoom_summary">When enabled, double-tap to zoom; when disabled, rapid single-tap page turning is supported</string>
+    <string name="settings_fork_page_area_double_tap_zoom_summary">When disabled, page-turn areas respond to single taps immediately; menu and progress areas still support double-tap zoom</string>
     <string name="settings_fork_bookmark_subscription_summary">Tap here, or use Quick Search settings, to subscribe to Quick Searches. You can then tap “Quick Search Subscriptions” in the sidebar to view all matching galleries sorted by time.</string>
     <string name="settings_advanced_proxy">Proxy</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>

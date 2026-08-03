@@ -181,7 +181,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private ImageButton mQuickDirectSave;
     @Nullable
-    private ImageButton mQuickDoubleTapZoom;
+    private ImageButton mQuickPageAreaDoubleTapZoom;
     @Nullable
     private View mSeekBarPanel;
     @Nullable
@@ -408,7 +408,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();
         mGalleryView = new GalleryView.Builder(this, mGalleryAdapter).setListener(this).setLayoutMode(Settings.getReadingDirection()).setScaleMode(Settings.getPageScaling()).setStartPosition(Settings.getStartPosition()).setStartPage(startPage).setBackgroundColor(AttrResources.getAttrColor(this, android.R.attr.colorBackground)).setEdgeColor(AttrResources.getAttrColor(this, R.attr.colorEdgeEffect) & 0xffffff | 0x33000000).setPagerInterval(Settings.getShowPageInterval() ? resources.getDimensionPixelOffset(R.dimen.gallery_pager_interval) : 0).setScrollInterval(Settings.getShowPageInterval() ? resources.getDimensionPixelOffset(R.dimen.gallery_scroll_interval) : 0).setPageMinHeight(resources.getDimensionPixelOffset(R.dimen.gallery_page_min_height)).setPageInfoInterval(resources.getDimensionPixelOffset(R.dimen.gallery_page_info_interval)).setProgressColor(ResourcesUtils.getAttrColor(this, androidx.appcompat.R.attr.colorPrimary)).setProgressSize(resources.getDimensionPixelOffset(R.dimen.gallery_progress_size)).setPageTextColor(AttrResources.getAttrColor(this, android.R.attr.textColorSecondary)).setPageTextSize(resources.getDimensionPixelOffset(R.dimen.gallery_page_text_size)).setPageTextTypeface(Typeface.DEFAULT).setErrorTextColor(resources.getColor(R.color.red_500, null)).setErrorTextSize(resources.getDimensionPixelOffset(R.dimen.gallery_error_text_size)).setDefaultErrorString(resources.getString(R.string.error_unknown)).setEmptyString(resources.getString(R.string.error_empty)).build();
-        mGalleryView.setDoubleTapEnabled(Settings.getDoubleTapZoom());
+        mGalleryView.setPageAreaDoubleTapEnabled(Settings.getPageAreaDoubleTapZoom());
         mGLRootView.setContentPane(mGalleryView);
         mGLRootView.setOnGenericMotionListener(this::onGenericMotion);
         mGalleryProvider.setListener(mGalleryAdapter);
@@ -439,12 +439,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mQuickSettingsPanel, R.id.quick_reading_direction);
         mQuickDirectSave = (ImageButton) ViewUtils.$$(
                 mQuickSettingsPanel, R.id.quick_direct_save);
-        mQuickDoubleTapZoom = (ImageButton) ViewUtils.$$(
-                mQuickSettingsPanel, R.id.quick_double_tap_zoom);
+        mQuickPageAreaDoubleTapZoom = (ImageButton) ViewUtils.$$(
+                mQuickSettingsPanel, R.id.quick_page_area_double_tap_zoom);
         mQuickScreenOrientation.setOnClickListener(this::toggleQuickScreenOrientation);
         mQuickReadingDirection.setOnClickListener(this::toggleQuickReadingDirection);
         mQuickDirectSave.setOnClickListener(this::toggleQuickDirectSave);
-        mQuickDoubleTapZoom.setOnClickListener(this::toggleQuickDoubleTapZoom);
+        mQuickPageAreaDoubleTapZoom.setOnClickListener(this::toggleQuickPageAreaDoubleTapZoom);
         ViewCompat.setOnApplyWindowInsetsListener(mQuickSettingsPanel, (view, insets) -> {
             int statusBarInset = insets.getInsets(
                     WindowInsetsCompat.Type.statusBars()).top;
@@ -576,7 +576,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mQuickScreenOrientation = null;
         mQuickReadingDirection = null;
         mQuickDirectSave = null;
-        mQuickDoubleTapZoom = null;
+        mQuickPageAreaDoubleTapZoom = null;
         mSeekBarPanel = null;
         mAutoTransferPanel = null;
         mLeftText = null;
@@ -796,7 +796,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void updateQuickSettingsButtons() {
         if (mQuickScreenOrientation == null || mQuickReadingDirection == null
-                || mQuickDirectSave == null || mQuickDoubleTapZoom == null) {
+                || mQuickDirectSave == null || mQuickPageAreaDoubleTapZoom == null) {
             return;
         }
 
@@ -821,7 +821,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                         : R.drawable.v_arrow_right_x24);
 
         updateQuickToggleButton(mQuickDirectSave, Settings.getDirectSave());
-        updateQuickToggleButton(mQuickDoubleTapZoom, Settings.getDoubleTapZoom());
+        updateQuickToggleButton(mQuickPageAreaDoubleTapZoom,
+                Settings.getPageAreaDoubleTapZoom());
     }
 
     private static void updateQuickToggleButton(ImageButton button, boolean enabled) {
@@ -877,11 +878,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         keepQuickSettingsVisible();
     }
 
-    private void toggleQuickDoubleTapZoom(View view) {
-        boolean enabled = !Settings.getDoubleTapZoom();
-        Settings.putDoubleTapZoom(enabled);
+    private void toggleQuickPageAreaDoubleTapZoom(View view) {
+        boolean enabled = !Settings.getPageAreaDoubleTapZoom();
+        Settings.putPageAreaDoubleTapZoom(enabled);
         if (mGalleryView != null) {
-            mGalleryView.setDoubleTapEnabled(enabled);
+            mGalleryView.setPageAreaDoubleTapEnabled(enabled);
         }
         updateQuickSettingsButtons();
         keepQuickSettingsVisible();
@@ -1414,7 +1415,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         private final EditText mStartTransferTimeInput;
         private final SwitchCompat mDirectSave;
         private final SwitchCompat mLongPressSaveTurnPage;
-        private final SwitchCompat mDoubleTapZoom;
+        private final SwitchCompat mPageAreaDoubleTapZoom;
         private final SwitchCompat mKeepScreenOn;
         private final SwitchCompat mShowClock;
         private final SwitchCompat mShowProgress;
@@ -1437,7 +1438,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mStartTransferTimeInput = mView.findViewById(R.id.start_transfer_time_input);
             mDirectSave = mView.findViewById(R.id.direct_save);
             mLongPressSaveTurnPage = mView.findViewById(R.id.long_press_save_turn_page);
-            mDoubleTapZoom = mView.findViewById(R.id.double_tap_zoom);
+            mPageAreaDoubleTapZoom = mView.findViewById(R.id.page_area_double_tap_zoom);
             mKeepScreenOn = mView.findViewById(R.id.keep_screen_on);
             mShowClock = mView.findViewById(R.id.show_clock);
             mShowProgress = mView.findViewById(R.id.show_progress);
@@ -1456,7 +1457,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             configureStartTransferTime();
             mDirectSave.setChecked(Settings.getDirectSave());
             mLongPressSaveTurnPage.setChecked(Settings.getLongPressSaveTurnPage());
-            mDoubleTapZoom.setChecked(Settings.getDoubleTapZoom());
+            mPageAreaDoubleTapZoom.setChecked(Settings.getPageAreaDoubleTapZoom());
             mKeepScreenOn.setChecked(Settings.getKeepScreenOn());
             mShowClock.setChecked(Settings.getShowClock());
             mShowProgress.setChecked(Settings.getShowProgress());
@@ -1592,7 +1593,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             int startPosition = GalleryView.sanitizeStartPosition(mStartPosition.getSelectedItemPosition());
             boolean directSave = mDirectSave.isChecked();
             boolean longPressSaveTurnPage = mLongPressSaveTurnPage.isChecked();
-            boolean doubleTapZoom = mDoubleTapZoom.isChecked();
+            boolean pageAreaDoubleTapZoom = mPageAreaDoubleTapZoom.isChecked();
             boolean keepScreenOn = mKeepScreenOn.isChecked();
             boolean showClock = mShowClock.isChecked();
             boolean showProgress = mShowProgress.isChecked();
@@ -1615,7 +1616,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             Settings.putStartTransferTime(transferTime);
             Settings.putDirectSave(directSave);
             Settings.putLongPressSaveTurnPage(longPressSaveTurnPage);
-            Settings.putDoubleTapZoom(doubleTapZoom);
+            Settings.putPageAreaDoubleTapZoom(pageAreaDoubleTapZoom);
             Settings.putKeepScreenOn(keepScreenOn);
             Settings.putShowClock(showClock);
             Settings.putShowProgress(showProgress);
@@ -1652,7 +1653,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mGalleryView.setLayoutMode(layoutMode);
             mGalleryView.setScaleMode(scaleMode);
             mGalleryView.setStartPosition(startPosition);
-            mGalleryView.setDoubleTapEnabled(doubleTapZoom);
+            mGalleryView.setPageAreaDoubleTapEnabled(pageAreaDoubleTapZoom);
             if (keepScreenOn) {
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             } else {

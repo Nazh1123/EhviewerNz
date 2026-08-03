@@ -565,8 +565,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         postMethod(METHOD_SET_SCROLL_INTERVAL, interval);
     }
 
-    public void setDoubleTapEnabled(boolean enabled) {
-        mGestureRecognizer.setDoubleTapEnabled(enabled);
+    public void setPageAreaDoubleTapEnabled(boolean enabled) {
+        mGestureRecognizer.setPageAreaDoubleTapEnabled(enabled);
     }
 
     @Override
@@ -591,6 +591,12 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     public boolean onDoubleTapConfirmed(float x, float y) {
         postMethod(METHOD_ON_DOUBLE_TAP_CONFIRMED, x, y);
         return true;
+    }
+
+    @Override
+    public boolean isDoubleTapRegion(float x, float y) {
+        return mMenuArea.contains((int) x, (int) y)
+                || mSliderArea.contains((int) x, (int) y);
     }
 
     @Override
@@ -684,6 +690,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     }
 
     private void onSingleTapUpInternal(float x, float y) {
+        onSingleTapConfirmedInternal(x, y);
     }
 
     private GalleryPageView findPageUnder(float x, float y) {

@@ -35,6 +35,7 @@ class GestureRecognizer {
         boolean onSingleTapConfirmed(float x, float y);
         boolean onDoubleTap(float x, float y);
         boolean onDoubleTapConfirmed(float x, float y);
+        boolean isDoubleTapRegion(float x, float y);
         void onLongPress(float x, float y);
         boolean onScroll(float dx, float dy, float totalX, float totalY, float x, float y);
 
@@ -53,32 +54,67 @@ class GestureRecognizer {
     }
 
     private final GestureDetectorCompat mGestureDetector;
+    private final GestureDetectorCompat mDoubleTapGestureDetector;
     private final ScaleGestureDetector mScaleDetector;
     private final DownUpDetector mDownUpDetector;
     private final Listener mListener;
     private final MyGestureListener mGestureListener;
-    private boolean mDoubleTapEnabled;
+    private final DoubleTapGestureListener mDoubleTapGestureListener;
+    private boolean mPageAreaDoubleTapEnabled;
+    private boolean mCurrentGestureUsesDoubleTap;
+    private boolean mDoubleTapChainBroken;
+    private boolean mPendingSingleTap;
+    private float mPendingSingleTapX;
+    private float mPendingSingleTapY;
 
     public GestureRecognizer(Context context, Listener listener) {
         mListener = listener;
         mGestureListener = new MyGestureListener();
         mGestureDetector = new GestureDetectorCompat(context, mGestureListener,
                 null /* ignoreMultitouch */);
-        setDoubleTapEnabled(false);
+        // Keep the primary detector free from double-tap deferral. It handles scrolling,
+        // long presses and taps that must respond immediately, such as page turns.
+        mGestureDetector.setOnDoubleTapListener(null);
+        mDoubleTapGestureListener = new DoubleTapGestureListener();
+        mDoubleTapGestureDetector = new GestureDetectorCompat(
+                context, mDoubleTapGestureListener, null /* handler */);
+        mDoubleTapGestureDetector.setOnDoubleTapListener(mDoubleTapGestureListener);
         mScaleDetector = new ScaleGestureDetector(
                 context, new MyScaleListener());
         mDownUpDetector = new DownUpDetector(new MyDownUpListener());
     }
 
-    public void setDoubleTapEnabled(boolean enabled) {
-        mDoubleTapEnabled = enabled;
-        mGestureDetector.setOnDoubleTapListener(enabled ? mGestureListener : null);
+    public void setPageAreaDoubleTapEnabled(boolean enabled) {
+        mPageAreaDoubleTapEnabled = enabled;
     }
 
     public void onTouchEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            boolean useDoubleTap = mPageAreaDoubleTapEnabled
+                    || mListener.isDoubleTapRegion(event.getX(), event.getY());
+            if (useDoubleTap && mDoubleTapChainBroken) {
+                finishPendingSingleTap();
+                cancelDoubleTapGesture();
+                mDoubleTapChainBroken = false;
+            } else if (!useDoubleTap) {
+                // Do not cancel a pending central-area tap immediately: it still needs its
+                // confirmed-single callback. Break the chain before the next eligible tap.
+                mDoubleTapChainBroken = true;
+            }
+            mCurrentGestureUsesDoubleTap = useDoubleTap;
+        }
+
         mScaleDetector.onTouchEvent(event);
+        if (mCurrentGestureUsesDoubleTap) {
+            mDoubleTapGestureDetector.onTouchEvent(event);
+        }
         mGestureDetector.onTouchEvent(event);
         mDownUpDetector.onTouchEvent(event);
+
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            mCurrentGestureUsesDoubleTap = false;
+        }
     }
 
     public boolean isDown() {
@@ -93,34 +129,27 @@ class GestureRecognizer {
         cancelEvent.recycle();
     }
 
+    private void finishPendingSingleTap() {
+        if (mPendingSingleTap) {
+            mPendingSingleTap = false;
+            mListener.onSingleTapConfirmed(mPendingSingleTapX, mPendingSingleTapY);
+        }
+    }
+
+    private void cancelDoubleTapGesture() {
+        long now = SystemClock.uptimeMillis();
+        MotionEvent cancelEvent = MotionEvent.obtain(
+                now, now, MotionEvent.ACTION_CANCEL, 0, 0, 0);
+        mDoubleTapGestureDetector.onTouchEvent(cancelEvent);
+        cancelEvent.recycle();
+    }
+
     private class MyGestureListener
                 extends GestureDetector.SimpleOnGestureListener {
         @Override
         public boolean onSingleTapUp(MotionEvent e) {
-            if (mDoubleTapEnabled) {
-                return mListener.onSingleTapUp(e.getX(), e.getY());
-            } else {
-                return mListener.onSingleTapConfirmed(e.getX(), e.getY());
-            }
-        }
-
-        @Override
-        public boolean onSingleTapConfirmed(MotionEvent e) {
-            return mListener.onSingleTapConfirmed(e.getX(), e.getY());
-        }
-
-        @Override
-        public boolean onDoubleTapEvent(MotionEvent e) {
-            if (e.getAction() == MotionEvent.ACTION_UP) {
-                return mListener.onDoubleTapConfirmed(e.getX(), e.getY());
-            } else {
-                return true;
-            }
-        }
-
-        @Override
-        public boolean onDoubleTap(MotionEvent e) {
-            return mListener.onDoubleTap(e.getX(), e.getY());
+            return mCurrentGestureUsesDoubleTap
+                    || mListener.onSingleTapUp(e.getX(), e.getY());
         }
 
         @Override
@@ -139,6 +168,42 @@ class GestureRecognizer {
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX,
                 float velocityY) {
             return mListener.onFling(e1, e2, velocityX, velocityY);
+        }
+    }
+
+    private class DoubleTapGestureListener
+            extends GestureDetector.SimpleOnGestureListener {
+        @Override
+        public boolean onDown(MotionEvent e) {
+            return true;
+        }
+
+        @Override
+        public boolean onSingleTapUp(MotionEvent e) {
+            mPendingSingleTap = true;
+            mPendingSingleTapX = e.getX();
+            mPendingSingleTapY = e.getY();
+            return true;
+        }
+
+        @Override
+        public boolean onSingleTapConfirmed(MotionEvent e) {
+            mPendingSingleTap = false;
+            return mListener.onSingleTapConfirmed(e.getX(), e.getY());
+        }
+
+        @Override
+        public boolean onDoubleTap(MotionEvent e) {
+            mPendingSingleTap = false;
+            return mListener.onDoubleTap(e.getX(), e.getY());
+        }
+
+        @Override
+        public boolean onDoubleTapEvent(MotionEvent e) {
+            if (e.getAction() == MotionEvent.ACTION_UP) {
+                return mListener.onDoubleTapConfirmed(e.getX(), e.getY());
+            }
+            return true;
         }
     }
 

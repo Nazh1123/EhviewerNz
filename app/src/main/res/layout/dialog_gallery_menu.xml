@@ -201,10 +201,10 @@
         </LinearLayout>
 
         <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/double_tap_zoom"
+            android:id="@+id/page_area_double_tap_zoom"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/settings_read_double_tap_zoom"
+            android:text="@string/settings_read_page_area_double_tap_zoom"
             android:textColor="?android:attr/textColorPrimary" />
 
 
