@@ -815,10 +815,24 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 : R.drawable.v_screen_portrait_x24);
 
         int readingDirection = Settings.getReadingDirection();
-        mQuickReadingDirection.setImageResource(
-                readingDirection == GalleryView.LAYOUT_RIGHT_TO_LEFT
-                        ? R.drawable.v_arrow_left_x24
-                        : R.drawable.v_arrow_right_x24);
+        switch (readingDirection) {
+            case GalleryView.LAYOUT_RIGHT_TO_LEFT:
+                mQuickReadingDirection.setImageResource(R.drawable.v_arrow_left_x24);
+                mQuickReadingDirection.setContentDescription(
+                        getString(R.string.settings_read_reading_direction_right_to_Left));
+                break;
+            case GalleryView.LAYOUT_TOP_TO_BOTTOM:
+                mQuickReadingDirection.setImageResource(R.drawable.v_arrow_down_x24);
+                mQuickReadingDirection.setContentDescription(
+                        getString(R.string.settings_read_reading_direction_top_to_bottom));
+                break;
+            case GalleryView.LAYOUT_LEFT_TO_RIGHT:
+            default:
+                mQuickReadingDirection.setImageResource(R.drawable.v_arrow_right_x24);
+                mQuickReadingDirection.setContentDescription(
+                        getString(R.string.settings_read_reading_direction_left_to_right));
+                break;
+        }
 
         updateQuickToggleButton(mQuickDirectSave, Settings.getDirectSave());
         updateQuickToggleButton(mQuickPageAreaDoubleTapZoom,
@@ -861,9 +875,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             return;
         }
         int currentDirection = Settings.getReadingDirection();
-        int newDirection = currentDirection == GalleryView.LAYOUT_LEFT_TO_RIGHT
-                ? GalleryView.LAYOUT_RIGHT_TO_LEFT
-                : GalleryView.LAYOUT_LEFT_TO_RIGHT;
+        int newDirection;
+        if (currentDirection == GalleryView.LAYOUT_LEFT_TO_RIGHT) {
+            newDirection = GalleryView.LAYOUT_RIGHT_TO_LEFT;
+        } else {
+            // The quick action intentionally toggles only the two horizontal modes. Entering it
+            // from top-to-bottom (or an invalid persisted value) starts at left-to-right.
+            newDirection = GalleryView.LAYOUT_LEFT_TO_RIGHT;
+        }
         Settings.putReadingDirection(newDirection);
         mLayoutMode = newDirection;
         mGalleryView.setLayoutMode(newDirection);
