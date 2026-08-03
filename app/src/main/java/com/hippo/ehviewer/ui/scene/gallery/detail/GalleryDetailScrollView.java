@@ -17,6 +17,7 @@
 package com.hippo.ehviewer.ui.scene.gallery.detail;
 
 import android.content.Context;
+import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
@@ -32,44 +33,31 @@ import androidx.annotation.Nullable;
  */
 public class GalleryDetailScrollView extends ScrollView {
 
-    private static final float MIN_DISTANCE_FRACTION = 0.25f;
+    private static final float MIN_DISTANCE_FRACTION = 0.20f;
+    private static final float CANCEL_DISTANCE_FRACTION =
+            MIN_DISTANCE_FRACTION * 0.25f;
+    private static final float REARM_DISTANCE_FRACTION =
+            MIN_DISTANCE_FRACTION * 0.3125f;
     private static final float HORIZONTAL_BIAS = 1.5f;
-    private static final float PULL_UP_TRIGGER_DP = 64f;
-    private static final float PULL_UP_CANCEL_DP = 16f;
-    private static final float PULL_UP_REARM_DP = 20f;
-    private static final float PULL_UP_MAX_OFFSET_DP = 48f;
-    private static final float PULL_UP_RESISTANCE = 0.5f;
-    private static final float VERTICAL_BIAS = 1.25f;
-    private static final long PULL_UP_SETTLE_DURATION_MS = 180L;
 
     private final int mTouchSlop;
-    private final float mPullUpTriggerDistance;
-    private final float mPullUpCancelDistance;
-    private final float mPullUpRearmDistance;
-    private final float mPullUpMaxOffset;
+    private final Rect mVisibleRect = new Rect();
 
     @Nullable
     private OnSwipeLeftListener mOnSwipeLeftListener;
     @Nullable
-    private OnPullUpPreviewListener mOnPullUpPreviewListener;
-    @Nullable
     private View mSwipeExclusionView;
+    @Nullable
+    private View mSwipeActivationView;
     private int mActivePointerId = MotionEvent.INVALID_POINTER_ID;
     private float mDownX;
     private float mDownY;
+    private float mSwipeStateAnchorX;
     private boolean mTrackingSwipe;
     private boolean mHadMultiplePointers;
     private boolean mSwipeReady;
     private boolean mSwipeReadyChanged;
-    private float mPullUpDownRawX;
-    private float mPullUpDownRawY;
-    private boolean mPullUpEnabled;
-    private boolean mTrackingPullUp;
-    private boolean mPullUpHadMultiplePointers;
-    private boolean mPullUpReady;
-    private boolean mPullUpReadyChanged;
-    private boolean mPullUpHasArmed;
-    private float mPullUpStateAnchorRawY;
+    private boolean mSwipeHasArmed;
 
     public GalleryDetailScrollView(Context context) {
         this(context, null);
@@ -82,11 +70,6 @@ public class GalleryDetailScrollView extends ScrollView {
     public GalleryDetailScrollView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
-        float density = getResources().getDisplayMetrics().density;
-        mPullUpTriggerDistance = PULL_UP_TRIGGER_DP * density;
-        mPullUpCancelDistance = PULL_UP_CANCEL_DP * density;
-        mPullUpRearmDistance = PULL_UP_REARM_DP * density;
-        mPullUpMaxOffset = PULL_UP_MAX_OFFSET_DP * density;
     }
 
     public void setOnSwipeLeftListener(@Nullable OnSwipeLeftListener listener) {
@@ -97,25 +80,14 @@ public class GalleryDetailScrollView extends ScrollView {
         mSwipeExclusionView = view;
     }
 
-    public void setOnPullUpPreviewListener(@Nullable OnPullUpPreviewListener listener) {
-        mOnPullUpPreviewListener = listener;
+    public void setSwipeActivationView(@Nullable View view) {
+        mSwipeActivationView = view;
     }
 
-    public void setPullUpPreviewEnabled(boolean enabled) {
-        if (mPullUpEnabled == enabled) {
-            return;
-        }
-        mPullUpEnabled = enabled;
-        if (!enabled) {
-            boolean wasReady = mPullUpReady;
-            mPullUpReady = false;
-            mPullUpReadyChanged = false;
-            resetPullUpTracking();
-            settlePullUpTranslation();
-            if (wasReady && mOnPullUpPreviewListener != null) {
-                mOnPullUpPreviewListener.onPullUpPreviewReadyChanged(false);
-            }
-        }
+    public boolean isSwipeActivationViewVisible() {
+        View activationView = mSwipeActivationView;
+        return activationView != null && activationView.isShown()
+                && activationView.getGlobalVisibleRect(mVisibleRect);
     }
 
     @Override
@@ -123,9 +95,6 @@ public class GalleryDetailScrollView extends ScrollView {
         boolean completedSwipe = trackSwipe(event);
         boolean swipeReadyChanged = mSwipeReadyChanged;
         boolean swipeReady = mSwipeReady;
-        boolean completedPullUp = trackPullUp(event);
-        boolean pullUpReadyChanged = mPullUpReadyChanged;
-        boolean pullUpReady = mPullUpReady;
         boolean handled = super.dispatchTouchEvent(event);
         if (mOnSwipeLeftListener != null) {
             if (swipeReadyChanged) {
@@ -135,154 +104,7 @@ public class GalleryDetailScrollView extends ScrollView {
                 mOnSwipeLeftListener.onSwipeLeft();
             }
         }
-        if (mOnPullUpPreviewListener != null) {
-            if (pullUpReadyChanged) {
-                mOnPullUpPreviewListener.onPullUpPreviewReadyChanged(pullUpReady);
-            }
-            if (completedPullUp) {
-                mOnPullUpPreviewListener.onPullUpPreview();
-            }
-        }
         return handled;
-    }
-
-    private boolean trackPullUp(MotionEvent event) {
-        mPullUpReadyChanged = false;
-        switch (event.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                animate().cancel();
-                setTranslationY(0f);
-                mPullUpDownRawX = event.getRawX();
-                mPullUpDownRawY = event.getRawY();
-                mTrackingPullUp = mPullUpEnabled && isAtBottom();
-                mPullUpHadMultiplePointers = false;
-                setPullUpReady(false);
-                break;
-            case MotionEvent.ACTION_POINTER_DOWN:
-                mPullUpHadMultiplePointers = true;
-                setPullUpReady(false);
-                settlePullUpTranslation();
-                break;
-            case MotionEvent.ACTION_MOVE:
-                updatePullUp(event);
-                break;
-            case MotionEvent.ACTION_UP:
-                updatePullUp(event);
-                boolean completed = mPullUpReady;
-                if (completed) {
-                    // Completion owns the hint fade-out, so don't emit a separate retreat.
-                    mPullUpReady = false;
-                    mPullUpReadyChanged = false;
-                } else {
-                    setPullUpReady(false);
-                }
-                resetPullUpTracking();
-                settlePullUpTranslation();
-                return completed;
-            case MotionEvent.ACTION_CANCEL:
-                setPullUpReady(false);
-                resetPullUpTracking();
-                settlePullUpTranslation();
-                break;
-            default:
-                break;
-        }
-        return false;
-    }
-
-    private void updatePullUp(MotionEvent event) {
-        if (!mTrackingPullUp || mPullUpHadMultiplePointers) {
-            setPullUpReady(false);
-            return;
-        }
-
-        float distanceX = event.getRawX() - mPullUpDownRawX;
-        float distanceY = mPullUpDownRawY - event.getRawY();
-        boolean verticalPull = distanceY > mTouchSlop
-                && distanceY > Math.abs(distanceX) * VERTICAL_BIAS;
-        if (!verticalPull) {
-            animate().cancel();
-            setTranslationY(0f);
-            if (mPullUpReady) {
-                setPullUpReady(false);
-                mPullUpStateAnchorRawY = event.getRawY();
-            } else if (mPullUpHasArmed) {
-                mPullUpStateAnchorRawY = Math.max(
-                        mPullUpStateAnchorRawY, event.getRawY());
-            }
-            return;
-        }
-
-        float offset = Math.min(mPullUpMaxOffset,
-                (distanceY - mTouchSlop) * PULL_UP_RESISTANCE);
-        animate().cancel();
-        setTranslationY(-offset);
-        updatePullUpReadyState(event.getRawY(), distanceY);
-    }
-
-    private void updatePullUpReadyState(float rawY, float distanceY) {
-        if (!mPullUpHasArmed) {
-            if (distanceY >= mPullUpTriggerDistance) {
-                mPullUpHasArmed = true;
-                mPullUpStateAnchorRawY = rawY;
-                setPullUpReady(true);
-            }
-            return;
-        }
-
-        if (mPullUpReady) {
-            // Track the furthest upward point. A short reversal always cancels, even if the
-            // user pulled far beyond the initial activation distance.
-            mPullUpStateAnchorRawY = Math.min(mPullUpStateAnchorRawY, rawY);
-            if (rawY - mPullUpStateAnchorRawY >= mPullUpCancelDistance) {
-                mPullUpStateAnchorRawY = rawY;
-                setPullUpReady(false);
-            }
-        } else {
-            // After cancellation, track the furthest downward point and re-arm on an upward
-            // reversal without requiring the finger to return to the original activation line.
-            mPullUpStateAnchorRawY = Math.max(mPullUpStateAnchorRawY, rawY);
-            if (mPullUpStateAnchorRawY - rawY >= mPullUpRearmDistance) {
-                mPullUpStateAnchorRawY = rawY;
-                setPullUpReady(true);
-            }
-        }
-    }
-
-    private boolean isAtBottom() {
-        if (!canScrollVertically(1)) {
-            return true;
-        }
-        View child = getChildAt(0);
-        if (child == null) {
-            return true;
-        }
-        int viewportBottom = getScrollY() + getHeight() - getPaddingBottom();
-        return viewportBottom >= child.getHeight() - mTouchSlop;
-    }
-
-    private void setPullUpReady(boolean ready) {
-        if (mPullUpReady != ready) {
-            mPullUpReady = ready;
-            mPullUpReadyChanged = true;
-        }
-    }
-
-    private void resetPullUpTracking() {
-        mTrackingPullUp = false;
-        mPullUpHadMultiplePointers = false;
-        mPullUpHasArmed = false;
-        mPullUpStateAnchorRawY = 0f;
-    }
-
-    private void settlePullUpTranslation() {
-        animate().cancel();
-        if (getTranslationY() != 0f) {
-            animate()
-                    .translationY(0f)
-                    .setDuration(PULL_UP_SETTLE_DURATION_MS)
-                    .start();
-        }
     }
 
     private boolean trackSwipe(MotionEvent event) {
@@ -294,6 +116,8 @@ public class GalleryDetailScrollView extends ScrollView {
                 mDownY = event.getY(0);
                 mTrackingSwipe = !isPointInsideExclusionView(mDownX, mDownY);
                 mHadMultiplePointers = false;
+                mSwipeHasArmed = false;
+                mSwipeStateAnchorX = mDownX;
                 setSwipeReady(false);
                 break;
             case MotionEvent.ACTION_POINTER_DOWN:
@@ -336,8 +160,42 @@ public class GalleryDetailScrollView extends ScrollView {
         float distanceY = event.getY(pointerIndex) - mDownY;
         float requiredDistance = Math.max(
                 getWidth() * MIN_DISTANCE_FRACTION, mTouchSlop * 8f);
-        setSwipeReady(distanceX <= -requiredDistance
-                && Math.abs(distanceX) > Math.abs(distanceY) * HORIZONTAL_BIAS);
+        float currentX = event.getX(pointerIndex);
+        boolean horizontalSwipe = Math.abs(distanceX)
+                > Math.abs(distanceY) * HORIZONTAL_BIAS;
+
+        if (!mSwipeHasArmed) {
+            if (distanceX <= -requiredDistance && horizontalSwipe) {
+                mSwipeHasArmed = true;
+                mSwipeStateAnchorX = currentX;
+                setSwipeReady(true);
+            }
+            return;
+        }
+
+        if (!horizontalSwipe) {
+            mSwipeStateAnchorX = currentX;
+            setSwipeReady(false);
+            return;
+        }
+
+        if (mSwipeReady) {
+            // A 5%-width rightward reversal cancels even after a long initial swipe.
+            mSwipeStateAnchorX = Math.min(mSwipeStateAnchorX, currentX);
+            if (currentX - mSwipeStateAnchorX
+                    >= getWidth() * CANCEL_DISTANCE_FRACTION) {
+                mSwipeStateAnchorX = currentX;
+                setSwipeReady(false);
+            }
+        } else {
+            // Once cancelled, a 6.25%-width leftward reversal re-arms the same gesture.
+            mSwipeStateAnchorX = Math.max(mSwipeStateAnchorX, currentX);
+            if (mSwipeStateAnchorX - currentX
+                    >= getWidth() * REARM_DISTANCE_FRACTION) {
+                mSwipeStateAnchorX = currentX;
+                setSwipeReady(true);
+            }
+        }
     }
 
     private void setSwipeReady(boolean ready) {
@@ -368,17 +226,13 @@ public class GalleryDetailScrollView extends ScrollView {
         mActivePointerId = MotionEvent.INVALID_POINTER_ID;
         mTrackingSwipe = false;
         mHadMultiplePointers = false;
+        mSwipeHasArmed = false;
+        mSwipeStateAnchorX = 0f;
     }
 
     public interface OnSwipeLeftListener {
         void onSwipeLeftReadyChanged(boolean ready);
 
         void onSwipeLeft();
-    }
-
-    public interface OnPullUpPreviewListener {
-        void onPullUpPreviewReadyChanged(boolean ready);
-
-        void onPullUpPreview();
     }
 }

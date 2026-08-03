@@ -294,10 +294,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private int mSwipePreviewIndicatorOffset;
     private boolean mSwipePreviewIndicatorVisible;
     @Nullable
-    private View mPullUpPreviewHint;
-    private int mPullUpPreviewHintOffset;
-    private boolean mPullUpPreviewHintVisible;
-    @Nullable
     private View mPreviews;
     @Nullable
     private SimpleGridAutoSpanLayout mGridLayout;
@@ -568,16 +564,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mSwipePreviewIndicator.setBackground(swipePreviewIndicatorBackground);
         mSwipePreviewIndicatorOffset = LayoutUtils.dp2pix(context, 28);
         mSwipePreviewIndicator.setTranslationX(mSwipePreviewIndicatorOffset);
-
-        mPullUpPreviewHint = ViewUtils.$$(main, R.id.pull_up_preview_hint);
-        GradientDrawable pullUpPreviewHintBackground = new GradientDrawable();
-        pullUpPreviewHintBackground.setColor(AttrResources.getAttrColor(
-                context, R.attr.galleryDetailButtonBackgroundColor));
-        pullUpPreviewHintBackground.setCornerRadius(LayoutUtils.dp2pix(context, 20));
-        mPullUpPreviewHint.setBackground(pullUpPreviewHintBackground);
-        mPullUpPreviewHintOffset = LayoutUtils.dp2pix(context, 16);
-        mPullUpPreviewHint.setTranslationY(mPullUpPreviewHintOffset);
-
         main.addOnLayoutChangeListener((v, left, top, right, bottom,
                                         oldLeft, oldTop, oldRight, oldBottom) -> {
             View indicator = mSwipePreviewIndicator;
@@ -653,23 +639,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                     @Override
                     public void onSwipeLeft() {
                         setSwipePreviewIndicatorVisible(false, true);
-                        openGalleryPreviews(false, true);
-                    }
-                });
-        mDetailScrollView.setOnPullUpPreviewListener(
-                new GalleryDetailScrollView.OnPullUpPreviewListener() {
-                    @Override
-                    public void onPullUpPreviewReadyChanged(boolean ready) {
-                        setPullUpPreviewHintVisible(ready, false);
-                    }
-
-                    @Override
-                    public void onPullUpPreview() {
-                        setPullUpPreviewHintVisible(false, true);
-                        View previews = mPreviews;
-                        if (previews != null && previews.isShown() && previews.isEnabled()) {
-                            previews.performClick();
-                        }
+                        boolean jumpToNewContent = mDetailScrollView != null
+                                && mDetailScrollView.isSwipeActivationViewVisible()
+                                && Settings.getGalleryPreviewImmediateJump();
+                        openGalleryPreviews(jumpToNewContent, true);
                     }
                 });
 
@@ -778,6 +751,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mPreviewText = (TextView) ViewUtils.$$(mPreviews, R.id.preview_text);
         Ripple.addRipple(mPreviews, isDarkTheme);
         mPreviews.setOnClickListener(this);
+        mDetailScrollView.setSwipeActivationView(mPreviewText);
 
         mProgress = ViewUtils.$$(mainView, R.id.progress);
 
@@ -833,8 +807,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         if (mDetailScrollView != null) {
             mDetailScrollView.setOnSwipeLeftListener(null);
             mDetailScrollView.setSwipeExclusionView(null);
-            mDetailScrollView.setOnPullUpPreviewListener(null);
-            mDetailScrollView.setPullUpPreviewEnabled(false);
+            mDetailScrollView.setSwipeActivationView(null);
             mDetailScrollView = null;
         }
         if (mSwipePreviewIndicator != null) {
@@ -842,11 +815,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             mSwipePreviewIndicator = null;
         }
         mSwipePreviewIndicatorVisible = false;
-        if (mPullUpPreviewHint != null) {
-            mPullUpPreviewHint.animate().cancel();
-            mPullUpPreviewHint = null;
-        }
-        mPullUpPreviewHintVisible = false;
 
         mTip = null;
         mViewTransition = null;
@@ -1356,11 +1324,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 //        final int displayCount = Math.min(totalSize, maxDisplayCount);
         final long gid = gd.gid;
 
-        GalleryDetailScrollView detailScrollView = mDetailScrollView;
-        if (detailScrollView != null) {
-            detailScrollView.setPullUpPreviewEnabled(gd.previewPages > 1 && totalSize > 0);
-        }
-
         if (gd.previewPages <= 0 || totalSize == 0) {
             mPreviewText.setText(R.string.no_previews);
             return;
@@ -1655,41 +1618,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                         if (!mSwipePreviewIndicatorVisible
                                 && indicator == mSwipePreviewIndicator) {
                             indicator.setVisibility(View.INVISIBLE);
-                        }
-                    })
-                    .start();
-        }
-    }
-
-    private void setPullUpPreviewHintVisible(boolean visible, boolean completing) {
-        View hint = mPullUpPreviewHint;
-        if (hint == null || mPullUpPreviewHintVisible == visible) {
-            return;
-        }
-
-        mPullUpPreviewHintVisible = visible;
-        hint.animate().cancel();
-        if (visible) {
-            if (hint.getVisibility() != View.VISIBLE) {
-                hint.setVisibility(View.VISIBLE);
-                hint.setAlpha(0f);
-                hint.setTranslationY(mPullUpPreviewHintOffset);
-            }
-            hint.animate()
-                    .alpha(1f)
-                    .translationY(0f)
-                    .setDuration(140L)
-                    .setInterpolator(new DecelerateInterpolator())
-                    .start();
-        } else {
-            hint.animate()
-                    .alpha(0f)
-                    .translationY(completing ? 0f : mPullUpPreviewHintOffset)
-                    .setDuration(completing ? 160L : 120L)
-                    .setInterpolator(new DecelerateInterpolator())
-                    .withEndAction(() -> {
-                        if (!mPullUpPreviewHintVisible && hint == mPullUpPreviewHint) {
-                            hint.setVisibility(View.INVISIBLE);
                         }
                     })
                     .start();

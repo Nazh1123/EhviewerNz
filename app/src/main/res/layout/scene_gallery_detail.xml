@@ -33,23 +33,6 @@
 
     </com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScrollView>
 
-    <TextView
-        android:id="@+id/pull_up_preview_hint"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="12dp"
-        android:alpha="0"
-        android:elevation="4dp"
-        android:gravity="center"
-        android:paddingStart="16dp"
-        android:paddingTop="10dp"
-        android:paddingEnd="16dp"
-        android:paddingBottom="10dp"
-        android:text="@string/release_to_more_previews"
-        android:textColor="?attr/textColorThemeAccent"
-        android:visibility="invisible" />
-
     <com.hippo.widget.ProgressView
         android:id="@+id/progress_view"
         style="@style/ProgressView"
