@@ -33,6 +33,7 @@ import com.hippo.ehviewer.client.data.ArchiverData;
 import com.hippo.ehviewer.client.data.EhNewsDetail;
 import com.hippo.ehviewer.client.data.EhTopListDetail;
 import com.hippo.ehviewer.client.data.GalleryCommentList;
+import com.hippo.ehviewer.client.data.GalleryChainMetadata;
 import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.HomeDetail;
@@ -51,6 +52,7 @@ import com.hippo.ehviewer.client.parser.EhHomeParser;
 import com.hippo.ehviewer.client.parser.FavoritesParser;
 import com.hippo.ehviewer.client.parser.ForumsParser;
 import com.hippo.ehviewer.client.parser.GalleryApiParser;
+import com.hippo.ehviewer.client.parser.GalleryChainMetadataParser;
 import com.hippo.ehviewer.client.parser.GalleryDetailParser;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.client.parser.GalleryPageApiParser;
@@ -350,6 +352,48 @@ public class EhEngine {
             assert response.body() != null;
             body = response.body().string();
             GalleryApiParser.parse(body, galleryInfoList);
+        } catch (Throwable e) {
+            ExceptionUtils.throwIfFatal(e);
+            throwException(call, code, headers, body, e);
+            throw e;
+        }
+    }
+
+    public static GalleryChainMetadata getGalleryChainMetadata(@Nullable EhClient.Task task,
+                                                                OkHttpClient okHttpClient,
+                                                                long gid, String token) throws Throwable {
+        JSONObject json = new JSONObject();
+        json.put("method", "gdata");
+        JSONArray gidList = new JSONArray();
+        JSONArray gallery = new JSONArray();
+        gallery.put(gid);
+        gallery.put(token);
+        gidList.put(gallery);
+        json.put("gidlist", gidList);
+        json.put("namespace", 0);
+
+        String url = EhUrl.getApiUrl();
+        String referer = EhUrl.getGalleryDetailUrl(gid, token);
+        String origin = EhUrl.getOrigin();
+        Log.d(TAG, url);
+        Request request = new EhRequestBuilder(url, referer, origin)
+                .post(RequestBody.create(MEDIA_TYPE_JSON, json.toString()))
+                .build();
+        Call call = okHttpClient.newCall(request);
+        if (task != null) {
+            task.setCall(call);
+        }
+
+        String body = null;
+        Headers headers = null;
+        int code = -1;
+        try {
+            Response response = call.execute();
+            code = response.code();
+            headers = response.headers();
+            assert response.body() != null;
+            body = response.body().string();
+            return GalleryChainMetadataParser.parse(body);
         } catch (Throwable e) {
             ExceptionUtils.throwIfFatal(e);
             throwException(call, code, headers, body, e);

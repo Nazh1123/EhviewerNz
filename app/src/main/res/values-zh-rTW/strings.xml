@@ -990,6 +990,10 @@
     <string name="imported_archive_info_title">本機匯入資訊</string>
     <string name="imported_archive_info_message">這是從本機儲存空間匯入的項目</string>
     <string name="imported_archive_category">本機匯入</string>
+    <string name="parent_gallery_list_title">父畫廊</string>
+    <string name="parent_gallery_list_loading">正在尋找父畫廊…</string>
+    <string name="parent_gallery_list_failed">父畫廊清單載入失敗：%s</string>
+    <string name="open_direct_parent">直接開啟父畫廊</string>
 
     <!-- S-Pen Actions(Samsung only) -->
     <string name="spen_previous_page">上一頁</string>

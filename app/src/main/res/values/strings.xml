@@ -1124,6 +1124,10 @@
     <string name="imported_archive_info_title">Local Import Info</string>
     <string name="imported_archive_info_message">This is an item imported from local storage</string>
     <string name="imported_archive_category">Local Import</string>
+    <string name="parent_gallery_list_title">Parent galleries</string>
+    <string name="parent_gallery_list_loading">Loading parent galleries…</string>
+    <string name="parent_gallery_list_failed">Failed to load parent galleries: %s</string>
+    <string name="open_direct_parent">Open direct parent</string>
     <!-- TagSelectActivity -->
     <string name="tag_search_entrance">Tag Selector</string>
 </resources>

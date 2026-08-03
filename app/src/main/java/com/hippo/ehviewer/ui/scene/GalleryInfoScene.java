@@ -62,9 +62,13 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
     private ArrayList<String> mKeys;
     @Nullable
     private ArrayList<String> mValues;
+    @Nullable
+    private GalleryDetail mGalleryDetail;
 
     @Nullable
     private EasyRecyclerView mRecyclerView;
+    @Nullable
+    private GalleryParentChainDialog mParentChainDialog;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -85,6 +89,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
         if (gd == null) {
             return;
         }
+        mGalleryDetail = gd;
         if (mKeys == null || mValues == null) {
             return;
         }
@@ -146,6 +151,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
     protected void onRestore(@NonNull Bundle savedInstanceState) {
         mKeys = savedInstanceState.getStringArrayList(KEY_KEYS);
         mValues = savedInstanceState.getStringArrayList(KEY_VALUES);
+        mGalleryDetail = savedInstanceState.getParcelable(KEY_GALLERY_DETAIL);
     }
 
     @Override
@@ -153,6 +159,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
         super.onSaveInstanceState(outState);
         outState.putStringArrayList(KEY_KEYS, mKeys);
         outState.putStringArrayList(KEY_VALUES, mValues);
+        outState.putParcelable(KEY_GALLERY_DETAIL, mGalleryDetail);
     }
 
     @NonNull
@@ -196,6 +203,10 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
             mRecyclerView.stopScroll();
             mRecyclerView = null;
         }
+        if (mParentChainDialog != null) {
+            mParentChainDialog.destroy();
+            mParentChainDialog = null;
+        }
     }
 
     @Override
@@ -203,7 +214,15 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
         Context context = getEHContext();
         if (null != context && 0 != position && null != mValues) {
             if (position == INDEX_PARENT) {
-                UrlOpener.openUrl(context, mValues.get(position), true);
+                if (mGalleryDetail != null) {
+                    if (mParentChainDialog == null) {
+                        mParentChainDialog = new GalleryParentChainDialog(
+                                this, context, mGalleryDetail);
+                    }
+                    mParentChainDialog.show();
+                } else {
+                    UrlOpener.openUrl(context, mValues.get(position), true);
+                }
             } else {
                 ClipboardManager cmb = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
                 cmb.setPrimaryClip(ClipData.newPlainText(null, mValues.get(position)));

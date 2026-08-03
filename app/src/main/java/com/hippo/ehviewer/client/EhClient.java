@@ -70,6 +70,7 @@ public class EhClient {
     public static final int METHOD_GET_HOME = 25;
     public static final int METHOD_RESET_LIMIT = 26;
     public static final int METHOD_GET_EDIT_COMMENT = 29;
+    public static final int METHOD_GET_GALLERY_CHAIN_METADATA = 30;
 
     private final ThreadPoolExecutor mRequestThreadPool;
     private final OkHttpClient mOkHttpClient;
@@ -160,6 +161,9 @@ public class EhClient {
                         return EhEngine.getGalleryList(this, mOkHttpClient, (String) params[0], (int) params[1]);
                     case METHOD_GET_GALLERY_DETAIL:
                         return EhEngine.getGalleryDetail(this, mOkHttpClient, (String) params[0]);
+                    case METHOD_GET_GALLERY_CHAIN_METADATA:
+                        return EhEngine.getGalleryChainMetadata(this, mOkHttpClient,
+                                (Long) params[0], (String) params[1]);
                     case METHOD_GET_PREVIEW_SET:
                         return EhEngine.getPreviewSet(this, mOkHttpClient, (String) params[0]);
                     case METHOD_GET_RATE_GALLERY:

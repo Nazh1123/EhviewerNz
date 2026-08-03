@@ -1033,5 +1033,9 @@
     <string name="imported_archive_info_title">本地导入信息</string>
     <string name="imported_archive_info_message">这是从本地存储中导入的项目</string>
     <string name="imported_archive_category">本地导入</string>
+    <string name="parent_gallery_list_title">父画廊</string>
+    <string name="parent_gallery_list_loading">正在查找父画廊…</string>
+    <string name="parent_gallery_list_failed">父画廊列表加载失败：%s</string>
+    <string name="open_direct_parent">直接打开父画廊</string>
 
 </resources>
