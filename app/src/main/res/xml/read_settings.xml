@@ -79,8 +79,8 @@
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
-        android:key="gallery_double_tap_zoom"
-        android:title="@string/settings_read_page_area_double_tap_zoom" />
+        android:key="gallery_quick_page_turn"
+        android:title="@string/settings_read_quick_page_turn" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"

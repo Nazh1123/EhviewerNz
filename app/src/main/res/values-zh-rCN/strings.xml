@@ -602,7 +602,7 @@
     <string name="settings_read_auto_transfer_time">自动翻页(ms)</string>
     <string name="settings_read_direct_save">长按保存</string>
     <string name="settings_read_long_press_save_turn_page">保存后翻页</string>
-    <string name="settings_read_page_area_double_tap_zoom">翻页区域双击放大</string>
+    <string name="settings_read_quick_page_turn">快速翻页</string>
     <string name="settings_read_start_position_center">中心</string>
     <string name="settings_read_keep_screen_on">屏幕常亮</string>
     <string name="settings_read_show_clock">显示时钟</string>
@@ -679,7 +679,7 @@
     <string name="settings_fork_gallery_immediate_jump">画廊立即跳转</string>
     <string name="settings_fork_long_press_save_summary">长按下一页翻页区域，将当前图片保存到本地</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">长按保存成功后自动翻至下一页</string>
-    <string name="settings_fork_page_area_double_tap_zoom_summary">关闭后翻页区域立即响应单击；菜单和进度区域仍支持双击放大</string>
+    <string name="settings_fork_quick_page_turn_summary">开启后翻页区域立即响应单击；关闭后翻页区域支持双击放大。菜单和进度区域始终支持双击放大</string>
     <string name="settings_fork_bookmark_subscription_summary">点击此项，或在书签栏设置中为书签添加订阅。后可在侧边栏中点击“书签订阅”查看依据时间排序的符合书签条件的所有画廊</string>
     <string name="settings_advanced_proxy">代理</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>

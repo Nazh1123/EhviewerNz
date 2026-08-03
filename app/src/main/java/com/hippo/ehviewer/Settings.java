@@ -89,6 +89,7 @@ public class Settings {
         if (!sSettingsPre.contains(KEY_SEARCH_LANGUAGE)) {
             putString(KEY_SEARCH_LANGUAGE, getInitialSearchLanguage());
         }
+        migrateQuickPageTurnSetting();
         getStartTransferTime();
     }
 
@@ -683,16 +684,29 @@ public class Settings {
         putBoolean(KEY_LONG_PRESS_SAVE_TURN_PAGE, value);
     }
 
-    // Keep the persisted key for compatibility with the original fork setting.
-    private static final String KEY_PAGE_AREA_DOUBLE_TAP_ZOOM = "gallery_double_tap_zoom";
-    private static final boolean DEFAULT_PAGE_AREA_DOUBLE_TAP_ZOOM = false;
+    private static final String KEY_QUICK_PAGE_TURN = "gallery_quick_page_turn";
+    private static final String KEY_LEGACY_PAGE_AREA_DOUBLE_TAP_ZOOM =
+            "gallery_double_tap_zoom";
+    static final boolean DEFAULT_QUICK_PAGE_TURN = false;
 
-    public static boolean getPageAreaDoubleTapZoom() {
-        return getBoolean(KEY_PAGE_AREA_DOUBLE_TAP_ZOOM, DEFAULT_PAGE_AREA_DOUBLE_TAP_ZOOM);
+    private static void migrateQuickPageTurnSetting() {
+        if (!sSettingsPre.contains(KEY_QUICK_PAGE_TURN)
+                && sSettingsPre.contains(KEY_LEGACY_PAGE_AREA_DOUBLE_TAP_ZOOM)) {
+            putQuickPageTurn(quickPageTurnFromLegacyDoubleTap(getBoolean(
+                    KEY_LEGACY_PAGE_AREA_DOUBLE_TAP_ZOOM, false)));
+        }
     }
 
-    public static void putPageAreaDoubleTapZoom(boolean value) {
-        putBoolean(KEY_PAGE_AREA_DOUBLE_TAP_ZOOM, value);
+    static boolean quickPageTurnFromLegacyDoubleTap(boolean doubleTapEnabled) {
+        return !doubleTapEnabled;
+    }
+
+    public static boolean getQuickPageTurn() {
+        return getBoolean(KEY_QUICK_PAGE_TURN, DEFAULT_QUICK_PAGE_TURN);
+    }
+
+    public static void putQuickPageTurn(boolean value) {
+        putBoolean(KEY_QUICK_PAGE_TURN, value);
     }
 
     public static final String KEY_SEARCH_LANGUAGE = "search_language";

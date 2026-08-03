@@ -581,7 +581,7 @@
     <string name="settings_read_auto_transfer_time">自動切換時間（ms）</string>
     <string name="settings_read_direct_save">長按儲存</string>
     <string name="settings_read_long_press_save_turn_page">儲存後翻頁</string>
-    <string name="settings_read_page_area_double_tap_zoom">翻頁區域雙擊放大</string>
+    <string name="settings_read_quick_page_turn">快速翻頁</string>
     <string name="settings_read_custom_screen_lightness">自訂螢幕亮度</string>
     <string name="settings_read_screen_lightness">螢幕亮度</string>
 
