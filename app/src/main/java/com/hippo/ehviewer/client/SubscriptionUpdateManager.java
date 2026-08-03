@@ -44,11 +44,14 @@ import java.util.concurrent.ExecutorService;
 public final class SubscriptionUpdateManager {
 
     public static final long CHECK_INTERVAL_MS = 60L * 60L * 1000L;
+    public static final long CANCEL_RETRY_DELAY_MS = 3L * 60L * 1000L;
 
     private static final int MAX_CONCURRENT_REQUESTS = 5;
 
     private static final String KEY_LAST_CHECK_TIME =
             "subscription_updates_last_check_time";
+    private static final String KEY_CANCEL_RETRY_NOT_BEFORE_TIME =
+            "subscription_updates_cancel_retry_not_before_time";
     private static final String KEY_LAST_SEEN_EH_GID =
             "subscription_updates_last_seen_eh_gid";
     private static final String KEY_LAST_SEEN_BOOKMARK_GID =
@@ -197,8 +200,14 @@ public final class SubscriptionUpdateManager {
         return Settings.getLong(KEY_LAST_CHECK_TIME, 0L);
     }
 
+    public long getNextAutomaticCheckTime() {
+        return calculateNextAutomaticCheckTime(getLastCheckTime(),
+                Settings.getLong(KEY_CANCEL_RETRY_NOT_BEFORE_TIME, 0L));
+    }
+
     public void resetCheckTimer() {
         Settings.putLong(KEY_LAST_CHECK_TIME, System.currentTimeMillis());
+        Settings.putLong(KEY_CANCEL_RETRY_NOT_BEFORE_TIME, 0L);
     }
 
     @NonNull
@@ -218,6 +227,10 @@ public final class SubscriptionUpdateManager {
     /** Returns false when another check is active or no source is enabled. */
     public boolean checkForUpdates(boolean manual) {
         if (mChecking) {
+            return false;
+        }
+        if (!manual && System.currentTimeMillis()
+                < Settings.getLong(KEY_CANCEL_RETRY_NOT_BEFORE_TIME, 0L)) {
             return false;
         }
 
@@ -241,6 +254,7 @@ public final class SubscriptionUpdateManager {
         mBookmarkPreparationFailed = false;
         mQueue.clear();
         mSources.clear();
+        Settings.putLong(KEY_CANCEL_RETRY_NOT_BEFORE_TIME, 0L);
 
         mEhCursorGid = Math.max(
                 Settings.getLong(KEY_LAST_SEEN_EH_GID, 0L),
@@ -289,6 +303,8 @@ public final class SubscriptionUpdateManager {
         mSources.clear();
         mActiveRequests = 0;
         mChecking = false;
+        Settings.putLong(KEY_CANCEL_RETRY_NOT_BEFORE_TIME,
+                System.currentTimeMillis() + CANCEL_RETRY_DELAY_MS);
         notifyStateChanged();
     }
 
@@ -700,5 +716,12 @@ public final class SubscriptionUpdateManager {
 
     private static void persistGids(@NonNull String key, @NonNull Set<Long> gids) {
         Settings.putString(key, serializeGids(gids));
+    }
+
+    static long calculateNextAutomaticCheckTime(long lastCheckTime,
+                                                long cancelRetryNotBeforeTime) {
+        long intervalCheckTime = lastCheckTime > 0L
+                ? lastCheckTime + CHECK_INTERVAL_MS : 0L;
+        return Math.max(intervalCheckTime, cancelRetryNotBeforeTime);
     }
 }

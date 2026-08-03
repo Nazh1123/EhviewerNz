@@ -750,7 +750,6 @@ public final class MainActivity extends StageActivity
         mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
         if (mSubscriptionUpdateManager != null) {
             mSubscriptionUpdateManager.setListener(null);
-            mSubscriptionUpdateManager.cancelCheck();
         }
         super.onStop();
     }
@@ -1065,16 +1064,9 @@ public final class MainActivity extends StageActivity
             scheduleSubscriptionUpdateCheckAfterInterval();
             return;
         }
-        long lastCheckTime = manager.getLastCheckTime();
-        long delay;
-        if (lastCheckTime <= 0L) {
-            delay = 0L;
-        } else {
-            long elapsed = Math.max(0L,
-                    System.currentTimeMillis() - lastCheckTime);
-            delay = Math.max(0L,
-                    SubscriptionUpdateManager.CHECK_INTERVAL_MS - elapsed);
-        }
+        long nextCheckTime = manager.getNextAutomaticCheckTime();
+        long delay = nextCheckTime <= 0L ? 0L
+                : Math.max(0L, nextCheckTime - System.currentTimeMillis());
         mSubscriptionUpdateHandler.postDelayed(
                 mSubscriptionUpdateRunnable, delay);
     }

@@ -39,4 +39,29 @@ public class SubscriptionUpdateManagerTest {
         assertTrue(SubscriptionUpdateManager.parseGids(null).isEmpty());
         assertTrue(SubscriptionUpdateManager.parseGids("").isEmpty());
     }
+
+    @Test
+    public void nextAutomaticCheckHonorsCancelRetryWindow() {
+        long lastCheckTime = 1_000L;
+        long intervalCheckTime = lastCheckTime
+                + SubscriptionUpdateManager.CHECK_INTERVAL_MS;
+        long retryNotBeforeTime = intervalCheckTime + 30_000L;
+
+        assertEquals(retryNotBeforeTime,
+                SubscriptionUpdateManager.calculateNextAutomaticCheckTime(
+                        lastCheckTime, retryNotBeforeTime));
+    }
+
+    @Test
+    public void nextAutomaticCheckUsesNormalIntervalAfterRetryExpiresFirst() {
+        long lastCheckTime = 10_000L;
+        long intervalCheckTime = lastCheckTime
+                + SubscriptionUpdateManager.CHECK_INTERVAL_MS;
+
+        assertEquals(intervalCheckTime,
+                SubscriptionUpdateManager.calculateNextAutomaticCheckTime(
+                        lastCheckTime, 20_000L));
+        assertEquals(0L,
+                SubscriptionUpdateManager.calculateNextAutomaticCheckTime(0L, 0L));
+    }
 }
