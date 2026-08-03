@@ -50,6 +50,32 @@
         android:paddingBottom="@dimen/corner_fab_margin">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/multi_select_download_fab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            app:srcCompat="@drawable/v_download_dark_x24"
+            app:backgroundTint="?attr/widgetColorThemeAccent"
+            style="@style/Widget.Design.FloatingActionButton.Mini"/>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/multi_select_delete_fab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            app:srcCompat="@drawable/v_delete_dark_x24"
+            app:backgroundTint="?attr/widgetColorThemeAccent"
+            style="@style/Widget.Design.FloatingActionButton.Mini"/>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/multi_select_fab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:srcCompat="@drawable/v_check_all_dark_x24"
+            app:backgroundTint="?attr/widgetColorThemeAccent"
+            style="@style/Widget.Design.FloatingActionButton.Mini"/>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:id="@+id/tag_filter"

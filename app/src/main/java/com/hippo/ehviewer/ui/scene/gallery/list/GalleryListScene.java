@@ -185,6 +185,14 @@ public class GalleryListScene extends BaseScene
     final static int STATE_SEARCH = 2;
     final static int STATE_SEARCH_SHOW_LIST = 3;
 
+    private static final int FAB_MULTI_SELECT_DOWNLOAD = 0;
+    private static final int FAB_MULTI_SELECT_DELETE = 1;
+    private static final int FAB_MULTI_SELECT = 2;
+    private static final int FAB_TAG_FILTER = 3;
+    private static final int FAB_GO_TO = 4;
+    private static final int FAB_REFRESH = 5;
+    private static final int FAB_RANDOM = 6;
+
     private static final long ANIMATE_TIME = 300L;
 
     private boolean showReadProgress = false;
@@ -215,6 +223,8 @@ public class GalleryListScene extends BaseScene
     private FabLayout mFabLayout;
     @Nullable
     private FloatingActionButton mFloatingActionButton;
+    @Nullable
+    private FloatingActionButton mMultiSelectFab;
     @Nullable
     private ViewTransition mViewTransition;
     @Nullable
@@ -282,6 +292,9 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+            if (mMultiSelectMode) {
+                return;
+            }
             if (dy >= mHideActionFabSlop) {
                 hideActionFab();
             } else if (dy <= -mHideActionFabSlop / 2) {
@@ -708,6 +721,7 @@ public class GalleryListScene extends BaseScene
         mSearchBar = (SearchBar) ViewUtils.$$(mainLayout, R.id.search_bar);
         mFabLayout = (FabLayout) ViewUtils.$$(mainLayout, R.id.fab_layout);
         mFloatingActionButton = (FloatingActionButton) ViewUtils.$$(mFabLayout, R.id.tag_filter);
+        mMultiSelectFab = (FloatingActionButton) ViewUtils.$$(mFabLayout, R.id.multi_select_fab);
 
         onFilter(filterOpen, filterTagList.size());
 
@@ -762,6 +776,7 @@ public class GalleryListScene extends BaseScene
 
         mActionFabDrawable = new AddDeleteDrawable(context, resources.getColor(R.color.primary_drawable_dark, null));
         mFabLayout.getPrimaryFab().setImageDrawable(mActionFabDrawable);
+        updateMultiSelectFabState(false);
 
         mSearchFab.setOnClickListener(this);
 
@@ -1015,6 +1030,8 @@ public class GalleryListScene extends BaseScene
         mSearchLayout = null;
         mSearchBar = null;
         mSearchFab = null;
+        mFloatingActionButton = null;
+        mMultiSelectFab = null;
         mViewTransition = null;
         mLeftDrawable = null;
         mRightDrawable = null;
@@ -1381,30 +1398,33 @@ public class GalleryListScene extends BaseScene
             return true;
         }
 
+        if (mMultiSelectMode) {
+            toggleGallerySelection(gi);
+            return true;
+        }
+
         boolean downloaded = mDownloadManager.getDownloadState(gi.gid) != DownloadInfo.STATE_INVALID;
         boolean favourited = gi.favoriteSlot != -2;
         ListUrlBuilder matchingBookmarkSearch = isBookmarkSubscriptionMode()
                 && mBookmarkSubscriptionCoordinator != null
                 ? mBookmarkSubscriptionCoordinator.buildSearchForGallery(gi.gid) : null;
 
-        int menuSize = matchingBookmarkSearch != null ? 5 : 4;
+        int menuSize = matchingBookmarkSearch != null ? 4 : 3;
         CharSequence[] items = new CharSequence[menuSize];
         items[0] = context.getString(R.string.read);
         items[1] = context.getString(downloaded
                 ? R.string.delete_downloads : R.string.download);
         items[2] = context.getString(favourited
                 ? R.string.remove_from_favourites : R.string.add_to_favourites);
-        items[3] = context.getString(R.string.multi_select);
 
         int[] icons = new int[menuSize];
         icons[0] = R.drawable.v_book_open_x24;
         icons[1] = downloaded ? R.drawable.v_delete_x24 : R.drawable.v_download_x24;
         icons[2] = favourited ? R.drawable.v_heart_broken_x24 : R.drawable.v_heart_x24;
-        icons[3] = R.drawable.v_check_all_x24;
 
         if (matchingBookmarkSearch != null) {
-            items[4] = context.getString(R.string.search_corresponding_bookmarks);
-            icons[4] = R.drawable.v_magnify_x24;
+            items[3] = context.getString(R.string.search_corresponding_bookmarks);
+            icons[3] = R.drawable.v_magnify_x24;
         }
 
         @SuppressLint("InflateParams") LinearLayout linearLayout = (LinearLayout) getLayoutInflater2().inflate(R.layout.gallery_item_dialog_coustom_title, null);
@@ -1442,13 +1462,7 @@ public class GalleryListScene extends BaseScene
                             startActivity(intent);
                             break;
                         case 1: // Download
-                            if (mMultiSelectMode) {
-                                if (downloaded) {
-                                    showBatchDeleteDownloadDialog(context);
-                                } else {
-                                    batchDownloadSelected(activity);
-                                }
-                            } else if (downloaded) {
+                            if (downloaded) {
                                 new AlertDialog.Builder(context)
                                         .setTitle(R.string.download_remove_dialog_title)
                                         .setMessage(getString(R.string.download_remove_dialog_message, gi.title))
@@ -1465,10 +1479,7 @@ public class GalleryListScene extends BaseScene
                                 CommonOperations.addToFavorites(activity, gi, new AddToFavoriteListener(context, activity.getStageId(), getTag()), false);
                             }
                             break;
-                        case 3: // Multi-select
-                            enterMultiSelectMode(gi);
-                            break;
-                        case 4: // Search matching bookmark subscriptions
+                        case 3: // Search matching bookmark subscriptions
                             if (matchingBookmarkSearch != null) {
                                 searchMatchingBookmarks(matchingBookmarkSearch);
                             }
@@ -1478,14 +1489,9 @@ public class GalleryListScene extends BaseScene
         return true;
     }
 
-    private void enterMultiSelectMode(@NonNull GalleryInfo galleryInfo) {
+    private void enterMultiSelectMode() {
         mMultiSelectMode = true;
-        if (mFabLayout != null) {
-            mFabLayout.setExpanded(false);
-        }
-        if (mSelectedGids.add(galleryInfo.gid)) {
-            notifyGallerySelectionChanged(galleryInfo.gid);
-        }
+        updateMultiSelectFabState(true);
     }
 
     private void toggleGallerySelection(@NonNull GalleryInfo galleryInfo) {
@@ -1502,6 +1508,52 @@ public class GalleryListScene extends BaseScene
         if (mAdapter != null) {
             mAdapter.notifyDataSetChanged();
         }
+        updateMultiSelectFabState(true);
+    }
+
+    private void updateMultiSelectFabState(boolean animation) {
+        FabLayout fabLayout = mFabLayout;
+        FloatingActionButton multiSelectFab = mMultiSelectFab;
+        if (fabLayout == null || multiSelectFab == null) {
+            return;
+        }
+
+        multiSelectFab.setImageResource(mMultiSelectMode
+                ? R.drawable.v_check_dark_x24 : R.drawable.v_check_all_dark_x24);
+
+        if (mMultiSelectMode) {
+            fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DOWNLOAD, true);
+            fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DELETE, true);
+            fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT, true);
+            fabLayout.setSecondaryFabVisibilityAt(FAB_TAG_FILTER, false);
+            fabLayout.setSecondaryFabVisibilityAt(FAB_GO_TO, false);
+            fabLayout.setSecondaryFabVisibilityAt(FAB_REFRESH, false);
+            fabLayout.setSecondaryFabVisibilityAt(FAB_RANDOM, false);
+            fabLayout.setAutoCancel(false);
+            fabLayout.setExpanded(true, animation);
+        } else {
+            fabLayout.setAutoCancel(true);
+            fabLayout.setExpanded(false, animation);
+            if (animation) {
+                fabLayout.postDelayed(() -> {
+                    if (!mMultiSelectMode && mFabLayout == fabLayout) {
+                        showNormalFabs(fabLayout);
+                    }
+                }, ANIMATE_TIME);
+            } else {
+                showNormalFabs(fabLayout);
+            }
+        }
+    }
+
+    private void showNormalFabs(@NonNull FabLayout fabLayout) {
+        fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DOWNLOAD, false);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DELETE, false);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT, true);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_TAG_FILTER, true);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_GO_TO, true);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_REFRESH, true);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_RANDOM, true);
     }
 
     private void notifyGallerySelectionChanged(long gid) {
@@ -1706,11 +1758,32 @@ public class GalleryListScene extends BaseScene
         }
 
         switch (position) {
-            case 0: // 开启\关闭多标签搜索
+            case FAB_MULTI_SELECT_DOWNLOAD: {
+                MainActivity activity = getActivity2();
+                if (mMultiSelectMode && activity != null) {
+                    batchDownloadSelected(activity);
+                }
+                return;
+            }
+            case FAB_MULTI_SELECT_DELETE: {
+                Context context = getEHContext();
+                if (mMultiSelectMode && context != null) {
+                    showBatchDeleteDownloadDialog(context);
+                }
+                return;
+            }
+            case FAB_MULTI_SELECT:
+                if (mMultiSelectMode) {
+                    exitMultiSelectMode();
+                } else {
+                    enterMultiSelectMode();
+                }
+                return;
+            case FAB_TAG_FILTER: // 开启\关闭多标签搜索
                 filterOpen = !filterOpen;
                 onFilter(filterOpen, filterTagList.size());
                 break;
-            case 1: // Go to
+            case FAB_GO_TO: // Go to
                 if (mHelper.canGoTo()) {
                     if (mUrlBuilder != null &&
                             (mUrlBuilder.getMode() == ListUrlBuilder.MODE_TOP_LIST
@@ -1719,10 +1792,10 @@ public class GalleryListScene extends BaseScene
                     showGoToDialog();
                 }
                 break;
-            case 2: // Refresh
+            case FAB_REFRESH: // Refresh
                 mHelper.refresh();
                 break;
-            case 3:
+            case FAB_RANDOM:
                 List<GalleryInfo> gInfoL = mHelper.getData();
                 if (gInfoL == null || gInfoL.isEmpty()) {
                     return;
