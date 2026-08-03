@@ -264,6 +264,7 @@
     <string name="no_previews">沒有預覽</string>
     <string name="no_more_previews">已經顯示所有預覽了</string>
     <string name="more_previews">更多預覽</string>
+    <string name="release_to_more_previews">放開以查看更多預覽</string>
     <string name="refresh">重新整理</string>
     <string name="open_in_other_app">在其他應用程式中開啟</string>
     <string name="rate_successfully">評分成功</string>
