@@ -24,14 +24,14 @@
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="gallery_direct_save"
-        android:summary="@string/settings_fork_quick_save_summary"
+        android:summary="@string/settings_fork_long_press_save_summary"
         android:title="@string/settings_read_direct_save" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="gallery_quick_save_turn_page"
-        android:summary="@string/settings_fork_save_then_turn_page_summary"
-        android:title="@string/settings_read_quick_save_turn_page" />
+        android:summary="@string/settings_fork_long_press_save_then_turn_page_summary"
+        android:title="@string/settings_read_long_press_save_turn_page" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"

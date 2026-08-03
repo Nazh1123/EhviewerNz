@@ -75,7 +75,7 @@
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="gallery_quick_save_turn_page"
-        android:title="@string/settings_read_quick_save_turn_page" />
+        android:title="@string/settings_read_long_press_save_turn_page" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"

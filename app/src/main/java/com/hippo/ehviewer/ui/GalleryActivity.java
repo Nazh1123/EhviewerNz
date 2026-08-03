@@ -137,7 +137,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private static final long SLIDER_ANIMATION_DURING = 150;
     private static final long HIDE_SLIDER_DELAY = 3000;
-    private static final long QUICK_SAVE_DEBOUNCE_MS = 1000L;
+    private static final long LONG_PRESS_SAVE_DEBOUNCE_MS = 1000L;
     private static final long SAVE_NOTICE_DURATION_MS = 2000L;
     private static final long SAVE_NOTICE_ENTER_DURATION_MS = 180L;
     private static final long SAVE_NOTICE_FADE_DURATION_MS = 200L;
@@ -200,8 +200,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private int mLayoutMode;
     private int mSize;
     private int mCurrentIndex;
-    private long mLastQuickSaveAt;
-    private int mLastQuickSaveIndex = -1;
+    private long mLastLongPressSaveAt;
+    private int mLastLongPressSaveIndex = -1;
 
     private boolean canFinish = false;
     private boolean autoTransferring = false;
@@ -963,16 +963,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     @Override
-    public void onTapSaveArea(int index) {
-        NotifyTask task = mNotifyTaskPool.pop();
-        if (task == null) {
-            task = new NotifyTask();
-        }
-        task.setData(NotifyTask.KEY_TAP_SAVE_AREA, index);
-        SimpleHandler.getInstance().post(task);
-    }
-
-    @Override
     public void onTapMenuArea() {
         NotifyTask task = mNotifyTaskPool.pop();
         if (task == null) {
@@ -1423,7 +1413,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         private final SeekBar mStartTransferTime;
         private final EditText mStartTransferTimeInput;
         private final SwitchCompat mDirectSave;
-        private final SwitchCompat mQuickSaveTurnPage;
+        private final SwitchCompat mLongPressSaveTurnPage;
         private final SwitchCompat mDoubleTapZoom;
         private final SwitchCompat mKeepScreenOn;
         private final SwitchCompat mShowClock;
@@ -1446,7 +1436,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mStartTransferTime = mView.findViewById(R.id.start_transfer_time);
             mStartTransferTimeInput = mView.findViewById(R.id.start_transfer_time_input);
             mDirectSave = mView.findViewById(R.id.direct_save);
-            mQuickSaveTurnPage = mView.findViewById(R.id.quick_save_turn_page);
+            mLongPressSaveTurnPage = mView.findViewById(R.id.long_press_save_turn_page);
             mDoubleTapZoom = mView.findViewById(R.id.double_tap_zoom);
             mKeepScreenOn = mView.findViewById(R.id.keep_screen_on);
             mShowClock = mView.findViewById(R.id.show_clock);
@@ -1465,7 +1455,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mStartPosition.setSelection(Settings.getStartPosition());
             configureStartTransferTime();
             mDirectSave.setChecked(Settings.getDirectSave());
-            mQuickSaveTurnPage.setChecked(Settings.getQuickSaveTurnPage());
+            mLongPressSaveTurnPage.setChecked(Settings.getLongPressSaveTurnPage());
             mDoubleTapZoom.setChecked(Settings.getDoubleTapZoom());
             mKeepScreenOn.setChecked(Settings.getKeepScreenOn());
             mShowClock.setChecked(Settings.getShowClock());
@@ -1482,7 +1472,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mDirectSave.setOnCheckedChangeListener(this::onDirectSaveChange);
             mVolumePage.setOnCheckedChangeListener(this::onVolumePageChange);
 
-            mQuickSaveTurnPage.setVisibility(
+            mLongPressSaveTurnPage.setVisibility(
                     Settings.getDirectSave() ? View.VISIBLE : View.GONE);
 
             if (Settings.getVolumePage()) {
@@ -1583,7 +1573,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
 
         private void onDirectSaveChange(CompoundButton compoundButton, boolean checked) {
-            mQuickSaveTurnPage.setVisibility(checked ? View.VISIBLE : View.GONE);
+            mLongPressSaveTurnPage.setVisibility(checked ? View.VISIBLE : View.GONE);
         }
 
         public View getView() {
@@ -1601,7 +1591,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             int scaleMode = GalleryView.sanitizeScaleMode(mScaleMode.getSelectedItemPosition());
             int startPosition = GalleryView.sanitizeStartPosition(mStartPosition.getSelectedItemPosition());
             boolean directSave = mDirectSave.isChecked();
-            boolean quickSaveTurnPage = mQuickSaveTurnPage.isChecked();
+            boolean longPressSaveTurnPage = mLongPressSaveTurnPage.isChecked();
             boolean doubleTapZoom = mDoubleTapZoom.isChecked();
             boolean keepScreenOn = mKeepScreenOn.isChecked();
             boolean showClock = mShowClock.isChecked();
@@ -1624,7 +1614,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             Settings.putStartPosition(startPosition);
             Settings.putStartTransferTime(transferTime);
             Settings.putDirectSave(directSave);
-            Settings.putQuickSaveTurnPage(quickSaveTurnPage);
+            Settings.putLongPressSaveTurnPage(longPressSaveTurnPage);
             Settings.putDoubleTapZoom(doubleTapZoom);
             Settings.putKeepScreenOn(keepScreenOn);
             Settings.putShowClock(showClock);
@@ -1701,8 +1691,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         public static final int KEY_TAP_MENU_AREA = 4;
         public static final int KEY_TAP_ERROR_TEXT = 5;
         public static final int KEY_LONG_PRESS_PAGE = 6;
-        public static final int KEY_TAP_SAVE_AREA = 7;
-        public static final int KEY_LONG_PRESS_NEXT_PAGE_AREA = 8;
+        public static final int KEY_LONG_PRESS_NEXT_PAGE_AREA = 7;
 
         private int mKey;
         private int mValue;
@@ -1745,34 +1734,23 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
 
-        private void onTapSaveArea(int index) {
-            if (!Settings.getDirectSave()) {
-                if (mGalleryView != null) {
-                    mGalleryView.pageLeft();
-                }
-                return;
-            }
-
-            performQuickSave(index);
-        }
-
-        private void performQuickSave(int index) {
+        private void performLongPressSave(int index) {
             if (mGalleryProvider == null || index < 0 || index >= mSize) {
                 return;
             }
 
             long now = SystemClock.elapsedRealtime();
-            if (index == mLastQuickSaveIndex
-                    && mLastQuickSaveAt != 0L
-                    && now - mLastQuickSaveAt < QUICK_SAVE_DEBOUNCE_MS) {
+            if (index == mLastLongPressSaveIndex
+                    && mLastLongPressSaveAt != 0L
+                    && now - mLastLongPressSaveAt < LONG_PRESS_SAVE_DEBOUNCE_MS) {
                 return;
             }
 
             saveImage(index);
-            mLastQuickSaveIndex = index;
-            mLastQuickSaveAt = SystemClock.elapsedRealtime();
+            mLastLongPressSaveIndex = index;
+            mLastLongPressSaveAt = SystemClock.elapsedRealtime();
 
-            if (Settings.getQuickSaveTurnPage() && mGalleryView != null) {
+            if (Settings.getLongPressSaveTurnPage() && mGalleryView != null) {
                 if (mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT) {
                     mGalleryView.pageLeft();
                 } else {
@@ -1787,7 +1765,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         private void onLongPressNextPageArea(final int index) {
             if (Settings.getDirectSave()) {
-                performQuickSave(index);
+                performLongPressSave(index);
             } else {
                 showPageDialog(index);
             }
@@ -1821,9 +1799,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case KEY_LONG_PRESS_PAGE:
                     onLongPressPage(mValue);
-                    break;
-                case KEY_TAP_SAVE_AREA:
-                    onTapSaveArea(mValue);
                     break;
                 case KEY_LONG_PRESS_NEXT_PAGE_AREA:
                     onLongPressNextPageArea(mValue);

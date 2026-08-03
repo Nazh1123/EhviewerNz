@@ -174,7 +174,7 @@
             android:textColor="?android:attr/textColorPrimary" />
 
         <LinearLayout
-            android:id="@+id/quick_save_turn_page_container"
+            android:id="@+id/long_press_save_turn_page_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal">
@@ -185,11 +185,11 @@
                 android:layout_weight="2" />
 
             <androidx.appcompat.widget.SwitchCompat
-                android:id="@+id/quick_save_turn_page"
+                android:id="@+id/long_press_save_turn_page"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_weight="20"
-                android:text="@string/settings_read_quick_save_turn_page"
+                android:text="@string/settings_read_long_press_save_turn_page"
                 android:textColor="?android:attr/textColorPrimary"
                 android:textSize="@dimen/text_super_small" />
 
