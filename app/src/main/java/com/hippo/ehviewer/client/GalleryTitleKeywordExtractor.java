@@ -17,7 +17,7 @@
 package com.hippo.ehviewer.client;
 
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -120,7 +120,8 @@ public final class GalleryTitleKeywordExtractor {
             return text;
         }
 
-        ranges.sort(Comparator.comparingInt(range -> range.start));
+        Collections.sort(ranges,
+                (left, right) -> Integer.compare(left.start, right.start));
         StringBuilder result = new StringBuilder(text.length());
         int cursor = 0;
         for (Range range : ranges) {
