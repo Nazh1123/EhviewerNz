@@ -31,6 +31,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.ConnectivityManager;
@@ -45,6 +46,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -58,6 +60,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.appcompat.app.AlertDialog;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.navigation.NavigationView;
 import com.google.android.material.snackbar.Snackbar;
@@ -445,6 +448,7 @@ public final class MainActivity extends StageActivity
         initSubscriptionUpdateBadges();
         mRightDrawer = (FrameLayout) ViewUtils.$$(this, R.id.right_drawer);
         View headerLayout = mNavView.getHeaderView(0);
+        configureOneHandedNavigation(headerLayout);
         mAvatar = (AvatarImageView) ViewUtils.$$(headerLayout, R.id.avatar);
         mAvatar.setOnClickListener(l -> onAvatarChange());
         mHeaderBackground = (ImageView) ViewUtils.$$(headerLayout, R.id.header_background);
@@ -494,6 +498,53 @@ public final class MainActivity extends StageActivity
             onRestore(savedInstanceState);
         }
         EhTagDatabase.update(this);
+    }
+
+    private void configureOneHandedNavigation(View headerLayout) {
+        RecyclerView menuView = findRecyclerView(mNavView);
+        if (menuView == null) {
+            return;
+        }
+
+        // Keep NavigationView's native scrolling, fling and edge feedback. The final item's
+        // decoration is real scroll range, allowing it to stop 35% into the button-only area.
+        menuView.setVerticalScrollBarEnabled(false);
+        menuView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        menuView.setSaveEnabled(false);
+        menuView.addItemDecoration(new RecyclerView.ItemDecoration() {
+            @Override
+            public void getItemOffsets(@NonNull Rect outRect, @NonNull View view,
+                    @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+                RecyclerView.Adapter<?> adapter = parent.getAdapter();
+                int position = parent.getChildAdapterPosition(view);
+                if (adapter == null || position == RecyclerView.NO_POSITION ||
+                        position != adapter.getItemCount() - 1) {
+                    return;
+                }
+
+                int buttonAreaHeight = Math.max(0, parent.getHeight() - headerLayout.getHeight());
+                int targetTop = headerLayout.getHeight() + Math.round(buttonAreaHeight * 0.35f);
+                outRect.bottom = Math.max(0,
+                        parent.getHeight() - targetTop - view.getMeasuredHeight());
+            }
+        });
+    }
+
+    @Nullable
+    private static RecyclerView findRecyclerView(View view) {
+        if (view instanceof RecyclerView) {
+            return (RecyclerView) view;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                RecyclerView recyclerView = findRecyclerView(group.getChildAt(i));
+                if (recyclerView != null) {
+                    return recyclerView;
+                }
+            }
+        }
+        return null;
     }
 
     @Override
@@ -1242,6 +1293,13 @@ public final class MainActivity extends StageActivity
     public void onDrawerClosed(View drawerView) {
         if (limitsCountView != null) {
             limitsCountView.hide();
+        }
+        if (mNavView != null && drawerView.findViewById(R.id.nav_view) == mNavView) {
+            RecyclerView menuView = findRecyclerView(mNavView);
+            if (menuView != null) {
+                menuView.stopScroll();
+                menuView.scrollToPosition(0);
+            }
         }
     }
 

@@ -39,57 +39,47 @@
             android:orientation="vertical"
             app:insetForeground="@android:color/transparent">
 
-            <FrameLayout
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent">
+                android:layout_height="match_parent"
+                android:orientation="vertical">
 
-                <FrameLayout
+                <com.google.android.material.navigation.NavigationView
+                    android:id="@+id/nav_view"
                     android:layout_width="wrap_content"
-                    android:layout_height="match_parent">
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:background="?android:navigationBarColor"
+                    android:scrollbars="none"
+                    app:headerLayout="@layout/nav_header_main"
+                    app:insetForeground="@android:color/transparent"
+                    app:menu="@menu/nav_drawer_main" />
 
-                    <com.google.android.material.navigation.NavigationView
-                        android:id="@+id/nav_view"
-                        android:layout_width="wrap_content"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1"
-                        android:background="?android:navigationBarColor"
-                        android:paddingBottom="96dip"
-                        android:scrollbars="vertical"
-                        app:headerLayout="@layout/nav_header_main"
-                        app:insetForeground="@android:color/transparent"
-                        app:menu="@menu/nav_drawer_main" />
-                </FrameLayout>
-
-                <FrameLayout
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="bottom|center">
+                    android:background="?android:navigationBarColor"
+                    android:orientation="vertical">
 
-                    <LinearLayout
+                    <com.hippo.ehviewer.widget.LimitsCountView
+                        android:id="@+id/limits_count_view"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical">
+                        android:maxHeight="180dp" />
 
-                        <com.hippo.ehviewer.widget.LimitsCountView
-                            android:id="@+id/limits_count_view"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:maxHeight="180dp"/>
-
-                        <TextView
-                            android:id="@+id/change_theme"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_gravity="center"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center_vertical|center_horizontal"
-                            android:minWidth="88dip"
-                            android:minHeight="48dip"
-                            app:insetForeground="@android:color/transparent" />
-                    </LinearLayout>
-                </FrameLayout>
-            </FrameLayout>
+                    <TextView
+                        android:id="@+id/change_theme"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical|center_horizontal"
+                        android:minWidth="88dip"
+                        android:minHeight="48dip"
+                        app:insetForeground="@android:color/transparent" />
+                </LinearLayout>
+            </LinearLayout>
         </com.hippo.ehviewer.widget.EhNavigationView>
 
         <com.hippo.ehviewer.widget.EhDrawerView
