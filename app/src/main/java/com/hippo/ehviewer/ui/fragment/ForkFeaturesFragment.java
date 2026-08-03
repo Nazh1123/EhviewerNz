@@ -2,12 +2,8 @@ package com.hippo.ehviewer.ui.fragment;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
-import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import androidx.preference.Preference;
 
@@ -17,40 +13,19 @@ import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.scene.gallery.list.QuickSearchScene;
 import com.hippo.scene.StageActivity;
 import com.hippo.unifile.UniFile;
-import com.hippo.util.ExceptionUtils;
 
 public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
 
     private static final String SUBSCRIPTION_SOURCE_INDENT = "\u3000\u3000";
     private static final String KEY_MANUAL_IMAGE_SAVE_LOCATION =
             "manual_image_save_location";
+    private static final int REQUEST_CODE_PICK_MANUAL_IMAGE_DIR = 0;
+    private static final int REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L = 1;
     private static final String KEY_BOOKMARK_SUBSCRIPTION_SETTINGS =
             "bookmark_subscription_settings";
 
     @Nullable
     private Preference mManualImageSaveLocation;
-
-    private final ActivityResultLauncher<Uri> mManualDirectoryLauncher =
-            registerForActivityResult(new ActivityResultContracts.OpenDocumentTree(), uri -> {
-                if (uri == null || getActivity() == null) {
-                    return;
-                }
-                try {
-                    requireActivity().getContentResolver().takePersistableUriPermission(
-                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION |
-                                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                    UniFile directory = UniFile.fromTreeUri(requireContext(), uri);
-                    if (directory == null) {
-                        showInvalidDirectory();
-                        return;
-                    }
-                    Settings.putManualImageSaveLocation(directory);
-                    updateManualSaveLocationSummary();
-                } catch (Throwable e) {
-                    ExceptionUtils.throwIfFatal(e);
-                    showInvalidDirectory();
-                }
-            });
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState,
@@ -104,8 +79,10 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         updateManualSaveLocationSummary();
         if (mManualImageSaveLocation != null) {
             mManualImageSaveLocation.setOnPreferenceClickListener(preference -> {
-                Uri initialUri = Settings.getManualImageSaveLocationUri();
-                mManualDirectoryLauncher.launch(initialUri);
+                SettingsDirectoryPicker.selectLocation(this,
+                        Settings.getManualImageSaveLocation(),
+                        REQUEST_CODE_PICK_MANUAL_IMAGE_DIR,
+                        REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L);
                 return true;
             });
         }
@@ -123,6 +100,21 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         updateManualSaveLocationSummary();
     }
 
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        if (SettingsDirectoryPicker.handleActivityResult(this,
+                requestCode, resultCode, data,
+                REQUEST_CODE_PICK_MANUAL_IMAGE_DIR,
+                REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L,
+                directory -> {
+                    Settings.putManualImageSaveLocation(directory);
+                    updateManualSaveLocationSummary();
+                })) {
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
     private void updateManualSaveLocationSummary() {
         if (mManualImageSaveLocation == null) {
             return;
@@ -133,14 +125,6 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         } else {
             mManualImageSaveLocation.setSummary(
                     R.string.settings_download_invalid_download_location);
-        }
-    }
-
-    private void showInvalidDirectory() {
-        if (getContext() != null) {
-            Toast.makeText(getContext(),
-                    R.string.settings_download_cant_get_download_location,
-                    Toast.LENGTH_SHORT).show();
         }
     }
 

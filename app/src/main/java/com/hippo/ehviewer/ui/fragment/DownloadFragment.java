@@ -18,11 +18,9 @@ package com.hippo.ehviewer.ui.fragment;
 
 import android.app.Activity;
 import android.app.ProgressDialog;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.Build;
 import android.os.Bundle;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -38,7 +36,6 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.ui.CommonOperations;
-import com.hippo.ehviewer.ui.DirPickerActivity;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.ExceptionUtils;
 import com.hippo.yorozuya.IOUtils;
@@ -205,64 +202,14 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
     }
 
     private void selectLocation(boolean manualSaveLocation) {
-        int sdk = Build.VERSION.SDK_INT;
-        if (sdk < Build.VERSION_CODES.KITKAT) {
-            openDirPicker(manualSaveLocation);
-        } else if (sdk < Build.VERSION_CODES.LOLLIPOP) {
-            showDirPickerDialogKK(manualSaveLocation);
-        } else {
-            showDirPickerDialogL(manualSaveLocation);
-        }
-    }
-
-    private void showDirPickerDialogKK(boolean manualSaveLocation) {
-        new AlertDialog.Builder(requireActivity()).setMessage(R.string.settings_download_pick_dir_kk)
-                .setPositiveButton(R.string.settings_download_continue,
-                        (dialog, which) -> openDirPicker(manualSaveLocation))
-                .show();
-    }
-
-    private void showDirPickerDialogL(boolean manualSaveLocation) {
-        DialogInterface.OnClickListener listener = (dialog, which) -> {
-            switch (which) {
-                case DialogInterface.BUTTON_POSITIVE:
-                    openDirPicker(manualSaveLocation);
-                    break;
-                case DialogInterface.BUTTON_NEUTRAL:
-                    openDirPickerL(manualSaveLocation);
-                    break;
-            }
-        };
-
-        new AlertDialog.Builder(requireActivity()).setMessage(R.string.settings_download_pick_dir_l)
-                .setPositiveButton(R.string.settings_download_continue, listener)
-                .setNeutralButton(R.string.settings_download_document, listener)
-                .show();
-    }
-
-    private void openDirPicker(boolean manualSaveLocation) {
         UniFile uniFile = manualSaveLocation
                 ? Settings.getManualImageSaveLocation()
                 : Settings.getDownloadLocation();
-        Intent intent = new Intent(getActivity(), DirPickerActivity.class);
-        if (uniFile != null) {
-            intent.putExtra(DirPickerActivity.KEY_FILE_URI, uniFile.getUri());
-        }
-        startActivityForResult(intent, manualSaveLocation
-                ? REQUEST_CODE_PICK_MANUAL_IMAGE_DIR
-                : REQUEST_CODE_PICK_IMAGE_DIR);
-    }
-
-    private void openDirPickerL(boolean manualSaveLocation) {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        try {
-            startActivityForResult(intent, manualSaveLocation
-                    ? REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L
-                    : REQUEST_CODE_PICK_IMAGE_DIR_L);
-        } catch (Throwable e) {
-            ExceptionUtils.throwIfFatal(e);
-            Toast.makeText(getActivity(), R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
-        }
+        SettingsDirectoryPicker.selectLocation(this, uniFile,
+                manualSaveLocation ? REQUEST_CODE_PICK_MANUAL_IMAGE_DIR
+                        : REQUEST_CODE_PICK_IMAGE_DIR,
+                manualSaveLocation ? REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L
+                        : REQUEST_CODE_PICK_IMAGE_DIR_L);
     }
 
     private void exportDownloadItems() {
@@ -311,44 +258,22 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (SettingsDirectoryPicker.handleActivityResult(this,
+                requestCode, resultCode, data,
+                REQUEST_CODE_PICK_IMAGE_DIR, REQUEST_CODE_PICK_IMAGE_DIR_L,
+                location -> putLocation(false, location))
+                || SettingsDirectoryPicker.handleActivityResult(this,
+                requestCode, resultCode, data,
+                REQUEST_CODE_PICK_MANUAL_IMAGE_DIR,
+                REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L,
+                location -> putLocation(true, location))) {
+            return;
+        }
         if(data == null){
             super.onActivityResult(requestCode, resultCode, null);
             return;
         }
         switch (requestCode) {
-            case REQUEST_CODE_PICK_IMAGE_DIR:
-            case REQUEST_CODE_PICK_MANUAL_IMAGE_DIR: {
-                if (resultCode == Activity.RESULT_OK) {
-                    UniFile uniFile = UniFile.fromUri(getActivity(), data.getData());
-                    if (uniFile != null) {
-                        putLocation(requestCode == REQUEST_CODE_PICK_MANUAL_IMAGE_DIR, uniFile);
-                    } else {
-                        Toast.makeText(getActivity(), R.string.settings_download_cant_get_download_location,
-                                Toast.LENGTH_SHORT).show();
-                    }
-                }
-                break;
-            }
-            case REQUEST_CODE_PICK_IMAGE_DIR_L:
-            case REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L: {
-                if (resultCode == Activity.RESULT_OK) {
-                    Uri treeUri = data.getData();
-                    if (treeUri != null) {
-                        requireActivity().getContentResolver().takePersistableUriPermission(
-                                treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                        UniFile uniFile = UniFile.fromTreeUri(getActivity(), treeUri);
-                        if (uniFile != null) {
-                            putLocation(
-                                    requestCode == REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L,
-                                    uniFile);
-                        } else {
-                            Toast.makeText(getActivity(), R.string.settings_download_cant_get_download_location,
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                }
-                break;
-            }
             case REQUEST_CODE_PICK_DOWNLOAD_IMPORT_FILE: {
                 if (resultCode == Activity.RESULT_OK) {
                     new ImportDownloadTask(this, data.getData()).execute();
