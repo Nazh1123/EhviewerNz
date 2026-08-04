@@ -11,6 +11,7 @@
 package com.hippo.ehviewer.client;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
@@ -63,5 +64,21 @@ public class SubscriptionUpdateManagerTest {
                         lastCheckTime, 20_000L));
         assertEquals(0L,
                 SubscriptionUpdateManager.calculateNextAutomaticCheckTime(0L, 0L));
+    }
+
+    @Test
+    public void automaticCheckResultIsFreshThroughThirtySecondBoundary() {
+        long completedRealtime = 5_000L;
+
+        assertTrue(SubscriptionUpdateManager.isAutomaticCheckResultFresh(
+                completedRealtime, completedRealtime));
+        assertTrue(SubscriptionUpdateManager.isAutomaticCheckResultFresh(
+                completedRealtime, completedRealtime
+                        + SubscriptionUpdateManager.AUTOMATIC_CHECK_REUSE_WINDOW_MS));
+        assertFalse(SubscriptionUpdateManager.isAutomaticCheckResultFresh(
+                completedRealtime, completedRealtime
+                        + SubscriptionUpdateManager.AUTOMATIC_CHECK_REUSE_WINDOW_MS + 1L));
+        assertFalse(SubscriptionUpdateManager.isAutomaticCheckResultFresh(
+                completedRealtime, completedRealtime - 1L));
     }
 }

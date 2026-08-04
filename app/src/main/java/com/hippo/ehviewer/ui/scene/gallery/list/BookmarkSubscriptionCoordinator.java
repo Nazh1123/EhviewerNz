@@ -22,6 +22,7 @@ import androidx.annotation.Nullable;
 
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
+import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
@@ -252,7 +253,8 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     void refresh(int taskId, List<QuickSearch> quickSearches,
-                 boolean includeEhSubscription) {
+                 boolean includeEhSubscription,
+                 @Nullable SubscriptionUpdateManager.AutomaticCheckResult automaticResult) {
         cancel();
         mTaskId = taskId;
         mRefresh = true;
@@ -281,11 +283,24 @@ final class BookmarkSubscriptionCoordinator {
             return;
         }
 
-        mInitialRequestsRemaining = mSources.size();
+        mInitialRequestsRemaining = 0;
         for (Source source : mSources) {
-            enqueue(source, true);
+            SubscriptionUpdateManager.AutomaticCheckSource cachedSource =
+                    findCachedSource(automaticResult, source);
+            if (cachedSource != null) {
+                applyCachedSource(source, cachedSource);
+            } else {
+                mInitialRequestsRemaining++;
+                enqueue(source, true);
+            }
         }
         pumpRequests();
+        if (mInitialRequestsRemaining == 0) {
+            if (mBatchSize == 0) {
+                mBatchSize = DEFAULT_BATCH_SIZE;
+            }
+            continueProducing();
+        }
     }
 
     void loadMore(int taskId) {
@@ -328,6 +343,37 @@ final class BookmarkSubscriptionCoordinator {
             }
         }
         return false;
+    }
+
+    @Nullable
+    private static SubscriptionUpdateManager.AutomaticCheckSource findCachedSource(
+            @Nullable SubscriptionUpdateManager.AutomaticCheckResult automaticResult,
+            Source source) {
+        if (automaticResult == null) {
+            return null;
+        }
+        for (SubscriptionUpdateManager.AutomaticCheckSource cachedSource
+                : automaticResult.sources) {
+            if (source.quickSearch == null
+                    ? cachedSource.isEhSubscription()
+                    : cachedSource.matchesQuickSearch(source.quickSearch)) {
+                return cachedSource;
+            }
+        }
+        return null;
+    }
+
+    private void applyCachedSource(
+            Source source,
+            SubscriptionUpdateManager.AutomaticCheckSource cachedSource) {
+        mBatchSize = Math.max(mBatchSize, cachedSource.initialResultCount);
+        source.pageIndex = cachedSource.pageIndex;
+        source.nextHref = cachedSource.nextHref;
+        source.boundaryPosted = cachedSource.boundaryPosted;
+        source.boundaryGid = cachedSource.boundaryGid;
+        source.hasBoundary = cachedSource.hasBoundary;
+        source.exhausted = cachedSource.exhausted;
+        setSourceGalleryInfos(source, cachedSource.galleryInfoList);
     }
 
     private void enqueue(Source source, boolean initial) {
@@ -401,10 +447,27 @@ final class BookmarkSubscriptionCoordinator {
         if (initial) {
             mBatchSize = Math.max(mBatchSize, result.rawResultCount);
         }
+        setSourceGalleryInfos(source, result.galleryInfoList);
+
+        if (result.rawResultCount > 0) {
+            source.boundaryPosted = result.rawTailPosted;
+            source.boundaryGid = result.rawTailGid;
+            source.hasBoundary = true;
+        }
+
+        source.nextHref = result.nextHref;
+        boolean hasHref = !TextUtils.isEmpty(result.nextHref);
+        boolean hasIndexedPage = result.pages > 0 && source.pageIndex + 1 < result.pages;
+        source.exhausted = !hasHref && !hasIndexedPage;
+
+        afterRequestFinished();
+    }
+
+    private void setSourceGalleryInfos(Source source, List<GalleryInfo> galleryInfoList) {
         source.buffer.clear();
         source.bufferIndex = 0;
-        source.buffer.addAll(result.galleryInfoList);
-        for (GalleryInfo galleryInfo : result.galleryInfoList) {
+        source.buffer.addAll(galleryInfoList);
+        for (GalleryInfo galleryInfo : galleryInfoList) {
             if (source.quickSearch == null) {
                 mLatestEhGid = Math.max(mLatestEhGid, galleryInfo.gid);
             } else {
@@ -423,19 +486,6 @@ final class BookmarkSubscriptionCoordinator {
         }
         Collections.sort(source.buffer,
                 (first, second) -> -compareGalleryOrder(first, second));
-
-        if (result.rawResultCount > 0) {
-            source.boundaryPosted = result.rawTailPosted;
-            source.boundaryGid = result.rawTailGid;
-            source.hasBoundary = true;
-        }
-
-        source.nextHref = result.nextHref;
-        boolean hasHref = !TextUtils.isEmpty(result.nextHref);
-        boolean hasIndexedPage = result.pages > 0 && source.pageIndex + 1 < result.pages;
-        source.exhausted = !hasHref && !hasIndexedPage;
-
-        afterRequestFinished();
     }
 
     private void onPageFailure(int generation, int sourceId, boolean initial, Exception error) {
