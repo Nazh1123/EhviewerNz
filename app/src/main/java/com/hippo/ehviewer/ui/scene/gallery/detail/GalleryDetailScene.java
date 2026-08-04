@@ -1519,10 +1519,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
 
-        if (null != gd.uploader) {
+        String uploader = gd.uploader != null ? gd.uploader.trim() : null;
+        if (!TextUtils.isEmpty(uploader)) {
             ListUrlBuilder lub = new ListUrlBuilder();
-            lub.setMode(ListUrlBuilder.MODE_UPLOADER);
-            lub.setKeyword(gd.uploader);
+            lub.setMode(ListUrlBuilder.MODE_NORMAL);
+            lub.setKeyword("upload:\"" + uploader.replace("\"", "\\\"") + "\"");
             GalleryListScene.startScene(this, lub);
         }
     }

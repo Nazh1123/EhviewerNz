@@ -37,6 +37,17 @@ public class DownloadLabelListOperationsTest {
     }
 
     @Test
+    public void chineseLabelsAreSortedByPinyin() {
+        List<DownloadLabel> labels = labels("张三", "王五", "阿明", "李四");
+        Set<Long> selected = new HashSet<>(Arrays.asList(1L, 2L, 3L, 4L));
+
+        List<DownloadLabel> result =
+                DownloadLabelListOperations.classifySelectedAtBottom(labels, selected);
+
+        assertEquals(Arrays.asList("阿明", "李四", "王五", "张三"), names(result));
+    }
+
+    @Test
     public void rangeSelectionIncludesBothEndpointsAndItemsBetween() {
         List<DownloadLabel> labels = labels("one", "two", "three", "four", "five");
 

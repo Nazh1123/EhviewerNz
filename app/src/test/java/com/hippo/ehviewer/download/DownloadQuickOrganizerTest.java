@@ -69,13 +69,32 @@ public class DownloadQuickOrganizerTest {
     }
 
     @Test
-    public void uploaderIsLastMiscFallback() {
+    public void uploaderUsesUploaderPrefixWhenTitleHasNoKeyword() {
         GalleryInfo gallery = galleryWithKnownTags();
         gallery.title = "AI Generated Patreon";
         gallery.uploader = "uploader name";
 
-        assertEquals("M: uploader name",
+        assertEquals("U: uploader name",
                 DownloadQuickOrganizer.resolveLabel(gallery, null));
+    }
+
+    @Test
+    public void aiGeneratedWithoutTitleKeywordUsesUploaderPrefix() {
+        GalleryInfo gallery = galleryWithKnownTags("other:ai generated");
+        gallery.title = "120p";
+        gallery.uploader = "uploader name";
+
+        assertEquals("U: uploader name",
+                DownloadQuickOrganizer.resolveLabel(gallery, null));
+    }
+
+    @Test
+    public void unusableTitleAndUploaderReturnNull() {
+        GalleryInfo gallery = galleryWithKnownTags();
+        gallery.title = "123p";
+        gallery.uploader = " ";
+
+        assertNull(DownloadQuickOrganizer.resolveLabel(gallery, null));
     }
 
     @Test
@@ -152,6 +171,20 @@ public class DownloadQuickOrganizerTest {
                 DownloadQuickOrganizer.findEquivalentLabel(
                         Arrays.asList("A: artist name #note", "A: artist name"),
                         "A: artist name"));
+    }
+
+    @Test
+    public void existingLabelIsReusedIgnoringCase() {
+        assertEquals("KKi",
+                DownloadQuickOrganizer.findEquivalentLabel(
+                        Collections.singletonList("KKi"), "kki"));
+    }
+
+    @Test
+    public void annotatedLabelIsReusedIgnoringCase() {
+        assertEquals("A: KKi #note",
+                DownloadQuickOrganizer.findEquivalentLabel(
+                        Collections.singletonList("A: KKi #note"), "a: kki"));
     }
 
     private static GalleryInfo galleryWithKnownTags(String... tags) {

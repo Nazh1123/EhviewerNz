@@ -54,13 +54,25 @@ public class GalleryTitleKeywordExtractorTest {
                 {"AI Generated Remaining", "Remaining"},
                 {"Pixiv Remaining", "Remaining"},
                 {"Pixivision Remaining", "Pixivision"},
-                {"[Animated] [Part] Creator", "Creator"},
-                {"aNiMaTeD pArT Remaining", "Remaining"},
+                {"[Animated] [Part] Creator", "Part"},
+                {"aNiMaTeD pArT Remaining", "pArT"},
                 {"Animatedly PartOne", "Animatedly"},
                 {"[Patreon] [Fanbox] [Artist]", null},
                 {"[MiXeD.Name-01]", "MiXeD.Name-01"},
                 {"（Full Width） (ASCII)", "Full Width"},
-                {"[Decensored v2]", "Decensored v2"}
+                {"[Decensored v2]", "Decensored v2"},
+                {"Creator-Title Rest", "Creator"},
+                {"Part", "Part"},
+                {"[Part 12] Creator", "Creator"},
+                {"[Part-12] Creator", "Creator"},
+                {"Part 12 Creator", "Creator"},
+                {"Part-12-Creator", "Creator"},
+                {"120p Creator", "Creator"},
+                {"[120P] Creator", "Creator"},
+                {"123+456 Creator", "Creator"},
+                {"[123 + ---] Creator", "Creator"},
+                {"[+++] Creator", "Creator"},
+                {"123p", null}
         });
     }
 

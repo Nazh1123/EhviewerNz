@@ -19,13 +19,21 @@ package com.hippo.ehviewer.client;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Extracts a likely artist keyword from a gallery title.
  */
 public final class GalleryTitleKeywordExtractor {
 
-    private static final int BRACKET_SEARCH_WORD_LIMIT = 8;
+    private static final int BRACKET_SEARCH_WORD_LIMIT = 10;
+    private static final Pattern DIGITS_PATTERN = Pattern.compile("^\\p{N}+$");
+    private static final Pattern PART_NUMBER_PATTERN = Pattern.compile(
+            "^Part(?:\\s+|-)\\p{N}+$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern NUMBER_P_PATTERN = Pattern.compile(
+            "^\\p{N}+p$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern NUMBER_OR_SYMBOL_PATTERN = Pattern.compile(
+            "^[\\p{N}\\p{P}\\p{S}\\s]+$");
 
     // The order is significant: higher-priority bracket types come first.
     private static final Bracket[] BRACKETS = {
@@ -161,8 +169,9 @@ public final class GalleryTitleKeywordExtractor {
         List<String> words = splitWords(title.substring(0, openingIndex));
         int wordCount = 0;
         for (int i = 0; i < words.size(); i++) {
-            if (isAiGeneratedGroup(words, i)) {
-                i++;
+            int ignoredGroupSize = getIgnoredGroupSize(words, i);
+            if (ignoredGroupSize > 0) {
+                i += ignoredGroupSize - 1;
             }
             wordCount++;
         }
@@ -173,8 +182,9 @@ public final class GalleryTitleKeywordExtractor {
         List<String> words = splitWords(title);
         for (int i = 0; i < words.size(); i++) {
             String word = words.get(i);
-            if (isAiGeneratedGroup(words, i)) {
-                i++;
+            int ignoredGroupSize = getIgnoredGroupSize(words, i);
+            if (ignoredGroupSize > 0) {
+                i += ignoredGroupSize - 1;
                 continue;
             }
             if (!isIgnored(word)) {
@@ -201,14 +211,27 @@ public final class GalleryTitleKeywordExtractor {
         return result;
     }
 
+    private static int getIgnoredGroupSize(List<String> words, int index) {
+        if (isAiGeneratedGroup(words, index) || isPartNumberGroup(words, index)) {
+            return 2;
+        }
+        return 0;
+    }
+
     private static boolean isAiGeneratedGroup(List<String> words, int index) {
         return "AI".equalsIgnoreCase(words.get(index))
                 && index + 1 < words.size()
                 && "Generated".equalsIgnoreCase(words.get(index + 1));
     }
 
+    private static boolean isPartNumberGroup(List<String> words, int index) {
+        return "Part".equalsIgnoreCase(words.get(index))
+                && index + 1 < words.size()
+                && DIGITS_PATTERN.matcher(words.get(index + 1)).matches();
+    }
+
     private static boolean isWordSeparator(char ch) {
-        if (Character.isWhitespace(ch)) {
+        if (Character.isWhitespace(ch) || ch == '-') {
             return true;
         }
         for (Bracket bracket : BRACKETS) {
@@ -220,14 +243,17 @@ public final class GalleryTitleKeywordExtractor {
     }
 
     private static boolean isIgnored(String value) {
-        return "AI Generated".equalsIgnoreCase(value)
-                || "Decensored".equalsIgnoreCase(value)
-                || "Patreon".equalsIgnoreCase(value)
-                || "Pixiv".equalsIgnoreCase(value)
-                || "Fanbox".equalsIgnoreCase(value)
-                || "Animated".equalsIgnoreCase(value)
-                || "Artist".equalsIgnoreCase(value)
-                || "Part".equalsIgnoreCase(value);
+        String candidate = value.trim();
+        return "AI Generated".equalsIgnoreCase(candidate)
+                || "Decensored".equalsIgnoreCase(candidate)
+                || "Patreon".equalsIgnoreCase(candidate)
+                || "Pixiv".equalsIgnoreCase(candidate)
+                || "Fanbox".equalsIgnoreCase(candidate)
+                || "Animated".equalsIgnoreCase(candidate)
+                || "Artist".equalsIgnoreCase(candidate)
+                || PART_NUMBER_PATTERN.matcher(candidate).matches()
+                || NUMBER_P_PATTERN.matcher(candidate).matches()
+                || NUMBER_OR_SYMBOL_PATTERN.matcher(candidate).matches();
     }
 
     private static final class Bracket {

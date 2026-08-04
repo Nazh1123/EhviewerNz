@@ -42,7 +42,7 @@ final class DownloadLabelListOperations {
             }
         }
 
-        Collator collator = Collator.getInstance(Locale.getDefault());
+        Collator collator = Collator.getInstance(Locale.CHINA);
         collator.setStrength(Collator.PRIMARY);
         selected.sort((left, right) -> {
             String leftLabel = left.getLabel() != null ? left.getLabel() : "";

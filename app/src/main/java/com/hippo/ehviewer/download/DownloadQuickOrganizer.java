@@ -82,13 +82,13 @@ public final class DownloadQuickOrganizer {
                         && containsStoredTag(storedTags.other, AI_GENERATED_TAG);
 
         String keyword = GalleryTitleKeywordExtractor.extractArtistKeyword(gallery.title);
-        if (keyword == null || keyword.trim().isEmpty()) {
-            keyword = gallery.uploader;
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            return (aiGenerated ? "AI: " : "M: ") + keyword.trim();
         }
-        if (keyword == null || keyword.trim().isEmpty()) {
+        if (gallery.uploader == null || gallery.uploader.trim().isEmpty()) {
             return null;
         }
-        return (aiGenerated ? "AI: " : "M: ") + keyword.trim();
+        return "U: " + gallery.uploader.trim();
     }
 
     public static boolean hasKnownTags(@NonNull GalleryInfo gallery,
@@ -115,11 +115,12 @@ public final class DownloadQuickOrganizer {
             if (existingLabel == null) {
                 continue;
             }
-            if (desiredLabel.equals(existingLabel.trim())) {
+            if (desiredLabel.equalsIgnoreCase(existingLabel.trim())) {
                 return existingLabel;
             }
             if (equivalent == null
-                    && desiredIdentity.equals(normalizeLabelIdentity(existingLabel))) {
+                    && desiredIdentity.equalsIgnoreCase(
+                            normalizeLabelIdentity(existingLabel))) {
                 equivalent = existingLabel;
             }
         }
