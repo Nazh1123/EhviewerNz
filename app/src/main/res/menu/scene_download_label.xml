@@ -20,9 +20,42 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_select_all_labels"
+        android:icon="@drawable/v_check_all_dark_x24"
+        android:title="@string/select_all"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_select_label_range"
+        android:icon="@drawable/v_select_range_dark_x24"
+        android:title="@string/select_label_range"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/action_add"
         android:icon="@drawable/v_plus_dark_x24"
         android:title="@string/add"
         app:showAsAction="always"/>
+
+    <item
+        android:id="@+id/action_cancel_label_selection"
+        android:icon="@drawable/v_close_dark_x24"
+        android:title="@string/cancel_label_selection"
+        android:visible="false"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_classify_selected_labels"
+        android:icon="@drawable/v_sort_selected_dark_x24"
+        android:title="@string/classify_selected_labels"
+        android:visible="false"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_delete_selected_labels"
+        android:icon="@drawable/v_delete_dark_x24"
+        android:title="@string/delete"
+        android:visible="false"
+        app:showAsAction="always" />
 
 </menu>

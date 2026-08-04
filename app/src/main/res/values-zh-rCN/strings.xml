@@ -407,6 +407,13 @@
     <string name="quick_organize_processing">正在收纳选中的画廊…</string>
     <string name="quick_organize_result">已收纳 %1$d 个画廊；因元数据不可用跳过 %2$d 个</string>
     <string name="download_labels">下载标签</string>
+    <string name="select_label_range">区间选择</string>
+    <string name="cancel_label_selection">取消选择</string>
+    <string name="classify_selected_labels">执行归类</string>
+    <string name="select_label_range_start">请选择区间起点</string>
+    <string name="select_label_range_end">请选择区间终点</string>
+    <string name="select_download_label">选择“%1$s”</string>
+    <string name="delete_selected_labels_message">删除选中的 %1$d 个标签？其中的下载项将移至默认标签。</string>
     <string name="download_sort_list">排序</string>
     <string name="download_filter_by_status">根据状态过滤</string>
     <string name="download_filter_by_kind">根据类型过滤</string>

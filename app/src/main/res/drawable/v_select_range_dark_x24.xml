@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ~ Copyright 2026 Hippo Seven
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  -->
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <path
+        android:fillColor="@color/primary_drawable_dark"
+        android:pathData="M3,3H9V9H3V3ZM5,5V7H7V5H5ZM6,9H7V15H6V9ZM3,15H9V21H3V15ZM5,17V19H7V17H5ZM11,5H21V7H11V5ZM11,17H21V19H11V17Z"
+        android:fillType="evenOdd" />
+
+</vector>

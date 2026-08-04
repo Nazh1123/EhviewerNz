@@ -23,11 +23,14 @@ import android.graphics.drawable.NinePatchDrawable;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -43,12 +46,16 @@ import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.dao.DownloadLabel;
+import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.util.DrawableManager;
 import com.hippo.view.ViewTransition;
 import com.hippo.lib.yorozuya.AssertUtils;
 import com.hippo.lib.yorozuya.ViewUtils;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 public class DownloadLabelsScene extends ToolbarScene {
 
@@ -67,6 +74,28 @@ public class DownloadLabelsScene extends ToolbarScene {
     private ViewTransition mViewTransition;
     @Nullable
     private RecyclerView.Adapter mAdapter;
+    @Nullable
+    private MenuItem mAddItem;
+    @Nullable
+    private MenuItem mSelectAllItem;
+    @Nullable
+    private MenuItem mSelectRangeItem;
+    @Nullable
+    private MenuItem mCancelSelectionItem;
+    @Nullable
+    private MenuItem mClassifySelectionItem;
+    @Nullable
+    private MenuItem mDeleteSelectionItem;
+
+    private final Set<Long> mSelectedLabelIds = new LinkedHashSet<>();
+    private boolean mRangeSelectionPending;
+    @Nullable
+    private Long mRangeSelectionAnchorId;
+    @Nullable
+    private List<Long> mDraggedSelectedIds;
+    @Nullable
+    private List<DownloadLabel> mGroupDragStartOrder;
+    private long mGroupDragAnchorId = -1L;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -125,6 +154,7 @@ public class DownloadLabelsScene extends ToolbarScene {
         super.onViewCreated(view, savedInstanceState);
         setTitle(R.string.download_labels);
         setNavigationIcon(R.drawable.v_arrow_left_dark_x24);
+        updateSelectionUi(false);
     }
 
     @Override
@@ -138,16 +168,48 @@ public class DownloadLabelsScene extends ToolbarScene {
 
         mViewTransition = null;
         mAdapter = null;
+        mAddItem = null;
+        mSelectAllItem = null;
+        mSelectRangeItem = null;
+        mCancelSelectionItem = null;
+        mClassifySelectionItem = null;
+        mDeleteSelectionItem = null;
+        mDraggedSelectedIds = null;
+        mGroupDragStartOrder = null;
     }
 
     @Override
     public void onNavigationClick(View view) {
-        onBackPressed();
+        if (hasSelectionContext()) {
+            clearSelection();
+        } else {
+            onBackPressed();
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (hasSelectionContext()) {
+            clearSelection();
+        } else {
+            super.onBackPressed();
+        }
     }
 
     @Override
     public int getMenuResId() {
         return R.menu.scene_download_label;
+    }
+
+    @Override
+    public void onMenuCreated(Menu menu) {
+        mAddItem = menu.findItem(R.id.action_add);
+        mSelectAllItem = menu.findItem(R.id.action_select_all_labels);
+        mSelectRangeItem = menu.findItem(R.id.action_select_label_range);
+        mCancelSelectionItem = menu.findItem(R.id.action_cancel_label_selection);
+        mClassifySelectionItem = menu.findItem(R.id.action_classify_selected_labels);
+        mDeleteSelectionItem = menu.findItem(R.id.action_delete_selected_labels);
+        updateSelectionUi(false);
     }
 
     @Override
@@ -165,9 +227,174 @@ public class DownloadLabelsScene extends ToolbarScene {
                 builder.setPositiveButton(android.R.string.ok, null);
                 AlertDialog dialog = builder.show();
                 new NewLabelDialogHelper(builder, dialog);
+                return true;
+            }
+            case R.id.action_select_all_labels:
+                selectAllLabels();
+                return true;
+            case R.id.action_select_label_range:
+                selectLabelRange();
+                return true;
+            case R.id.action_cancel_label_selection:
+                clearSelection();
+                return true;
+            case R.id.action_classify_selected_labels:
+                classifySelectedLabels();
+                return true;
+            case R.id.action_delete_selected_labels:
+                confirmDeleteSelectedLabels();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private boolean hasSelectionContext() {
+        return !mSelectedLabelIds.isEmpty() || mRangeSelectionPending;
+    }
+
+    private void selectAllLabels() {
+        if (mList == null) {
+            return;
+        }
+        mRangeSelectionPending = false;
+        mRangeSelectionAnchorId = null;
+        for (DownloadLabel label : mList) {
+            if (label.getId() != null) {
+                mSelectedLabelIds.add(label.getId());
             }
         }
-        return false;
+        updateSelectionUi(true);
+    }
+
+    private void selectLabelRange() {
+        Context context = getEHContext();
+        if (context == null || mList == null || mList.isEmpty()) {
+            return;
+        }
+
+        List<Long> selectedIds = DownloadLabelListOperations.getSelectedIdsInOrder(
+                mList, mSelectedLabelIds);
+        if (selectedIds.size() >= 2) {
+            mSelectedLabelIds.addAll(DownloadLabelListOperations.getRangeIds(
+                    mList, selectedIds.get(0), selectedIds.get(selectedIds.size() - 1)));
+            mRangeSelectionPending = false;
+            mRangeSelectionAnchorId = null;
+        } else {
+            mRangeSelectionPending = true;
+            mRangeSelectionAnchorId = selectedIds.isEmpty() ? null : selectedIds.get(0);
+            Toast.makeText(context,
+                    mRangeSelectionAnchorId == null
+                            ? R.string.select_label_range_start
+                            : R.string.select_label_range_end,
+                    Toast.LENGTH_SHORT).show();
+        }
+        updateSelectionUi(true);
+    }
+
+    private void toggleLabelSelection(int position) {
+        Context context = getEHContext();
+        if (mList == null || position < 0 || position >= mList.size()) {
+            return;
+        }
+        Long id = mList.get(position).getId();
+        if (id == null) {
+            return;
+        }
+
+        if (mRangeSelectionPending) {
+            if (mRangeSelectionAnchorId == null) {
+                mSelectedLabelIds.add(id);
+                mRangeSelectionAnchorId = id;
+                if (context != null) {
+                    Toast.makeText(context, R.string.select_label_range_end,
+                            Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                mSelectedLabelIds.addAll(DownloadLabelListOperations.getRangeIds(
+                        mList, mRangeSelectionAnchorId, id));
+                mRangeSelectionPending = false;
+                mRangeSelectionAnchorId = null;
+            }
+        } else if (!mSelectedLabelIds.remove(id)) {
+            mSelectedLabelIds.add(id);
+        }
+        updateSelectionUi(true);
+    }
+
+    private void clearSelection() {
+        mSelectedLabelIds.clear();
+        mRangeSelectionPending = false;
+        mRangeSelectionAnchorId = null;
+        updateSelectionUi(true);
+    }
+
+    private void classifySelectedLabels() {
+        Context context = getEHContext();
+        if (context == null || mList == null || mSelectedLabelIds.isEmpty()) {
+            return;
+        }
+
+        List<DownloadLabel> newOrder =
+                DownloadLabelListOperations.classifySelectedAtBottom(
+                        mList, mSelectedLabelIds);
+        EhApplication.getDownloadManager(context).reorderLabels(newOrder);
+        clearSelection();
+    }
+
+    private void confirmDeleteSelectedLabels() {
+        Context context = getEHContext();
+        if (context == null || mList == null || mSelectedLabelIds.isEmpty()) {
+            return;
+        }
+
+        List<String> selectedLabels = new ArrayList<>();
+        for (DownloadLabel label : mList) {
+            if (mSelectedLabelIds.contains(label.getId()) && label.getLabel() != null) {
+                selectedLabels.add(label.getLabel());
+            }
+        }
+        new AlertDialog.Builder(context)
+                .setTitle(R.string.delete_label_title)
+                .setMessage(getString(R.string.delete_selected_labels_message,
+                        selectedLabels.size()))
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    EhApplication.getDownloadManager(context).deleteLabels(selectedLabels);
+                    clearSelection();
+                    updateView();
+                })
+                .show();
+    }
+
+    private void updateSelectionUi(boolean notifyItems) {
+        boolean hasSelection = !mSelectedLabelIds.isEmpty();
+        boolean hasContext = hasSelectionContext();
+        setTitle(hasContext ? "" : getString(R.string.download_labels));
+        if (mAddItem != null) {
+            mAddItem.setVisible(!hasContext);
+        }
+        if (mSelectAllItem != null) {
+            mSelectAllItem.setVisible(true);
+            mSelectAllItem.setEnabled(mList != null
+                    && mSelectedLabelIds.size() < mList.size());
+        }
+        if (mSelectRangeItem != null) {
+            mSelectRangeItem.setVisible(true);
+            mSelectRangeItem.setEnabled(mList != null && !mList.isEmpty());
+        }
+        if (mCancelSelectionItem != null) {
+            mCancelSelectionItem.setVisible(hasContext);
+        }
+        if (mClassifySelectionItem != null) {
+            mClassifySelectionItem.setVisible(hasSelection);
+        }
+        if (mDeleteSelectionItem != null) {
+            mDeleteSelectionItem.setVisible(hasSelection);
+        }
+        if (notifyItems && mAdapter != null) {
+            mAdapter.notifyDataSetChanged();
+        }
     }
 
     private void updateView() {
@@ -273,6 +500,7 @@ public class DownloadLabelsScene extends ToolbarScene {
     private class LabelHolder extends AbstractDraggableItemViewHolder
             implements View.OnClickListener {
 
+        public final CheckBox selection;
         public final TextView label;
         public final View dragHandler;
         public final View delete;
@@ -280,10 +508,12 @@ public class DownloadLabelsScene extends ToolbarScene {
         public LabelHolder(View itemView) {
             super(itemView);
 
+            selection = (CheckBox) ViewUtils.$$(itemView, R.id.selection);
             label = (TextView) ViewUtils.$$(itemView, R.id.label);
             dragHandler = ViewUtils.$$(itemView, R.id.drag_handler);
             delete = ViewUtils.$$(itemView, R.id.delete);
 
+            selection.setOnClickListener(this);
             label.setOnClickListener(this);
             delete.setOnClickListener(this);
         }
@@ -292,11 +522,14 @@ public class DownloadLabelsScene extends ToolbarScene {
         public void onClick(View v) {
             int position = getAdapterPosition();
             Context context = getEHContext();
-            if (null == context || null == mList || null == mRecyclerView) {
+            if (position == RecyclerView.NO_POSITION || null == context
+                    || null == mList || null == mRecyclerView) {
                 return;
             }
 
-            if (label == v) {
+            if (selection == v) {
+                toggleLabelSelection(position);
+            } else if (label == v) {
                 DownloadLabel raw = mList.get(position);
                 EditTextDialogBuilder builder = new EditTextDialogBuilder(
                         context, raw.getLabel(), getString(R.string.download_labels));
@@ -346,7 +579,13 @@ public class DownloadLabelsScene extends ToolbarScene {
         @Override
         public void onBindViewHolder(LabelHolder holder, int position) {
             if (mList != null) {
-                holder.label.setText(mList.get(position).getLabel());
+                DownloadLabel label = mList.get(position);
+                holder.label.setText(label.getLabel());
+                holder.selection.setChecked(mSelectedLabelIds.contains(label.getId()));
+                holder.selection.setContentDescription(getString(
+                        R.string.select_download_label, label.getLabel()));
+                holder.delete.setVisibility(hasSelectionContext()
+                        ? View.GONE : View.VISIBLE);
             }
         }
 
@@ -362,7 +601,14 @@ public class DownloadLabelsScene extends ToolbarScene {
 
         @Override
         public boolean onCheckCanStartDrag(LabelHolder holder, int position, int x, int y) {
-            return ViewUtils.isViewUnder(holder.dragHandler, x, y, 0);
+            if (!ViewUtils.isViewUnder(holder.dragHandler, x, y, 0)) {
+                return false;
+            }
+            if (mSelectedLabelIds.isEmpty()) {
+                return true;
+            }
+            return mList != null && position >= 0 && position < mList.size()
+                    && mSelectedLabelIds.contains(mList.get(position).getId());
         }
 
         @Override
@@ -373,11 +619,18 @@ public class DownloadLabelsScene extends ToolbarScene {
         @Override
         public void onMoveItem(int fromPosition, int toPosition) {
             Context context = getEHContext();
-            if (null == context || fromPosition == toPosition) {
+            if (null == context || mList == null || fromPosition == toPosition
+                    || fromPosition < 0 || fromPosition >= mList.size()
+                    || toPosition < 0 || toPosition >= mList.size()) {
                 return;
             }
 
-            EhApplication.getDownloadManager(context).moveLabel(fromPosition, toPosition);
+            if (mDraggedSelectedIds != null) {
+                DownloadLabel anchor = mList.remove(fromPosition);
+                mList.add(toPosition, anchor);
+            } else {
+                EhApplication.getDownloadManager(context).moveLabel(fromPosition, toPosition);
+            }
         }
 
         @Override
@@ -386,9 +639,40 @@ public class DownloadLabelsScene extends ToolbarScene {
         }
 
         @Override
-        public void onItemDragStarted(int position) { }
+        public void onItemDragStarted(int position) {
+            if (mList == null || position < 0 || position >= mList.size()) {
+                return;
+            }
+            DownloadLabel anchor = mList.get(position);
+            Long anchorId = anchor.getId();
+            if (anchorId != null && mSelectedLabelIds.contains(anchorId)) {
+                mDraggedSelectedIds = DownloadLabelListOperations.getSelectedIdsInOrder(
+                        mList, mSelectedLabelIds);
+                mGroupDragStartOrder = new ArrayList<>(mList);
+                mGroupDragAnchorId = anchorId;
+            }
+        }
 
         @Override
-        public void onItemDragFinished(int fromPosition, int toPosition, boolean result) { }
+        public void onItemDragFinished(int fromPosition, int toPosition, boolean result) {
+            Context context = getEHContext();
+            if (context != null && mList != null && mDraggedSelectedIds != null
+                    && mGroupDragStartOrder != null) {
+                DownloadManager manager = EhApplication.getDownloadManager(context);
+                if (result) {
+                    manager.reorderLabels(
+                            DownloadLabelListOperations.placeSelectedGroupAtAnchor(
+                                    mList, mDraggedSelectedIds, mGroupDragAnchorId));
+                } else {
+                    manager.reorderLabels(mGroupDragStartOrder);
+                }
+                if (mAdapter != null) {
+                    mAdapter.notifyDataSetChanged();
+                }
+            }
+            mDraggedSelectedIds = null;
+            mGroupDragStartOrder = null;
+            mGroupDragAnchorId = -1L;
+        }
     }
 }

@@ -51,13 +51,16 @@ import com.hippo.lib.yorozuya.collect.SparseJLArray;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
@@ -970,6 +973,24 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
     }
 
+    public void reorderLabels(@NonNull List<DownloadLabel> orderedLabels) {
+        List<DownloadLabel> newOrder = new ArrayList<>(orderedLabels);
+        Set<DownloadLabel> expectedLabels = new HashSet<>(mLabelList);
+        Set<DownloadLabel> actualLabels = new HashSet<>(newOrder);
+        if (newOrder.size() != mLabelList.size()
+                || expectedLabels.size() != actualLabels.size()
+                || !expectedLabels.equals(actualLabels)) {
+            throw new IllegalArgumentException("The reordered labels must match the current labels");
+        }
+        mLabelList.clear();
+        mLabelList.addAll(newOrder);
+        EhDB.reorderDownloadLabels(mLabelList);
+
+        for (DownloadInfoListener l : mDownloadInfoListeners) {
+            l.onUpdateLabels();
+        }
+    }
+
     public void renameLabel(@NonNull String from, @NonNull String to) {
         // Find in label list
         boolean found = false;
@@ -1007,38 +1028,46 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     public void deleteLabel(@NonNull String label) {
-        // Find in label list and remove
-        boolean found = false;
+        deleteLabels(Collections.singleton(label));
+    }
+
+    public void deleteLabels(@NonNull Collection<String> labels) {
+        Set<String> targetLabels = new HashSet<>(labels);
+        if (targetLabels.isEmpty()) {
+            return;
+        }
+
+        List<DownloadLabel> removedLabels = new ArrayList<>();
         for (Iterator<DownloadLabel> iterator = mLabelList.iterator(); iterator.hasNext(); ) {
             DownloadLabel raw = iterator.next();
-            if (label.equals(raw.getLabel())) {
-                found = true;
+            if (targetLabels.contains(raw.getLabel())) {
                 iterator.remove();
-                EhDB.removeDownloadLabel(raw);
-                break;
+                removedLabels.add(raw);
             }
         }
-        if (!found) {
+        if (removedLabels.isEmpty()) {
             return;
         }
+        EhDB.removeDownloadLabels(removedLabels);
 
-        LinkedList<DownloadInfo> list = mMap.remove(label);
-        if (list == null) {
-            return;
+        List<DownloadInfo> changedInfo = new ArrayList<>();
+        for (DownloadLabel raw : removedLabels) {
+            String label = raw.getLabel();
+            mLabelCountMap.remove(label);
+            LinkedList<DownloadInfo> list = mMap.remove(label);
+            if (list == null) {
+                continue;
+            }
+            for (DownloadInfo info : list) {
+                info.label = null;
+                changedInfo.add(info);
+                mDefaultInfoList.add(info);
+            }
         }
+        EhDB.putDownloadInfo(changedInfo);
 
-        // Update info label
-        for (DownloadInfo info : list) {
-            info.label = null;
-            // Update in DB
-            EhDB.putDownloadInfo(info);
-            mDefaultInfoList.add(info);
-        }
-
-        // Sort
         Collections.sort(mDefaultInfoList, DATE_DESC_COMPARATOR);
 
-        // Notify listener
         for (DownloadInfoListener l : mDownloadInfoListeners) {
             l.onChange();
         }

@@ -472,6 +472,13 @@ public class EhDB {
         }
     }
 
+    public static synchronized void putDownloadInfo(@NonNull List<DownloadInfo> downloadInfoList) {
+        if (downloadInfoList.isEmpty()) {
+            return;
+        }
+        sDaoSession.getDownloadsDao().updateInTx(downloadInfoList);
+    }
+
     public static synchronized void removeDownloadInfo(long gid) {
         sDaoSession.getDownloadsDao().deleteByKey(gid);
     }
@@ -593,9 +600,28 @@ public class EhDB {
         dao.updateInTx(list);
     }
 
+    public static synchronized void reorderDownloadLabels(
+            @NonNull List<DownloadLabel> orderedLabels) {
+        if (orderedLabels.isEmpty()) {
+            return;
+        }
+
+        for (int i = 0; i < orderedLabels.size(); i++) {
+            orderedLabels.get(i).setTime(i);
+        }
+        sDaoSession.getDownloadLabelDao().updateInTx(orderedLabels);
+    }
+
     public static synchronized void removeDownloadLabel(DownloadLabel raw) {
         DownloadLabelDao dao = sDaoSession.getDownloadLabelDao();
         dao.delete(raw);
+    }
+
+    public static synchronized void removeDownloadLabels(
+            @NonNull List<DownloadLabel> labels) {
+        if (!labels.isEmpty()) {
+            sDaoSession.getDownloadLabelDao().deleteInTx(labels);
+        }
     }
 
     public static synchronized List<GalleryInfo> getAllLocalFavorites() {

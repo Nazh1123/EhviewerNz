@@ -497,6 +497,13 @@
     <string name="quick_organize_processing">Organizing selected galleries…</string>
     <string name="quick_organize_result">Organized %1$d galleries; skipped %2$d with unavailable metadata</string>
     <string name="download_labels">Download labels</string>
+    <string name="select_label_range">Select range</string>
+    <string name="cancel_label_selection">Cancel selection</string>
+    <string name="classify_selected_labels">Classify selected labels</string>
+    <string name="select_label_range_start">Select the start of the range</string>
+    <string name="select_label_range_end">Select the end of the range</string>
+    <string name="select_download_label">Select “%1$s”</string>
+    <string name="delete_selected_labels_message">Delete %1$d selected labels? Their downloads will be moved to Default.</string>
     <string name="download_sort_list">Sort</string>
     <string name="download_filter_by_status">Filter by status</string>
     <string name="download_filter_by_kind">Filter by kind</string>
