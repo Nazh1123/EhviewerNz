@@ -437,6 +437,9 @@
     <string name="drawer_download_label_title">標籤</string>
     <string name="default_download_label_name">預設</string>
     <string name="download_move_dialog_title">移動</string>
+    <string name="quick_organize">快速收納</string>
+    <string name="quick_organize_processing">正在收納已選畫廊…</string>
+    <string name="quick_organize_result">已收納 %1$d 個畫廊；因中繼資料無法使用而略過 %2$d 個</string>
     <string name="download_labels">下載標籤</string>
     <string name="download_sort_list">排序</string>
     <string name="download_filter_by_status">按狀態過濾</string>

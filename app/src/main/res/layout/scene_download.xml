@@ -151,6 +151,14 @@
                 style="@style/Widget.Design.FloatingActionButton.Mini"/>
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
+                style="@style/Widget.Design.FloatingActionButton.Mini"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/quick_organize"
+                app:backgroundTint="?attr/widgetColorThemeAccent"
+                app:srcCompat="@drawable/v_folders_import_dark_x24" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 app:backgroundTint="?attr/widgetColorThemePrimary"

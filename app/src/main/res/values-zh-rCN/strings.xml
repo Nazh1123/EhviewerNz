@@ -403,6 +403,9 @@
     <string name="drawer_download_label_title">标签</string>
     <string name="default_download_label_name">默认</string>
     <string name="download_move_dialog_title">移动</string>
+    <string name="quick_organize">快速收纳</string>
+    <string name="quick_organize_processing">正在收纳选中的画廊…</string>
+    <string name="quick_organize_result">已收纳 %1$d 个画廊；因元数据不可用跳过 %2$d 个</string>
     <string name="download_labels">下载标签</string>
     <string name="download_sort_list">排序</string>
     <string name="download_filter_by_status">根据状态过滤</string>

@@ -58,6 +58,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.TooltipCompat;
 import androidx.core.content.res.ResourcesCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
@@ -85,11 +86,15 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.callBack.DownloadSearchCallback;
 import com.hippo.ehviewer.client.EhConfig;
+import com.hippo.ehviewer.client.EhEngine;
+import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
+import com.hippo.ehviewer.dao.GalleryTags;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.download.DownloadQuickOrganizer;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
 import com.hippo.ehviewer.spider.SpiderInfo;
@@ -110,6 +115,7 @@ import com.hippo.lib.yorozuya.collect.LongList;
 import com.hippo.ripple.Ripple;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.DrawableManager;
+import com.hippo.util.ExceptionUtils;
 import com.hippo.util.IoThreadPoolExecutor;
 import com.hippo.view.ViewTransition;
 import com.hippo.widget.FabLayout;
@@ -126,6 +132,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -150,6 +157,7 @@ public class DownloadsScene extends ToolbarScene
     public static final int LOCAL_GALLERY_INFO_CHANGE = 909;
 
     private static final long ANIMATE_TIME = 300L;
+    private static final int FAB_QUICK_ORGANIZE = 7;
 
     @Nullable
     private AddDeleteDrawable mActionFabDrawable;
@@ -611,6 +619,9 @@ public class DownloadsScene extends ToolbarScene
         } else {
             fab.setImageDrawable(ResourcesCompat.getDrawable(getResources(), R.drawable.v_mobile_hand_left_off_x24, context.getTheme()));
         }
+        TooltipCompat.setTooltipText(
+                mFabLayout.getSecondaryFabAt(FAB_QUICK_ORGANIZE),
+                getString(R.string.quick_organize));
         addAboveSnackView(mFabLayout);
 
         updateView();
@@ -1080,7 +1091,8 @@ public class DownloadsScene extends ToolbarScene
             LongList gidList = null;
             List<DownloadInfo> downloadInfoList = null;
             boolean collectGid = position == 1 || position == 2 || position == 3; // Start, Stop, Delete
-            boolean collectDownloadInfo = position == 3 || position == 4; // Delete or Move
+            boolean collectDownloadInfo = position == 3 || position == 4
+                    || position == FAB_QUICK_ORGANIZE; // Delete, Move, or Quick organize
             if (collectGid) {
                 gidList = new LongList();
             }
@@ -1170,8 +1182,101 @@ public class DownloadsScene extends ToolbarScene
                 case 6:
                     setDragEnable(fab);
                     break;
+                case FAB_QUICK_ORGANIZE:
+                    if (downloadInfoList.isEmpty()) {
+                        break;
+                    }
+                    recyclerView.outOfCustomChoiceMode();
+                    Toast.makeText(context, R.string.quick_organize_processing,
+                            Toast.LENGTH_SHORT).show();
+                    quickOrganizeDownloads(context,
+                            new ArrayList<>(downloadInfoList));
+                    break;
             }
         }
+    }
+
+    private void quickOrganizeDownloads(@NonNull Context context,
+                                        @NonNull List<DownloadInfo> downloadInfos) {
+        Context applicationContext = context.getApplicationContext();
+        EhApplication.getExecutorService(applicationContext).execute(() -> {
+            Map<Long, GalleryTags> storedTags = new HashMap<>();
+            List<GalleryInfo> missingMetadata = new ArrayList<>();
+            for (DownloadInfo info : downloadInfos) {
+                GalleryTags tags = EhDB.queryGalleryTags(info.gid);
+                storedTags.put(info.gid, tags);
+                if (!DownloadQuickOrganizer.hasKnownTags(info, tags)
+                        && info.gid > 0L && info.token != null && !info.token.isEmpty()) {
+                    missingMetadata.add(info);
+                }
+            }
+
+            if (!missingMetadata.isEmpty()) {
+                try {
+                    EhEngine.fillGalleryListByApi(null,
+                            EhApplication.getOkHttpClient(applicationContext),
+                            missingMetadata, EhUrl.getReferer());
+                } catch (Throwable e) {
+                    ExceptionUtils.throwIfFatal(e);
+                    Log.w(TAG, "Unable to fill metadata for quick organization", e);
+                }
+            }
+
+            Map<String, List<DownloadInfo>> assignments = new LinkedHashMap<>();
+            int skipped = 0;
+            for (DownloadInfo info : downloadInfos) {
+                String label = DownloadQuickOrganizer.resolveLabel(
+                        info, storedTags.get(info.gid));
+                if (label == null) {
+                    skipped++;
+                    continue;
+                }
+                assignments.computeIfAbsent(label, ignored -> new ArrayList<>()).add(info);
+            }
+
+            int skippedCount = skipped;
+            runOnUiThread(() -> applyQuickOrganization(
+                    applicationContext, assignments, skippedCount));
+        });
+    }
+
+    private void applyQuickOrganization(
+            @NonNull Context context,
+            @NonNull Map<String, List<DownloadInfo>> assignments,
+            int skippedCount) {
+        DownloadManager manager = mDownloadManager;
+        if (manager == null) {
+            return;
+        }
+
+        List<String> existingLabels = new ArrayList<>();
+        for (DownloadLabel label : manager.getLabelList()) {
+            existingLabels.add(label.getLabel());
+        }
+
+        int organizedCount = 0;
+        for (Map.Entry<String, List<DownloadInfo>> assignment : assignments.entrySet()) {
+            String desiredLabel = assignment.getKey();
+            String concreteLabel = DownloadQuickOrganizer.findEquivalentLabel(
+                    existingLabels, desiredLabel);
+            if (concreteLabel == null) {
+                manager.addLabel(desiredLabel);
+                existingLabels.add(desiredLabel);
+                concreteLabel = desiredLabel;
+            }
+            List<DownloadInfo> infos = assignment.getValue();
+            manager.changeLabel(infos, concreteLabel);
+            organizedCount += infos.size();
+        }
+
+        updateTitle();
+        updatePaginationIndicator();
+        updateView();
+        if (downloadLabelDraw != null) {
+            downloadLabelDraw.updateDownloadLabels();
+        }
+        Toast.makeText(context, getString(R.string.quick_organize_result,
+                organizedCount, skippedCount), Toast.LENGTH_LONG).show();
     }
 
     private void setDragEnable(FloatingActionButton fab) {

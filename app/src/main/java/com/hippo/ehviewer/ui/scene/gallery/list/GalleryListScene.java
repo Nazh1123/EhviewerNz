@@ -327,6 +327,8 @@ public class GalleryListScene extends BaseScene
     private BookmarkSubscriptionCoordinator mBookmarkSubscriptionCoordinator;
     @Nullable
     private SubscriptionUpdateManager mSubscriptionUpdateManager;
+    @Nullable
+    private SubscriptionUpdateManager.AutomaticCheckResult mAutomaticCheckResult;
 
     @Override
     public int getNavCheckedItem() {
@@ -520,6 +522,7 @@ public class GalleryListScene extends BaseScene
         }
         mClient = null;
         mUrlBuilder = null;
+        mAutomaticCheckResult = null;
         mSubscriptionUpdateManager = null;
         mDownloadManager.removeDownloadInfoListener(mDownloadInfoListener);
         mFavouriteStatusRouter.removeListener(mFavouriteStatusRouterListener);
@@ -2340,10 +2343,16 @@ public class GalleryListScene extends BaseScene
             return;
         }
         int mode = mUrlBuilder.getMode();
+        mAutomaticCheckResult = null;
         if (mode == ListUrlBuilder.MODE_SUBSCRIPTION
                 || mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
                 || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
             mSubscriptionUpdateManager.onSubscriptionOpened(mode);
+        }
+        if (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
+                || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
+            mAutomaticCheckResult =
+                    mSubscriptionUpdateManager.takeRecentAutomaticCheckResult(mode);
         }
     }
 
@@ -2554,6 +2563,9 @@ public class GalleryListScene extends BaseScene
 
         private void loadBookmarkSubscriptions(int taskId, @NonNull MainActivity activity,
                                                boolean includeEhSubscription) {
+            SubscriptionUpdateManager.AutomaticCheckResult automaticCheckResult =
+                    mAutomaticCheckResult;
+            mAutomaticCheckResult = null;
             executorService.execute(() -> {
                 final List<QuickSearch> subscriptions;
                 try {
@@ -2575,7 +2587,8 @@ public class GalleryListScene extends BaseScene
                     BookmarkSubscriptionCoordinator coordinator =
                             getBookmarkSubscriptionCoordinator();
                     if (coordinator != null) {
-                        coordinator.refresh(taskId, subscriptions, includeEhSubscription);
+                        coordinator.refresh(taskId, subscriptions, includeEhSubscription,
+                                automaticCheckResult);
                     }
                 });
             });

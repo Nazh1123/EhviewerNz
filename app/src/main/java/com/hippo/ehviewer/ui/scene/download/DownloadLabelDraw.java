@@ -144,6 +144,9 @@ public class DownloadLabelDraw {
     }
 
     public void updateDownloadLabels(){
+        if (listView == null) {
+            return;
+        }
         final DownloadManager downloadManager = EhApplication.getDownloadManager(context);
         List<DownloadLabel> list = downloadManager.getLabelList();
         final List<String> labels = new ArrayList<>(list.size() + 1);

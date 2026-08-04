@@ -493,6 +493,9 @@
     <string name="drawer_download_label_title">Label</string>
     <string name="default_download_label_name">Default</string>
     <string name="download_move_dialog_title">Move</string>
+    <string name="quick_organize">Quick organize</string>
+    <string name="quick_organize_processing">Organizing selected galleries…</string>
+    <string name="quick_organize_result">Organized %1$d galleries; skipped %2$d with unavailable metadata</string>
     <string name="download_labels">Download labels</string>
     <string name="download_sort_list">Sort</string>
     <string name="download_filter_by_status">Filter by status</string>
