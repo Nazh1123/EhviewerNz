@@ -54,6 +54,7 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
 import android.widget.CompoundButton;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -87,9 +88,11 @@ import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
 import com.hippo.ehviewer.widget.ReversibleSeekBar;
 import com.hippo.lib.glgallery.GalleryProvider;
+import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.glgallery.GalleryView;
 import com.hippo.lib.glgallery.SimpleAdapter;
 import com.hippo.lib.glview.view.GLRootView;
+import com.hippo.lib.glview.image.ImageTexture;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.ExceptionUtils;
 import com.hippo.util.SystemUiHelper;
@@ -115,12 +118,14 @@ import java.io.OutputStream;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.Locale;
 
 import javax.microedition.khronos.egl.EGL10;
 import javax.microedition.khronos.egl.EGLContext;
 import javax.microedition.khronos.egl.EGLDisplay;
 
-public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChangeListener, GalleryView.Listener {
+public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChangeListener,
+        GalleryView.Listener, ImageTexture.PlaybackListener {
 
     private static final String TAG = "GalleryActivity";
 
@@ -192,6 +197,22 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private TextView mRightText;
     @Nullable
     private ReversibleSeekBar mSeekBar;
+    @Nullable
+    private View mAnimatedWebpPanel;
+    @Nullable
+    private View mAnimatedWebpControls;
+    @Nullable
+    private TextView mAnimatedWebpTime;
+    @Nullable
+    private SeekBar mAnimatedWebpSeek;
+    @Nullable
+    private ImageButton mAnimatedWebpPlayPause;
+    @Nullable
+    private Button mAnimatedWebpSpeed;
+    @Nullable
+    private ImageTexture mAnimatedWebpTexture;
+    private boolean mAnimatedWebpSeeking;
+    private boolean mAnimatedWebpControlsExpanded;
 
     private ObjectAnimator mSeekBarPanelAnimator;
     private ObjectAnimator mAutoTransferAnimator;
@@ -210,6 +231,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private ScheduledExecutorService transferService = Executors.newSingleThreadScheduledExecutor();
     private final Handler transHandle = new Handler(Looper.getMainLooper());
+    private final Handler mAnimatedWebpHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mAnimatedWebpUiRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateAnimatedWebpUi();
+            mAnimatedWebpHandler.postDelayed(this, 100L);
+        }
+    };
 
     private final ValueAnimator.AnimatorUpdateListener mUpdateSliderListener = new ValueAnimator.AnimatorUpdateListener() {
         @Override
@@ -466,6 +495,44 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSeekBar.setOnSeekBarChangeListener(this);
         mAutoTransferPanel.setOnClickListener(this::autoRead);
 
+        mAnimatedWebpPanel = findViewById(R.id.animated_webp_panel);
+        mAnimatedWebpControls = findViewById(R.id.animated_webp_controls);
+        mAnimatedWebpTime = findViewById(R.id.animated_webp_time);
+        mAnimatedWebpSeek = findViewById(R.id.animated_webp_seek);
+        mAnimatedWebpPlayPause = findViewById(R.id.animated_webp_play_pause);
+        mAnimatedWebpSpeed = findViewById(R.id.animated_webp_speed);
+        View.OnClickListener toggleAnimationControls = v -> toggleAnimatedWebpControls();
+        mAnimatedWebpPanel.setOnClickListener(toggleAnimationControls);
+        mAnimatedWebpSeek.setOnClickListener(toggleAnimationControls);
+        mAnimatedWebpPlayPause.setOnClickListener(v -> {
+            ImageTexture texture = mAnimatedWebpTexture;
+            if (texture != null) texture.setPlaybackPlaying(!texture.isPlaybackPlaying());
+        });
+        mAnimatedWebpSpeed.setOnClickListener(v -> cycleAnimatedWebpSpeed());
+        mAnimatedWebpSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) updateAnimatedWebpTime(progress,
+                        mAnimatedWebpTexture != null ? mAnimatedWebpTexture.getPlaybackDuration() : 0);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                mAnimatedWebpSeeking = true;
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                mAnimatedWebpSeeking = false;
+                ImageTexture texture = mAnimatedWebpTexture;
+                if (texture != null && Settings.getAnimatedWebpAllowSeek()) {
+                    texture.seekTo(seekBar.getProgress());
+                }
+            }
+        });
+        mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiRunnable);
+        mAnimatedWebpHandler.post(mAnimatedWebpUiRunnable);
+
         mSize = mGalleryProvider.size();
         mCurrentIndex = startPage;
         if (mGalleryView != null) {
@@ -552,6 +619,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiRunnable);
+        if (mAnimatedWebpTexture != null) {
+            mAnimatedWebpTexture.setPlaybackListener(null);
+            mAnimatedWebpTexture = null;
+        }
         if (!transferService.isShutdown()) {
             transferService.shutdown();
             transferService = null;
@@ -582,6 +654,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mLeftText = null;
         mRightText = null;
         mSeekBar = null;
+        mAnimatedWebpPanel = null;
+        mAnimatedWebpControls = null;
+        mAnimatedWebpTime = null;
+        mAnimatedWebpSeek = null;
+        mAnimatedWebpPlayPause = null;
+        mAnimatedWebpSpeed = null;
 
         if (transferService != null && !transferService.isShutdown()) {
             transferService.shutdown();
@@ -1699,6 +1777,111 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 recreate();
             }
         }
+    }
+
+    private void toggleAnimatedWebpControls() {
+        if (!Settings.getAnimatedWebpShowControls() || mAnimatedWebpTexture == null) return;
+        mAnimatedWebpControlsExpanded = !mAnimatedWebpControlsExpanded;
+        if (mAnimatedWebpControls != null) {
+            mAnimatedWebpControls.setVisibility(
+                    mAnimatedWebpControlsExpanded ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private void cycleAnimatedWebpSpeed() {
+        ImageTexture texture = mAnimatedWebpTexture;
+        if (texture == null) return;
+        float speed = texture.getPlaybackSpeed();
+        if (speed < 0.75f) speed = 1.0f;
+        else if (speed < 1.25f) speed = 1.5f;
+        else if (speed < 1.75f) speed = 2.0f;
+        else speed = 0.5f;
+        texture.setPlaybackSpeed(speed);
+        updateAnimatedWebpSpeedButton(speed);
+    }
+
+    private void updateAnimatedWebpSpeedButton(float speed) {
+        if (mAnimatedWebpSpeed == null) return;
+        String text = speed == (int) speed
+                ? Integer.toString((int) speed) + "x"
+                : String.format(Locale.US, "%.1fx", speed);
+        mAnimatedWebpSpeed.setText(text);
+    }
+
+    private static String formatAnimatedWebpTime(int positionMs, int durationMs) {
+        int positionSeconds = Math.max(0, positionMs) / 1000;
+        int durationSeconds = Math.max(0, durationMs) / 1000;
+        return String.format(Locale.US, "%02d:%02d/%02d:%02d",
+                positionSeconds / 60, positionSeconds % 60,
+                durationSeconds / 60, durationSeconds % 60);
+    }
+
+    private void updateAnimatedWebpTime(int positionMs, int durationMs) {
+        if (mAnimatedWebpTime != null) {
+            mAnimatedWebpTime.setText(formatAnimatedWebpTime(positionMs, durationMs));
+        }
+    }
+
+    private void updateAnimatedWebpUi() {
+        ImageTexture candidate = null;
+        if (mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM && mGalleryView != null &&
+                mCurrentIndex >= 0) {
+            GalleryPageView page = mGalleryView.findPageByIndex(mCurrentIndex);
+            ImageTexture texture = page != null ? page.getImageTexture() : null;
+            if (texture != null && texture.isControllableAnimation()) candidate = texture;
+        }
+
+        if (candidate != mAnimatedWebpTexture) {
+            if (mAnimatedWebpTexture != null) mAnimatedWebpTexture.setPlaybackListener(null);
+            mAnimatedWebpTexture = candidate;
+            mAnimatedWebpControlsExpanded = false;
+            if (candidate != null) candidate.setPlaybackListener(this);
+        }
+
+        boolean showProgress = Settings.getAnimatedWebpShowProgress();
+        boolean showTime = Settings.getAnimatedWebpShowTime();
+        boolean showControls = Settings.getAnimatedWebpShowControls();
+        boolean visible = candidate != null && (showProgress || showTime || showControls);
+        if (mAnimatedWebpPanel != null) {
+            mAnimatedWebpPanel.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+        if (!visible) return;
+
+        int duration = candidate.getPlaybackDuration();
+        int position = candidate.getPlaybackPosition();
+        if (mAnimatedWebpTime != null) {
+            mAnimatedWebpTime.setVisibility(showTime ? View.VISIBLE : View.GONE);
+        }
+        updateAnimatedWebpTime(position, duration);
+        if (mAnimatedWebpSeek != null) {
+            mAnimatedWebpSeek.setVisibility(showProgress ? View.VISIBLE : View.GONE);
+            mAnimatedWebpSeek.setEnabled(Settings.getAnimatedWebpAllowSeek());
+            mAnimatedWebpSeek.setMax(Math.max(1, duration));
+            if (!mAnimatedWebpSeeking) {
+                mAnimatedWebpSeek.setProgress(Math.min(duration, position));
+            }
+        }
+        if (mAnimatedWebpControls != null) {
+            mAnimatedWebpControls.setVisibility(showControls && mAnimatedWebpControlsExpanded
+                    ? View.VISIBLE : View.GONE);
+        }
+        if (mAnimatedWebpPlayPause != null) {
+            mAnimatedWebpPlayPause.setImageResource(candidate.isPlaybackPlaying()
+                    ? R.drawable.v_pause_x24 : R.drawable.v_play_x24);
+        }
+        updateAnimatedWebpSpeedButton(candidate.getPlaybackSpeed());
+    }
+
+    @Override
+    public void onPlaybackChanged(ImageTexture texture, boolean looped) {
+        mAnimatedWebpHandler.post(() -> {
+            if (texture != mAnimatedWebpTexture) return;
+            updateAnimatedWebpUi();
+            if (looped && Settings.getAnimatedWebpAutoAdvance() && mGalleryView != null &&
+                    mCurrentIndex >= 0 && mCurrentIndex + 1 < mSize) {
+                mGalleryView.setCurrentPage(mCurrentIndex + 1);
+            }
+        });
     }
 
     private class NotifyTask implements Runnable {

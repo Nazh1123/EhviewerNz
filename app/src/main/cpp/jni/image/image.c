@@ -359,6 +359,43 @@ void advance(void *image, int format) {
     }
 }
 
+bool advance_and_get_looped(void *image, int format) {
+#ifdef IMAGE_SUPPORT_WEBP
+    if (format == IMAGE_FORMAT_WEBP) {
+        return WEBP_advance_and_get_looped((WEBP *) image);
+    }
+#endif
+    advance(image, format);
+    return false;
+}
+
+int seek_to(void *image, int format, int position_ms) {
+#ifdef IMAGE_SUPPORT_WEBP
+    if (format == IMAGE_FORMAT_WEBP) {
+        return WEBP_seek_to((WEBP *) image, position_ms);
+    }
+#endif
+    return 0;
+}
+
+int get_current_position(void *image, int format) {
+#ifdef IMAGE_SUPPORT_WEBP
+    if (format == IMAGE_FORMAT_WEBP) {
+        return WEBP_get_current_position((WEBP *) image);
+    }
+#endif
+    return 0;
+}
+
+int get_total_duration(void *image, int format) {
+#ifdef IMAGE_SUPPORT_WEBP
+    if (format == IMAGE_FORMAT_WEBP) {
+        return WEBP_get_total_duration((WEBP *) image);
+    }
+#endif
+    return 0;
+}
+
 int get_delay(void *image, int format) {
     switch (format) {
 #ifdef IMAGE_SUPPORT_PLAIN
@@ -443,7 +480,7 @@ bool is_opaque(void *image, int format) {
     }
 }
 
-static void get_image_data(void *image, int format, void **pixel, int *width, int *height) {
+void get_image_data(void *image, int format, void **pixel, int *width, int *height) {
     switch (format) {
 #ifdef IMAGE_SUPPORT_PLAIN
         case IMAGE_FORMAT_PLAIN: {
@@ -498,18 +535,38 @@ static void get_image_data(void *image, int format, void **pixel, int *width, in
     }
 }
 
+void lock_image_data(void *image, int format) {
+#ifdef IMAGE_SUPPORT_WEBP
+    if (format == IMAGE_FORMAT_WEBP) {
+        WEBP_lock_pixels((WEBP *) image);
+    }
+#endif
+}
+
+void unlock_image_data(void *image, int format) {
+#ifdef IMAGE_SUPPORT_WEBP
+    if (format == IMAGE_FORMAT_WEBP) {
+        WEBP_unlock_pixels((WEBP *) image);
+    }
+#endif
+}
+
 bool is_gray(void *image, int format, int error) {
     void *pixel = NULL;
     int width = 0;
     int height = 0;
 
+    lock_image_data(image, format);
     get_image_data(image, format, &pixel, &width, &height);
 
     if (pixel == NULL || width == 0 || height == 0) {
+        unlock_image_data(image, format);
         return false;
     }
 
-    return IMAGE_is_gray(pixel, width, height, error);
+    bool result = IMAGE_is_gray(pixel, width, height, error);
+    unlock_image_data(image, format);
+    return result;
 }
 
 void clahe(void *image, int format, bool to_gray) {
@@ -517,13 +574,16 @@ void clahe(void *image, int format, bool to_gray) {
     int width = 0;
     int height = 0;
 
+    lock_image_data(image, format);
     get_image_data(image, format, &pixel, &width, &height);
 
     if (pixel == NULL || width == 0 || height == 0) {
+        unlock_image_data(image, format);
         return;
     }
 
     IMAGE_clahe(pixel, width, height, to_gray);
+    unlock_image_data(image, format);
 }
 
 void recycle(JNIEnv *env, void *image, int format) {

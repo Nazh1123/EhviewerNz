@@ -114,6 +114,12 @@ class Image1 private constructor(
         )
     }
 
+    /** Upload the stable native RGBA frame directly to the current GL texture. */
+    fun texImageDirect(init: Boolean) {
+        checkRecycled()
+        nativeTexImageDirect(mNativePtr, format, init)
+    }
+
     /**
      * Move to next frame. Do nothing for non-animation image
      */
@@ -121,6 +127,29 @@ class Image1 private constructor(
         checkRecycled()
         nativeAdvance(mNativePtr, this.format)
     }
+
+    /** Move to the next frame and return true when playback wrapped to frame zero. */
+    fun advanceAndGetLooped(): Boolean {
+        checkRecycled()
+        return nativeAdvanceAndGetLooped(mNativePtr, format)
+    }
+
+    fun seekTo(positionMs: Int): Int {
+        checkRecycled()
+        return nativeSeekTo(mNativePtr, format, positionMs)
+    }
+
+    val currentPosition: Int
+        get() {
+            checkRecycled()
+            return nativeGetCurrentPosition(mNativePtr, format)
+        }
+
+    val totalDuration: Int
+        get() {
+            checkRecycled()
+            return nativeGetTotalDuration(mNativePtr, format)
+        }
 
     val delay: Int
         /**
@@ -292,7 +321,17 @@ class Image1 private constructor(
             init: Boolean, offsetX: Int, offsetY: Int, width: Int, height: Int
         )
         @JvmStatic
+        private external fun nativeTexImageDirect(nativePtr: Long, format: Int, init: Boolean)
+        @JvmStatic
         private external fun nativeAdvance(nativePtr: Long, format: Int)
+        @JvmStatic
+        private external fun nativeAdvanceAndGetLooped(nativePtr: Long, format: Int): Boolean
+        @JvmStatic
+        private external fun nativeSeekTo(nativePtr: Long, format: Int, positionMs: Int): Int
+        @JvmStatic
+        private external fun nativeGetCurrentPosition(nativePtr: Long, format: Int): Int
+        @JvmStatic
+        private external fun nativeGetTotalDuration(nativePtr: Long, format: Int): Int
         @JvmStatic
         private external fun nativeGetDelay(nativePtr: Long, format: Int): Int
         @JvmStatic

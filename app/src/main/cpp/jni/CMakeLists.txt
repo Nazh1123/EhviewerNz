@@ -22,3 +22,11 @@ add_subdirectory(libpng)
 add_subdirectory(giflib)
 add_subdirectory(libwebp)
 add_subdirectory(image)
+
+# android-gif-drawable ships optimized native code even when consumed by a
+# debuggable application. Keep the experimental animated WebP backend equally
+# optimized; the CMake Debug default otherwise leaves libwebp at -O0.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(libwebp PRIVATE -O3 -DNDEBUG)
+    target_compile_options(image PRIVATE -O3 -DNDEBUG)
+endif()

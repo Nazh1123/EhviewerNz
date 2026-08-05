@@ -57,9 +57,16 @@ void render(void* image, int format, int src_x, int src_y,
     void* dst, int dst_w, int dst_h, int dst_x, int dst_y,
     int width, int height, bool fill_blank, int default_color);
 void advance(void* image, int format);
+bool advance_and_get_looped(void* image, int format);
+int seek_to(void* image, int format, int position_ms);
+int get_current_position(void* image, int format);
+int get_total_duration(void* image, int format);
 int get_delay(void* image, int format);
 int get_frame_count(void* image, int format);
 bool is_opaque(void* image, int format);
+void get_image_data(void* image, int format, void** pixel, int* width, int* height);
+void lock_image_data(void* image, int format);
+void unlock_image_data(void* image, int format);
 bool is_gray(void* image, int format, int error);
 void clahe(void* image, int format, bool to_gray);
 void recycle(JNIEnv *env, void* image, int format);

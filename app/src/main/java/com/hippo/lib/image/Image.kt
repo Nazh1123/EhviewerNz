@@ -24,6 +24,8 @@ import kotlin.math.max
 import kotlin.math.min
 import androidx.core.graphics.createBitmap
 import com.hippo.ehviewer.Analytics
+import com.hippo.ehviewer.Settings
+import java.nio.ByteBuffer
 
 
 class Image private constructor(
@@ -33,12 +35,20 @@ class Image private constructor(
     val release: () -> Unit? = {},
 ) {
     private var mObtainedDrawable: Drawable?
+    private var mNativeImage: Image1? = null
     private var mBitmap: Bitmap? = null
     private var mReferences = 0
 
     init {
         mObtainedDrawable = null
         source?.let {
+            if (!hardware && Settings.getExperimentalAnimatedWebpEnabled() &&
+                Settings.getReadingDirection() != 2 && isAnimatedWebp(source)) {
+                source.channel.position(0)
+                mNativeImage = Image1.decode(source, false)
+                if (mNativeImage != null) return@let
+                source.channel.position(0)
+            }
             var simpleSize: Int? = null
             if (source.available() > 10485760) {
                 simpleSize = source.available() / 10485760 + 1
@@ -108,27 +118,39 @@ class Image private constructor(
                 }
             }
         }
-        if (mObtainedDrawable == null) {
+        if (mObtainedDrawable == null && mNativeImage == null) {
             mObtainedDrawable = drawable
                 ?: throw IllegalArgumentException("数据解码出错")
         }
     }
 
-    val animated = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        mObtainedDrawable is AnimatedImageDrawable
-    } else {
-        mObtainedDrawable is AnimationDrawable
-    }
-    val width =
-        (mObtainedDrawable as? BitmapDrawable)?.bitmap?.width ?: mObtainedDrawable!!.intrinsicWidth
-    val height = (mObtainedDrawable as? BitmapDrawable)?.bitmap?.height
-        ?: mObtainedDrawable!!.intrinsicHeight
-    val isRecycled = mObtainedDrawable == null
+    val animated: Boolean
+        get() = mNativeImage?.let { it.frameCount > 1 } ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            mObtainedDrawable is AnimatedImageDrawable
+        } else {
+            mObtainedDrawable is AnimationDrawable
+        }
+    val controllableAnimation: Boolean
+        get() = mNativeImage?.let { it.format == Image1.FORMAT_WEBP && it.frameCount > 1 } == true
+    val width: Int
+        get() = mNativeImage?.width ?: ((mObtainedDrawable as? BitmapDrawable)?.bitmap?.width
+            ?: mObtainedDrawable!!.intrinsicWidth)
+    val height: Int
+        get() = mNativeImage?.height ?: ((mObtainedDrawable as? BitmapDrawable)?.bitmap?.height
+            ?: mObtainedDrawable!!.intrinsicHeight)
+    val isRecycled: Boolean
+        get() = mNativeImage?.isRecycled ?: (mObtainedDrawable == null)
 
     private var started = false
 
     @Synchronized
     fun recycle() {
+        mNativeImage?.let {
+            if (!it.isRecycled) it.recycle()
+            mNativeImage = null
+            release()
+            return
+        }
         if (mObtainedDrawable == null) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             if (mObtainedDrawable is AnimatedImageDrawable) {
@@ -174,12 +196,17 @@ class Image private constructor(
     }
 
     fun getDrawable(): Drawable {
+        check(mNativeImage == null) { "Native animated WebP has no Drawable" }
         check(obtain()) { "Recycled!" }
         return mObtainedDrawable as Drawable
     }
 
     fun texImage(init: Boolean, offsetX: Int, offsetY: Int, width: Int, height: Int) {
         check(!hardware) { "Hardware buffer cannot be used in glgallery" }
+        mNativeImage?.let {
+            it.texImage(init, offsetX, offsetY, width, height)
+            return
+        }
         try {
             val bitmap: Bitmap = if (animated) {
                 updateBitmap()
@@ -215,7 +242,24 @@ class Image private constructor(
         }
     }
 
+    fun texImageDirect(init: Boolean) {
+        check(!hardware) { "Hardware buffer cannot be used in glgallery" }
+        mNativeImage?.texImageDirect(init)
+            ?: throw IllegalStateException("Direct upload requires native animated WebP")
+    }
+
+    fun advanceFrame(): Boolean = mNativeImage?.advanceAndGetLooped() ?: false
+
+    fun seekTo(positionMs: Int): Int = mNativeImage?.seekTo(positionMs) ?: 0
+
+    val currentFramePosition: Int
+        get() = mNativeImage?.currentPosition ?: 0
+
+    val totalDuration: Int
+        get() = mNativeImage?.totalDuration ?: 0
+
     fun start() {
+        if (mNativeImage != null) return
         if (!started) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 (mObtainedDrawable as AnimatedImageDrawable?)?.start()
@@ -225,6 +269,7 @@ class Image private constructor(
 
     val delay: Int
         get() {
+            mNativeImage?.let { return it.delay }
             if (animated)
                 return 10
             return 0
@@ -233,6 +278,7 @@ class Image private constructor(
     @get:SuppressWarnings("deprecation")
     val isOpaque: Boolean
         get() {
+            mNativeImage?.let { return it.isOpaque }
             return mObtainedDrawable?.opacity == PixelFormat.OPAQUE
         }
 
@@ -244,6 +290,28 @@ class Image private constructor(
         fun initialize(ehApplication: EhApplication) {
             screenWidth = ehApplication.resources.displayMetrics.widthPixels
             screenHeight = ehApplication.resources.displayMetrics.heightPixels
+        }
+
+        private fun isAnimatedWebp(stream: FileInputStream): Boolean {
+            val channel = stream.channel
+            val oldPosition = channel.position()
+            return try {
+                channel.position(0)
+                val header = ByteBuffer.allocate(21)
+                if (channel.read(header) < 21) return false
+                val bytes = header.array()
+                bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
+                    bytes[2] == 'F'.code.toByte() && bytes[3] == 'F'.code.toByte() &&
+                    bytes[8] == 'W'.code.toByte() && bytes[9] == 'E'.code.toByte() &&
+                    bytes[10] == 'B'.code.toByte() && bytes[11] == 'P'.code.toByte() &&
+                    bytes[12] == 'V'.code.toByte() && bytes[13] == 'P'.code.toByte() &&
+                    bytes[14] == '8'.code.toByte() && bytes[15] == 'X'.code.toByte() &&
+                    (bytes[20].toInt() and 0x02) != 0
+            } catch (_: Exception) {
+                false
+            } finally {
+                channel.position(oldPosition)
+            }
         }
 
         @JvmStatic
