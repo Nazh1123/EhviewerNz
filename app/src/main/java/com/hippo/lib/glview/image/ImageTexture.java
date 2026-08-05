@@ -1391,6 +1391,7 @@ public class ImageTexture implements Texture, Animatable {
                     if (mReleased.get() || mImage.isImageRecycled() || mNeedRelease.get()) break;
                     mImageBusy = true;
                 }
+                long decodeStarted = SystemClock.uptimeMillis();
                 boolean looped = false;
                 int framePosition;
                 if (seekPosition >= 0) {
@@ -1400,6 +1401,7 @@ public class ImageTexture implements Texture, Animatable {
                     framePosition = mImage.getCurrentPosition();
                 }
                 int frameDelay = mImage.getDelay();
+                long decodeElapsed = SystemClock.uptimeMillis() - decodeStarted;
                 synchronized (mImage) {
                     mImageBusy = false;
                 }
@@ -1407,7 +1409,11 @@ public class ImageTexture implements Texture, Animatable {
                     mPlaybackFramePosition = framePosition;
                     mPlaybackFrameDelay = frameDelay;
                     mPlaybackFrameElapsed = seekPosition >= 0
-                            ? Math.max(0, seekPosition - framePosition) : 0;
+                            ? Math.max(0, seekPosition - framePosition)
+                            // Decoding and any wait for the GL upload mutex are part of
+                            // the animation timeline. Carry that time into the new frame
+                            // instead of adding a full frame delay after every decode.
+                            : Math.min(frameDelay, decodeElapsed * mPlaybackSpeed);
                     mPlaybackFrameStart = SystemClock.uptimeMillis();
                 }
                 mFrameDirty.lazySet(true);

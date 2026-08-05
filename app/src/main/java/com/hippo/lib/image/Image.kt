@@ -45,7 +45,14 @@ class Image private constructor(
             if (!hardware && Settings.getExperimentalAnimatedWebpEnabled() &&
                 Settings.getReadingDirection() != 2 && isAnimatedWebp(source)) {
                 source.channel.position(0)
-                mNativeImage = Image1.decode(source, false)
+                try {
+                    mNativeImage = Image1.decode(source, false)
+                } catch (error: LinkageError) {
+                    // The experimental decoder must not take down SpiderDecoder when
+                    // libimage cannot be loaded on a particular device/ABI.
+                    Analytics.recordException(error)
+                    mNativeImage = null
+                }
                 if (mNativeImage != null) return@let
                 source.channel.position(0)
             }
