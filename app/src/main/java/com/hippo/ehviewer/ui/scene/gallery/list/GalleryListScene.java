@@ -1522,7 +1522,7 @@ public class GalleryListScene extends BaseScene
         }
 
         multiSelectFab.setImageResource(mMultiSelectMode
-                ? R.drawable.v_check_dark_x24 : R.drawable.v_check_all_dark_x24);
+                ? R.drawable.v_return_curve_dark_x24 : R.drawable.v_check_all_dark_x24);
 
         if (mMultiSelectMode) {
             fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DOWNLOAD, true);
