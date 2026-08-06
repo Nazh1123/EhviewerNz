@@ -46,12 +46,12 @@ public final class DownloadLabelSearchQueryResolver {
             case "A":
                 return quote("a", value);
             case "C":
-                return quote("c", value);
+                return quote("cos", value);
             case "AI":
             case "M":
                 return value;
             case "U":
-                return quote("upload", value);
+                return quote("uploader", value);
             default:
                 return null;
         }
@@ -60,6 +60,6 @@ public final class DownloadLabelSearchQueryResolver {
     @NonNull
     private static String quote(@NonNull String namespace, @NonNull String value) {
         String escaped = value.replace("\\", "\\\\").replace("\"", "\\\"");
-        return namespace + ":\"" + escaped + "\"";
+        return namespace + ":\"" + escaped + "$\"";
     }
 }

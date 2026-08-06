@@ -361,7 +361,7 @@ public class DownloadListInfosExecutor {
 
         for (int i = 0; i < mList.size(); i++) {
             DownloadInfo info = mList.get(i);
-            if (EhUtils.judgeSuitableTitle(info, mSearchKey)) {
+            if (matchesTitleIgnoreCase(info, mSearchKey)) {
                 cache.add(info);
             } else if (matchTag(mSearchKey, info)) {
                 cache.add(info);
@@ -369,6 +369,27 @@ public class DownloadListInfosExecutor {
         }
 
         return cache;
+    }
+
+    static boolean matchesTitleIgnoreCase(DownloadInfo info, String searchKey) {
+        if (info == null || searchKey == null || searchKey.isEmpty()) {
+            return false;
+        }
+        return containsIgnoreCase(info.title, searchKey)
+                || containsIgnoreCase(info.titleJpn, searchKey);
+    }
+
+    private static boolean containsIgnoreCase(String text, String searchKey) {
+        if (text == null || searchKey.length() > text.length()) {
+            return false;
+        }
+        int lastStart = text.length() - searchKey.length();
+        for (int start = 0; start <= lastStart; start++) {
+            if (text.regionMatches(true, start, searchKey, 0, searchKey.length())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean matchTag(String mSearchKey, DownloadInfo info) {
