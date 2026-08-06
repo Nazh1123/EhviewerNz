@@ -26,6 +26,7 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.LruCache;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -35,6 +36,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 
 import com.hippo.android.resource.AttrResources;
 import com.hippo.easyrecyclerview.EasyRecyclerView;
@@ -55,6 +57,7 @@ import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.EnterGalleryDetailTransaction;
 import com.hippo.ehviewer.widget.SimpleRatingView;
 import com.hippo.lib.yorozuya.AssertUtils;
+import com.hippo.lib.yorozuya.ObjectUtils;
 import com.hippo.lib.yorozuya.ViewUtils;
 import com.hippo.ripple.Ripple;
 import com.hippo.scene.Announcer;
@@ -71,17 +74,22 @@ import com.h6ah4i.android.widget.advrecyclerview.utils.AbstractDraggableItemView
 
 import java.io.InputStream;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 下载列表适配器
  */
-public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.DownloadHolder>
-        implements DraggableItemAdapter<DownloadAdapter.DownloadHolder> {
+public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder>
+        implements DraggableItemAdapter<RecyclerView.ViewHolder> {
 
     private static final String TAG = DownloadAdapter.class.getSimpleName();
+    private static final int VIEW_TYPE_GALLERY = 0;
+    private static final int VIEW_TYPE_LABEL_HEADER = 1;
     public static boolean DRAG_ENABLE = false;
 
     private final LayoutInflater mInflater;
@@ -92,7 +100,17 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
 
     private View movedItem = null;
 
-    private final Map<String, Bitmap> thumbnailCache = new HashMap<>();
+    private static final LruCache<String, Bitmap> ARCHIVE_THUMBNAIL_CACHE =
+            new LruCache<String, Bitmap>(16 * 1024 * 1024) {
+                @Override
+                protected int sizeOf(@NonNull String key, @NonNull Bitmap value) {
+                    return value.getAllocationByteCount();
+                }
+            };
+    private static final ExecutorService ARCHIVE_THUMBNAIL_EXECUTOR =
+            Executors.newFixedThreadPool(2);
+    private static final Set<String> LOADING_ARCHIVE_THUMBNAILS =
+            ConcurrentHashMap.newKeySet();
 
     public interface DownloadAdapterCallback {
         int getIndexPage();
@@ -105,6 +123,19 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
         Map<Long, SpiderInfo> getSpiderInfoMap();
         DownloadManager getDownloadManager();
         EasyRecyclerView getRecyclerView();
+        boolean isContinuousLabelBrowse();
+        int getDisplayItemCount();
+        boolean isLabelHeaderPosition(int position);
+        String getLabelHeaderTitle(int position);
+        int getLabelHeaderGalleryCount(int position);
+        boolean isLabelHeaderCollapsed(int position);
+        void onLabelHeaderClick(int position);
+        boolean onLabelHeaderLongClick(int position);
+        void onCollapsedLabelClick(int position);
+        long getDisplayItemId(int position);
+        void onGroupedDownloadOrderChanged();
+        boolean canReorderCurrentList();
+        int getAdapterPositionForGallery(long gid);
     }
 
     public DownloadAdapter(DownloadsScene scene, DownloadAdapterCallback callback) {
@@ -141,6 +172,9 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
 
     @Override
     public long getItemId(int position) {
+        if (mCallback.isContinuousLabelBrowse()) {
+            return mCallback.getDisplayItemId(position);
+        }
         int posInList = mCallback.positionInList(position);
         List<DownloadInfo> list = mCallback.getList();
         if (list == null || posInList < 0 || posInList >= list.size()) {
@@ -149,9 +183,20 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
         return list.get(posInList).gid;
     }
 
+    @Override
+    public int getItemViewType(int position) {
+        return mCallback.isContinuousLabelBrowse()
+                && mCallback.isLabelHeaderPosition(position)
+                ? VIEW_TYPE_LABEL_HEADER : VIEW_TYPE_GALLERY;
+    }
+
     @NonNull
     @Override
-    public DownloadHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        if (viewType == VIEW_TYPE_LABEL_HEADER) {
+            return new LabelHeaderHolder(mInflater.inflate(
+                    R.layout.item_download_label_header, parent, false));
+        }
         DownloadHolder holder = new DownloadHolder(mInflater.inflate(R.layout.item_download, parent, false));
 
         ViewGroup.LayoutParams lp = holder.thumb.getLayoutParams();
@@ -163,7 +208,23 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
     }
 
     @Override
-    public void onBindViewHolder(DownloadHolder holder, int position) {
+    public void onBindViewHolder(RecyclerView.ViewHolder rawHolder, int position) {
+        if (rawHolder instanceof LabelHeaderHolder) {
+            LabelHeaderHolder holder = (LabelHeaderHolder) rawHolder;
+            holder.boundPosition = position;
+            holder.label.setText(mCallback.getLabelHeaderTitle(position));
+            holder.count.setText(Integer.toString(
+                    mCallback.getLabelHeaderGalleryCount(position)));
+            boolean collapsed = mCallback.isLabelHeaderCollapsed(position);
+            holder.collapsedAction.setVisibility(collapsed ? View.VISIBLE : View.GONE);
+            if (collapsed) {
+                holder.collapsedAction.setText(mScene.getString(
+                        R.string.download_label_collapsed_action,
+                        mCallback.getLabelHeaderGalleryCount(position)));
+            }
+            return;
+        }
+        DownloadHolder holder = (DownloadHolder) rawHolder;
         List<DownloadInfo> list = mCallback.getList();
         if (list == null) {
             return;
@@ -171,7 +232,11 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
 
         try {
             int pos = mCallback.positionInList(position);
+            if (pos < 0 || pos >= list.size()) {
+                return;
+            }
             DownloadInfo info = list.get(pos);
+            holder.boundGid = info.gid;
 
             String title = EhUtils.getSuitableTitle(info);
             // Add special prefix for imported archives
@@ -181,8 +246,10 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
             // Handle thumbnail loading for imported archives
             if (info.archiveUri != null && info.archiveUri.startsWith("content://")) {
                 // For imported archives, extract first image as thumbnail
-                loadArchiveThumbnail(holder.thumb, Uri.parse(info.archiveUri));
+                holder.boundArchiveUri = info.archiveUri;
+                loadArchiveThumbnail(holder, Uri.parse(info.archiveUri));
             } else {
+                holder.boundArchiveUri = null;
                 // Normal thumbnail loading for regular downloads
                 holder.thumb.load(EhCacheKeyFactory.getThumbKey(info.gid), info.thumb,
                         new ThumbDataContainer(info), true, false);
@@ -208,6 +275,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
                 int startPage = spiderInfo.startPage + 1;
                 String readText = startPage + "/" + spiderInfo.pages;
                 holder.readProgress.setText(readText);
+            } else {
+                holder.readProgress.setText(null);
             }
 
             TextView category = holder.category;
@@ -224,7 +293,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
 
             if (!newCategoryText.equals(category.getText())) {
                 category.setText(newCategoryText);
-                category.setBackgroundColor(EhUtils.getCategoryColor(info.category));
+                category.setBackgroundColor(categoryColor);
             }
             bindForState(holder, info);
 
@@ -237,6 +306,9 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
 
     @Override
     public int getItemCount() {
+        if (mCallback.isContinuousLabelBrowse()) {
+            return mCallback.getDisplayItemCount();
+        }
         List<DownloadInfo> list = mCallback.getList();
         if (list == null) {
             return 0;
@@ -346,22 +418,43 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
 
     // 拖拽排序相关方法实现
     @Override
-    public boolean onCheckCanStartDrag(@NonNull DownloadHolder holder, int position, int x, int y) {
-        if (!DRAG_ENABLE){
+    public boolean onCheckCanStartDrag(@NonNull RecyclerView.ViewHolder rawHolder,
+            int position, int x, int y) {
+        if (!DRAG_ENABLE || !mCallback.canReorderCurrentList()
+                || !(rawHolder instanceof DownloadHolder)){
             return false;
         }
+        DownloadHolder holder = (DownloadHolder) rawHolder;
         // 检查是否点击在thumb上
         return ViewUtils.isViewUnder(holder.thumb, x, y, 0);
     }
 
     @Override
-    public ItemDraggableRange onGetItemDraggableRange(DownloadHolder holder, int position) {
+    public ItemDraggableRange onGetItemDraggableRange(
+            RecyclerView.ViewHolder holder, int position) {
+        if (mCallback.isContinuousLabelBrowse()) {
+            int start = position;
+            int end = position;
+            while (start > 0 && !mCallback.isLabelHeaderPosition(start - 1)) {
+                start--;
+            }
+            int itemCount = mCallback.getDisplayItemCount();
+            while (end + 1 < itemCount
+                    && !mCallback.isLabelHeaderPosition(end + 1)) {
+                end++;
+            }
+            return new ItemDraggableRange(start, end);
+        }
         return null;
     }
 
     @Override
     public void onMoveItem(int fromPosition, int toPosition) {
         if (fromPosition == toPosition) {
+            return;
+        }
+        if (mCallback.isContinuousLabelBrowse()) {
+            moveGroupedDownload(fromPosition, toPosition);
             return;
         }
         final List<DownloadInfo> list = mCallback.getList();
@@ -393,9 +486,57 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
         }
     }
 
+    private void moveGroupedDownload(int fromPosition, int toPosition) {
+        List<DownloadInfo> list = mCallback.getList();
+        if (list == null) {
+            return;
+        }
+        int fromPosInList = mCallback.positionInList(fromPosition);
+        int toPosInList = mCallback.positionInList(toPosition);
+        if (fromPosInList < 0 || fromPosInList >= list.size()
+                || toPosInList < 0 || toPosInList >= list.size()) {
+            return;
+        }
+        DownloadInfo fromInfo = list.get(fromPosInList);
+        DownloadInfo toInfo = list.get(toPosInList);
+        if (!ObjectUtils.equal(fromInfo.label, toInfo.label)) {
+            return;
+        }
+        DownloadManager manager = mCallback.getDownloadManager();
+        if (manager == null) {
+            return;
+        }
+        List<DownloadInfo> labelList = fromInfo.label == null
+                ? manager.getDefaultDownloadInfoList()
+                : manager.getLabelDownloadInfoList(fromInfo.label);
+        if (labelList == null) {
+            return;
+        }
+        int fromLabelPosition = labelList.indexOf(fromInfo);
+        int toLabelPosition = labelList.indexOf(toInfo);
+        if (fromLabelPosition < 0 || toLabelPosition < 0) {
+            return;
+        }
+        EhDB.moveDownloadInfo(labelList, fromLabelPosition, toLabelPosition);
+        labelList.remove(fromLabelPosition);
+        labelList.add(toLabelPosition, fromInfo);
+        mCallback.onGroupedDownloadOrderChanged();
+    }
+
     @Override
     public boolean onCheckCanDrop(int draggingPosition, int dropPosition) {
-        return DRAG_ENABLE;
+        if (!DRAG_ENABLE || !mCallback.canReorderCurrentList()) {
+            return false;
+        }
+        if (!mCallback.isContinuousLabelBrowse()) {
+            return true;
+        }
+        int from = mCallback.positionInList(draggingPosition);
+        int to = mCallback.positionInList(dropPosition);
+        List<DownloadInfo> list = mCallback.getList();
+        return list != null && from >= 0 && from < list.size()
+                && to >= 0 && to < list.size()
+                && ObjectUtils.equal(list.get(from).label, list.get(to).label);
     }
 
     @Override
@@ -447,47 +588,61 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
         }
     }
 
-    private void loadArchiveThumbnail(LoadImageView thumb, Uri archiveUri) {
+    @Override
+    public void onViewAttachedToWindow(@NonNull RecyclerView.ViewHolder holder) {
+        super.onViewAttachedToWindow(holder);
+        ViewGroup.LayoutParams layoutParams = holder.itemView.getLayoutParams();
+        if (layoutParams instanceof StaggeredGridLayoutManager.LayoutParams) {
+            ((StaggeredGridLayoutManager.LayoutParams) layoutParams).setFullSpan(
+                    holder instanceof LabelHeaderHolder);
+        }
+    }
+
+    private void loadArchiveThumbnail(DownloadHolder holder, Uri archiveUri) {
         String uriString = archiveUri.toString();
+        LoadImageView thumb = holder.thumb;
 
         // Check cache first
-        if (thumbnailCache.containsKey(uriString)) {
-            Bitmap cachedThumbnail = thumbnailCache.get(uriString);
-            if (cachedThumbnail != null && !cachedThumbnail.isRecycled()) {
-                thumb.setImageBitmap(cachedThumbnail);
-                return;
-            } else {
-                // Remove invalid cached entry
-                thumbnailCache.remove(uriString);
-            }
+        Bitmap cachedThumbnail = ARCHIVE_THUMBNAIL_CACHE.get(uriString);
+        if (cachedThumbnail != null && !cachedThumbnail.isRecycled()) {
+            thumb.setImageBitmap(cachedThumbnail);
+            return;
         }
 
         // Set default icon immediately as fallback
         thumb.setImageResource(R.drawable.v_archive_hh_primary_x48);
+        if (!LOADING_ARCHIVE_THUMBNAILS.add(uriString)) {
+            return;
+        }
+        long requestedGid = holder.boundGid;
 
-        // Load thumbnail in background thread
-        new Thread(() -> {
+        // Keep extraction work bounded when a long combined list is scrolled quickly.
+        ARCHIVE_THUMBNAIL_EXECUTOR.execute(() -> {
+            Bitmap thumbnail = null;
             try {
-                Bitmap thumbnail = extractFirstImageFromArchive(archiveUri);
-                mScene.runOnUiThread(() -> {
-                    if (thumbnail != null && !thumbnail.isRecycled()) {
-                        // Cache the thumbnail
-                        thumbnailCache.put(uriString, thumbnail);
-                        thumb.setImageBitmap(thumbnail);
-                    } else {
-                        // If extraction fails, check if we have a previous cached thumbnail
-                        Bitmap fallbackThumbnail = thumbnailCache.get(uriString);
-                        if (fallbackThumbnail != null && !fallbackThumbnail.isRecycled()) {
-                            thumb.setImageBitmap(fallbackThumbnail);
-                        }
-                        // Otherwise keep the default archive icon that was already set
-                    }
-                });
+                thumbnail = extractFirstImageFromArchive(archiveUri);
+                if (thumbnail != null && !thumbnail.isRecycled()) {
+                    ARCHIVE_THUMBNAIL_CACHE.put(uriString, thumbnail);
+                }
             } catch (Exception e) {
                 Log.e(TAG, "Failed to load archive thumbnail for " + uriString, e);
-                // Keep the default icon that was already set - no need to change anything
+            } finally {
+                LOADING_ARCHIVE_THUMBNAILS.remove(uriString);
             }
-        }).start();
+            Bitmap result = thumbnail;
+            mScene.runOnUiThread(() -> {
+                if (result != null && !result.isRecycled()
+                        && uriString.equals(holder.boundArchiveUri)) {
+                    thumb.setImageBitmap(result);
+                }
+                if (result != null && !result.isRecycled()) {
+                    int position = mCallback.getAdapterPositionForGallery(requestedGid);
+                    if (position >= 0) {
+                        notifyItemChanged(position);
+                    }
+                }
+            });
+        });
     }
 
     private Bitmap extractFirstImageFromArchive(Uri archiveUri) {
@@ -653,8 +808,39 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
         return null;
     }
 
+    private class LabelHeaderHolder extends AbstractDraggableItemViewHolder {
+
+        final TextView label;
+        final TextView count;
+        final View headerContent;
+        final TextView collapsedAction;
+        int boundPosition = RecyclerView.NO_POSITION;
+
+        LabelHeaderHolder(@NonNull View itemView) {
+            super(itemView);
+            label = itemView.findViewById(R.id.label);
+            count = itemView.findViewById(R.id.count);
+            headerContent = itemView.findViewById(R.id.header_content);
+            collapsedAction = itemView.findViewById(R.id.collapsed_action);
+            headerContent.setOnClickListener(view -> {
+                if (boundPosition != RecyclerView.NO_POSITION) {
+                    mCallback.onLabelHeaderClick(boundPosition);
+                }
+            });
+            headerContent.setOnLongClickListener(view -> boundPosition != RecyclerView.NO_POSITION
+                    && mCallback.onLabelHeaderLongClick(boundPosition));
+            collapsedAction.setOnClickListener(view -> {
+                if (boundPosition != RecyclerView.NO_POSITION) {
+                    mCallback.onCollapsedLabelClick(boundPosition);
+                }
+            });
+        }
+    }
+
     public class DownloadHolder extends AbstractDraggableItemViewHolder implements View.OnClickListener {
 
+        long boundGid = -1L;
+        String boundArchiveUri;
         public final LoadImageView thumb;
         public final TextView title;
         public final TextView uploader;
@@ -707,12 +893,13 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
             }
             int size = list.size();
             int index = recyclerView.getChildAdapterPosition(itemView);
-            if (index < 0 || index >= size) {
+            int listPosition = mCallback.positionInList(index);
+            if (index < 0 || listPosition < 0 || listPosition >= size) {
                 return;
             }
 
             if (thumb == v) {
-                DownloadInfo currentInfo = list.get(mScene.positionInList(index));
+                DownloadInfo currentInfo = list.get(listPosition);
                 if (currentInfo.archiveUri != null && currentInfo.archiveUri.startsWith("content://")) {
                     // Show info dialog for imported archive
                     String message = mScene.getString(R.string.imported_archive_info_message) + "\n\n" + currentInfo.archiveUri;
@@ -725,14 +912,15 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
                     // Normal behavior for regular downloads
                     Bundle args = new Bundle();
                     args.putString(GalleryDetailScene.KEY_ACTION, GalleryDetailScene.ACTION_DOWNLOAD_GALLERY_INFO);
-                    args.putParcelable(GalleryDetailScene.KEY_GALLERY_INFO, list.get(mCallback.positionInList(index)));
+                    args.putParcelable(GalleryDetailScene.KEY_GALLERY_INFO,
+                            list.get(listPosition));
                     Announcer announcer = new Announcer(GalleryDetailScene.class).setArgs(args);
                     announcer.setTranHelper(new EnterGalleryDetailTransaction(thumb));
                     mScene.startScene(announcer);
                 }
 
             } else if (start == v) {
-                final DownloadInfo info = list.get(mCallback.positionInList(index));
+                final DownloadInfo info = list.get(listPosition);
                 Intent intent = new Intent(context, DownloadService.class);
                 intent.setAction(DownloadService.ACTION_START);
                 intent.putExtra(DownloadService.KEY_GALLERY_INFO, info);
@@ -740,7 +928,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<DownloadAdapter.Downlo
             } else if (stop == v) {
                 DownloadManager downloadManager = mCallback.getDownloadManager();
                 if (null != downloadManager) {
-                    downloadManager.stopDownload(list.get(mCallback.positionInList(index)).gid);
+                    downloadManager.stopDownload(list.get(listPosition).gid);
                 }
             }
         }

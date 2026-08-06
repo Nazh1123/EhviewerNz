@@ -23,16 +23,20 @@ class DownloadSpiderInfoExecutor(
 
     fun execute() {
         service.execute(Runnable {
-            for (i in mList.indices) {
-                val info = mList.get(i)
-                resultMap.put(info.gid, getSpiderInfo(info))
-            }
-            handler.post(Runnable {
-                if (callBack == null) {
-                    return@Runnable
+            try {
+                for (i in mList.indices) {
+                    val info = mList[i]
+                    resultMap[info.gid] = getSpiderInfo(info)
                 }
-                callBack.resultCallBack(resultMap)
-            })
+            } finally {
+                handler.post(Runnable {
+                    try {
+                        callBack?.resultCallBack(resultMap)
+                    } finally {
+                        service.shutdown()
+                    }
+                })
+            }
         })
     }
 

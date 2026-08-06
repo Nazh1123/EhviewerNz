@@ -469,6 +469,7 @@
     <!-- Download -->
     <string name="scene_download_title">%s Galleries - %s</string>
     <string name="scene_download_title_new">%s(%s)</string>
+    <string name="scene_download_continuous_title">Downloads (%d)</string>
     <string name="no_download_info">Download items will be shown here</string>
     <string name="download_state_none">Idle</string>
     <string name="download_state_wait">Waiting</string>
@@ -496,6 +497,9 @@
     <string name="stat_download_action_stop_all">Stop all</string>
     <string name="drawer_download_label_title">Label</string>
     <string name="default_download_label_name">Default</string>
+    <string name="default_download_label_cannot_rename">The default download label cannot be renamed</string>
+    <string name="download_label_collapsed_action">%d galleries collapsed; tap to view this label</string>
+    <string name="download_label_search_unsupported">This label does not support gallery search</string>
     <string name="download_move_dialog_title">Move</string>
     <string name="quick_organize">Quick organize</string>
     <string name="quick_organize_processing">Organizing selected galleries…</string>
@@ -529,6 +533,7 @@
     <string name="download_stop_all">Stop all</string>
     <string name="download_reset_reading_progress">Reset reading progress</string>
     <string name="download_search_gallery">Search gallery</string>
+    <string name="download_toggle_list_mode">Toggle List Mode</string>
     <string name="download_search_hint">Input search key</string>
     <string name="reset_reading_progress_message">Reset the reading progress of all downloaded galleries?</string>
     <string name="download_service_label">EhViewer Download Service</string>
@@ -785,6 +790,8 @@
     <string name="settings_search_language">Search Language Tag</string>
     <string name="settings_fork_features">Fork Extra Features</string>
     <string name="settings_fork_delete_empty_galleries">Delete Empty Galleries</string>
+    <string name="settings_fork_download_label_continuous_browse">Continuous Download Label Browsing</string>
+    <string name="settings_fork_download_label_continuous_browse_summary">Show every download label and its galleries continuously from top to bottom, replacing the original single-label browsing mode</string>
     <string name="settings_fork_gallery_immediate_jump">Immediate gallery jump</string>
     <string name="settings_fork_long_press_save_summary">Long-press the next-page area to save the current image locally</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Automatically turn to the next page after a long-press save</string>

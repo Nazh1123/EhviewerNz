@@ -406,6 +406,10 @@
     <string name="stat_download_action_stop_all">全部停止</string>
     <string name="drawer_download_label_title">标签</string>
     <string name="default_download_label_name">默认</string>
+    <string name="scene_download_continuous_title">下载（%d）</string>
+    <string name="default_download_label_cannot_rename">默认下载标签无法重命名</string>
+    <string name="download_label_collapsed_action">已折叠 %d 个画廊；点击查看该标签</string>
+    <string name="download_label_search_unsupported">该标签不支持画廊搜索</string>
     <string name="download_move_dialog_title">移动</string>
     <string name="quick_organize">快速收纳</string>
     <string name="quick_organize_processing">正在收纳选中的画廊…</string>
@@ -438,6 +442,7 @@
     <string name="download_stop_all">全部停止</string>
     <string name="download_reset_reading_progress">重置阅读进度</string>
     <string name="download_search_gallery">搜索画廊</string>
+    <string name="download_toggle_list_mode">切换列表模式</string>
     <string name="download_search_hint">输入关键字</string>
     <string name="reset_reading_progress_message">重置所有已下载画廊的阅读进度？</string>
     <string name="download_service_label">EhViewer 下载服务</string>
@@ -694,6 +699,8 @@
     <string name="settings_search_language">搜索语言项</string>
     <string name="settings_fork_features">Fork额外功能</string>
     <string name="settings_fork_delete_empty_galleries">删除空画廊</string>
+    <string name="settings_fork_download_label_continuous_browse">下载标签连续浏览</string>
+    <string name="settings_fork_download_label_continuous_browse_summary">在一个页面中按标签从上到下连续显示下载画廊，并替换原有的单标签浏览模式</string>
     <string name="settings_fork_auto_subscription_updates">自动获取订阅更新</string>
     <string name="settings_fork_auto_subscription_updates_summary">至少每一个小时获取订阅内容的更新画廊数量</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH 订阅</string>

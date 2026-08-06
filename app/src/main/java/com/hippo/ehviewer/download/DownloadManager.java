@@ -1008,18 +1008,18 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
 
         LinkedList<DownloadInfo> list = mMap.remove(from);
-        if (list == null) {
-            return;
+        if (list != null) {
+            // Update info label
+            for (DownloadInfo info : list) {
+                info.label = to;
+                // Update in DB
+                EhDB.putDownloadInfo(info);
+            }
+            // Put list back with new label
+            mMap.put(to, list);
         }
-
-        // Update info label
-        for (DownloadInfo info : list) {
-            info.label = to;
-            // Update in DB
-            EhDB.putDownloadInfo(info);
-        }
-        // Put list back with new label
-        mMap.put(to, list);
+        Long count = mLabelCountMap.remove(from);
+        mLabelCountMap.put(to, count != null ? count : 0L);
 
         // Notify listener
         for (DownloadInfoListener l : mDownloadInfoListeners) {

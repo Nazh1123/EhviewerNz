@@ -36,6 +36,7 @@ import android.graphics.drawable.NinePatchDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.view.Display;
@@ -47,6 +48,7 @@ import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -73,6 +75,7 @@ import com.h6ah4i.android.widget.advrecyclerview.animator.GeneralItemAnimator;
 import com.h6ah4i.android.widget.advrecyclerview.draggable.RecyclerViewDragDropManager;
 import com.hippo.android.resource.AttrResources;
 import com.hippo.app.CheckBoxDialogBuilder;
+import com.hippo.app.EditTextDialogBuilder;
 import com.hippo.drawable.AddDeleteDrawable;
 import com.hippo.drawerlayout.DrawerLayout;
 import com.hippo.easyrecyclerview.EasyRecyclerView;
@@ -90,11 +93,13 @@ import com.hippo.ehviewer.client.EhEngine;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
+import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
 import com.hippo.ehviewer.dao.GalleryTags;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadQuickOrganizer;
+import com.hippo.ehviewer.download.DownloadLabelSearchQueryResolver;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
 import com.hippo.ehviewer.spider.SpiderInfo;
@@ -106,6 +111,7 @@ import com.hippo.ehviewer.ui.annotation.ViewLifeCircle;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadAdapter;
 import com.hippo.ehviewer.ui.scene.download.part.MyPageChangeListener;
+import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
 import com.hippo.ehviewer.widget.MyEasyRecyclerView;
 import com.hippo.ehviewer.widget.SearchBar;
 import com.hippo.lib.yorozuya.AssertUtils;
@@ -113,6 +119,7 @@ import com.hippo.lib.yorozuya.ObjectUtils;
 import com.hippo.lib.yorozuya.ViewUtils;
 import com.hippo.lib.yorozuya.collect.LongList;
 import com.hippo.ripple.Ripple;
+import com.hippo.scene.Announcer;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.DrawableManager;
 import com.hippo.util.ExceptionUtils;
@@ -132,12 +139,14 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 public class DownloadsScene extends ToolbarScene
         implements DownloadManager.DownloadInfoListener, DownloadSearchCallback,
@@ -150,7 +159,8 @@ public class DownloadsScene extends ToolbarScene
     public static final String KEY_GID = "gid";
 
     public static final String KEY_ACTION = "action";
-    private static final String KEY_LABEL = "label";
+    static final String KEY_LABEL = "label";
+    static final String KEY_FORCE_SINGLE_LABEL_MODE = "force_single_label_mode";
 
     public static final String ACTION_CLEAR_DOWNLOAD_SERVICE = "clear_download_service";
 
@@ -158,6 +168,7 @@ public class DownloadsScene extends ToolbarScene
 
     private static final long ANIMATE_TIME = 300L;
     private static final int FAB_QUICK_ORGANIZE = 7;
+    private static final int CONTINUOUS_LABEL_EXPAND_LIMIT = 50;
 
     @Nullable
     private AddDeleteDrawable mActionFabDrawable;
@@ -174,6 +185,49 @@ public class DownloadsScene extends ToolbarScene
     private List<DownloadInfo> mList;
     @Nullable
     private List<DownloadInfo> mBackList;
+    private boolean mContinuousLabelBrowse;
+    private boolean mForceSingleLabelBrowse;
+    private final List<ContinuousDownloadItem> mContinuousItems = new ArrayList<>();
+    private final Map<Long, Integer> mContinuousGalleryPositions = new HashMap<>();
+    private final Map<String, Integer> mContinuousHeaderPositions = new HashMap<>();
+
+    private static final class ContinuousDownloadItem {
+        final boolean header;
+        @Nullable
+        final String label;
+        @Nullable
+        final String title;
+        @Nullable
+        final DownloadInfo downloadInfo;
+        final int galleryIndex;
+        final int galleryCount;
+        final boolean collapsed;
+        final long stableId;
+
+        private ContinuousDownloadItem(boolean header, @Nullable String label,
+                @Nullable String title, @Nullable DownloadInfo downloadInfo,
+                int galleryIndex, int galleryCount, boolean collapsed, long stableId) {
+            this.header = header;
+            this.label = label;
+            this.title = title;
+            this.downloadInfo = downloadInfo;
+            this.galleryIndex = galleryIndex;
+            this.galleryCount = galleryCount;
+            this.collapsed = collapsed;
+            this.stableId = stableId;
+        }
+
+        static ContinuousDownloadItem header(@Nullable String label, String title,
+                int galleryCount, boolean collapsed, long stableId) {
+            return new ContinuousDownloadItem(true, label, title, null,
+                    -1, galleryCount, collapsed, stableId);
+        }
+
+        static ContinuousDownloadItem gallery(DownloadInfo info, int galleryIndex) {
+            return new ContinuousDownloadItem(false, info.label, null, info,
+                    galleryIndex, 0, false, info.gid);
+        }
+    }
 
     /*---------------
      List pagination
@@ -189,6 +243,7 @@ public class DownloadsScene extends ToolbarScene
     private MyPageChangeListener myPageChangeListener;
 
     private final Map<Long, SpiderInfo> mSpiderInfoMap = new HashMap<>();
+    private final Set<Long> mSpiderInfoRequested = new HashSet<>();
 
     /*---------------
      View life cycle
@@ -227,6 +282,8 @@ public class DownloadsScene extends ToolbarScene
     public String searchKey = null;
 
     private int mInitPosition = -1;
+    private int mContinuousRestorePosition = RecyclerView.NO_POSITION;
+    private int mContinuousRestoreOffset;
 
     public boolean searching = false;
     private boolean doNotScroll = false;
@@ -262,6 +319,13 @@ public class DownloadsScene extends ToolbarScene
 
         if (ACTION_CLEAR_DOWNLOAD_SERVICE.equals(args.getString(KEY_ACTION))) {
             DownloadService.Companion.clear();
+        }
+
+        if (args.containsKey(KEY_LABEL)) {
+            mLabel = args.getString(KEY_LABEL);
+            updateForLabel();
+            updateView();
+            return true;
         }
 
         long gid;
@@ -300,6 +364,11 @@ public class DownloadsScene extends ToolbarScene
         AssertUtils.assertNotNull(context);
         mDownloadManager = EhApplication.getDownloadManager(context);
         mDownloadManager.addDownloadInfoListener(this);
+        Bundle args = getArguments();
+        mForceSingleLabelBrowse = args != null
+                && args.getBoolean(KEY_FORCE_SINGLE_LABEL_MODE, false);
+        mContinuousLabelBrowse = !mForceSingleLabelBrowse
+                && Settings.getDownloadLabelContinuousBrowse();
         canPagination = Settings.getDownloadPagination();
         if (savedInstanceState == null) {
             onInit();
@@ -338,7 +407,20 @@ public class DownloadsScene extends ToolbarScene
             return;
         }
 
-        if (mLabel == null) {
+        if (mContinuousLabelBrowse) {
+            mLabel = null;
+            List<DownloadInfo> allDownloads = new ArrayList<>(
+                    mDownloadManager.getAllDownloadInfoList().size());
+            allDownloads.addAll(mDownloadManager.getDefaultDownloadInfoList());
+            for (DownloadLabel label : mDownloadManager.getLabelList()) {
+                List<DownloadInfo> downloads =
+                        mDownloadManager.getLabelDownloadInfoList(label.getLabel());
+                if (downloads != null) {
+                    allDownloads.addAll(downloads);
+                }
+            }
+            rebuildContinuousItems(allDownloads, true);
+        } else if (mLabel == null) {
             mList = mDownloadManager.getDefaultDownloadInfoList();
         } else {
             mList = mDownloadManager.getLabelDownloadInfoList(mLabel);
@@ -351,19 +433,104 @@ public class DownloadsScene extends ToolbarScene
         if (mAdapter != null) {
             mAdapter.notifyDataSetChanged();
         }
-        mBackList = mList;
+        mBackList = mContinuousLabelBrowse && mList != null
+                ? new ArrayList<>(mList) : mList;
 //        filterByCategory();
         updateTitle();
         updatePaginationIndicator();
-        Settings.putRecentDownloadLabel(mLabel);
+        if (!mContinuousLabelBrowse) {
+            Settings.putRecentDownloadLabel(mLabel);
+        }
         queryUnreadSpiderInfo();
+    }
+
+    private void rebuildContinuousItems(@NonNull List<DownloadInfo> source,
+            boolean includeEmptyLabels) {
+        if (!mContinuousLabelBrowse || mDownloadManager == null) {
+            mList = source;
+            return;
+        }
+
+        Map<String, List<DownloadInfo>> downloadsByLabel = new LinkedHashMap<>();
+        downloadsByLabel.put(null, new ArrayList<>());
+        List<DownloadLabel> labels = mDownloadManager.getLabelList();
+        for (DownloadLabel label : labels) {
+            downloadsByLabel.put(label.getLabel(), new ArrayList<>());
+        }
+        for (DownloadInfo info : source) {
+            downloadsByLabel.computeIfAbsent(info.label, ignored -> new ArrayList<>())
+                    .add(info);
+        }
+
+        mContinuousItems.clear();
+        mContinuousGalleryPositions.clear();
+        mContinuousHeaderPositions.clear();
+        List<DownloadInfo> orderedDownloads = new ArrayList<>(source.size());
+
+        List<DownloadInfo> defaultDownloads = downloadsByLabel.remove(null);
+        if (defaultDownloads == null) {
+            defaultDownloads = Collections.emptyList();
+        }
+        if (!defaultDownloads.isEmpty() || (includeEmptyLabels && !labels.isEmpty())) {
+            appendContinuousSection(null,
+                    getString(R.string.default_download_label_name),
+                    Long.MIN_VALUE, defaultDownloads, orderedDownloads);
+        }
+
+        for (DownloadLabel label : labels) {
+            String labelName = label.getLabel();
+            List<DownloadInfo> downloads = downloadsByLabel.remove(labelName);
+            if (downloads == null) {
+                downloads = Collections.emptyList();
+            }
+            if (includeEmptyLabels || !downloads.isEmpty()) {
+                Long labelId = label.getId();
+                long stableId = labelId != null
+                        ? Long.MIN_VALUE + labelId + 1L
+                        : Long.MIN_VALUE / 2L + labelName.hashCode();
+                appendContinuousSection(labelName, labelName, stableId,
+                        downloads, orderedDownloads);
+            }
+        }
+
+        for (Map.Entry<String, List<DownloadInfo>> entry : downloadsByLabel.entrySet()) {
+            if (!entry.getValue().isEmpty()) {
+                String labelName = entry.getKey();
+                String title = labelName != null ? labelName
+                        : getString(R.string.default_download_label_name);
+                long stableId = Long.MIN_VALUE / 2L + title.hashCode();
+                appendContinuousSection(labelName, title, stableId,
+                        entry.getValue(), orderedDownloads);
+            }
+        }
+        mList = orderedDownloads;
+    }
+
+    private void appendContinuousSection(@Nullable String label, @NonNull String title,
+            long stableId, @NonNull List<DownloadInfo> downloads,
+            @NonNull List<DownloadInfo> orderedDownloads) {
+        int headerPosition = mContinuousItems.size();
+        mContinuousHeaderPositions.put(label, headerPosition);
+        boolean collapsed = downloads.size() > CONTINUOUS_LABEL_EXPAND_LIMIT;
+        mContinuousItems.add(ContinuousDownloadItem.header(
+                label, title, downloads.size(), collapsed, stableId));
+        for (DownloadInfo info : downloads) {
+            int galleryIndex = orderedDownloads.size();
+            orderedDownloads.add(info);
+            if (collapsed) {
+                continue;
+            }
+            int adapterPosition = mContinuousItems.size();
+            mContinuousGalleryPositions.put(info.gid, adapterPosition);
+            mContinuousItems.add(ContinuousDownloadItem.gallery(info, galleryIndex));
+        }
     }
 
     private void updatePaginationIndicator() {
         if (mPaginationIndicator == null || mList == null) {
             return;
         }
-        if (mList.size() < paginationSize || !canPagination) {
+        if (mContinuousLabelBrowse || mList.size() < paginationSize || !canPagination) {
             mPaginationIndicator.setVisibility(View.GONE);
             return;
         }
@@ -384,6 +551,11 @@ public class DownloadsScene extends ToolbarScene
 
     @SuppressLint("StringFormatMatches")
     private void updateTitle() {
+        if (mContinuousLabelBrowse) {
+            setTitle(getString(R.string.scene_download_continuous_title,
+                    mList == null ? 0 : mList.size()));
+            return;
+        }
         try {
             setTitle(getString(R.string.scene_download_title_new,
                     mLabel != null ? mLabel : getString(R.string.default_download_label_name),
@@ -555,15 +727,18 @@ public class DownloadsScene extends ToolbarScene
         final GeneralItemAnimator animator = new DraggableItemAnimator();
         mRecyclerView.setItemAnimator(animator);
 
-        mRecyclerView.setItemViewCacheSize(100);
-        try {
-            mRecyclerView.setDrawingCacheEnabled(true);
-            mRecyclerView.setDrawingCacheQuality(View.DRAWING_CACHE_QUALITY_HIGH);
-        } catch (Exception e) {
-            // 忽略硬件位图相关错误
-            android.util.Log.w("DownloadsScene", "Error setting drawing cache: " + e.getMessage());
-        }
+        // Keep a small pool of nearby cards. A large View/drawing cache retains too many
+        // thumbnails in continuous mode and competes with the image cache for memory.
+        mRecyclerView.setItemViewCacheSize(24);
         mRecyclerView.setLayoutManager(mLayoutManager);
+        mRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                if (mContinuousLabelBrowse) {
+                    queryVisibleSpiderInfo();
+                }
+            }
+        });
         mRecyclerView.setSelector(Ripple.generateRippleDrawable(context, !AttrResources.getAttrBoolean(context, androidx.appcompat.R.attr.isLightTheme), new ColorDrawable(Color.TRANSPARENT)));
         mRecyclerView.setDrawSelectorOnTop(true);
         mRecyclerView.setClipToPadding(false);
@@ -594,9 +769,14 @@ public class DownloadsScene extends ToolbarScene
             }
         }
 
-        if (mInitPosition >= 0 && indexPage != 1) {
-            initPage(mInitPosition);
-            mRecyclerView.scrollToPosition(listIndexInPage(mInitPosition));
+        if (mInitPosition >= 0) {
+            if (!mContinuousLabelBrowse && indexPage != 1) {
+                initPage(mInitPosition);
+            }
+            int adapterPosition = listIndexInPage(mInitPosition);
+            if (adapterPosition >= 0) {
+                mRecyclerView.scrollToPosition(adapterPosition);
+            }
             mInitPosition = -1;
         }
 
@@ -605,6 +785,7 @@ public class DownloadsScene extends ToolbarScene
         handlerDrawable.setColor(AttrResources.getAttrColor(context, R.attr.widgetColorThemeAccent));
         fastScroller.setHandlerDrawable(handlerDrawable);
         fastScroller.setOnDragHandlerListener(this);
+        mRecyclerView.post(this::queryVisibleSpiderInfo);
 
         mFabLayout.setExpanded(false, true);
         mFabLayout.setHidePrimaryFab(false);
@@ -808,6 +989,16 @@ public class DownloadsScene extends ToolbarScene
                 gotoSearch(context);
                 return true;
             }
+            case R.id.action_toggle_download_list_mode:
+                if (mForceSingleLabelBrowse) {
+                    Settings.setDownloadLabelContinuousBrowse(true);
+                    onBackPressed();
+                    return true;
+                }
+                boolean continuousLabelBrowse = !mContinuousLabelBrowse;
+                Settings.setDownloadLabelContinuousBrowse(continuousLabelBrowse);
+                applyDownloadListMode(continuousLabelBrowse);
+                return true;
             case R.id.all:
             case R.id.sort_by_default:
             case R.id.download_done:
@@ -919,7 +1110,10 @@ public class DownloadsScene extends ToolbarScene
 
     public void updateView() {
         if (mViewTransition != null) {
-            if (mList == null || mList.size() == 0) {
+            boolean empty = mContinuousLabelBrowse
+                    ? mContinuousItems.isEmpty()
+                    : mList == null || mList.isEmpty();
+            if (empty) {
                 mViewTransition.showView(1);
             } else {
                 mViewTransition.showView(0);
@@ -972,6 +1166,10 @@ public class DownloadsScene extends ToolbarScene
             return false;
         }
 
+        if (mContinuousLabelBrowse && isLabelHeaderPosition(position)) {
+            return true;
+        }
+
         if (recyclerView.isInCustomChoice()) {
             recyclerView.toggleItemChecked(position);
             return true;
@@ -980,11 +1178,12 @@ public class DownloadsScene extends ToolbarScene
             if (list == null) {
                 return false;
             }
-            if (position < 0 || position >= list.size()) {
+            int listPosition = positionInList(position);
+            if (listPosition < 0 || listPosition >= list.size()) {
                 return false;
             }
 
-            DownloadInfo downloadInfo = list.get(positionInList(position));
+            DownloadInfo downloadInfo = list.get(listPosition);
             Intent intent = new Intent(activity, GalleryActivity.class);
             // Check if this is an imported archive
             if (downloadInfo.archiveUri != null && downloadInfo.archiveUri.startsWith("content://")) {
@@ -1032,12 +1231,99 @@ public class DownloadsScene extends ToolbarScene
             return false;
         }
 
+        if (mContinuousLabelBrowse && isLabelHeaderPosition(position)) {
+            return true;
+        }
+
         if (!recyclerView.isInCustomChoice()) {
             recyclerView.intoCustomChoiceMode();
         }
         recyclerView.toggleItemChecked(position);
 
         return true;
+    }
+
+    private void showRenameContinuousLabelDialog(@Nullable String originalLabel) {
+        Context context = getEHContext();
+        if (context == null) {
+            return;
+        }
+        if (originalLabel == null) {
+            Toast.makeText(context, R.string.default_download_label_cannot_rename,
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        EditTextDialogBuilder builder = new EditTextDialogBuilder(
+                context, originalLabel, getString(R.string.download_labels));
+        builder.setTitle(R.string.rename_label_title);
+        builder.setPositiveButton(android.R.string.ok, null);
+        AlertDialog dialog = builder.show();
+        Button positive = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+        if (positive == null) {
+            return;
+        }
+        positive.setOnClickListener(view -> {
+            String text = builder.getText();
+            if (TextUtils.isEmpty(text)) {
+                builder.setError(getString(R.string.label_text_is_empty));
+            } else if (getString(R.string.default_download_label_name).equals(text)) {
+                builder.setError(getString(R.string.label_text_is_invalid));
+            } else if (originalLabel.equals(text)) {
+                dialog.dismiss();
+            } else if (mDownloadManager != null && mDownloadManager.containLabel(text)) {
+                builder.setError(getString(R.string.label_text_exist));
+            } else if (mDownloadManager != null) {
+                builder.setError(null);
+                dialog.dismiss();
+                mDownloadManager.renameLabel(originalLabel, text);
+            }
+        });
+    }
+
+    @Override
+    public void onLabelHeaderClick(int position) {
+        MyEasyRecyclerView recyclerView = mRecyclerView;
+        if (!mContinuousLabelBrowse || recyclerView == null
+                || recyclerView.isInCustomChoice() || !isLabelHeaderPosition(position)) {
+            return;
+        }
+        showRenameContinuousLabelDialog(mContinuousItems.get(position).label);
+    }
+
+    @Override
+    public boolean onLabelHeaderLongClick(int position) {
+        if (!mContinuousLabelBrowse || !isLabelHeaderPosition(position)) {
+            return false;
+        }
+        String query = DownloadLabelSearchQueryResolver.resolve(
+                mContinuousItems.get(position).label);
+        if (query == null) {
+            Context context = getEHContext();
+            if (context != null) {
+                Toast.makeText(context, R.string.download_label_search_unsupported,
+                        Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        }
+        rememberContinuousScrollPosition();
+        ListUrlBuilder builder = new ListUrlBuilder();
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword(query);
+        GalleryListScene.startScene(this, builder);
+        return true;
+    }
+
+    @Override
+    public void onCollapsedLabelClick(int position) {
+        if (!mContinuousLabelBrowse || !isLabelHeaderCollapsed(position)) {
+            return;
+        }
+        rememberContinuousScrollPosition();
+        Bundle args = new Bundle();
+        args.putBoolean(KEY_FORCE_SINGLE_LABEL_MODE, true);
+        args.putString(KEY_LABEL, mContinuousItems.get(position).label);
+        startScene(new Announcer(SingleLabelDownloadsScene.class).setArgs(args));
     }
 
     @SuppressLint("RtlHardcoded")
@@ -1082,6 +1368,15 @@ public class DownloadsScene extends ToolbarScene
 
         if (0 == position) {
             recyclerView.checkAll();
+            if (mContinuousLabelBrowse) {
+                SparseBooleanArray checked = recyclerView.getCheckedItemPositions();
+                for (int i = checked.size() - 1; i >= 0; i--) {
+                    int adapterPosition = checked.keyAt(i);
+                    if (checked.valueAt(i) && isLabelHeaderPosition(adapterPosition)) {
+                        recyclerView.toggleItemChecked(adapterPosition);
+                    }
+                }
+            }
         } else {
             List<DownloadInfo> list = mList;
             if (list == null) {
@@ -1103,7 +1398,11 @@ public class DownloadsScene extends ToolbarScene
             SparseBooleanArray stateArray = recyclerView.getCheckedItemPositions();
             for (int i = 0, n = stateArray.size(); i < n; i++) {
                 if (stateArray.valueAt(i)) {
-                    DownloadInfo info = list.get(positionInList(stateArray.keyAt(i)));
+                    int listPosition = positionInList(stateArray.keyAt(i));
+                    if (listPosition < 0 || listPosition >= list.size()) {
+                        continue;
+                    }
+                    DownloadInfo info = list.get(listPosition);
                     if (collectDownloadInfo) {
                         downloadInfoList.add(info);
                     }
@@ -1193,6 +1492,39 @@ public class DownloadsScene extends ToolbarScene
                             new ArrayList<>(downloadInfoList));
                     break;
             }
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        boolean continuousLabelBrowse = !mForceSingleLabelBrowse
+                && Settings.getDownloadLabelContinuousBrowse();
+        if (continuousLabelBrowse != mContinuousLabelBrowse) {
+            applyDownloadListMode(continuousLabelBrowse);
+        }
+        restoreContinuousScrollPosition();
+    }
+
+    private void applyDownloadListMode(boolean continuousLabelBrowse) {
+        mContinuousLabelBrowse = continuousLabelBrowse;
+        mLabel = null;
+        searchKey = null;
+        mSelectedCategory = EhUtils.ALL_CATEGORY;
+        indexPage = 1;
+        if (mCategorySpinner != null) {
+            mCategorySpinner.setSelection(0);
+        }
+        if (mRecyclerView != null && mRecyclerView.isInCustomChoice()) {
+            mRecyclerView.outOfCustomChoiceMode();
+        }
+        updateForLabel();
+        updateView();
+        if (mLayoutManager != null) {
+            mLayoutManager.scrollToPositionWithOffset(0, 0);
+        }
+        if (downloadLabelDraw != null) {
+            downloadLabelDraw.updateDownloadLabels();
         }
     }
 
@@ -1314,6 +1646,10 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onAdd(@NonNull DownloadInfo info, @NonNull List<DownloadInfo> list, int position) {
+        if (mContinuousLabelBrowse) {
+            refreshContinuousStructure();
+            return;
+        }
         if (mList != list) {
             return;
         }
@@ -1329,6 +1665,17 @@ public class DownloadsScene extends ToolbarScene
     @Override
     public void onReplace(@NonNull DownloadInfo newInfo, @NonNull DownloadInfo oldInfo) {
         if (mList == null) {
+            return;
+        }
+        if (mContinuousLabelBrowse) {
+            mList = new ArrayList<>(mList);
+            for (int i = 0; i < mList.size(); i++) {
+                if (mList.get(i).gid == oldInfo.gid) {
+                    mList.set(i, newInfo);
+                    break;
+                }
+            }
+            refreshContinuousStructure();
             return;
         }
         updateForLabel();
@@ -1347,12 +1694,18 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onUpdate(@NonNull DownloadInfo info, @NonNull List<DownloadInfo> list, LinkedList<DownloadInfo> mWaitList) {
-        if (mList != list && !mList.contains(info)) {
+        if (mList == null || (mList != list && !mList.contains(info))) {
             return;
+        }
+        if (mContinuousLabelBrowse && info.state == DownloadInfo.STATE_FINISH) {
+            requestSpiderInfo(Collections.singletonList(info));
         }
         int index = mList.indexOf(info);
         if (index >= 0 && mAdapter != null) {
-            mAdapter.notifyItemChanged(listIndexInPage(index));
+            int adapterPosition = listIndexInPage(index);
+            if (adapterPosition >= 0) {
+                mAdapter.notifyItemChanged(adapterPosition);
+            }
         }
     }
 
@@ -1367,6 +1720,10 @@ public class DownloadsScene extends ToolbarScene
     @SuppressLint("NotifyDataSetChanged")
     @Override
     public void onReload() {
+        if (mContinuousLabelBrowse) {
+            refreshContinuousStructure();
+            return;
+        }
         if (mAdapter != null) {
             mAdapter.notifyDataSetChanged();
         }
@@ -1375,6 +1732,10 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onChange() {
+        if (mContinuousLabelBrowse) {
+            refreshContinuousStructure();
+            return;
+        }
         mLabel = null;
         updateForLabel();
         updateView();
@@ -1382,6 +1743,13 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onRenameLabel(String from, String to) {
+        if (mContinuousLabelBrowse) {
+            refreshContinuousStructure();
+            if (downloadLabelDraw != null) {
+                downloadLabelDraw.updateDownloadLabels();
+            }
+            return;
+        }
         if (!ObjectUtils.equal(mLabel, from)) {
             return;
         }
@@ -1389,10 +1757,21 @@ public class DownloadsScene extends ToolbarScene
         mLabel = to;
         updateForLabel();
         updateView();
+        if (downloadLabelDraw != null) {
+            downloadLabelDraw.updateDownloadLabels();
+        }
     }
 
     @Override
     public void onRemove(@NonNull DownloadInfo info, @NonNull List<DownloadInfo> list, int position) {
+        if (mContinuousLabelBrowse) {
+            if (mList != null) {
+                mList = new ArrayList<>(mList);
+                mList.remove(info);
+            }
+            refreshContinuousStructure();
+            return;
+        }
         if (mList != list) {
             return;
         }
@@ -1404,6 +1783,40 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onUpdateLabels() {
+        if (mContinuousLabelBrowse) {
+            refreshContinuousStructure();
+        }
+        if (downloadLabelDraw != null) {
+            downloadLabelDraw.updateDownloadLabels();
+        }
+    }
+
+    private void refreshContinuousStructure() {
+        if (!mContinuousLabelBrowse || mDownloadManager == null) {
+            return;
+        }
+        boolean unfiltered = TextUtils.isEmpty(searchKey)
+                && mSelectedCategory == EhUtils.ALL_CATEGORY;
+        if (unfiltered) {
+            updateForLabel();
+        } else {
+            if (mList == null) {
+                mList = new ArrayList<>();
+            } else {
+                mList = new ArrayList<>(mList);
+                for (int i = mList.size() - 1; i >= 0; i--) {
+                    if (mDownloadManager.getDownloadInfo(mList.get(i).gid) == null) {
+                        mList.remove(i);
+                    }
+                }
+            }
+            rebuildContinuousItems(mList, false);
+            if (mAdapter != null) {
+                mAdapter.notifyDataSetChanged();
+            }
+            updateTitle();
+            updateView();
+        }
         if (downloadLabelDraw != null) {
             downloadLabelDraw.updateDownloadLabels();
         }
@@ -1432,11 +1845,18 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public boolean isCanPagination() {
-        return canPagination;
+        return canPagination && !mContinuousLabelBrowse;
     }
 
     @Override
     public int positionInList(int position) {
+        if (mContinuousLabelBrowse) {
+            if (position < 0 || position >= mContinuousItems.size()) {
+                return -1;
+            }
+            ContinuousDownloadItem item = mContinuousItems.get(position);
+            return item.header ? -1 : item.galleryIndex;
+        }
         if (mList != null && mList.size() > paginationSize && canPagination) {
             return position + pageSize * (indexPage - 1);
         }
@@ -1445,6 +1865,14 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public int listIndexInPage(int position) {
+        if (mContinuousLabelBrowse) {
+            if (mList == null || position < 0 || position >= mList.size()) {
+                return -1;
+            }
+            Integer adapterPosition =
+                    mContinuousGalleryPositions.get(mList.get(position).gid);
+            return adapterPosition != null ? adapterPosition : -1;
+        }
         if (mList != null && mList.size() > paginationSize && canPagination) {
             return position % pageSize;
         }
@@ -1469,6 +1897,137 @@ public class DownloadsScene extends ToolbarScene
     @Override
     public MyEasyRecyclerView getRecyclerView() {
         return mRecyclerView;
+    }
+
+    @Override
+    public boolean isContinuousLabelBrowse() {
+        return mContinuousLabelBrowse;
+    }
+
+    @Override
+    public int getDisplayItemCount() {
+        return mContinuousItems.size();
+    }
+
+    @Override
+    public boolean isLabelHeaderPosition(int position) {
+        return mContinuousLabelBrowse && position >= 0
+                && position < mContinuousItems.size()
+                && mContinuousItems.get(position).header;
+    }
+
+    @Override
+    public String getLabelHeaderTitle(int position) {
+        if (!isLabelHeaderPosition(position)) {
+            return "";
+        }
+        String title = mContinuousItems.get(position).title;
+        return title != null ? title : "";
+    }
+
+    @Override
+    public int getLabelHeaderGalleryCount(int position) {
+        return isLabelHeaderPosition(position)
+                ? mContinuousItems.get(position).galleryCount : 0;
+    }
+
+    @Override
+    public boolean isLabelHeaderCollapsed(int position) {
+        return isLabelHeaderPosition(position)
+                && mContinuousItems.get(position).collapsed;
+    }
+
+    @Override
+    public long getDisplayItemId(int position) {
+        return position >= 0 && position < mContinuousItems.size()
+                ? mContinuousItems.get(position).stableId : RecyclerView.NO_ID;
+    }
+
+    @Override
+    public void onGroupedDownloadOrderChanged() {
+        updateForLabel();
+        updateView();
+    }
+
+    @Override
+    public boolean canReorderCurrentList() {
+        return !mContinuousLabelBrowse || (TextUtils.isEmpty(searchKey)
+                && mSelectedCategory == EhUtils.ALL_CATEGORY);
+    }
+
+    @Override
+    public int getAdapterPositionForGallery(long gid) {
+        if (mContinuousLabelBrowse) {
+            Integer position = mContinuousGalleryPositions.get(gid);
+            return position != null ? position : -1;
+        }
+        if (mList == null) {
+            return -1;
+        }
+        for (int i = 0; i < mList.size(); i++) {
+            if (mList.get(i).gid == gid) {
+                if (mList.size() > paginationSize && canPagination) {
+                    int first = pageSize * (indexPage - 1);
+                    int last = Math.min(first + pageSize, mList.size());
+                    return i >= first && i < last ? i - first : -1;
+                }
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    boolean scrollToDownloadLabel(@Nullable String label) {
+        if (!mContinuousLabelBrowse || mRecyclerView == null) {
+            return false;
+        }
+        Integer position = mContinuousHeaderPositions.get(label);
+        if (position == null) {
+            return false;
+        }
+        mRecyclerView.stopScroll();
+        if (mLayoutManager != null) {
+            mLayoutManager.scrollToPositionWithOffset(position, 0);
+        } else {
+            mRecyclerView.scrollToPosition(position);
+        }
+        return true;
+    }
+
+    private void rememberContinuousScrollPosition() {
+        if (!mContinuousLabelBrowse || mLayoutManager == null) {
+            return;
+        }
+        int[] positions = mLayoutManager.findFirstVisibleItemPositions(null);
+        int first = Integer.MAX_VALUE;
+        for (int position : positions) {
+            if (position != RecyclerView.NO_POSITION) {
+                first = Math.min(first, position);
+            }
+        }
+        if (first == Integer.MAX_VALUE) {
+            return;
+        }
+        View firstView = mLayoutManager.findViewByPosition(first);
+        mContinuousRestorePosition = first;
+        mContinuousRestoreOffset = firstView != null
+                ? mLayoutManager.getDecoratedTop(firstView) : 0;
+    }
+
+    private void restoreContinuousScrollPosition() {
+        if (!mContinuousLabelBrowse || mRecyclerView == null || mLayoutManager == null
+                || mContinuousRestorePosition == RecyclerView.NO_POSITION) {
+            return;
+        }
+        int position = Math.min(mContinuousRestorePosition,
+                Math.max(0, mContinuousItems.size() - 1));
+        int offset = mContinuousRestoreOffset;
+        mContinuousRestorePosition = RecyclerView.NO_POSITION;
+        mRecyclerView.post(() -> {
+            if (mLayoutManager != null && !mContinuousItems.isEmpty()) {
+                mLayoutManager.scrollToPositionWithOffset(position, offset);
+            }
+        });
     }
 
 
@@ -1572,6 +2131,18 @@ public class DownloadsScene extends ToolbarScene
     private void updateAdapter() {
         // 检查 Fragment 是否已附加，如果未附加则延迟创建适配器
         if (!isAdded()) {
+            return;
+        }
+        if (mContinuousLabelBrowse && mList != null) {
+            boolean includeEmptyLabels = TextUtils.isEmpty(searchKey)
+                    && mSelectedCategory == EhUtils.ALL_CATEGORY;
+            rebuildContinuousItems(mList, includeEmptyLabels);
+        }
+        if (mOriginalAdapter != null) {
+            mOriginalAdapter.notifyDataSetChanged();
+            updateTitle();
+            updatePaginationIndicator();
+            updateView();
             return;
         }
         mOriginalAdapter = new DownloadAdapter(this, this);
@@ -1717,6 +2288,19 @@ public class DownloadsScene extends ToolbarScene
         if (mList == null) {
             return;
         }
+        if (mContinuousLabelBrowse) {
+            List<DownloadInfo> initialWindow = new ArrayList<>(100);
+            for (ContinuousDownloadItem item : mContinuousItems) {
+                if (!item.header && item.downloadInfo != null) {
+                    initialWindow.add(item.downloadInfo);
+                    if (initialWindow.size() == 100) {
+                        break;
+                    }
+                }
+            }
+            requestSpiderInfo(initialWindow);
+            return;
+        }
         List<DownloadInfo> requestList = new ArrayList<>();
         for (int i = 0; i < mList.size(); i++) {
             DownloadInfo info = mList.get(i);
@@ -1728,24 +2312,115 @@ public class DownloadsScene extends ToolbarScene
         executor.execute();
     }
 
-    @SuppressLint("NotifyDataSetChanged")
+    private void queryVisibleSpiderInfo() {
+        if (!mContinuousLabelBrowse || mLayoutManager == null
+                || mList == null || mList.isEmpty()) {
+            return;
+        }
+        int spanCount = mLayoutManager.getSpanCount();
+        if (spanCount <= 0) {
+            return;
+        }
+        int[] firstPositions = mLayoutManager.findFirstVisibleItemPositions(
+                new int[spanCount]);
+        int[] lastPositions = mLayoutManager.findLastVisibleItemPositions(
+                new int[spanCount]);
+        int first = Integer.MAX_VALUE;
+        int last = RecyclerView.NO_POSITION;
+        for (int position : firstPositions) {
+            if (position != RecyclerView.NO_POSITION) {
+                first = Math.min(first, position);
+            }
+        }
+        for (int position : lastPositions) {
+            last = Math.max(last, position);
+        }
+        if (first == Integer.MAX_VALUE || last < first) {
+            return;
+        }
+
+        int preload = Math.max(24, spanCount * 8);
+        int start = Math.max(0, first - preload / 2);
+        int end = Math.min(mContinuousItems.size() - 1, last + preload);
+        List<DownloadInfo> request = new ArrayList<>();
+        for (int position = start; position <= end; position++) {
+            int listPosition = positionInList(position);
+            if (listPosition >= 0 && listPosition < mList.size()) {
+                request.add(mList.get(listPosition));
+            }
+        }
+        requestSpiderInfo(request);
+    }
+
+    private void requestSpiderInfo(@NonNull List<DownloadInfo> candidates) {
+        List<DownloadInfo> request = new ArrayList<>();
+        for (DownloadInfo info : candidates) {
+            if (info.state != DownloadInfo.STATE_FINISH
+                    || (info.archiveUri != null
+                    && info.archiveUri.startsWith("content://"))
+                    || !mSpiderInfoRequested.add(info.gid)) {
+                continue;
+            }
+            request.add(info);
+        }
+        if (request.isEmpty()) {
+            return;
+        }
+        DownloadSpiderInfoExecutor executor = new DownloadSpiderInfoExecutor(
+                request, this::spiderInfoResultCallBack);
+        executor.execute();
+    }
+
     private void spiderInfoResultCallBack(Map<Long, SpiderInfo> resultMap) {
         mSpiderInfoMap.putAll(resultMap);
-        if (mAdapter != null) {
-            mAdapter.notifyDataSetChanged();
+        if (mAdapter == null || mLayoutManager == null) {
+            return;
+        }
+        int spanCount = mLayoutManager.getSpanCount();
+        if (spanCount <= 0) {
+            return;
+        }
+        int[] firstPositions = mLayoutManager.findFirstVisibleItemPositions(
+                new int[spanCount]);
+        int[] lastPositions = mLayoutManager.findLastVisibleItemPositions(
+                new int[spanCount]);
+        int first = Integer.MAX_VALUE;
+        int last = RecyclerView.NO_POSITION;
+        for (int position : firstPositions) {
+            if (position != RecyclerView.NO_POSITION) {
+                first = Math.min(first, position);
+            }
+        }
+        for (int position : lastPositions) {
+            last = Math.max(last, position);
+        }
+        if (first != Integer.MAX_VALUE && last >= first) {
+            mAdapter.notifyItemRangeChanged(first, last - first + 1);
         }
     }
 
     @Subscribe(threadMode = ThreadMode.MAIN)
     public void updateDownloadLabels(SomethingNeedRefresh somethingNeedRefresh) {
         if (somethingNeedRefresh.isDownloadLabelDrawNeed()) {
-            downloadLabelDraw.updateDownloadLabels();
+            if (downloadLabelDraw != null) {
+                downloadLabelDraw.updateDownloadLabels();
+            }
+            if (mContinuousLabelBrowse) {
+                refreshContinuousStructure();
+            }
         }
     }
 
 
     @SuppressLint("NotifyDataSetChanged")
     private void initPage(int position) {
+        if (mContinuousLabelBrowse) {
+            int adapterPosition = listIndexInPage(position);
+            if (mRecyclerView != null && adapterPosition >= 0) {
+                mRecyclerView.scrollToPosition(adapterPosition);
+            }
+            return;
+        }
         if (mList != null && mList.size() > paginationSize && canPagination) {
             indexPage = position / pageSize + 1;
         }
@@ -2132,6 +2807,9 @@ public class DownloadsScene extends ToolbarScene
                     mList.add(info);
                 }
             }
+        }
+        if (mContinuousLabelBrowse) {
+            rebuildContinuousItems(mList, false);
         }
         if (mAdapter != null) {
             mAdapter.notifyDataSetChanged();

@@ -128,6 +128,11 @@ public class DownloadLabelDraw {
             } else {
                 label = labels.get(position);
             }
+            if (scene.isContinuousLabelBrowse()) {
+                scene.scrollToDownloadLabel(label);
+                scene.closeDrawer(Gravity.RIGHT);
+                return;
+            }
             if (!ObjectUtils.equal(label, scene.mLabel)) {
                 scene.mLabel = label;
                 scene.updateForLabel();
@@ -181,6 +186,11 @@ public class DownloadLabelDraw {
                 label = null;
             } else {
                 label = labels.get(position);
+            }
+            if (scene.isContinuousLabelBrowse()) {
+                scene.scrollToDownloadLabel(label);
+                scene.closeDrawer(Gravity.RIGHT);
+                return;
             }
             if (!ObjectUtils.equal(label, scene.mLabel)) {
                 scene.mLabel = label;

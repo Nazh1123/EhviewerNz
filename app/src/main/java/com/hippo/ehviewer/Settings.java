@@ -1690,6 +1690,17 @@ public class Settings {
         putBoolean(KEY_DOWNLOAD_LIST_PAGINATION, value);
     }
 
+    public static final String KEY_DOWNLOAD_LABEL_CONTINUOUS_BROWSE =
+            "download_label_continuous_browse";
+
+    public static boolean getDownloadLabelContinuousBrowse() {
+        return getBoolean(KEY_DOWNLOAD_LABEL_CONTINUOUS_BROWSE, false);
+    }
+
+    public static void setDownloadLabelContinuousBrowse(boolean value) {
+        putBoolean(KEY_DOWNLOAD_LABEL_CONTINUOUS_BROWSE, value);
+    }
+
     public static final String KEY_SHOW_READ_PROGRESS = "show_read_progress";
 
     private static boolean IS_SHOW_READ_PROGRESS = true;

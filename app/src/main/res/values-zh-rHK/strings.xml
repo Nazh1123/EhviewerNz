@@ -440,6 +440,10 @@
     <string name="stat_download_action_stop_all">全部停止</string>
     <string name="drawer_download_label_title">標籤</string>
     <string name="default_download_label_name">預設</string>
+    <string name="scene_download_continuous_title">下載（%d）</string>
+    <string name="default_download_label_cannot_rename">預設下載標籤無法重新命名</string>
+    <string name="download_label_collapsed_action">已摺疊 %d 個畫廊；點擊查看此標籤</string>
+    <string name="download_label_search_unsupported">此標籤不支援畫廊搜尋</string>
     <string name="download_move_dialog_title">移動</string>
     <string name="quick_organize">快速收納</string>
     <string name="quick_organize_processing">正在收納已選畫廊…</string>
@@ -472,6 +476,7 @@
     <string name="download_stop_all">全部停止</string>
     <string name="download_reset_reading_progress">重設閱讀進度</string>
     <string name="download_search_gallery">搜尋畫廊</string>
+    <string name="download_toggle_list_mode">切換列表模式</string>
     <string name="download_search_hint">輸入搜尋關鍵字</string>
     <string name="reset_reading_progress_message">重設所有已下載圖庫的閱讀進度？</string>
     <string name="download_service_label">EhViewer 下載服務</string>
@@ -696,6 +701,8 @@
     <string name="settings_download_delete_missing_galleries_done">已刪除 %d 個本機不存在的畫廊</string>
     <string name="settings_download_delete_missing_galleries_none">沒有本機不存在的畫廊</string>
     <string name="settings_fork_delete_empty_galleries">刪除空畫廊</string>
+    <string name="settings_fork_download_label_continuous_browse">下載標籤連續瀏覽</string>
+    <string name="settings_fork_download_label_continuous_browse_summary">在同一頁面依標籤由上至下連續顯示下載畫廊，並取代原有的單標籤瀏覽模式</string>
 
     <string name="settings_advanced">進階</string>
     <string name="settings_advanced_save_parse_error_body">解析失敗時儲存頁面內容</string>

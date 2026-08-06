@@ -187,6 +187,11 @@
       app:showAsAction="never"/>
 
     <item
+        android:id="@+id/action_toggle_download_list_mode"
+        android:title="@string/download_toggle_list_mode"
+        app:showAsAction="never"/>
+
+    <item
         android:id="@+id/import_local_archive"
         android:title="@string/import_local_archive"
         app:showAsAction="never"/>

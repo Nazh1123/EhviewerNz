@@ -83,6 +83,13 @@
         android:summary="@string/settings_eh_gallery_preview_immediate_jump_summary"
         android:title="@string/settings_fork_gallery_immediate_jump" />
 
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="download_label_continuous_browse"
+        android:summary="@string/settings_fork_download_label_continuous_browse_summary"
+        android:title="@string/settings_fork_download_label_continuous_browse"
+        app:allowDividerAbove="true" />
+
     <Preference
         android:key="fork_delete_empty_galleries"
         android:summary="@string/settings_download_delete_missing_galleries_summary"
