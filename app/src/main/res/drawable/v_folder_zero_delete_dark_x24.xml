@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Delete mark behind the folder. -->
+    <path
+        android:fillColor="@color/primary_drawable_dark"
+        android:pathData="M14.5,2L18,5.5L21.5,2L23,3.5L19.5,7L23,10.5L21.5,12L18,8.5L14.5,12L13,10.5L16.5,7L13,3.5Z" />
+
+    <!-- Folder in the foreground. -->
+    <path
+        android:fillColor="@color/primary_drawable_dark"
+        android:pathData="M3,6H9L11,8H19C20.1,8 21,8.9 21,10V19C21,20.1 20.1,21 19,21H3C1.9,21 1,20.1 1,19V8C1,6.9 1.9,6 3,6Z" />
+
+    <!-- Reversed slashed zero. -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M11,10.5C8.8,10.5 7.5,12.1 7.5,15.5C7.5,18.9 8.8,20.5 11,20.5C13.2,20.5 14.5,18.9 14.5,15.5C14.5,12.1 13.2,10.5 11,10.5Z"
+        android:strokeColor="?attr/widgetColorThemeAccent"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.7" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M8.6,18.6L13.4,12.4"
+        android:strokeColor="?attr/widgetColorThemeAccent"
+        android:strokeLineCap="round"
+        android:strokeWidth="1.7" />
+
+</vector>

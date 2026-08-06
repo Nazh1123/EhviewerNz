@@ -377,6 +377,10 @@
     <string name="download_remove_dialog_message">將 %s 從下載佇列中移除嗎?</string>
     <string name="download_remove_dialog_message_2">從下載佇列中移除 %d 項任務嗎？</string>
     <string name="download_remove_dialog_check_text">刪除圖檔</string>
+    <string name="download_delete_empty_labels">刪除空標籤</string>
+    <string name="download_delete_empty_labels_message">刪除 %d 個沒有畫廊的下載標籤嗎？</string>
+    <string name="download_delete_empty_labels_none">沒有空下載標籤</string>
+    <string name="download_delete_empty_labels_done">已刪除 %d 個空標籤</string>
     <string name="stat_download_action_stop_all">全部停止</string>
     <string name="drawer_download_label_title">標籤</string>
     <string name="default_download_label_name">預設</string>
@@ -632,6 +636,13 @@
     <string name="settings_download_clean_redundancy_summary">清除已下載但不在下載列表中的圖檔</string>
     <string name="settings_download_clean_redundancy_no_redundancy">未發現冗餘檔案</string>
     <string name="settings_download_clean_redundancy_done">完成冗餘檔案清理，共清理了 %d 個檔案</string>
+    <string name="settings_download_delete_missing_galleries">刪除本機不存在的畫廊</string>
+    <string name="settings_download_delete_missing_galleries_summary">清理下載列表中不在本機下載目錄中的畫廊</string>
+    <string name="settings_download_delete_missing_galleries_confirm">確定從下載列表中刪除本機不存在的畫廊嗎？</string>
+    <string name="settings_download_delete_missing_galleries_scanning">正在檢查本機畫廊</string>
+    <string name="settings_download_delete_missing_galleries_done">已刪除 %d 個本機不存在的畫廊</string>
+    <string name="settings_download_delete_missing_galleries_none">沒有本機不存在的畫廊</string>
+    <string name="settings_fork_delete_empty_galleries">刪除空畫廊</string>
 
     <string name="settings_advanced">進階</string>
     <string name="settings_advanced_save_parse_error_body">解析失敗時儲存網頁的內容</string>

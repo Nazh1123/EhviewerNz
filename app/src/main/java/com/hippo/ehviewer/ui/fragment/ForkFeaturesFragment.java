@@ -23,6 +23,8 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
     private static final int REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L = 1;
     private static final String KEY_BOOKMARK_SUBSCRIPTION_SETTINGS =
             "bookmark_subscription_settings";
+    private static final String KEY_DELETE_EMPTY_GALLERIES =
+            "fork_delete_empty_galleries";
 
     @Nullable
     private Preference mManualImageSaveLocation;
@@ -54,6 +56,14 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
                         Intent.FLAG_ACTIVITY_SINGLE_TOP);
                 startActivity(intent);
                 requireActivity().finish();
+                return true;
+            });
+        }
+        Preference deleteEmptyGalleries = findPreference(KEY_DELETE_EMPTY_GALLERIES);
+        if (deleteEmptyGalleries != null) {
+            deleteEmptyGalleries.setOnPreferenceClickListener(preference -> {
+                MissingGalleryCleaner.showConfirmation(requireActivity(),
+                        R.string.settings_fork_delete_empty_galleries);
                 return true;
             });
         }

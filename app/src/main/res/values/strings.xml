@@ -489,6 +489,10 @@
     <string name="download_remove_dialog_message">Remove %s from download list ?</string>
     <string name="download_remove_dialog_message_2">Remove %d items from download list ?</string>
     <string name="download_remove_dialog_check_text">Delete image files</string>
+    <string name="download_delete_empty_labels">Delete Empty Labels</string>
+    <string name="download_delete_empty_labels_message">Delete %d labels that contain no galleries?</string>
+    <string name="download_delete_empty_labels_none">No empty download labels found</string>
+    <string name="download_delete_empty_labels_done">Deleted %d empty labels</string>
     <string name="stat_download_action_stop_all">Stop all</string>
     <string name="drawer_download_label_title">Label</string>
     <string name="default_download_label_name">Default</string>
@@ -755,6 +759,12 @@
     <string name="settings_download_clean_redundancy_done">Redundancy cleaning completed, clean-up %d items totally</string>
     <string name="settings_download_clean_invalid_download_summary">Remove download items which are invalid</string>
     <string name="settings_download_clean_invalid_download">Clean invaild download</string>
+    <string name="settings_download_delete_missing_galleries">Delete Locally Missing Galleries</string>
+    <string name="settings_download_delete_missing_galleries_summary">Clean galleries from the download list that are not in the local download directory</string>
+    <string name="settings_download_delete_missing_galleries_confirm">Delete galleries from the download list when they do not exist locally?</string>
+    <string name="settings_download_delete_missing_galleries_scanning">Checking local galleries</string>
+    <string name="settings_download_delete_missing_galleries_done">Deleted %d locally missing galleries</string>
+    <string name="settings_download_delete_missing_galleries_none">No locally missing galleries found</string>
 
     <string name="settings_advanced">Advanced</string>
     <string name="settings_advanced_save_parse_error_body">Save html content when parsing error</string>
@@ -774,6 +784,7 @@
     <string name="settings_advanced_app_language_title">App language</string>
     <string name="settings_search_language">Search Language Tag</string>
     <string name="settings_fork_features">Fork Extra Features</string>
+    <string name="settings_fork_delete_empty_galleries">Delete Empty Galleries</string>
     <string name="settings_fork_gallery_immediate_jump">Immediate gallery jump</string>
     <string name="settings_fork_long_press_save_summary">Long-press the next-page area to save the current image locally</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Automatically turn to the next page after a long-press save</string>

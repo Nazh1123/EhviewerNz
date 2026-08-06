@@ -399,6 +399,10 @@
     <string name="download_remove_dialog_message">从下载列表移除 %s ？</string>
     <string name="download_remove_dialog_message_2">从下载列表移除 %d 项？</string>
     <string name="download_remove_dialog_check_text">删除图片文件</string>
+    <string name="download_delete_empty_labels">删除空标签</string>
+    <string name="download_delete_empty_labels_message">删除 %d 个没有画廊的下载标签？</string>
+    <string name="download_delete_empty_labels_none">没有空下载标签</string>
+    <string name="download_delete_empty_labels_done">已删除 %d 个空标签</string>
     <string name="stat_download_action_stop_all">全部停止</string>
     <string name="drawer_download_label_title">标签</string>
     <string name="default_download_label_name">默认</string>
@@ -664,6 +668,12 @@
     <string name="settings_download_clean_redundancy_done">完成冗余清理，共清理 %d 项</string>
     <string name="settings_download_clean_invalid_download_summary">清空任何无效的下载项，尤其是下载未完整的下载项，不会清空已完成的下载项</string>
     <string name="settings_download_clean_invalid_download">清空无效的下载项</string>
+    <string name="settings_download_delete_missing_galleries">删除本地不存在的画廊</string>
+    <string name="settings_download_delete_missing_galleries_summary">清理下载列表中不在本地下载目录中的画廊</string>
+    <string name="settings_download_delete_missing_galleries_confirm">确定从下载列表中删除本地不存在的画廊？</string>
+    <string name="settings_download_delete_missing_galleries_scanning">正在检查本地画廊</string>
+    <string name="settings_download_delete_missing_galleries_done">已删除 %d 个本地不存在的画廊</string>
+    <string name="settings_download_delete_missing_galleries_none">没有本地不存在的画廊</string>
 
     <string name="settings_advanced">高级</string>
     <string name="settings_advanced_save_parse_error_body">解析失败时保存页面内容</string>
@@ -683,6 +693,7 @@
     <string name="settings_advanced_app_language_title">App 界面语言</string>
     <string name="settings_search_language">搜索语言项</string>
     <string name="settings_fork_features">Fork额外功能</string>
+    <string name="settings_fork_delete_empty_galleries">删除空画廊</string>
     <string name="settings_fork_auto_subscription_updates">自动获取订阅更新</string>
     <string name="settings_fork_auto_subscription_updates_summary">至少每一个小时获取订阅内容的更新画廊数量</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH 订阅</string>

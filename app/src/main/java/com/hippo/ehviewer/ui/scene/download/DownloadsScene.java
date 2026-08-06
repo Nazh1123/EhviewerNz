@@ -1404,7 +1404,9 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onUpdateLabels() {
-        // TODO
+        if (downloadLabelDraw != null) {
+            downloadLabelDraw.updateDownloadLabels();
+        }
     }
 
     @Nullable

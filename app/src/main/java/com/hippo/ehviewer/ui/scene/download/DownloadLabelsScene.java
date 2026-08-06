@@ -85,6 +85,8 @@ public class DownloadLabelsScene extends ToolbarScene {
     @Nullable
     private MenuItem mClassifySelectionItem;
     @Nullable
+    private MenuItem mDeleteEmptyLabelsItem;
+    @Nullable
     private MenuItem mDeleteSelectionItem;
 
     private final Set<Long> mSelectedLabelIds = new LinkedHashSet<>();
@@ -173,6 +175,7 @@ public class DownloadLabelsScene extends ToolbarScene {
         mSelectRangeItem = null;
         mCancelSelectionItem = null;
         mClassifySelectionItem = null;
+        mDeleteEmptyLabelsItem = null;
         mDeleteSelectionItem = null;
         mDraggedSelectedIds = null;
         mGroupDragStartOrder = null;
@@ -208,6 +211,7 @@ public class DownloadLabelsScene extends ToolbarScene {
         mSelectRangeItem = menu.findItem(R.id.action_select_label_range);
         mCancelSelectionItem = menu.findItem(R.id.action_cancel_label_selection);
         mClassifySelectionItem = menu.findItem(R.id.action_classify_selected_labels);
+        mDeleteEmptyLabelsItem = menu.findItem(R.id.action_delete_empty_labels);
         mDeleteSelectionItem = menu.findItem(R.id.action_delete_selected_labels);
         updateSelectionUi(false);
     }
@@ -240,6 +244,9 @@ public class DownloadLabelsScene extends ToolbarScene {
                 return true;
             case R.id.action_classify_selected_labels:
                 classifySelectedLabels();
+                return true;
+            case R.id.action_delete_empty_labels:
+                confirmDeleteSelectedEmptyLabels();
                 return true;
             case R.id.action_delete_selected_labels:
                 confirmDeleteSelectedLabels();
@@ -367,6 +374,46 @@ public class DownloadLabelsScene extends ToolbarScene {
                 .show();
     }
 
+    private void confirmDeleteSelectedEmptyLabels() {
+        Context context = getEHContext();
+        if (context == null || mList == null || mSelectedLabelIds.isEmpty()) {
+            return;
+        }
+
+        DownloadManager downloadManager = EhApplication.getDownloadManager(context);
+        List<String> emptyLabels = new ArrayList<>();
+        for (DownloadLabel label : mList) {
+            if (!mSelectedLabelIds.contains(label.getId()) || label.getLabel() == null) {
+                continue;
+            }
+            List<?> downloads = downloadManager.getLabelDownloadInfoList(label.getLabel());
+            if (downloads == null || downloads.isEmpty()) {
+                emptyLabels.add(label.getLabel());
+            }
+        }
+        if (emptyLabels.isEmpty()) {
+            Toast.makeText(context, R.string.download_delete_empty_labels_none,
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        new AlertDialog.Builder(context)
+                .setTitle(R.string.download_delete_empty_labels)
+                .setMessage(getString(R.string.download_delete_empty_labels_message,
+                        emptyLabels.size()))
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                    downloadManager.deleteLabels(emptyLabels);
+                    clearSelection();
+                    updateView();
+                    Toast.makeText(context,
+                            getString(R.string.download_delete_empty_labels_done,
+                                    emptyLabels.size()),
+                            Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
     private void updateSelectionUi(boolean notifyItems) {
         boolean hasSelection = !mSelectedLabelIds.isEmpty();
         boolean hasContext = hasSelectionContext();
@@ -388,6 +435,9 @@ public class DownloadLabelsScene extends ToolbarScene {
         }
         if (mClassifySelectionItem != null) {
             mClassifySelectionItem.setVisible(hasSelection);
+        }
+        if (mDeleteEmptyLabelsItem != null) {
+            mDeleteEmptyLabelsItem.setVisible(hasSelection);
         }
         if (mDeleteSelectionItem != null) {
             mDeleteSelectionItem.setVisible(hasSelection);

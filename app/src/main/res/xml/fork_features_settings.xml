@@ -83,4 +83,11 @@
         android:summary="@string/settings_eh_gallery_preview_immediate_jump_summary"
         android:title="@string/settings_fork_gallery_immediate_jump" />
 
+    <Preference
+        android:key="fork_delete_empty_galleries"
+        android:summary="@string/settings_download_delete_missing_galleries_summary"
+        android:title="@string/settings_fork_delete_empty_galleries"
+        app:allowDividerAbove="true"
+        app:iconSpaceReserved="false" />
+
 </PreferenceScreen>

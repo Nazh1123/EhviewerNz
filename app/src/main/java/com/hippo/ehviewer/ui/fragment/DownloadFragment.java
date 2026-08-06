@@ -67,6 +67,7 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
     public static final String KEY_EXPORT_DOWNLOAD_ITEMS = "export_download_items";
     public static final String KEY_IMPORT_DOWNLOAD_ITEMS = "import_download_items";
     public static final String KEY_CLEAN_INVALID_DOWNLOAD = "clean_invalid_download";
+    public static final String KEY_DELETE_MISSING_GALLERIES = "delete_missing_galleries";
 
     @Nullable
     private Preference mDownloadLocation;
@@ -86,6 +87,7 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         Preference exportDownloadItems = findPreference(KEY_EXPORT_DOWNLOAD_ITEMS);
         Preference importDownloadItems = findPreference(KEY_IMPORT_DOWNLOAD_ITEMS);
         Preference cleanInvalidDownload = findPreference(KEY_CLEAN_INVALID_DOWNLOAD);
+        Preference deleteMissingGalleries = findPreference(KEY_DELETE_MISSING_GALLERIES);
         Preference preloadImage = findPreference("preload_image");
         Preference imageResolutionPref = findPreference(Settings.KEY_IMAGE_RESOLUTION);
 
@@ -135,6 +137,9 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         }
         if (cleanInvalidDownload != null) {
             cleanInvalidDownload.setOnPreferenceClickListener(this);
+        }
+        if (deleteMissingGalleries != null) {
+            deleteMissingGalleries.setOnPreferenceClickListener(this);
         }
     }
 
@@ -196,6 +201,10 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
                     .setPositiveButton(android.R.string.ok, (dialog, which) -> new CleanInvalidDownloadTask(this).execute())
                     .setNegativeButton(android.R.string.cancel, null)
                     .show();
+            return true;
+        } else if (KEY_DELETE_MISSING_GALLERIES.equals(key)) {
+            MissingGalleryCleaner.showConfirmation(requireActivity(),
+                    R.string.settings_download_delete_missing_galleries);
             return true;
         }
         return false;

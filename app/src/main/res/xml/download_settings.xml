@@ -124,4 +124,11 @@
         android:title="@string/settings_download_clean_invalid_download"
         app:allowDividerAbove="true"
         app:iconSpaceReserved="false" />
+
+    <Preference
+        android:key="delete_missing_galleries"
+        android:summary="@string/settings_download_delete_missing_galleries_summary"
+        android:title="@string/settings_download_delete_missing_galleries"
+        app:allowDividerAbove="true"
+        app:iconSpaceReserved="false" />
 </PreferenceScreen>

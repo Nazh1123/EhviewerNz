@@ -1069,7 +1069,11 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         Collections.sort(mDefaultInfoList, DATE_DESC_COMPARATOR);
 
         for (DownloadInfoListener l : mDownloadInfoListeners) {
-            l.onChange();
+            if (changedInfo.isEmpty()) {
+                l.onUpdateLabels();
+            } else {
+                l.onChange();
+            }
         }
     }
 
