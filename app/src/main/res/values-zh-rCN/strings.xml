@@ -1065,4 +1065,9 @@
     <string name="parent_gallery_list_failed">父画廊列表加载失败：%s</string>
     <string name="open_direct_parent">直接打开父画廊</string>
 
+    <string name="settings_animated_webp_controls">动图控制</string>
+    <string name="settings_animated_webp_playback_time">播放时间</string>
+    <string name="settings_animated_webp_progress_control">进度条控制</string>
+    <string name="settings_animated_webp_sequential_playback">顺序播放</string>
+    <string name="settings_animated_webp_auto_transfer_button">自动翻页按钮</string>
 </resources>

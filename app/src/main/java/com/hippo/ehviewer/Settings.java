@@ -597,6 +597,71 @@ public class Settings {
         putIntToStr(KEY_READING_DIRECTION, value);
     }
 
+    public static final String KEY_EXPERIMENTAL_ANIMATED_WEBP = "experimental_animated_webp";
+    private static final String KEY_ANIMATED_WEBP_SHOW_PROGRESS = "animated_webp_show_progress";
+    public static final String KEY_ANIMATED_WEBP_SHOW_TIME = "animated_webp_show_time";
+    public static final String KEY_ANIMATED_WEBP_ALLOW_SEEK = "animated_webp_allow_seek";
+    private static final String KEY_ANIMATED_WEBP_SHOW_CONTROLS = "animated_webp_show_controls";
+    public static final String KEY_ANIMATED_WEBP_AUTO_ADVANCE = "animated_webp_auto_advance";
+    public static final String KEY_ANIMATED_WEBP_AUTO_TRANSFER_BUTTON =
+            "animated_webp_auto_transfer_button";
+
+    public static boolean getExperimentalAnimatedWebpEnabled() {
+        return getBoolean(KEY_EXPERIMENTAL_ANIMATED_WEBP, true);
+    }
+
+    public static boolean getAnimatedWebpShowProgress() {
+        return getBoolean(KEY_ANIMATED_WEBP_SHOW_PROGRESS, true);
+    }
+
+    public static boolean getAnimatedWebpShowTime() {
+        return getBoolean(KEY_ANIMATED_WEBP_SHOW_TIME, true);
+    }
+
+    public static boolean getAnimatedWebpAllowSeek() {
+        return getBoolean(KEY_ANIMATED_WEBP_ALLOW_SEEK, true);
+    }
+
+    public static boolean getAnimatedWebpShowControls() {
+        return getBoolean(KEY_ANIMATED_WEBP_SHOW_CONTROLS, true);
+    }
+
+    public static boolean getAnimatedWebpAutoAdvance() {
+        return getBoolean(KEY_ANIMATED_WEBP_AUTO_ADVANCE, false);
+    }
+
+    public static boolean getAnimatedWebpAutoTransferButton() {
+        return getBoolean(KEY_ANIMATED_WEBP_AUTO_TRANSFER_BUTTON, false);
+    }
+
+    public static void putExperimentalAnimatedWebpEnabled(boolean value) {
+        putBoolean(KEY_EXPERIMENTAL_ANIMATED_WEBP, value);
+    }
+
+    public static void putAnimatedWebpShowProgress(boolean value) {
+        putBoolean(KEY_ANIMATED_WEBP_SHOW_PROGRESS, value);
+    }
+
+    public static void putAnimatedWebpShowTime(boolean value) {
+        putBoolean(KEY_ANIMATED_WEBP_SHOW_TIME, value);
+    }
+
+    public static void putAnimatedWebpAllowSeek(boolean value) {
+        putBoolean(KEY_ANIMATED_WEBP_ALLOW_SEEK, value);
+    }
+
+    public static void putAnimatedWebpShowControls(boolean value) {
+        putBoolean(KEY_ANIMATED_WEBP_SHOW_CONTROLS, value);
+    }
+
+    public static void putAnimatedWebpAutoAdvance(boolean value) {
+        putBoolean(KEY_ANIMATED_WEBP_AUTO_ADVANCE, value);
+    }
+
+    public static void putAnimatedWebpAutoTransferButton(boolean value) {
+        putBoolean(KEY_ANIMATED_WEBP_AUTO_TRANSFER_BUTTON, value);
+    }
+
     private static final String KEY_PAGE_SCALING = "page_scaling";
     private static final int DEFAULT_PAGE_SCALING = GalleryView.SCALE_FIT;
 

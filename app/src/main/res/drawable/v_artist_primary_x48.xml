@@ -9,6 +9,6 @@
 
     <path
         android:fillColor="?attr/drawableColorThemePrimary"
-        android:pathData="M12 2C19 2 19 12 12 12 5 12 5 2 12 2M3 19C3 16 8 14 12 14 16 14 21 16 21 19V22H3Z"/>
+        android:pathData="M12,2A5,5 0 0,0 12,12A5,5 0 0,0 12,2M3,19C3,16 8,14 12,14C16,14 21,16 21,19V22H3Z"/>
 
 </vector>

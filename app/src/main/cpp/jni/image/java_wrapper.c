@@ -214,10 +214,65 @@ Java_com_hippo_lib_image_Image1_nativeTexImage(JNIEnv* env,
 }
 
 JNIEXPORT void JNICALL
+Java_com_hippo_lib_image_Image1_nativeTexImageDirect(JNIEnv* env,
+                                                     jclass clazz, jlong ptr,
+                                                     jint format, jboolean init)
+{
+  void* pixels = NULL;
+  int width = 0;
+  int height = 0;
+  void* image = (void*) (intptr_t) ptr;
+  lock_image_data(image, format);
+  get_image_data(image, format, &pixels, &width, &height);
+  if (pixels != NULL && width > 0 && height > 0) {
+    if (init) {
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height,
+          0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    } else {
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height,
+          GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    }
+  }
+  unlock_image_data(image, format);
+}
+
+JNIEXPORT void JNICALL
 Java_com_hippo_lib_image_Image1_nativeAdvance(JNIEnv* env,
                                               jclass clazz, jlong ptr, jint format)
 {
   advance((void*) (intptr_t) ptr, format);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_hippo_lib_image_Image1_nativeAdvanceAndGetLooped(JNIEnv* env,
+                                                          jclass clazz, jlong ptr,
+                                                          jint format)
+{
+  return (jboolean) advance_and_get_looped((void*) (intptr_t) ptr, format);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_hippo_lib_image_Image1_nativeSeekTo(JNIEnv* env,
+                                             jclass clazz, jlong ptr, jint format,
+                                             jint position_ms)
+{
+  return (jint) seek_to((void*) (intptr_t) ptr, format, position_ms);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_hippo_lib_image_Image1_nativeGetCurrentPosition(JNIEnv* env,
+                                                         jclass clazz, jlong ptr,
+                                                         jint format)
+{
+  return (jint) get_current_position((void*) (intptr_t) ptr, format);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_hippo_lib_image_Image1_nativeGetTotalDuration(JNIEnv* env,
+                                                       jclass clazz, jlong ptr,
+                                                       jint format)
+{
+  return (jint) get_total_duration((void*) (intptr_t) ptr, format);
 }
 
 JNIEXPORT jint JNICALL

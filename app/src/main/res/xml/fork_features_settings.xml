@@ -84,6 +84,40 @@
         android:title="@string/settings_fork_gallery_immediate_jump" />
 
     <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="experimental_animated_webp"
+        android:title="@string/settings_animated_webp_controls"
+        app:allowDividerAbove="true" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:dependency="experimental_animated_webp"
+        android:key="animated_webp_show_time"
+        android:title="@string/settings_animated_webp_playback_time"
+        app:iconSpaceReserved="true" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:dependency="experimental_animated_webp"
+        android:key="animated_webp_allow_seek"
+        android:title="@string/settings_animated_webp_progress_control"
+        app:iconSpaceReserved="true" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:dependency="experimental_animated_webp"
+        android:key="animated_webp_auto_advance"
+        android:title="@string/settings_animated_webp_sequential_playback"
+        app:iconSpaceReserved="true" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:dependency="experimental_animated_webp"
+        android:key="animated_webp_auto_transfer_button"
+        android:title="@string/settings_animated_webp_auto_transfer_button"
+        app:iconSpaceReserved="true" />
+
+    <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="download_label_continuous_browse"
         android:summary="@string/settings_fork_download_label_continuous_browse_summary"

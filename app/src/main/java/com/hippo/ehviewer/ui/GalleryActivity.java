@@ -30,8 +30,11 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
@@ -49,6 +52,9 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
+import android.view.ViewGroup;
+import android.view.Gravity;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
@@ -86,10 +92,13 @@ import com.hippo.ehviewer.gallery.GalleryProvider2;
 import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
 import com.hippo.ehviewer.widget.ReversibleSeekBar;
+import com.hippo.ehviewer.widget.TouchThroughSeekBar;
 import com.hippo.lib.glgallery.GalleryProvider;
+import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.glgallery.GalleryView;
 import com.hippo.lib.glgallery.SimpleAdapter;
 import com.hippo.lib.glview.view.GLRootView;
+import com.hippo.lib.glview.image.ImageTexture;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.ExceptionUtils;
 import com.hippo.util.SystemUiHelper;
@@ -115,12 +124,14 @@ import java.io.OutputStream;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.Locale;
 
 import javax.microedition.khronos.egl.EGL10;
 import javax.microedition.khronos.egl.EGLContext;
 import javax.microedition.khronos.egl.EGLDisplay;
 
-public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChangeListener, GalleryView.Listener {
+public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChangeListener,
+        GalleryView.Listener, ImageTexture.PlaybackListener {
 
     private static final String TAG = "GalleryActivity";
 
@@ -184,6 +195,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private ImageButton mQuickPageTurn;
     @Nullable
+    private ImageButton mQuickAnimatedWebp;
+    @Nullable
     private View mSeekBarPanel;
     @Nullable
     private ImageView mAutoTransferPanel;
@@ -197,6 +210,47 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private View mSaveNotice;
     @Nullable
     private ImageView mSaveNoticeIcon;
+    @Nullable
+    private View mAnimatedWebpPanel;
+    @Nullable
+    private View mAnimatedWebpControls;
+    @Nullable
+    private TextView mAnimatedWebpTime;
+    @Nullable
+    private TouchThroughSeekBar mAnimatedWebpSeek;
+    @Nullable
+    private ImageButton mAnimatedWebpPlayPause;
+    @Nullable
+    private TextView mAnimatedWebpSpeed;
+    @Nullable
+    private ImageButton mAnimatedWebpSequential;
+    @Nullable
+    private ImageTexture mAnimatedWebpTexture;
+    private boolean mAnimatedWebpSeeking;
+    private boolean mAnimatedWebpSeekAwaitingFrame;
+    private boolean mAnimatedWebpWasPlayingBeforeSeek;
+    private int mAnimatedWebpRequestedPosition;
+    private long mAnimatedWebpLastPreviewAt;
+    private boolean mAnimatedWebpTouchCandidate;
+    private boolean mAnimatedWebpTouchDragging;
+    private float mAnimatedWebpTouchDownX;
+    private float mAnimatedWebpTouchDownY;
+    private int mAnimatedWebpTouchSlop;
+    @Nullable
+    private ImageTexture mAnimatedWebpReloadSourceTexture;
+    @Nullable
+    private ColorStateList mPageSliderDefaultProgressTint;
+    @Nullable
+    private ColorStateList mPageSliderDefaultProgressBackgroundTint;
+    @Nullable
+    private ColorStateList mPageSliderDefaultSecondaryProgressTint;
+    @Nullable
+    private ColorStateList mPageSliderDefaultThumbTint;
+    @Nullable
+    private Drawable.ConstantState mPageSliderDefaultProgressDrawableState;
+    @Nullable
+    private Drawable.ConstantState mPageSliderDefaultThumbDrawableState;
+    private boolean mPageSliderAnimatedTintApplied;
 
     private ObjectAnimator mSeekBarPanelAnimator;
     private ObjectAnimator mAutoTransferAnimator;
@@ -218,6 +272,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private ScheduledExecutorService transferService = Executors.newSingleThreadScheduledExecutor();
     private final Handler transHandle = new Handler(Looper.getMainLooper());
+    private final Handler mAnimatedWebpHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mAnimatedWebpUiRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateAnimatedWebpUi();
+            mAnimatedWebpHandler.postDelayed(this, 100L);
+        }
+    };
 
     private final ValueAnimator.AnimatorUpdateListener mUpdateSliderListener = new ValueAnimator.AnimatorUpdateListener() {
         @Override
@@ -421,6 +483,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mGalleryView.setPageAreaDoubleTapEnabled(!Settings.getQuickPageTurn());
         mGLRootView.setContentPane(mGalleryView);
         mGLRootView.setOnGenericMotionListener(this::onGenericMotion);
+        mAnimatedWebpTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
         mGalleryProvider.setListener(mGalleryAdapter);
         mGalleryProvider.setGLRoot(mGLRootView);
 
@@ -451,10 +514,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mQuickSettingsPanel, R.id.quick_direct_save);
         mQuickPageTurn = (ImageButton) ViewUtils.$$(
                 mQuickSettingsPanel, R.id.quick_page_turn);
+        mQuickAnimatedWebp = (ImageButton) ViewUtils.$$(
+                mQuickSettingsPanel, R.id.quick_animated_webp);
         mQuickScreenOrientation.setOnClickListener(this::toggleQuickScreenOrientation);
         mQuickReadingDirection.setOnClickListener(this::toggleQuickReadingDirection);
         mQuickDirectSave.setOnClickListener(this::toggleQuickDirectSave);
         mQuickPageTurn.setOnClickListener(this::toggleQuickPageTurn);
+        mQuickAnimatedWebp.setOnClickListener(this::toggleQuickAnimatedWebp);
         ViewCompat.setOnApplyWindowInsetsListener(mQuickSettingsPanel, (view, insets) -> {
             int statusBarInset = insets.getInsets(
                     WindowInsetsCompat.Type.statusBars()).top;
@@ -474,10 +540,58 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mRightText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.right);
         mSeekBar = (ReversibleSeekBar) ViewUtils.$$(mSeekBarPanel, R.id.seek_bar);
         mSeekBar.setOnSeekBarChangeListener(this);
+        mPageSliderDefaultProgressTint = mSeekBar.getProgressTintList();
+        mPageSliderDefaultProgressBackgroundTint =
+                mSeekBar.getProgressBackgroundTintList();
+        mPageSliderDefaultSecondaryProgressTint =
+                mSeekBar.getSecondaryProgressTintList();
+        mPageSliderDefaultThumbTint = mSeekBar.getThumbTintList();
+        if (mSeekBar.getProgressDrawable() != null) {
+            mPageSliderDefaultProgressDrawableState =
+                    mSeekBar.getProgressDrawable().getConstantState();
+        }
+        if (mSeekBar.getThumb() != null) {
+            mPageSliderDefaultThumbDrawableState = mSeekBar.getThumb().getConstantState();
+        }
         mAutoTransferPanel.setOnClickListener(this::autoRead);
 
         mSaveNotice = ViewUtils.$$(this, R.id.save_notice);
         mSaveNoticeIcon = (ImageView) ViewUtils.$$(this, R.id.save_notice_icon);
+
+        mAnimatedWebpPanel = findViewById(R.id.animated_webp_panel);
+        mAnimatedWebpControls = findViewById(R.id.animated_webp_controls);
+        mAnimatedWebpTime = findViewById(R.id.animated_webp_time);
+        mAnimatedWebpSeek = findViewById(R.id.animated_webp_seek);
+        mAnimatedWebpPlayPause = findViewById(R.id.animated_webp_play_pause);
+        mAnimatedWebpSpeed = findViewById(R.id.animated_webp_speed);
+        mAnimatedWebpSequential = findViewById(R.id.animated_webp_sequential);
+        mAnimatedWebpPlayPause.setOnClickListener(v -> {
+            ImageTexture texture = mAnimatedWebpTexture;
+            if (texture != null) texture.setPlaybackPlaying(!texture.isPlaybackPlaying());
+        });
+        mAnimatedWebpSpeed.setOnClickListener(v -> cycleAnimatedWebpSpeed());
+        mAnimatedWebpSequential.setOnClickListener(v -> {
+            Settings.putAnimatedWebpAutoAdvance(!Settings.getAnimatedWebpAutoAdvance());
+            updateAnimatedWebpSequentialButton();
+        });
+        mAnimatedWebpSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) requestAnimatedWebpSeekPreview(progress, false);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                beginAnimatedWebpSeek();
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                finishAnimatedWebpSeek(seekBar.getProgress());
+            }
+        });
+        mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiRunnable);
+        mAnimatedWebpHandler.post(mAnimatedWebpUiRunnable);
 
         mSize = mGalleryProvider.size();
         mCurrentIndex = startPage;
@@ -565,6 +679,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiRunnable);
+        if (mAnimatedWebpTexture != null) {
+            mAnimatedWebpTexture.setPlaybackListener(null);
+            mAnimatedWebpTexture = null;
+        }
         if (!transferService.isShutdown()) {
             transferService.shutdown();
             transferService = null;
@@ -590,6 +709,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mQuickReadingDirection = null;
         mQuickDirectSave = null;
         mQuickPageTurn = null;
+        mQuickAnimatedWebp = null;
         mSeekBarPanel = null;
         mAutoTransferPanel = null;
         mLeftText = null;
@@ -602,6 +722,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         cancelSaveNoticeAnimation();
         mSaveNotice = null;
         mSaveNoticeIcon = null;
+        mAnimatedWebpPanel = null;
+        mAnimatedWebpControls = null;
+        mAnimatedWebpTime = null;
+        mAnimatedWebpSeek = null;
+        mAnimatedWebpPlayPause = null;
+        mAnimatedWebpSpeed = null;
+        mAnimatedWebpSequential = null;
 
         if (transferService != null && !transferService.isShutdown()) {
             transferService.shutdown();
@@ -802,6 +929,105 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         return false;
     }
 
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (handleAnimatedWebpScrubGesture(event)) {
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
+    private boolean handleAnimatedWebpScrubGesture(MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                mAnimatedWebpTouchDragging = false;
+                mAnimatedWebpTouchCandidate = canStartAnimatedWebpScrub(event);
+                if (mAnimatedWebpTouchCandidate) {
+                    mAnimatedWebpTouchDownX = event.getX();
+                    mAnimatedWebpTouchDownY = event.getY();
+                }
+                return false;
+            case MotionEvent.ACTION_MOVE:
+                if (!mAnimatedWebpTouchCandidate || event.getPointerCount() != 1) {
+                    return false;
+                }
+                if (!mAnimatedWebpTouchDragging) {
+                    float dx = event.getX() - mAnimatedWebpTouchDownX;
+                    float dy = event.getY() - mAnimatedWebpTouchDownY;
+                    if (Math.abs(dx) <= mAnimatedWebpTouchSlop ||
+                            Math.abs(dx) <= Math.abs(dy)) {
+                        return false;
+                    }
+                    mAnimatedWebpTouchDragging = true;
+                    MotionEvent cancel = MotionEvent.obtain(event);
+                    cancel.setAction(MotionEvent.ACTION_CANCEL);
+                    super.dispatchTouchEvent(cancel);
+                    cancel.recycle();
+                    beginAnimatedWebpSeek();
+                }
+                requestAnimatedWebpSeekPreview(animatedWebpPositionForX(event.getX()), false);
+                return true;
+            case MotionEvent.ACTION_UP:
+                if (mAnimatedWebpTouchDragging) {
+                    finishAnimatedWebpSeek(animatedWebpPositionForX(event.getX()));
+                    clearAnimatedWebpTouchGesture();
+                    return true;
+                }
+                clearAnimatedWebpTouchGesture();
+                return false;
+            case MotionEvent.ACTION_CANCEL:
+                if (mAnimatedWebpTouchDragging) {
+                    finishAnimatedWebpSeek(mAnimatedWebpRequestedPosition);
+                    clearAnimatedWebpTouchGesture();
+                    return true;
+                }
+                clearAnimatedWebpTouchGesture();
+                return false;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                clearAnimatedWebpTouchGesture();
+                return false;
+            default:
+                return false;
+        }
+    }
+
+    private boolean canStartAnimatedWebpScrub(MotionEvent event) {
+        if (mAnimatedWebpTexture == null || !Settings.getAnimatedWebpAllowSeek()) {
+            return false;
+        }
+        View decor = getWindow().getDecorView();
+        if (event.getY() < decor.getHeight() * 0.75f) return false;
+        if (mSeekBarPanel != null && mSeekBarPanel.getVisibility() == View.VISIBLE &&
+                isPointInsideView(event.getRawX(), event.getRawY(), mSeekBarPanel)) {
+            return false;
+        }
+        // Let the real progress bar keep normal SeekBar semantics. The rest of
+        // the lower quarter is the larger, invisible scrubbing target.
+        return mAnimatedWebpSeek == null || !isPointInsideView(
+                event.getRawX(), event.getRawY(), mAnimatedWebpSeek);
+    }
+
+    private static boolean isPointInsideView(float rawX, float rawY, View view) {
+        if (view.getVisibility() != View.VISIBLE) return false;
+        int[] location = new int[2];
+        view.getLocationOnScreen(location);
+        return rawX >= location[0] && rawX < location[0] + view.getWidth() &&
+                rawY >= location[1] && rawY < location[1] + view.getHeight();
+    }
+
+    private int animatedWebpPositionForX(float x) {
+        ImageTexture texture = mAnimatedWebpTexture;
+        View decor = getWindow().getDecorView();
+        if (texture == null || decor.getWidth() <= 0) return 0;
+        float fraction = Math.max(0f, Math.min(1f, x / decor.getWidth()));
+        return Math.round(Math.max(0, texture.getPlaybackDuration() - 1) * fraction);
+    }
+
+    private void clearAnimatedWebpTouchGesture() {
+        mAnimatedWebpTouchCandidate = false;
+        mAnimatedWebpTouchDragging = false;
+    }
+
     @SuppressLint("SetTextI18n")
     private void updateProgress() {
         if (mProgress == null) {
@@ -816,7 +1042,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void updateQuickSettingsButtons() {
         if (mQuickScreenOrientation == null || mQuickReadingDirection == null
-                || mQuickDirectSave == null || mQuickPageTurn == null) {
+                || mQuickDirectSave == null || mQuickPageTurn == null
+                || mQuickAnimatedWebp == null) {
             return;
         }
 
@@ -856,6 +1083,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         updateQuickToggleButton(mQuickDirectSave, Settings.getDirectSave());
         updateQuickToggleButton(mQuickPageTurn, Settings.getQuickPageTurn());
+        updateQuickToggleButton(mQuickAnimatedWebp,
+                Settings.getExperimentalAnimatedWebpEnabled());
     }
 
     private static void updateQuickToggleButton(ImageButton button, boolean enabled) {
@@ -923,6 +1152,16 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mGalleryView.setPageAreaDoubleTapEnabled(!enabled);
         }
         updateQuickSettingsButtons();
+        keepQuickSettingsVisible();
+    }
+
+    private void toggleQuickAnimatedWebp(View view) {
+        Settings.putExperimentalAnimatedWebpEnabled(
+                !Settings.getExperimentalAnimatedWebpEnabled());
+        updateQuickSettingsButtons();
+        if (!reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) {
+            updateAnimatedWebpUi();
+        }
         keepQuickSettingsVisible();
     }
 
@@ -1499,6 +1738,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         private final SwitchCompat mReadingFullscreen;
         private final SwitchCompat mCustomScreenLightness;
         private final SeekBar mScreenLightness;
+        private final SwitchCompat mAnimatedWebpEnabled;
+        private final View mAnimatedWebpSettings;
+        private final SwitchCompat mAnimatedWebpShowTime;
+        private final SwitchCompat mAnimatedWebpAllowSeek;
+        private final SwitchCompat mAnimatedWebpAutoAdvance;
+        private final SwitchCompat mAnimatedWebpAutoTransferButton;
 
         @SuppressLint("InflateParams")
         public GalleryMenuHelper(Context context) {
@@ -1522,6 +1767,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mReadingFullscreen = mView.findViewById(R.id.reading_fullscreen);
             mCustomScreenLightness = mView.findViewById(R.id.custom_screen_lightness);
             mScreenLightness = mView.findViewById(R.id.screen_lightness);
+            mAnimatedWebpEnabled = mView.findViewById(R.id.animated_webp_enabled);
+            mAnimatedWebpSettings = mView.findViewById(R.id.animated_webp_settings);
+            mAnimatedWebpShowTime = mView.findViewById(R.id.animated_webp_show_time);
+            mAnimatedWebpAllowSeek = mView.findViewById(R.id.animated_webp_allow_seek);
+            mAnimatedWebpAutoAdvance = mView.findViewById(R.id.animated_webp_auto_advance);
+            mAnimatedWebpAutoTransferButton =
+                    mView.findViewById(R.id.animated_webp_auto_transfer_button);
 
             mScreenRotation.setSelection(Settings.getScreenRotation());
             mReadingDirection.setSelection(Settings.getReadingDirection());
@@ -1542,6 +1794,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mCustomScreenLightness.setChecked(Settings.getCustomScreenLightness());
             mScreenLightness.setProgress(Settings.getScreenLightness());
             mScreenLightness.setEnabled(Settings.getCustomScreenLightness());
+            mAnimatedWebpEnabled.setChecked(Settings.getExperimentalAnimatedWebpEnabled());
+            mAnimatedWebpShowTime.setChecked(Settings.getAnimatedWebpShowTime());
+            mAnimatedWebpAllowSeek.setChecked(Settings.getAnimatedWebpAllowSeek());
+            mAnimatedWebpAutoAdvance.setChecked(Settings.getAnimatedWebpAutoAdvance());
+            mAnimatedWebpAutoTransferButton.setChecked(
+                    Settings.getAnimatedWebpAutoTransferButton());
+            updateAnimatedWebpSettingsEnabled(mAnimatedWebpEnabled.isChecked());
 
             mDirectSave.setOnCheckedChangeListener(this::onDirectSaveChange);
             mVolumePage.setOnCheckedChangeListener(this::onVolumePageChange);
@@ -1557,6 +1816,17 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
 
             mCustomScreenLightness.setOnCheckedChangeListener((buttonView, isChecked) -> mScreenLightness.setEnabled(isChecked));
+            mAnimatedWebpEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
+                    updateAnimatedWebpSettingsEnabled(isChecked));
+        }
+
+        private void updateAnimatedWebpSettingsEnabled(boolean enabled) {
+            mAnimatedWebpSettings.setVisibility(View.VISIBLE);
+            mAnimatedWebpSettings.setAlpha(enabled ? 1.0f : 0.5f);
+            mAnimatedWebpShowTime.setEnabled(enabled);
+            mAnimatedWebpAllowSeek.setEnabled(enabled);
+            mAnimatedWebpAutoAdvance.setEnabled(enabled);
+            mAnimatedWebpAutoTransferButton.setEnabled(enabled);
         }
 
         private void configureStartTransferTime() {
@@ -1676,6 +1946,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             boolean reverseVolumePage = mReverseVolumePage.isChecked();
             boolean readingFullscreen = mReadingFullscreen.isChecked();
             boolean customScreenLightness = mCustomScreenLightness.isChecked();
+            boolean animatedWebpEnabled = mAnimatedWebpEnabled.isChecked();
+            boolean animatedWebpShowTime = mAnimatedWebpShowTime.isChecked();
+            boolean animatedWebpAllowSeek = mAnimatedWebpAllowSeek.isChecked();
+            boolean animatedWebpAutoAdvance = mAnimatedWebpAutoAdvance.isChecked();
+            boolean animatedWebpAutoTransferButton =
+                    mAnimatedWebpAutoTransferButton.isChecked();
 
             int screenLightness = mScreenLightness.getProgress();
             int transferTime = getTransferTimeInput();
@@ -1700,6 +1976,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             Settings.putCustomScreenLightness(customScreenLightness);
             Settings.putScreenLightness(screenLightness);
             Settings.putReverseVolumePage(reverseVolumePage);
+            Settings.putExperimentalAnimatedWebpEnabled(animatedWebpEnabled);
+            Settings.putAnimatedWebpShowTime(animatedWebpShowTime);
+            Settings.putAnimatedWebpAllowSeek(animatedWebpAllowSeek);
+            Settings.putAnimatedWebpAutoAdvance(animatedWebpAutoAdvance);
+            Settings.putAnimatedWebpAutoTransferButton(animatedWebpAutoTransferButton);
             if (!volumePage) {
                 mReverseVolumePage.setVisibility(View.GONE);
             } else {
@@ -1749,11 +2030,290 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mLayoutMode = layoutMode;
             updateSlider();
             updateQuickSettingsButtons();
+            if (!reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) {
+                updateAnimatedWebpUi();
+            }
 
             if (oldReadingFullscreen != readingFullscreen) {
                 recreate();
             }
         }
+    }
+
+    private void beginAnimatedWebpSeek() {
+        ImageTexture texture = mAnimatedWebpTexture;
+        if (texture == null || !Settings.getAnimatedWebpAllowSeek()) return;
+        if (!mAnimatedWebpSeeking) {
+            mAnimatedWebpSeeking = true;
+            mAnimatedWebpSeekAwaitingFrame = false;
+            mAnimatedWebpWasPlayingBeforeSeek = texture.isPlaybackPlaying();
+            texture.setPlaybackPlaying(false);
+        }
+    }
+
+    private void requestAnimatedWebpSeekPreview(int position, boolean force) {
+        ImageTexture texture = mAnimatedWebpTexture;
+        if (texture == null || !Settings.getAnimatedWebpAllowSeek()) return;
+        int duration = texture.getPlaybackDuration();
+        int target = Math.max(0, Math.min(Math.max(0, duration - 1), position));
+        mAnimatedWebpRequestedPosition = target;
+        if (mAnimatedWebpSeek != null && mAnimatedWebpSeek.getProgress() != target) {
+            mAnimatedWebpSeek.setProgress(target);
+        }
+        updateAnimatedWebpTime(target, duration);
+        long now = SystemClock.uptimeMillis();
+        if (force || now - mAnimatedWebpLastPreviewAt >= 120L) {
+            mAnimatedWebpLastPreviewAt = now;
+            texture.seekTo(target);
+        }
+    }
+
+    private void finishAnimatedWebpSeek(int position) {
+        ImageTexture texture = mAnimatedWebpTexture;
+        if (texture == null || !mAnimatedWebpSeeking) return;
+        requestAnimatedWebpSeekPreview(position, true);
+        mAnimatedWebpSeeking = false;
+        mAnimatedWebpSeekAwaitingFrame = true;
+        if (mAnimatedWebpWasPlayingBeforeSeek) texture.setPlaybackPlaying(true);
+    }
+
+    private void toggleAnimatedWebpPlayback() {
+        ImageTexture texture = mAnimatedWebpTexture;
+        if (texture != null) {
+            texture.setPlaybackPlaying(!texture.isPlaybackPlaying());
+        }
+    }
+
+    private void cycleAnimatedWebpSpeed() {
+        ImageTexture texture = mAnimatedWebpTexture;
+        if (texture == null) return;
+        float speed = texture.getPlaybackSpeed();
+        if (speed < 0.75f) speed = 1.0f;
+        else if (speed < 1.25f) speed = 1.5f;
+        else if (speed < 1.75f) speed = 2.0f;
+        else speed = 0.5f;
+        texture.setPlaybackSpeed(speed);
+        updateAnimatedWebpSpeedButton(speed);
+    }
+
+    private void updateAnimatedWebpSpeedButton(float speed) {
+        if (mAnimatedWebpSpeed == null) return;
+        String text = speed == (int) speed
+                ? Integer.toString((int) speed) + "x"
+                : String.format(Locale.US, "%.1fx", speed);
+        mAnimatedWebpSpeed.setText(text);
+    }
+
+    private void updateAnimatedWebpSequentialButton() {
+        if (mAnimatedWebpSequential == null) return;
+        mAnimatedWebpSequential.setImageResource(Settings.getAnimatedWebpAutoAdvance()
+                ? R.drawable.v_animated_webp_repeat_next_x24
+                : R.drawable.v_animated_webp_repeat_one_x24);
+        mAnimatedWebpSequential.setSelected(Settings.getAnimatedWebpAutoAdvance());
+    }
+
+    private static String formatAnimatedWebpTime(int positionMs, int durationMs) {
+        int positionSeconds = Math.max(0, positionMs) / 1000;
+        int durationSeconds = Math.max(0, durationMs) / 1000;
+        return String.format(Locale.US, "%02d:%02d/%02d:%02d",
+                positionSeconds / 60, positionSeconds % 60,
+                durationSeconds / 60, durationSeconds % 60);
+    }
+
+    private void updateAnimatedWebpTime(int positionMs, int durationMs) {
+        if (mAnimatedWebpTime != null) {
+            mAnimatedWebpTime.setText(formatAnimatedWebpTime(positionMs, durationMs));
+        }
+    }
+
+    private void updatePageSliderTint(boolean animatedWebp) {
+        if (mSeekBar == null || mPageSliderAnimatedTintApplied == animatedWebp) return;
+        mPageSliderAnimatedTintApplied = animatedWebp;
+        if (animatedWebp) {
+            ColorStateList tint = ColorStateList.valueOf(0xffb8c9bb);
+            ColorStateList backgroundTint = ColorStateList.valueOf(0x80b8c9bb);
+            mSeekBar.setProgressTintList(tint);
+            mSeekBar.setProgressBackgroundTintList(backgroundTint);
+            mSeekBar.setSecondaryProgressTintList(tint);
+            mSeekBar.setThumbTintList(tint);
+        } else {
+            if (mPageSliderDefaultProgressDrawableState != null) {
+                mSeekBar.setProgressDrawable(mPageSliderDefaultProgressDrawableState
+                        .newDrawable(getResources(), getTheme()).mutate());
+            }
+            if (mPageSliderDefaultThumbDrawableState != null) {
+                mSeekBar.setThumb(mPageSliderDefaultThumbDrawableState
+                        .newDrawable(getResources(), getTheme()).mutate());
+            }
+            mSeekBar.setProgressTintList(mPageSliderDefaultProgressTint);
+            mSeekBar.setProgressBackgroundTintList(
+                    mPageSliderDefaultProgressBackgroundTint);
+            mSeekBar.setSecondaryProgressTintList(
+                    mPageSliderDefaultSecondaryProgressTint);
+            mSeekBar.setThumbTintList(mPageSliderDefaultThumbTint);
+        }
+        mSeekBar.invalidate();
+    }
+
+    private boolean reloadCurrentAnimatedWebpForDecoderModeIfNeeded() {
+        if (mGalleryView == null || mGalleryProvider == null || mCurrentIndex < 0) {
+            return false;
+        }
+        GalleryPageView page = mGalleryView.findPageByIndex(mCurrentIndex);
+        ImageTexture texture = page != null ? page.getImageTexture() : null;
+        if (texture == null || !texture.isAnimatedWebpSource()) {
+            mAnimatedWebpReloadSourceTexture = null;
+            return false;
+        }
+
+        boolean targetEnabled = Settings.getExperimentalAnimatedWebpEnabled() &&
+                mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM;
+        if (texture.wasAnimatedWebpControlRequested() == targetEnabled) {
+            mAnimatedWebpReloadSourceTexture = null;
+            return false;
+        }
+        if (mAnimatedWebpReloadSourceTexture == texture) {
+            return false;
+        }
+
+        mAnimatedWebpReloadSourceTexture = texture;
+        if (mAnimatedWebpTexture != null) {
+            mAnimatedWebpTexture.setPlaybackListener(null);
+            mAnimatedWebpTexture = null;
+        }
+        mAnimatedWebpSeeking = false;
+        mAnimatedWebpSeekAwaitingFrame = false;
+        clearAnimatedWebpTouchGesture();
+        if (mAnimatedWebpPanel != null) mAnimatedWebpPanel.setVisibility(View.GONE);
+
+        // Animated pages are normally excluded from GalleryProvider's LRU cache.
+        // Removing the entry is still useful if a decoder reported the image as
+        // static. The provider then decodes the already downloaded/local source
+        // again without recreating the complete gallery.
+        mGalleryProvider.removeCache(mCurrentIndex);
+        mGalleryProvider.notifyDataChanged(mCurrentIndex);
+        return true;
+    }
+
+    private void updateAnimatedWebpUi() {
+        if (reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) return;
+
+        ImageTexture candidate = null;
+        if (mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM && mGalleryView != null &&
+                mCurrentIndex >= 0) {
+            GalleryPageView page = mGalleryView.findPageByIndex(mCurrentIndex);
+            ImageTexture texture = page != null ? page.getImageTexture() : null;
+            if (texture != null && texture.isControllableAnimation()) candidate = texture;
+        }
+
+        if (!Settings.getExperimentalAnimatedWebpEnabled()) candidate = null;
+
+        if (candidate != mAnimatedWebpTexture) {
+            if (mAnimatedWebpTexture != null) mAnimatedWebpTexture.setPlaybackListener(null);
+            mAnimatedWebpTexture = candidate;
+            mAnimatedWebpSeeking = false;
+            mAnimatedWebpSeekAwaitingFrame = false;
+            if (candidate != null) candidate.setPlaybackListener(this);
+        }
+
+        boolean showTime = Settings.getAnimatedWebpShowTime();
+        boolean allowSeek = Settings.getAnimatedWebpAllowSeek();
+        boolean sliderVisible = mSeekBarPanel != null &&
+                mSeekBarPanel.getVisibility() == View.VISIBLE;
+        int sliderOffset = sliderVisible && mSeekBarPanel != null
+                ? mSeekBarPanel.getHeight() : 0;
+        boolean visible = candidate != null;
+        updatePageSliderTint(visible);
+        if (mAnimatedWebpPanel != null) {
+            mAnimatedWebpPanel.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+        if (!visible) {
+            if (mAutoTransferPanel != null && sliderVisible) {
+                mAutoTransferPanel.setVisibility(View.VISIBLE);
+            }
+            return;
+        }
+
+        int duration = candidate.getPlaybackDuration();
+        int position = candidate.getPlaybackPosition();
+        if (mAnimatedWebpSeekAwaitingFrame &&
+                Math.abs(position - mAnimatedWebpRequestedPosition) <=
+                        Math.max(150, candidate.getPlaybackFrameDelay())) {
+            mAnimatedWebpSeekAwaitingFrame = false;
+        }
+        if (mAnimatedWebpTime != null) {
+            mAnimatedWebpTime.setVisibility(showTime ? View.VISIBLE : View.INVISIBLE);
+        }
+        if (!mAnimatedWebpSeeking && !mAnimatedWebpSeekAwaitingFrame) {
+            updateAnimatedWebpTime(position, duration);
+        }
+        if (mAnimatedWebpSeek != null) {
+            mAnimatedWebpSeek.setVisibility(View.VISIBLE);
+            // The page slider occupies the higher-priority touch layer while visible.
+            mAnimatedWebpSeek.setEnabled(allowSeek);
+            mAnimatedWebpSeek.setTouchHandlingEnabled(!sliderVisible);
+            mAnimatedWebpSeek.setMax(Math.max(1, duration));
+            if (!mAnimatedWebpSeeking && !mAnimatedWebpSeekAwaitingFrame) {
+                mAnimatedWebpSeek.setProgress(Math.min(duration, position));
+            }
+        }
+        if (mAnimatedWebpControls != null) {
+            mAnimatedWebpControls.setVisibility(showTime || sliderVisible
+                    ? View.VISIBLE : View.GONE);
+            ViewGroup.LayoutParams raw = mAnimatedWebpControls.getLayoutParams();
+            if (raw instanceof FrameLayout.LayoutParams) {
+                FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) raw;
+                int baseMargin = Math.round(18 * getResources().getDisplayMetrics().density);
+                if (params.bottomMargin != baseMargin + sliderOffset) {
+                    params.bottomMargin = baseMargin + sliderOffset;
+                    mAnimatedWebpControls.setLayoutParams(params);
+                }
+                if (mAnimatedWebpPanel != null) {
+                    ViewGroup.LayoutParams panelParams = mAnimatedWebpPanel.getLayoutParams();
+                    int height = Math.round(58 * getResources().getDisplayMetrics().density)
+                            + sliderOffset;
+                    if (panelParams.height != height) {
+                        panelParams.height = height;
+                        mAnimatedWebpPanel.setLayoutParams(panelParams);
+                    }
+                }
+            }
+        }
+        if (mAnimatedWebpPlayPause != null) {
+            mAnimatedWebpPlayPause.setVisibility(sliderVisible ? View.VISIBLE : View.INVISIBLE);
+            mAnimatedWebpPlayPause.setImageResource(candidate.isPlaybackPlaying()
+                    ? R.drawable.v_pause_x24 : R.drawable.v_play_x24);
+        }
+        if (mAnimatedWebpSpeed != null) {
+            mAnimatedWebpSpeed.setVisibility(sliderVisible ? View.VISIBLE : View.INVISIBLE);
+        }
+        if (mAnimatedWebpSequential != null) {
+            mAnimatedWebpSequential.setVisibility(
+                    sliderVisible ? View.VISIBLE : View.INVISIBLE);
+        }
+        if (mAutoTransferPanel != null && sliderVisible) {
+            mAutoTransferPanel.setVisibility(Settings.getAnimatedWebpAutoTransferButton()
+                    ? View.VISIBLE : View.INVISIBLE);
+        }
+        updateAnimatedWebpSpeedButton(candidate.getPlaybackSpeed());
+        updateAnimatedWebpSequentialButton();
+    }
+
+    @Override
+    public void onPlaybackChanged(ImageTexture texture, boolean looped) {
+        mAnimatedWebpHandler.post(() -> {
+            if (texture != mAnimatedWebpTexture) return;
+            updateAnimatedWebpUi();
+            if (looped && Settings.getAnimatedWebpAutoAdvance() && mGalleryView != null &&
+                    mCurrentIndex >= 0 && mCurrentIndex + 1 < mSize) {
+                mGalleryView.setCurrentPage(mCurrentIndex + 1);
+            }
+        });
+    }
+
+    @Override
+    public void onDoubleTapSliderArea() {
+        mAnimatedWebpHandler.post(this::toggleAnimatedWebpPlayback);
     }
 
     private class NotifyTask implements Runnable {
@@ -1798,6 +2358,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 showSlider(mSeekBarPanel, mSeekBarPanelAnimator);
                 showSlider(mAutoTransferPanel, mAutoTransferAnimator);
                 showSlider(mQuickSettingsPanel, mQuickSettingsAnimator);
+                updateAnimatedWebpUi();
                 SimpleHandler.getInstance().postDelayed(mHideSliderRunnable, HIDE_SLIDER_DELAY);
             }
         }
@@ -1861,6 +2422,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     GalleryActivity.this.mCurrentIndex = mValue;
                     updateSlider();
                     updateProgress();
+                    if (!reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) {
+                        updateAnimatedWebpUi();
+                    }
                     break;
                 case KEY_TAP_MENU_AREA:
                     onTapMenuArea();

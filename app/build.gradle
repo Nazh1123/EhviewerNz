@@ -51,7 +51,7 @@ android {
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 30
         versionCode 111
-        versionName "2.0.2.3.3.7"
+        versionName "2.0.2.3.3.12"
         manifestPlaceholders = [appLabel: "@string/app_name"]
         vectorDrawables.useSupportLibrary = true
         resourceConfigurations += ['zh', 'zh-rCN', 'zh-rHK', 'zh-rTW', 'es', 'ja', 'ko', 'fr', 'de', 'th']

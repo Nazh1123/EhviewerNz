@@ -698,6 +698,8 @@ public class ImageTexture implements Texture, Animatable {
 
     private static final int TILE_SMALL = 0;
     private static final int TILE_LARGE = 1;
+    private static final int TILE_DIRECT = 2;
+    private static final int DIRECT_TEXTURE_MAX_SIZE = 4096;
     private static final int SMALL_CONTENT_SIZE = 254;
     private static final int SMALL_BORDER_SIZE = 1;
     private static final int SMALL_TILE_SIZE = SMALL_CONTENT_SIZE + 2 * SMALL_BORDER_SIZE;
@@ -726,6 +728,7 @@ public class ImageTexture implements Texture, Animatable {
     // Should be protected by "synchronized."
     private final int mHeight;
     private final boolean mOpaque;
+    private final boolean mControllableAnimation;
     private final RectF mSrcRect = new RectF();
     private final RectF mDestRect = new RectF();
     private final AtomicBoolean mRunning = new AtomicBoolean();
@@ -736,6 +739,16 @@ public class ImageTexture implements Texture, Animatable {
     private int mUploadIndex = 0;
     private boolean mImageBusy = false;
     private Runnable mAnimateRunnable = null;
+    private final Object mPlaybackLock = new Object();
+    private boolean mPlaybackPlaying = true;
+    private float mPlaybackSpeed = 1.0f;
+    private int mPendingSeek = -1;
+    private int mPlaybackFramePosition;
+    private int mPlaybackFrameDelay;
+    private long mPlaybackFrameStart;
+    private float mPlaybackFrameElapsed;
+    private final int mPlaybackDuration;
+    private WeakReference<PlaybackListener> mPlaybackListener;
 
     private WeakReference<Callback> mCallback;
 
@@ -747,9 +760,23 @@ public class ImageTexture implements Texture, Animatable {
         int width = mWidth = image.getWidth();
         int height = mHeight = image.getHeight();
         boolean opaque = mOpaque = image.isOpaque();
+        mControllableAnimation = image.isControllableAnimation();
+        mPlaybackDuration = mControllableAnimation ? image.getTotalDuration() : 0;
+        mPlaybackFramePosition = mControllableAnimation ? image.getCurrentPosition() : 0;
+        mPlaybackFrameDelay = mControllableAnimation ? image.getDelay() : 0;
+        mPlaybackFrameStart = SystemClock.uptimeMillis();
         ArrayList<Tile> list = new ArrayList<>();
 
-        for (int x = 0; x < width; x += LARGE_CONTENT_SIZE) {
+        if (mControllableAnimation && image.canUseDirectTexture() &&
+                width <= DIRECT_TEXTURE_MAX_SIZE && height <= DIRECT_TEXTURE_MAX_SIZE) {
+            Tile tile = new Tile();
+            tile.offsetX = 0;
+            tile.offsetY = 0;
+            tile.image = image;
+            tile.setSize(TILE_DIRECT, width, height);
+            tile.setOpaque(opaque);
+            list.add(tile);
+        } else for (int x = 0; x < width; x += LARGE_CONTENT_SIZE) {
             for (int y = 0; y < height; y += LARGE_CONTENT_SIZE) {
                 int w = Math.min(LARGE_CONTENT_SIZE, width - x);
                 int h = Math.min(LARGE_CONTENT_SIZE, height - y);
@@ -873,6 +900,99 @@ public class ImageTexture implements Texture, Animatable {
         }
     }
 
+    public boolean isControllableAnimation() {
+        return mControllableAnimation;
+    }
+
+    public boolean isAnimatedWebpSource() {
+        return mImage.isAnimatedWebpSource();
+    }
+
+    public boolean wasAnimatedWebpControlRequested() {
+        return mImage.wasAnimatedWebpControlRequested();
+    }
+
+    public int getPlaybackDuration() {
+        return mPlaybackDuration;
+    }
+
+    public int getPlaybackPosition() {
+        if (!mControllableAnimation) return 0;
+        synchronized (mPlaybackLock) {
+            updateElapsedLocked();
+            return Math.min(mPlaybackDuration,
+                    mPlaybackFramePosition + Math.round(mPlaybackFrameElapsed));
+        }
+    }
+
+    public int getPlaybackFrameDelay() {
+        synchronized (mPlaybackLock) {
+            return mPlaybackFrameDelay;
+        }
+    }
+
+    public boolean isPlaybackPlaying() {
+        synchronized (mPlaybackLock) {
+            return mPlaybackPlaying;
+        }
+    }
+
+    public void setPlaybackPlaying(boolean playing) {
+        if (!mControllableAnimation) return;
+        synchronized (mPlaybackLock) {
+            updateElapsedLocked();
+            mPlaybackPlaying = playing;
+            mPlaybackFrameStart = SystemClock.uptimeMillis();
+            mPlaybackLock.notifyAll();
+        }
+        notifyPlaybackChanged(false);
+    }
+
+    public float getPlaybackSpeed() {
+        synchronized (mPlaybackLock) {
+            return mPlaybackSpeed;
+        }
+    }
+
+    public void setPlaybackSpeed(float speed) {
+        if (!mControllableAnimation) return;
+        float clamped = Math.max(0.25f, Math.min(4.0f, speed));
+        synchronized (mPlaybackLock) {
+            updateElapsedLocked();
+            mPlaybackSpeed = clamped;
+            mPlaybackFrameStart = SystemClock.uptimeMillis();
+            mPlaybackLock.notifyAll();
+        }
+        notifyPlaybackChanged(false);
+    }
+
+    public void seekTo(int positionMs) {
+        if (!mControllableAnimation || mPlaybackDuration <= 0) return;
+        synchronized (mPlaybackLock) {
+            mPendingSeek = Math.max(0, Math.min(mPlaybackDuration - 1, positionMs));
+            mPlaybackLock.notifyAll();
+        }
+    }
+
+    public void setPlaybackListener(PlaybackListener listener) {
+        mPlaybackListener = listener == null ? null : new WeakReference<>(listener);
+    }
+
+    private void updateElapsedLocked() {
+        long now = SystemClock.uptimeMillis();
+        if (mPlaybackPlaying && mRunning.get()) {
+            mPlaybackFrameElapsed = Math.min(mPlaybackFrameDelay,
+                    mPlaybackFrameElapsed + (now - mPlaybackFrameStart) * mPlaybackSpeed);
+        }
+        mPlaybackFrameStart = now;
+    }
+
+    private void notifyPlaybackChanged(boolean looped) {
+        WeakReference<PlaybackListener> reference = mPlaybackListener;
+        PlaybackListener listener = reference != null ? reference.get() : null;
+        if (listener != null) listener.onPlaybackChanged(this, looped);
+    }
+
     @Override
     public void start() {
         synchronized (mImage) {
@@ -896,6 +1016,12 @@ public class ImageTexture implements Texture, Animatable {
         }
 
         mRunning.lazySet(true);
+        if (mControllableAnimation) {
+            synchronized (mPlaybackLock) {
+                mPlaybackFrameStart = SystemClock.uptimeMillis();
+                mPlaybackLock.notifyAll();
+            }
+        }
 
         synchronized (mImage) {
             if (mAnimateRunnable == null) {
@@ -910,6 +1036,10 @@ public class ImageTexture implements Texture, Animatable {
     public void stop() {
         mRunning.lazySet(false);
         mRequestAnimation.lazySet(false);
+        synchronized (mPlaybackLock) {
+            updateElapsedLocked();
+            mPlaybackLock.notifyAll();
+        }
     }
 
     @Override
@@ -1061,6 +1191,10 @@ public class ImageTexture implements Texture, Animatable {
 
     public void recycle() {
         mRunning.lazySet(false);
+        synchronized (mPlaybackLock) {
+            mPlaybackLock.notifyAll();
+        }
+        mPlaybackListener = null;
 
         for (Tile mTile : mTiles) {
             mTile.free();
@@ -1089,7 +1223,7 @@ public class ImageTexture implements Texture, Animatable {
         }
     }
 
-    @IntDef({TILE_SMALL, TILE_LARGE})
+    @IntDef({TILE_SMALL, TILE_LARGE, TILE_DIRECT})
     @Retention(RetentionPolicy.SOURCE)
     private @interface TileType {
     }
@@ -1181,6 +1315,9 @@ public class ImageTexture implements Texture, Animatable {
             } else if (tileType == TILE_LARGE) {
                 borderSize = LARGE_BORDER_SIZE;
                 tileSize = LARGE_TILE_SIZE;
+            } else if (tileType == TILE_DIRECT) {
+                borderSize = 0;
+                tileSize = 0;
             } else {
                 throw new IllegalStateException("Not support tile type: " + tileType);
             }
@@ -1189,13 +1326,17 @@ public class ImageTexture implements Texture, Animatable {
 
             mWidth = width + 2 * borderSize;
             mHeight = height + 2 * borderSize;
-            mTextureWidth = tileSize;
-            mTextureHeight = tileSize;
+            mTextureWidth = tileType == TILE_DIRECT ? width : tileSize;
+            mTextureHeight = tileType == TILE_DIRECT ? height : tileSize;
         }
 
         @Override
         protected void texImage(boolean init) {
             if (image != null && !image.isRecycled()) {
+                if (mTileType == TILE_DIRECT) {
+                    image.texImageDirect(init);
+                    return;
+                }
                 int w, h;
                 if (init) {
                     w = mTextureWidth;
@@ -1221,6 +1362,9 @@ public class ImageTexture implements Texture, Animatable {
                 case TILE_LARGE:
                     freeLargeTile(this);
                     break;
+                case TILE_DIRECT:
+                    invalidate();
+                    break;
                 default:
                     throw new IllegalStateException("Not support tile type: " + mTileType);
             }
@@ -1228,6 +1372,73 @@ public class ImageTexture implements Texture, Animatable {
     }
 
     private class AnimateRunnable implements Runnable {
+
+        private void doControllableRun() {
+            while (mRunning.get() && !mReleased.get() && !mImage.isImageRecycled() &&
+                    !mNeedRelease.get()) {
+                int seekPosition;
+                synchronized (mPlaybackLock) {
+                    while (mRunning.get() && !mPlaybackPlaying && mPendingSeek < 0) {
+                        try {
+                            mPlaybackLock.wait();
+                        } catch (InterruptedException ignored) {
+                        }
+                    }
+                    if (!mRunning.get()) break;
+                    seekPosition = mPendingSeek;
+                    mPendingSeek = -1;
+                    if (seekPosition < 0) {
+                        updateElapsedLocked();
+                        float remaining = mPlaybackFrameDelay - mPlaybackFrameElapsed;
+                        if (remaining > 0f) {
+                            try {
+                                mPlaybackLock.wait(Math.max(1L,
+                                        (long) Math.ceil(remaining / mPlaybackSpeed)));
+                            } catch (InterruptedException ignored) {
+                            }
+                            continue;
+                        }
+                    }
+                }
+
+                synchronized (mImage) {
+                    if (mReleased.get() || mImage.isImageRecycled() || mNeedRelease.get()) break;
+                    mImageBusy = true;
+                }
+                long decodeStarted = SystemClock.uptimeMillis();
+                boolean looped = false;
+                int framePosition;
+                if (seekPosition >= 0) {
+                    framePosition = mImage.seekTo(seekPosition);
+                } else {
+                    looped = mImage.advanceFrame();
+                    framePosition = mImage.getCurrentPosition();
+                }
+                int frameDelay = mImage.getDelay();
+                long decodeElapsed = SystemClock.uptimeMillis() - decodeStarted;
+                synchronized (mImage) {
+                    mImageBusy = false;
+                }
+                synchronized (mPlaybackLock) {
+                    mPlaybackFramePosition = framePosition;
+                    mPlaybackFrameDelay = frameDelay;
+                    mPlaybackFrameElapsed = seekPosition >= 0
+                            ? Math.max(0, seekPosition - framePosition)
+                            // Decoding and any wait for the GL upload mutex are part of
+                            // the animation timeline. Carry that time into the new frame
+                            // instead of adding a full frame delay after every decode.
+                            : Math.min(frameDelay, decodeElapsed * mPlaybackSpeed);
+                    mPlaybackFrameStart = SystemClock.uptimeMillis();
+                }
+                mFrameDirty.lazySet(true);
+                invalidateSelf();
+                notifyPlaybackChanged(looped);
+            }
+            synchronized (mImage) {
+                mImageBusy = false;
+                mAnimateRunnable = null;
+            }
+        }
 
         public void doRun() {
             long lastTime = System.nanoTime();
@@ -1297,8 +1508,17 @@ public class ImageTexture implements Texture, Animatable {
 
         @Override
         public void run() {
+            if (mControllableAnimation) {
+                doControllableRun();
+                releaseIfNeeded();
+                return;
+            }
             doRun();
 
+            releaseIfNeeded();
+        }
+
+        private void releaseIfNeeded() {
             while (mNeedRelease.get()) {
                 // Obtain
                 synchronized (mImage) {
@@ -1326,5 +1546,9 @@ public class ImageTexture implements Texture, Animatable {
                 }
             }
         }
+    }
+
+    public interface PlaybackListener {
+        void onPlaybackChanged(ImageTexture texture, boolean looped);
     }
 }

@@ -1030,4 +1030,9 @@
     <string name="dummy_button">虛擬按鈕</string>
     <string name="dummy_content">虛擬\n內容</string>
 
+    <string name="settings_animated_webp_controls">動圖控制</string>
+    <string name="settings_animated_webp_playback_time">播放時間</string>
+    <string name="settings_animated_webp_progress_control">進度條控制</string>
+    <string name="settings_animated_webp_sequential_playback">順序播放</string>
+    <string name="settings_animated_webp_auto_transfer_button">自動翻頁按鈕</string>
 </resources>

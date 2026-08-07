@@ -20,11 +20,14 @@
 #include "config.h"
 #ifdef IMAGE_SUPPORT_WEBP
 
+#include <pthread.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #include "patch_head_input_stream.h"
 #include "../utils.h"
 #include "webp/decode.h"
+#include "webp/demux.h"
 
 #define IMAGE_WEBP_DECODER_DESCRIPTION \
   ("libwebp " MAKESTRING(STRINGIZE, WEBP_DECODER_ABI_VERSION))
@@ -42,14 +45,24 @@ typedef struct {
   unsigned int frame_count;
   unsigned int current_frame;
   unsigned char* buffer;
-  unsigned char** frames;
+  unsigned char* encoded_data;
+  size_t encoded_length;
+  WebPAnimDecoder* decoder;
+  // Stable RGBA display frame, independent of the decoder's working canvas.
+  unsigned char* current_frame_buffer;
+  size_t frame_buffer_size;
+  pthread_mutex_t frame_buffer_mutex;
+  bool frame_buffer_mutex_initialized;
   int* delays;
+  int total_duration;
 } WEBP;
 
 void* WEBP_decode(JNIEnv* env, PatchHeadInputStream* patch_head_input_stream, bool partially);
 bool WEBP_complete(JNIEnv* env, WEBP* webp);
 bool WEBP_is_completed(WEBP* webp);
 void* WEBP_get_pixels(WEBP* webp);
+void WEBP_lock_pixels(WEBP* webp);
+void WEBP_unlock_pixels(WEBP* webp);
 int WEBP_get_width(WEBP* webp);
 int WEBP_get_height(WEBP* webp);
 int WEBP_get_byte_count(WEBP* webp);
@@ -57,6 +70,10 @@ void WEBP_render(WEBP* webp, int src_x, int src_y,
                  void* dst, int dst_w, int dst_h, int dst_x, int dst_y,
                  int width, int height, bool fill_blank, int default_color);
 void WEBP_advance(WEBP* webp);
+bool WEBP_advance_and_get_looped(WEBP* webp);
+int WEBP_seek_to(WEBP* webp, int position_ms);
+int WEBP_get_current_position(WEBP* webp);
+int WEBP_get_total_duration(WEBP* webp);
 int WEBP_get_delay(WEBP* webp);
 int WEBP_get_frame_count(WEBP* webp);
 bool WEBP_is_opaque(WEBP* webp);
@@ -65,4 +82,3 @@ void WEBP_recycle(JNIEnv* env, WEBP* webp);
 #endif // IMAGE_SUPPORT_WEBP
 
 #endif // IMAGE_IMAGE_WEBP_H
-

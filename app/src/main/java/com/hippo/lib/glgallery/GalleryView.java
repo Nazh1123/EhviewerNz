@@ -739,6 +739,15 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             return;
         }
 
+        if (mSliderArea.contains((int) x, (int) y)) {
+            GalleryPageView page = findPageUnder(x, y);
+            if (page != null && page.getImageTexture() != null &&
+                    page.getImageTexture().isControllableAnimation()) {
+                if (mListener != null) mListener.onDoubleTapSliderArea();
+                return;
+            }
+        }
+
         if (mLayoutManager != null) {
             mLayoutManager.onDoubleTapConfirmed(x, y);
         }
@@ -1252,6 +1261,9 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
         @RenderThread
         void onTapSliderArea();
+
+        @RenderThread
+        void onDoubleTapSliderArea();
 
         @RenderThread
         void onTapMenuArea();

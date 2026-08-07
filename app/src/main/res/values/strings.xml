@@ -1157,4 +1157,11 @@
     <string name="open_direct_parent">Open direct parent</string>
     <!-- TagSelectActivity -->
     <string name="tag_search_entrance">Tag Selector</string>
+    <string name="animated_webp_progress">Animated image progress</string>
+    <string name="animated_webp_play_pause">Play or pause animated image</string>
+    <string name="settings_animated_webp_controls">Animated image controls</string>
+    <string name="settings_animated_webp_playback_time">Playback time</string>
+    <string name="settings_animated_webp_progress_control">Progress bar control</string>
+    <string name="settings_animated_webp_sequential_playback">Sequential playback</string>
+    <string name="settings_animated_webp_auto_transfer_button">Auto page-turn button</string>
 </resources>

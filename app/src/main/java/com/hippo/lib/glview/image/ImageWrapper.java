@@ -291,6 +291,23 @@ public class ImageWrapper {
         return mImage.getAnimated();
     }
 
+    public boolean isControllableAnimation() {
+        return mImage.getControllableAnimation();
+    }
+
+    public boolean isAnimatedWebpSource() {
+        return mImage.getAnimatedWebpSource();
+    }
+
+    public boolean wasAnimatedWebpControlRequested() {
+        return mImage.getAnimatedWebpControlRequested();
+    }
+
+    public boolean canUseDirectTexture() {
+        return isControllableAnimation() && mCut.left == 0 && mCut.top == 0 &&
+                mCut.right == mImage.getWidth() && mCut.bottom == mImage.getHeight();
+    }
+
     /**
      * @see Image#getAnimated()
      */
@@ -319,6 +336,26 @@ public class ImageWrapper {
      */
     public void texImage(boolean init, int offsetX, int offsetY, int width, int height) {
         mImage.texImage(init, offsetX + mCut.left, offsetY + mCut.top, width, height);
+    }
+
+    public void texImageDirect(boolean init) {
+        mImage.texImageDirect(init);
+    }
+
+    public boolean advanceFrame() {
+        return mImage.advanceFrame();
+    }
+
+    public int seekTo(int positionMs) {
+        return mImage.seekTo(positionMs);
+    }
+
+    public int getCurrentPosition() {
+        return mImage.getCurrentFramePosition();
+    }
+
+    public int getTotalDuration() {
+        return mImage.getTotalDuration();
     }
 
     /**

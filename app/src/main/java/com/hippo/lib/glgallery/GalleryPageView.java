@@ -16,6 +16,8 @@
 
 package com.hippo.lib.glgallery;
 
+import androidx.annotation.Nullable;
+
 import com.hippo.lib.glview.glrenderer.BasicTexture;
 import com.hippo.lib.glview.glrenderer.Texture;
 import com.hippo.lib.glview.image.GLImageMovableTextView;
@@ -135,6 +137,11 @@ public class GalleryPageView extends GLFrameLayout {
         if (imageTexture != null) {
             mImage.setImageTexture(imageTexture);
         }
+    }
+
+    @Nullable
+    public ImageTexture getImageTexture() {
+        return mImage.getImageTexture();
     }
 
     public void setPage(int page) {
