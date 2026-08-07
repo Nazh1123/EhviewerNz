@@ -917,6 +917,12 @@ public class ImageTexture implements Texture, Animatable {
         }
     }
 
+    public int getPlaybackFrameDelay() {
+        synchronized (mPlaybackLock) {
+            return mPlaybackFrameDelay;
+        }
+    }
+
     public boolean isPlaybackPlaying() {
         synchronized (mPlaybackLock) {
             return mPlaybackPlaying;

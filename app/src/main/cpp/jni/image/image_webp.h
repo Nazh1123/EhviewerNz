@@ -48,7 +48,7 @@ typedef struct {
   unsigned char* encoded_data;
   size_t encoded_length;
   WebPAnimDecoder* decoder;
-  // Decoder-owned composited RGBA frame. Protected until GL upload completes.
+  // Stable RGBA display frame, independent of the decoder's working canvas.
   unsigned char* current_frame_buffer;
   size_t frame_buffer_size;
   pthread_mutex_t frame_buffer_mutex;

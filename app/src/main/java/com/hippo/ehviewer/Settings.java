@@ -597,13 +597,14 @@ public class Settings {
         putIntToStr(KEY_READING_DIRECTION, value);
     }
 
-    // Experimental animated WebP controls. They intentionally have no settings UI yet.
-    private static final String KEY_EXPERIMENTAL_ANIMATED_WEBP = "experimental_animated_webp";
+    public static final String KEY_EXPERIMENTAL_ANIMATED_WEBP = "experimental_animated_webp";
     private static final String KEY_ANIMATED_WEBP_SHOW_PROGRESS = "animated_webp_show_progress";
-    private static final String KEY_ANIMATED_WEBP_SHOW_TIME = "animated_webp_show_time";
-    private static final String KEY_ANIMATED_WEBP_ALLOW_SEEK = "animated_webp_allow_seek";
+    public static final String KEY_ANIMATED_WEBP_SHOW_TIME = "animated_webp_show_time";
+    public static final String KEY_ANIMATED_WEBP_ALLOW_SEEK = "animated_webp_allow_seek";
     private static final String KEY_ANIMATED_WEBP_SHOW_CONTROLS = "animated_webp_show_controls";
-    private static final String KEY_ANIMATED_WEBP_AUTO_ADVANCE = "animated_webp_auto_advance";
+    public static final String KEY_ANIMATED_WEBP_AUTO_ADVANCE = "animated_webp_auto_advance";
+    public static final String KEY_ANIMATED_WEBP_AUTO_TRANSFER_BUTTON =
+            "animated_webp_auto_transfer_button";
 
     public static boolean getExperimentalAnimatedWebpEnabled() {
         return getBoolean(KEY_EXPERIMENTAL_ANIMATED_WEBP, true);
@@ -629,6 +630,10 @@ public class Settings {
         return getBoolean(KEY_ANIMATED_WEBP_AUTO_ADVANCE, false);
     }
 
+    public static boolean getAnimatedWebpAutoTransferButton() {
+        return getBoolean(KEY_ANIMATED_WEBP_AUTO_TRANSFER_BUTTON, false);
+    }
+
     public static void putExperimentalAnimatedWebpEnabled(boolean value) {
         putBoolean(KEY_EXPERIMENTAL_ANIMATED_WEBP, value);
     }
@@ -651,6 +656,10 @@ public class Settings {
 
     public static void putAnimatedWebpAutoAdvance(boolean value) {
         putBoolean(KEY_ANIMATED_WEBP_AUTO_ADVANCE, value);
+    }
+
+    public static void putAnimatedWebpAutoTransferButton(boolean value) {
+        putBoolean(KEY_ANIMATED_WEBP_AUTO_TRANSFER_BUTTON, value);
     }
 
     private static final String KEY_PAGE_SCALING = "page_scaling";

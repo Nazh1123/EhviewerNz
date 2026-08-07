@@ -117,7 +117,12 @@ static bool decode_animation(WEBP* webp, const uint8_t* data, size_t length) {
     }
   }
   if (!WebPAnimDecoderGetNext(webp->decoder, &frame, &timestamp)) return false;
-  webp->current_frame_buffer = frame;
+  webp->current_frame_buffer = (unsigned char*) malloc(webp->frame_buffer_size);
+  if (webp->current_frame_buffer == NULL) {
+    WTF_OM;
+    return false;
+  }
+  memcpy(webp->current_frame_buffer, frame, webp->frame_buffer_size);
   webp->width = info.canvas_width;
   webp->height = info.canvas_height;
   webp->animated = true;
@@ -218,21 +223,22 @@ void WEBP_advance(WEBP* webp) { WEBP_advance_and_get_looped(webp); }
 bool WEBP_advance_and_get_looped(WEBP* webp) {
   if (webp == NULL || !webp->animated || webp->decoder == NULL) return false;
   bool looped = false;
-  WEBP_lock_pixels(webp);
+  unsigned int next_frame;
   if (!WebPAnimDecoderHasMoreFrames(webp->decoder)) {
     WebPAnimDecoderReset(webp->decoder);
-    webp->current_frame = 0;
+    next_frame = 0;
     looped = true;
   } else {
-    webp->current_frame++;
+    next_frame = webp->current_frame + 1;
   }
   uint8_t* frame = NULL;
   int timestamp = 0;
   if (!WebPAnimDecoderGetNext(webp->decoder, &frame, &timestamp)) {
-    WEBP_unlock_pixels(webp);
     return false;
   }
-  webp->current_frame_buffer = frame;
+  WEBP_lock_pixels(webp);
+  memcpy(webp->current_frame_buffer, frame, webp->frame_buffer_size);
+  webp->current_frame = next_frame;
   WEBP_unlock_pixels(webp);
   return looped;
 }
@@ -248,18 +254,28 @@ int WEBP_seek_to(WEBP* webp, int position_ms) {
     if (position_ms < frame_start + webp->delays[i]) break;
     frame_start += webp->delays[i];
   }
-  WEBP_lock_pixels(webp);
-  WebPAnimDecoderReset(webp->decoder);
+  unsigned int first_frame;
+  if (target < webp->current_frame) {
+    WebPAnimDecoderReset(webp->decoder);
+    first_frame = 0;
+  } else if (target > webp->current_frame) {
+    // The decoder is already positioned immediately after current_frame.
+    // Continue from there so forward scrubbing does not repeatedly decode the
+    // complete animation prefix.
+    first_frame = webp->current_frame + 1;
+  } else {
+    return frame_start;
+  }
   uint8_t* frame = NULL;
   int timestamp = 0;
-  for (unsigned int i = 0; i <= target; i++) {
+  for (unsigned int i = first_frame; i <= target; i++) {
     if (!WebPAnimDecoderGetNext(webp->decoder, &frame, &timestamp)) {
-      WEBP_unlock_pixels(webp);
       return WEBP_get_current_position(webp);
     }
   }
+  WEBP_lock_pixels(webp);
+  memcpy(webp->current_frame_buffer, frame, webp->frame_buffer_size);
   webp->current_frame = target;
-  webp->current_frame_buffer = frame;
   WEBP_unlock_pixels(webp);
   return frame_start;
 }
@@ -294,6 +310,7 @@ void WEBP_recycle(JNIEnv* env, WEBP* webp) {
   if (webp == NULL) return;
   if (webp->decoder != NULL) WebPAnimDecoderDelete(webp->decoder);
   free(webp->buffer);
+  free(webp->current_frame_buffer);
   free(webp->encoded_data);
   free(webp->delays);
   if (webp->frame_buffer_mutex_initialized) {
