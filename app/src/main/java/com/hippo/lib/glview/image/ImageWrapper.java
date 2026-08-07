@@ -295,6 +295,14 @@ public class ImageWrapper {
         return mImage.getControllableAnimation();
     }
 
+    public boolean isAnimatedWebpSource() {
+        return mImage.getAnimatedWebpSource();
+    }
+
+    public boolean wasAnimatedWebpControlRequested() {
+        return mImage.getAnimatedWebpControlRequested();
+    }
+
     public boolean canUseDirectTexture() {
         return isControllableAnimation() && mCut.left == 0 && mCut.top == 0 &&
                 mCut.right == mImage.getWidth() && mCut.bottom == mImage.getHeight();

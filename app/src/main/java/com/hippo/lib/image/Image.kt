@@ -38,12 +38,17 @@ class Image private constructor(
     private var mNativeImage: Image1? = null
     private var mBitmap: Bitmap? = null
     private var mReferences = 0
+    private var mAnimatedWebpSource = false
+    private var mAnimatedWebpControlRequested = false
 
     init {
         mObtainedDrawable = null
         source?.let {
-            if (!hardware && Settings.getExperimentalAnimatedWebpEnabled() &&
-                Settings.getReadingDirection() != 2 && isAnimatedWebp(source)) {
+            mAnimatedWebpSource = isAnimatedWebp(source)
+            mAnimatedWebpControlRequested = !hardware && mAnimatedWebpSource &&
+                Settings.getExperimentalAnimatedWebpEnabled() &&
+                Settings.getReadingDirection() != 2
+            if (mAnimatedWebpControlRequested) {
                 source.channel.position(0)
                 try {
                     mNativeImage = Image1.decode(source, false)
@@ -139,6 +144,10 @@ class Image private constructor(
         }
     val controllableAnimation: Boolean
         get() = mNativeImage?.let { it.format == Image1.FORMAT_WEBP && it.frameCount > 1 } == true
+    val animatedWebpSource: Boolean
+        get() = mAnimatedWebpSource
+    val animatedWebpControlRequested: Boolean
+        get() = mAnimatedWebpControlRequested
     val width: Int
         get() = mNativeImage?.width ?: ((mObtainedDrawable as? BitmapDrawable)?.bitmap?.width
             ?: mObtainedDrawable!!.intrinsicWidth)

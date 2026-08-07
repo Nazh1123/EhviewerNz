@@ -225,6 +225,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private float mAnimatedWebpTouchDownX;
     private float mAnimatedWebpTouchDownY;
     private int mAnimatedWebpTouchSlop;
+    @Nullable
+    private ImageTexture mAnimatedWebpReloadSourceTexture;
 
     private ObjectAnimator mSeekBarPanelAnimator;
     private ObjectAnimator mAutoTransferAnimator;
@@ -1096,7 +1098,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         Settings.putExperimentalAnimatedWebpEnabled(
                 !Settings.getExperimentalAnimatedWebpEnabled());
         updateQuickSettingsButtons();
-        updateAnimatedWebpUi();
+        if (!reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) {
+            updateAnimatedWebpUi();
+        }
         keepQuickSettingsVisible();
     }
 
@@ -1922,7 +1926,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mLayoutMode = layoutMode;
             updateSlider();
             updateQuickSettingsButtons();
-            updateAnimatedWebpUi();
+            if (!reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) {
+                updateAnimatedWebpUi();
+            }
 
             if (oldReadingFullscreen != readingFullscreen) {
                 recreate();
@@ -2008,7 +2014,50 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
     }
 
+    private boolean reloadCurrentAnimatedWebpForDecoderModeIfNeeded() {
+        if (mGalleryView == null || mGalleryProvider == null || mCurrentIndex < 0) {
+            return false;
+        }
+        GalleryPageView page = mGalleryView.findPageByIndex(mCurrentIndex);
+        ImageTexture texture = page != null ? page.getImageTexture() : null;
+        if (texture == null || !texture.isAnimatedWebpSource()) {
+            mAnimatedWebpReloadSourceTexture = null;
+            return false;
+        }
+
+        boolean targetEnabled = Settings.getExperimentalAnimatedWebpEnabled() &&
+                mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM;
+        if (texture.wasAnimatedWebpControlRequested() == targetEnabled) {
+            mAnimatedWebpReloadSourceTexture = null;
+            return false;
+        }
+        if (mAnimatedWebpReloadSourceTexture == texture) {
+            return false;
+        }
+
+        mAnimatedWebpReloadSourceTexture = texture;
+        if (mAnimatedWebpTexture != null) {
+            mAnimatedWebpTexture.setPlaybackListener(null);
+            mAnimatedWebpTexture = null;
+        }
+        mAnimatedWebpSeeking = false;
+        mAnimatedWebpSeekAwaitingFrame = false;
+        clearAnimatedWebpTouchGesture();
+        if (mAnimatedWebpPanel != null) mAnimatedWebpPanel.setVisibility(View.GONE);
+        mGalleryView.setAnimatedSeekGestureEnabled(false);
+
+        // Animated pages are normally excluded from GalleryProvider's LRU cache.
+        // Removing the entry is still useful if a decoder reported the image as
+        // static. The provider then decodes the already downloaded/local source
+        // again without recreating the complete gallery.
+        mGalleryProvider.removeCache(mCurrentIndex);
+        mGalleryProvider.notifyDataChanged(mCurrentIndex);
+        return true;
+    }
+
     private void updateAnimatedWebpUi() {
+        if (reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) return;
+
         ImageTexture candidate = null;
         if (mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM && mGalleryView != null &&
                 mCurrentIndex >= 0) {
@@ -2237,6 +2286,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     GalleryActivity.this.mCurrentIndex = mValue;
                     updateSlider();
                     updateProgress();
+                    if (!reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) {
+                        updateAnimatedWebpUi();
+                    }
                     break;
                 case KEY_TAP_MENU_AREA:
                     onTapMenuArea();
