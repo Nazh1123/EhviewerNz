@@ -93,24 +93,28 @@
         android:defaultValue="true"
         android:dependency="experimental_animated_webp"
         android:key="animated_webp_show_time"
-        android:title="@string/settings_animated_webp_playback_time" />
+        android:title="@string/settings_animated_webp_playback_time"
+        app:iconSpaceReserved="true" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
         android:dependency="experimental_animated_webp"
         android:key="animated_webp_allow_seek"
-        android:title="@string/settings_animated_webp_progress_control" />
+        android:title="@string/settings_animated_webp_progress_control"
+        app:iconSpaceReserved="true" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:dependency="experimental_animated_webp"
         android:key="animated_webp_auto_advance"
-        android:title="@string/settings_animated_webp_sequential_playback" />
+        android:title="@string/settings_animated_webp_sequential_playback"
+        app:iconSpaceReserved="true" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:dependency="experimental_animated_webp"
         android:key="animated_webp_auto_transfer_button"
-        android:title="@string/settings_animated_webp_auto_transfer_button" />
+        android:title="@string/settings_animated_webp_auto_transfer_button"
+        app:iconSpaceReserved="true" />
 
 </PreferenceScreen>

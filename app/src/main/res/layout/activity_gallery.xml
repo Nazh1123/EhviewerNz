@@ -218,7 +218,14 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                app:layout_constraintGuide_percent="0.75" />
+                app:layout_constraintGuide_percent="0.70" />
+
+            <androidx.constraintlayout.widget.Guideline
+                android:id="@+id/animated_webp_sequential_guide"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layout_constraintGuide_percent="0.85" />
 
             <com.hippo.ehviewer.widget.StrokeTextView
                 android:id="@+id/animated_webp_time"
@@ -229,7 +236,7 @@
                 android:includeFontPadding="false"
                 android:text="00:00/00:00"
                 android:textColor="?android:attr/textColorPrimary"
-                android:textSize="24dp"
+                android:textSize="16dp"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="parent"
@@ -242,6 +249,7 @@
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:background="@drawable/bg_animated_webp_control"
+                android:backgroundTint="@null"
                 android:contentDescription="@string/animated_webp_play_pause"
                 android:padding="6dp"
                 android:src="@drawable/v_pause_x24"
@@ -252,12 +260,13 @@
                 app:layout_constraintStart_toStartOf="@id/animated_webp_play_guide"
                 app:layout_constraintTop_toTopOf="parent" />
 
-            <Button
+            <TextView
                 android:id="@+id/animated_webp_speed"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
                 android:background="@drawable/bg_animated_webp_control"
                 android:backgroundTint="@null"
+                android:gravity="center"
                 android:minWidth="0dp"
                 android:minHeight="0dp"
                 android:padding="0dp"
@@ -271,9 +280,25 @@
                 app:layout_constraintStart_toStartOf="@id/animated_webp_speed_guide"
                 app:layout_constraintTop_toTopOf="parent" />
 
+            <ImageButton
+                android:id="@+id/animated_webp_sequential"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/bg_animated_webp_control"
+                android:backgroundTint="@null"
+                android:contentDescription="@string/settings_animated_webp_sequential_playback"
+                android:padding="6dp"
+                android:src="@drawable/v_animated_webp_repeat_one_x24"
+                android:tint="@android:color/white"
+                android:visibility="invisible"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="@id/animated_webp_sequential_guide"
+                app:layout_constraintStart_toStartOf="@id/animated_webp_sequential_guide"
+                app:layout_constraintTop_toTopOf="parent" />
+
         </androidx.constraintlayout.widget.ConstraintLayout>
 
-        <SeekBar
+        <com.hippo.ehviewer.widget.TouchThroughSeekBar
             android:id="@+id/animated_webp_seek"
             android:layout_width="match_parent"
             android:layout_height="18dp"

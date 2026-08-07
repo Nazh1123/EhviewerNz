@@ -28,8 +28,10 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.Typeface;
 import android.net.Uri;
@@ -56,7 +58,6 @@ import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
 import android.widget.CompoundButton;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -89,6 +90,7 @@ import com.hippo.ehviewer.gallery.GalleryProvider2;
 import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
 import com.hippo.ehviewer.widget.ReversibleSeekBar;
+import com.hippo.ehviewer.widget.TouchThroughSeekBar;
 import com.hippo.lib.glgallery.GalleryProvider;
 import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.glgallery.GalleryView;
@@ -208,11 +210,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private TextView mAnimatedWebpTime;
     @Nullable
-    private SeekBar mAnimatedWebpSeek;
+    private TouchThroughSeekBar mAnimatedWebpSeek;
     @Nullable
     private ImageButton mAnimatedWebpPlayPause;
     @Nullable
-    private Button mAnimatedWebpSpeed;
+    private TextView mAnimatedWebpSpeed;
+    @Nullable
+    private ImageButton mAnimatedWebpSequential;
     @Nullable
     private ImageTexture mAnimatedWebpTexture;
     private boolean mAnimatedWebpSeeking;
@@ -227,6 +231,19 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private int mAnimatedWebpTouchSlop;
     @Nullable
     private ImageTexture mAnimatedWebpReloadSourceTexture;
+    @Nullable
+    private ColorStateList mPageSliderDefaultProgressTint;
+    @Nullable
+    private ColorStateList mPageSliderDefaultProgressBackgroundTint;
+    @Nullable
+    private ColorStateList mPageSliderDefaultSecondaryProgressTint;
+    @Nullable
+    private ColorStateList mPageSliderDefaultThumbTint;
+    @Nullable
+    private Drawable.ConstantState mPageSliderDefaultProgressDrawableState;
+    @Nullable
+    private Drawable.ConstantState mPageSliderDefaultThumbDrawableState;
+    private boolean mPageSliderAnimatedTintApplied;
 
     private ObjectAnimator mSeekBarPanelAnimator;
     private ObjectAnimator mAutoTransferAnimator;
@@ -511,6 +528,19 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mRightText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.right);
         mSeekBar = (ReversibleSeekBar) ViewUtils.$$(mSeekBarPanel, R.id.seek_bar);
         mSeekBar.setOnSeekBarChangeListener(this);
+        mPageSliderDefaultProgressTint = mSeekBar.getProgressTintList();
+        mPageSliderDefaultProgressBackgroundTint =
+                mSeekBar.getProgressBackgroundTintList();
+        mPageSliderDefaultSecondaryProgressTint =
+                mSeekBar.getSecondaryProgressTintList();
+        mPageSliderDefaultThumbTint = mSeekBar.getThumbTintList();
+        if (mSeekBar.getProgressDrawable() != null) {
+            mPageSliderDefaultProgressDrawableState =
+                    mSeekBar.getProgressDrawable().getConstantState();
+        }
+        if (mSeekBar.getThumb() != null) {
+            mPageSliderDefaultThumbDrawableState = mSeekBar.getThumb().getConstantState();
+        }
         mAutoTransferPanel.setOnClickListener(this::autoRead);
 
         mAnimatedWebpPanel = findViewById(R.id.animated_webp_panel);
@@ -519,11 +549,16 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpSeek = findViewById(R.id.animated_webp_seek);
         mAnimatedWebpPlayPause = findViewById(R.id.animated_webp_play_pause);
         mAnimatedWebpSpeed = findViewById(R.id.animated_webp_speed);
+        mAnimatedWebpSequential = findViewById(R.id.animated_webp_sequential);
         mAnimatedWebpPlayPause.setOnClickListener(v -> {
             ImageTexture texture = mAnimatedWebpTexture;
             if (texture != null) texture.setPlaybackPlaying(!texture.isPlaybackPlaying());
         });
         mAnimatedWebpSpeed.setOnClickListener(v -> cycleAnimatedWebpSpeed());
+        mAnimatedWebpSequential.setOnClickListener(v -> {
+            Settings.putAnimatedWebpAutoAdvance(!Settings.getAnimatedWebpAutoAdvance());
+            updateAnimatedWebpSequentialButton();
+        });
         mAnimatedWebpSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -671,6 +706,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpSeek = null;
         mAnimatedWebpPlayPause = null;
         mAnimatedWebpSpeed = null;
+        mAnimatedWebpSequential = null;
 
         if (transferService != null && !transferService.isShutdown()) {
             transferService.shutdown();
@@ -934,12 +970,15 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private boolean canStartAnimatedWebpScrub(MotionEvent event) {
-        if (mAnimatedWebpTexture == null || !Settings.getAnimatedWebpAllowSeek() ||
-                mSeekBarPanel != null && mSeekBarPanel.getVisibility() == View.VISIBLE) {
+        if (mAnimatedWebpTexture == null || !Settings.getAnimatedWebpAllowSeek()) {
             return false;
         }
         View decor = getWindow().getDecorView();
         if (event.getY() < decor.getHeight() * 0.75f) return false;
+        if (mSeekBarPanel != null && mSeekBarPanel.getVisibility() == View.VISIBLE &&
+                isPointInsideView(event.getRawX(), event.getRawY(), mSeekBarPanel)) {
+            return false;
+        }
         // Let the real progress bar keep normal SeekBar semantics. The rest of
         // the lower quarter is the larger, invisible scrubbing target.
         return mAnimatedWebpSeek == null || !isPointInsideView(
@@ -1704,8 +1743,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpAutoAdvance.setChecked(Settings.getAnimatedWebpAutoAdvance());
             mAnimatedWebpAutoTransferButton.setChecked(
                     Settings.getAnimatedWebpAutoTransferButton());
-            mAnimatedWebpSettings.setVisibility(mAnimatedWebpEnabled.isChecked()
-                    ? View.VISIBLE : View.GONE);
+            updateAnimatedWebpSettingsEnabled(mAnimatedWebpEnabled.isChecked());
 
             mDirectSave.setOnCheckedChangeListener(this::onDirectSaveChange);
             mVolumePage.setOnCheckedChangeListener(this::onVolumePageChange);
@@ -1722,7 +1760,16 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
             mCustomScreenLightness.setOnCheckedChangeListener((buttonView, isChecked) -> mScreenLightness.setEnabled(isChecked));
             mAnimatedWebpEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
-                    mAnimatedWebpSettings.setVisibility(isChecked ? View.VISIBLE : View.GONE));
+                    updateAnimatedWebpSettingsEnabled(isChecked));
+        }
+
+        private void updateAnimatedWebpSettingsEnabled(boolean enabled) {
+            mAnimatedWebpSettings.setVisibility(View.VISIBLE);
+            mAnimatedWebpSettings.setAlpha(enabled ? 1.0f : 0.5f);
+            mAnimatedWebpShowTime.setEnabled(enabled);
+            mAnimatedWebpAllowSeek.setEnabled(enabled);
+            mAnimatedWebpAutoAdvance.setEnabled(enabled);
+            mAnimatedWebpAutoTransferButton.setEnabled(enabled);
         }
 
         private void configureStartTransferTime() {
@@ -2000,6 +2047,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpSpeed.setText(text);
     }
 
+    private void updateAnimatedWebpSequentialButton() {
+        if (mAnimatedWebpSequential == null) return;
+        mAnimatedWebpSequential.setImageResource(Settings.getAnimatedWebpAutoAdvance()
+                ? R.drawable.v_animated_webp_repeat_next_x24
+                : R.drawable.v_animated_webp_repeat_one_x24);
+        mAnimatedWebpSequential.setSelected(Settings.getAnimatedWebpAutoAdvance());
+    }
+
     private static String formatAnimatedWebpTime(int positionMs, int durationMs) {
         int positionSeconds = Math.max(0, positionMs) / 1000;
         int durationSeconds = Math.max(0, durationMs) / 1000;
@@ -2012,6 +2067,35 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mAnimatedWebpTime != null) {
             mAnimatedWebpTime.setText(formatAnimatedWebpTime(positionMs, durationMs));
         }
+    }
+
+    private void updatePageSliderTint(boolean animatedWebp) {
+        if (mSeekBar == null || mPageSliderAnimatedTintApplied == animatedWebp) return;
+        mPageSliderAnimatedTintApplied = animatedWebp;
+        if (animatedWebp) {
+            ColorStateList tint = ColorStateList.valueOf(0xffb8c9bb);
+            ColorStateList backgroundTint = ColorStateList.valueOf(0x80b8c9bb);
+            mSeekBar.setProgressTintList(tint);
+            mSeekBar.setProgressBackgroundTintList(backgroundTint);
+            mSeekBar.setSecondaryProgressTintList(tint);
+            mSeekBar.setThumbTintList(tint);
+        } else {
+            if (mPageSliderDefaultProgressDrawableState != null) {
+                mSeekBar.setProgressDrawable(mPageSliderDefaultProgressDrawableState
+                        .newDrawable(getResources(), getTheme()).mutate());
+            }
+            if (mPageSliderDefaultThumbDrawableState != null) {
+                mSeekBar.setThumb(mPageSliderDefaultThumbDrawableState
+                        .newDrawable(getResources(), getTheme()).mutate());
+            }
+            mSeekBar.setProgressTintList(mPageSliderDefaultProgressTint);
+            mSeekBar.setProgressBackgroundTintList(
+                    mPageSliderDefaultProgressBackgroundTint);
+            mSeekBar.setSecondaryProgressTintList(
+                    mPageSliderDefaultSecondaryProgressTint);
+            mSeekBar.setThumbTintList(mPageSliderDefaultThumbTint);
+        }
+        mSeekBar.invalidate();
     }
 
     private boolean reloadCurrentAnimatedWebpForDecoderModeIfNeeded() {
@@ -2044,7 +2128,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpSeekAwaitingFrame = false;
         clearAnimatedWebpTouchGesture();
         if (mAnimatedWebpPanel != null) mAnimatedWebpPanel.setVisibility(View.GONE);
-        mGalleryView.setAnimatedSeekGestureEnabled(false);
 
         // Animated pages are normally excluded from GalleryProvider's LRU cache.
         // Removing the entry is still useful if a decoder reported the image as
@@ -2083,11 +2166,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         int sliderOffset = sliderVisible && mSeekBarPanel != null
                 ? mSeekBarPanel.getHeight() : 0;
         boolean visible = candidate != null;
+        updatePageSliderTint(visible);
         if (mAnimatedWebpPanel != null) {
             mAnimatedWebpPanel.setVisibility(visible ? View.VISIBLE : View.GONE);
-        }
-        if (mGalleryView != null) {
-            mGalleryView.setAnimatedSeekGestureEnabled(visible && allowSeek && !sliderVisible);
         }
         if (!visible) {
             if (mAutoTransferPanel != null && sliderVisible) {
@@ -2112,16 +2193,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mAnimatedWebpSeek != null) {
             mAnimatedWebpSeek.setVisibility(View.VISIBLE);
             // The page slider occupies the higher-priority touch layer while visible.
-            mAnimatedWebpSeek.setEnabled(allowSeek && !sliderVisible);
+            mAnimatedWebpSeek.setEnabled(allowSeek);
+            mAnimatedWebpSeek.setTouchHandlingEnabled(!sliderVisible);
             mAnimatedWebpSeek.setMax(Math.max(1, duration));
-            ViewGroup.LayoutParams raw = mAnimatedWebpSeek.getLayoutParams();
-            if (raw instanceof FrameLayout.LayoutParams) {
-                FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) raw;
-                if (params.bottomMargin != sliderOffset) {
-                    params.bottomMargin = sliderOffset;
-                    mAnimatedWebpSeek.setLayoutParams(params);
-                }
-            }
             if (!mAnimatedWebpSeeking && !mAnimatedWebpSeekAwaitingFrame) {
                 mAnimatedWebpSeek.setProgress(Math.min(duration, position));
             }
@@ -2156,11 +2230,16 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mAnimatedWebpSpeed != null) {
             mAnimatedWebpSpeed.setVisibility(sliderVisible ? View.VISIBLE : View.INVISIBLE);
         }
+        if (mAnimatedWebpSequential != null) {
+            mAnimatedWebpSequential.setVisibility(
+                    sliderVisible ? View.VISIBLE : View.INVISIBLE);
+        }
         if (mAutoTransferPanel != null && sliderVisible) {
             mAutoTransferPanel.setVisibility(Settings.getAnimatedWebpAutoTransferButton()
                     ? View.VISIBLE : View.INVISIBLE);
         }
         updateAnimatedWebpSpeedButton(candidate.getPlaybackSpeed());
+        updateAnimatedWebpSequentialButton();
     }
 
     @Override
