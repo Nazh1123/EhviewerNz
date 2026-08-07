@@ -19,6 +19,8 @@ package com.hippo.ehviewer.ui;
 import static com.hippo.ehviewer.ui.scene.download.DownloadsScene.LOCAL_GALLERY_INFO_CHANGE;
 
 import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
@@ -30,7 +32,6 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
-import android.graphics.drawable.GradientDrawable;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
@@ -48,7 +49,6 @@ import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.Gravity;
 import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
@@ -139,8 +139,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private static final long HIDE_SLIDER_DELAY = 3000;
     private static final long LONG_PRESS_SAVE_DEBOUNCE_MS = 1000L;
     private static final long SAVE_NOTICE_DURATION_MS = 2000L;
-    private static final long SAVE_NOTICE_ENTER_DURATION_MS = 180L;
-    private static final long SAVE_NOTICE_FADE_DURATION_MS = 200L;
+    private static final long SAVE_NOTICE_ENTER_DURATION_MS = 300L;
+    private static final long SAVE_NOTICE_REPEAT_DURATION_MS = 320L;
+    private static final long SAVE_NOTICE_EXIT_DURATION_MS = 180L;
 
     private static final int WRITE_REQUEST_CODE = 43;
 
@@ -192,16 +193,23 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private TextView mRightText;
     @Nullable
     private ReversibleSeekBar mSeekBar;
+    @Nullable
+    private View mSaveNotice;
+    @Nullable
+    private ImageView mSaveNoticeIcon;
 
     private ObjectAnimator mSeekBarPanelAnimator;
     private ObjectAnimator mAutoTransferAnimator;
     private ObjectAnimator mQuickSettingsAnimator;
+    @Nullable
+    private AnimatorSet mSaveNoticeAnimator;
 
     private int mLayoutMode;
     private int mSize;
     private int mCurrentIndex;
     private long mLastLongPressSaveAt;
     private int mLastLongPressSaveIndex = -1;
+    private int mSaveNoticeGeneration;
 
     private boolean canFinish = false;
     private boolean autoTransferring = false;
@@ -263,6 +271,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
     };
+
+    private final Runnable mHideSaveNoticeRunnable = this::hideSaveNotice;
 
     @Override
     protected int getThemeResId(int theme) {
@@ -466,6 +476,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSeekBar.setOnSeekBarChangeListener(this);
         mAutoTransferPanel.setOnClickListener(this::autoRead);
 
+        mSaveNotice = ViewUtils.$$(this, R.id.save_notice);
+        mSaveNoticeIcon = (ImageView) ViewUtils.$$(this, R.id.save_notice_icon);
+
         mSize = mGalleryProvider.size();
         mCurrentIndex = startPage;
         if (mGalleryView != null) {
@@ -582,6 +595,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mLeftText = null;
         mRightText = null;
         mSeekBar = null;
+        if (mSaveNotice != null) {
+            mSaveNotice.removeCallbacks(mHideSaveNoticeRunnable);
+        }
+        mSaveNoticeGeneration++;
+        cancelSaveNoticeAnimation();
+        mSaveNotice = null;
+        mSaveNoticeIcon = null;
 
         if (transferService != null && !transferService.isShutdown()) {
             transferService.shutdown();
@@ -1174,7 +1194,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         UniFile defaultDir = UniFile.fromFile(AppConfig.getExternalImageDir());
         UniFile effectiveDir = configuredDir != null ? configuredDir : defaultDir;
         if (effectiveDir == null) {
-            showSaveNotice(getText(R.string.error_cant_save_image));
+            showSaveErrorNotice(getText(R.string.error_cant_save_image));
             return;
         }
 
@@ -1186,7 +1206,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             file = saveImageInDirectory(page, defaultDir);
         }
         if (file == null) {
-            showSaveNotice(getText(R.string.error_cant_save_image));
+            showSaveErrorNotice(getText(R.string.error_cant_save_image));
             return;
         }
 
@@ -1197,76 +1217,111 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void showSaveNotice(CharSequence message) {
-        FrameLayout host = findViewById(R.id.main);
-        if (host == null) {
+        View notice = mSaveNotice;
+        ImageView icon = mSaveNoticeIcon;
+        if (notice == null || icon == null) {
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
             return;
         }
 
         float density = getResources().getDisplayMetrics().density;
-        int horizontalPadding = Math.round(16.0f * density);
-        int verticalPadding = Math.round(10.0f * density);
+        boolean repeated = notice.getVisibility() == View.VISIBLE && notice.getAlpha() > 0.0f;
 
-        TextView notice = new TextView(this);
-        notice.setText(message);
-        notice.setTextColor(0xffffffff);
-        notice.setTextSize(14.0f);
-        notice.setGravity(Gravity.CENTER);
-        notice.setMaxLines(2);
-        notice.setEllipsize(TextUtils.TruncateAt.END);
-        notice.setMinHeight(Math.round(56.0f * density));
-        notice.setPadding(horizontalPadding, verticalPadding,
-                horizontalPadding, verticalPadding);
-        notice.setElevation(6.0f * density);
+        mSaveNoticeGeneration++;
+        notice.removeCallbacks(mHideSaveNoticeRunnable);
+        cancelSaveNoticeAnimation();
+        notice.setVisibility(View.VISIBLE);
+        notice.setContentDescription(message);
+        notice.announceForAccessibility(message);
 
-        GradientDrawable background = new GradientDrawable();
-        background.setColor(0xff323232);
-        background.setCornerRadius(12.0f * density);
-        notice.setBackground(background);
+        AnimatorSet animator = new AnimatorSet();
+        if (repeated) {
+            ObjectAnimator alpha = ObjectAnimator.ofFloat(
+                    notice, View.ALPHA, notice.getAlpha(), 1.0f);
+            ObjectAnimator scaleX = ObjectAnimator.ofFloat(
+                    notice, View.SCALE_X, notice.getScaleX(), 1.16f, 0.96f, 1.0f);
+            ObjectAnimator scaleY = ObjectAnimator.ofFloat(
+                    notice, View.SCALE_Y, notice.getScaleY(), 1.16f, 0.96f, 1.0f);
+            ObjectAnimator translationX = ObjectAnimator.ofFloat(
+                    notice, View.TRANSLATION_X, notice.getTranslationX(), 0.0f);
+            ObjectAnimator translationY = ObjectAnimator.ofFloat(
+                    notice, View.TRANSLATION_Y, notice.getTranslationY(),
+                    -4.0f * density, 0.0f);
+            ObjectAnimator iconAlpha = ObjectAnimator.ofFloat(
+                    icon, View.ALPHA, icon.getAlpha(), 0.92f, 0.5f);
+            animator.playTogether(alpha, scaleX, scaleY, translationX,
+                    translationY, iconAlpha);
+            animator.setDuration(SAVE_NOTICE_REPEAT_DURATION_MS);
+        } else {
+            notice.setAlpha(0.0f);
+            notice.setScaleX(0.76f);
+            notice.setScaleY(0.76f);
+            notice.setTranslationX(10.0f * density);
+            notice.setTranslationY(10.0f * density);
+            icon.setAlpha(0.5f);
 
-        WindowInsetsCompat rootInsets = ViewCompat.getRootWindowInsets(host);
-        int navigationBarInset = rootInsets != null
-                ? rootInsets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
-                : 0;
-        int availableWidth = host.getWidth() > 0
-                ? host.getWidth()
-                : getResources().getDisplayMetrics().widthPixels;
-        int noticeWidth = Math.min(
-                Math.max(availableWidth - Math.round(48.0f * density), 1),
-                Math.round(520.0f * density));
-        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
-                noticeWidth, FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
-        layoutParams.bottomMargin = navigationBarInset + Math.round(64.0f * density);
+            ObjectAnimator alpha = ObjectAnimator.ofFloat(notice, View.ALPHA, 0.0f, 1.0f);
+            ObjectAnimator scaleX = ObjectAnimator.ofFloat(
+                    notice, View.SCALE_X, 0.76f, 1.08f, 1.0f);
+            ObjectAnimator scaleY = ObjectAnimator.ofFloat(
+                    notice, View.SCALE_Y, 0.76f, 1.08f, 1.0f);
+            ObjectAnimator translationX = ObjectAnimator.ofFloat(
+                    notice, View.TRANSLATION_X, 10.0f * density, 0.0f);
+            ObjectAnimator translationY = ObjectAnimator.ofFloat(
+                    notice, View.TRANSLATION_Y, 10.0f * density, 0.0f);
+            animator.playTogether(alpha, scaleX, scaleY, translationX, translationY);
+            animator.setDuration(SAVE_NOTICE_ENTER_DURATION_MS);
+        }
+        animator.setInterpolator(AnimationUtils.SLOW_FAST_SLOW_INTERPOLATOR);
+        mSaveNoticeAnimator = animator;
+        animator.start();
+        notice.postDelayed(mHideSaveNoticeRunnable, SAVE_NOTICE_DURATION_MS);
+    }
 
-        // Keep every notice alive for its own duration. Adding the newest one last puts it
-        // visually above older notices without cancelling or queueing either one.
-        notice.setAlpha(0.0f);
-        notice.setScaleX(0.94f);
-        notice.setScaleY(0.94f);
-        notice.setTranslationY(10.0f * density);
-        host.addView(notice, layoutParams);
-        notice.animate()
-                .alpha(1.0f)
-                .scaleX(1.0f)
-                .scaleY(1.0f)
-                .translationY(0.0f)
-                .setDuration(SAVE_NOTICE_ENTER_DURATION_MS)
-                .start();
-        notice.postDelayed(() -> {
-            if (!ViewCompat.isAttachedToWindow(notice)) {
-                return;
+    private void showSaveErrorNotice(CharSequence message) {
+        hideSaveNotice();
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    private void hideSaveNotice() {
+        View notice = mSaveNotice;
+        if (notice == null || notice.getVisibility() != View.VISIBLE) {
+            return;
+        }
+
+        notice.removeCallbacks(mHideSaveNoticeRunnable);
+        cancelSaveNoticeAnimation();
+        final int generation = mSaveNoticeGeneration;
+        float density = getResources().getDisplayMetrics().density;
+        AnimatorSet animator = new AnimatorSet();
+        animator.playTogether(
+                ObjectAnimator.ofFloat(notice, View.ALPHA, notice.getAlpha(), 0.0f),
+                ObjectAnimator.ofFloat(notice, View.SCALE_X, notice.getScaleX(), 0.84f),
+                ObjectAnimator.ofFloat(notice, View.SCALE_Y, notice.getScaleY(), 0.84f),
+                ObjectAnimator.ofFloat(notice, View.TRANSLATION_X,
+                        notice.getTranslationX(), 6.0f * density),
+                ObjectAnimator.ofFloat(notice, View.TRANSLATION_Y,
+                        notice.getTranslationY(), 6.0f * density));
+        animator.setDuration(SAVE_NOTICE_EXIT_DURATION_MS);
+        animator.setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR);
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (generation == mSaveNoticeGeneration && mSaveNotice == notice) {
+                    notice.setVisibility(View.GONE);
+                }
             }
-            notice.animate()
-                    .alpha(0.0f)
-                    .setDuration(SAVE_NOTICE_FADE_DURATION_MS)
-                    .withEndAction(() -> {
-                        if (notice.getParent() == host) {
-                            host.removeView(notice);
-                        }
-                    })
-                    .start();
-        }, SAVE_NOTICE_DURATION_MS - SAVE_NOTICE_FADE_DURATION_MS);
+        });
+        mSaveNoticeAnimator = animator;
+        animator.start();
+    }
+
+    private void cancelSaveNoticeAnimation() {
+        AnimatorSet animator = mSaveNoticeAnimator;
+        mSaveNoticeAnimator = null;
+        if (animator != null) {
+            animator.cancel();
+        }
     }
 
     @Nullable
@@ -1290,12 +1345,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         File dir = getCacheDir();
         UniFile file;
         if (null == (file = mGalleryProvider.save(page, UniFile.fromFile(dir), mGalleryProvider.getImageFilename(page)))) {
-            showSaveNotice(getText(R.string.error_cant_save_image));
+            showSaveErrorNotice(getText(R.string.error_cant_save_image));
             return;
         }
         String filename = file.getName();
         if (filename == null) {
-            showSaveNotice(getText(R.string.error_cant_save_image));
+            showSaveErrorNotice(getText(R.string.error_cant_save_image));
             return;
         }
         mCacheFileName = filename;
