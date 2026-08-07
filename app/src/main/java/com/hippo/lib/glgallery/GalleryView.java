@@ -32,6 +32,7 @@ import com.hippo.lib.glview.glrenderer.BasicTexture;
 import com.hippo.lib.glview.glrenderer.GLCanvas;
 import com.hippo.lib.glview.glrenderer.StringTexture;
 import com.hippo.lib.glview.glrenderer.Texture;
+import com.hippo.lib.glview.image.ImageTexture;
 import com.hippo.lib.glview.image.ImageMovableTextTexture;
 import com.hippo.lib.glview.util.GalleryUtils;
 import com.hippo.lib.glview.view.AnimationTime;
@@ -150,6 +151,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private boolean mScale = false;
     private boolean mScroll = false;
     private boolean mFirstScroll = false;
+    private boolean mSliderLongPressHandled = false;
 
     private final Rect mLeftArea = new Rect();
     private final Rect mRightArea = new Rect();
@@ -762,6 +764,17 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             return;
         }
 
+        if (mSliderArea.contains((int) x, (int) y)) {
+            GalleryPageView page = findPageUnder(x, y);
+            ImageTexture texture = page != null ? page.getImageTexture() : null;
+            if (texture != null && texture.isControllableAnimation()
+                    && mListener != null
+                    && mListener.onLongPressSliderArea(texture)) {
+                mSliderLongPressHandled = true;
+                return;
+            }
+        }
+
         boolean nextPageArea = (mLayoutMode == LAYOUT_RIGHT_TO_LEFT
                 ? mLeftArea : mRightArea).contains((int) x, (int) y);
         int index = nextPageArea
@@ -821,6 +834,12 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     }
 
     private void onUpInternal() {
+        if (mSliderLongPressHandled) {
+            mSliderLongPressHandled = false;
+            if (mListener != null) {
+                mListener.onLongPressSliderAreaReleased();
+            }
+        }
         if (mLayoutManager != null) {
             mLayoutManager.onUp();
         }
@@ -1273,6 +1292,12 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
         @RenderThread
         void onLongPressPage(int index, boolean nextPageArea);
+
+        @RenderThread
+        boolean onLongPressSliderArea(ImageTexture texture);
+
+        @RenderThread
+        void onLongPressSliderAreaReleased();
 
         void onAutoTransferDone();
     }

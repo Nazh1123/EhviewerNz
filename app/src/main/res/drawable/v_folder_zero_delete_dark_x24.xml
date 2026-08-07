@@ -8,26 +8,36 @@
     <!-- Delete mark behind the folder. -->
     <path
         android:fillColor="@color/primary_drawable_dark"
-        android:pathData="M14.5,2L18,5.5L21.5,2L23,3.5L19.5,7L23,10.5L21.5,12L18,8.5L14.5,12L13,10.5L16.5,7L13,3.5Z" />
+        android:pathData="
+        M17,2.5
+        L19,4.5
+        L21,2.5
+        L22.2,3.7
+        L20.2,5.7
+        L22.2,7.7
+        L21,8.9
+        L19,6.9
+        L17,8.9
+        L15.8,7.7
+        L17.8,5.7
+        L15.8,3.7
+        Z" />
 
-    <!-- Folder in the foreground. -->
-    <path
-        android:fillColor="@color/primary_drawable_dark"
-        android:pathData="M3,6H9L11,8H19C20.1,8 21,8.9 21,10V19C21,20.1 20.1,21 19,21H3C1.9,21 1,20.1 1,19V8C1,6.9 1.9,6 3,6Z" />
-
-    <!-- Reversed slashed zero. -->
+    <!-- 2. Folder outline -->
     <path
         android:fillColor="@android:color/transparent"
-        android:pathData="M11,10.5C8.8,10.5 7.5,12.1 7.5,15.5C7.5,18.9 8.8,20.5 11,20.5C13.2,20.5 14.5,18.9 14.5,15.5C14.5,12.1 13.2,10.5 11,10.5Z"
-        android:strokeColor="?attr/widgetColorThemeAccent"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:strokeWidth="1.7" />
+        android:pathData="M9 8 11 9.5H15.08C16 9.5 17 10.5 17 11.5V18C17 19 16 20 15 20H5C4 20 3 19 3 18V10C3 9 4 8 5 8Z"
+        android:strokeColor="@color/primary_drawable_dark"
+        android:strokeWidth="1.5"
+        android:strokeLineJoin="miter"/>
+
+    <!-- 3. Empty folder slash -->
     <path
         android:fillColor="@android:color/transparent"
-        android:pathData="M8.6,18.6L13.4,12.4"
-        android:strokeColor="?attr/widgetColorThemeAccent"
+        android:pathData="M8.5 16 11.5 13ZM10 11.5C9 11.5 8 12.5 8 14.5 8 16.5 9 17.5 10 17.5 11 17.5 12 16.5 12 14.5 12 12.5 11 11.5 10 11.5Z"
+        android:strokeColor="@color/primary_drawable_dark"
+        android:strokeWidth="1.1"
         android:strokeLineCap="round"
-        android:strokeWidth="1.7" />
+        android:strokeLineJoin="round"/>
 
 </vector>

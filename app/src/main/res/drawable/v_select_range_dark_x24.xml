@@ -8,7 +8,7 @@
 
     <path
         android:fillColor="@color/primary_drawable_dark"
-        android:pathData="M4 4V7H7V4ZM10 11 13 8 16 11H14V13H16L13 16 10 13H12V11ZM4 17V20H7V17ZM9 5H21V7H9ZM9 17H21V19H9Z"
+        android:pathData="M3 4.5V7.5H6V4.5ZM15 8 18 4 21 8H19V16H21L18 20 15 16H17V8ZM3 16.5V19.5H6V16.5ZM7.5 5H14V7H7.5ZM7.5 17H14V19H7.5ZM5 11H14V13H5Z"
         android:fillType="evenOdd" />
 
 </vector>

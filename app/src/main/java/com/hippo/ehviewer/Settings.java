@@ -605,6 +605,9 @@ public class Settings {
     public static final String KEY_ANIMATED_WEBP_AUTO_ADVANCE = "animated_webp_auto_advance";
     public static final String KEY_ANIMATED_WEBP_AUTO_TRANSFER_BUTTON =
             "animated_webp_auto_transfer_button";
+    public static final String KEY_ANIMATED_WEBP_LONG_PRESS_SPEED =
+            "animated_webp_long_press_speed";
+    private static final String DEFAULT_ANIMATED_WEBP_LONG_PRESS_SPEED = "2.0";
 
     public static boolean getExperimentalAnimatedWebpEnabled() {
         return getBoolean(KEY_EXPERIMENTAL_ANIMATED_WEBP, true);
@@ -634,6 +637,27 @@ public class Settings {
         return getBoolean(KEY_ANIMATED_WEBP_AUTO_TRANSFER_BUTTON, false);
     }
 
+    public static float getAnimatedWebpLongPressSpeed() {
+        String normalized = normalizeAnimatedWebpLongPressSpeed(
+                getString(KEY_ANIMATED_WEBP_LONG_PRESS_SPEED,
+                        DEFAULT_ANIMATED_WEBP_LONG_PRESS_SPEED));
+        return normalized != null ? Float.parseFloat(normalized) : 2.0f;
+    }
+
+    @Nullable
+    public static String normalizeAnimatedWebpLongPressSpeed(@Nullable String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        if (!trimmed.matches("\\d+(?:\\.\\d)?")) return null;
+        try {
+            float speed = Float.parseFloat(trimmed);
+            if (speed < 0.1f || speed > 3.0f) return null;
+            return String.format(Locale.US, "%.1f", speed);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     public static void putExperimentalAnimatedWebpEnabled(boolean value) {
         putBoolean(KEY_EXPERIMENTAL_ANIMATED_WEBP, value);
     }
@@ -660,6 +684,13 @@ public class Settings {
 
     public static void putAnimatedWebpAutoTransferButton(boolean value) {
         putBoolean(KEY_ANIMATED_WEBP_AUTO_TRANSFER_BUTTON, value);
+    }
+
+    public static void putAnimatedWebpLongPressSpeed(float value) {
+        String normalized = normalizeAnimatedWebpLongPressSpeed(
+                String.format(Locale.US, "%.1f", value));
+        putString(KEY_ANIMATED_WEBP_LONG_PRESS_SPEED,
+                normalized != null ? normalized : DEFAULT_ANIMATED_WEBP_LONG_PRESS_SPEED);
     }
 
     private static final String KEY_PAGE_SCALING = "page_scaling";

@@ -956,7 +956,7 @@ public class ImageTexture implements Texture, Animatable {
 
     public void setPlaybackSpeed(float speed) {
         if (!mControllableAnimation) return;
-        float clamped = Math.max(0.25f, Math.min(4.0f, speed));
+        float clamped = Math.max(0.1f, Math.min(4.0f, speed));
         synchronized (mPlaybackLock) {
             updateElapsedLocked();
             mPlaybackSpeed = clamped;

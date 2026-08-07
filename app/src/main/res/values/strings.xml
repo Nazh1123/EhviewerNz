@@ -1164,4 +1164,6 @@
     <string name="settings_animated_webp_progress_control">Progress bar control</string>
     <string name="settings_animated_webp_sequential_playback">Sequential playback</string>
     <string name="settings_animated_webp_auto_transfer_button">Auto page-turn button</string>
+    <string name="settings_animated_webp_long_press_speed">Long-press speed</string>
+    <string name="settings_animated_webp_long_press_speed_invalid">Enter a value from 0.1 to 3.0 with at most one decimal place</string>
 </resources>

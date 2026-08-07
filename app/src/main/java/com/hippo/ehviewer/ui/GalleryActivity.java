@@ -226,6 +226,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private ImageButton mAnimatedWebpSequential;
     @Nullable
     private ImageTexture mAnimatedWebpTexture;
+    @Nullable
+    private ImageTexture mAnimatedWebpLongPressTexture;
+    private float mAnimatedWebpLongPressRestoreSpeed;
+    private boolean mAnimatedWebpLongPressRestorePlaying;
     private boolean mAnimatedWebpSeeking;
     private boolean mAnimatedWebpSeekAwaitingFrame;
     private boolean mAnimatedWebpWasPlayingBeforeSeek;
@@ -680,6 +684,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onDestroy() {
         mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiRunnable);
+        restoreAnimatedWebpLongPressPlayback();
         if (mAnimatedWebpTexture != null) {
             mAnimatedWebpTexture.setPlaybackListener(null);
             mAnimatedWebpTexture = null;
@@ -751,6 +756,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onPause() {
+        restoreAnimatedWebpLongPressPlayback();
         super.onPause();
 
         if (mGLRootView != null) {
@@ -1744,6 +1750,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         private final SwitchCompat mAnimatedWebpAllowSeek;
         private final SwitchCompat mAnimatedWebpAutoAdvance;
         private final SwitchCompat mAnimatedWebpAutoTransferButton;
+        private final EditText mAnimatedWebpLongPressSpeed;
 
         @SuppressLint("InflateParams")
         public GalleryMenuHelper(Context context) {
@@ -1774,6 +1781,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpAutoAdvance = mView.findViewById(R.id.animated_webp_auto_advance);
             mAnimatedWebpAutoTransferButton =
                     mView.findViewById(R.id.animated_webp_auto_transfer_button);
+            mAnimatedWebpLongPressSpeed =
+                    mView.findViewById(R.id.animated_webp_long_press_speed);
 
             mScreenRotation.setSelection(Settings.getScreenRotation());
             mReadingDirection.setSelection(Settings.getReadingDirection());
@@ -1800,6 +1809,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpAutoAdvance.setChecked(Settings.getAnimatedWebpAutoAdvance());
             mAnimatedWebpAutoTransferButton.setChecked(
                     Settings.getAnimatedWebpAutoTransferButton());
+            setAnimatedWebpLongPressSpeedInput(
+                    Settings.getAnimatedWebpLongPressSpeed());
+            mAnimatedWebpLongPressSpeed.setOnFocusChangeListener((view, hasFocus) -> {
+                if (!hasFocus) {
+                    setAnimatedWebpLongPressSpeedInput(
+                            getAnimatedWebpLongPressSpeedInput());
+                }
+            });
             updateAnimatedWebpSettingsEnabled(mAnimatedWebpEnabled.isChecked());
 
             mDirectSave.setOnCheckedChangeListener(this::onDirectSaveChange);
@@ -1827,6 +1844,26 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpAllowSeek.setEnabled(enabled);
             mAnimatedWebpAutoAdvance.setEnabled(enabled);
             mAnimatedWebpAutoTransferButton.setEnabled(enabled);
+            mAnimatedWebpLongPressSpeed.setEnabled(enabled);
+        }
+
+        private float getAnimatedWebpLongPressSpeedInput() {
+            String normalized = Settings.normalizeAnimatedWebpLongPressSpeed(
+                    mAnimatedWebpLongPressSpeed.getText().toString());
+            if (normalized == null) {
+                return Settings.getAnimatedWebpLongPressSpeed();
+            }
+            return Float.parseFloat(normalized);
+        }
+
+        private void setAnimatedWebpLongPressSpeedInput(float speed) {
+            String value = Settings.normalizeAnimatedWebpLongPressSpeed(
+                    String.format(Locale.US, "%.1f", speed));
+            if (value == null) value = "2.0";
+            if (!value.contentEquals(mAnimatedWebpLongPressSpeed.getText())) {
+                mAnimatedWebpLongPressSpeed.setText(value);
+                mAnimatedWebpLongPressSpeed.setSelection(value.length());
+            }
         }
 
         private void configureStartTransferTime() {
@@ -1952,6 +1989,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             boolean animatedWebpAutoAdvance = mAnimatedWebpAutoAdvance.isChecked();
             boolean animatedWebpAutoTransferButton =
                     mAnimatedWebpAutoTransferButton.isChecked();
+            float animatedWebpLongPressSpeed =
+                    getAnimatedWebpLongPressSpeedInput();
 
             int screenLightness = mScreenLightness.getProgress();
             int transferTime = getTransferTimeInput();
@@ -1981,6 +2020,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             Settings.putAnimatedWebpAllowSeek(animatedWebpAllowSeek);
             Settings.putAnimatedWebpAutoAdvance(animatedWebpAutoAdvance);
             Settings.putAnimatedWebpAutoTransferButton(animatedWebpAutoTransferButton);
+            Settings.putAnimatedWebpLongPressSpeed(animatedWebpLongPressSpeed);
             if (!volumePage) {
                 mReverseVolumePage.setVisibility(View.GONE);
             } else {
@@ -2314,6 +2354,39 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     public void onDoubleTapSliderArea() {
         mAnimatedWebpHandler.post(this::toggleAnimatedWebpPlayback);
+    }
+
+    @Override
+    public synchronized boolean onLongPressSliderArea(@NonNull ImageTexture texture) {
+        float speed = Settings.getAnimatedWebpLongPressSpeed();
+        if (!Settings.getExperimentalAnimatedWebpEnabled()
+                || mLayoutMode == GalleryView.LAYOUT_TOP_TO_BOTTOM
+                || texture != mAnimatedWebpTexture
+                || Math.abs(speed - 1.0f) < 0.0001f
+                || mAnimatedWebpLongPressTexture != null) {
+            return false;
+        }
+        mAnimatedWebpLongPressTexture = texture;
+        mAnimatedWebpLongPressRestoreSpeed = texture.getPlaybackSpeed();
+        mAnimatedWebpLongPressRestorePlaying = texture.isPlaybackPlaying();
+        texture.setPlaybackSpeed(speed);
+        texture.setPlaybackPlaying(true);
+        return true;
+    }
+
+    @Override
+    public void onLongPressSliderAreaReleased() {
+        restoreAnimatedWebpLongPressPlayback();
+    }
+
+    private synchronized void restoreAnimatedWebpLongPressPlayback() {
+        ImageTexture texture = mAnimatedWebpLongPressTexture;
+        if (texture == null) return;
+        float speed = mAnimatedWebpLongPressRestoreSpeed;
+        boolean playing = mAnimatedWebpLongPressRestorePlaying;
+        mAnimatedWebpLongPressTexture = null;
+        texture.setPlaybackSpeed(speed);
+        texture.setPlaybackPlaying(playing);
     }
 
     private class NotifyTask implements Runnable {

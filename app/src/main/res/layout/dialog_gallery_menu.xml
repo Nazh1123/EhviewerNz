@@ -342,6 +342,38 @@
                 android:textColor="?android:attr/textColorPrimary"
                 android:textSize="@dimen/text_super_small" />
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_weight="2"
+                    android:text="@string/settings_animated_webp_long_press_speed"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="@dimen/text_super_small" />
+
+                <EditText
+                    android:id="@+id/animated_webp_long_press_speed"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_weight="1"
+                    android:digits="0123456789."
+                    android:gravity="center"
+                    android:imeOptions="actionDone"
+                    android:inputType="numberDecimal"
+                    android:maxLength="3"
+                    android:selectAllOnFocus="true"
+                    android:singleLine="true"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:textSize="@dimen/text_super_small" />
+
+            </LinearLayout>
+
         </LinearLayout>
 
     </LinearLayout>

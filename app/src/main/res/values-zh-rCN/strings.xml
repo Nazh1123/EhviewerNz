@@ -1070,4 +1070,6 @@
     <string name="settings_animated_webp_progress_control">进度条控制</string>
     <string name="settings_animated_webp_sequential_playback">顺序播放</string>
     <string name="settings_animated_webp_auto_transfer_button">自动翻页按钮</string>
+    <string name="settings_animated_webp_long_press_speed">长按倍速</string>
+    <string name="settings_animated_webp_long_press_speed_invalid">请输入 0.1–3.0 范围内、最多一位小数的数值</string>
 </resources>

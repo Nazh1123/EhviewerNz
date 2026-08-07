@@ -117,6 +117,13 @@
         android:title="@string/settings_animated_webp_auto_transfer_button"
         app:iconSpaceReserved="true" />
 
+    <androidx.preference.EditTextPreference
+        android:defaultValue="2.0"
+        android:dependency="experimental_animated_webp"
+        android:key="animated_webp_long_press_speed"
+        android:title="@string/settings_animated_webp_long_press_speed"
+        app:iconSpaceReserved="true" />
+
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="download_label_continuous_browse"
