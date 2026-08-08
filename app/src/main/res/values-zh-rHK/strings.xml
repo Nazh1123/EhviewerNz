@@ -560,6 +560,9 @@
     <string name="gallery_menu_title">選單</string>
     <string name="share_image">分享圖片</string>
     <string name="image_saved">已儲存圖片至 %s</string>
+    <string name="image_save_undo_description">%1$s，點擊可撤銷本次儲存</string>
+    <string name="image_save_undone">已撤銷本次圖片儲存</string>
+    <string name="error_cant_undo_image_save">無法撤銷本次圖片儲存</string>
 
     <!-- Settings -->
     <string name="settings_eh">EH</string>

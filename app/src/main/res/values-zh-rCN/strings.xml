@@ -526,6 +526,9 @@
     <string name="gallery_menu_title">菜单</string>
     <string name="share_image">分享图片</string>
     <string name="image_saved">图片已保存至 %s</string>
+    <string name="image_save_undo_description">%1$s，点击可撤销本次保存</string>
+    <string name="image_save_undone">已撤销本次图片保存</string>
+    <string name="error_cant_undo_image_save">无法撤销本次图片保存</string>
 
     <!-- Settings -->
     <string name="settings_eh">EH</string>

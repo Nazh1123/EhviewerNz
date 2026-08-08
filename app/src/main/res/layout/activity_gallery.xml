@@ -322,11 +322,14 @@
         android:id="@+id/save_notice"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:layout_gravity="bottom|right"
+        android:layout_gravity="top|right"
+        android:layout_marginTop="24dp"
         android:layout_marginRight="16dp"
-        android:layout_marginBottom="24dp"
         android:accessibilityLiveRegion="polite"
         android:background="@drawable/gallery_save_notice_background"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?android:attr/selectableItemBackgroundBorderless"
         android:importantForAccessibility="yes"
         android:visibility="gone"
         tools:ignore="RtlHardcoded">
@@ -339,6 +342,22 @@
             android:alpha="0.5"
             android:importantForAccessibility="no"
             android:src="@drawable/v_download_dark_x24" />
+
+        <TextView
+            android:id="@+id/save_notice_previous_badge"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_gravity="bottom|right"
+            android:layout_marginRight="3dp"
+            android:layout_marginBottom="3dp"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:importantForAccessibility="no"
+            android:text="p"
+            android:textColor="?attr/iconColor"
+            android:textSize="10sp"
+            android:visibility="gone"
+            tools:ignore="HardcodedText,RtlHardcoded" />
 
     </FrameLayout>
 

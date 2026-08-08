@@ -11,8 +11,10 @@
 package com.hippo.ehviewer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
 import android.preference.PreferenceManager;
@@ -60,6 +62,26 @@ public class ManualImageSaveLocationTest {
     }
 
     @Test
+    public void preservesNestedDirectoryNamedDefault() throws Exception {
+        File parent = temporaryFolder.newFolder("main");
+        File directory = new File(parent, "_default");
+        assertTrue(directory.mkdir());
+        UniFile selected = UniFile.fromFile(directory);
+
+        Settings.putManualImageSaveLocation(selected);
+
+        UniFile restored = Settings.getManualImageSaveLocation();
+        assertNotNull(restored);
+        assertEquals(selected.getUri(), restored.getUri());
+
+        UniFile saved = restored.createFile("image.jpg");
+        assertNotNull(saved);
+        assertEquals(UniFile.fromFile(new File(directory, "image.jpg")).getUri(),
+                saved.getUri());
+        assertFalse(new File(parent, "image.jpg").exists());
+    }
+
+    @Test
     public void rejectsConfiguredLocationThatIsNotDirectory() throws Exception {
         File regularFile = temporaryFolder.newFile("not-a-directory");
         UniFile selected = UniFile.fromFile(regularFile);
@@ -68,6 +90,7 @@ public class ManualImageSaveLocationTest {
 
         assertEquals(selected.getUri(), Settings.getManualImageSaveLocationUri());
         assertNull(Settings.getConfiguredManualImageSaveLocation());
+        assertNull(Settings.getManualImageSaveLocation());
     }
 
     @Test

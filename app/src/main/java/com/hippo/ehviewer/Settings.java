@@ -1053,14 +1053,13 @@ public class Settings {
 
     /**
      * Returns the effective manual image destination. The historical EhViewer/image directory is
-     * retained as a fallback so saving keeps working when no custom directory is selected or its
-     * persisted permission is later revoked.
+     * used only when no custom directory was selected. If a configured directory becomes
+     * unavailable, return {@code null} instead of silently saving somewhere else.
      */
     @Nullable
     public static UniFile getManualImageSaveLocation() {
-        UniFile configured = getConfiguredManualImageSaveLocation();
-        return configured != null
-                ? configured
+        return getManualImageSaveLocationUri() != null
+                ? getConfiguredManualImageSaveLocation()
                 : UniFile.fromFile(AppConfig.getExternalImageDir());
     }
 

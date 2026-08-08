@@ -211,6 +211,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private ImageView mSaveNoticeIcon;
     @Nullable
+    private TextView mSaveNoticePreviousBadge;
+    @Nullable
+    private UniFile mSaveNoticeUndoFile;
+    private int mSaveNoticeUndoPage = -1;
+    @Nullable
     private View mAnimatedWebpPanel;
     @Nullable
     private View mAnimatedWebpControls;
@@ -563,6 +568,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         mSaveNotice = ViewUtils.$$(this, R.id.save_notice);
         mSaveNoticeIcon = (ImageView) ViewUtils.$$(this, R.id.save_notice_icon);
+        mSaveNoticePreviousBadge = (TextView) ViewUtils.$$(
+                this, R.id.save_notice_previous_badge);
+        mSaveNotice.setOnClickListener(view -> undoLastImageSave());
         mAnimatedWebpStallWarning = findViewById(R.id.animated_webp_stall_warning);
         mAnimatedWebpStallWarning.setOnClickListener(
                 view -> degradeCurrentAnimatedWebpDecoder());
@@ -741,8 +749,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         mSaveNoticeGeneration++;
         cancelSaveNoticeAnimation();
+        clearSaveNoticeAction();
         mSaveNotice = null;
         mSaveNoticeIcon = null;
+        mSaveNoticePreviousBadge = null;
         mAnimatedWebpPanel = null;
         mAnimatedWebpControls = null;
         mAnimatedWebpTime = null;
@@ -1462,37 +1472,40 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void saveImage(int page) {
+        saveImage(page, false);
+    }
+
+    private boolean saveImage(int page, boolean previousPageSave) {
         if (null == mGalleryProvider) {
-            return;
+            return false;
         }
 
-        UniFile configuredDir = Settings.getConfiguredManualImageSaveLocation();
-        UniFile defaultDir = UniFile.fromFile(AppConfig.getExternalImageDir());
-        UniFile effectiveDir = configuredDir != null ? configuredDir : defaultDir;
+        UniFile effectiveDir = Settings.getManualImageSaveLocation();
         if (effectiveDir == null) {
             showSaveErrorNotice(getText(R.string.error_cant_save_image));
-            return;
+            return false;
         }
 
         UniFile file = saveImageInDirectory(page, effectiveDir);
-        // A persisted SAF grant can be revoked while the reader is open. Keep the historical
-        // EhViewer/image directory as a last-resort destination for this manual save only.
-        if (file == null && configuredDir != null && defaultDir != null
-                && !configuredDir.getUri().equals(defaultDir.getUri())) {
-            file = saveImageInDirectory(page, defaultDir);
-        }
         if (file == null) {
             showSaveErrorNotice(getText(R.string.error_cant_save_image));
-            return;
+            return false;
         }
 
-        showSaveNotice(getString(R.string.image_saved, file.getUri()));
+        showSaveNotice(getString(R.string.image_saved, file.getUri()),
+                file, page, previousPageSave);
 
         // Sync media store
         sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, file.getUri()));
+        return true;
     }
 
     private void showSaveNotice(CharSequence message) {
+        showSaveNotice(message, null, -1, false);
+    }
+
+    private void showSaveNotice(CharSequence message, @Nullable UniFile undoFile,
+                                int savedPage, boolean previousPageSave) {
         View notice = mSaveNotice;
         ImageView icon = mSaveNoticeIcon;
         if (notice == null || icon == null) {
@@ -1506,9 +1519,20 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSaveNoticeGeneration++;
         notice.removeCallbacks(mHideSaveNoticeRunnable);
         cancelSaveNoticeAnimation();
+        mSaveNoticeUndoFile = undoFile;
+        mSaveNoticeUndoPage = undoFile != null ? savedPage : -1;
+        notice.setClickable(undoFile != null);
+        notice.setFocusable(undoFile != null);
+        if (mSaveNoticePreviousBadge != null) {
+            mSaveNoticePreviousBadge.setVisibility(
+                    previousPageSave ? View.VISIBLE : View.GONE);
+        }
         notice.setVisibility(View.VISIBLE);
-        notice.setContentDescription(message);
-        notice.announceForAccessibility(message);
+        CharSequence accessibilityMessage = undoFile != null
+                ? getString(R.string.image_save_undo_description, message)
+                : message;
+        notice.setContentDescription(accessibilityMessage);
+        notice.announceForAccessibility(accessibilityMessage);
 
         AnimatorSet animator = new AnimatorSet();
         if (repeated) {
@@ -1522,7 +1546,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     notice, View.TRANSLATION_X, notice.getTranslationX(), 0.0f);
             ObjectAnimator translationY = ObjectAnimator.ofFloat(
                     notice, View.TRANSLATION_Y, notice.getTranslationY(),
-                    -4.0f * density, 0.0f);
+                    4.0f * density, 0.0f);
             ObjectAnimator iconAlpha = ObjectAnimator.ofFloat(
                     icon, View.ALPHA, icon.getAlpha(), 0.92f, 0.5f);
             animator.playTogether(alpha, scaleX, scaleY, translationX,
@@ -1533,7 +1557,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             notice.setScaleX(0.76f);
             notice.setScaleY(0.76f);
             notice.setTranslationX(10.0f * density);
-            notice.setTranslationY(10.0f * density);
+            notice.setTranslationY(-10.0f * density);
             icon.setAlpha(0.5f);
 
             ObjectAnimator alpha = ObjectAnimator.ofFloat(notice, View.ALPHA, 0.0f, 1.0f);
@@ -1544,7 +1568,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             ObjectAnimator translationX = ObjectAnimator.ofFloat(
                     notice, View.TRANSLATION_X, 10.0f * density, 0.0f);
             ObjectAnimator translationY = ObjectAnimator.ofFloat(
-                    notice, View.TRANSLATION_Y, 10.0f * density, 0.0f);
+                    notice, View.TRANSLATION_Y, -10.0f * density, 0.0f);
             animator.playTogether(alpha, scaleX, scaleY, translationX, translationY);
             animator.setDuration(SAVE_NOTICE_ENTER_DURATION_MS);
         }
@@ -1552,6 +1576,35 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSaveNoticeAnimator = animator;
         animator.start();
         notice.postDelayed(mHideSaveNoticeRunnable, SAVE_NOTICE_DURATION_MS);
+    }
+
+    private void undoLastImageSave() {
+        UniFile file = mSaveNoticeUndoFile;
+        if (file == null) {
+            return;
+        }
+
+        boolean removed = false;
+        try {
+            removed = !file.exists() || file.delete() || !file.exists();
+        } catch (Throwable e) {
+            ExceptionUtils.throwIfFatal(e);
+            Log.w(TAG, "Failed to undo image save at " + file.getUri(), e);
+        }
+        if (!removed) {
+            Toast.makeText(this, R.string.error_cant_undo_image_save,
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        int undonePage = mSaveNoticeUndoPage;
+        if (undonePage == mLastLongPressSaveIndex) {
+            mLastLongPressSaveIndex = -1;
+            mLastLongPressSaveAt = 0L;
+        }
+        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, file.getUri()));
+        hideSaveNotice();
+        Toast.makeText(this, R.string.image_save_undone, Toast.LENGTH_SHORT).show();
     }
 
     private void showSaveErrorNotice(CharSequence message) {
@@ -1562,11 +1615,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private void hideSaveNotice() {
         View notice = mSaveNotice;
         if (notice == null || notice.getVisibility() != View.VISIBLE) {
+            clearSaveNoticeAction();
             return;
         }
 
         notice.removeCallbacks(mHideSaveNoticeRunnable);
         cancelSaveNoticeAnimation();
+        clearSaveNoticeAction();
         final int generation = mSaveNoticeGeneration;
         float density = getResources().getDisplayMetrics().density;
         AnimatorSet animator = new AnimatorSet();
@@ -1577,7 +1632,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 ObjectAnimator.ofFloat(notice, View.TRANSLATION_X,
                         notice.getTranslationX(), 6.0f * density),
                 ObjectAnimator.ofFloat(notice, View.TRANSLATION_Y,
-                        notice.getTranslationY(), 6.0f * density));
+                        notice.getTranslationY(), -6.0f * density));
         animator.setDuration(SAVE_NOTICE_EXIT_DURATION_MS);
         animator.setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR);
         animator.addListener(new AnimatorListenerAdapter() {
@@ -1590,6 +1645,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         });
         mSaveNoticeAnimator = animator;
         animator.start();
+    }
+
+    private void clearSaveNoticeAction() {
+        mSaveNoticeUndoFile = null;
+        mSaveNoticeUndoPage = -1;
+        if (mSaveNotice != null) {
+            mSaveNotice.setClickable(false);
+            mSaveNotice.setFocusable(false);
+        }
+        if (mSaveNoticePreviousBadge != null) {
+            mSaveNoticePreviousBadge.setVisibility(View.GONE);
+        }
     }
 
     private void cancelSaveNoticeAnimation() {
@@ -2546,7 +2613,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
 
-        private void performLongPressSave(int index, boolean turnPageAfterSave) {
+        private void performLongPressSave(int index, boolean turnPageAfterSave,
+                                          boolean previousPageSave) {
             if (mGalleryProvider == null || index < 0 || index >= mSize) {
                 return;
             }
@@ -2558,7 +2626,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 return;
             }
 
-            saveImage(index);
+            if (!saveImage(index, previousPageSave)) {
+                return;
+            }
             mLastLongPressSaveIndex = index;
             mLastLongPressSaveAt = SystemClock.elapsedRealtime();
 
@@ -2578,7 +2648,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         private void onLongPressNextPageArea(final int index) {
             if (Settings.getDirectSave()) {
-                performLongPressSave(index, true);
+                performLongPressSave(index, true, false);
             } else {
                 showPageDialog(index);
             }
@@ -2591,7 +2661,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     && Settings.getAnimatedWebpAutoAdvance()
                     && mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM
                     && previousIndex >= 0) {
-                performLongPressSave(previousIndex, false);
+                performLongPressSave(previousIndex, false, true);
             } else {
                 showPageDialog(index);
             }
