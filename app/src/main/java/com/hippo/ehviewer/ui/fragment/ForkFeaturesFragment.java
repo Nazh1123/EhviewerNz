@@ -16,7 +16,6 @@ import com.hippo.unifile.UniFile;
 
 public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
 
-    private static final String SUBSCRIPTION_SOURCE_INDENT = "\u3000\u3000";
     private static final String KEY_MANUAL_IMAGE_SAVE_LOCATION =
             "manual_image_save_location";
     private static final int REQUEST_CODE_PICK_MANUAL_IMAGE_DIR = 0;
@@ -64,25 +63,6 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
             deleteEmptyGalleries.setOnPreferenceClickListener(preference -> {
                 MissingGalleryCleaner.showConfirmation(requireActivity(),
                         R.string.settings_fork_delete_empty_galleries);
-                return true;
-            });
-        }
-        Preference autoSubscriptionUpdates =
-                findPreference(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES);
-        Preference autoSubscriptionUpdatesEh =
-                findPreference(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH);
-        Preference autoSubscriptionUpdatesBookmark =
-                findPreference(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK);
-        indentPreferenceTitle(autoSubscriptionUpdatesEh);
-        indentPreferenceTitle(autoSubscriptionUpdatesBookmark);
-        boolean showAutoSubscriptionSources = Settings.getAutoSubscriptionUpdates();
-        setSubscriptionSourcePreferencesVisible(autoSubscriptionUpdatesEh,
-                autoSubscriptionUpdatesBookmark, showAutoSubscriptionSources);
-        if (autoSubscriptionUpdates != null) {
-            autoSubscriptionUpdates.setOnPreferenceChangeListener((preference, newValue) -> {
-                boolean visible = Boolean.TRUE.equals(newValue);
-                setSubscriptionSourcePreferencesVisible(autoSubscriptionUpdatesEh,
-                        autoSubscriptionUpdatesBookmark, visible);
                 return true;
             });
         }
@@ -138,25 +118,4 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         }
     }
 
-    private static void setSubscriptionSourcePreferencesVisible(
-            @Nullable Preference ehPreference,
-            @Nullable Preference bookmarkPreference,
-            boolean visible) {
-        if (ehPreference != null) {
-            ehPreference.setVisible(visible);
-        }
-        if (bookmarkPreference != null) {
-            bookmarkPreference.setVisible(visible);
-        }
-    }
-
-    private static void indentPreferenceTitle(@Nullable Preference preference) {
-        if (preference == null || preference.getTitle() == null) {
-            return;
-        }
-        String title = preference.getTitle().toString();
-        if (!title.startsWith(SUBSCRIPTION_SOURCE_INDENT)) {
-            preference.setTitle(SUBSCRIPTION_SOURCE_INDENT + title);
-        }
-    }
 }

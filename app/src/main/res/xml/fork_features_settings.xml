@@ -29,6 +29,7 @@
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
+        android:dependency="gallery_direct_save"
         android:key="gallery_quick_save_turn_page"
         android:summary="@string/settings_fork_long_press_save_then_turn_page_summary"
         android:title="@string/settings_read_long_press_save_turn_page" />
@@ -38,12 +39,6 @@
         android:key="gallery_quick_page_turn"
         android:summary="@string/settings_fork_quick_page_turn_summary"
         android:title="@string/settings_read_quick_page_turn" />
-
-    <com.hippo.preference.SwitchPreference
-        android:defaultValue="true"
-        android:key="show_thumbnail_download_badge"
-        android:summary="@string/settings_eh_show_thumbnail_download_badge_summary"
-        android:title="@string/settings_eh_show_thumbnail_download_badge" />
 
     <com.hippo.preference.ListPreference
         android:key="search_language"
@@ -69,13 +64,21 @@
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
+        android:dependency="auto_subscription_updates"
         android:key="auto_subscription_updates_eh"
         android:title="@string/settings_fork_auto_subscription_updates_eh" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
+        android:dependency="auto_subscription_updates"
         android:key="auto_subscription_updates_bookmark"
         android:title="@string/bookmark_subscription" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="show_thumbnail_download_badge"
+        android:summary="@string/settings_eh_show_thumbnail_download_badge_summary"
+        android:title="@string/settings_eh_show_thumbnail_download_badge" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
@@ -86,6 +89,7 @@
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
         android:key="experimental_animated_webp"
+        android:summary="@string/settings_animated_webp_controls_summary"
         android:title="@string/settings_animated_webp_controls"
         app:allowDividerAbove="true" />
 
@@ -93,36 +97,36 @@
         android:defaultValue="true"
         android:dependency="experimental_animated_webp"
         android:key="animated_webp_show_time"
-        android:title="@string/settings_animated_webp_playback_time"
-        app:iconSpaceReserved="true" />
+        android:summary="@string/settings_animated_webp_playback_time_summary"
+        android:title="@string/settings_animated_webp_playback_time" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
         android:dependency="experimental_animated_webp"
         android:key="animated_webp_allow_seek"
-        android:title="@string/settings_animated_webp_progress_control"
-        app:iconSpaceReserved="true" />
+        android:summary="@string/settings_animated_webp_progress_control_summary"
+        android:title="@string/settings_animated_webp_progress_control" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:dependency="experimental_animated_webp"
         android:key="animated_webp_auto_advance"
-        android:title="@string/settings_animated_webp_sequential_playback"
-        app:iconSpaceReserved="true" />
+        android:summary="@string/settings_animated_webp_sequential_playback_summary"
+        android:title="@string/settings_animated_webp_sequential_playback" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:dependency="experimental_animated_webp"
         android:key="animated_webp_auto_transfer_button"
-        android:title="@string/settings_animated_webp_auto_transfer_button"
-        app:iconSpaceReserved="true" />
+        android:summary="@string/settings_animated_webp_auto_transfer_button_summary"
+        android:title="@string/settings_animated_webp_auto_transfer_button" />
 
     <androidx.preference.EditTextPreference
         android:defaultValue="2.0"
         android:dependency="experimental_animated_webp"
         android:key="animated_webp_long_press_speed"
-        android:title="@string/settings_animated_webp_long_press_speed"
-        app:iconSpaceReserved="true" />
+        android:summary="@string/settings_animated_webp_long_press_speed_summary"
+        android:title="@string/settings_animated_webp_long_press_speed" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"

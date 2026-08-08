@@ -1821,7 +1821,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                             getAnimatedWebpLongPressSpeedInput());
                 }
             });
-            updateAnimatedWebpSettingsEnabled(mAnimatedWebpEnabled.isChecked());
+            updateAnimatedWebpSettingsVisibility(mAnimatedWebpEnabled.isChecked());
 
             mDirectSave.setOnCheckedChangeListener(this::onDirectSaveChange);
             mVolumePage.setOnCheckedChangeListener(this::onVolumePageChange);
@@ -1838,17 +1838,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
             mCustomScreenLightness.setOnCheckedChangeListener((buttonView, isChecked) -> mScreenLightness.setEnabled(isChecked));
             mAnimatedWebpEnabled.setOnCheckedChangeListener((buttonView, isChecked) ->
-                    updateAnimatedWebpSettingsEnabled(isChecked));
+                    updateAnimatedWebpSettingsVisibility(isChecked));
         }
 
-        private void updateAnimatedWebpSettingsEnabled(boolean enabled) {
-            mAnimatedWebpSettings.setVisibility(View.VISIBLE);
-            mAnimatedWebpSettings.setAlpha(enabled ? 1.0f : 0.5f);
-            mAnimatedWebpShowTime.setEnabled(enabled);
-            mAnimatedWebpAllowSeek.setEnabled(enabled);
-            mAnimatedWebpAutoAdvance.setEnabled(enabled);
-            mAnimatedWebpAutoTransferButton.setEnabled(enabled);
-            mAnimatedWebpLongPressSpeed.setEnabled(enabled);
+        private void updateAnimatedWebpSettingsVisibility(boolean enabled) {
+            mAnimatedWebpSettings.setVisibility(enabled ? View.VISIBLE : View.GONE);
         }
 
         private float getAnimatedWebpLongPressSpeedInput() {

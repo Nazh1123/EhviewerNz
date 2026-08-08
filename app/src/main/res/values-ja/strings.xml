@@ -916,4 +916,10 @@
     <string name="imported_archive_info_title">ローカルインポート情報</string>
     <string name="imported_archive_info_message">これはローカルストレージからインポートされたアイテムです</string>
     <string name="imported_archive_category">ローカルインポート</string>
+    <string name="settings_animated_webp_controls_summary">アニメーション WebP の一時停止、進行バー、再生速度などの操作を有効にします</string>
+    <string name="settings_animated_webp_playback_time_summary">下部の進行バーの上に現在の再生時間と合計時間を表示します</string>
+    <string name="settings_animated_webp_progress_control_summary">画面下部 25% の領域をスワイプして再生位置を変更できます</string>
+    <string name="settings_animated_webp_sequential_playback_summary">再生終了後に次の画像を自動的に開きます</string>
+    <string name="settings_animated_webp_auto_transfer_button_summary">ページスライダーの表示中に自動ページ送りの再生／一時停止ボタンを表示します</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 画面中央下部を長押しすると %1$sx で再生します。1.0 では長押しでメニューを表示します</string>
 </resources>

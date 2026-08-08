@@ -968,4 +968,10 @@
     <string name="spen_next_page">หน้าถัดไป</string>
     <string name="category_all">ทั้งหมด</string>
 
+    <string name="settings_animated_webp_controls_summary">เปิดใช้การควบคุม WebP เคลื่อนไหว เช่น หยุดชั่วคราว แถบความคืบหน้า ความเร็วการเล่น และอื่น ๆ</string>
+    <string name="settings_animated_webp_playback_time_summary">แสดงเวลาเล่นปัจจุบันและระยะเวลาทั้งหมดเหนือแถบความคืบหน้าด้านล่าง</string>
+    <string name="settings_animated_webp_progress_control_summary">ปัดภายในพื้นที่ 25% ด้านล่างของหน้าจอเพื่อเปลี่ยนตำแหน่งการเล่น</string>
+    <string name="settings_animated_webp_sequential_playback_summary">เปิดภาพถัดไปโดยอัตโนมัติเมื่อเล่นจบ</string>
+    <string name="settings_animated_webp_auto_transfer_button_summary">แสดงปุ่มเล่น/หยุดชั่วคราวสำหรับการเปลี่ยนหน้าอัตโนมัติเมื่อแถบเลื่อนหน้าแสดงอยู่</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - กดค้างบริเวณกึ่งกลางด้านล่างของหน้าจอเพื่อเล่นที่ %1$sx เมื่อตั้งเป็น 1.0 การกดค้างจะเปิดเมนูแทน</string>
 </resources>

@@ -1066,10 +1066,16 @@
     <string name="open_direct_parent">直接打开父画廊</string>
 
     <string name="settings_animated_webp_controls">动图控制</string>
+    <string name="settings_animated_webp_controls_summary">为动态 WebP 启用控制：暂停、进度条、倍速等</string>
     <string name="settings_animated_webp_playback_time">播放时间</string>
+    <string name="settings_animated_webp_playback_time_summary">在底部进度条上方显示当前播放时间和总时长</string>
     <string name="settings_animated_webp_progress_control">进度条控制</string>
+    <string name="settings_animated_webp_progress_control_summary">允许在屏幕底部 25% 区域滑动以跳转动图播放进度</string>
     <string name="settings_animated_webp_sequential_playback">顺序播放</string>
+    <string name="settings_animated_webp_sequential_playback_summary">播放完毕后自动进入下一张</string>
     <string name="settings_animated_webp_auto_transfer_button">自动翻页按钮</string>
+    <string name="settings_animated_webp_auto_transfer_button_summary">唤出页面滑动条时显示自动翻页的播放/暂停按钮</string>
     <string name="settings_animated_webp_long_press_speed">长按倍速</string>
-    <string name="settings_animated_webp_long_press_speed_invalid">请输入 0.1–3.0 范围内、最多一位小数的数值</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 长按屏幕中下区域，以 %1$sx 倍速播放；设为 1.0 时长按改为唤出菜单</string>
+    <string name="settings_animated_webp_long_press_speed_invalid">请输入 0.1–3.0 范围内最多一位小数的数值</string>
 </resources>

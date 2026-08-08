@@ -903,4 +903,10 @@
     <string name="imported_archive_info_title">Lokaler Import-Info</string>
     <string name="imported_archive_info_message">Dies ist ein Element, das aus dem lokalen Speicher importiert wurde</string>
     <string name="imported_archive_category">Lokaler Import</string>
+    <string name="settings_animated_webp_controls_summary">Aktiviert Steuerungen für animierte WebP-Dateien: Pause, Fortschrittsleiste, Wiedergabegeschwindigkeit und mehr</string>
+    <string name="settings_animated_webp_playback_time_summary">Zeigt die aktuelle Wiedergabezeit und die Gesamtdauer über der unteren Fortschrittsleiste an</string>
+    <string name="settings_animated_webp_progress_control_summary">Durch Wischen im unteren Viertel des Bildschirms kann die Wiedergabeposition geändert werden</string>
+    <string name="settings_animated_webp_sequential_playback_summary">Öffnet nach dem Wiedergabeende automatisch das nächste Bild</string>
+    <string name="settings_animated_webp_auto_transfer_button_summary">Zeigt die Wiedergabe-/Pause-Schaltfläche für automatisches Umblättern an, wenn der Seitenschieberegler sichtbar ist</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx – Langes Drücken im unteren mittleren Bildschirmbereich spielt mit %1$sx ab; bei 1.0 öffnet langes Drücken stattdessen das Menü</string>
 </resources>

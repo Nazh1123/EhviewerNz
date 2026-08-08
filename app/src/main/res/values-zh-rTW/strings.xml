@@ -1031,10 +1031,16 @@
     <string name="dummy_content">虛擬\n內容</string>
 
     <string name="settings_animated_webp_controls">動圖控制</string>
+    <string name="settings_animated_webp_controls_summary">為動態 WebP 啟用控制：暫停、進度條、倍速等</string>
     <string name="settings_animated_webp_playback_time">播放時間</string>
+    <string name="settings_animated_webp_playback_time_summary">在底部進度條上方顯示目前播放時間和總時長</string>
     <string name="settings_animated_webp_progress_control">進度條控制</string>
+    <string name="settings_animated_webp_progress_control_summary">允許在螢幕底部 25% 區域滑動以跳轉動圖播放進度</string>
     <string name="settings_animated_webp_sequential_playback">順序播放</string>
+    <string name="settings_animated_webp_sequential_playback_summary">播放完畢後自動進入下一張</string>
     <string name="settings_animated_webp_auto_transfer_button">自動翻頁按鈕</string>
+    <string name="settings_animated_webp_auto_transfer_button_summary">叫出頁面滑動條時顯示自動翻頁的播放／暫停按鈕</string>
     <string name="settings_animated_webp_long_press_speed">長按倍速</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 長按螢幕中下區域，以 %1$sx 倍速播放；設為 1.0 時長按改為叫出選單</string>
     <string name="settings_animated_webp_long_press_speed_invalid">請輸入 0.1–3.0 範圍內、最多一位小數的數值</string>
 </resources>

@@ -143,6 +143,8 @@
     <dimen name="preference_widget_width">48dp</dimen>
     <dimen name="preference_item_padding_side">8dip</dimen>
     <dimen name="preference_item_padding_inner">8dip</dimen>
+    <!-- Approximately two 16sp text characters; used once for dependent settings. -->
+    <dimen name="preference_child_indent">32dp</dimen>
 
     <!-- Gallery -->
     <dimen name="gallery_pager_interval">48dp</dimen>
