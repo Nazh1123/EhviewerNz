@@ -777,7 +777,9 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
         boolean nextPageArea = (mLayoutMode == LAYOUT_RIGHT_TO_LEFT
                 ? mLeftArea : mRightArea).contains((int) x, (int) y);
-        int index = nextPageArea
+        boolean previousPageArea = (mLayoutMode == LAYOUT_RIGHT_TO_LEFT
+                ? mRightArea : mLeftArea).contains((int) x, (int) y);
+        int index = nextPageArea || previousPageArea
                 ? mLayoutManager.getInternalCurrentIndex()
                 : mLayoutManager.getIndexUnder(x, y);
         if (index == GalleryPageView.INVALID_INDEX) {
@@ -785,7 +787,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         }
 
         if (mListener != null) {
-            mListener.onLongPressPage(index, nextPageArea);
+            mListener.onLongPressPage(index, nextPageArea, previousPageArea);
         }
     }
 
@@ -1291,7 +1293,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         void onTapErrorText(int index);
 
         @RenderThread
-        void onLongPressPage(int index, boolean nextPageArea);
+        void onLongPressPage(int index, boolean nextPageArea, boolean previousPageArea);
 
         @RenderThread
         boolean onLongPressSliderArea(ImageTexture texture);

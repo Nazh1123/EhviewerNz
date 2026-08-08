@@ -1267,14 +1267,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     @Override
-    public void onLongPressPage(int index, boolean nextPageArea) {
+    public void onLongPressPage(int index, boolean nextPageArea,
+                                boolean previousPageArea) {
         NotifyTask task = mNotifyTaskPool.pop();
         if (task == null) {
             task = new NotifyTask();
         }
-        task.setData(nextPageArea
+        int key = nextPageArea
                 ? NotifyTask.KEY_LONG_PRESS_NEXT_PAGE_AREA
-                : NotifyTask.KEY_LONG_PRESS_PAGE, index);
+                : previousPageArea
+                        ? NotifyTask.KEY_LONG_PRESS_PREVIOUS_PAGE_AREA
+                        : NotifyTask.KEY_LONG_PRESS_PAGE;
+        task.setData(key, index);
         SimpleHandler.getInstance().post(task);
     }
 
@@ -2399,6 +2403,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         public static final int KEY_TAP_ERROR_TEXT = 5;
         public static final int KEY_LONG_PRESS_PAGE = 6;
         public static final int KEY_LONG_PRESS_NEXT_PAGE_AREA = 7;
+        public static final int KEY_LONG_PRESS_PREVIOUS_PAGE_AREA = 8;
 
         private int mKey;
         private int mValue;
@@ -2442,7 +2447,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
 
-        private void performLongPressSave(int index) {
+        private void performLongPressSave(int index, boolean turnPageAfterSave) {
             if (mGalleryProvider == null || index < 0 || index >= mSize) {
                 return;
             }
@@ -2458,7 +2463,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mLastLongPressSaveIndex = index;
             mLastLongPressSaveAt = SystemClock.elapsedRealtime();
 
-            if (Settings.getLongPressSaveTurnPage() && mGalleryView != null) {
+            if (turnPageAfterSave && Settings.getLongPressSaveTurnPage()
+                    && mGalleryView != null) {
                 if (mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT) {
                     mGalleryView.pageLeft();
                 } else {
@@ -2473,7 +2479,20 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         private void onLongPressNextPageArea(final int index) {
             if (Settings.getDirectSave()) {
-                performLongPressSave(index);
+                performLongPressSave(index, true);
+            } else {
+                showPageDialog(index);
+            }
+        }
+
+        private void onLongPressPreviousPageArea(final int index) {
+            int previousIndex = index - 1;
+            if (Settings.getDirectSave()
+                    && Settings.getExperimentalAnimatedWebpEnabled()
+                    && Settings.getAnimatedWebpAutoAdvance()
+                    && mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM
+                    && previousIndex >= 0) {
+                performLongPressSave(previousIndex, false);
             } else {
                 showPageDialog(index);
             }
@@ -2513,6 +2532,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case KEY_LONG_PRESS_NEXT_PAGE_AREA:
                     onLongPressNextPageArea(mValue);
+                    break;
+                case KEY_LONG_PRESS_PREVIOUS_PAGE_AREA:
+                    onLongPressPreviousPageArea(mValue);
                     break;
             }
             mNotifyTaskPool.push(this);
