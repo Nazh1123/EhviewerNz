@@ -237,6 +237,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private ImageTexture mAnimatedWebpStallWarningTexture;
     @Nullable
     private ImageTexture mAnimatedWebpLongPressTexture;
+    private boolean mAnimatedWebpLongPressActive;
     private float mAnimatedWebpLongPressRestoreSpeed;
     private boolean mAnimatedWebpLongPressRestorePlaying;
     private boolean mAnimatedWebpSeeking;
@@ -2347,6 +2348,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
 
         mAnimatedWebpReloadSourceTexture = texture;
+        restoreAnimatedWebpLongPressPlayback();
         if (mAnimatedWebpTexture != null) {
             mAnimatedWebpTexture.setPlaybackListener(null);
             mAnimatedWebpTexture = null;
@@ -2380,6 +2382,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         if (candidate != mAnimatedWebpTexture) {
             if (mAnimatedWebpTexture != null) mAnimatedWebpTexture.setPlaybackListener(null);
+            transferAnimatedWebpLongPressPlayback(candidate);
             mAnimatedWebpTexture = candidate;
             mAnimatedWebpSeeking = false;
             mAnimatedWebpSeekAwaitingFrame = false;
@@ -2513,6 +2516,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mGalleryProvider.setAnimatedWebpDecodeMode(mCurrentIndex, nextMode);
         hideAnimatedWebpStallWarning();
         mAnimatedWebpReloadSourceTexture = texture;
+        restoreAnimatedWebpLongPressPlayback();
         texture.setPlaybackListener(null);
         texture.stop();
         mAnimatedWebpTexture = null;
@@ -2531,15 +2535,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 || mLayoutMode == GalleryView.LAYOUT_TOP_TO_BOTTOM
                 || texture != mAnimatedWebpTexture
                 || Math.abs(speed - 1.0f) < 0.0001f
-                || mAnimatedWebpLongPressTexture != null) {
+                || mAnimatedWebpLongPressActive) {
             return false;
         }
-        mAnimatedWebpLongPressTexture = texture;
-        mAnimatedWebpLongPressRestoreSpeed = texture.getPlaybackSpeed();
-        mAnimatedWebpLongPressRestorePlaying = texture.isPlaybackPlaying();
-        texture.setStallDetectionSuppressed(true);
-        texture.setPlaybackSpeed(speed);
-        texture.setPlaybackPlaying(true);
+        mAnimatedWebpLongPressActive = true;
+        applyAnimatedWebpLongPressPlayback(texture, speed);
         return true;
     }
 
@@ -2549,6 +2549,48 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private synchronized void restoreAnimatedWebpLongPressPlayback() {
+        mAnimatedWebpLongPressActive = false;
+        restoreAnimatedWebpLongPressTexture();
+    }
+
+    private synchronized void transferAnimatedWebpLongPressPlayback(
+            @Nullable ImageTexture nextTexture) {
+        if (!mAnimatedWebpLongPressActive || nextTexture == mAnimatedWebpLongPressTexture) {
+            return;
+        }
+
+        restoreAnimatedWebpLongPressTexture();
+        if (nextTexture == null) {
+            // The next page may still be decoding. Keep the physical long-press session alive;
+            // updateAnimatedWebpUi() will apply it as soon as that texture becomes available.
+            return;
+        }
+        if (!Settings.getAnimatedWebpAutoAdvance()
+                || !Settings.getExperimentalAnimatedWebpEnabled()
+                || mLayoutMode == GalleryView.LAYOUT_TOP_TO_BOTTOM) {
+            mAnimatedWebpLongPressActive = false;
+            return;
+        }
+
+        float speed = Settings.getAnimatedWebpLongPressSpeed();
+        if (Math.abs(speed - 1.0f) < 0.0001f) {
+            mAnimatedWebpLongPressActive = false;
+            return;
+        }
+        applyAnimatedWebpLongPressPlayback(nextTexture, speed);
+    }
+
+    private void applyAnimatedWebpLongPressPlayback(@NonNull ImageTexture texture,
+                                                    float speed) {
+        mAnimatedWebpLongPressTexture = texture;
+        mAnimatedWebpLongPressRestoreSpeed = texture.getPlaybackSpeed();
+        mAnimatedWebpLongPressRestorePlaying = texture.isPlaybackPlaying();
+        texture.setStallDetectionSuppressed(true);
+        texture.setPlaybackSpeed(speed);
+        texture.setPlaybackPlaying(true);
+    }
+
+    private void restoreAnimatedWebpLongPressTexture() {
         ImageTexture texture = mAnimatedWebpLongPressTexture;
         if (texture == null) return;
         float speed = mAnimatedWebpLongPressRestoreSpeed;

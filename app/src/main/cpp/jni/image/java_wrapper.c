@@ -26,6 +26,7 @@
 #include "com_hippo_lib_image_Image.h"
 #include "input_stream.h"
 #include "image.h"
+#include "image_webp.h"
 #include "../log.h"
 
 static JavaVM* jvm;
@@ -224,6 +225,26 @@ Java_com_hippo_lib_image_Image1_nativeTexImageDirect(JNIEnv* env,
   int width = 0;
   int height = 0;
   void* image = (void*) (intptr_t) ptr;
+#ifdef IMAGE_SUPPORT_WEBP
+  if (format == IMAGE_FORMAT_WEBP) {
+    int x = 0;
+    int y = 0;
+    WEBP_lock_pixels((WEBP*) image);
+    pixels = WEBP_get_upload_pixels((WEBP*) image, init, &x, &y,
+                                    &width, &height);
+    if (pixels != NULL && width > 0 && height > 0) {
+      if (init) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height,
+            0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+      } else {
+        glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height,
+            GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+      }
+    }
+    WEBP_unlock_pixels((WEBP*) image);
+    return;
+  }
+#endif
   lock_image_data(image, format);
   get_image_data(image, format, &pixels, &width, &height);
   if (pixels != NULL && width > 0 && height > 0) {

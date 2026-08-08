@@ -31,6 +31,7 @@
 #include "webp/demux.h"
 
 #define WEBP_DEFAULT_FRAME_DELAY 100
+#define WEBP_DIRTY_FULL_UPLOAD_PERCENT 60u
 
 static bool checked_rgba_size(unsigned int width, unsigned int height,
                               size_t* size) {
@@ -55,6 +56,56 @@ static void clear_rect(unsigned char* canvas, unsigned int canvas_width,
   for (unsigned int y = 0; y < frame->height; ++y) {
     memset(row, 0, (size_t) frame->width * 4u);
     row += stride;
+  }
+}
+
+static void add_dirty_rect(WEBP* webp, unsigned int left, unsigned int top,
+                           unsigned int width, unsigned int height) {
+  if (width == 0 || height == 0 || left >= webp->width || top >= webp->height) {
+    return;
+  }
+  unsigned int right = left + width;
+  unsigned int bottom = top + height;
+  if (right < left || right > webp->width) right = webp->width;
+  if (bottom < top || bottom > webp->height) bottom = webp->height;
+  if (!webp->dirty_pending) {
+    webp->dirty_left = left;
+    webp->dirty_top = top;
+    webp->dirty_right = right;
+    webp->dirty_bottom = bottom;
+    webp->dirty_pending = true;
+  } else {
+    if (left < webp->dirty_left) webp->dirty_left = left;
+    if (top < webp->dirty_top) webp->dirty_top = top;
+    if (right > webp->dirty_right) webp->dirty_right = right;
+    if (bottom > webp->dirty_bottom) webp->dirty_bottom = bottom;
+  }
+}
+
+static void add_full_dirty_rect(WEBP* webp) {
+  webp->dirty_left = 0;
+  webp->dirty_top = 0;
+  webp->dirty_right = webp->width;
+  webp->dirty_bottom = webp->height;
+  webp->dirty_pending = true;
+}
+
+// A transition changes the new ANMF rectangle and, when requested, the
+// previous frame rectangle cleared by DISPOSE_BACKGROUND. A new loop resets
+// the WebP canvas, so frame zero conservatively dirties the full texture.
+static void add_transition_dirty_rect(WEBP* webp,
+                                      unsigned int next_frame) {
+  if (next_frame == 0 || webp->current_frame >= webp->frame_count) {
+    add_full_dirty_rect(webp);
+    return;
+  }
+  const WEBP_FRAME_INFO* next = &webp->frames[next_frame];
+  add_dirty_rect(webp, next->x_offset, next->y_offset,
+                 next->width, next->height);
+  const WEBP_FRAME_INFO* previous = &webp->frames[webp->current_frame];
+  if (previous->dispose_method == WEBP_MUX_DISPOSE_BACKGROUND) {
+    add_dirty_rect(webp, previous->x_offset, previous->y_offset,
+                   previous->width, previous->height);
   }
 }
 
@@ -236,6 +287,7 @@ static bool decode_frame(WEBP* webp, unsigned int frame_index,
 
   if (publish) {
     if (!pixels_locked) WEBP_lock_pixels(webp);
+    add_transition_dirty_rect(webp, frame_index);
     unsigned char* swap = webp->current_frame_buffer;
     webp->current_frame_buffer = webp->next_frame_buffer;
     webp->next_frame_buffer = swap;
@@ -397,6 +449,78 @@ void* WEBP_get_pixels(WEBP* webp) {
       : (webp->animated ? webp->current_frame_buffer : webp->buffer);
 }
 
+void* WEBP_get_upload_pixels(WEBP* webp, bool init, int* x, int* y,
+                             int* width, int* height) {
+  if (webp == NULL || !webp->animated || webp->current_frame_buffer == NULL) {
+    return NULL;
+  }
+  if (init) add_full_dirty_rect(webp);
+  if (!webp->dirty_pending) return NULL;
+
+  unsigned int left = webp->dirty_left;
+  unsigned int top = webp->dirty_top;
+  unsigned int dirty_width = webp->dirty_right - left;
+  unsigned int dirty_height = webp->dirty_bottom - top;
+  const uint64_t dirty_area = (uint64_t) dirty_width * dirty_height;
+  const uint64_t canvas_area = (uint64_t) webp->width * webp->height;
+
+  // Avoid an almost full-frame staging copy. Full-width rows are already
+  // contiguous, and large narrow rectangles are cheaper to upload directly as
+  // the complete canvas.
+  if (dirty_width != webp->width &&
+      dirty_area * 100u >= canvas_area * WEBP_DIRTY_FULL_UPLOAD_PERCENT) {
+    left = 0;
+    top = 0;
+    dirty_width = webp->width;
+    dirty_height = webp->height;
+  }
+
+  unsigned char* pixels;
+  const size_t canvas_stride = (size_t) webp->width * 4u;
+  if (left == 0 && dirty_width == webp->width) {
+    pixels = webp->current_frame_buffer + (size_t) top * canvas_stride;
+  } else {
+    size_t upload_size;
+    if (!checked_rgba_size(dirty_width, dirty_height, &upload_size)) {
+      return NULL;
+    }
+    if (webp->upload_buffer_size < upload_size) {
+      unsigned char* replacement =
+          (unsigned char*) realloc(webp->upload_buffer, upload_size);
+      if (replacement == NULL) {
+        // Keep the GPU image correct under memory pressure. The full canvas is
+        // contiguous and requires no staging allocation.
+        left = 0;
+        top = 0;
+        dirty_width = webp->width;
+        dirty_height = webp->height;
+        pixels = webp->current_frame_buffer;
+        goto UploadReady;
+      }
+      webp->upload_buffer = replacement;
+      webp->upload_buffer_size = upload_size;
+    }
+    const size_t row_size = (size_t) dirty_width * 4u;
+    const unsigned char* source = webp->current_frame_buffer
+        + (size_t) top * canvas_stride + (size_t) left * 4u;
+    unsigned char* destination = webp->upload_buffer;
+    for (unsigned int row = 0; row < dirty_height; ++row) {
+      memcpy(destination, source, row_size);
+      destination += row_size;
+      source += canvas_stride;
+    }
+    pixels = webp->upload_buffer;
+  }
+
+UploadReady:
+  *x = (int) left;
+  *y = (int) top;
+  *width = (int) dirty_width;
+  *height = (int) dirty_height;
+  webp->dirty_pending = false;
+  return pixels;
+}
+
 void WEBP_lock_pixels(WEBP* webp) {
   if (webp != NULL && webp->frame_buffer_mutex_initialized) {
     pthread_mutex_lock(&webp->frame_buffer_mutex);
@@ -420,6 +544,7 @@ int WEBP_get_byte_count(WEBP* webp) {
     size += (size_t) webp->frame_count * sizeof(WEBP_FRAME_INFO);
   }
   size += webp->alpha_temp_buffer_size;
+  size += webp->upload_buffer_size;
   return size > INT_MAX ? INT_MAX : (int) size;
 }
 
@@ -457,6 +582,7 @@ bool WEBP_prepare_next_frame(WEBP* webp) {
 bool WEBP_present_prepared_frame(WEBP* webp) {
   if (webp == NULL || !webp->frame_prepared) return false;
   WEBP_lock_pixels(webp);
+  add_transition_dirty_rect(webp, webp->prepared_frame);
   unsigned char* swap = webp->current_frame_buffer;
   webp->current_frame_buffer = webp->next_frame_buffer;
   webp->next_frame_buffer = swap;
@@ -497,6 +623,9 @@ int WEBP_seek_to(WEBP* webp, int position_ms) {
       return WEBP_get_current_position(webp);
     }
   }
+  // The GPU may still contain the image from before an arbitrary multi-frame
+  // seek. Synchronize it with one safe full upload.
+  add_full_dirty_rect(webp);
   WEBP_unlock_pixels(webp);
   return frame_start;
 }
@@ -536,6 +665,7 @@ void WEBP_recycle(JNIEnv* env, WEBP* webp) {
   free(webp->current_frame_buffer);
   free(webp->next_frame_buffer);
   free(webp->alpha_temp_buffer);
+  free(webp->upload_buffer);
   free(webp->frames);
   free(webp->encoded_data);
   if (webp->frame_buffer_mutex_initialized) {

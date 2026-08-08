@@ -75,6 +75,13 @@ typedef struct {
   unsigned int prepared_frame;
   bool frame_prepared;
   bool prepared_looped;
+  unsigned int dirty_left;
+  unsigned int dirty_top;
+  unsigned int dirty_right;
+  unsigned int dirty_bottom;
+  bool dirty_pending;
+  unsigned char* upload_buffer;
+  size_t upload_buffer_size;
 } WEBP;
 
 void* WEBP_decode(JNIEnv* env, PatchHeadInputStream* patch_head_input_stream,
@@ -82,6 +89,10 @@ void* WEBP_decode(JNIEnv* env, PatchHeadInputStream* patch_head_input_stream,
 bool WEBP_complete(JNIEnv* env, WEBP* webp);
 bool WEBP_is_completed(WEBP* webp);
 void* WEBP_get_pixels(WEBP* webp);
+// Returns tightly packed pixels for the accumulated metadata dirty rectangle.
+// The caller must hold the pixel mutex until the GL upload has completed.
+void* WEBP_get_upload_pixels(WEBP* webp, bool init, int* x, int* y,
+                             int* width, int* height);
 void WEBP_lock_pixels(WEBP* webp);
 void WEBP_unlock_pixels(WEBP* webp);
 int WEBP_get_width(WEBP* webp);
