@@ -95,6 +95,7 @@
     <string name="global_subscription_empty">No galleries were found in EH subscriptions or Quick Search Subscriptions.</string>
     <string name="global_subscription_partial_failure">Some Global Subscription sources could not be loaded</string>
     <string name="update_subscriptions">Update subscriptions</string>
+    <string name="subscription_update_countdown_format">%1$02d:%2$02d</string>
     <string name="subscription_updates_checking">Checking subscription updates…</string>
     <string name="subscription_updates_none">No subscription updates</string>
     <string name="subscription_updates_failed">Subscription update check failed</string>

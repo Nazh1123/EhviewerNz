@@ -170,7 +170,10 @@ public final class MainActivity extends StageActivity
     private TextView mBookmarkSubscriptionBadge;
     @Nullable
     private TextView mGlobalSubscriptionBadge;
+    @Nullable
+    private TextView mSubscriptionUpdateCountdown;
     private boolean mSubscriptionUpdatesStarted;
+    private boolean mSubscriptionCountdownRunning;
 
     private final Handler mSubscriptionUpdateHandler =
             new Handler(Looper.getMainLooper());
@@ -188,6 +191,9 @@ public final class MainActivity extends StageActivity
         manager.checkForUpdates(false);
         scheduleSubscriptionUpdateCheck();
     };
+
+    private final Runnable mSubscriptionCountdownRunnable =
+            this::renderSubscriptionUpdateCountdown;
 
     private final SubscriptionUpdateManager.Listener mSubscriptionUpdateListener =
             new SubscriptionUpdateManager.Listener() {
@@ -723,6 +729,8 @@ public final class MainActivity extends StageActivity
         super.onDestroy();
 
         mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
+        mSubscriptionUpdateHandler.removeCallbacks(
+                mSubscriptionCountdownRunnable);
 
         mDrawerLayout = null;
         mNavView = null;
@@ -732,6 +740,7 @@ public final class MainActivity extends StageActivity
         mEhSubscriptionBadge = null;
         mBookmarkSubscriptionBadge = null;
         mGlobalSubscriptionBadge = null;
+        mSubscriptionUpdateCountdown = null;
         mSubscriptionUpdateManager = null;
     }
 
@@ -750,6 +759,7 @@ public final class MainActivity extends StageActivity
     protected void onStop() {
         mSubscriptionUpdatesStarted = false;
         mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
+        stopSubscriptionUpdateCountdown();
         if (mSubscriptionUpdateManager != null) {
             mSubscriptionUpdateManager.setListener(null);
         }
@@ -1001,6 +1011,7 @@ public final class MainActivity extends StageActivity
                 R.id.nav_bookmark_subscription);
         mGlobalSubscriptionBadge = initSubscriptionUpdateBadge(
                 R.id.nav_global_subscription);
+        mSubscriptionUpdateCountdown = initSubscriptionUpdateCountdown();
     }
 
     @Nullable
@@ -1016,6 +1027,23 @@ public final class MainActivity extends StageActivity
         View actionView = item.getActionView();
         return actionView == null ? null
                 : actionView.findViewById(R.id.subscription_update_badge);
+    }
+
+    @Nullable
+    private TextView initSubscriptionUpdateCountdown() {
+        if (mNavView == null) {
+            return null;
+        }
+        MenuItem item = mNavView.getMenu().findItem(
+                R.id.nav_update_subscription);
+        if (item == null) {
+            return null;
+        }
+        item.setActionView(R.layout.nav_subscription_countdown);
+        View actionView = item.getActionView();
+        return actionView == null ? null
+                : actionView.findViewById(
+                        R.id.subscription_update_countdown);
     }
 
     private void renderSubscriptionUpdateState() {
@@ -1037,6 +1065,55 @@ public final class MainActivity extends StageActivity
             if (updateItem != null) {
                 updateItem.setEnabled(!manager.isChecking());
             }
+        }
+        renderSubscriptionUpdateCountdown();
+    }
+
+    private void startSubscriptionUpdateCountdown() {
+        mSubscriptionCountdownRunning = true;
+        renderSubscriptionUpdateCountdown();
+    }
+
+    private void stopSubscriptionUpdateCountdown() {
+        mSubscriptionCountdownRunning = false;
+        mSubscriptionUpdateHandler.removeCallbacks(
+                mSubscriptionCountdownRunnable);
+    }
+
+    private void renderSubscriptionUpdateCountdown() {
+        mSubscriptionUpdateHandler.removeCallbacks(
+                mSubscriptionCountdownRunnable);
+        TextView countdown = mSubscriptionUpdateCountdown;
+        SubscriptionUpdateManager manager = mSubscriptionUpdateManager;
+        boolean hasEnabledSource = Settings.getAutoSubscriptionUpdatesEh()
+                || Settings.getAutoSubscriptionUpdatesBookmark();
+        if (countdown == null || manager == null
+                || !Settings.getAutoSubscriptionUpdates()
+                || !hasEnabledSource) {
+            if (countdown != null) {
+                countdown.setText(null);
+                countdown.setVisibility(View.GONE);
+            }
+            return;
+        }
+
+        long remainingMillis = manager.isChecking() ? 0L
+                : Math.max(0L, manager.getNextAutomaticCheckTime()
+                        - System.currentTimeMillis());
+        long remainingSeconds = (remainingMillis + 999L) / 1000L;
+        long minutes = remainingSeconds / 60L;
+        long seconds = remainingSeconds % 60L;
+        countdown.setText(getString(
+                R.string.subscription_update_countdown_format,
+                minutes, seconds));
+        countdown.setVisibility(View.VISIBLE);
+
+        if (mSubscriptionUpdatesStarted && mSubscriptionCountdownRunning
+                && !manager.isChecking() && remainingMillis > 0L) {
+            long delay = remainingMillis % 1000L;
+            mSubscriptionUpdateHandler.postDelayed(
+                    mSubscriptionCountdownRunnable,
+                    delay == 0L ? 1000L : delay);
         }
     }
 
@@ -1273,11 +1350,17 @@ public final class MainActivity extends StageActivity
 
     @Override
     public void onDrawerSlide(View drawerView, float percent) {
-
+        if (percent > 0f && isSubscriptionDrawer(drawerView)
+                && !mSubscriptionCountdownRunning) {
+            startSubscriptionUpdateCountdown();
+        }
     }
 
     @Override
     public void onDrawerOpened(View drawerView) {
+        if (isSubscriptionDrawer(drawerView)) {
+            startSubscriptionUpdateCountdown();
+        }
         if (limitsCountView != null) {
             limitsCountView.onLoadData(drawerView, true);
         }
@@ -1285,6 +1368,9 @@ public final class MainActivity extends StageActivity
 
     @Override
     public void onDrawerClosed(View drawerView) {
+        if (isSubscriptionDrawer(drawerView)) {
+            stopSubscriptionUpdateCountdown();
+        }
         if (limitsCountView != null) {
             limitsCountView.hide();
         }
@@ -1300,5 +1386,10 @@ public final class MainActivity extends StageActivity
     @Override
     public void onDrawerStateChanged(View drawerView, int newState) {
 
+    }
+
+    private boolean isSubscriptionDrawer(@NonNull View drawerView) {
+        return mNavView != null
+                && drawerView.findViewById(R.id.nav_view) == mNavView;
     }
 }
