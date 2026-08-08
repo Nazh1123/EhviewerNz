@@ -11,7 +11,7 @@
 //
 // Author: Skal (pascal.massimino@gmail.com)
 #ifdef HAVE_CONFIG_H
-#include "../webp/config.h"
+#include "webp/config.h"
 #endif
 
 #if defined(__unix__) || defined(__CYGWIN__)
@@ -568,7 +568,7 @@ int main(int argc, char* argv[]) {
   if (kParams.file_name == NULL) {
     printf("missing input file!!\n");
     Help();
-    FREE_WARGV_AND_RETURN(EXIT_SUCCESS);
+    FREE_WARGV_AND_RETURN(EXIT_FAILURE);
   }
 
   if (!ImgIoUtilReadFile(kParams.file_name,

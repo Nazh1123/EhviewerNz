@@ -13,11 +13,10 @@
 #define WEBP_EXAMPLES_ANIM_UTIL_H_
 
 #ifdef HAVE_CONFIG_H
-#include "../webp/config.h"
+#include "webp/config.h"
 #endif
 
-#include <stdint.h>
-#include "../src/webp/types.h"
+#include "webp/types.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -11,11 +11,15 @@
 //
 // Author: Skal (pascal.massimino@gmail.com)
 
-#include "../sharpyuv/sharpyuv_dsp.h"
+#include "sharpyuv/sharpyuv_dsp.h"
 
 #if defined(WEBP_USE_SSE2)
-#include <stdlib.h>
 #include <emmintrin.h>
+
+#include <stdlib.h>
+
+#include "src/dsp/cpu.h"
+#include "src/webp/types.h"
 
 static uint16_t clip_SSE2(int v, int max) {
   return (v < 0) ? 0 : (v > max) ? max : (uint16_t)v;

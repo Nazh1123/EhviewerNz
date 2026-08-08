@@ -64,7 +64,8 @@ static int get_format(JNIEnv *env, InputStream *stream) {
     return IMAGE_FORMAT_UNKNOWN;
 }
 
-void *decode(JNIEnv *env, InputStream *stream, bool partially, int *format) {
+void *decode(JNIEnv *env, InputStream *stream, bool partially, int sample_size,
+             int *format) {
     unsigned char magic_numbers[2];
     PatchHeadInputStream *patch_head_input_stream;
 
@@ -124,7 +125,8 @@ void *decode(JNIEnv *env, InputStream *stream, bool partially, int *format) {
 #endif
 #ifdef IMAGE_SUPPORT_WEBP
         case IMAGE_FORMAT_WEBP:
-            return WEBP_decode(env, patch_head_input_stream, partially);
+            return WEBP_decode(env, patch_head_input_stream, partially,
+                               sample_size);
 #endif
         default:
             LOGE(MSG("Can't detect format %d"), *format);
@@ -366,6 +368,24 @@ bool advance_and_get_looped(void *image, int format) {
     }
 #endif
     advance(image, format);
+    return false;
+}
+
+bool prepare_next_frame(void *image, int format) {
+#ifdef IMAGE_SUPPORT_WEBP
+    if (format == IMAGE_FORMAT_WEBP) {
+        return WEBP_prepare_next_frame((WEBP *) image);
+    }
+#endif
+    return false;
+}
+
+bool present_prepared_frame(void *image, int format) {
+#ifdef IMAGE_SUPPORT_WEBP
+    if (format == IMAGE_FORMAT_WEBP) {
+        return WEBP_present_prepared_frame((WEBP *) image);
+    }
+#endif
     return false;
 }
 

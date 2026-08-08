@@ -225,7 +225,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private ImageButton mAnimatedWebpSequential;
     @Nullable
+    private ImageButton mAnimatedWebpStallWarning;
+    @Nullable
     private ImageTexture mAnimatedWebpTexture;
+    @Nullable
+    private ImageTexture mAnimatedWebpStallWarningTexture;
     @Nullable
     private ImageTexture mAnimatedWebpLongPressTexture;
     private float mAnimatedWebpLongPressRestoreSpeed;
@@ -277,13 +281,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private ScheduledExecutorService transferService = Executors.newSingleThreadScheduledExecutor();
     private final Handler transHandle = new Handler(Looper.getMainLooper());
     private final Handler mAnimatedWebpHandler = new Handler(Looper.getMainLooper());
-    private final Runnable mAnimatedWebpUiRunnable = new Runnable() {
-        @Override
-        public void run() {
-            updateAnimatedWebpUi();
-            mAnimatedWebpHandler.postDelayed(this, 100L);
-        }
-    };
 
     private final ValueAnimator.AnimatorUpdateListener mUpdateSliderListener = new ValueAnimator.AnimatorUpdateListener() {
         @Override
@@ -312,6 +309,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private final SimpleAnimatorListener mHideSliderListener = new SimpleAnimatorListener() {
         @Override
         public void onAnimationEnd(Animator animation) {
+            boolean pageSliderWasVisible = mSeekBarPanel != null &&
+                    mSeekBarPanel.getVisibility() == View.VISIBLE;
             mSeekBarPanelAnimator = null;
             if (mSeekBarPanel != null) {
                 mSeekBarPanel.setVisibility(View.INVISIBLE);
@@ -323,6 +322,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mQuickSettingsAnimator = null;
             if (mQuickSettingsPanel != null) {
                 mQuickSettingsPanel.setVisibility(View.INVISIBLE);
+            }
+            if (pageSliderWasVisible) {
+                updateAnimatedWebpUi();
             }
         }
     };
@@ -561,6 +563,22 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         mSaveNotice = ViewUtils.$$(this, R.id.save_notice);
         mSaveNoticeIcon = (ImageView) ViewUtils.$$(this, R.id.save_notice_icon);
+        mAnimatedWebpStallWarning = findViewById(R.id.animated_webp_stall_warning);
+        mAnimatedWebpStallWarning.setOnClickListener(
+                view -> degradeCurrentAnimatedWebpDecoder());
+        ViewCompat.setOnApplyWindowInsetsListener(mAnimatedWebpStallWarning,
+                (view, insets) -> {
+                    int statusBarInset = insets.getInsets(
+                            WindowInsetsCompat.Type.statusBars()).top;
+                    FrameLayout.LayoutParams layoutParams =
+                            (FrameLayout.LayoutParams) view.getLayoutParams();
+                    int margin = getResources().getDimensionPixelSize(R.dimen.gallery_widget_margin_v);
+                    if (layoutParams.topMargin != statusBarInset + margin) {
+                        layoutParams.topMargin = statusBarInset + margin;
+                        view.setLayoutParams(layoutParams);
+                    }
+                    return insets;
+                });
 
         mAnimatedWebpPanel = findViewById(R.id.animated_webp_panel);
         mAnimatedWebpControls = findViewById(R.id.animated_webp_controls);
@@ -594,15 +612,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 finishAnimatedWebpSeek(seekBar.getProgress());
             }
         });
-        mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiRunnable);
-        mAnimatedWebpHandler.post(mAnimatedWebpUiRunnable);
-
         mSize = mGalleryProvider.size();
         mCurrentIndex = startPage;
         if (mGalleryView != null) {
             mLayoutMode = mGalleryView.getLayoutMode();
         }
         updateSlider();
+        updateAnimatedWebpUi();
 
         // Update keep screen on
         if (Settings.getKeepScreenOn()) {
@@ -683,7 +699,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
-        mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiRunnable);
+        mAnimatedWebpHandler.removeCallbacksAndMessages(null);
         restoreAnimatedWebpLongPressPlayback();
         if (mAnimatedWebpTexture != null) {
             mAnimatedWebpTexture.setPlaybackListener(null);
@@ -734,6 +750,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpPlayPause = null;
         mAnimatedWebpSpeed = null;
         mAnimatedWebpSequential = null;
+        mAnimatedWebpStallWarning = null;
+        mAnimatedWebpStallWarningTexture = null;
 
         if (transferService != null && !transferService.isShutdown()) {
             transferService.shutdown();
@@ -1234,6 +1252,15 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         task.setData(NotifyTask.KEY_CURRENT_INDEX, index);
         SimpleHandler.getInstance().post(task);
+    }
+
+    @Override
+    public void onPageImageReady(int index) {
+        mAnimatedWebpHandler.post(() -> {
+            if (index == mCurrentIndex) {
+                updateAnimatedWebpUi();
+            }
+        });
     }
 
     @Override
@@ -2151,16 +2178,52 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private static String formatAnimatedWebpTime(int positionMs, int durationMs) {
-        int positionSeconds = Math.max(0, positionMs) / 1000;
-        int durationSeconds = Math.max(0, durationMs) / 1000;
-        return String.format(Locale.US, "%02d:%02d/%02d:%02d",
-                positionSeconds / 60, positionSeconds % 60,
-                durationSeconds / 60, durationSeconds % 60);
+        StringBuilder builder = new StringBuilder(17);
+        appendAnimatedWebpTimestamp(builder, positionMs);
+        builder.append('/');
+        appendAnimatedWebpTimestamp(builder, durationMs);
+        return builder.toString();
+    }
+
+    private static void appendAnimatedWebpTimestamp(StringBuilder builder, int timeMs) {
+        int clampedTime = Math.max(0, timeMs);
+        int seconds = clampedTime / 1000;
+        int centiseconds = clampedTime % 1000 / 10;
+        if (seconds < 10) builder.append('0');
+        builder.append(seconds).append(':');
+        if (centiseconds < 10) builder.append('0');
+        builder.append(centiseconds);
     }
 
     private void updateAnimatedWebpTime(int positionMs, int durationMs) {
         if (mAnimatedWebpTime != null) {
-            mAnimatedWebpTime.setText(formatAnimatedWebpTime(positionMs, durationMs));
+            String time = formatAnimatedWebpTime(positionMs, durationMs);
+            if (!TextUtils.equals(mAnimatedWebpTime.getText(), time)) {
+                mAnimatedWebpTime.setText(time);
+            }
+        }
+    }
+
+    private void updateAnimatedWebpProgress(ImageTexture texture) {
+        if (texture != mAnimatedWebpTexture) return;
+        int duration = texture.getPlaybackDuration();
+        int position = texture.getPlaybackPosition();
+        if (mAnimatedWebpSeekAwaitingFrame &&
+                Math.abs(position - mAnimatedWebpRequestedPosition) <=
+                        Math.max(150, texture.getPlaybackFrameDelay())) {
+            mAnimatedWebpSeekAwaitingFrame = false;
+        }
+        if (!mAnimatedWebpSeeking && !mAnimatedWebpSeekAwaitingFrame) {
+            if (mAnimatedWebpTime != null &&
+                    mAnimatedWebpTime.getVisibility() == View.VISIBLE) {
+                updateAnimatedWebpTime(position, duration);
+            }
+            if (mAnimatedWebpSeek != null) {
+                int progress = Math.min(duration, position);
+                if (mAnimatedWebpSeek.getProgress() != progress) {
+                    mAnimatedWebpSeek.setProgress(progress);
+                }
+            }
         }
     }
 
@@ -2204,8 +2267,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             return false;
         }
 
+        boolean forceSystemDecoder = mGalleryProvider.getAnimatedWebpDecodeMode(
+                mCurrentIndex) == com.hippo.lib.image.Image.ANIMATED_WEBP_MODE_SYSTEM;
         boolean targetEnabled = Settings.getExperimentalAnimatedWebpEnabled() &&
-                mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM;
+                mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM && !forceSystemDecoder;
         if (texture.wasAnimatedWebpControlRequested() == targetEnabled) {
             mAnimatedWebpReloadSourceTexture = null;
             return false;
@@ -2252,6 +2317,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpSeeking = false;
             mAnimatedWebpSeekAwaitingFrame = false;
             if (candidate != null) candidate.setPlaybackListener(this);
+            if (candidate == null || candidate != mAnimatedWebpStallWarningTexture) {
+                hideAnimatedWebpStallWarning();
+            }
         }
 
         boolean showTime = Settings.getAnimatedWebpShowTime();
@@ -2272,27 +2340,17 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             return;
         }
 
-        int duration = candidate.getPlaybackDuration();
-        int position = candidate.getPlaybackPosition();
-        if (mAnimatedWebpSeekAwaitingFrame &&
-                Math.abs(position - mAnimatedWebpRequestedPosition) <=
-                        Math.max(150, candidate.getPlaybackFrameDelay())) {
-            mAnimatedWebpSeekAwaitingFrame = false;
-        }
         if (mAnimatedWebpTime != null) {
             mAnimatedWebpTime.setVisibility(showTime ? View.VISIBLE : View.INVISIBLE);
-        }
-        if (!mAnimatedWebpSeeking && !mAnimatedWebpSeekAwaitingFrame) {
-            updateAnimatedWebpTime(position, duration);
         }
         if (mAnimatedWebpSeek != null) {
             mAnimatedWebpSeek.setVisibility(View.VISIBLE);
             // The page slider occupies the higher-priority touch layer while visible.
             mAnimatedWebpSeek.setEnabled(allowSeek);
             mAnimatedWebpSeek.setTouchHandlingEnabled(!sliderVisible);
-            mAnimatedWebpSeek.setMax(Math.max(1, duration));
-            if (!mAnimatedWebpSeeking && !mAnimatedWebpSeekAwaitingFrame) {
-                mAnimatedWebpSeek.setProgress(Math.min(duration, position));
+            int max = Math.max(1, candidate.getPlaybackDuration());
+            if (mAnimatedWebpSeek.getMax() != max) {
+                mAnimatedWebpSeek.setMax(max);
             }
         }
         if (mAnimatedWebpControls != null) {
@@ -2335,13 +2393,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         updateAnimatedWebpSpeedButton(candidate.getPlaybackSpeed());
         updateAnimatedWebpSequentialButton();
+        updateAnimatedWebpProgress(candidate);
     }
 
     @Override
-    public void onPlaybackChanged(ImageTexture texture, boolean looped) {
+    public void onPlaybackChanged(ImageTexture texture, boolean looped, boolean frameChanged) {
         mAnimatedWebpHandler.post(() -> {
             if (texture != mAnimatedWebpTexture) return;
-            updateAnimatedWebpUi();
+            if (frameChanged) {
+                updateAnimatedWebpProgress(texture);
+            } else {
+                updateAnimatedWebpUi();
+            }
             if (looped && Settings.getAnimatedWebpAutoAdvance() && mGalleryView != null &&
                     mCurrentIndex >= 0 && mCurrentIndex + 1 < mSize) {
                 mGalleryView.setCurrentPage(mCurrentIndex + 1);
@@ -2352,6 +2415,46 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     public void onDoubleTapSliderArea() {
         mAnimatedWebpHandler.post(this::toggleAnimatedWebpPlayback);
+    }
+
+    @Override
+    public void onPlaybackStalled(ImageTexture texture) {
+        mAnimatedWebpHandler.post(() -> {
+            if (texture != mAnimatedWebpTexture || mCurrentIndex < 0 ||
+                    mLayoutMode == GalleryView.LAYOUT_TOP_TO_BOTTOM) return;
+            mAnimatedWebpStallWarningTexture = texture;
+            if (mAnimatedWebpStallWarning != null) {
+                mAnimatedWebpStallWarning.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    private void hideAnimatedWebpStallWarning() {
+        mAnimatedWebpStallWarningTexture = null;
+        if (mAnimatedWebpStallWarning != null) {
+            mAnimatedWebpStallWarning.setVisibility(View.GONE);
+        }
+    }
+
+    private void degradeCurrentAnimatedWebpDecoder() {
+        ImageTexture texture = mAnimatedWebpStallWarningTexture;
+        if (texture == null || texture != mAnimatedWebpTexture ||
+                mGalleryProvider == null || mCurrentIndex < 0) return;
+        int nextMode = texture.getAnimatedWebpSampleSize() >= 2
+                ? com.hippo.lib.image.Image.ANIMATED_WEBP_MODE_SYSTEM
+                : com.hippo.lib.image.Image.ANIMATED_WEBP_MODE_SAMPLE_2;
+        mGalleryProvider.setAnimatedWebpDecodeMode(mCurrentIndex, nextMode);
+        hideAnimatedWebpStallWarning();
+        mAnimatedWebpReloadSourceTexture = texture;
+        texture.setPlaybackListener(null);
+        texture.stop();
+        mAnimatedWebpTexture = null;
+        mAnimatedWebpSeeking = false;
+        mAnimatedWebpSeekAwaitingFrame = false;
+        clearAnimatedWebpTouchGesture();
+        if (mAnimatedWebpPanel != null) mAnimatedWebpPanel.setVisibility(View.GONE);
+        mGalleryProvider.removeCache(mCurrentIndex);
+        mGalleryProvider.notifyDataChanged(mCurrentIndex);
     }
 
     @Override
@@ -2367,6 +2470,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpLongPressTexture = texture;
         mAnimatedWebpLongPressRestoreSpeed = texture.getPlaybackSpeed();
         mAnimatedWebpLongPressRestorePlaying = texture.isPlaybackPlaying();
+        texture.setStallDetectionSuppressed(true);
         texture.setPlaybackSpeed(speed);
         texture.setPlaybackPlaying(true);
         return true;
@@ -2385,6 +2489,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpLongPressTexture = null;
         texture.setPlaybackSpeed(speed);
         texture.setPlaybackPlaying(playing);
+        texture.setStallDetectionSuppressed(false);
     }
 
     private class NotifyTask implements Runnable {
@@ -2498,6 +2603,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 case KEY_LAYOUT_MODE:
                     GalleryActivity.this.mLayoutMode = mValue;
                     updateSlider();
+                    if (!reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) {
+                        updateAnimatedWebpUi();
+                    }
                     break;
                 case KEY_SIZE:
                     GalleryActivity.this.mSize = mValue;

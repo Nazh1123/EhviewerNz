@@ -9,7 +9,12 @@
 //
 // Generic image-type guessing.
 
+#include <stddef.h>
+
 #include "./image_dec.h"
+#include "./metadata.h"
+#include "webp/encode.h"
+#include "webp/types.h"
 
 const char* WebPGetEnabledInputFileFormats(void) {
   return "WebP"
@@ -74,7 +79,7 @@ WebPImageReader WebPGetImageReader(WebPInputFileFormat format) {
     case WEBP_TIFF_FORMAT: return ReadTIFF;
     case WEBP_WEBP_FORMAT: return ReadWebP;
     case WEBP_PNM_FORMAT: return ReadPNM;
-    default: return (WebPImageReader) FailReader;
+    default: return FailReader;
   }
 }
 

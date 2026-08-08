@@ -32,6 +32,7 @@ class Image private constructor(
     source: FileInputStream?,
     drawable: Drawable? = null,
     val hardware: Boolean = false,
+    animatedWebpDecodeMode: Int = ANIMATED_WEBP_MODE_DEFAULT,
     val release: () -> Unit? = {},
 ) {
     private var mObtainedDrawable: Drawable?
@@ -40,6 +41,7 @@ class Image private constructor(
     private var mReferences = 0
     private var mAnimatedWebpSource = false
     private var mAnimatedWebpControlRequested = false
+    private var mAnimatedWebpSampleSize = 0
 
     init {
         mObtainedDrawable = null
@@ -47,11 +49,16 @@ class Image private constructor(
             mAnimatedWebpSource = isAnimatedWebp(source)
             mAnimatedWebpControlRequested = !hardware && mAnimatedWebpSource &&
                 Settings.getExperimentalAnimatedWebpEnabled() &&
-                Settings.getReadingDirection() != 2
+                Settings.getReadingDirection() != 2 &&
+                animatedWebpDecodeMode != ANIMATED_WEBP_MODE_SYSTEM
             if (mAnimatedWebpControlRequested) {
                 source.channel.position(0)
                 try {
-                    mNativeImage = Image1.decode(source, false)
+                    val sampleSize = if (
+                        animatedWebpDecodeMode == ANIMATED_WEBP_MODE_SAMPLE_2
+                    ) 2 else 1
+                    mNativeImage = Image1.decode(source, false, sampleSize)
+                    if (mNativeImage != null) mAnimatedWebpSampleSize = sampleSize
                 } catch (error: LinkageError) {
                     // The experimental decoder must not take down SpiderDecoder when
                     // libimage cannot be loaded on a particular device/ABI.
@@ -148,6 +155,8 @@ class Image private constructor(
         get() = mAnimatedWebpSource
     val animatedWebpControlRequested: Boolean
         get() = mAnimatedWebpControlRequested
+    val animatedWebpSampleSize: Int
+        get() = mAnimatedWebpSampleSize
     val width: Int
         get() = mNativeImage?.width ?: ((mObtainedDrawable as? BitmapDrawable)?.bitmap?.width
             ?: mObtainedDrawable!!.intrinsicWidth)
@@ -266,6 +275,10 @@ class Image private constructor(
 
     fun advanceFrame(): Boolean = mNativeImage?.advanceAndGetLooped() ?: false
 
+    fun prepareNextFrame(): Boolean = mNativeImage?.prepareNextFrame() ?: false
+
+    fun presentPreparedFrame(): Boolean = mNativeImage?.presentPreparedFrame() ?: false
+
     fun seekTo(positionMs: Int): Int = mNativeImage?.seekTo(positionMs) ?: 0
 
     val currentFramePosition: Int
@@ -299,6 +312,10 @@ class Image private constructor(
         }
 
     companion object {
+        const val ANIMATED_WEBP_MODE_SYSTEM = -1
+        const val ANIMATED_WEBP_MODE_DEFAULT = 0
+        const val ANIMATED_WEBP_MODE_SAMPLE_2 = 2
+
         var screenWidth: Int = 0
         var screenHeight: Int = 0
 
@@ -332,8 +349,21 @@ class Image private constructor(
 
         @JvmStatic
         fun decode(stream: FileInputStream, hardware: Boolean = true): Image? {
+            return decode(stream, hardware, ANIMATED_WEBP_MODE_DEFAULT)
+        }
+
+        @JvmStatic
+        fun decode(
+            stream: FileInputStream,
+            hardware: Boolean,
+            animatedWebpDecodeMode: Int,
+        ): Image? {
             try {
-                return Image(stream, hardware = hardware)
+                return Image(
+                    stream,
+                    hardware = hardware,
+                    animatedWebpDecodeMode = animatedWebpDecodeMode,
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
                 Analytics.recordException(e)

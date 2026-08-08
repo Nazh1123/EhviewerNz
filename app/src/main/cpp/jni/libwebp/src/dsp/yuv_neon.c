@@ -11,14 +11,15 @@
 //
 // Author: Skal (pascal.massimino@gmail.com)
 
-#include "../src/dsp/yuv.h"
+#include "src/dsp/yuv.h"
 
 #if defined(WEBP_USE_NEON)
 
 #include <assert.h>
 #include <stdlib.h>
 
-#include "../src/dsp/neon.h"
+#include "src/dsp/dsp.h"
+#include "src/dsp/neon.h"
 
 //-----------------------------------------------------------------------------
 

@@ -117,6 +117,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
                 mUploader.addTexture(imageTexture);
                 page.showImage();
                 page.setImage(imageTexture);
+                mGalleryView.notifyPageImageReady(index);
                 if (mShowIndex) {
                     page.setPage(index + 1);
                 } else {

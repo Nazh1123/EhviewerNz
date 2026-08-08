@@ -303,6 +303,10 @@ public class ImageWrapper {
         return mImage.getAnimatedWebpControlRequested();
     }
 
+    public int getAnimatedWebpSampleSize() {
+        return mImage.getAnimatedWebpSampleSize();
+    }
+
     public boolean canUseDirectTexture() {
         return isControllableAnimation() && mCut.left == 0 && mCut.top == 0 &&
                 mCut.right == mImage.getWidth() && mCut.bottom == mImage.getHeight();
@@ -344,6 +348,14 @@ public class ImageWrapper {
 
     public boolean advanceFrame() {
         return mImage.advanceFrame();
+    }
+
+    public boolean prepareNextFrame() {
+        return mImage.prepareNextFrame();
+    }
+
+    public boolean presentPreparedFrame() {
+        return mImage.presentPreparedFrame();
     }
 
     public int seekTo(int positionMs) {

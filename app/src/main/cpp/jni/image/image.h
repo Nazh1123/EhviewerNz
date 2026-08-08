@@ -46,7 +46,8 @@
 
 #define IMAGE_MAX_SUPPORTED_FORMAT_COUNT 4
 
-void* decode(JNIEnv* env, InputStream* stream, bool partially, int* format);
+void* decode(JNIEnv* env, InputStream* stream, bool partially, int sample_size,
+             int* format);
 void* create(unsigned int width, unsigned int height, const void* data);
 bool complete(JNIEnv* env, void* image, int format);
 bool is_completed(void* image, int format);
@@ -58,6 +59,8 @@ void render(void* image, int format, int src_x, int src_y,
     int width, int height, bool fill_blank, int default_color);
 void advance(void* image, int format);
 bool advance_and_get_looped(void* image, int format);
+bool prepare_next_frame(void* image, int format);
+bool present_prepared_frame(void* image, int format);
 int seek_to(void* image, int format, int position_ms);
 int get_current_position(void* image, int format);
 int get_total_duration(void* image, int format);

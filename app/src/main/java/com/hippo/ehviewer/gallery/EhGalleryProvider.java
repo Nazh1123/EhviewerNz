@@ -146,6 +146,14 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     }
 
     @Override
+    public void setAnimatedWebpDecodeMode(int index, int mode) {
+        super.setAnimatedWebpDecodeMode(index, mode);
+        if (mSpiderQueen != null) {
+            mSpiderQueen.setAnimatedWebpDecodeMode(index, mode);
+        }
+    }
+
+    @Override
     public String getError() {
         if (mSpiderQueen != null) {
             return mSpiderQueen.getError();

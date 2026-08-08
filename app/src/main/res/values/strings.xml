@@ -1159,6 +1159,7 @@
     <string name="tag_search_entrance">Tag Selector</string>
     <string name="animated_webp_progress">Animated image progress</string>
     <string name="animated_webp_play_pause">Play or pause animated image</string>
+    <string name="animated_webp_stall_warning">Animated image playback is stalling; tap to reduce decoding load</string>
     <string name="settings_animated_webp_controls">Animated image controls</string>
     <string name="settings_animated_webp_controls_summary">Enable controls for animated WebP: pause, progress bar, playback speed, and more</string>
     <string name="settings_animated_webp_playback_time">Playback time</string>

@@ -20,10 +20,11 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <string_view>
 
 #include "imageio/image_dec.h"
 #include "imageio/metadata.h"
-#include "../src/webp/encode.h"
+#include "src/webp/encode.h"
 #include "tests/fuzzer/fuzz_utils.h"
 
 namespace {
@@ -33,7 +34,7 @@ void TestReader(const uint8_t *data, size_t size, WebPImageReader reader,
   WebPPicture pic;
   if (!WebPPictureInit(&pic)) {
     std::cerr << "WebPPictureInit failed" << std::endl;
-    abort();
+    std::abort();
   }
   Metadata metadata;
   MetadataInit(&metadata);

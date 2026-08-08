@@ -11,14 +11,16 @@
 //
 // Author: Skal (pascal.massimino@gmail.com)
 
-#include "../src/dsp/dsp.h"
+#include "src/dsp/dsp.h"
 
 #if defined(WEBP_USE_SSE2)
-
-#include <assert.h>
 #include <emmintrin.h>
 
-#include "../src/dsp/common_sse2.h"
+#include <assert.h>
+
+#include "src/dsp/common_sse2.h"
+#include "src/dsp/cpu.h"
+#include "src/webp/types.h"
 
 #if !defined(WEBP_DISABLE_STATS)
 

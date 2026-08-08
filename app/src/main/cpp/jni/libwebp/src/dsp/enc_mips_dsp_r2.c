@@ -12,13 +12,13 @@
 // Author(s): Darko Laus (darko.laus@imgtec.com)
 //            Mirko Raus (mirko.raus@imgtec.com)
 
-#include "../src/dsp/dsp.h"
+#include "src/dsp/dsp.h"
 
 #if defined(WEBP_USE_MIPS_DSP_R2)
 
-#include "../dsp/mips_macro.h"
-#include "../src/enc/cost_enc.h"
-#include "../src/enc/vp8i_enc.h"
+#include "src/dsp/mips_macro.h"
+#include "src/enc/cost_enc.h"
+#include "src/enc/vp8i_enc.h"
 
 static const int kC1 = WEBP_TRANSFORM_AC3_C1;
 static const int kC2 = WEBP_TRANSFORM_AC3_C2;
@@ -1296,11 +1296,11 @@ static int QuantizeBlock_MIPSdspR2(int16_t in[16], int16_t out[16],
 
   int16_t* ppin             = &in[0];
   int16_t* pout             = &out[0];
-  const uint16_t* ppsharpen = &mtx->sharpen_[0];
-  const uint32_t* ppzthresh = &mtx->zthresh_[0];
-  const uint16_t* ppq       = &mtx->q_[0];
-  const uint16_t* ppiq      = &mtx->iq_[0];
-  const uint32_t* ppbias    = &mtx->bias_[0];
+  const uint16_t* ppsharpen = &mtx->sharpen[0];
+  const uint32_t* ppzthresh = &mtx->zthresh[0];
+  const uint16_t* ppq       = &mtx->q[0];
+  const uint16_t* ppiq      = &mtx->iq[0];
+  const uint32_t* ppbias    = &mtx->bias[0];
 
   __asm__ volatile (
     QUANTIZE_ONE( 0,  0,  0,  2)

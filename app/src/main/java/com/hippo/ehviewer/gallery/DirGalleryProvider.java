@@ -225,7 +225,8 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
             try {
                 is = files[index].openInputStream();
 //                Image image = Image.decode(is, true);
-                Image image = Image.decode((FileInputStream) is, false);
+                Image image = Image.decode((FileInputStream) is, false,
+                        getAnimatedWebpDecodeMode(index));
 //                Image1 image1 = Image1.decode((FileInputStream) is, false);
                 mDecodingIndex.lazySet(GalleryPageView.INVALID_INDEX);
                 if (image != null) {

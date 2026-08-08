@@ -342,4 +342,17 @@
 
     </FrameLayout>
 
+    <ImageButton
+        android:id="@+id/animated_webp_stall_warning"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|start"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/animated_webp_stall_warning"
+        android:padding="10dp"
+        android:src="@drawable/v_animated_webp_warning_x24"
+        android:visibility="gone" />
+
 </FrameLayout>

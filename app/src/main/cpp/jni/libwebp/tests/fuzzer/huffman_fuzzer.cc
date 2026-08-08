@@ -16,14 +16,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string_view>
 
 #include "./fuzz_utils.h"
-#include "../src/dec/vp8li_dec.h
-#include "../src/utils/bit_reader_utils.h"
-#include "../src/utils/huffman_utils.h"
-#include "../src/utils/utils.h"
-#include "../src/webp/format_constants.h"
+#include "src/dec/vp8li_dec.h"
+#include "src/utils/bit_reader_utils.h"
+#include "src/utils/huffman_utils.h"
+#include "src/utils/utils.h"
+#include "src/webp/format_constants.h"
 
 namespace {
 
@@ -50,7 +51,7 @@ void HuffmanTest(std::string_view blob) {
   VP8LBitReader* br;
   VP8LDecoder* dec = VP8LNew();
   if (dec == NULL) goto Error;
-  br = &dec->br_;
+  br = &dec->br;
   VP8LInitBitReader(br, data, size);
 
   color_cache_bits = VP8LReadBits(br, kColorCacheBitsBits);

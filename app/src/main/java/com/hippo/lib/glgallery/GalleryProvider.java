@@ -32,6 +32,7 @@ import com.hippo.lib.yorozuya.OSUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class GalleryProvider {
 
@@ -43,6 +44,8 @@ public abstract class GalleryProvider {
     private volatile GLRoot mGLRoot;
 
     private final ImageCache mImageCache = new ImageCache();
+    private final ConcurrentHashMap<Integer, Integer> mAnimatedWebpDecodeModes =
+            new ConcurrentHashMap<>();
 
     private boolean mStarted = false;
 
@@ -88,6 +91,19 @@ public abstract class GalleryProvider {
 
     public void removeCache(int index) {
         mImageCache.remove(index);
+    }
+
+    public void setAnimatedWebpDecodeMode(int index, int mode) {
+        if (mode == Image.ANIMATED_WEBP_MODE_DEFAULT) {
+            mAnimatedWebpDecodeModes.remove(index);
+        } else {
+            mAnimatedWebpDecodeModes.put(index, mode);
+        }
+    }
+
+    public int getAnimatedWebpDecodeMode(int index) {
+        Integer mode = mAnimatedWebpDecodeModes.get(index);
+        return mode != null ? mode : Image.ANIMATED_WEBP_MODE_DEFAULT;
     }
 
     protected abstract void onRequest(int index);

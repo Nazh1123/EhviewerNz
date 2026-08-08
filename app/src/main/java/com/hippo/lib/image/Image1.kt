@@ -134,6 +134,16 @@ class Image1 private constructor(
         return nativeAdvanceAndGetLooped(mNativePtr, format)
     }
 
+    fun prepareNextFrame(): Boolean {
+        checkRecycled()
+        return nativePrepareNextFrame(mNativePtr, format)
+    }
+
+    fun presentPreparedFrame(): Boolean {
+        checkRecycled()
+        return nativePresentPreparedFrame(mNativePtr, format)
+    }
+
     fun seekTo(positionMs: Int): Int {
         checkRecycled()
         return nativeSeekTo(mNativePtr, format, positionMs)
@@ -255,12 +265,12 @@ class Image1 private constructor(
          * Decode image from `InputStream`
          */
         @JvmStatic
-        fun decode(`is`: InputStream?, partially: Boolean): Image1? {
+        fun decode(`is`: InputStream?, partially: Boolean, sampleSize: Int = 1): Image1? {
             var `is` = `is`
             if (`is` !is BufferedInputStream) {
                 `is` = BufferedInputStream(`is`)
             }
-            return nativeDecode(`is`, partially)
+            return nativeDecode(`is`, partially, sampleSize.coerceIn(1, 2))
         }
 
         /**
@@ -298,7 +308,9 @@ class Image1 private constructor(
             //        System.loadLibrary("ehviewer");
         }
         @JvmStatic
-        private external fun nativeDecode(`is`: InputStream?, partially: Boolean): Image1?
+        private external fun nativeDecode(
+            `is`: InputStream?, partially: Boolean, sampleSize: Int
+        ): Image1?
 
         //    private static native Image nativeDecode3(InputStream is, boolean partially);
         @JvmStatic
@@ -326,6 +338,10 @@ class Image1 private constructor(
         private external fun nativeAdvance(nativePtr: Long, format: Int)
         @JvmStatic
         private external fun nativeAdvanceAndGetLooped(nativePtr: Long, format: Int): Boolean
+        @JvmStatic
+        private external fun nativePrepareNextFrame(nativePtr: Long, format: Int): Boolean
+        @JvmStatic
+        private external fun nativePresentPreparedFrame(nativePtr: Long, format: Int): Boolean
         @JvmStatic
         private external fun nativeSeekTo(nativePtr: Long, format: Int, positionMs: Int): Int
         @JvmStatic

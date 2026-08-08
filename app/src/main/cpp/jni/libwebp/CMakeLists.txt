@@ -20,6 +20,9 @@ set(LIBWEBP_SOURCES
 )
 
 add_library(libwebp STATIC ${LIBWEBP_SOURCES})
-target_include_directories(libwebp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(libwebp
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+)
 target_compile_definitions(libwebp PRIVATE WEBP_USE_THREAD HAVE_PTHREAD HAVE_MALLOC_H)
 target_link_libraries(libwebp PUBLIC m)

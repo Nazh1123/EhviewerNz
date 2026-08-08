@@ -28,9 +28,11 @@
 #include "../imageio/imageio_util.h"
 #include "./stopwatch.h"
 #include "./unicode.h"
-#include "../sharpyuv/sharpyuv.h
+#include "sharpyuv/sharpyuv.h"
 #include "webp/encode.h"
 #include "webp/mux.h"
+#include "webp/mux_types.h"
+#include "webp/types.h"
 
 //------------------------------------------------------------------------------
 
@@ -62,7 +64,8 @@ static void Help(void) {
   printf(" -lossless ............ use lossless mode (default)\n");
   printf(" -lossy ............... use lossy mode\n");
   printf(" -q <float> ........... quality\n");
-  printf(" -m <int> ............. method to use\n");
+  printf(" -m <int> ............. compression method (0=fast, 6=slowest), "
+         "default=4\n");
   printf(" -exact, -noexact ..... preserve or alter RGB values in transparent "
                                   "area\n"
          "                        (default: -noexact, may cause artifacts\n"
@@ -150,6 +153,7 @@ int main(int argc, const char* argv[]) {
   WebPData webp_data;
   int c;
   int have_input = 0;
+  int last_input_index = 0;
   CommandLineArguments cmd_args;
   int ok;
 
@@ -158,8 +162,8 @@ int main(int argc, const char* argv[]) {
   ok = ExUtilInitCommandLineArguments(argc - 1, argv + 1, &cmd_args);
   if (!ok) FREE_WARGV_AND_RETURN(EXIT_FAILURE);
 
-  argc = cmd_args.argc_;
-  argv = cmd_args.argv_;
+  argc = cmd_args.argc;
+  argv = cmd_args.argv;
 
   WebPDataInit(&webp_data);
   if (!WebPAnimEncoderOptionsInit(&anim_config) ||
@@ -228,6 +232,8 @@ int main(int argc, const char* argv[]) {
   }
   if (!have_input) {
     fprintf(stderr, "No input file(s) for generating animation!\n");
+    ok = 0;
+    Help();
     goto End;
   }
 
@@ -276,6 +282,7 @@ int main(int argc, const char* argv[]) {
     // read next input image
     pic.use_argb = 1;
     ok = ReadImage((const char*)GET_WARGV_SHIFTED(argv, c), &pic);
+    last_input_index = c;
     if (!ok) goto End;
 
     if (enc == NULL) {
@@ -312,6 +319,13 @@ int main(int argc, const char* argv[]) {
     }
     timestamp_ms += duration;
     ++pic_num;
+  }
+
+  for (c = last_input_index + 1; c < argc; ++c) {
+    if (argv[c] != NULL) {
+      fprintf(stderr, "Warning: unused option [%s]!"
+                      " Frame options go before the input frame.\n", argv[c]);
+    }
   }
 
   // add a last fake frame to signal the last duration

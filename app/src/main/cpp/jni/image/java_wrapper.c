@@ -75,7 +75,9 @@ jobject create_image_object(JNIEnv* env, void* ptr, int format, int width, int h
 
 JNIEXPORT jobject JNICALL
 Java_com_hippo_lib_image_Image1_nativeDecode(JNIEnv* env,
-                                             jclass clazz, jobject is, jboolean partially)
+                                             jclass clazz, jobject is,
+                                             jboolean partially,
+                                             jint sample_size)
 {
   InputStream* input_stream;
   int format;
@@ -87,7 +89,7 @@ Java_com_hippo_lib_image_Image1_nativeDecode(JNIEnv* env,
     return NULL;
   }
 
-  image = decode(env, input_stream, partially, &format);
+  image = decode(env, input_stream, partially, sample_size, &format);
   if (image == NULL) {
     return NULL;
   }
@@ -251,6 +253,22 @@ Java_com_hippo_lib_image_Image1_nativeAdvanceAndGetLooped(JNIEnv* env,
   return (jboolean) advance_and_get_looped((void*) (intptr_t) ptr, format);
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_hippo_lib_image_Image1_nativePrepareNextFrame(JNIEnv* env,
+                                                       jclass clazz, jlong ptr,
+                                                       jint format)
+{
+  return (jboolean) prepare_next_frame((void*) (intptr_t) ptr, format);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_hippo_lib_image_Image1_nativePresentPreparedFrame(JNIEnv* env,
+                                                           jclass clazz, jlong ptr,
+                                                           jint format)
+{
+  return (jboolean) present_prepared_frame((void*) (intptr_t) ptr, format);
+}
+
 JNIEXPORT jint JNICALL
 Java_com_hippo_lib_image_Image1_nativeSeekTo(JNIEnv* env,
                                              jclass clazz, jlong ptr, jint format,
@@ -377,7 +395,7 @@ Java_com_hippo_lib_image_Image_nativeDecode3(JNIEnv *env, jclass clazz, jobject 
         return NULL;
     }
 
-    image = decode(env, input_stream, partially, &format);
+    image = decode(env, input_stream, partially, 1, &format);
     if (image == NULL) {
         return NULL;
     }

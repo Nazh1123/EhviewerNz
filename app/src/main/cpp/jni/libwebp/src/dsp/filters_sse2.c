@@ -11,7 +11,7 @@
 //
 // Author: Skal (pascal.massimino@gmail.com)
 
-#include "../src/dsp/dsp.h"
+#include "src/dsp/dsp.h"
 
 #if defined(WEBP_USE_SSE2)
 
@@ -19,6 +19,9 @@
 #include <emmintrin.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "src/dsp/cpu.h"
+#include "src/webp/types.h"
 
 //------------------------------------------------------------------------------
 // Helpful macro.

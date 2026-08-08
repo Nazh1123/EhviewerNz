@@ -13,7 +13,8 @@
 #define WEBP_EXAMPLES_GIFDEC_H_
 
 #include <stdio.h>
-#include "../src/webp/types.h"
+
+#include "webp/types.h"
 
 #ifdef HAVE_CONFIG_H
 #include "webp/config.h"

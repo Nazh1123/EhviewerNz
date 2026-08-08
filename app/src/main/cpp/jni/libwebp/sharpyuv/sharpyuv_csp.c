@@ -9,11 +9,13 @@
 //
 // Colorspace utilities.
 
-#include "../sharpyuv/sharpyuv_csp.h"
+#include "sharpyuv/sharpyuv_csp.h"
 
 #include <assert.h>
 #include <math.h>
 #include <stddef.h>
+
+#include "sharpyuv/sharpyuv.h"
 
 static int ToFixed16(float f) { return (int)floor(f * (1 << 16) + 0.5f); }
 
@@ -22,16 +24,16 @@ void SharpYuvComputeConversionMatrix(const SharpYuvColorSpace* yuv_color_space,
   const float kr = yuv_color_space->kr;
   const float kb = yuv_color_space->kb;
   const float kg = 1.0f - kr - kb;
-  const float cr = 0.5f / (1.0f - kb);
-  const float cb = 0.5f / (1.0f - kr);
+  const float cb = 0.5f / (1.0f - kb);
+  const float cr = 0.5f / (1.0f - kr);
 
   const int shift = yuv_color_space->bit_depth - 8;
 
   const float denom = (float)((1 << yuv_color_space->bit_depth) - 1);
   float scale_y = 1.0f;
   float add_y = 0.0f;
-  float scale_u = cr;
-  float scale_v = cb;
+  float scale_u = cb;
+  float scale_v = cr;
   float add_uv = (float)(128 << shift);
   assert(yuv_color_space->bit_depth >= 8);
 
@@ -60,6 +62,10 @@ void SharpYuvComputeConversionMatrix(const SharpYuvColorSpace* yuv_color_space,
 
 // Matrices are in YUV_FIX fixed point precision.
 // WebP's matrix, similar but not identical to kRec601LimitedMatrix
+// Derived using the following formulas:
+// Y = 0.2569 * R + 0.5044 * G + 0.0979 * B + 16
+// U = -0.1483 * R - 0.2911 * G + 0.4394 * B + 128
+// V = 0.4394 * R - 0.3679 * G - 0.0715 * B + 128
 static const SharpYuvConversionMatrix kWebpMatrix = {
   {16839, 33059, 6420, 16 << 16},
   {-9719, -19081, 28800, 128 << 16},

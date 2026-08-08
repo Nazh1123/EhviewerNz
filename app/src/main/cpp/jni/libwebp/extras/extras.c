@@ -17,14 +17,15 @@
 #include <string.h>
 
 #include "extras/sharpyuv_risk_table.h"
-#include "../sharpyuv/sharpyuv.h
-#include "../src/dsp/dsp.h"
-#include "../src/utils/utils.h"
+#include "sharpyuv/sharpyuv.h"
+#include "src/dsp/dsp.h"
+#include "src/utils/utils.h"
+#include "src/webp/encode.h"
 #include "webp/format_constants.h"
 #include "webp/types.h"
 
 #define XTRA_MAJ_VERSION 1
-#define XTRA_MIN_VERSION 4
+#define XTRA_MIN_VERSION 6
 #define XTRA_REV_VERSION 0
 
 //------------------------------------------------------------------------------

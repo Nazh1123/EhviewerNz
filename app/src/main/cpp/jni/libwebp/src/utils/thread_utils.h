@@ -15,10 +15,10 @@
 #define WEBP_UTILS_THREAD_UTILS_H_
 
 #ifdef HAVE_CONFIG_H
-#include "../webp/config.h"
+#include "src/webp/config.h"
 #endif
 
-#include "../src/webp/types.h"
+#include "src/webp/types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,8 +37,8 @@ typedef int (*WebPWorkerHook)(void*, void*);
 
 // Synchronization object used to launch job in the worker thread
 typedef struct {
-  void* impl_;            // platform-dependent implementation worker details
-  WebPWorkerStatus status_;
+  void* impl;             // platform-dependent implementation worker details
+  WebPWorkerStatus status;
   WebPWorkerHook hook;    // hook to call
   void* data1;            // first argument passed to 'hook'
   void* data2;            // second argument passed to 'hook'

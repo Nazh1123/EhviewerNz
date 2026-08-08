@@ -11,14 +11,18 @@
 //
 // Author: Skal (pascal.massimino@gmail.com)
 
-#include "../src/dsp/dsp.h"
+#include "src/dsp/dsp.h"
 
 #if defined(WEBP_USE_SSE2) && !defined(WEBP_REDUCE_SIZE)
 #include <emmintrin.h>
 
 #include <assert.h>
-#include "../src/utils/rescaler_utils.h"
-#include "../src/utils/utils.h"
+#include <stddef.h>
+
+#include "src/dsp/cpu.h"
+#include "src/utils/rescaler_utils.h"
+#include "src/utils/utils.h"
+#include "src/webp/types.h"
 
 //------------------------------------------------------------------------------
 // Implementations of critical functions ImportRow / ExportRow

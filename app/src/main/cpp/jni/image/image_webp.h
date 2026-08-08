@@ -38,6 +38,19 @@
 #define IMAGE_WEBP_MAGIC_NUMBER_11 0x45
 
 typedef struct {
+  unsigned int x_offset;
+  unsigned int y_offset;
+  unsigned int width;
+  unsigned int height;
+  int duration;
+  WebPMuxAnimDispose dispose_method;
+  WebPMuxAnimBlend blend_method;
+  bool has_alpha;
+  // -1 unknown, 0 contains transparency, 1 fully opaque after decoding.
+  signed char decoded_opaque;
+} WEBP_FRAME_INFO;
+
+typedef struct {
   unsigned int width;
   unsigned int height;
   bool animated;
@@ -47,17 +60,25 @@ typedef struct {
   unsigned char* buffer;
   unsigned char* encoded_data;
   size_t encoded_length;
-  WebPAnimDecoder* decoder;
-  // Stable RGBA display frame, independent of the decoder's working canvas.
+  WebPDemuxer* demux;
+  // Double-buffered RGBA canvases. libwebp decodes into the back canvas while
+  // the GL thread keeps reading the stable current canvas.
   unsigned char* current_frame_buffer;
+  unsigned char* next_frame_buffer;
+  unsigned char* alpha_temp_buffer;
+  size_t alpha_temp_buffer_size;
   size_t frame_buffer_size;
   pthread_mutex_t frame_buffer_mutex;
   bool frame_buffer_mutex_initialized;
-  int* delays;
+  WEBP_FRAME_INFO* frames;
   int total_duration;
+  unsigned int prepared_frame;
+  bool frame_prepared;
+  bool prepared_looped;
 } WEBP;
 
-void* WEBP_decode(JNIEnv* env, PatchHeadInputStream* patch_head_input_stream, bool partially);
+void* WEBP_decode(JNIEnv* env, PatchHeadInputStream* patch_head_input_stream,
+                  bool partially, int sample_size);
 bool WEBP_complete(JNIEnv* env, WEBP* webp);
 bool WEBP_is_completed(WEBP* webp);
 void* WEBP_get_pixels(WEBP* webp);
@@ -71,6 +92,8 @@ void WEBP_render(WEBP* webp, int src_x, int src_y,
                  int width, int height, bool fill_blank, int default_color);
 void WEBP_advance(WEBP* webp);
 bool WEBP_advance_and_get_looped(WEBP* webp);
+bool WEBP_prepare_next_frame(WEBP* webp);
+bool WEBP_present_prepared_frame(WEBP* webp);
 int WEBP_seek_to(WEBP* webp, int position_ms);
 int WEBP_get_current_position(WEBP* webp);
 int WEBP_get_total_duration(WEBP* webp);

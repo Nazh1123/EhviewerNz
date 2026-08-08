@@ -148,6 +148,8 @@ public final class SpiderQueen implements Runnable {
     private final ConcurrentHashMap<Integer, String> mPageErrorMap = new ConcurrentHashMap<>();
     // Store page download percent
     private final ConcurrentHashMap<Integer, Float> mPagePercentMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, Integer> mAnimatedWebpDecodeModes =
+            new ConcurrentHashMap<>();
     private final List<OnSpiderListener> mSpiderListeners = new ArrayList<>();
     private final int mWorkerMaxCount;
     private final int mPreloadNumber;
@@ -508,6 +510,14 @@ public final class SpiderQueen implements Runnable {
 
     public Object forceRequest(int index) {
         return request(index, true, true, false);
+    }
+
+    public void setAnimatedWebpDecodeMode(int index, int mode) {
+        if (mode == Image.ANIMATED_WEBP_MODE_DEFAULT) {
+            mAnimatedWebpDecodeModes.remove(index);
+        } else {
+            mAnimatedWebpDecodeModes.put(index, mode);
+        }
     }
 
     public Object request(int index) {
@@ -1858,7 +1868,10 @@ public final class SpiderQueen implements Runnable {
 
                 if (is != null) {
                     try {
-                        image = Image.decode((FileInputStream) is, false);
+                        Integer decodeMode = mAnimatedWebpDecodeModes.get(index);
+                        image = Image.decode((FileInputStream) is, false,
+                                decodeMode != null ? decodeMode
+                                        : Image.ANIMATED_WEBP_MODE_DEFAULT);
                     } catch (OutOfMemoryError e){
                         Analytics.recordException(e);
                     } finally {

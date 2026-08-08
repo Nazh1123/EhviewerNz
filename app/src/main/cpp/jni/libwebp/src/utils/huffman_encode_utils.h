@@ -14,7 +14,7 @@
 #ifndef WEBP_UTILS_HUFFMAN_ENCODE_UTILS_H_
 #define WEBP_UTILS_HUFFMAN_ENCODE_UTILS_H_
 
-#include "../src/webp/types.h"
+#include "src/webp/types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,10 +35,10 @@ typedef struct {
 
 // Struct to represent the Huffman tree.
 typedef struct {
-  uint32_t total_count_;   // Symbol frequency.
-  int value_;              // Symbol value.
-  int pool_index_left_;    // Index for the left sub-tree.
-  int pool_index_right_;   // Index for the right sub-tree.
+  uint32_t total_count;   // Symbol frequency.
+  int value;              // Symbol value.
+  int pool_index_left;    // Index for the left sub-tree.
+  int pool_index_right;   // Index for the right sub-tree.
 } HuffmanTree;
 
 // Turn the Huffman tree into a token sequence.

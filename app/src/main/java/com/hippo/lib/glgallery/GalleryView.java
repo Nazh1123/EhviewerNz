@@ -1100,6 +1100,12 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         }
     }
 
+    void notifyPageImageReady(int index) {
+        if (mListener != null) {
+            mListener.onPageImageReady(index);
+        }
+    }
+
     GalleryPageView obtainPage() {
         GalleryPageView page = mGalleryPageViewPool.pop();
         if (page == null) {
@@ -1279,6 +1285,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
         @RenderThread
         void onUpdateCurrentIndex(int index);
+
+        void onPageImageReady(int index);
 
         @RenderThread
         void onTapSliderArea();

@@ -710,6 +710,7 @@ public class ImageTexture implements Texture, Animatable {
     // We are targeting at 60fps, so we have 16ms for each frame.
     // In this 16ms, we use about 4~8 ms to upload tiles.
     private static final long UPLOAD_TILE_LIMIT = 4; // ms
+    private static final int STALL_WINDOW_SIZE = 8;
     private static final Executor sThreadExecutor;
     private static final PVLock sPVLock;
     private static final Object sFreeTileLock = new Object();
@@ -747,8 +748,18 @@ public class ImageTexture implements Texture, Animatable {
     private int mPlaybackFrameDelay;
     private long mPlaybackFrameStart;
     private float mPlaybackFrameElapsed;
+    private boolean mPlaybackFramePrepared;
     private final int mPlaybackDuration;
     private WeakReference<PlaybackListener> mPlaybackListener;
+    private final Object mStallLock = new Object();
+    private final boolean[] mStallWindow = new boolean[STALL_WINDOW_SIZE];
+    private int mStallWindowIndex;
+    private int mStallWindowCount;
+    private int mStallLateCount;
+    private int mConsecutiveStalls;
+    private int mConsecutiveUploadStalls;
+    private volatile boolean mStallWarningSent;
+    private volatile boolean mStallDetectionSuppressed;
 
     private WeakReference<Callback> mCallback;
 
@@ -773,6 +784,7 @@ public class ImageTexture implements Texture, Animatable {
             tile.offsetX = 0;
             tile.offsetY = 0;
             tile.image = image;
+            tile.owner = this;
             tile.setSize(TILE_DIRECT, width, height);
             tile.setOpaque(opaque);
             list.add(tile);
@@ -912,6 +924,10 @@ public class ImageTexture implements Texture, Animatable {
         return mImage.wasAnimatedWebpControlRequested();
     }
 
+    public int getAnimatedWebpSampleSize() {
+        return mImage.getAnimatedWebpSampleSize();
+    }
+
     public int getPlaybackDuration() {
         return mPlaybackDuration;
     }
@@ -945,7 +961,7 @@ public class ImageTexture implements Texture, Animatable {
             mPlaybackFrameStart = SystemClock.uptimeMillis();
             mPlaybackLock.notifyAll();
         }
-        notifyPlaybackChanged(false);
+        notifyPlaybackChanged(false, false);
     }
 
     public float getPlaybackSpeed() {
@@ -963,7 +979,7 @@ public class ImageTexture implements Texture, Animatable {
             mPlaybackFrameStart = SystemClock.uptimeMillis();
             mPlaybackLock.notifyAll();
         }
-        notifyPlaybackChanged(false);
+        notifyPlaybackChanged(false, false);
     }
 
     public void seekTo(int positionMs) {
@@ -978,6 +994,11 @@ public class ImageTexture implements Texture, Animatable {
         mPlaybackListener = listener == null ? null : new WeakReference<>(listener);
     }
 
+    public void setStallDetectionSuppressed(boolean suppressed) {
+        mStallDetectionSuppressed = suppressed;
+        if (suppressed) resetStallSamples();
+    }
+
     private void updateElapsedLocked() {
         long now = SystemClock.uptimeMillis();
         if (mPlaybackPlaying && mRunning.get()) {
@@ -987,10 +1008,10 @@ public class ImageTexture implements Texture, Animatable {
         mPlaybackFrameStart = now;
     }
 
-    private void notifyPlaybackChanged(boolean looped) {
+    private void notifyPlaybackChanged(boolean looped, boolean frameChanged) {
         WeakReference<PlaybackListener> reference = mPlaybackListener;
         PlaybackListener listener = reference != null ? reference.get() : null;
-        if (listener != null) listener.onPlaybackChanged(this, looped);
+        if (listener != null) listener.onPlaybackChanged(this, looped, frameChanged);
     }
 
     @Override
@@ -1287,6 +1308,7 @@ public class ImageTexture implements Texture, Animatable {
         public int contentWidth;
         public int contentHeight;
         public int borderSize;
+        public ImageTexture owner;
         @TileType
         private int mTileType;
 
@@ -1334,7 +1356,11 @@ public class ImageTexture implements Texture, Animatable {
         protected void texImage(boolean init) {
             if (image != null && !image.isRecycled()) {
                 if (mTileType == TILE_DIRECT) {
+                    long started = SystemClock.uptimeMillis();
                     image.texImageDirect(init);
+                    if (!init && owner != null) {
+                        owner.recordUploadDuration(SystemClock.uptimeMillis() - started);
+                    }
                     return;
                 }
                 int w, h;
@@ -1352,6 +1378,7 @@ public class ImageTexture implements Texture, Animatable {
         private void invalidate() {
             invalidateContent();
             image = null;
+            owner = null;
         }
 
         public void free() {
@@ -1377,6 +1404,9 @@ public class ImageTexture implements Texture, Animatable {
             while (mRunning.get() && !mReleased.get() && !mImage.isImageRecycled() &&
                     !mNeedRelease.get()) {
                 int seekPosition;
+                boolean prepareFrame = false;
+                float prepareSpeed = 1.0f;
+                float availablePlaybackMs = 0f;
                 synchronized (mPlaybackLock) {
                     while (mRunning.get() && !mPlaybackPlaying && mPendingSeek < 0) {
                         try {
@@ -1387,6 +1417,45 @@ public class ImageTexture implements Texture, Animatable {
                     if (!mRunning.get()) break;
                     seekPosition = mPendingSeek;
                     mPendingSeek = -1;
+                    if (seekPosition < 0) {
+                        updateElapsedLocked();
+                        if (!mPlaybackFramePrepared) {
+                            prepareFrame = true;
+                            prepareSpeed = mPlaybackSpeed;
+                            availablePlaybackMs = Math.max(0f,
+                                    mPlaybackFrameDelay - mPlaybackFrameElapsed);
+                        }
+                    }
+                }
+
+                // Decode the following frame while the current canvas remains on
+                // screen. Presentation is a pointer swap after the deadline, so a
+                // decode that fits within the frame interval no longer lowers FPS.
+                if (prepareFrame) {
+                    synchronized (mImage) {
+                        if (mReleased.get() || mImage.isImageRecycled() ||
+                                mNeedRelease.get()) break;
+                        mImageBusy = true;
+                    }
+                    long decodeStarted = SystemClock.uptimeMillis();
+                    boolean prepared = mImage.prepareNextFrame();
+                    long decodeElapsed = SystemClock.uptimeMillis() - decodeStarted;
+                    synchronized (mImage) {
+                        mImageBusy = false;
+                    }
+                    synchronized (mPlaybackLock) {
+                        mPlaybackFramePrepared = prepared;
+                    }
+                    long targetInterval = Math.max(1L, (long) Math.ceil(
+                            mPlaybackFrameDelay / prepareSpeed));
+                    long availableReal = Math.max(0L, (long) Math.ceil(
+                            availablePlaybackMs / prepareSpeed));
+                    recordFrameTiming(Math.max(0L, decodeElapsed - availableReal),
+                            targetInterval);
+                    continue;
+                }
+
+                synchronized (mPlaybackLock) {
                     if (seekPosition < 0) {
                         updateElapsedLocked();
                         float remaining = mPlaybackFrameDelay - mPlaybackFrameElapsed;
@@ -1411,7 +1480,13 @@ public class ImageTexture implements Texture, Animatable {
                 if (seekPosition >= 0) {
                     framePosition = mImage.seekTo(seekPosition);
                 } else {
-                    looped = mImage.advanceFrame();
+                    boolean prepared;
+                    synchronized (mPlaybackLock) {
+                        prepared = mPlaybackFramePrepared;
+                    }
+                    looped = prepared
+                            ? mImage.presentPreparedFrame()
+                            : mImage.advanceFrame();
                     framePosition = mImage.getCurrentPosition();
                 }
                 int frameDelay = mImage.getDelay();
@@ -1422,17 +1497,29 @@ public class ImageTexture implements Texture, Animatable {
                 synchronized (mPlaybackLock) {
                     mPlaybackFramePosition = framePosition;
                     mPlaybackFrameDelay = frameDelay;
+                    mPlaybackFramePrepared = false;
                     mPlaybackFrameElapsed = seekPosition >= 0
                             ? Math.max(0, seekPosition - framePosition)
-                            // Decoding and any wait for the GL upload mutex are part of
-                            // the animation timeline. Carry that time into the new frame
-                            // instead of adding a full frame delay after every decode.
-                            : Math.min(frameDelay, decodeElapsed * mPlaybackSpeed);
+                            // Never skip or shorten a decoded frame. If decoding missed
+                            // its deadline, the old frame stays visible and playback
+                            // resumes from the new frame once it is ready.
+                            : 0f;
                     mPlaybackFrameStart = SystemClock.uptimeMillis();
+                }
+                if (seekPosition < 0 && decodeElapsed > 0) {
+                    float speed;
+                    synchronized (mPlaybackLock) {
+                        speed = mPlaybackSpeed;
+                    }
+                    long target = Math.max(1L,
+                            (long) Math.ceil(frameDelay / speed));
+                    if (decodeElapsed > target) {
+                        recordFrameTiming(decodeElapsed - target, target);
+                    }
                 }
                 mFrameDirty.lazySet(true);
                 invalidateSelf();
-                notifyPlaybackChanged(looped);
+                notifyPlaybackChanged(looped, true);
             }
             synchronized (mImage) {
                 mImageBusy = false;
@@ -1549,6 +1636,86 @@ public class ImageTexture implements Texture, Animatable {
     }
 
     public interface PlaybackListener {
-        void onPlaybackChanged(ImageTexture texture, boolean looped);
+        void onPlaybackChanged(ImageTexture texture, boolean looped, boolean frameChanged);
+
+        void onPlaybackStalled(ImageTexture texture);
+    }
+
+    private void resetStallSamples() {
+        synchronized (mStallLock) {
+            mStallWindowIndex = 0;
+            mStallWindowCount = 0;
+            mStallLateCount = 0;
+            mConsecutiveStalls = 0;
+            mConsecutiveUploadStalls = 0;
+        }
+    }
+
+    private void recordFrameTiming(long latenessMs, long targetIntervalMs) {
+        if (mStallDetectionSuppressed || mStallWarningSent || !mRunning.get()) return;
+        synchronized (mPlaybackLock) {
+            if (!mPlaybackPlaying) return;
+        }
+        final long tolerance = Math.max(16L,
+                (long) Math.ceil(targetIntervalMs * 0.25d));
+        final boolean late = latenessMs > tolerance;
+        final boolean severe = latenessMs > Math.max(100L, targetIntervalMs);
+        boolean notify = false;
+        synchronized (mStallLock) {
+            if (mStallWindowCount == STALL_WINDOW_SIZE) {
+                if (mStallWindow[mStallWindowIndex]) --mStallLateCount;
+            } else {
+                ++mStallWindowCount;
+            }
+            mStallWindow[mStallWindowIndex] = late;
+            mStallWindowIndex = (mStallWindowIndex + 1) % STALL_WINDOW_SIZE;
+            if (late) {
+                ++mStallLateCount;
+                ++mConsecutiveStalls;
+            } else {
+                mConsecutiveStalls = 0;
+            }
+            if (severe || mConsecutiveStalls >= 3 ||
+                    (mStallWindowCount == STALL_WINDOW_SIZE && mStallLateCount >= 5)) {
+                mStallWarningSent = true;
+                notify = true;
+            }
+        }
+        if (notify) {
+            WeakReference<PlaybackListener> reference = mPlaybackListener;
+            PlaybackListener listener = reference != null ? reference.get() : null;
+            if (listener != null) listener.onPlaybackStalled(this);
+        }
+    }
+
+    private void recordUploadDuration(long elapsedMs) {
+        if (mStallDetectionSuppressed || mStallWarningSent || !mRunning.get()) return;
+        float speed;
+        int delay;
+        synchronized (mPlaybackLock) {
+            if (!mPlaybackPlaying) return;
+            speed = mPlaybackSpeed;
+            delay = mPlaybackFrameDelay;
+        }
+        long target = Math.max(1L, (long) Math.ceil(delay / speed));
+        long tolerance = Math.max(16L, (long) Math.ceil(target * 0.25d));
+        boolean notify = false;
+        synchronized (mStallLock) {
+            if (elapsedMs > tolerance) {
+                ++mConsecutiveUploadStalls;
+                if (elapsedMs > Math.max(100L, target) ||
+                        mConsecutiveUploadStalls >= 3) {
+                    mStallWarningSent = true;
+                    notify = true;
+                }
+            } else {
+                mConsecutiveUploadStalls = 0;
+            }
+        }
+        if (notify) {
+            WeakReference<PlaybackListener> reference = mPlaybackListener;
+            PlaybackListener listener = reference != null ? reference.get() : null;
+            if (listener != null) listener.onPlaybackStalled(this);
+        }
     }
 }
