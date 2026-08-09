@@ -102,6 +102,7 @@
     <string name="error_cant_find_activity">找不到相应的应用</string>
     <string name="error_cannot_parse_the_url">无法解析链接</string>
     <string name="error_not_folder_path">非文件夹路径</string>
+    <string name="error_open_image_directory">无法读取所选图片所在目录。请授予存储访问权限，或换用可提供本地路径的文件管理器。</string>
     <string name="error_no_provider">无 provider</string>
     <string name="error_decoding_failed">解码失败</string>
     <string name="error_not_found">未找到</string>

@@ -49,16 +49,29 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     private static final AtomicInteger sIdGenerator = new AtomicInteger();
 
     private final UniFile mDir;
+    @Nullable
+    private final String mInitialFilename;
     private final Stack<Integer> mRequests = new Stack<>();
     private final AtomicInteger mDecodingIndex = new AtomicInteger(GalleryPageView.INVALID_INDEX);
     private final AtomicReference<UniFile[]> mFileList = new AtomicReference<>();
     @Nullable
     private Thread mBgThread;
     private volatile int mSize = STATE_WAIT;
+    private volatile int mStartPage;
     private String mError;
 
     public DirGalleryProvider(@NonNull UniFile dir) {
+        this(dir, null);
+    }
+
+    public DirGalleryProvider(@NonNull UniFile dir, @Nullable String initialFilename) {
         mDir = dir;
+        mInitialFilename = initialFilename;
+    }
+
+    @Override
+    public int getStartPage() {
+        return mStartPage;
     }
 
     @Override
@@ -116,8 +129,13 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     @NonNull
     @Override
     public String getImageFilename(int index) {
-        // TODO
-        return Integer.toString(index);
+        UniFile[] fileList = mFileList.get();
+        if (fileList == null || index < 0 || index >= fileList.length) {
+            return Integer.toString(index);
+        }
+        String name = fileList[index].getName();
+        String extension = FileUtils.getExtensionFromFilename(name);
+        return extension == null ? name : name.substring(0, name.length() - extension.length() - 1);
     }
 
     @Override
@@ -175,7 +193,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     @Override
     public void run() {
         // It may take a long time, so run it in new thread
-        UniFile[] files = mDir.listFiles(imageFilter);
+        UniFile[] files = listAndSortImageFiles(mDir);
 
         if (files == null) {
             mSize = STATE_ERROR;
@@ -188,8 +206,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
             return;
         }
 
-        // Sort it
-        Arrays.sort(files, naturalComparator);
+        mStartPage = findStartPage(files, mInitialFilename);
 
         // Put file list
         mFileList.lazySet(files);
@@ -259,4 +276,24 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
             return comparator.compare(o1.getName(), o2.getName());
         }
     };
+
+    @Nullable
+    static UniFile[] listAndSortImageFiles(@NonNull UniFile dir) {
+        UniFile[] files = dir.listFiles(imageFilter);
+        if (files != null) {
+            Arrays.sort(files, naturalComparator);
+        }
+        return files;
+    }
+
+    static int findStartPage(@NonNull UniFile[] files, @Nullable String initialFilename) {
+        if (initialFilename != null) {
+            for (int i = 0; i < files.length; i++) {
+                if (initialFilename.equals(files[i].getName())) {
+                    return i;
+                }
+            }
+        }
+        return 0;
+    }
 }

@@ -188,6 +188,7 @@
     <string name="error_cant_find_activity">Can\'t find the application</string>
     <string name="error_cannot_parse_the_url">Can\'t parse the url</string>
     <string name="error_not_folder_path">Not folder path</string>
+    <string name="error_open_image_directory">Unable to access this image\'s folder. Grant storage access or use a file manager that exposes its local path.</string>
     <string name="error_no_provider">No provider</string>
     <string name="error_decoding_failed">Decoding failed</string>
     <string name="error_not_found">Not found</string>

@@ -88,6 +88,7 @@ import com.hippo.ehviewer.event.GalleryActivityEvent;
 import com.hippo.ehviewer.gallery.ArchiveGalleryProvider;
 import com.hippo.ehviewer.gallery.DirGalleryProvider;
 import com.hippo.ehviewer.gallery.EhGalleryProvider;
+import com.hippo.ehviewer.gallery.ExternalImageFileResolver;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
 import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
@@ -162,6 +163,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private GalleryInfo mGalleryInfo;
     private int mPage;
     private String mCacheFileName;
+    private boolean mExternalImage;
+    private boolean mExternalImagePathError;
+    private boolean mPendingExternalImageStart;
 
     @Nullable
     private GLRootView mGLRootView;
@@ -366,6 +370,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             return;
         }
 
+        mExternalImage = false;
+        mExternalImagePathError = false;
+
         if (ACTION_DIR.equals(mAction)) {
             if (mFilename != null) {
                 mGalleryProvider = new DirGalleryProvider(UniFile.fromFile(new File(mFilename)));
@@ -376,8 +383,19 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         } else if (Intent.ACTION_VIEW.equals(mAction)) {
             if (mUri != null) {
-                // Only support zip now
-                mGalleryProvider = new ArchiveGalleryProvider(this, mUri);
+                if (ExternalImageFileResolver.isImageUri(this, mUri)) {
+                    File imageFile = ExternalImageFileResolver.resolve(this, mUri);
+                    File parent = imageFile != null ? imageFile.getParentFile() : null;
+                    if (imageFile != null && parent != null && parent.isDirectory()) {
+                        mExternalImage = true;
+                        mGalleryProvider = new DirGalleryProvider(
+                                UniFile.fromFile(parent), imageFile.getName());
+                    } else {
+                        mExternalImagePathError = true;
+                    }
+                } else {
+                    mGalleryProvider = new ArchiveGalleryProvider(this, mUri);
+                }
             }
         }
     }
@@ -468,10 +486,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             if (!canFinish) {
                 return;
             }
+            if (mExternalImagePathError) {
+                Toast.makeText(this, R.string.error_open_image_directory, Toast.LENGTH_LONG).show();
+            }
             finish();
             return;
         }
-        mGalleryProvider.start();
+        boolean deferProviderStart = mExternalImage;
+        mPendingExternalImageStart = savedInstanceState == null
+                && mExternalImage && mPage < 0;
+        if (!deferProviderStart) {
+            mGalleryProvider.start();
+        }
 
         // Get start page
         int startPage;
@@ -498,6 +524,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
         mGalleryProvider.setListener(mGalleryAdapter);
         mGalleryProvider.setGLRoot(mGLRootView);
+        if (deferProviderStart) {
+            // The selected page is known only after the directory scan. Starting here
+            // ensures that its first size notification cannot race ahead of the listener.
+            mGalleryProvider.start();
+        }
 
         // System UI helper
         if (Settings.getReadingFullscreen()) {
@@ -2721,6 +2752,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case KEY_SIZE:
                     GalleryActivity.this.mSize = mValue;
+                    if (mPendingExternalImageStart && mValue >= 0) {
+                        mPendingExternalImageStart = false;
+                        int startPage = mGalleryProvider != null
+                                ? mGalleryProvider.getStartPage() : 0;
+                        if (mGalleryView != null && startPage >= 0 && startPage < mValue) {
+                            mGalleryView.setCurrentPage(startPage);
+                        }
+                    }
                     updateSlider();
                     updateProgress();
                     break;
