@@ -637,11 +637,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                     }
 
                     @Override
-                    public void onSwipeLeft(boolean startedInBottomRegion) {
+                    public void onSwipeLeft(boolean canJumpToNewContent) {
                         setSwipePreviewIndicatorVisible(false, true);
-                        boolean jumpToNewContent = startedInBottomRegion
-                                && mDetailScrollView != null
-                                && mDetailScrollView.hasSeenSwipeActivationView()
+                        boolean jumpToNewContent = canJumpToNewContent
                                 && Settings.getGalleryPreviewImmediateJump();
                         openGalleryPreviews(jumpToNewContent, true);
                     }

@@ -18,9 +18,11 @@ package com.hippo.ehviewer.ui.scene.gallery.detail;
 
 final class GalleryDetailSwipeState {
 
+    private boolean mActivationViewVisible;
     private boolean mActivationViewSeen;
 
     void observeActivationView(boolean visible) {
+        mActivationViewVisible = visible;
         mActivationViewSeen |= visible;
     }
 
@@ -28,11 +30,20 @@ final class GalleryDetailSwipeState {
         return mActivationViewSeen;
     }
 
+    boolean canJumpToNewContent(boolean nearContentBottom) {
+        return mActivationViewVisible
+                || (mActivationViewSeen && nearContentBottom);
+    }
+
     void resetActivationViewSeen() {
+        mActivationViewVisible = false;
         mActivationViewSeen = false;
     }
 
-    static boolean isInBottomRegion(float y, int height, float regionHeight) {
-        return y >= Math.max(0f, height - regionHeight) && y <= height;
+    static boolean isWithinBottomRange(
+            int scrollY, int viewportHeight, int contentHeight, float range) {
+        float remaining = Math.max(
+                0f, contentHeight - viewportHeight - Math.max(0, scrollY));
+        return remaining <= Math.max(0f, range);
     }
 }

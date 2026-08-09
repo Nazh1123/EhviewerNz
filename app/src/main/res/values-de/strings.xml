@@ -191,6 +191,9 @@
     <string name="quick_search">Sofortsuche</string>
     <string name="bookmark_subscription">Sofortsuche-Abonnements</string>
     <string name="global_subscription">Globale Abonnements</string>
+    <string name="subscription_updates_eh_message">EH-Updates:\t%1$d</string>
+    <string name="subscription_updates_bookmark_message">Lesez.-Updates:\t%1$d</string>
+    <string name="subscription_updates_global_message">Globale Updates:\t%1$d</string>
     <string name="quick_search_tip">Tippe an +, um eine Sofortsuche hinzuzufügen</string>
     <string name="add_quick_search_dialog_title">Sofortsuche hinzufügen</string>
     <string name="name_is_empty">Gib den Name ein</string>

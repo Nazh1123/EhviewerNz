@@ -272,6 +272,9 @@
     <string name="quick_search">快速搜尋</string>
     <string name="bookmark_subscription">快速搜尋訂閱</string>
     <string name="global_subscription">全域訂閱</string>
+    <string name="subscription_updates_eh_message">EH更新:\t%1$d</string>
+    <string name="subscription_updates_bookmark_message">書籤更新:\t%1$d</string>
+    <string name="subscription_updates_global_message">全域更新:\t%1$d</string>
     <string name="quick_search_tip">輕觸“+”以新增快速搜尋</string>
     <string name="add_quick_search_dialog_title">新增快速搜尋</string>
     <string name="name_is_empty">空白名稱</string>

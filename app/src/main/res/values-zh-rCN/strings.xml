@@ -42,9 +42,9 @@
     <string name="subscription_updates_failed">订阅更新检查失败</string>
     <string name="subscription_updates_already_checking">订阅更新检查正在进行</string>
     <string name="subscription_updates_no_sources">未启用订阅更新来源</string>
-    <string name="subscription_updates_eh_message">EH 订阅更新: %1$d</string>
-    <string name="subscription_updates_bookmark_message">书签订阅更新: %1$d</string>
-    <string name="subscription_updates_global_message">全局订阅更新: %1$d</string>
+    <string name="subscription_updates_eh_message">EH更新:\t%1$d</string>
+    <string name="subscription_updates_bookmark_message">书签更新:\t%1$d</string>
+    <string name="subscription_updates_global_message">全局更新:\t%1$d</string>
     <string name="search_corresponding_bookmarks">搜索对应书签</string>
     <string name="whats_hot">热门</string>
     <string name="top_lists">排行榜</string>
@@ -583,7 +583,7 @@
     <string name="settings_eh_show_jpn_title">显示日文标题</string>
     <string name="settings_eh_show_gallery_comment">显示画廊评论</string>
     <string name="settings_eh_gallery_preview_immediate_jump">画廊预览立即跳转</string>
-    <string name="settings_eh_gallery_preview_immediate_jump_summary">查看过画廊详细页底部的“查看更多预览”后，从屏幕底部 60dp 区域左滑可直接打开预览第二页</string>
+    <string name="settings_eh_gallery_preview_immediate_jump_summary">“查看更多预览”当前可见，或该按钮曾可见且页面处于距内容底部 60dp 范围内时，左滑可直接打开预览第二页</string>
     <string name="settings_eh_show_gallery_rating">显示画廊评分</string>
     <string name="settings_eh_show_eh_event">显示E站事件</string>
     <string name="settings_eh_show_eh_limits">显示E站配额</string>

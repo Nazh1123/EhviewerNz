@@ -239,6 +239,9 @@
     <string name="quick_search">ค้นหาอย่างด่วน</string>
     <string name="bookmark_subscription">การสมัครรับข้อมูลการค้นหาอย่างด่วน</string>
     <string name="global_subscription">การสมัครรับข้อมูลทั่วโลก</string>
+    <string name="subscription_updates_eh_message">อัปเดต EH:\t%1$d</string>
+    <string name="subscription_updates_bookmark_message">อัปเดตบุ๊กมาร์ก:\t%1$d</string>
+    <string name="subscription_updates_global_message">อัปเดตรวม:\t%1$d</string>
     <string name="quick_search_tip">แตะ \"+\" เพื่อเพิ่มการค้นหาอย่างด่วน</string>
     <string name="add_quick_search_dialog_title">เพิ่มค้นหาอย่างด่วน</string>
     <string name="name_is_empty">ชื่อห้ามเว้นว่างไว้</string>

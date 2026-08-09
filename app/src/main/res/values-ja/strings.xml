@@ -212,6 +212,9 @@
     <string name="quick_search">クイック検索</string>
     <string name="bookmark_subscription">クイック検索購読</string>
     <string name="global_subscription">グローバル購読</string>
+    <string name="subscription_updates_eh_message">EH更新:\t%1$d</string>
+    <string name="subscription_updates_bookmark_message">ブックマーク更新:\t%1$d</string>
+    <string name="subscription_updates_global_message">グローバル更新:\t%1$d</string>
     <string name="quick_search_tip">「+」をタップしてクイック検索を追加します</string>
     <string name="add_quick_search_dialog_title">クイック検索を追加</string>
     <string name="name_is_empty">タイトルが空です</string>

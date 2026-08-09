@@ -101,9 +101,9 @@
     <string name="subscription_updates_failed">Subscription update check failed</string>
     <string name="subscription_updates_already_checking">A subscription update check is already running</string>
     <string name="subscription_updates_no_sources">No subscription update source is enabled</string>
-    <string name="subscription_updates_eh_message">EH subscription updates: %1$d</string>
-    <string name="subscription_updates_bookmark_message">Quick Search subscription updates: %1$d</string>
-    <string name="subscription_updates_global_message">Global subscription updates: %1$d</string>
+    <string name="subscription_updates_eh_message">EH updates:\t%1$d</string>
+    <string name="subscription_updates_bookmark_message">Bookmark updates:\t%1$d</string>
+    <string name="subscription_updates_global_message">Global updates:\t%1$d</string>
     <string name="search_corresponding_bookmarks">Search corresponding bookmarks</string>
     <string name="whats_hot">What\'s hot</string>
     <string name="top_lists">Top Lists</string>
@@ -672,7 +672,7 @@
     <string name="settings_eh_show_jpn_title">Show Japanese title</string>
     <string name="settings_eh_show_gallery_comment">Show Gallery Comment</string>
     <string name="settings_eh_gallery_preview_immediate_jump">Jump to new gallery previews</string>
-    <string name="settings_eh_gallery_preview_immediate_jump_summary">After the More previews button has been visible, swipe left from the bottom 60 dp of gallery details to open previews directly on page 2</string>
+    <string name="settings_eh_gallery_preview_immediate_jump_summary">Swipe left to open previews directly on page 2 while More previews is visible, or after it has been visible when within 60 dp of the bottom of gallery details</string>
     <string name="settings_eh_show_gallery_rating">Show Gallery Rating</string>
     <string name="settings_eh_show_eh_event">Show EH events</string>
     <string name="settings_eh_show_eh_limits">Show EH limits</string>

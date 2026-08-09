@@ -244,6 +244,9 @@
     <string name="quick_search">Quick search</string>
     <string name="bookmark_subscription">Quick Search Subscriptions</string>
     <string name="global_subscription">Global Subscriptions</string>
+    <string name="subscription_updates_eh_message">EH updates:\t%1$d</string>
+    <string name="subscription_updates_bookmark_message">Bookmark updates:\t%1$d</string>
+    <string name="subscription_updates_global_message">Global updates:\t%1$d</string>
     <string name="quick_search_tip">Tap \"+\" to add Quick Search</string>
     <string name="add_quick_search_dialog_title">Add Quick Search</string>
     <string name="name_is_empty">Name is empty</string>

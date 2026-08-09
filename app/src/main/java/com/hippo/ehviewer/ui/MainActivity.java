@@ -41,7 +41,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PersistableBundle;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
 import android.text.TextUtils;
+import android.text.style.TabStopSpan;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
@@ -1162,7 +1165,7 @@ public final class MainActivity extends StageActivity
 
     private void showSubscriptionUpdateResult(
             @NonNull SubscriptionUpdateManager.CheckResult result) {
-        String message = formatSubscriptionUpdateCounts(result.snapshot);
+        CharSequence message = formatSubscriptionUpdateCounts(result.snapshot);
         if (!result.manual) {
             if (result.hasNewGalleries() && !TextUtils.isEmpty(message)) {
                 showTip(message, BaseScene.LENGTH_LONG);
@@ -1181,30 +1184,47 @@ public final class MainActivity extends StageActivity
     }
 
     @NonNull
-    private String formatSubscriptionUpdateCounts(
+    private CharSequence formatSubscriptionUpdateCounts(
             @NonNull SubscriptionUpdateManager.Snapshot snapshot) {
-        StringBuilder builder = new StringBuilder();
-        if (snapshot.ehEnabled && snapshot.ehCount > 0) {
-            appendSubscriptionUpdateLine(builder, getString(
-                    R.string.subscription_updates_eh_message,
+        SpannableStringBuilder builder = new SpannableStringBuilder();
+        boolean hasEhUpdates = snapshot.ehEnabled && snapshot.ehCount > 0;
+        boolean hasBookmarkUpdates = snapshot.bookmarkEnabled
+                && snapshot.bookmarkCount > 0;
+        if (hasEhUpdates) {
+            builder.append(getString(R.string.subscription_updates_eh_message,
                     snapshot.ehCount));
+            if (hasBookmarkUpdates && snapshot.globalCount > 0) {
+                builder.append('\t').append(getString(
+                        R.string.subscription_updates_global_message,
+                        snapshot.globalCount));
+            }
         }
-        if (snapshot.bookmarkEnabled && snapshot.bookmarkCount > 0) {
+        if (hasBookmarkUpdates) {
             appendSubscriptionUpdateLine(builder, getString(
                     R.string.subscription_updates_bookmark_message,
                     snapshot.bookmarkCount));
         }
-        if (snapshot.ehEnabled && snapshot.bookmarkEnabled
-                && snapshot.globalCount > 0) {
-            appendSubscriptionUpdateLine(builder, getString(
-                    R.string.subscription_updates_global_message,
-                    snapshot.globalCount));
+        if (hasEhUpdates && hasBookmarkUpdates) {
+            float density = getResources().getDisplayMetrics().density;
+            float screenWidthDp = getResources().getDisplayMetrics().widthPixels
+                    / density;
+            float contentWidthDp = Math.min(screenWidthDp - 48f, 600f);
+            setTabStop(builder, 128, density);
+            setTabStop(builder, Math.round(Math.max(176f,
+                    contentWidthDp - 120f)), density);
+            setTabStop(builder, Math.round(contentWidthDp - 24f), density);
         }
-        return builder.toString();
+        return builder;
+    }
+
+    private static void setTabStop(@NonNull SpannableStringBuilder builder,
+                                   int positionDp, float density) {
+        builder.setSpan(new TabStopSpan.Standard(Math.round(positionDp * density)),
+                0, builder.length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
     }
 
     private static void appendSubscriptionUpdateLine(
-            @NonNull StringBuilder builder, @NonNull String line) {
+            @NonNull SpannableStringBuilder builder, @NonNull String line) {
         if (builder.length() > 0) {
             builder.append('\n');
         }

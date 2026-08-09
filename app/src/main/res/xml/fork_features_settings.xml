@@ -39,53 +39,7 @@
         android:key="gallery_quick_page_turn"
         android:summary="@string/settings_fork_quick_page_turn_summary"
         android:title="@string/settings_read_quick_page_turn" />
-
-    <com.hippo.preference.ListPreference
-        android:key="search_language"
-        android:summary="%s"
-        android:title="@string/settings_search_language"
-        app:allowDividerAbove="true"
-        app:entries="@array/search_language_entries"
-        app:entryValues="@array/search_language_entry_values" />
-
-    <Preference
-        android:key="bookmark_subscription_settings"
-        android:summary="@string/settings_fork_bookmark_subscription_summary"
-        android:title="@string/bookmark_subscription"
-        app:allowDividerAbove="true"
-        app:iconSpaceReserved="false" />
-
-    <com.hippo.preference.SwitchPreference
-        android:defaultValue="false"
-        android:key="auto_subscription_updates"
-        android:summary="@string/settings_fork_auto_subscription_updates_summary"
-        android:title="@string/settings_fork_auto_subscription_updates"
-        app:allowDividerAbove="true" />
-
-    <com.hippo.preference.SwitchPreference
-        android:defaultValue="true"
-        android:dependency="auto_subscription_updates"
-        android:key="auto_subscription_updates_eh"
-        android:title="@string/settings_fork_auto_subscription_updates_eh" />
-
-    <com.hippo.preference.SwitchPreference
-        android:defaultValue="true"
-        android:dependency="auto_subscription_updates"
-        android:key="auto_subscription_updates_bookmark"
-        android:title="@string/bookmark_subscription" />
-
-    <com.hippo.preference.SwitchPreference
-        android:defaultValue="true"
-        android:key="show_thumbnail_download_badge"
-        android:summary="@string/settings_eh_show_thumbnail_download_badge_summary"
-        android:title="@string/settings_eh_show_thumbnail_download_badge" />
-
-    <com.hippo.preference.SwitchPreference
-        android:defaultValue="true"
-        android:key="gallery_preview_immediate_jump"
-        android:summary="@string/settings_eh_gallery_preview_immediate_jump_summary"
-        android:title="@string/settings_fork_gallery_immediate_jump" />
-
+    
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
         android:key="experimental_animated_webp"
@@ -127,6 +81,52 @@
         android:key="animated_webp_long_press_speed"
         android:summary="@string/settings_animated_webp_long_press_speed_summary"
         android:title="@string/settings_animated_webp_long_press_speed" />
+
+    <Preference
+        android:key="bookmark_subscription_settings"
+        android:summary="@string/settings_fork_bookmark_subscription_summary"
+        android:title="@string/bookmark_subscription"
+        app:allowDividerAbove="true"
+        app:iconSpaceReserved="false" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="auto_subscription_updates"
+        android:summary="@string/settings_fork_auto_subscription_updates_summary"
+        android:title="@string/settings_fork_auto_subscription_updates"
+        app:allowDividerAbove="true" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:dependency="auto_subscription_updates"
+        android:key="auto_subscription_updates_eh"
+        android:title="@string/settings_fork_auto_subscription_updates_eh" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:dependency="auto_subscription_updates"
+        android:key="auto_subscription_updates_bookmark"
+        android:title="@string/bookmark_subscription" />
+
+    <com.hippo.preference.ListPreference
+        android:key="search_language"
+        android:summary="%s"
+        android:title="@string/settings_search_language"
+        app:allowDividerAbove="true"
+        app:entries="@array/search_language_entries"
+        app:entryValues="@array/search_language_entry_values" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="show_thumbnail_download_badge"
+        android:summary="@string/settings_eh_show_thumbnail_download_badge_summary"
+        android:title="@string/settings_eh_show_thumbnail_download_badge" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="gallery_preview_immediate_jump"
+        android:summary="@string/settings_eh_gallery_preview_immediate_jump_summary"
+        android:title="@string/settings_fork_gallery_immediate_jump" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"

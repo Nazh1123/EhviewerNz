@@ -240,6 +240,9 @@
     <string name="quick_search">빠른 검색</string>
     <string name="bookmark_subscription">빠른 검색 구독</string>
     <string name="global_subscription">글로벌 구독</string>
+    <string name="subscription_updates_eh_message">EH 업데이트:\t%1$d</string>
+    <string name="subscription_updates_bookmark_message">북마크 업데이트:\t%1$d</string>
+    <string name="subscription_updates_global_message">전체 업데이트:\t%1$d</string>
     <string name="quick_search_tip">빠른 검색을 추가하려면 \"+\" 버튼을 누르세요.</string>
     <string name="add_quick_search_dialog_title">빠른 검색 추가</string>
     <string name="name_is_empty">이름이 비어 있습니다.</string>

@@ -24,25 +24,31 @@ import org.junit.Test;
 public class GalleryDetailSwipeStateTest {
 
     @Test
-    public void remembersActivationViewAfterItLeavesViewport() {
+    public void jumpRequiresCurrentVisibilityOrSeenAndNearBottom() {
         GalleryDetailSwipeState state = new GalleryDetailSwipeState();
 
         state.observeActivationView(false);
         assertFalse(state.hasSeenActivationView());
+        assertFalse(state.canJumpToNewContent(true));
 
         state.observeActivationView(true);
-        state.observeActivationView(false);
         assertTrue(state.hasSeenActivationView());
+        assertTrue(state.canJumpToNewContent(false));
+
+        state.observeActivationView(false);
+        assertFalse(state.canJumpToNewContent(false));
+        assertTrue(state.canJumpToNewContent(true));
 
         state.resetActivationViewSeen();
         assertFalse(state.hasSeenActivationView());
+        assertFalse(state.canJumpToNewContent(true));
     }
 
     @Test
-    public void bottomRegionIncludesOnlyLastRequestedPixels() {
-        assertFalse(GalleryDetailSwipeState.isInBottomRegion(439.9f, 500, 60f));
-        assertTrue(GalleryDetailSwipeState.isInBottomRegion(440f, 500, 60f));
-        assertTrue(GalleryDetailSwipeState.isInBottomRegion(500f, 500, 60f));
-        assertFalse(GalleryDetailSwipeState.isInBottomRegion(500.1f, 500, 60f));
+    public void bottomRangeUsesRemainingScrollDistance() {
+        assertFalse(GalleryDetailSwipeState.isWithinBottomRange(439, 500, 1000, 60f));
+        assertTrue(GalleryDetailSwipeState.isWithinBottomRange(440, 500, 1000, 60f));
+        assertTrue(GalleryDetailSwipeState.isWithinBottomRange(500, 500, 1000, 60f));
+        assertTrue(GalleryDetailSwipeState.isWithinBottomRange(0, 500, 400, 60f));
     }
 }

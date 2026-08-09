@@ -39,10 +39,10 @@ public class GalleryDetailScrollView extends ScrollView {
     private static final float REARM_DISTANCE_FRACTION =
             MIN_DISTANCE_FRACTION * 0.3125f;
     private static final float HORIZONTAL_BIAS = 1.5f;
-    private static final float BOTTOM_SWIPE_REGION_DP = 60f;
+    private static final float BOTTOM_ACTIVATION_RANGE_DP = 120f;
 
     private final int mTouchSlop;
-    private final float mBottomSwipeRegion;
+    private final float mBottomActivationRange;
     private final Rect mVisibleRect = new Rect();
     private final GalleryDetailSwipeState mSwipeState = new GalleryDetailSwipeState();
 
@@ -73,7 +73,7 @@ public class GalleryDetailScrollView extends ScrollView {
     public GalleryDetailScrollView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
-        mBottomSwipeRegion = BOTTOM_SWIPE_REGION_DP
+        mBottomActivationRange = BOTTOM_ACTIVATION_RANGE_DP
                 * getResources().getDisplayMetrics().density;
     }
 
@@ -90,27 +90,35 @@ public class GalleryDetailScrollView extends ScrollView {
             mSwipeState.resetActivationViewSeen();
         }
         mSwipeActivationView = view;
-        updateSwipeActivationViewSeen();
+        updateSwipeActivationState();
     }
 
-    public boolean hasSeenSwipeActivationView() {
-        updateSwipeActivationViewSeen();
-        return mSwipeState.hasSeenActivationView();
+    public boolean canJumpToNewContent() {
+        updateSwipeActivationState();
+        return mSwipeState.canJumpToNewContent(isNearContentBottom());
     }
 
-    private void updateSwipeActivationViewSeen() {
-        if (mSwipeState.hasSeenActivationView()) {
-            return;
-        }
+    private void updateSwipeActivationState() {
         View activationView = mSwipeActivationView;
-        mSwipeState.observeActivationView(activationView != null && activationView.isShown()
-                && activationView.getGlobalVisibleRect(mVisibleRect));
+        boolean activationViewVisible = activationView != null && activationView.isShown()
+                && activationView.getGlobalVisibleRect(mVisibleRect);
+        mSwipeState.observeActivationView(activationViewVisible);
+    }
+
+    private boolean isNearContentBottom() {
+        View content = getChildCount() > 0 ? getChildAt(0) : null;
+        if (!isLaidOut() || getHeight() <= 0 || content == null || content.getHeight() <= 0) {
+            return false;
+        }
+        int viewportHeight = getHeight() - getPaddingTop() - getPaddingBottom();
+        return GalleryDetailSwipeState.isWithinBottomRange(
+                getScrollY(), viewportHeight, content.getHeight(), mBottomActivationRange);
     }
 
     @Override
     protected void onScrollChanged(int l, int t, int oldl, int oldt) {
         super.onScrollChanged(l, t, oldl, oldt);
-        updateSwipeActivationViewSeen();
+        updateSwipeActivationState();
     }
 
     @Override
@@ -124,7 +132,7 @@ public class GalleryDetailScrollView extends ScrollView {
                 mOnSwipeLeftListener.onSwipeLeftReadyChanged(swipeReady);
             }
             if (completedSwipe) {
-                mOnSwipeLeftListener.onSwipeLeft(isSwipeStartInBottomRegion());
+                mOnSwipeLeftListener.onSwipeLeft(canJumpToNewContent());
             }
         }
         return handled;
@@ -170,11 +178,6 @@ public class GalleryDetailScrollView extends ScrollView {
                 break;
         }
         return false;
-    }
-
-    private boolean isSwipeStartInBottomRegion() {
-        return GalleryDetailSwipeState.isInBottomRegion(
-                mDownY, getHeight(), mBottomSwipeRegion);
     }
 
     private void updateSwipeReady(MotionEvent event) {
@@ -261,6 +264,6 @@ public class GalleryDetailScrollView extends ScrollView {
     public interface OnSwipeLeftListener {
         void onSwipeLeftReadyChanged(boolean ready);
 
-        void onSwipeLeft(boolean startedInBottomRegion);
+        void onSwipeLeft(boolean canJumpToNewContent);
     }
 }
