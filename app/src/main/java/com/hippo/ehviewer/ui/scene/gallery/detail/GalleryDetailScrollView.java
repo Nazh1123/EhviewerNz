@@ -39,9 +39,12 @@ public class GalleryDetailScrollView extends ScrollView {
     private static final float REARM_DISTANCE_FRACTION =
             MIN_DISTANCE_FRACTION * 0.3125f;
     private static final float HORIZONTAL_BIAS = 1.5f;
+    private static final float BOTTOM_SWIPE_REGION_DP = 60f;
 
     private final int mTouchSlop;
+    private final float mBottomSwipeRegion;
     private final Rect mVisibleRect = new Rect();
+    private final GalleryDetailSwipeState mSwipeState = new GalleryDetailSwipeState();
 
     @Nullable
     private OnSwipeLeftListener mOnSwipeLeftListener;
@@ -70,6 +73,8 @@ public class GalleryDetailScrollView extends ScrollView {
     public GalleryDetailScrollView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        mBottomSwipeRegion = BOTTOM_SWIPE_REGION_DP
+                * getResources().getDisplayMetrics().density;
     }
 
     public void setOnSwipeLeftListener(@Nullable OnSwipeLeftListener listener) {
@@ -81,13 +86,31 @@ public class GalleryDetailScrollView extends ScrollView {
     }
 
     public void setSwipeActivationView(@Nullable View view) {
+        if (mSwipeActivationView != view) {
+            mSwipeState.resetActivationViewSeen();
+        }
         mSwipeActivationView = view;
+        updateSwipeActivationViewSeen();
     }
 
-    public boolean isSwipeActivationViewVisible() {
+    public boolean hasSeenSwipeActivationView() {
+        updateSwipeActivationViewSeen();
+        return mSwipeState.hasSeenActivationView();
+    }
+
+    private void updateSwipeActivationViewSeen() {
+        if (mSwipeState.hasSeenActivationView()) {
+            return;
+        }
         View activationView = mSwipeActivationView;
-        return activationView != null && activationView.isShown()
-                && activationView.getGlobalVisibleRect(mVisibleRect);
+        mSwipeState.observeActivationView(activationView != null && activationView.isShown()
+                && activationView.getGlobalVisibleRect(mVisibleRect));
+    }
+
+    @Override
+    protected void onScrollChanged(int l, int t, int oldl, int oldt) {
+        super.onScrollChanged(l, t, oldl, oldt);
+        updateSwipeActivationViewSeen();
     }
 
     @Override
@@ -101,7 +124,7 @@ public class GalleryDetailScrollView extends ScrollView {
                 mOnSwipeLeftListener.onSwipeLeftReadyChanged(swipeReady);
             }
             if (completedSwipe) {
-                mOnSwipeLeftListener.onSwipeLeft();
+                mOnSwipeLeftListener.onSwipeLeft(isSwipeStartInBottomRegion());
             }
         }
         return handled;
@@ -147,6 +170,11 @@ public class GalleryDetailScrollView extends ScrollView {
                 break;
         }
         return false;
+    }
+
+    private boolean isSwipeStartInBottomRegion() {
+        return GalleryDetailSwipeState.isInBottomRegion(
+                mDownY, getHeight(), mBottomSwipeRegion);
     }
 
     private void updateSwipeReady(MotionEvent event) {
@@ -233,6 +261,6 @@ public class GalleryDetailScrollView extends ScrollView {
     public interface OnSwipeLeftListener {
         void onSwipeLeftReadyChanged(boolean ready);
 
-        void onSwipeLeft();
+        void onSwipeLeft(boolean startedInBottomRegion);
     }
 }

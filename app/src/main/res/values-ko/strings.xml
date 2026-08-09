@@ -957,7 +957,7 @@
     <string name="imported_archive_category">로컬 가져오기</string>
 
 
-    <string name="settings_animated_webp_controls_summary">애니메이션 WebP의 일시정지, 진행률 표시줄, 재생 속도 등의 제어를 사용합니다</string>
+    <string name="settings_animated_webp_controls_summary">애니메이션 WebP의 일시정지, 진행률 표시줄, 재생 속도 등의 제어를 사용합니다. 애니메이션 이미지를 볼 때 끊김이 발생하면 노란색 경고 아이콘을 누르거나 이 옵션을 끄세요.</string>
     <string name="settings_animated_webp_playback_time_summary">하단 진행률 표시줄 위에 현재 재생 시간과 전체 길이를 표시합니다</string>
     <string name="settings_animated_webp_progress_control_summary">화면 하단 25% 영역을 밀어 애니메이션 재생 위치를 변경합니다</string>
     <string name="settings_animated_webp_sequential_playback_summary">재생이 끝나면 다음 이미지를 자동으로 엽니다</string>

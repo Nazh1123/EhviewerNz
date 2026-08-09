@@ -965,7 +965,7 @@
     <string name="dummy_content">CONTENIDO\nFICTICIO</string>
     <string name="my_tags">Mis etiquetas</string>
 
-    <string name="settings_animated_webp_controls_summary">Activa controles para WebP animados: pausa, barra de progreso, velocidad de reproducción y más</string>
+    <string name="settings_animated_webp_controls_summary">Activa controles para WebP animados: pausa, barra de progreso, velocidad de reproducción y más. Si las imágenes animadas se entrecortan al visualizarlas, toca el icono amarillo de advertencia o desactiva esta opción.</string>
     <string name="settings_animated_webp_playback_time_summary">Muestra el tiempo actual y la duración total encima de la barra de progreso inferior</string>
     <string name="settings_animated_webp_progress_control_summary">Desliza en el cuarto inferior de la pantalla para cambiar la posición de reproducción</string>
     <string name="settings_animated_webp_sequential_playback_summary">Abre automáticamente la imagen siguiente al terminar la reproducción</string>

@@ -1083,7 +1083,7 @@
     <string name="open_direct_parent">直接開啟父畫廊</string>
 
     <string name="settings_animated_webp_controls">動圖控制</string>
-    <string name="settings_animated_webp_controls_summary">為動態 WebP 啟用控制：暫停、進度列、倍速等</string>
+    <string name="settings_animated_webp_controls_summary">為動態 WebP 啟用控制：暫停、進度列、倍速等。如瀏覽動圖時遇到卡頓，請點按黃色警告圖示或關閉此選項。</string>
     <string name="settings_animated_webp_playback_time">播放時間</string>
     <string name="settings_animated_webp_playback_time_summary">在底部進度列上方顯示目前播放時間及總時長</string>
     <string name="settings_animated_webp_progress_control">進度列控制</string>

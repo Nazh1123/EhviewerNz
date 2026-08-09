@@ -671,7 +671,7 @@
     <string name="settings_eh_show_jpn_title">Show Japanese title</string>
     <string name="settings_eh_show_gallery_comment">Show Gallery Comment</string>
     <string name="settings_eh_gallery_preview_immediate_jump">Jump to new gallery previews</string>
-    <string name="settings_eh_gallery_preview_immediate_jump_summary">When opening gallery previews from the bottom of gallery details, jump directly to new content (page 2)</string>
+    <string name="settings_eh_gallery_preview_immediate_jump_summary">After the More previews button has been visible, swipe left from the bottom 60 dp of gallery details to open previews directly on page 2</string>
     <string name="settings_eh_show_gallery_rating">Show Gallery Rating</string>
     <string name="settings_eh_show_eh_event">Show EH events</string>
     <string name="settings_eh_show_eh_limits">Show EH limits</string>
@@ -1165,7 +1165,7 @@
     <string name="animated_webp_play_pause">Play or pause animated image</string>
     <string name="animated_webp_stall_warning">Animated image playback is stalling; tap to reduce decoding load</string>
     <string name="settings_animated_webp_controls">Animated image controls</string>
-    <string name="settings_animated_webp_controls_summary">Enable controls for animated WebP: pause, progress bar, playback speed, and more</string>
+    <string name="settings_animated_webp_controls_summary">Enable controls for animated WebP: pause, progress bar, playback speed, and more. If animated images lag while viewing, tap the yellow warning icon or turn off this option.</string>
     <string name="settings_animated_webp_playback_time">Playback time</string>
     <string name="settings_animated_webp_playback_time_summary">Show the current playback time and total duration above the bottom progress bar</string>
     <string name="settings_animated_webp_progress_control">Progress bar control</string>
