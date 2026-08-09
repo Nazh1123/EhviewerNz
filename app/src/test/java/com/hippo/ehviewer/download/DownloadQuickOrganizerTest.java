@@ -50,12 +50,48 @@ public class DownloadQuickOrganizerTest {
     }
 
     @Test
+    public void groupIsUsedWhenArtistAndCosplayerAreAbsent() {
+        GalleryInfo gallery = galleryWithKnownTags("group:group name");
+
+        assertEquals("G: group name",
+                DownloadQuickOrganizer.resolveLabel(gallery, null));
+    }
+
+    @Test
+    public void groupFromTagListIsSupportedCaseInsensitively() {
+        GalleryInfo gallery = new GalleryInfo();
+        gallery.tgList = new ArrayList<>(Collections.singletonList("Group:group name"));
+
+        assertEquals("G: group name",
+                DownloadQuickOrganizer.resolveLabel(gallery, null));
+    }
+
+    @Test
+    public void cosplayerTakesPriorityOverGroup() {
+        GalleryInfo gallery = galleryWithKnownTags(
+                "group:group name", "cosplayer:cos name");
+
+        assertEquals("C: cos name",
+                DownloadQuickOrganizer.resolveLabel(gallery, null));
+    }
+
+    @Test
     public void storedArtistTagsAreSupported() {
         GalleryInfo gallery = new GalleryInfo();
         GalleryTags tags = new GalleryTags(gallery.gid);
         tags.artist = "first artist,second artist";
 
         assertEquals("A: first artist",
+                DownloadQuickOrganizer.resolveLabel(gallery, tags));
+    }
+
+    @Test
+    public void storedGroupTagsAreSupported() {
+        GalleryInfo gallery = new GalleryInfo();
+        GalleryTags tags = new GalleryTags(gallery.gid);
+        tags.group = "first group,second group";
+
+        assertEquals("G: first group",
                 DownloadQuickOrganizer.resolveLabel(gallery, tags));
     }
 

@@ -25,7 +25,9 @@ import com.hippo.ehviewer.client.data.GalleryTagGroup;
  */
 public final class GalleryTagSearchKeywordResolver {
 
-    private static final String[] PREFERRED_NAMESPACES = {"artist", "cosplayer"};
+    private static final String[] PREFERRED_NAMESPACES = {
+            "artist", "cosplayer", "group"
+    };
 
     private GalleryTagSearchKeywordResolver() {
     }
@@ -39,7 +41,7 @@ public final class GalleryTagSearchKeywordResolver {
         for (String namespace : PREFERRED_NAMESPACES) {
             for (GalleryTagGroup tagGroup : tagGroups) {
                 if (tagGroup != null
-                        && namespace.equals(tagGroup.groupName)
+                        && namespace.equalsIgnoreCase(tagGroup.groupName)
                         && tagGroup.size() > 0) {
                     return namespace + ":" + tagGroup.getTagAt(0);
                 }

@@ -25,14 +25,26 @@ public class DownloadLabelSearchQueryResolverTest {
 
     @Test
     public void artistLabelUsesQuotedShortNamespace() {
-        assertEquals("a:\"arti nme\"",
+        assertEquals("a:\"arti nme$\"",
                 DownloadLabelSearchQueryResolver.resolve("A: arti nme"));
     }
 
     @Test
     public void cosplayerLabelUsesQuotedShortNamespace() {
-        assertEquals("c:\"cos name\"",
+        assertEquals("cos:\"cos name$\"",
                 DownloadLabelSearchQueryResolver.resolve("C: cos name"));
+    }
+
+    @Test
+    public void groupLabelUsesQuotedShortNamespace() {
+        assertEquals("g:\"group name$\"",
+                DownloadLabelSearchQueryResolver.resolve("G: group name"));
+    }
+
+    @Test
+    public void annotatedGroupLabelIgnoresComment() {
+        assertEquals("g:\"group name$\"",
+                DownloadLabelSearchQueryResolver.resolve("G: group name #note"));
     }
 
     @Test
@@ -45,14 +57,16 @@ public class DownloadLabelSearchQueryResolverTest {
 
     @Test
     public void uploaderLabelUsesUploadNamespace() {
-        assertEquals("upload:\"uplod er\"",
+        assertEquals("uploader:\"uplod er$\"",
                 DownloadLabelSearchQueryResolver.resolve("U: uplod er"));
     }
 
     @Test
     public void prefixesAreCaseInsensitive() {
-        assertEquals("a:\"artist\"",
+        assertEquals("a:\"artist$\"",
                 DownloadLabelSearchQueryResolver.resolve("a: artist"));
+        assertEquals("g:\"group$\"",
+                DownloadLabelSearchQueryResolver.resolve("g: group"));
     }
 
     @Test

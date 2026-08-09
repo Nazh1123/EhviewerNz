@@ -25,6 +25,7 @@ public final class DownloadQuickOrganizer {
     private static final String ARTIST_NAMESPACE = "artist";
     private static final String COSPLAYER_NAMESPACE = "cosplayer";
     private static final String COSER_NAMESPACE = "coser";
+    private static final String GROUP_NAMESPACE = "group";
     private static final String OTHER_NAMESPACE = "other";
     private static final String OTHER_SHORT_NAMESPACE = "o";
     private static final String AI_GENERATED_TAG = "ai generated";
@@ -68,6 +69,17 @@ public final class DownloadQuickOrganizer {
         }
         if (cosplayer != null) {
             return "C: " + cosplayer;
+        }
+
+        String group = findNamespacedTag(gallery.simpleTags, GROUP_NAMESPACE);
+        if (group == null) {
+            group = findNamespacedTag(gallery.tgList, GROUP_NAMESPACE);
+        }
+        if (group == null && storedTags != null) {
+            group = firstStoredTag(storedTags.group);
+        }
+        if (group != null) {
+            return "G: " + group;
         }
 
         boolean aiGenerated = hasNamespacedTagValue(

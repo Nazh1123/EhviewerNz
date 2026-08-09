@@ -55,7 +55,26 @@ public class GalleryTagSearchKeywordResolverTest {
     }
 
     @Test
-    public void returnsNullWhenNeitherPreferredTagExists() {
+    public void fallsBackToGroupWhenArtistAndCosplayerAreAbsent() {
+        GalleryTagGroup group = group("Group", "group-name");
+
+        assertEquals("group:group-name",
+                GalleryTagSearchKeywordResolver.resolveArtistActionTag(
+                        new GalleryTagGroup[]{group("female", "tag"), group}));
+    }
+
+    @Test
+    public void cosplayerTakesPriorityOverGroup() {
+        GalleryTagGroup group = group("group", "group-name");
+        GalleryTagGroup cosplayer = group("cosplayer", "cosplayer-name");
+
+        assertEquals("cosplayer:cosplayer-name",
+                GalleryTagSearchKeywordResolver.resolveArtistActionTag(
+                        new GalleryTagGroup[]{group, cosplayer}));
+    }
+
+    @Test
+    public void returnsNullWhenNoPreferredTagExists() {
         assertNull(GalleryTagSearchKeywordResolver.resolveArtistActionTag(
                 new GalleryTagGroup[]{group("female", "tag")}));
         assertNull(GalleryTagSearchKeywordResolver.resolveArtistActionTag(null));

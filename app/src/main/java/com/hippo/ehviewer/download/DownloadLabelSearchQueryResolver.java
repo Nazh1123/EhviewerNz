@@ -32,7 +32,10 @@ public final class DownloadLabelSearchQueryResolver {
         if (label == null) {
             return null;
         }
-        String trimmed = label.trim();
+        String trimmed = DownloadQuickOrganizer.normalizeLabelIdentity(label);
+        if (trimmed == null) {
+            return null;
+        }
         int separator = trimmed.indexOf(':');
         if (separator <= 0 || separator == trimmed.length() - 1) {
             return null;
@@ -47,6 +50,8 @@ public final class DownloadLabelSearchQueryResolver {
                 return quote("a", value);
             case "C":
                 return quote("cos", value);
+            case "G":
+                return quote("g", value);
             case "AI":
             case "M":
                 return value;
