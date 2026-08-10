@@ -24,6 +24,7 @@
 #include "config.h"
 #ifdef IMAGE_SUPPORT_GIF
 
+#include <pthread.h>
 #include <stdbool.h>
 
 #include "patch_head_input_stream.h"
@@ -60,6 +61,16 @@ typedef struct
   bool partially;
   // Use extra buffer to avoid blink
   void* shown_buffer;
+  // The next frame is composed off-screen and published only when its
+  // presentation deadline is reached.
+  void* prepared_buffer;
+  void* prepared_backup;
+  int prepared_buffer_index;
+  bool frame_prepared;
+  bool prepared_looped;
+  int total_duration;
+  pthread_mutex_t frame_buffer_mutex;
+  bool frame_buffer_mutex_initialized;
   PatchHeadInputStream* patch_head_input_stream;
 } GIF;
 
@@ -74,6 +85,14 @@ void GIF_render(GIF* gif, int src_x, int src_y,
     void* dst, int dst_w, int dst_h, int dst_x, int dst_y,
     int width, int height, bool fill_blank, int default_color);
 void GIF_advance(GIF* gif);
+bool GIF_advance_and_get_looped(GIF* gif);
+bool GIF_prepare_next_frame(GIF* gif);
+bool GIF_present_prepared_frame(GIF* gif);
+int GIF_seek_to(GIF* gif, int position_ms);
+int GIF_get_current_position(GIF* gif);
+int GIF_get_total_duration(GIF* gif);
+void GIF_lock_pixels(GIF* gif);
+void GIF_unlock_pixels(GIF* gif);
 int GIF_get_delay(GIF* gif);
 int GIF_get_frame_count(GIF* gif);
 bool GIF_is_opaque(GIF* gif);

@@ -1070,7 +1070,7 @@
     <string name="open_direct_parent">直接打开父画廊</string>
 
     <string name="settings_animated_webp_controls">动图控制</string>
-    <string name="settings_animated_webp_controls_summary">为动态 WebP 启用控制：暂停、进度条、倍速等。如在动图浏览时遭遇卡顿，点击黄色警告图标或关闭此项。</string>
+    <string name="settings_animated_webp_controls_summary">为动态 WebP 和 GIF 启用控制：暂停、进度条、倍速等。如在动图浏览时遭遇卡顿，点击黄色警告图标或关闭此项。</string>
     <string name="settings_animated_webp_playback_time">播放时间</string>
     <string name="settings_animated_webp_playback_time_summary">在底部进度条上方显示当前播放时间和总时长</string>
     <string name="settings_animated_webp_progress_control">进度条控制</string>

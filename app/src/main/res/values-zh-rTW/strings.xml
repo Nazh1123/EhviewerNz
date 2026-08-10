@@ -1037,7 +1037,7 @@
     <string name="dummy_content">虛擬\n內容</string>
 
     <string name="settings_animated_webp_controls">動圖控制</string>
-    <string name="settings_animated_webp_controls_summary">為動態 WebP 啟用控制：暫停、進度條、倍速等。如果瀏覽動圖時遇到卡頓，請點選黃色警告圖示或關閉此選項。</string>
+    <string name="settings_animated_webp_controls_summary">為動態 WebP 和 GIF 啟用控制：暫停、進度條、倍速等。如果瀏覽動圖時遇到卡頓，請點選黃色警告圖示或關閉此選項。</string>
     <string name="settings_animated_webp_playback_time">播放時間</string>
     <string name="settings_animated_webp_playback_time_summary">在底部進度條上方顯示目前播放時間和總時長</string>
     <string name="settings_animated_webp_progress_control">進度條控制</string>

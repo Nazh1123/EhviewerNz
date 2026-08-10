@@ -2361,7 +2361,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         GalleryPageView page = mGalleryView.findPageByIndex(mCurrentIndex);
         ImageTexture texture = page != null ? page.getImageTexture() : null;
-        if (texture == null || !texture.isAnimatedWebpSource()) {
+        if (texture == null || !texture.isControllableAnimationSource()) {
             mAnimatedWebpReloadSourceTexture = null;
             return false;
         }
@@ -2370,7 +2370,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mCurrentIndex) == com.hippo.lib.image.Image.ANIMATED_WEBP_MODE_SYSTEM;
         boolean targetEnabled = Settings.getExperimentalAnimatedWebpEnabled() &&
                 mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM && !forceSystemDecoder;
-        if (texture.wasAnimatedWebpControlRequested() == targetEnabled) {
+        if (texture.wasAnimationControlRequested() == targetEnabled) {
             mAnimatedWebpReloadSourceTexture = null;
             return false;
         }
@@ -2541,7 +2541,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         ImageTexture texture = mAnimatedWebpStallWarningTexture;
         if (texture == null || texture != mAnimatedWebpTexture ||
                 mGalleryProvider == null || mCurrentIndex < 0) return;
-        int nextMode = texture.getAnimatedWebpSampleSize() >= 2
+        int nextMode = !texture.isAnimatedWebpSource() ||
+                texture.getAnimatedWebpSampleSize() >= 2
                 ? com.hippo.lib.image.Image.ANIMATED_WEBP_MODE_SYSTEM
                 : com.hippo.lib.image.Image.ANIMATED_WEBP_MODE_SAMPLE_2;
         mGalleryProvider.setAnimatedWebpDecodeMode(mCurrentIndex, nextMode);

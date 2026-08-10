@@ -916,12 +916,16 @@ public class ImageTexture implements Texture, Animatable {
         return mControllableAnimation;
     }
 
-    public boolean isAnimatedWebpSource() {
-        return mImage.isAnimatedWebpSource();
+    public boolean isControllableAnimationSource() {
+        return mImage.isControllableAnimationSource();
     }
 
-    public boolean wasAnimatedWebpControlRequested() {
-        return mImage.wasAnimatedWebpControlRequested();
+    public boolean wasAnimationControlRequested() {
+        return mImage.wasAnimationControlRequested();
+    }
+
+    public boolean isAnimatedWebpSource() {
+        return mImage.isAnimatedWebpSource();
     }
 
     public int getAnimatedWebpSampleSize() {

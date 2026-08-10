@@ -362,6 +362,11 @@ void advance(void *image, int format) {
 }
 
 bool advance_and_get_looped(void *image, int format) {
+#ifdef IMAGE_SUPPORT_GIF
+    if (format == IMAGE_FORMAT_GIF) {
+        return GIF_advance_and_get_looped((GIF *) image);
+    }
+#endif
 #ifdef IMAGE_SUPPORT_WEBP
     if (format == IMAGE_FORMAT_WEBP) {
         return WEBP_advance_and_get_looped((WEBP *) image);
@@ -372,6 +377,11 @@ bool advance_and_get_looped(void *image, int format) {
 }
 
 bool prepare_next_frame(void *image, int format) {
+#ifdef IMAGE_SUPPORT_GIF
+    if (format == IMAGE_FORMAT_GIF) {
+        return GIF_prepare_next_frame((GIF *) image);
+    }
+#endif
 #ifdef IMAGE_SUPPORT_WEBP
     if (format == IMAGE_FORMAT_WEBP) {
         return WEBP_prepare_next_frame((WEBP *) image);
@@ -381,6 +391,11 @@ bool prepare_next_frame(void *image, int format) {
 }
 
 bool present_prepared_frame(void *image, int format) {
+#ifdef IMAGE_SUPPORT_GIF
+    if (format == IMAGE_FORMAT_GIF) {
+        return GIF_present_prepared_frame((GIF *) image);
+    }
+#endif
 #ifdef IMAGE_SUPPORT_WEBP
     if (format == IMAGE_FORMAT_WEBP) {
         return WEBP_present_prepared_frame((WEBP *) image);
@@ -390,6 +405,11 @@ bool present_prepared_frame(void *image, int format) {
 }
 
 int seek_to(void *image, int format, int position_ms) {
+#ifdef IMAGE_SUPPORT_GIF
+    if (format == IMAGE_FORMAT_GIF) {
+        return GIF_seek_to((GIF *) image, position_ms);
+    }
+#endif
 #ifdef IMAGE_SUPPORT_WEBP
     if (format == IMAGE_FORMAT_WEBP) {
         return WEBP_seek_to((WEBP *) image, position_ms);
@@ -399,6 +419,11 @@ int seek_to(void *image, int format, int position_ms) {
 }
 
 int get_current_position(void *image, int format) {
+#ifdef IMAGE_SUPPORT_GIF
+    if (format == IMAGE_FORMAT_GIF) {
+        return GIF_get_current_position((GIF *) image);
+    }
+#endif
 #ifdef IMAGE_SUPPORT_WEBP
     if (format == IMAGE_FORMAT_WEBP) {
         return WEBP_get_current_position((WEBP *) image);
@@ -408,6 +433,11 @@ int get_current_position(void *image, int format) {
 }
 
 int get_total_duration(void *image, int format) {
+#ifdef IMAGE_SUPPORT_GIF
+    if (format == IMAGE_FORMAT_GIF) {
+        return GIF_get_total_duration((GIF *) image);
+    }
+#endif
 #ifdef IMAGE_SUPPORT_WEBP
     if (format == IMAGE_FORMAT_WEBP) {
         return WEBP_get_total_duration((WEBP *) image);
@@ -556,6 +586,12 @@ void get_image_data(void *image, int format, void **pixel, int *width, int *heig
 }
 
 void lock_image_data(void *image, int format) {
+#ifdef IMAGE_SUPPORT_GIF
+    if (format == IMAGE_FORMAT_GIF) {
+        GIF_lock_pixels((GIF *) image);
+        return;
+    }
+#endif
 #ifdef IMAGE_SUPPORT_WEBP
     if (format == IMAGE_FORMAT_WEBP) {
         WEBP_lock_pixels((WEBP *) image);
@@ -564,6 +600,12 @@ void lock_image_data(void *image, int format) {
 }
 
 void unlock_image_data(void *image, int format) {
+#ifdef IMAGE_SUPPORT_GIF
+    if (format == IMAGE_FORMAT_GIF) {
+        GIF_unlock_pixels((GIF *) image);
+        return;
+    }
+#endif
 #ifdef IMAGE_SUPPORT_WEBP
     if (format == IMAGE_FORMAT_WEBP) {
         WEBP_unlock_pixels((WEBP *) image);

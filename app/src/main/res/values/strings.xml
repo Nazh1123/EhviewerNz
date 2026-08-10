@@ -1166,7 +1166,7 @@
     <string name="animated_webp_play_pause">Play or pause animated image</string>
     <string name="animated_webp_stall_warning">Animated image playback is stalling; tap to reduce decoding load</string>
     <string name="settings_animated_webp_controls">Animated image controls</string>
-    <string name="settings_animated_webp_controls_summary">Enable controls for animated WebP: pause, progress bar, playback speed, and more. If animated images lag while viewing, tap the yellow warning icon or turn off this option.</string>
+    <string name="settings_animated_webp_controls_summary">Enable controls for animated WebP and GIF: pause, progress bar, playback speed, and more. If animated images lag while viewing, tap the yellow warning icon or turn off this option.</string>
     <string name="settings_animated_webp_playback_time">Playback time</string>
     <string name="settings_animated_webp_playback_time_summary">Show the current playback time and total duration above the bottom progress bar</string>
     <string name="settings_animated_webp_progress_control">Progress bar control</string>

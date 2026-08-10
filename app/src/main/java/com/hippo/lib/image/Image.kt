@@ -40,25 +40,30 @@ class Image private constructor(
     private var mBitmap: Bitmap? = null
     private var mReferences = 0
     private var mAnimatedWebpSource = false
-    private var mAnimatedWebpControlRequested = false
+    private var mGifSource = false
+    private var mAnimationControlRequested = false
     private var mAnimatedWebpSampleSize = 0
 
     init {
         mObtainedDrawable = null
         source?.let {
             mAnimatedWebpSource = isAnimatedWebp(source)
-            mAnimatedWebpControlRequested = !hardware && mAnimatedWebpSource &&
+            mGifSource = isGif(source)
+            mAnimationControlRequested = !hardware &&
+                (mAnimatedWebpSource || mGifSource) &&
                 Settings.getExperimentalAnimatedWebpEnabled() &&
                 Settings.getReadingDirection() != 2 &&
                 animatedWebpDecodeMode != ANIMATED_WEBP_MODE_SYSTEM
-            if (mAnimatedWebpControlRequested) {
+            if (mAnimationControlRequested) {
                 source.channel.position(0)
                 try {
-                    val sampleSize = if (
+                    val sampleSize = if (mAnimatedWebpSource &&
                         animatedWebpDecodeMode == ANIMATED_WEBP_MODE_SAMPLE_2
                     ) 2 else 1
                     mNativeImage = Image1.decode(source, false, sampleSize)
-                    if (mNativeImage != null) mAnimatedWebpSampleSize = sampleSize
+                    if (mNativeImage?.format == Image1.FORMAT_WEBP) {
+                        mAnimatedWebpSampleSize = sampleSize
+                    }
                 } catch (error: LinkageError) {
                     // The experimental decoder must not take down SpiderDecoder when
                     // libimage cannot be loaded on a particular device/ABI.
@@ -150,11 +155,16 @@ class Image private constructor(
             mObtainedDrawable is AnimationDrawable
         }
     val controllableAnimation: Boolean
-        get() = mNativeImage?.let { it.format == Image1.FORMAT_WEBP && it.frameCount > 1 } == true
+        get() = mNativeImage?.let {
+            (it.format == Image1.FORMAT_WEBP || it.format == Image1.FORMAT_GIF) &&
+                it.frameCount > 1
+        } == true
+    val controllableAnimationSource: Boolean
+        get() = mAnimatedWebpSource || mGifSource
+    val animationControlRequested: Boolean
+        get() = mAnimationControlRequested
     val animatedWebpSource: Boolean
         get() = mAnimatedWebpSource
-    val animatedWebpControlRequested: Boolean
-        get() = mAnimatedWebpControlRequested
     val animatedWebpSampleSize: Int
         get() = mAnimatedWebpSampleSize
     val width: Int
@@ -221,7 +231,7 @@ class Image private constructor(
     }
 
     fun getDrawable(): Drawable {
-        check(mNativeImage == null) { "Native animated WebP has no Drawable" }
+        check(mNativeImage == null) { "Native controlled animation has no Drawable" }
         check(obtain()) { "Recycled!" }
         return mObtainedDrawable as Drawable
     }
@@ -270,7 +280,7 @@ class Image private constructor(
     fun texImageDirect(init: Boolean) {
         check(!hardware) { "Hardware buffer cannot be used in glgallery" }
         mNativeImage?.texImageDirect(init)
-            ?: throw IllegalStateException("Direct upload requires native animated WebP")
+            ?: throw IllegalStateException("Direct upload requires a native animation")
     }
 
     fun advanceFrame(): Boolean = mNativeImage?.advanceAndGetLooped() ?: false
@@ -340,6 +350,25 @@ class Image private constructor(
                     bytes[12] == 'V'.code.toByte() && bytes[13] == 'P'.code.toByte() &&
                     bytes[14] == '8'.code.toByte() && bytes[15] == 'X'.code.toByte() &&
                     (bytes[20].toInt() and 0x02) != 0
+            } catch (_: Exception) {
+                false
+            } finally {
+                channel.position(oldPosition)
+            }
+        }
+
+        private fun isGif(stream: FileInputStream): Boolean {
+            val channel = stream.channel
+            val oldPosition = channel.position()
+            return try {
+                channel.position(0)
+                val header = ByteBuffer.allocate(6)
+                if (channel.read(header) < 6) return false
+                val bytes = header.array()
+                bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
+                    bytes[2] == 'F'.code.toByte() && bytes[3] == '8'.code.toByte() &&
+                    (bytes[4] == '7'.code.toByte() || bytes[4] == '9'.code.toByte()) &&
+                    bytes[5] == 'a'.code.toByte()
             } catch (_: Exception) {
                 false
             } finally {

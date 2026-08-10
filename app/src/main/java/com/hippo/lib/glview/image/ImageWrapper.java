@@ -295,12 +295,16 @@ public class ImageWrapper {
         return mImage.getControllableAnimation();
     }
 
-    public boolean isAnimatedWebpSource() {
-        return mImage.getAnimatedWebpSource();
+    public boolean isControllableAnimationSource() {
+        return mImage.getControllableAnimationSource();
     }
 
-    public boolean wasAnimatedWebpControlRequested() {
-        return mImage.getAnimatedWebpControlRequested();
+    public boolean wasAnimationControlRequested() {
+        return mImage.getAnimationControlRequested();
+    }
+
+    public boolean isAnimatedWebpSource() {
+        return mImage.getAnimatedWebpSource();
     }
 
     public int getAnimatedWebpSampleSize() {

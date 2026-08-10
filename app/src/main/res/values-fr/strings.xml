@@ -894,7 +894,7 @@
     <string name="spen_next_page">Page suivante</string>
     <string name="category_all">Tout</string>
 
-    <string name="settings_animated_webp_controls_summary">Active les commandes pour les WebP animés : pause, barre de progression, vitesse de lecture, etc. Si les images animées sont saccadées pendant la lecture, appuyez sur l’icône d’avertissement jaune ou désactivez cette option.</string>
+    <string name="settings_animated_webp_controls_summary">Active les commandes pour les WebP et GIF animés : pause, barre de progression, vitesse de lecture, etc. Si les images animées sont saccadées pendant la lecture, appuyez sur l’icône d’avertissement jaune ou désactivez cette option.</string>
     <string name="settings_animated_webp_playback_time_summary">Affiche le temps de lecture actuel et la durée totale au-dessus de la barre de progression inférieure</string>
     <string name="settings_animated_webp_progress_control_summary">Faites glisser dans le quart inférieur de l’écran pour changer la position de lecture</string>
     <string name="settings_animated_webp_sequential_playback_summary">Ouvre automatiquement l’image suivante à la fin de la lecture</string>
