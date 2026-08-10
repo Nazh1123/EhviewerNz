@@ -150,10 +150,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private static final long SLIDER_ANIMATION_DURING = 150;
     private static final long HIDE_SLIDER_DELAY = 3000;
     private static final long LONG_PRESS_SAVE_DEBOUNCE_MS = 1000L;
-    private static final long SAVE_NOTICE_DURATION_MS = 2000L;
+    private static final long SAVE_NOTICE_DURATION_MS = 3500L;
     private static final long SAVE_NOTICE_ENTER_DURATION_MS = 300L;
     private static final long SAVE_NOTICE_REPEAT_DURATION_MS = 320L;
-    private static final long SAVE_NOTICE_EXIT_DURATION_MS = 180L;
+    private static final long SAVE_NOTICE_EXIT_DURATION_MS = 200L;
 
     private static final int WRITE_REQUEST_CODE = 43;
 
