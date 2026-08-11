@@ -222,6 +222,8 @@
     <string name="subscription_updates_global_message">全域更新:\t%1$d</string>
     <string name="quick_search_tip">點擊“+”以新增快速搜尋</string>
     <string name="add_quick_search_dialog_title">新增快速搜尋</string>
+    <string name="rename_quick_search_dialog_title">重新命名快速搜尋</string>
+    <string name="quick_search_original_keyword_title">原始關鍵詞</string>
     <string name="name_is_empty">名稱是空的</string>
     <string name="delete">刪除</string>
     <string name="delete_quick_search_title">刪除快速搜尋</string>

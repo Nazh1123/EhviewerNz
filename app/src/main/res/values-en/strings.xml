@@ -249,6 +249,8 @@
     <string name="subscription_updates_global_message">Global updates:\t%1$d</string>
     <string name="quick_search_tip">Tap \"+\" to add Quick Search</string>
     <string name="add_quick_search_dialog_title">Add Quick Search</string>
+    <string name="rename_quick_search_dialog_title">Rename Quick Search</string>
+    <string name="quick_search_original_keyword_title">Original keyword</string>
     <string name="name_is_empty">Name is empty</string>
     <string name="delete">Delete</string>
     <string name="delete_quick_search_title">Delete Quick Search</string>

@@ -237,6 +237,8 @@
     <string name="quick_search">书签栏</string>
     <string name="quick_search_tip">点击“+”来添加书签</string>
     <string name="add_quick_search_dialog_title">添加书签</string>
+    <string name="rename_quick_search_dialog_title">重命名书签</string>
+    <string name="quick_search_original_keyword_title">书签原关键词</string>
     <string name="name_is_empty">名称为空</string>
     <string name="delete">删除</string>
     <string name="delete_quick_search_title">删除书签</string>
