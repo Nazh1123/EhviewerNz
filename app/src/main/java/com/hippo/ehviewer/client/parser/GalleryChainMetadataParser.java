@@ -46,6 +46,7 @@ public final class GalleryChainMetadataParser {
         long postedSeconds = NumberUtils.parseLongSafely(safeString(source, "posted"), 0L);
         result.posted = postedSeconds > 0L
                 ? ParserUtils.formatDate(postedSeconds * 1000L) : "";
+        result.pages = NumberUtils.parseIntSafely(safeString(source, "filecount"), 0);
 
         result.parentGid = parseGid(source, "parent_gid");
         result.parentToken = safeString(source, "parent_key");

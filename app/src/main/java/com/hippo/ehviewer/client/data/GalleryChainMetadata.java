@@ -16,6 +16,7 @@ public class GalleryChainMetadata {
     public String title;
     public String titleJpn;
     public String posted;
+    public int pages;
 
     public long parentGid = -1L;
     public String parentToken;

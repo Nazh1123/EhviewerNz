@@ -13,6 +13,7 @@ package com.hippo.ehviewer.ui.scene;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.InsetDrawable;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -29,16 +30,25 @@ import androidx.appcompat.content.res.AppCompatResources;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.UrlOpener;
+import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryDetail;
+import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.GalleryUpdateTask;
+import com.hippo.ehviewer.spider.SpiderInfo;
+import com.hippo.ehviewer.sync.DownloadSpiderInfoExecutor;
 import com.hippo.ehviewer.util.ClipboardUtil;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.SceneFragment;
 import com.hippo.util.ExceptionUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 /** Displays the same shared parent-chain result used by gallery-update detection. */
 public final class GalleryParentChainDialog {
@@ -89,6 +99,7 @@ public final class GalleryParentChainDialog {
         progressView = content.findViewById(R.id.progress);
         statusView = content.findViewById(R.id.text);
         listView = content.findViewById(R.id.list_view);
+        addHalfLineDividerSpacing(listView);
         adapter = new ParentAdapter();
         listView.setAdapter(adapter);
         listView.setOnItemClickListener((parent, view, position, id) -> openGallery(position));
@@ -193,6 +204,40 @@ public final class GalleryParentChainDialog {
             statusView.setText(R.string.gallery_history_empty);
         }
         listView.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
+        loadReadingProgress(items, adapter);
+    }
+
+    private void addHalfLineDividerSpacing(@NonNull ListView target) {
+        Drawable divider = target.getDivider();
+        if (divider == null) {
+            return;
+        }
+        int height = Math.round(10 * context.getResources().getDisplayMetrics().density);
+        int lineHeight = Math.min(height, Math.max(1, divider.getIntrinsicHeight()));
+        int inset = height - lineHeight;
+        target.setDivider(new InsetDrawable(divider, 0, inset / 2, 0,
+                inset - inset / 2));
+        target.setDividerHeight(height);
+    }
+
+    private void loadReadingProgress(
+            @NonNull List<GalleryUpdateTask.ParentGallery> items,
+            @NonNull ParentAdapter targetAdapter) {
+        ArrayList<DownloadInfo> downloads = new ArrayList<>();
+        for (GalleryUpdateTask.ParentGallery item : items) {
+            DownloadInfo info = downloadManager.getDownloadInfo(item.gid);
+            if (info != null) {
+                downloads.add(info);
+            }
+        }
+        if (downloads.isEmpty()) {
+            return;
+        }
+        new DownloadSpiderInfoExecutor(downloads, result -> {
+            if (!destroyed && adapter == targetAdapter) {
+                targetAdapter.setReadingProgress(result);
+            }
+        }).execute();
     }
 
     private void showError(@NonNull Exception error) {
@@ -225,11 +270,24 @@ public final class GalleryParentChainDialog {
 
     private final class ParentAdapter extends BaseAdapter {
         private final ArrayList<GalleryUpdateTask.ParentGallery> items = new ArrayList<>();
+        private final Map<Long, SpiderInfo> readingProgress = new HashMap<>();
+        private final Set<Long> loadedProgress = new HashSet<>();
         private final LayoutInflater inflater = LayoutInflater.from(context);
+        @Nullable
+        private final Drawable downloadedIcon = AppCompatResources.getDrawable(
+                context, R.drawable.v_download_badge_x24);
 
         void replace(@NonNull List<GalleryUpdateTask.ParentGallery> replacement) {
             items.clear();
             items.addAll(replacement);
+            readingProgress.clear();
+            loadedProgress.clear();
+            notifyDataSetChanged();
+        }
+
+        void setReadingProgress(@NonNull Map<Long, SpiderInfo> replacement) {
+            readingProgress.putAll(replacement);
+            loadedProgress.addAll(replacement.keySet());
             notifyDataSetChanged();
         }
 
@@ -250,25 +308,75 @@ public final class GalleryParentChainDialog {
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            TextView textView;
-            if (convertView instanceof TextView) {
-                textView = (TextView) convertView;
+            ParentHolder holder;
+            if (convertView == null) {
+                convertView = inflater.inflate(R.layout.item_parent_gallery_history,
+                        parent, false);
+                holder = new ParentHolder(convertView);
+                convertView.setTag(holder);
             } else {
-                textView = (TextView) inflater.inflate(
-                        R.layout.dialog_item_select_with_icon, parent, false);
+                holder = (ParentHolder) convertView.getTag();
             }
 
             GalleryUpdateTask.ParentGallery item = getItem(position);
-            textView.setText(item.label);
-            Drawable icon = null;
-            if (downloadManager.containDownloadInfo(item.gid)) {
-                icon = AppCompatResources.getDrawable(context, R.drawable.v_download_x24);
-                if (icon != null) {
-                    icon.setBounds(0, 0, icon.getIntrinsicWidth(), icon.getIntrinsicHeight());
+            DownloadInfo downloadInfo = downloadManager.getDownloadInfo(item.gid);
+            boolean downloaded = downloadInfo != null;
+
+            String title = item.title;
+            String posted = item.posted;
+            if (downloadInfo != null) {
+                String localTitle = EhUtils.getSuitableTitle(downloadInfo);
+                if (!TextUtils.isEmpty(localTitle)) {
+                    title = localTitle;
+                }
+                if (!TextUtils.isEmpty(downloadInfo.posted)) {
+                    posted = downloadInfo.posted;
                 }
             }
-            textView.setCompoundDrawablesRelative(icon, null, null, null);
-            return textView;
+
+            holder.sequence.setText(String.format(Locale.getDefault(), "%d", position + 1));
+            holder.posted.setText(posted);
+            holder.title.setText(title);
+            holder.title.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    null, null, downloaded ? downloadedIcon : null, null);
+            holder.pageProgress.setText(getPageText(item, downloadInfo));
+            return convertView;
+        }
+
+        @Nullable
+        private String getPageText(@NonNull GalleryUpdateTask.ParentGallery item,
+                                   @Nullable DownloadInfo downloadInfo) {
+            if (downloadInfo == null) {
+                return item.pages > 0
+                        ? String.format(Locale.getDefault(), "%d", item.pages) : null;
+            }
+
+            SpiderInfo spiderInfo = readingProgress.get(item.gid);
+            if (spiderInfo != null && spiderInfo.pages > 0) {
+                int page = Math.min(Math.max(0, spiderInfo.startPage),
+                        spiderInfo.pages - 1) + 1;
+                return String.format(Locale.getDefault(), "%d/%d", page, spiderInfo.pages);
+            }
+            if (!loadedProgress.contains(item.gid)) {
+                return null;
+            }
+
+            int total = Math.max(item.pages, Math.max(downloadInfo.pages, downloadInfo.total));
+            return total > 0 ? String.format(Locale.getDefault(), "%d", total) : null;
+        }
+    }
+
+    private static final class ParentHolder {
+        final TextView sequence;
+        final TextView posted;
+        final TextView pageProgress;
+        final TextView title;
+
+        ParentHolder(@NonNull View itemView) {
+            sequence = itemView.findViewById(R.id.sequence);
+            posted = itemView.findViewById(R.id.posted);
+            pageProgress = itemView.findViewById(R.id.page_progress);
+            title = itemView.findViewById(R.id.title);
         }
     }
 }

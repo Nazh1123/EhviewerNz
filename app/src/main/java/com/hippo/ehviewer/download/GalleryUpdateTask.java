@@ -71,12 +71,18 @@ public final class GalleryUpdateTask {
         @NonNull
         public final String token;
         @NonNull
-        public final String label;
+        public final String title;
+        @NonNull
+        public final String posted;
+        public final int pages;
 
-        ParentGallery(long gid, @NonNull String token, @NonNull String label) {
+        ParentGallery(long gid, @NonNull String token, @NonNull String title,
+                      @NonNull String posted, int pages) {
             this.gid = gid;
             this.token = token;
-            this.label = label;
+            this.title = title;
+            this.posted = posted;
+            this.pages = pages;
         }
 
         @NonNull
@@ -181,7 +187,8 @@ public final class GalleryUpdateTask {
 
     private void handleForwardSegment(@NonNull GalleryDetail detail) {
         int previousSize = forwardItems.size();
-        addForwardItem(detail.gid, detail.token, detailLabel(detail));
+        addForwardItem(detail.gid, detail.token, EhUtils.getSuitableTitle(detail),
+                detail.posted, detail.pages);
         NewVersion[] newVersions = detail.newVersions;
         if (newVersions != null) {
             for (NewVersion version : newVersions) {
@@ -189,8 +196,9 @@ public final class GalleryUpdateTask {
                         version.versionUrl, false);
                 if (parsed != null) {
                     addForwardItem(parsed.gid, parsed.token,
-                            TextUtils.isEmpty(version.versionName)
-                                    ? fallbackLabel(parsed.gid) : version.versionName);
+                            TextUtils.isEmpty(version.versionTitle)
+                                    ? fallbackLabel(parsed.gid) : version.versionTitle,
+                            version.versionPosted, 0);
                 }
             }
         }
@@ -215,9 +223,12 @@ public final class GalleryUpdateTask {
         }
     }
 
-    private void addForwardItem(long gid, @Nullable String token, @NonNull String label) {
+    private void addForwardItem(long gid, @Nullable String token, @Nullable String title,
+                                @Nullable String posted, int pages) {
         if (gid > 0L && gid <= target.gid && !TextUtils.isEmpty(token)) {
-            forwardItems.put(gid, new ParentGallery(gid, token, label));
+            forwardItems.put(gid, new ParentGallery(gid, token,
+                    TextUtils.isEmpty(title) ? fallbackLabel(gid) : title,
+                    posted != null ? posted : "", Math.max(0, pages)));
         }
     }
 
@@ -268,7 +279,9 @@ public final class GalleryUpdateTask {
                     return;
                 }
                 String resultToken = TextUtils.isEmpty(metadata.token) ? token : metadata.token;
-                reverseItems.add(new ParentGallery(gid, resultToken, metadataLabel(metadata)));
+                reverseItems.add(new ParentGallery(gid, resultToken,
+                        metadataTitle(metadata), metadata.posted != null ? metadata.posted : "",
+                        Math.max(0, metadata.pages)));
                 if (gid == firstGid || metadata.parentGid <= 0L
                         || TextUtils.isEmpty(metadata.parentToken)) {
                     complete(reverseItems);
@@ -392,19 +405,10 @@ public final class GalleryUpdateTask {
         return "GID " + gid;
     }
 
-    private static String appendPosted(@Nullable String title, @Nullable String posted, long gid) {
-        String safeTitle = TextUtils.isEmpty(title) ? fallbackLabel(gid) : title;
-        return TextUtils.isEmpty(posted) ? safeTitle : safeTitle + "\n" + posted;
-    }
-
-    private static String detailLabel(@NonNull GalleryDetail detail) {
-        return appendPosted(EhUtils.getSuitableTitle(detail), detail.posted, detail.gid);
-    }
-
-    private static String metadataLabel(@NonNull GalleryChainMetadata metadata) {
+    private static String metadataTitle(@NonNull GalleryChainMetadata metadata) {
         String title = Settings.getShowJpnTitle() && !TextUtils.isEmpty(metadata.titleJpn)
                 ? metadata.titleJpn : metadata.title;
-        return appendPosted(title, metadata.posted, metadata.gid);
+        return TextUtils.isEmpty(title) ? fallbackLabel(metadata.gid) : title;
     }
 
     private interface MetadataHandler {

@@ -294,6 +294,8 @@ public class GalleryDetailParser {
                     String nameS = urlE.text();
                     TextNode textNode = textNodes.get(versionList.size());
                     String timeS = textNode.text();
+                    version.versionTitle = nameS;
+                    version.versionPosted = cleanVersionPosted(timeS);
                     if (timeS != null && !timeS.isEmpty()) {
                         version.versionName = nameS + timeS;
                     } else {
@@ -310,6 +312,20 @@ public class GalleryDetailParser {
         } catch (Throwable ignore) {
             gd.newVersions = null;
         }
+    }
+
+    private static String cleanVersionPosted(String value) {
+        if (value == null) {
+            return "";
+        }
+        String result = value.trim();
+        if (result.startsWith(",")) {
+            result = result.substring(1).trim();
+        }
+        if (result.startsWith("added ")) {
+            result = result.substring("added ".length()).trim();
+        }
+        return result;
     }
 
     // width:250px; height:356px; background:transparent url(https://exhentai.org/t/fe/1f/fe1fcfa9bf8fba2f03982eda0aa347cc9d6a6372-145921-1050-1492-jpg_250.jpg) 0 0 no-repeat
