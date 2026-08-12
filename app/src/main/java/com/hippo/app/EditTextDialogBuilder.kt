@@ -20,6 +20,7 @@ import android.content.Context
 import android.content.DialogInterface
 import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.WindowManager
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.TextView.OnEditorActionListener
@@ -58,6 +59,9 @@ class EditTextDialogBuilder @SuppressLint("InflateParams") constructor(
 
     override fun create(): AlertDialog {
         mDialog = super.create()
+        mDialog!!.window?.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+        )
         return mDialog!!
     }
 

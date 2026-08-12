@@ -8,6 +8,10 @@ if (file('google-services.json').exists()) {
     apply plugin: 'com.google.firebase.crashlytics'
 }
 
+
+def baseVersionName = "2.0.2.3.3.4"
+
+
 def releaseKeystoreFile = rootProject.file("ehviewernz.jks")
 def signingPropertiesFile = rootProject.file("keystore.properties")
 def hasReleaseKeystore = releaseKeystoreFile.isFile()
@@ -27,6 +31,7 @@ if (hasSigningProperties) {
 }
 def hasReleaseSigning = hasReleaseKeystore && hasSigningProperties
 def batchDebugAppName = System.getenv("EHVIEWER_BATCH_DEBUG_APP_NAME") == "1"
+def batchVersionSuffix = System.getenv("EHVIEWER_BATCH_VERSION_SUFFIX")?.trim()
 
 android {
     namespace 'com.hippo.ehviewer'
@@ -51,7 +56,7 @@ android {
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 30
         versionCode 111
-        versionName "2.0.2.3.3.3"
+        versionName batchVersionSuffix ? "${baseVersionName}.${batchVersionSuffix}" : baseVersionName
         manifestPlaceholders = [appLabel: "@string/app_name"]
         vectorDrawables.useSupportLibrary = true
         resourceConfigurations += ['zh', 'zh-rCN', 'zh-rHK', 'zh-rTW', 'es', 'ja', 'ko', 'fr', 'de', 'th']
