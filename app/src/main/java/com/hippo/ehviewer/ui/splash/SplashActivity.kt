@@ -34,6 +34,13 @@ class SplashActivity : EhActivity() {
 //        )
 //        Distribute.setEnabled(!Settings.getCloseAutoUpdate())
         super.onCreate(savedInstanceState)
+        if (!isTaskRoot && intent?.action == Intent.ACTION_MAIN
+            && intent?.hasCategory(Intent.CATEGORY_LAUNCHER) == true) {
+            // The existing task already contains MainActivity and may have a reader above it.
+            // Forwarding this launcher intent to singleTask MainActivity would clear that stack.
+            finish()
+            return
+        }
         setContentView(R.layout.splash_layout)
         Thread(Runnable {
             //耗时任务，比如加载网络数据

@@ -53,6 +53,7 @@ public final class DownloadLabelSearchQueryResolver {
             case "G":
                 return quote("g", value);
             case "AI":
+                return quote("o", "ai generated") + ", " + value;
             case "M":
                 return value;
             case "U":

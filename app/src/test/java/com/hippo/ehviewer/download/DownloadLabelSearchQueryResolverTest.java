@@ -48,9 +48,13 @@ public class DownloadLabelSearchQueryResolverTest {
     }
 
     @Test
-    public void aiAndMiscLabelsUseRawValue() {
-        assertEquals("txt tet",
+    public void aiLabelsRequireAiGeneratedTagAndRawValue() {
+        assertEquals("o:\"ai generated$\", txt tet",
                 DownloadLabelSearchQueryResolver.resolve("AI: txt tet"));
+    }
+
+    @Test
+    public void miscLabelsUseRawValue() {
         assertEquals("txt tet",
                 DownloadLabelSearchQueryResolver.resolve("M: txt tet"));
     }
