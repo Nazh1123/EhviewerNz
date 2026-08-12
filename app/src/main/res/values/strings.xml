@@ -506,6 +506,7 @@
     <string name="download_label_search_unsupported">This label does not support gallery search</string>
     <string name="download_move_dialog_title">Move</string>
     <string name="quick_organize">Quick organize</string>
+    <string name="quick_organize_confirm">Organize %1$d selected galleries?</string>
     <string name="quick_organize_processing">Organizing selected galleries…</string>
     <string name="quick_organize_result">Organized %1$d galleries; skipped %2$d with unavailable metadata</string>
     <string name="download_labels">Download labels</string>

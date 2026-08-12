@@ -16,6 +16,7 @@ import com.hippo.ehviewer.dao.DownloadLabel;
 
 import java.text.Collator;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -30,12 +31,16 @@ final class DownloadLabelListOperations {
     }
 
     @NonNull
-    static List<DownloadLabel> classifySelectedAtBottom(
+    static List<DownloadLabel> sortSelectedAtFirstPosition(
             @NonNull List<DownloadLabel> labels, @NonNull Set<Long> selectedIds) {
         List<DownloadLabel> unselected = new ArrayList<>();
         List<DownloadLabel> selected = new ArrayList<>();
+        int firstSelectedPosition = -1;
         for (DownloadLabel label : labels) {
             if (selectedIds.contains(label.getId())) {
+                if (firstSelectedPosition < 0) {
+                    firstSelectedPosition = unselected.size();
+                }
                 selected.add(label);
             } else {
                 unselected.add(label);
@@ -44,14 +49,41 @@ final class DownloadLabelListOperations {
 
         Collator collator = Collator.getInstance(Locale.CHINA);
         collator.setStrength(Collator.PRIMARY);
-        selected.sort((left, right) -> {
+        Collections.sort(selected, (left, right) -> {
             String leftLabel = left.getLabel() != null ? left.getLabel() : "";
             String rightLabel = right.getLabel() != null ? right.getLabel() : "";
             int result = collator.compare(leftLabel, rightLabel);
             return result != 0 ? result : leftLabel.compareTo(rightLabel);
         });
-        unselected.addAll(selected);
+        if (firstSelectedPosition >= 0) {
+            unselected.addAll(firstSelectedPosition, selected);
+        }
         return unselected;
+    }
+
+    @NonNull
+    static List<DownloadLabel> placeSelectedBeforeFirstNonUnderscore(
+            @NonNull List<DownloadLabel> labels, @NonNull Set<Long> selectedIds) {
+        List<DownloadLabel> result = new ArrayList<>(labels.size());
+        List<DownloadLabel> selected = new ArrayList<>();
+        for (DownloadLabel label : labels) {
+            if (selectedIds.contains(label.getId())) {
+                selected.add(label);
+            } else {
+                result.add(label);
+            }
+        }
+
+        int insertionPosition = result.size();
+        for (int i = 0; i < result.size(); i++) {
+            String label = result.get(i).getLabel();
+            if (label == null || !label.startsWith("_")) {
+                insertionPosition = i;
+                break;
+            }
+        }
+        result.addAll(insertionPosition, selected);
+        return result;
     }
 
     @NonNull

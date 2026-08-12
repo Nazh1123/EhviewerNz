@@ -415,6 +415,7 @@
     <string name="download_label_search_unsupported">该标签不支持画廊搜索</string>
     <string name="download_move_dialog_title">移动</string>
     <string name="quick_organize">快速收纳</string>
+    <string name="quick_organize_confirm">将要收纳选中的 %1$d 个画廊，是否继续？</string>
     <string name="quick_organize_processing">正在收纳选中的画廊…</string>
     <string name="quick_organize_result">已收纳 %1$d 个画廊；因元数据不可用跳过 %2$d 个</string>
     <string name="download_labels">下载标签</string>

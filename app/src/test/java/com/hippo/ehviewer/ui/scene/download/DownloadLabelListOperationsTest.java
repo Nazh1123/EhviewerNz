@@ -25,14 +25,14 @@ import java.util.stream.Collectors;
 public class DownloadLabelListOperationsTest {
 
     @Test
-    public void selectedLabelsAreSortedAndMovedToBottom() {
+    public void selectedLabelsAreSortedAtFirstSelectedPosition() {
         List<DownloadLabel> labels = labels("keep 1", "C: cos", "keep 2", "A: artist");
         Set<Long> selected = new HashSet<>(Arrays.asList(2L, 4L));
 
         List<DownloadLabel> result =
-                DownloadLabelListOperations.classifySelectedAtBottom(labels, selected);
+                DownloadLabelListOperations.sortSelectedAtFirstPosition(labels, selected);
 
-        assertEquals(Arrays.asList("keep 1", "keep 2", "A: artist", "C: cos"),
+        assertEquals(Arrays.asList("keep 1", "A: artist", "C: cos", "keep 2"),
                 names(result));
     }
 
@@ -42,9 +42,34 @@ public class DownloadLabelListOperationsTest {
         Set<Long> selected = new HashSet<>(Arrays.asList(1L, 2L, 3L, 4L));
 
         List<DownloadLabel> result =
-                DownloadLabelListOperations.classifySelectedAtBottom(labels, selected);
+                DownloadLabelListOperations.sortSelectedAtFirstPosition(labels, selected);
 
         assertEquals(Arrays.asList("阿明", "李四", "王五", "张三"), names(result));
+    }
+
+    @Test
+    public void newContentLabelsFollowLeadingUnderscoreLabels() {
+        List<DownloadLabel> labels = labels(
+                "_pinned", "existing", "other", "A: artist", "C: cos");
+        Set<Long> newLabelIds = new HashSet<>(Arrays.asList(4L, 5L));
+
+        List<DownloadLabel> result =
+                DownloadLabelListOperations.placeSelectedBeforeFirstNonUnderscore(
+                        labels, newLabelIds);
+
+        assertEquals(Arrays.asList(
+                "_pinned", "A: artist", "C: cos", "existing", "other"), names(result));
+    }
+
+    @Test
+    public void newContentLabelsFollowAllUnderscoreLabelsWhenNoRegularLabelExists() {
+        List<DownloadLabel> labels = labels("_one", "_two", "A: artist");
+
+        List<DownloadLabel> result =
+                DownloadLabelListOperations.placeSelectedBeforeFirstNonUnderscore(
+                        labels, new HashSet<>(Arrays.asList(3L)));
+
+        assertEquals(Arrays.asList("_one", "_two", "A: artist"), names(result));
     }
 
     @Test

@@ -343,7 +343,7 @@ public class DownloadLabelsScene extends ToolbarScene {
         }
 
         List<DownloadLabel> newOrder =
-                DownloadLabelListOperations.classifySelectedAtBottom(
+                DownloadLabelListOperations.sortSelectedAtFirstPosition(
                         mList, mSelectedLabelIds);
         EhApplication.getDownloadManager(context).reorderLabels(newOrder);
         clearSelection();

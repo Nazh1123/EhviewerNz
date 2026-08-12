@@ -1485,11 +1485,21 @@ public class DownloadsScene extends ToolbarScene
                     if (downloadInfoList.isEmpty()) {
                         break;
                     }
-                    recyclerView.outOfCustomChoiceMode();
-                    Toast.makeText(context, R.string.quick_organize_processing,
-                            Toast.LENGTH_SHORT).show();
-                    quickOrganizeDownloads(context,
-                            new ArrayList<>(downloadInfoList));
+                    List<DownloadInfo> selectedDownloads =
+                            new ArrayList<>(downloadInfoList);
+                    new AlertDialog.Builder(context)
+                            .setTitle(R.string.quick_organize)
+                            .setMessage(getString(R.string.quick_organize_confirm,
+                                    selectedDownloads.size()))
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                                recyclerView.outOfCustomChoiceMode();
+                                Toast.makeText(context,
+                                        R.string.quick_organize_processing,
+                                        Toast.LENGTH_SHORT).show();
+                                quickOrganizeDownloads(context, selectedDownloads);
+                            })
+                            .show();
                     break;
             }
         }
@@ -1563,7 +1573,12 @@ public class DownloadsScene extends ToolbarScene
                     skipped++;
                     continue;
                 }
-                assignments.computeIfAbsent(label, ignored -> new ArrayList<>()).add(info);
+                List<DownloadInfo> labelAssignments = assignments.get(label);
+                if (labelAssignments == null) {
+                    labelAssignments = new ArrayList<>();
+                    assignments.put(label, labelAssignments);
+                }
+                labelAssignments.add(info);
             }
 
             int skippedCount = skipped;
@@ -1587,6 +1602,7 @@ public class DownloadsScene extends ToolbarScene
         }
 
         int organizedCount = 0;
+        Set<Long> newLabelIds = new HashSet<>();
         for (Map.Entry<String, List<DownloadInfo>> assignment : assignments.entrySet()) {
             String desiredLabel = assignment.getKey();
             String concreteLabel = DownloadQuickOrganizer.findEquivalentLabel(
@@ -1595,10 +1611,24 @@ public class DownloadsScene extends ToolbarScene
                 manager.addLabel(desiredLabel);
                 existingLabels.add(desiredLabel);
                 concreteLabel = desiredLabel;
+                List<DownloadLabel> labels = manager.getLabelList();
+                if (!labels.isEmpty()) {
+                    DownloadLabel addedLabel = labels.get(labels.size() - 1);
+                    if (desiredLabel.equals(addedLabel.getLabel())
+                            && addedLabel.getId() != null) {
+                        newLabelIds.add(addedLabel.getId());
+                    }
+                }
             }
             List<DownloadInfo> infos = assignment.getValue();
             manager.changeLabel(infos, concreteLabel);
             organizedCount += infos.size();
+        }
+
+        if (!newLabelIds.isEmpty()) {
+            manager.reorderLabels(
+                    DownloadLabelListOperations.placeSelectedBeforeFirstNonUnderscore(
+                            manager.getLabelList(), newLabelIds));
         }
 
         updateTitle();

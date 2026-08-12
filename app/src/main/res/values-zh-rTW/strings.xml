@@ -395,6 +395,7 @@
     <string name="download_label_search_unsupported">此標籤不支援圖庫搜尋</string>
     <string name="download_move_dialog_title">移動</string>
     <string name="quick_organize">快速收納</string>
+    <string name="quick_organize_confirm">將要收納所選的 %1$d 個圖庫，是否繼續？</string>
     <string name="quick_organize_processing">正在收納已選圖庫…</string>
     <string name="quick_organize_result">已收納 %1$d 個圖庫；因中繼資料無法使用而略過 %2$d 個</string>
     <string name="download_labels">下載標籤</string>
