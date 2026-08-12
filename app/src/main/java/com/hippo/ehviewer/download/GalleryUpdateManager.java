@@ -18,17 +18,21 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.spider.SpiderQueen;
+import com.hippo.streampipe.InputStreamPipe;
 import com.hippo.unifile.UniFile;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -243,6 +247,180 @@ public final class GalleryUpdateManager {
             }
         }
         return new SourcePages(filesByPToken);
+    }
+
+    /**
+     * Transfers reading progress from the selected parent using pToken identity.
+     *
+     * <p>This method performs storage I/O and must run on a worker thread. Existing target
+     * progress always wins. If the exact source page was removed, the nearest source page still
+     * present in the target is used; the next page is preferred when both sides are equally
+     * close.</p>
+     */
+    public static boolean migrateReadingProgress(@NonNull Context context,
+                                                 @NonNull GalleryInfo targetInfo) {
+        UpdatePlan plan = getPlan(targetInfo.gid);
+        if (plan == null) {
+            return false;
+        }
+
+        SpiderInfo source = readDownloadedSpiderInfo(plan.sourceGid);
+        SpiderInfo target = readDownloadedSpiderInfo(targetInfo.gid);
+        if (source == null || target == null || source.pTokenMap == null
+                || target.pTokenMap == null) {
+            return false;
+        }
+
+        // Reading progress is also kept in the spider-info cache. Merge only startPage here:
+        // the downloaded file owns the current gallery metadata and pToken table.
+        source.startPage = Math.max(source.startPage,
+                readCachedStartPage(context, plan.sourceGid));
+        target.startPage = Math.max(target.startPage,
+                readCachedStartPage(context, targetInfo.gid));
+
+        // A non-zero target page means the user has already read the new gallery. Never replace
+        // that newer, gallery-specific choice with progress inherited from its parent.
+        if (target.startPage > 0) {
+            return true;
+        }
+
+        int mappedPage = findMappedStartPage(source, target);
+        if (mappedPage < 0) {
+            // The target's pToken table can still be incomplete after a failed download. Leave
+            // the plan intact so a later continuation can retry the migration.
+            return false;
+        }
+
+        // Re-read before writing to narrow the race with a reader opened while the background
+        // update was finishing. Any progress made on the target since the first read wins.
+        SpiderInfo latestTarget = readDownloadedSpiderInfo(targetInfo.gid);
+        if (latestTarget == null || latestTarget.pTokenMap == null) {
+            return false;
+        }
+        latestTarget.startPage = Math.max(latestTarget.startPage,
+                readCachedStartPage(context, targetInfo.gid));
+        if (latestTarget.startPage > 0) {
+            return true;
+        }
+
+        latestTarget.startPage = mappedPage;
+        latestTarget.writeNewSpiderInfoToLocal(new SpiderDen(targetInfo), context);
+        Log.i(TAG, "Migrated reading progress from " + plan.sourceGid + " page "
+                + source.startPage + " to " + targetInfo.gid + " page " + mappedPage);
+        return true;
+    }
+
+    /** Returns -1 until a source progress anchor can be matched to the target pToken table. */
+    static int findMappedStartPage(@NonNull SpiderInfo source, @NonNull SpiderInfo target) {
+        if (source.pages <= 0 || target.pages <= 0 || source.pTokenMap == null
+                || target.pTokenMap == null || target.pTokenMap.size() == 0) {
+            return -1;
+        }
+
+        HashMap<String, ArrayList<Integer>> targetIndexes = new HashMap<>();
+        for (int i = 0; i < target.pTokenMap.size(); i++) {
+            int index = target.pTokenMap.keyAt(i);
+            String pToken = target.pTokenMap.valueAt(i);
+            if (index < 0 || index >= target.pages || !isUsablePToken(pToken)) {
+                continue;
+            }
+            ArrayList<Integer> indexes = targetIndexes.get(pToken);
+            if (indexes == null) {
+                indexes = new ArrayList<>(1);
+                targetIndexes.put(pToken, indexes);
+            }
+            indexes.add(index);
+        }
+        if (targetIndexes.isEmpty()) {
+            return -1;
+        }
+
+        int sourcePage = Math.max(0, Math.min(source.startPage, source.pages - 1));
+        for (int distance = 0; distance < source.pages; distance++) {
+            int forward = sourcePage + distance;
+            int mapped = findTargetIndex(source, target, targetIndexes, forward);
+            if (mapped >= 0) {
+                return mapped;
+            }
+            // Prefer the following surviving page for an exact tie. It is the least surprising
+            // continuation when the page being read was deleted by the update.
+            if (distance > 0) {
+                int backward = sourcePage - distance;
+                mapped = findTargetIndex(source, target, targetIndexes, backward);
+                if (mapped >= 0) {
+                    return mapped;
+                }
+            }
+            if (forward >= source.pages && sourcePage - distance < 0) {
+                break;
+            }
+        }
+        return -1;
+    }
+
+    private static int findTargetIndex(@NonNull SpiderInfo source, @NonNull SpiderInfo target,
+                                       @NonNull Map<String, ArrayList<Integer>> targetIndexes,
+                                       int sourceIndex) {
+        if (sourceIndex < 0 || sourceIndex >= source.pages) {
+            return -1;
+        }
+        String pToken = source.pTokenMap.get(sourceIndex);
+        if (!isUsablePToken(pToken)) {
+            return -1;
+        }
+        ArrayList<Integer> matches = targetIndexes.get(pToken);
+        if (matches == null || matches.isEmpty()) {
+            return -1;
+        }
+
+        int expected = source.pages > 1
+                ? (int) Math.round((double) sourceIndex * (target.pages - 1)
+                / (source.pages - 1)) : 0;
+        int best = matches.get(0);
+        int bestDistance = Math.abs(best - expected);
+        for (int i = 1; i < matches.size(); i++) {
+            int candidate = matches.get(i);
+            int candidateDistance = Math.abs(candidate - expected);
+            if (candidateDistance < bestDistance) {
+                best = candidate;
+                bestDistance = candidateDistance;
+            }
+        }
+        return best;
+    }
+
+    private static boolean isUsablePToken(@Nullable String pToken) {
+        return !TextUtils.isEmpty(pToken) && !FAILED_PTOKEN.equals(pToken);
+    }
+
+    @Nullable
+    private static SpiderInfo readDownloadedSpiderInfo(long gid) {
+        GalleryInfo placeholder = new GalleryInfo();
+        placeholder.gid = gid;
+        UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
+        if (dir == null || !dir.isDirectory()) {
+            return null;
+        }
+        SpiderInfo result = SpiderInfo.read(dir.findFile(SpiderQueen.SPIDER_INFO_FILENAME));
+        return result != null && result.gid == gid ? result : null;
+    }
+
+    private static int readCachedStartPage(@NonNull Context context, long gid) {
+        SimpleDiskCache cache = EhApplication.getSpiderInfoCache(context);
+        InputStreamPipe pipe = cache.getInputStreamPipe(Long.toString(gid));
+        if (pipe == null) {
+            return 0;
+        }
+        try {
+            pipe.obtain();
+            SpiderInfo cached = SpiderInfo.read(pipe.open());
+            return cached != null && cached.gid == gid ? cached.startPage : 0;
+        } catch (IOException e) {
+            return 0;
+        } finally {
+            pipe.close();
+            pipe.release();
+        }
     }
 
     public static boolean beginCleanup(long targetGid) {

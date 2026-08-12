@@ -1119,6 +1119,11 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         if (plan == null || !GalleryUpdateManager.beginCleanup(targetGid)) {
             return;
         }
+        DownloadInfo targetInfo = mAllInfoMap.get(targetGid);
+        if (targetInfo == null) {
+            GalleryUpdateManager.finishCleanup(targetGid, false);
+            return;
+        }
 
         LongList gids = new LongList();
         for (Long gid : plan.parentGids) {
@@ -1131,6 +1136,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
 
         IoThreadPoolExecutor.Companion.getInstance().execute(() -> {
+            // Preserve the newest target-specific progress and migrate the parent's pToken anchor
+            // before its folder is removed.
+            GalleryUpdateManager.migrateReadingProgress(mContext, targetInfo);
             boolean success = true;
             for (Long gid : plan.parentGids) {
                 GalleryInfo placeholder = new GalleryInfo();
@@ -1384,6 +1392,11 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     EhDB.putDownloadInfo(info);
                     if (info.state == DownloadInfo.STATE_FINISH) {
                         completeGalleryUpdate(info.gid);
+                    } else if (GalleryUpdateManager.getPlan(info.gid) != null) {
+                        // Failed updates keep their parent and plan. Metadata collected during this
+                        // pass may now be sufficient to migrate progress; retry on every continuation.
+                        IoThreadPoolExecutor.Companion.getInstance().execute(() ->
+                                GalleryUpdateManager.migrateReadingProgress(mContext, info));
                     }
                     // Notify
                     if (mDownloadListener != null) {
