@@ -1262,14 +1262,16 @@ public final class MainActivity extends StageActivity
     @SuppressLint({"NonConstantResourceId", "RtlHardcoded"})
     @Override
     public boolean onNavigationItemSelected(MenuItem item) {
-        // Don't select twice
-        if (item.isChecked()) {
+        int id = item.getItemId();
+
+        // Selecting the current gallery-list destination again is an explicit refresh. Running
+        // its normal navigation branch below delivers fresh arguments to GalleryListScene, which
+        // resets that destination's query and calls GalleryListHelper.refresh().
+        if (item.isChecked() && !isRefreshableGalleryListNavigationItem(id)) {
             return false;
         }
 
-        int id = item.getItemId();
-
-        switch (item.getItemId()) {
+        switch (id) {
             case R.id.nav_homepage:
                 Bundle nav_homepage = new Bundle();
                 nav_homepage.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_HOMEPAGE);
@@ -1350,6 +1352,14 @@ public final class MainActivity extends StageActivity
             limitsCountView.hide();
         }
         return true;
+    }
+
+    private static boolean isRefreshableGalleryListNavigationItem(@IdRes int itemId) {
+        return itemId == R.id.nav_homepage
+                || itemId == R.id.nav_subscription
+                || itemId == R.id.nav_bookmark_subscription
+                || itemId == R.id.nav_global_subscription
+                || itemId == R.id.nav_whats_hot;
     }
 
     @Override
