@@ -19,9 +19,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.EhUrl;
+import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryChainMetadata;
 import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ehviewer.client.data.NewVersion;
@@ -29,6 +31,7 @@ import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,21 +50,38 @@ public final class GalleryUpdateTask {
     private static final int MAX_PARENT_DEPTH = 100;
     private static final int API_BURST_SIZE = 4;
     private static final long API_BURST_PAUSE = 5200L;
+    private static final int MAX_CACHE_ENTRIES = 64;
+
+    private static final Map<String, List<ParentGallery>> PARENT_CACHE =
+            new LinkedHashMap<String, List<ParentGallery>>(MAX_CACHE_ENTRIES, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, List<ParentGallery>> eldest) {
+                    return size() > MAX_CACHE_ENTRIES;
+                }
+            };
 
     public interface Listener {
-        void onSuccess(@NonNull List<Long> parentGids);
+        void onSuccess(@NonNull List<ParentGallery> parents);
 
         void onFailure(@NonNull Exception error);
     }
 
-    private static final class ChainGallery {
-        final long gid;
+    public static final class ParentGallery {
+        public final long gid;
         @NonNull
-        final String token;
+        public final String token;
+        @NonNull
+        public final String label;
 
-        ChainGallery(long gid, @NonNull String token) {
+        ParentGallery(long gid, @NonNull String token, @NonNull String label) {
             this.gid = gid;
             this.token = token;
+            this.label = label;
+        }
+
+        @NonNull
+        public String getUrl() {
+            return EhUrl.getGalleryDetailUrl(gid, token);
         }
     }
 
@@ -69,9 +89,9 @@ public final class GalleryUpdateTask {
     private final Listener listener;
     private final EhClient client;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final TreeMap<Long, ChainGallery> forwardItems = new TreeMap<>();
+    private final TreeMap<Long, ParentGallery> forwardItems = new TreeMap<>();
     private final Set<Long> forwardAnchors = new HashSet<>();
-    private final ArrayList<Long> reverseItems = new ArrayList<>();
+    private final ArrayList<ParentGallery> reverseItems = new ArrayList<>();
     private final Set<Long> reverseGids = new HashSet<>();
 
     @Nullable
@@ -93,6 +113,11 @@ public final class GalleryUpdateTask {
 
     public void start() {
         if (stopped) {
+            return;
+        }
+        List<ParentGallery> cached = getCachedParents(target);
+        if (cached != null) {
+            handler.post(() -> complete(cached));
             return;
         }
         requestMetadata(target.gid, target.token, false, new MetadataHandler() {
@@ -156,14 +181,16 @@ public final class GalleryUpdateTask {
 
     private void handleForwardSegment(@NonNull GalleryDetail detail) {
         int previousSize = forwardItems.size();
-        addForwardItem(detail.gid, detail.token);
+        addForwardItem(detail.gid, detail.token, detailLabel(detail));
         NewVersion[] newVersions = detail.newVersions;
         if (newVersions != null) {
             for (NewVersion version : newVersions) {
                 GalleryDetailUrlParser.Result parsed = GalleryDetailUrlParser.parse(
                         version.versionUrl, false);
                 if (parsed != null) {
-                    addForwardItem(parsed.gid, parsed.token);
+                    addForwardItem(parsed.gid, parsed.token,
+                            TextUtils.isEmpty(version.versionName)
+                                    ? fallbackLabel(parsed.gid) : version.versionName);
                 }
             }
         }
@@ -177,7 +204,7 @@ public final class GalleryUpdateTask {
             return;
         }
 
-        Map.Entry<Long, ChainGallery> nextAnchor = forwardItems.lowerEntry(target.gid);
+        Map.Entry<Long, ParentGallery> nextAnchor = forwardItems.lowerEntry(target.gid);
         while (nextAnchor != null && forwardAnchors.contains(nextAnchor.getKey())) {
             nextAnchor = forwardItems.lowerEntry(nextAnchor.getKey());
         }
@@ -188,18 +215,18 @@ public final class GalleryUpdateTask {
         }
     }
 
-    private void addForwardItem(long gid, @Nullable String token) {
+    private void addForwardItem(long gid, @Nullable String token, @NonNull String label) {
         if (gid > 0L && gid <= target.gid && !TextUtils.isEmpty(token)) {
-            forwardItems.put(gid, new ChainGallery(gid, token));
+            forwardItems.put(gid, new ParentGallery(gid, token, label));
         }
     }
 
     @NonNull
-    private ArrayList<Long> buildForwardParents() {
-        ArrayList<Long> result = new ArrayList<>();
-        for (Long gid : forwardItems.descendingKeySet()) {
-            if (gid < target.gid) {
-                result.add(gid);
+    private ArrayList<ParentGallery> buildForwardParents() {
+        ArrayList<ParentGallery> result = new ArrayList<>();
+        for (ParentGallery item : forwardItems.descendingMap().values()) {
+            if (item.gid < target.gid) {
+                result.add(item);
             }
         }
         return result;
@@ -240,7 +267,8 @@ public final class GalleryUpdateTask {
                     fail(new IllegalStateException("Unexpected gallery metadata"));
                     return;
                 }
-                reverseItems.add(gid);
+                String resultToken = TextUtils.isEmpty(metadata.token) ? token : metadata.token;
+                reverseItems.add(new ParentGallery(gid, resultToken, metadataLabel(metadata)));
                 if (gid == firstGid || metadata.parentGid <= 0L
                         || TextUtils.isEmpty(metadata.parentToken)) {
                     complete(reverseItems);
@@ -260,9 +288,9 @@ public final class GalleryUpdateTask {
     }
 
     private void appendForwardTail(long intersectionGid) {
-        for (Long gid : forwardItems.descendingKeySet()) {
-            if (gid <= intersectionGid && reverseGids.add(gid)) {
-                reverseItems.add(gid);
+        for (ParentGallery item : forwardItems.descendingMap().values()) {
+            if (item.gid <= intersectionGid && reverseGids.add(item.gid)) {
+                reverseItems.add(item);
             }
         }
     }
@@ -315,13 +343,17 @@ public final class GalleryUpdateTask {
         }
     }
 
-    private void complete(@NonNull List<Long> parentGids) {
+    private void complete(@NonNull List<ParentGallery> parents) {
         if (stopped) {
             return;
         }
         stopped = true;
         cancelActiveRequest();
-        listener.onSuccess(new ArrayList<>(parentGids));
+        ArrayList<ParentGallery> result = new ArrayList<>(parents);
+        synchronized (PARENT_CACHE) {
+            PARENT_CACHE.put(cacheKey(target), new ArrayList<>(result));
+        }
+        listener.onSuccess(result);
     }
 
     private void fail(@NonNull Exception error) {
@@ -342,6 +374,37 @@ public final class GalleryUpdateTask {
             request.cancel();
             request = null;
         }
+    }
+
+    @Nullable
+    public static List<ParentGallery> getCachedParents(@NonNull GalleryDetail gallery) {
+        synchronized (PARENT_CACHE) {
+            List<ParentGallery> cached = PARENT_CACHE.get(cacheKey(gallery));
+            return cached != null ? new ArrayList<>(cached) : null;
+        }
+    }
+
+    private static String cacheKey(@NonNull GalleryDetail gallery) {
+        return gallery.gid + ":" + (gallery.token != null ? gallery.token : "");
+    }
+
+    private static String fallbackLabel(long gid) {
+        return "GID " + gid;
+    }
+
+    private static String appendPosted(@Nullable String title, @Nullable String posted, long gid) {
+        String safeTitle = TextUtils.isEmpty(title) ? fallbackLabel(gid) : title;
+        return TextUtils.isEmpty(posted) ? safeTitle : safeTitle + "\n" + posted;
+    }
+
+    private static String detailLabel(@NonNull GalleryDetail detail) {
+        return appendPosted(EhUtils.getSuitableTitle(detail), detail.posted, detail.gid);
+    }
+
+    private static String metadataLabel(@NonNull GalleryChainMetadata metadata) {
+        String title = Settings.getShowJpnTitle() && !TextUtils.isEmpty(metadata.titleJpn)
+                ? metadata.titleJpn : metadata.title;
+        return appendPosted(title, metadata.posted, metadata.gid);
     }
 
     private interface MetadataHandler {

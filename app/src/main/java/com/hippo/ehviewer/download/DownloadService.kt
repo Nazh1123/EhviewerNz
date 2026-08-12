@@ -62,11 +62,14 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
     private var mDownloadedBuilder: NotificationCompat.Builder? = null
     private var m509dBuilder: NotificationCompat.Builder? = null
     private var mUpdatingBuilder: NotificationCompat.Builder? = null
+    private var mGalleryUpdatedBuilder: NotificationCompat.Builder? = null
     private var mDownloadingDelay: NotificationDelay? = null
     private var mDownloadedDelay: NotificationDelay? = null
     private var m509Delay: NotificationDelay? = null
     private var mUpdatingDelay: NotificationDelay? = null
+    private var mGalleryUpdatedDelay: NotificationDelay? = null
     private val mGalleryUpdateTasks = mutableMapOf<Long, GalleryUpdateTask>()
+    private val mActiveGalleryUpdateGids = mutableSetOf<Long>()
 
     // WakeLock 用于防止CPU被限制（针对后台下载优化）
     private var mWakeLock: PowerManager.WakeLock? = null
@@ -123,6 +126,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
 
         mGalleryUpdateTasks.values.forEach { it.cancel() }
         mGalleryUpdateTasks.clear()
+        mActiveGalleryUpdateGids.clear()
         
         // 释放 WakeLock
         releaseWakeLock()
@@ -139,6 +143,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         mDownloadedBuilder = null
         m509dBuilder = null
         mUpdatingBuilder = null
+        mGalleryUpdatedBuilder = null
         if (mDownloadingDelay != null) {
             mDownloadingDelay!!.release()
         }
@@ -150,6 +155,9 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         }
         if (mUpdatingDelay != null) {
             mUpdatingDelay!!.release()
+        }
+        if (mGalleryUpdatedDelay != null) {
+            mGalleryUpdatedDelay!!.release()
         }
     }
 
@@ -325,6 +333,30 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         m509Delay = NotificationDelay(this, mNotifyManager, m509dBuilder!!, ID_509)
     }
 
+    private fun ensureGalleryUpdatedBuilder() {
+        if (mGalleryUpdatedBuilder != null) {
+            return
+        }
+
+        val activityIntent = Intent(this, MainActivity::class.java)
+        activityIntent.setAction(StageActivity.ACTION_START_SCENE)
+        activityIntent.putExtra(StageActivity.KEY_SCENE_NAME, DownloadsScene::class.java.name)
+        activityIntent.putExtra(StageActivity.KEY_SCENE_ARGS, Bundle())
+        val piActivity = PendingIntent.getActivity(
+            this, ID_UPDATE_RESULT, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        mGalleryUpdatedBuilder = NotificationCompat.Builder(applicationContext, CHANNEL_ID!!)
+            .setLargeIcon(BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher))
+            .setOngoing(false)
+            .setAutoCancel(true)
+            .setContentIntent(piActivity)
+            .setChannelId(CHANNEL_ID!!)
+        mGalleryUpdatedDelay = NotificationDelay(
+            this, mNotifyManager, mGalleryUpdatedBuilder!!, ID_UPDATE_RESULT
+        )
+    }
+
     @Suppress("deprecation")
     private fun ensureUpdatingBuilder() {
         if (mUpdatingBuilder != null) {
@@ -370,11 +402,16 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         acquireWakeLock()
         ensureUpdatingBuilder()
         mUpdatingBuilder!!
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
             .setAutoCancel(false)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
-            .setContentTitle(EhUtils.getSuitableTitle(target))
+            .setContentTitle(
+                getString(
+                    R.string.gallery_update_notification_preparing_gallery,
+                    EhUtils.getSuitableTitle(target)
+                )
+            )
             .setContentText(getString(R.string.gallery_update_resolving))
             .setProgress(0, 0, true)
         mUpdatingDelay!!.startForeground()
@@ -382,11 +419,12 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         lateinit var task: GalleryUpdateTask
         task = GalleryUpdateTask(applicationContext, target,
             object : GalleryUpdateTask.Listener {
-                override fun onSuccess(parentGids: List<Long>) {
+                override fun onSuccess(parents: List<GalleryUpdateTask.ParentGallery>) {
                     if (mGalleryUpdateTasks[target.gid] !== task) {
                         return
                     }
                     mGalleryUpdateTasks.remove(target.gid)
+                    val parentGids = parents.map { it.gid }
                     val downloadedParents = parentGids.filter {
                         mDownloadManager?.containDownloadInfo(it) == true
                     }
@@ -401,6 +439,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
                     }
 
                     refreshGalleryUpdateNotification()
+                    mActiveGalleryUpdateGids.add(target.gid)
                     mDownloadManager?.startGalleryUpdate(
                         target, downloadedParents.first(), downloadedParents
                     )
@@ -483,6 +522,10 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         acquireWakeLock()
 
         ensureDownloadingBuilder()
+        val isGalleryUpdate = GalleryUpdateManager.getPlan(info.gid) != null
+        if (isGalleryUpdate) {
+            mActiveGalleryUpdateGids.add(info.gid)
+        }
 
         val bundle = Bundle()
         bundle.putLong(DownloadsScene.KEY_GID, info.gid)
@@ -495,8 +538,22 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
             activityIntent, PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        mDownloadingBuilder!!.setContentTitle(EhUtils.getSuitableTitle(info))
-            .setContentText(null)
+        mDownloadingBuilder!!
+            .setSmallIcon(
+                if (isGalleryUpdate) android.R.drawable.stat_notify_sync
+                else android.R.drawable.stat_sys_download
+            )
+            .setContentTitle(
+                if (isGalleryUpdate) getString(
+                    R.string.gallery_update_notification_running_title,
+                    EhUtils.getSuitableTitle(info)
+                ) else EhUtils.getSuitableTitle(info)
+            )
+            .setContentText(
+                if (isGalleryUpdate) getString(
+                    R.string.gallery_update_notification_running
+                ) else null
+            )
             .setContentInfo(null)
             .setProgress(0, 0, true)
             .setContentIntent(piActivity)
@@ -509,6 +566,8 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
             return
         }
         ensureDownloadingBuilder()
+        val isGalleryUpdate = mActiveGalleryUpdateGids.contains(info.gid)
+                || GalleryUpdateManager.getPlan(info.gid) != null
 
         var speed = info.speed
         if (speed < 0) {
@@ -525,8 +584,22 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         } else {
             getString(R.string.download_speed_text, text)
         }
-        mDownloadingBuilder!!.setContentTitle(EhUtils.getSuitableTitle(info))
-            .setContentText(text)
+        mDownloadingBuilder!!
+            .setSmallIcon(
+                if (isGalleryUpdate) android.R.drawable.stat_notify_sync
+                else android.R.drawable.stat_sys_download
+            )
+            .setContentTitle(
+                if (isGalleryUpdate) getString(
+                    R.string.gallery_update_notification_running_title,
+                    EhUtils.getSuitableTitle(info)
+                ) else EhUtils.getSuitableTitle(info)
+            )
+            .setContentText(
+                if (isGalleryUpdate) getString(
+                    R.string.gallery_update_notification_running_speed, text
+                ) else text
+            )
             .setContentInfo(if (info.total == -1 || info.finished == -1) null else info.finished.toString() + "/" + info.total)
             .setProgress(info.total, info.finished, false)
 
@@ -554,6 +627,13 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
 
         val finish = info.state == DownloadInfo.STATE_FINISH
         val gid = info.gid
+        val isGalleryUpdate = mActiveGalleryUpdateGids.remove(gid)
+                || GalleryUpdateManager.getPlan(gid) != null
+        if (isGalleryUpdate) {
+            showGalleryUpdateDownloadResult(info, finish)
+            checkStopSelf()
+            return
+        }
         val index = sItemStateArray.indexOfKey(gid)
         if (index < 0) { // Not contain
             sItemStateArray.put(gid, finish)
@@ -662,8 +742,37 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         if (null != mDownloadingDelay) {
             mDownloadingDelay!!.cancel()
         }
+        mActiveGalleryUpdateGids.remove(info.gid)
 
         checkStopSelf()
+    }
+
+    private fun showGalleryUpdateDownloadResult(info: DownloadInfo, finish: Boolean) {
+        ensureGalleryUpdatedBuilder()
+        val title = EhUtils.getSuitableTitle(info)
+        val builder = mGalleryUpdatedBuilder!!
+        if (finish) {
+            val text = getString(R.string.gallery_update_notification_complete, title)
+            builder
+                .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+                .setCategory(NotificationCompat.CATEGORY_STATUS)
+                .setContentTitle(getString(R.string.gallery_update_notification_complete_title))
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+        } else {
+            val incomplete = (info.total - info.finished).coerceAtLeast(0)
+            val text = getString(
+                R.string.gallery_update_notification_incomplete, title, incomplete
+            )
+            builder
+                .setSmallIcon(R.drawable.ic_stat_alert)
+                .setCategory(NotificationCompat.CATEGORY_ERROR)
+                .setContentTitle(getString(R.string.gallery_update_notification_incomplete_title))
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+        }
+        builder.setWhen(System.currentTimeMillis()).setShowWhen(true)
+        mGalleryUpdatedDelay!!.show()
     }
 
     private fun checkStopSelf() {
@@ -937,6 +1046,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         private const val ID_509 = 3
         private const val ID_UPDATE_PREPARING = 4
         private const val ID_UPDATE_FAILED = 5
+        private const val ID_UPDATE_RESULT = 6
 
         private val sItemStateArray =
             SparseJBArray()

@@ -1172,6 +1172,14 @@
     <string name="gallery_update_background_started">Preparing gallery update in the background</string>
     <string name="gallery_update_notification_preparing_title">Preparing gallery updates</string>
     <string name="gallery_update_notification_preparing_count">Resolving parent history for %d gallery(s)…</string>
+    <string name="gallery_update_notification_preparing_gallery">Preparing update: %s</string>
+    <string name="gallery_update_notification_running_title">Gallery update: %s</string>
+    <string name="gallery_update_notification_running">Reusing the old gallery and downloading new pages</string>
+    <string name="gallery_update_notification_running_speed">Updating · %s</string>
+    <string name="gallery_update_notification_complete_title">Gallery update complete</string>
+    <string name="gallery_update_notification_complete">Updated successfully: %s</string>
+    <string name="gallery_update_notification_incomplete_title">Gallery update incomplete</string>
+    <string name="gallery_update_notification_incomplete">%1$s\n%2$d page(s) remain; continue the update from Downloads</string>
     <string name="gallery_update_notification_failed_title">Gallery update failed</string>
     <string name="gallery_update_notification_failed">%1$s\n%2$s</string>
     <string name="gallery_update_chain_failed">Unable to resolve gallery history: %s</string>

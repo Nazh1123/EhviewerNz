@@ -1080,6 +1080,14 @@
     <string name="gallery_update_background_started">正在后台准备画廊更新</string>
     <string name="gallery_update_notification_preparing_title">正在准备画廊更新</string>
     <string name="gallery_update_notification_preparing_count">正在解析 %d 个画廊的父画廊历史…</string>
+    <string name="gallery_update_notification_preparing_gallery">正在准备更新：%s</string>
+    <string name="gallery_update_notification_running_title">画廊更新：%s</string>
+    <string name="gallery_update_notification_running">正在复用旧画廊内容并下载新增页面</string>
+    <string name="gallery_update_notification_running_speed">更新中 · %s</string>
+    <string name="gallery_update_notification_complete_title">画廊更新完成</string>
+    <string name="gallery_update_notification_complete">更新成功：%s</string>
+    <string name="gallery_update_notification_incomplete_title">画廊更新未完成</string>
+    <string name="gallery_update_notification_incomplete">%1$s\n仍有 %2$d 页未完成，可在下载列表中继续更新</string>
     <string name="gallery_update_notification_failed_title">画廊更新失败</string>
     <string name="gallery_update_notification_failed">%1$s\n%2$s</string>
     <string name="gallery_update_chain_failed">无法解析画廊历史：%s</string>

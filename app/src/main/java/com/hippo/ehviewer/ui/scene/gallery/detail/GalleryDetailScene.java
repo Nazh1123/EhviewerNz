@@ -96,10 +96,11 @@ import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.data.PreviewSet;
 import com.hippo.ehviewer.client.data.userTag.UserTagList;
 import com.hippo.ehviewer.client.exception.NoHAtHClientException;
-import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser;
 import com.hippo.ehviewer.client.parser.RateGalleryParser;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.Filter;
+import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.download.GalleryUpdateTask;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.spider.SpiderQueen;
 import com.hippo.ehviewer.ui.CommonOperations;
@@ -155,6 +156,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -330,7 +332,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     @Nullable
     private GalleryDetail mGalleryDetail;
-    private long mDirectParentGid = -1L;
+    @Nullable
+    private GalleryUpdateTask mGalleryParentLookup;
+    @Nullable
+    private List<GalleryUpdateTask.ParentGallery> mResolvedGalleryParents;
+    private long mResolvedGalleryParentsForGid = -1L;
     private int mRequestId = IntIdGenerator.INVALID_ID;
 
     @Nullable
@@ -810,6 +816,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         if (info != null && mGalleryDetail != null && mPages != null) {
             bindReadProgress(info);
         }
+        updateGalleryVersionActionsVisibility();
     }
 
     @Override
@@ -850,6 +857,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUpdateActionGroup = null;
         mUpdateGallery = null;
         mGalleryHistory = null;
+        if (mGalleryParentLookup != null) {
+            mGalleryParentLookup.cancel();
+            mGalleryParentLookup = null;
+        }
         if (mParentChainDialog != null) {
             mParentChainDialog.destroy();
             mParentChainDialog = null;
@@ -1146,8 +1157,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
         Resources resources = getResources2();
-        GalleryDetailUrlParser.Result parent = GalleryDetailUrlParser.parse(gd.parent, false);
-        mDirectParentGid = parent != null ? parent.gid : -1L;
         updateGalleryVersionActionsVisibility();
         if (gd.newVersions != null && mHaveNewVersion != null && resources != null) {
             mHaveNewVersion.setVisibility(View.VISIBLE);
@@ -2312,10 +2321,68 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
         Context context = getEHContext();
-        boolean hasDownloadedParent = context != null && mDirectParentGid > 0L
-                && EhApplication.getDownloadManager(context)
-                .containDownloadInfo(mDirectParentGid);
-        mUpdateActionGroup.setVisibility(hasDownloadedParent ? View.VISIBLE : View.GONE);
+        GalleryDetail detail = mGalleryDetail;
+        if (context == null || detail == null || TextUtils.isEmpty(detail.parent)) {
+            mUpdateActionGroup.setVisibility(View.GONE);
+            return;
+        }
+
+        List<GalleryUpdateTask.ParentGallery> cached =
+                GalleryUpdateTask.getCachedParents(detail);
+        if (cached != null) {
+            mResolvedGalleryParents = cached;
+            mResolvedGalleryParentsForGid = detail.gid;
+        }
+
+        DownloadManager downloadManager = EhApplication.getDownloadManager(context);
+        if (mResolvedGalleryParentsForGid == detail.gid
+                && mResolvedGalleryParents != null) {
+            boolean hasDownloadedParent = false;
+            for (GalleryUpdateTask.ParentGallery parent : mResolvedGalleryParents) {
+                if (downloadManager.containDownloadInfo(parent.gid)) {
+                    hasDownloadedParent = true;
+                    break;
+                }
+            }
+            mUpdateActionGroup.setVisibility(
+                    hasDownloadedParent ? View.VISIBLE : View.GONE);
+            return;
+        }
+
+        mUpdateActionGroup.setVisibility(View.GONE);
+        if (mGalleryParentLookup != null || !downloadManager.hasDownloadInfoBefore(detail.gid)) {
+            return;
+        }
+
+        final long targetGid = detail.gid;
+        GalleryUpdateTask lookup = new GalleryUpdateTask(context, detail,
+                new GalleryUpdateTask.Listener() {
+                    @Override
+                    public void onSuccess(
+                            @NonNull List<GalleryUpdateTask.ParentGallery> parents) {
+                        if (mGalleryParentLookup == null || mGalleryDetail == null
+                                || mGalleryDetail.gid != targetGid) {
+                            return;
+                        }
+                        mGalleryParentLookup = null;
+                        mResolvedGalleryParents = parents;
+                        mResolvedGalleryParentsForGid = targetGid;
+                        updateGalleryVersionActionsVisibility();
+                    }
+
+                    @Override
+                    public void onFailure(@NonNull Exception error) {
+                        if (mGalleryParentLookup == null || mGalleryDetail == null
+                                || mGalleryDetail.gid != targetGid) {
+                            return;
+                        }
+                        mGalleryParentLookup = null;
+                        mResolvedGalleryParents = new ArrayList<>();
+                        mResolvedGalleryParentsForGid = targetGid;
+                    }
+                });
+        mGalleryParentLookup = lookup;
+        lookup.start();
     }
 
     @Override
@@ -2362,6 +2429,15 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     protected void onGetGalleryDetailSuccess(GalleryDetail result) {
+        if (mGalleryDetail == null || mGalleryDetail.gid != result.gid
+                || !TextUtils.equals(mGalleryDetail.token, result.token)) {
+            if (mGalleryParentLookup != null) {
+                mGalleryParentLookup.cancel();
+                mGalleryParentLookup = null;
+            }
+            mResolvedGalleryParents = null;
+            mResolvedGalleryParentsForGid = -1L;
+        }
         mGalleryDetail = result;
         updateDownloadState();
         if (mDownloadState != DownloadInfo.STATE_INVALID) {

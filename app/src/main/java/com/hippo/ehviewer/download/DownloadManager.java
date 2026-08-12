@@ -224,6 +224,11 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         return mAllInfoMap.indexOfKey(gid) >= 0;
     }
 
+    /** Cheap preflight used before resolving a parent chain over the network. */
+    public boolean hasDownloadInfoBefore(long gid) {
+        return gid > 0L && mAllInfoMap.size() > 0 && mAllInfoMap.keyAt(0) < gid;
+    }
+
     @NonNull
     public List<DownloadLabel> getLabelList() {
         return mLabelList;
