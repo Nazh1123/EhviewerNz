@@ -53,13 +53,14 @@ public class MyPageChangeListener implements PaginationIndicator.OnChangedListen
 
     @Override
     public void onPageSelectedChanged(int currentPagePos, int lastPagePos, int totalPageCount, int total) {
-        if (indexPage == currentPagePos) {
-            needInitPage = false;
-        }
         if (needInitPage) {
-            // 注意：这里需要外部传入 PaginationIndicator 实例
-            // 或者通过回调方法处理
-            return;
+            // The indicator can finish its initialization before this listener is attached.
+            // In that case the first callback we receive is a real user selection, so only
+            // suppress it when it points to the page that is already displayed.
+            needInitPage = false;
+            if (indexPage == currentPagePos) {
+                return;
+            }
         }
         if (indexPage == currentPagePos) {
             return;

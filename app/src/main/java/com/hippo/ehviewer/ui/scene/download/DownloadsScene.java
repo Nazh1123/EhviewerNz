@@ -673,9 +673,6 @@ public class DownloadsScene extends ToolbarScene
         FastScroller fastScroller = (FastScroller) ViewUtils.$$(content, R.id.fast_scroller);
         mFabLayout = (FabLayout) ViewUtils.$$(view, R.id.fab_layout);
         TextView tip = (TextView) ViewUtils.$$(view, R.id.tip);
-        if (mPaginationIndicator != null) {
-            needInitPage = true;
-        }
         mPaginationIndicator = (PaginationIndicator) ViewUtils.$$(view, R.id.indicator);
 
         mPaginationIndicator.setPerPageCountChoices(perPageCountChoices, getPageSizePos(pageSize));
@@ -925,6 +922,9 @@ public class DownloadsScene extends ToolbarScene
         mOriginalAdapter = null;
         mLayoutManager = null;
         mDragDropManager = null;
+        mPaginationIndicator = null;
+        myPageChangeListener = null;
+        needInitPage = false;
         EventBus.getDefault().unregister(this);
     }
 
