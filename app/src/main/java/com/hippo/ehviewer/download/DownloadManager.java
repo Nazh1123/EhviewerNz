@@ -1040,6 +1040,74 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
     }
 
+    /**
+     * Moves every download from {@code from} into the existing {@code to} label and removes the
+     * source label. The destination label keeps its current position in the label list.
+     *
+     * @return {@code true} if both labels existed and were merged
+     */
+    public boolean mergeLabel(@NonNull String from, @NonNull String to) {
+        if (from.equals(to)) {
+            return false;
+        }
+
+        DownloadLabel sourceLabel = null;
+        boolean destinationExists = false;
+        for (DownloadLabel raw : mLabelList) {
+            if (from.equals(raw.getLabel())) {
+                sourceLabel = raw;
+            } else if (to.equals(raw.getLabel())) {
+                destinationExists = true;
+            }
+        }
+        if (sourceLabel == null || !destinationExists) {
+            return false;
+        }
+
+        LinkedList<DownloadInfo> sourceList = mMap.get(from);
+        LinkedList<DownloadInfo> destinationList = mMap.get(to);
+        if (sourceList == null || destinationList == null) {
+            return false;
+        }
+
+        List<DownloadInfo> changedInfo = mergeDownloadInfoLists(sourceList, destinationList, to);
+        // Persist the new ownership before deleting the source label so an interrupted merge
+        // cannot leave downloads referring to a label that no longer exists.
+        EhDB.putDownloadInfo(changedInfo);
+        EhDB.removeDownloadLabel(sourceLabel);
+
+        mMap.remove(from);
+        mLabelList.remove(sourceLabel);
+        mLabelCountMap.remove(from);
+        mLabelCountMap.put(to, (long) destinationList.size());
+        if (from.equals(Settings.getDefaultDownloadLabel())) {
+            Settings.putDefaultDownloadLabel(to);
+        }
+        if (from.equals(Settings.getRecentDownloadLabel())) {
+            Settings.putRecentDownloadLabel(to);
+        }
+
+        for (DownloadInfoListener l : mDownloadInfoListeners) {
+            l.onRenameLabel(from, to);
+            l.onUpdateLabels();
+        }
+        return true;
+    }
+
+    static List<DownloadInfo> mergeDownloadInfoLists(
+            @NonNull List<DownloadInfo> sourceList,
+            @NonNull List<DownloadInfo> destinationList,
+            @NonNull String destinationLabel) {
+        List<DownloadInfo> changedInfo = new ArrayList<>(sourceList.size());
+        for (DownloadInfo info : sourceList) {
+            info.label = destinationLabel;
+            changedInfo.add(info);
+        }
+        destinationList.addAll(sourceList);
+        Collections.sort(destinationList, DATE_DESC_COMPARATOR);
+        return changedInfo;
+    }
+
     public void deleteLabel(@NonNull String label) {
         deleteLabels(Collections.singleton(label));
     }

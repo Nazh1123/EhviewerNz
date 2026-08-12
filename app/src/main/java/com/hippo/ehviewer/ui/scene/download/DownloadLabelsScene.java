@@ -501,6 +501,7 @@ public class DownloadLabelsScene extends ToolbarScene {
                 }
             }
         }
+
     }
 
     private class RenameLabelDialogHelper implements View.OnClickListener {
@@ -534,8 +535,11 @@ public class DownloadLabelsScene extends ToolbarScene {
                 mBuilder.setError(getString(R.string.label_text_is_empty));
             } else if (getString(R.string.default_download_label_name).equals(text)) {
                 mBuilder.setError(getString(R.string.label_text_is_invalid));
+            } else if (mOriginalLabel.equals(text)) {
+                mBuilder.setError(null);
+                mDialog.dismiss();
             } else if (EhApplication.getDownloadManager(context).containLabel(text)) {
-                mBuilder.setError(getString(R.string.label_text_exist));
+                showMergeLabelDialog(context, text);
             } else {
                 mBuilder.setError(null);
                 mDialog.dismiss();
@@ -544,6 +548,26 @@ public class DownloadLabelsScene extends ToolbarScene {
                     mAdapter.notifyItemChanged(mPosition);
                 }
             }
+        }
+
+        private void showMergeLabelDialog(Context context, String destinationLabel) {
+            new AlertDialog.Builder(context)
+                    .setTitle(R.string.label_text_exist)
+                    .setMessage(getString(R.string.merge_download_label_message,
+                            destinationLabel, mOriginalLabel))
+                    .setPositiveButton(R.string.merge_download_label, (dialog, which) -> {
+                        DownloadManager manager = EhApplication.getDownloadManager(context);
+                        if (!manager.mergeLabel(mOriginalLabel, destinationLabel)) {
+                            mBuilder.setError(getString(R.string.label_text_exist));
+                            return;
+                        }
+                        mBuilder.setError(null);
+                        mDialog.dismiss();
+                        clearSelection();
+                        updateView();
+                    })
+                    .setNegativeButton(R.string.rename_label_reenter, null)
+                    .show();
         }
     }
 

@@ -558,6 +558,9 @@
     <string name="label_text_is_invalid">\"Default\" is an invalid label</string>
     <string name="label_text_exist">Label exists</string>
     <string name="rename_label_title">Rename label</string>
+    <string name="merge_download_label_message">A label named “%1$s” already exists. Merge all galleries from “%2$s” into it?</string>
+    <string name="merge_download_label">Merge</string>
+    <string name="rename_label_reenter">Cancel</string>
     <string name="delete_label_title">Delete label</string>
     <string name="delete_label_message">Delete \"%s\"?</string>
 

@@ -1272,7 +1272,22 @@ public class DownloadsScene extends ToolbarScene
             } else if (originalLabel.equals(text)) {
                 dialog.dismiss();
             } else if (mDownloadManager != null && mDownloadManager.containLabel(text)) {
-                builder.setError(getString(R.string.label_text_exist));
+                new AlertDialog.Builder(context)
+                        .setTitle(R.string.label_text_exist)
+                        .setMessage(getString(R.string.merge_download_label_message,
+                                text, originalLabel))
+                        .setPositiveButton(R.string.merge_download_label,
+                                (confirmDialog, which) -> {
+                                    if (mDownloadManager != null
+                                            && mDownloadManager.mergeLabel(originalLabel, text)) {
+                                        builder.setError(null);
+                                        dialog.dismiss();
+                                    } else {
+                                        builder.setError(getString(R.string.label_text_exist));
+                                    }
+                                })
+                        .setNegativeButton(R.string.rename_label_reenter, null)
+                        .show();
             } else if (mDownloadManager != null) {
                 builder.setError(null);
                 dialog.dismiss();
