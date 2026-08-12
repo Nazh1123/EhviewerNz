@@ -4,14 +4,8 @@ import static com.hippo.ehviewer.util.ClipboardUtil.createAnnouncerFromClipboard
 
 import android.app.AlertDialog;
 import android.content.Context;
-import android.os.Bundle;
-import android.view.View;
-
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.client.data.GalleryDetail;
-import com.hippo.ehviewer.client.data.GalleryInfo;
-import com.hippo.ehviewer.ui.MainActivity;
-import com.hippo.ehviewer.ui.scene.gallery.list.EnterGalleryDetailTransaction;
 import com.hippo.scene.Announcer;
 
 public class GalleryUpdateDialog {
@@ -22,10 +16,6 @@ public class GalleryUpdateDialog {
 
     private AlertDialog dialog;
 
-    private AlertDialog choseDialog;
-
-    public boolean autoDownload = false;
-
     public GalleryUpdateDialog(GalleryDetailScene scene, Context context) {
         this.detailScene = scene;
         this.context = context;
@@ -35,6 +25,7 @@ public class GalleryUpdateDialog {
         if (galleryDetail == this.galleryDetail && dialog != null) {
             dialog.setTitle(R.string.new_version);
             dialog.show();
+            return;
         }
         this.galleryDetail = galleryDetail;
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
@@ -56,24 +47,10 @@ public class GalleryUpdateDialog {
         dialog.show();
     }
 
-    private void showChooseDialog(String url) {
-        if (choseDialog != null) {
-            choseDialog.show();
+    public void destroy() {
+        if (dialog != null) {
+            dialog.dismiss();
+            dialog = null;
         }
-        AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        choseDialog = builder.setTitle(R.string.gallery_update_dialog_title)
-                .setMessage(R.string.gallery_update_dialog_message)
-                .setNeutralButton(R.string.cancel, (dialog, which) -> {
-                    dialog.dismiss();
-                })
-                .setNegativeButton(R.string.gallery_update_download_as_new, (dialog, which) -> {
-                    autoDownload = true;
-                    detailScene.startDownloadAsNew(url);
-                })
-                .setPositiveButton(R.string.gallery_update_override_old, (dialog, which) -> {
-                    detailScene.startUpdateDownload(url);
-                })
-                .create();
-        choseDialog.show();
     }
 }

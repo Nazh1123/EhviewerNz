@@ -44,6 +44,7 @@ import com.hippo.lib.yorozuya.Utilities;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Locale;
 
@@ -278,6 +279,61 @@ public final class SpiderDen {
             }
         }
         return null;
+    }
+
+    public static boolean isReadableImage(@NonNull UniFile file) {
+        InputStream is = null;
+        try {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            is = file.openInputStream();
+            BitmapFactory.decodeStream(is, null, options);
+            return options.outWidth > 0 && options.outHeight > 0;
+        } catch (IOException e) {
+            return false;
+        } finally {
+            IOUtils.closeQuietly(is);
+        }
+    }
+
+    /** Copies a verified parent-gallery image into this gallery at its new page index. */
+    public boolean copyImageFrom(@NonNull UniFile source, int index) {
+        if (mMode != SpiderQueen.MODE_DOWNLOAD || !prepareDownloadStorage()) {
+            return false;
+        }
+        UniFile dir = getDownloadDir();
+        if (dir == null) {
+            return false;
+        }
+
+        String sourceName = source.getName();
+        int dot = sourceName != null ? sourceName.lastIndexOf('.') : -1;
+        String extension = dot >= 0 ? sourceName.substring(dot).toLowerCase(Locale.US) : null;
+        extension = fixExtension(extension);
+        UniFile target = dir.createFile(generateImageFilename(index, extension));
+        if (target == null) {
+            return false;
+        }
+
+        InputStream is = null;
+        OutputStream os = null;
+        boolean success = false;
+        try {
+            is = source.openInputStream();
+            os = target.openOutputStream();
+            long copied = IOUtils.copy(is, os);
+            os.flush();
+            success = copied > 0L;
+            return success;
+        } catch (IOException e) {
+            return false;
+        } finally {
+            IOUtils.closeQuietly(is);
+            IOUtils.closeQuietly(os);
+            if (!success) {
+                target.delete();
+            }
+        }
     }
 
     private boolean containInDownloadDir(int index) {

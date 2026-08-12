@@ -23,6 +23,7 @@ import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -36,7 +37,6 @@ import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.easyrecyclerview.LinearDividerItemDecoration;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
-import com.hippo.ehviewer.UrlOpener;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryDetail;
@@ -69,7 +69,6 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
     private EasyRecyclerView mRecyclerView;
     @Nullable
     private GalleryParentChainDialog mParentChainDialog;
-
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -214,14 +213,12 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
         Context context = getEHContext();
         if (null != context && 0 != position && null != mValues) {
             if (position == INDEX_PARENT) {
-                if (mGalleryDetail != null) {
+                if (mGalleryDetail != null && !TextUtils.isEmpty(mGalleryDetail.parent)) {
                     if (mParentChainDialog == null) {
                         mParentChainDialog = new GalleryParentChainDialog(
                                 this, context, mGalleryDetail);
                     }
                     mParentChainDialog.show();
-                } else {
-                    UrlOpener.openUrl(context, mValues.get(position), true);
                 }
             } else {
                 ClipboardManager cmb = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);

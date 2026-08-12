@@ -164,6 +164,10 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         mWaitList = new LinkedList<>();
         mSpeedReminder = new SpeedReminder();
         mDownloadInfoListeners = new ArrayList<>();
+
+        // Retry cleanup if the app was killed after an updated gallery finished but before all
+        // parent folders were removed.
+        SimpleHandler.getInstance().post(this::resumeGalleryUpdateCleanup);
     }
 
     public void replaceInfo(DownloadInfo newInfo, DownloadInfo oldInfo) {
@@ -712,6 +716,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     public void deleteDownload(long gid) {
+        GalleryUpdateManager.cancel(gid);
         stopDownloadInternal(gid);
         DownloadInfo info = mAllInfoMap.get(gid);
         if (info != null) {
@@ -741,6 +746,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     public void deleteRangeDownload(LongList gidList) {
+        for (int i = 0, n = gidList.size(); i < n; i++) {
+            GalleryUpdateManager.cancel(gidList.get(i));
+        }
         stopRangeDownloadInternal(gidList);
 
         for (int i = 0, n = gidList.size(); i < n; i++) {
@@ -1077,6 +1085,63 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
     }
 
+    public void startGalleryUpdate(@NonNull GalleryInfo target, long sourceGid,
+                                   @NonNull List<Long> parentGids) {
+        DownloadInfo source = getDownloadInfo(sourceGid);
+        String label = source != null ? source.label : null;
+        GalleryUpdateManager.register(target.gid, sourceGid, parentGids);
+        startDownload(target, label);
+
+        DownloadInfo targetInfo = getDownloadInfo(target.gid);
+        if (targetInfo != null && targetInfo.state == DownloadInfo.STATE_FINISH) {
+            completeGalleryUpdate(target.gid);
+        }
+    }
+
+    private void resumeGalleryUpdateCleanup() {
+        for (Long targetGid : GalleryUpdateManager.getPlannedTargetGids()) {
+            DownloadInfo target = getDownloadInfo(targetGid);
+            if (target == null) {
+                GalleryUpdateManager.cancel(targetGid);
+            } else if (target.state == DownloadInfo.STATE_FINISH) {
+                completeGalleryUpdate(targetGid);
+            }
+        }
+    }
+
+    private void completeGalleryUpdate(long targetGid) {
+        GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(targetGid);
+        if (plan == null || !GalleryUpdateManager.beginCleanup(targetGid)) {
+            return;
+        }
+
+        LongList gids = new LongList();
+        for (Long gid : plan.parentGids) {
+            if (gid != null && mAllInfoMap.get(gid) != null) {
+                gids.add(gid);
+            }
+        }
+        if (gids.size() > 0) {
+            deleteRangeDownload(gids);
+        }
+
+        IoThreadPoolExecutor.Companion.getInstance().execute(() -> {
+            boolean success = true;
+            for (Long gid : plan.parentGids) {
+                GalleryInfo placeholder = new GalleryInfo();
+                placeholder.gid = gid;
+                UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
+                boolean deleted = dir == null || !dir.exists() || dir.delete();
+                if (deleted) {
+                    EhDB.removeDownloadDirname(gid);
+                } else {
+                    success = false;
+                }
+            }
+            GalleryUpdateManager.finishCleanup(targetGid, success);
+        });
+    }
+
     boolean isIdle() {
         return mCurrentTask == null && mWaitList.isEmpty();
     }
@@ -1312,6 +1377,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     }
                     // Update in DB
                     EhDB.putDownloadInfo(info);
+                    if (info.state == DownloadInfo.STATE_FINISH) {
+                        completeGalleryUpdate(info.gid);
+                    }
                     // Notify
                     if (mDownloadListener != null) {
                         mDownloadListener.onFinish(info);

@@ -44,6 +44,7 @@ import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.util.ClipboardUtil;
 import com.hippo.scene.Announcer;
+import com.hippo.scene.SceneFragment;
 import com.hippo.util.ExceptionUtils;
 
 import java.util.ArrayList;
@@ -53,14 +54,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-final class GalleryParentChainDialog {
+public final class GalleryParentChainDialog {
 
     private static final int MAX_FORWARD_SEGMENTS = 8;
     private static final int MAX_PARENT_DEPTH = 100;
     private static final int API_BURST_SIZE = 4;
     private static final long API_BURST_PAUSE = 5200L;
 
-    private final GalleryInfoScene host;
+    private final SceneFragment host;
     private final Context context;
     private final GalleryDetail currentGallery;
     private final EhClient client;
@@ -96,8 +97,8 @@ final class GalleryParentChainDialog {
     private int forwardSegmentCount;
     private int metadataRequestCount;
 
-    GalleryParentChainDialog(@NonNull GalleryInfoScene host, @NonNull Context context,
-                             @NonNull GalleryDetail currentGallery) {
+    public GalleryParentChainDialog(@NonNull SceneFragment host, @NonNull Context context,
+                                    @NonNull GalleryDetail currentGallery) {
         this.host = host;
         this.context = context;
         this.currentGallery = currentGallery;
@@ -105,7 +106,7 @@ final class GalleryParentChainDialog {
         downloadManager = EhApplication.getDownloadManager(context);
     }
 
-    void show() {
+    public void show() {
         if (destroyed || TextUtils.isEmpty(currentGallery.parent)) {
             return;
         }
@@ -126,7 +127,7 @@ final class GalleryParentChainDialog {
         progressView.setVisibility(View.VISIBLE);
 
         AlertDialog newDialog = new AlertDialog.Builder(context)
-                .setTitle(R.string.parent_gallery_list_title)
+                .setTitle(R.string.gallery_history_title)
                 .setView(content)
                 .setNegativeButton(R.string.cancel, null)
                 .setNeutralButton(R.string.open_direct_parent, null)
@@ -159,7 +160,7 @@ final class GalleryParentChainDialog {
         }
     }
 
-    void destroy() {
+    public void destroy() {
         destroyed = true;
         cancelActiveRun();
         if (dialog != null) {

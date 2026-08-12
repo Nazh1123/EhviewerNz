@@ -96,6 +96,7 @@ import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.data.PreviewSet;
 import com.hippo.ehviewer.client.data.userTag.UserTagList;
 import com.hippo.ehviewer.client.exception.NoHAtHClientException;
+import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser;
 import com.hippo.ehviewer.client.parser.RateGalleryParser;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.Filter;
@@ -110,6 +111,7 @@ import com.hippo.ehviewer.ui.scene.BaseScene;
 import com.hippo.ehviewer.ui.scene.EhCallback;
 import com.hippo.ehviewer.ui.scene.GalleryCommentsScene;
 import com.hippo.ehviewer.ui.scene.GalleryInfoScene;
+import com.hippo.ehviewer.ui.scene.GalleryParentChainDialog;
 import com.hippo.ehviewer.ui.scene.GalleryPreviewsScene;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
 import com.hippo.ehviewer.ui.scene.download.DownloadsScene;
@@ -229,6 +231,12 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private TextView mHaveNewVersion;
     @Nullable
     private View mRead;
+    @Nullable
+    private View mUpdateActionGroup;
+    @Nullable
+    private View mUpdateGallery;
+    @Nullable
+    private View mGalleryHistory;
     // Below header
     @Nullable
     private View mBelowHeader;
@@ -322,6 +330,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     @Nullable
     private GalleryDetail mGalleryDetail;
+    private long mDirectParentGid = -1L;
     private int mRequestId = IntIdGenerator.INVALID_ID;
 
     @Nullable
@@ -339,6 +348,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private boolean mModifingFavorites;
 
     private GalleryUpdateDialog myUpdateDialog;
+    @Nullable
+    private GalleryParentChainDialog mParentChainDialog;
     private GalleryListSceneDialog tagDialog;
 
     private boolean useNetWorkLoadThumb = false;
@@ -666,9 +677,14 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mHaveNewVersion = (TextView) ViewUtils.$$(mHeader, R.id.new_version);
         mArchiverDownloadProgress = (ArchiverDownloadProgress) ViewUtils.$$(mHeader, R.id.archiver_download_progress);
         mRead = ViewUtils.$$(mActionGroup, R.id.read);
+        mUpdateActionGroup = ViewUtils.$$(mHeader, R.id.update_action_card);
+        mUpdateGallery = ViewUtils.$$(mHeader, R.id.update_gallery);
+        mGalleryHistory = ViewUtils.$$(mHeader, R.id.gallery_history);
         Ripple.addRipple(mOtherActions, isDarkTheme);
         Ripple.addRipple(mDownload, isDarkTheme);
         Ripple.addRipple(mRead, isDarkTheme);
+        Ripple.addRipple(mUpdateGallery, isDarkTheme);
+        Ripple.addRipple(mGalleryHistory, isDarkTheme);
         mUploader.setOnClickListener(this);
         mCategory.setOnClickListener(this);
         mOtherActions.setOnClickListener(this);
@@ -676,6 +692,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mDownload.setOnLongClickListener(this);
         mHaveNewVersion.setOnClickListener(this);
         mRead.setOnClickListener(this);
+        mUpdateGallery.setOnClickListener(this);
+        mGalleryHistory.setOnClickListener(this);
         mTitle.setOnClickListener(this);
 
         mUploader.setOnLongClickListener(this);
@@ -829,6 +847,17 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mDownload = null;
         mHaveNewVersion = null;
         mRead = null;
+        mUpdateActionGroup = null;
+        mUpdateGallery = null;
+        mGalleryHistory = null;
+        if (mParentChainDialog != null) {
+            mParentChainDialog.destroy();
+            mParentChainDialog = null;
+        }
+        if (myUpdateDialog != null) {
+            myUpdateDialog.destroy();
+            myUpdateDialog = null;
+        }
         mBelowHeader = null;
         mArchiverDownloadProgress = null;
 
@@ -1117,6 +1146,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
         Resources resources = getResources2();
+        GalleryDetailUrlParser.Result parent = GalleryDetailUrlParser.parse(gd.parent, false);
+        mDirectParentGid = parent != null ? parent.gid : -1L;
+        updateGalleryVersionActionsVisibility();
         if (gd.newVersions != null && mHaveNewVersion != null && resources != null) {
             mHaveNewVersion.setVisibility(View.VISIBLE);
             mHaveNewVersion.setBackground(ResourcesCompat.getDrawable(resources, R.drawable.new_version_style, null));
@@ -1686,6 +1718,20 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 return;
             }
             myUpdateDialog.showSelectDialog(mGalleryDetail);
+        } else if (mUpdateGallery == v) {
+            if (mGalleryDetail == null || TextUtils.isEmpty(mGalleryDetail.parent)) {
+                return;
+            }
+            CommonOperations.startGalleryUpdate(activity, mGalleryDetail);
+        } else if (mGalleryHistory == v) {
+            if (mGalleryDetail == null || TextUtils.isEmpty(mGalleryDetail.parent)) {
+                showTip(R.string.gallery_history_empty, LENGTH_SHORT);
+                return;
+            }
+            if (mParentChainDialog == null) {
+                mParentChainDialog = new GalleryParentChainDialog(this, mContext, mGalleryDetail);
+            }
+            mParentChainDialog.show();
         } else if (mRead == v) {
             GalleryInfo galleryInfo = null;
             if (mGalleryInfo != null) {
@@ -2178,22 +2224,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         return path.replace(File.separatorChar, '/');
     }
 
-    public void startUpdateDownload(String updateUrl) {
-        if (mGalleryDetail == null || mGalleryDetail.newVersions == null) {
-            return;
-        }
-        adjustViewVisibility(STATE_REFRESH, false);
-        request(updateUrl, GetGalleryDetailListener.RESULT_UPDATE);
-    }
-
-    public void startDownloadAsNew(String updateUrl) {
-        if (mGalleryDetail == null || mGalleryDetail.newVersions == null) {
-            return;
-        }
-        adjustViewVisibility(STATE_REFRESH, false);
-        request(updateUrl, GetGalleryDetailListener.RESULT_DETAIL);
-    }
-
     @Override
     public void onBackPressed() {
         if (mViewTransition != null && mThumb != null &&
@@ -2268,12 +2298,24 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
 
+        updateGalleryVersionActionsVisibility();
         int downloadState = EhApplication.getDownloadManager(context).getDownloadState(gid);
         if (downloadState == mDownloadState) {
             return;
         }
         mDownloadState = downloadState;
         updateDownloadText();
+    }
+
+    private void updateGalleryVersionActionsVisibility() {
+        if (mUpdateActionGroup == null) {
+            return;
+        }
+        Context context = getEHContext();
+        boolean hasDownloadedParent = context != null && mDirectParentGid > 0L
+                && EhApplication.getDownloadManager(context)
+                .containDownloadInfo(mDirectParentGid);
+        mUpdateActionGroup.setVisibility(hasDownloadedParent ? View.VISIBLE : View.GONE);
     }
 
     @Override
@@ -2283,7 +2325,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     @Override
     public void onReplace(@NonNull DownloadInfo newInfo, @NonNull DownloadInfo oldInfo) {
-
+        updateGalleryVersionActionsVisibility();
     }
 
     @Override
@@ -2332,11 +2374,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         adjustViewVisibility(STATE_NORMAL, true);
         bindViewSecond();
-        if (myUpdateDialog != null && myUpdateDialog.autoDownload) {
-            myUpdateDialog.autoDownload = false;
-            mDownloadState = DownloadInfo.STATE_INVALID;
-            onDownload();
-        }
     }
 
     protected void onGetGalleryDetailFailure(Exception e) {
@@ -2347,11 +2384,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             mTip.setText(error);
             adjustViewVisibility(STATE_FAILED, true);
         }
-    }
-
-    protected void onGetGalleryDetailUpdateFailure(Exception e) {
-        Analytics.recordException(e);
-        adjustViewVisibility(STATE_NORMAL, true);
     }
 
     private void onRateGallerySuccess(RateGalleryParser.Result result) {

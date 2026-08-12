@@ -47,6 +47,7 @@ import com.hippo.ehviewer.client.exception.ParseException;
 import com.hippo.ehviewer.client.parser.GalleryDetailParser;
 import com.hippo.ehviewer.client.parser.GalleryPageApiParser;
 import com.hippo.ehviewer.client.parser.GalleryPageParser;
+import com.hippo.ehviewer.download.GalleryUpdateManager;
 import com.hippo.ehviewer.client.parser.GalleryPageUrlParser;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
 import com.hippo.lib.glgallery.GalleryPageView;
@@ -1738,6 +1739,14 @@ public final class SpiderQueen implements Runnable {
             if (SpiderInfo.TOKEN_FAILED.equals(pToken)) {
                 // Get token failed
                 updatePageState(index, STATE_FAILED, GetText.getString(R.string.error_get_ptoken_error));
+                return true;
+            }
+
+            // A pToken identifies the page content across gallery revisions. Reuse the matching
+            // parent file before resolving an image URL; page indexes are intentionally ignored.
+            if (!force && mSpiderDen.isDownloadMode()
+                    && GalleryUpdateManager.tryReuse(mGid, index, pToken, mSpiderDen)) {
+                updatePageState(index, STATE_FINISHED);
                 return true;
             }
 

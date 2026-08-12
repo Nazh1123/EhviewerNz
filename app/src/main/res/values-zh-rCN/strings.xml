@@ -1067,6 +1067,20 @@
     <string name="parent_gallery_list_title">父画廊</string>
     <string name="parent_gallery_list_loading">正在查找父画廊…</string>
     <string name="parent_gallery_list_failed">父画廊列表加载失败：%s</string>
+    <string name="gallery_history_empty">此画廊没有父画廊历史</string>
+    <string name="gallery_history_title">画廊历史</string>
+    <string name="gallery_update_no_new_version">此画廊没有更新版本</string>
+    <string name="gallery_update_no_parent">所选画廊没有父画廊</string>
+    <string name="gallery_update_resolving">正在解析完整的父画廊链…</string>
+    <string name="gallery_update_no_downloaded_parent">未找到已下载的父画廊，没有可复用的内容</string>
+    <string name="gallery_update_reuse_confirm">将仅从最新的已下载父画廊复用页面：\n%1$s（GID %2$d）\n\n新画廊全部下载成功后，将删除 %3$d 个已下载父画廊及其本地文件。父画廊中缺失或未完成的页面会正常联网下载。</string>
+    <string name="gallery_update_started">画廊更新已加入下载列表</string>
+    <string name="gallery_update_background_started">正在后台准备画廊更新</string>
+    <string name="gallery_update_notification_preparing_title">正在准备画廊更新</string>
+    <string name="gallery_update_notification_preparing_count">正在解析 %d 个画廊的父画廊历史…</string>
+    <string name="gallery_update_notification_failed_title">画廊更新失败</string>
+    <string name="gallery_update_notification_failed">%1$s\n%2$s</string>
+    <string name="gallery_update_chain_failed">无法解析画廊历史：%s</string>
     <string name="open_direct_parent">直接打开父画廊</string>
 
     <string name="settings_animated_webp_controls">动图控制</string>

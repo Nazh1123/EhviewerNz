@@ -19,6 +19,8 @@ package com.hippo.ehviewer.ui;
 import android.app.Activity;
 import android.content.Intent;
 
+import androidx.annotation.NonNull;
+
 import com.hippo.app.ListCheckBoxDialogBuilder;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
@@ -26,6 +28,7 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
+import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
 import com.hippo.ehviewer.download.DownloadManager;
@@ -42,6 +45,15 @@ import java.util.Collections;
 import java.util.List;
 
 public final class CommonOperations {
+
+    public static void startGalleryUpdate(@NonNull MainActivity activity,
+                                          @NonNull GalleryDetail galleryDetail) {
+        Intent intent = new Intent(activity, DownloadService.class);
+        intent.setAction(DownloadService.ACTION_START_GALLERY_UPDATE);
+        intent.putExtra(DownloadService.KEY_GALLERY_INFO, galleryDetail);
+        activity.startService(intent);
+        activity.showTip(R.string.gallery_update_background_started, BaseScene.LENGTH_SHORT);
+    }
 
     private static void doAddToFavorites(Activity activity, GalleryInfo galleryInfo,
                                          int slot, EhClient.Callback<Void> listener) {
