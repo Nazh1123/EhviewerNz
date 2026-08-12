@@ -21,6 +21,7 @@ import android.content.DialogInterface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.NinePatchDrawable;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -39,6 +40,7 @@ import com.h6ah4i.android.widget.advrecyclerview.draggable.DraggableItemAdapter;
 import com.h6ah4i.android.widget.advrecyclerview.draggable.ItemDraggableRange;
 import com.h6ah4i.android.widget.advrecyclerview.draggable.RecyclerViewDragDropManager;
 import com.h6ah4i.android.widget.advrecyclerview.utils.AbstractDraggableItemViewHolder;
+import com.hippo.app.EditTextDialogBuilder;
 import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.R;
@@ -160,7 +162,8 @@ public final class QuickSearchScene extends ToolbarScene {
         }
     }
 
-    private class QuickSearchHolder extends AbstractDraggableItemViewHolder implements View.OnClickListener {
+    private class QuickSearchHolder extends AbstractDraggableItemViewHolder
+            implements View.OnClickListener, View.OnLongClickListener {
 
         public final TextView label;
         public final View dragHandler;
@@ -175,6 +178,8 @@ public final class QuickSearchScene extends ToolbarScene {
             delete = ViewUtils.$$(itemView, R.id.delete);
             subscription = (ImageView) ViewUtils.$$(itemView, R.id.bookmark_subscription);
 
+            label.setOnClickListener(this);
+            label.setOnLongClickListener(this);
             delete.setOnClickListener(this);
             subscription.setOnClickListener(this);
         }
@@ -188,7 +193,9 @@ public final class QuickSearchScene extends ToolbarScene {
             }
 
             final QuickSearch quickSearch = mQuickSearchList.get(position);
-            if (v == subscription) {
+            if (v == label) {
+                showRenameDialog(quickSearch, position);
+            } else if (v == subscription) {
                 if (!BookmarkSubscriptionCoordinator.isSupported(quickSearch)) {
                     Toast.makeText(context, R.string.bookmark_subscription_unsupported,
                             Toast.LENGTH_SHORT).show();
@@ -204,8 +211,8 @@ public final class QuickSearchScene extends ToolbarScene {
                                 : R.string.bookmark_subscription_disabled,
                         quickSearch.name), Toast.LENGTH_SHORT).show();
                 return;
-            }
-            new AlertDialog.Builder(context)
+            } else if (v == delete) {
+                new AlertDialog.Builder(context)
                     .setTitle(R.string.delete_quick_search_title)
                     .setMessage(getString(R.string.delete_quick_search_message, quickSearch.name))
                     .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
@@ -224,7 +231,70 @@ public final class QuickSearchScene extends ToolbarScene {
                             updateView();
                         }
                     }).show();
+            }
         }
+
+        @Override
+        public boolean onLongClick(View v) {
+            int position = getAdapterPosition();
+            Context context = getEHContext();
+            if (v != label || position == RecyclerView.NO_POSITION || context == null
+                    || mQuickSearchList == null) {
+                return false;
+            }
+
+            QuickSearch quickSearch = mQuickSearchList.get(position);
+            String keyword = quickSearch.keyword == null ? "" : quickSearch.keyword;
+            if (quickSearch.advanceSearch != -1) {
+                keyword = "\"" + keyword + "\", advanced*";
+            }
+            new AlertDialog.Builder(context)
+                    .setTitle(R.string.quick_search_original_keyword_title)
+                    .setMessage(keyword)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+            return true;
+        }
+    }
+
+    private void showRenameDialog(QuickSearch quickSearch, int position) {
+        Context context = getEHContext();
+        if (context == null) {
+            return;
+        }
+
+        EditTextDialogBuilder builder = new EditTextDialogBuilder(
+                context, quickSearch.name, getString(R.string.quick_search));
+        builder.setTitle(R.string.rename_quick_search_dialog_title);
+        builder.setPositiveButton(android.R.string.ok, null);
+        AlertDialog dialog = builder.show();
+        dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String name = builder.getText().trim();
+            if (TextUtils.isEmpty(name)) {
+                builder.setError(getString(R.string.name_is_empty));
+                return;
+            }
+            if (mQuickSearchList == null) {
+                dialog.dismiss();
+                return;
+            }
+            for (QuickSearch item : mQuickSearchList) {
+                if (item != quickSearch && name.equals(item.name)) {
+                    builder.setError(getString(R.string.duplicate_name));
+                    return;
+                }
+            }
+
+            builder.setError(null);
+            dialog.dismiss();
+            if (!name.equals(quickSearch.name)) {
+                quickSearch.name = name;
+                EhDB.updateQuickSearch(quickSearch);
+                if (mAdapter != null) {
+                    mAdapter.notifyItemChanged(position);
+                }
+            }
+        });
     }
 
     private class QuickSearchAdapter extends RecyclerView.Adapter<QuickSearchHolder>
