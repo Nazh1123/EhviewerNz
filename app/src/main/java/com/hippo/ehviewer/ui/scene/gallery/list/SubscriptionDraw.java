@@ -12,6 +12,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.Toolbar;
 import androidx.viewpager.widget.ViewPager;
 
@@ -194,19 +195,13 @@ public class SubscriptionDraw {
         final EditTextDialogBuilder builder = new EditTextDialogBuilder(context,
                 tagName, context.getString(R.string.tag_title));
         builder.setTitle(R.string.add_tag_dialog_title);
-        builder.setPositiveButton(R.string.subscription_watched, this::onDialogPositiveButtonClick);
-        builder.setNegativeButton(R.string.subscription_hidden, this::onDialogNegativeButtonClick);
-        builder.show();
-    }
-
-    private void onDialogNegativeButtonClick(DialogInterface dialog, int which) {
-        dialog.dismiss();
-        requestTag(tagName, false);
-    }
-
-    private void onDialogPositiveButtonClick(DialogInterface dialog, int which) {
-        dialog.dismiss();
-        requestTag(tagName, true);
+        builder.setPositiveButton(R.string.subscription_watched, null);
+        builder.setNegativeButton(R.string.subscription_hidden, null);
+        AlertDialog dialog = builder.show();
+        dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(view ->
+                builder.dismiss(() -> requestTag(tagName, true)));
+        dialog.getButton(DialogInterface.BUTTON_NEGATIVE).setOnClickListener(view ->
+                builder.dismiss(() -> requestTag(tagName, false)));
     }
 
     private void loadData() throws EhException {

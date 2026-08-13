@@ -1270,7 +1270,7 @@ public class DownloadsScene extends ToolbarScene
             } else if (getString(R.string.default_download_label_name).equals(text)) {
                 builder.setError(getString(R.string.label_text_is_invalid));
             } else if (originalLabel.equals(text)) {
-                dialog.dismiss();
+                builder.dismiss();
             } else if (mDownloadManager != null && mDownloadManager.containLabel(text)) {
                 new AlertDialog.Builder(context)
                         .setTitle(R.string.label_text_exist)
@@ -1281,7 +1281,7 @@ public class DownloadsScene extends ToolbarScene
                                     if (mDownloadManager != null
                                             && mDownloadManager.mergeLabel(originalLabel, text)) {
                                         builder.setError(null);
-                                        dialog.dismiss();
+                                        builder.dismiss();
                                     } else {
                                         builder.setError(getString(R.string.label_text_exist));
                                     }
@@ -1290,8 +1290,11 @@ public class DownloadsScene extends ToolbarScene
                         .show();
             } else if (mDownloadManager != null) {
                 builder.setError(null);
-                dialog.dismiss();
-                mDownloadManager.renameLabel(originalLabel, text);
+                builder.dismiss(() -> {
+                    if (mDownloadManager != null) {
+                        mDownloadManager.renameLabel(originalLabel, text);
+                    }
+                });
             }
         });
     }

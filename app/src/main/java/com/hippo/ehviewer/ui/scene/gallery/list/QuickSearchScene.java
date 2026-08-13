@@ -275,7 +275,7 @@ public final class QuickSearchScene extends ToolbarScene {
                 return;
             }
             if (mQuickSearchList == null) {
-                dialog.dismiss();
+                builder.dismiss();
                 return;
             }
             for (QuickSearch item : mQuickSearchList) {
@@ -286,14 +286,15 @@ public final class QuickSearchScene extends ToolbarScene {
             }
 
             builder.setError(null);
-            dialog.dismiss();
-            if (!name.equals(quickSearch.name)) {
-                quickSearch.name = name;
-                EhDB.updateQuickSearch(quickSearch);
-                if (mAdapter != null) {
-                    mAdapter.notifyItemChanged(position);
+            builder.dismiss(() -> {
+                if (!name.equals(quickSearch.name)) {
+                    quickSearch.name = name;
+                    EhDB.updateQuickSearch(quickSearch);
+                    if (mAdapter != null) {
+                        mAdapter.notifyItemChanged(position);
+                    }
                 }
-            }
+            });
         });
     }
 

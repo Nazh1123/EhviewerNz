@@ -460,11 +460,9 @@ public class DownloadLabelsScene extends ToolbarScene {
     private class NewLabelDialogHelper implements View.OnClickListener {
 
         private final EditTextDialogBuilder mBuilder;
-        private final AlertDialog mDialog;
 
         public NewLabelDialogHelper(EditTextDialogBuilder builder, AlertDialog dialog) {
             mBuilder = builder;
-            mDialog = dialog;
             Button button = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
             if (button != null) {
                 button.setOnClickListener(this);
@@ -487,18 +485,19 @@ public class DownloadLabelsScene extends ToolbarScene {
                 mBuilder.setError(getString(R.string.label_text_exist));
             } else {
                 mBuilder.setError(null);
-                mDialog.dismiss();
-                EhApplication.getDownloadManager(context).addLabel(text);
-                if (mAdapter != null && mList != null) {
-                    mAdapter.notifyItemInserted(mList.size() - 1);
-                }
-                if (mViewTransition != null) {
-                    if (mList != null && mList.size() > 0) {
-                        mViewTransition.showView(0);
-                    } else {
-                        mViewTransition.showView(1);
+                mBuilder.dismiss(() -> {
+                    EhApplication.getDownloadManager(context).addLabel(text);
+                    if (mAdapter != null && mList != null) {
+                        mAdapter.notifyItemInserted(mList.size() - 1);
                     }
-                }
+                    if (mViewTransition != null) {
+                        if (mList != null && mList.size() > 0) {
+                            mViewTransition.showView(0);
+                        } else {
+                            mViewTransition.showView(1);
+                        }
+                    }
+                });
             }
         }
 
@@ -507,14 +506,12 @@ public class DownloadLabelsScene extends ToolbarScene {
     private class RenameLabelDialogHelper implements View.OnClickListener {
 
         private final EditTextDialogBuilder mBuilder;
-        private final AlertDialog mDialog;
         private final String mOriginalLabel;
         private final int mPosition;
 
         public RenameLabelDialogHelper(EditTextDialogBuilder builder, AlertDialog dialog,
                 String originalLabel, int position) {
             mBuilder = builder;
-            mDialog = dialog;
             mOriginalLabel = originalLabel;
             mPosition = position;
             Button button = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
@@ -537,16 +534,17 @@ public class DownloadLabelsScene extends ToolbarScene {
                 mBuilder.setError(getString(R.string.label_text_is_invalid));
             } else if (mOriginalLabel.equals(text)) {
                 mBuilder.setError(null);
-                mDialog.dismiss();
+                mBuilder.dismiss();
             } else if (EhApplication.getDownloadManager(context).containLabel(text)) {
                 showMergeLabelDialog(context, text);
             } else {
                 mBuilder.setError(null);
-                mDialog.dismiss();
-                EhApplication.getDownloadManager(context).renameLabel(mOriginalLabel, text);
-                if (mAdapter != null) {
-                    mAdapter.notifyItemChanged(mPosition);
-                }
+                mBuilder.dismiss(() -> {
+                    EhApplication.getDownloadManager(context).renameLabel(mOriginalLabel, text);
+                    if (mAdapter != null) {
+                        mAdapter.notifyItemChanged(mPosition);
+                    }
+                });
             }
         }
 
@@ -562,7 +560,7 @@ public class DownloadLabelsScene extends ToolbarScene {
                             return;
                         }
                         mBuilder.setError(null);
-                        mDialog.dismiss();
+                        mBuilder.dismiss();
                         clearSelection();
                         updateView();
                     })

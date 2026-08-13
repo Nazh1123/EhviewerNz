@@ -1107,47 +1107,48 @@ public class GalleryListScene extends BaseScene
             }
 
             builder.setError(null);
-            dialog.dismiss();
-            QuickSearch quickSearch = urlBuilder.toQuickSearch();
+            builder.dismiss(() -> {
+                QuickSearch quickSearch = urlBuilder.toQuickSearch();
 
-            //汉化or不汉化
-            if (translation) {
-                if (ehTags == null) {
-                    ehTags = EhTagDatabase.getInstance(context);
-                }
+                //汉化or不汉化
+                if (translation) {
+                    if (ehTags == null) {
+                        ehTags = EhTagDatabase.getInstance(context);
+                    }
                 //根据‘：’分割字符串为组名和标签名
                 //String[] tags = text.split(":");
                 //quickSearch.name = TagTranslationUtil.getTagCN(tags, ehTags);
 //                String[] parts = text.split("(?=(?:(?:[^\"]*\"){2})*[^\"]*$)\\s+");
-                String[] parts = text.split("  ");
-                StringBuilder newText = new StringBuilder();
-                for (String part : parts) {
-                    String[] tags = part.split(":");
-                    for (int j = 0; j < tags.length; j++) {
-                        tags[j] = tags[j].replace("\"", "").replace("$", "");
+                    String[] parts = text.split("  ");
+                    StringBuilder newText = new StringBuilder();
+                    for (String part : parts) {
+                        String[] tags = part.split(":");
+                        for (int j = 0; j < tags.length; j++) {
+                            tags[j] = tags[j].replace("\"", "").replace("$", "");
+                        }
+                        String trans = TagTranslationUtil.getTagCN(tags, ehTags);
+                        if (newText.length() == 0) {
+                            newText.append(trans);
+                        } else {
+                            newText.append("  ").append(trans);
+                        }
                     }
-                    String trans = TagTranslationUtil.getTagCN(tags, ehTags);
-                    if (newText.length() == 0) {
-                        newText.append(trans);
-                    } else {
-                        newText.append("  ").append(trans);
-                    }
+                    quickSearch.name = newText.toString();
+                } else {
+                    quickSearch.name = text;
                 }
-                quickSearch.name = newText.toString();
-            } else {
-                quickSearch.name = text;
-            }
-            EhDB.insertQuickSearch(quickSearch);
-            list.add(quickSearch);
-            adapter.notifyDataSetChanged();
+                EhDB.insertQuickSearch(quickSearch);
+                list.add(quickSearch);
+                adapter.notifyDataSetChanged();
 
-            if (0 == list.size()) {
-                tip.setVisibility(View.VISIBLE);
-                listView.setVisibility(View.GONE);
-            } else {
-                tip.setVisibility(View.GONE);
-                listView.setVisibility(View.VISIBLE);
-            }
+                if (0 == list.size()) {
+                    tip.setVisibility(View.VISIBLE);
+                    listView.setVisibility(View.GONE);
+                } else {
+                    tip.setVisibility(View.GONE);
+                    listView.setVisibility(View.VISIBLE);
+                }
+            });
         });
     }
 
