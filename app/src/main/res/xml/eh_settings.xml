@@ -107,6 +107,12 @@
         android:title="@string/settings_eh_show_thumbnail_download_badge" />
 
     <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="show_thumbnail_info_bar"
+        android:summary="@string/settings_eh_show_thumbnail_info_bar_summary"
+        android:title="@string/settings_eh_show_thumbnail_info_bar" />
+
+    <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
         android:key="show_read_progress"
         android:summary="@string/settings_eh_list_show_read_progress_summary"

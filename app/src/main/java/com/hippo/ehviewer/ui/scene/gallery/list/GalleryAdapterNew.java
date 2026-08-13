@@ -241,9 +241,11 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     public void onBindViewHolder(GalleryAdapterNew.GalleryHolder holder, int position) {
         GalleryInfo gi = getDataAt(position);
         if (null == gi) {
+            holder.boundGid = Long.MIN_VALUE;
             holder.selectionOutline.setVisibility(View.GONE);
             return;
         }
+        holder.boundGid = gi.gid;
 
         holder.selectionOutline.setVisibility(
                 isGallerySelected(gi) ? View.VISIBLE : View.GONE);
@@ -271,23 +273,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     holder.pages.setText(null);
                     holder.pages.setVisibility(View.GONE);
                 } else {
-                    if (showReadProgress){
-                        executor.submit(()->{
-                            int startPage = SpiderQueen.findStartPage(mInflater.getContext(), gi);
-                            handler.post(()->{
-                                String text;
-                                if (startPage > 0) {
-                                    text = startPage + 1 + "/" + gi.pages + "P";
-                                    holder.pages.setText(text);
-                                } else {
-                                    text = "0/" + gi.pages + "P";
-                                    holder.pages.setText(text);
-                                }
-                            });
-                        });
-                    }
-                    holder.pages.setText(new StringBuffer(gi.pages + "P"));
                     holder.pages.setVisibility(View.VISIBLE);
+                    bindPageProgress(holder, holder.pages, gi, showReadProgress, true);
                 }
                 if (TextUtils.isEmpty(gi.simpleLanguage)) {
                     holder.simpleLanguage.setText(null);
@@ -313,14 +300,58 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     ((TriangleDrawable) drawable).setColor(color);
                 }
                 holder.simpleLanguage.setText(gi.simpleLanguage);
-                holder.downloaded.setVisibility(
-                        Settings.getShowThumbnailDownloadBadge() &&
-                                mDownloadManager.containDownloadInfo(gi.gid)
-                                ? View.VISIBLE : View.GONE);
+                boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
+                boolean showInfoBar = Settings.isThumbnailInfoBarEffective();
+                holder.thumbnailInfoBar.setVisibility(showInfoBar ? View.VISIBLE : View.GONE);
+                holder.downloaded.setVisibility(!showInfoBar &&
+                        Settings.getShowThumbnailDownloadBadge() && downloaded
+                        ? View.VISIBLE : View.GONE);
+                if (showInfoBar) {
+                    holder.thumbnailPosted.setText(
+                            GalleryListDisplayHelper.formatCompactPosted(gi.posted));
+                    holder.thumbnailCensorship.setText(
+                            GalleryListDisplayHelper.resolveCensorship(
+                                    gi.simpleTags, gi.tgList));
+                    holder.thumbnailDownloaded.setVisibility(
+                            downloaded ? View.VISIBLE : View.GONE);
+                    bindPageProgress(holder, holder.thumbnailPages, gi, true, false);
+                }
                 break;
             }
         }
         ViewCompat.setTransitionName(holder.thumb, TransitionNameFactory.getThumbTransitionName(gi.gid));
+    }
+
+    private void bindPageProgress(@NonNull GalleryHolder holder,
+                                  @NonNull TextView target,
+                                  @NonNull GalleryInfo gi,
+                                  boolean includeReadProgress,
+                                  boolean appendPageSuffix) {
+        if (gi.pages <= 0) {
+            target.setText(GalleryListDisplayHelper.formatPageProgress(
+                    0, gi.pages, appendPageSuffix));
+            return;
+        }
+        if (!includeReadProgress) {
+            target.setText(gi.pages + (appendPageSuffix ? "P" : ""));
+            return;
+        }
+
+        target.setText(appendPageSuffix
+                ? gi.pages + "P"
+                : GalleryListDisplayHelper.formatPageProgress(0, gi.pages, false));
+        long gid = gi.gid;
+        int pages = gi.pages;
+        executor.submit(() -> {
+            int startPage = SpiderQueen.findStartPage(mInflater.getContext(), gi);
+            String text = GalleryListDisplayHelper.formatPageProgress(
+                    startPage, pages, appendPageSuffix);
+            handler.post(() -> {
+                if (holder.boundGid == gid) {
+                    target.setText(text);
+                }
+            });
+        });
     }
 
     public void setThumbItemClickListener(OnThumbItemClickListener listener) {
@@ -344,6 +375,17 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         public final ImageView favourite;
         public final ImageView downloaded;
         public final View selectionOutline;
+        @Nullable
+        public final View thumbnailInfoBar;
+        @Nullable
+        public final TextView thumbnailPosted;
+        @Nullable
+        public final TextView thumbnailCensorship;
+        @Nullable
+        public final ImageView thumbnailDownloaded;
+        @Nullable
+        public final TextView thumbnailPages;
+        public long boundGid = Long.MIN_VALUE;
 
         public GalleryHolder(View itemView, final OnThumbItemClickListener onThumbItemClickListener, int mType) {
             super(itemView);
@@ -358,6 +400,11 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             favourite = itemView.findViewById(R.id.favourited);
             downloaded = itemView.findViewById(R.id.downloaded);
             selectionOutline = itemView.findViewById(R.id.selection_outline);
+            thumbnailInfoBar = itemView.findViewById(R.id.thumbnail_info_bar);
+            thumbnailPosted = itemView.findViewById(R.id.thumbnail_posted);
+            thumbnailCensorship = itemView.findViewById(R.id.thumbnail_censorship);
+            thumbnailDownloaded = itemView.findViewById(R.id.thumbnail_downloaded);
+            thumbnailPages = itemView.findViewById(R.id.thumbnail_pages);
             if (mType == 0) {
                 thumb.setOnClickListener(v -> {
                     if (onThumbItemClickListener != null) {

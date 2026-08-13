@@ -429,6 +429,19 @@ public class Settings {
                 DEFAULT_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
     }
 
+    public static final String KEY_SHOW_THUMBNAIL_INFO_BAR =
+            "show_thumbnail_info_bar";
+    private static final boolean DEFAULT_SHOW_THUMBNAIL_INFO_BAR = false;
+
+    public static boolean getShowThumbnailInfoBar() {
+        return getBoolean(KEY_SHOW_THUMBNAIL_INFO_BAR,
+                DEFAULT_SHOW_THUMBNAIL_INFO_BAR);
+    }
+
+    public static boolean isThumbnailInfoBarEffective() {
+        return getShowThumbnailInfoBar() && getListMode() == 1 && getThumbSize() == 0;
+    }
+
     public static final String KEY_AUTO_SUBSCRIPTION_UPDATES =
             "auto_subscription_updates";
     public static final String KEY_AUTO_SUBSCRIPTION_UPDATES_EH =

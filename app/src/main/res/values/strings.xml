@@ -658,6 +658,8 @@
     <string name="settings_eh_list_mode_thumb">Thumb</string>
     <string name="settings_eh_show_thumbnail_download_badge">Show download badge on thumbnails</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">Show the downloaded gallery badge in the lower-right corner in thumbnail mode</string>
+    <string name="settings_eh_show_thumbnail_info_bar">Show thumbnail info bar</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">Show time, censorship type, download status, and reading progress below large thumbnails</string>
     <string name="settings_eh_detail_size">Detail size</string>
     <string name="settings_eh_detail_size_long">Long</string>
     <string name="settings_eh_detail_size_short">Short</string>

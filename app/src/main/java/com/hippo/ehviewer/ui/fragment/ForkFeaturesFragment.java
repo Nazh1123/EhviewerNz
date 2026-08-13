@@ -35,13 +35,22 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         mManualImageSaveLocation = findPreference(KEY_MANUAL_IMAGE_SAVE_LOCATION);
         Preference showThumbnailDownloadBadge =
                 findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
-        if (showThumbnailDownloadBadge != null) {
-            showThumbnailDownloadBadge.setOnPreferenceChangeListener((preference, newValue) -> {
+        Preference showThumbnailInfoBar =
+                findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR);
+        Preference.OnPreferenceChangeListener galleryListPreferenceListener =
+                (preference, newValue) -> {
                 if (getActivity() != null) {
                     getActivity().setResult(Activity.RESULT_OK);
                 }
                 return true;
-            });
+            };
+        if (showThumbnailDownloadBadge != null) {
+            showThumbnailDownloadBadge.setOnPreferenceChangeListener(
+                    galleryListPreferenceListener);
+        }
+        if (showThumbnailInfoBar != null) {
+            showThumbnailInfoBar.setOnPreferenceChangeListener(
+                    galleryListPreferenceListener);
         }
         Preference bookmarkSubscriptionSettings =
                 findPreference(KEY_BOOKMARK_SUBSCRIPTION_SETTINGS);

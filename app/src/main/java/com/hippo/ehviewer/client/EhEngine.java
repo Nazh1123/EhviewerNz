@@ -223,22 +223,31 @@ public class EhEngine {
 
         boolean hasTags = false;
         boolean hasPages = false;
+        boolean allHaveTags = !list.isEmpty();
+        boolean allHavePages = !list.isEmpty();
         boolean hasRated = false;
         for (GalleryInfo gi : list) {
             if (gi.simpleTags != null) {
                 hasTags = true;
+            } else {
+                allHaveTags = false;
             }
             if (gi.pages != 0) {
                 hasPages = true;
+            } else {
+                allHavePages = false;
             }
             if (gi.rated) {
                 hasRated = true;
             }
         }
 
+        boolean needThumbnailInfo = Settings.isThumbnailInfoBarEffective()
+                && (!allHaveTags || !allHavePages);
         boolean needApi = (filter && sEhFilter.needTags() && !hasTags) ||
                 (Settings.getShowGalleryPages() && !hasPages) ||
-                hasRated;
+                hasRated ||
+                needThumbnailInfo;
         if (needApi) {
             fillGalleryListByApi(task, okHttpClient, list, url);
         }
