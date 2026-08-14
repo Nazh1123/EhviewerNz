@@ -175,6 +175,9 @@
 
     <string name="gallery_list_action_url_missed">没找到下一页</string>
     <string name="gallery_list_no_more_data">当前列表没有更多数据</string>
+    <string name="gallery_list_downloaded_only">查看已下载画廊</string>
+    <string name="gallery_list_downloaded_only_empty">已加载页面中没有已下载画廊，可继续向上滑动查找</string>
+    <string name="gallery_list_downloaded_only_not_found">接下来的 %1$d 页中未找到新的已下载画廊</string>
     <string name="gallery_list_date_jump_1d">昨天</string>
     <string name="gallery_list_date_jump_3d">三天前</string>
     <string name="gallery_list_date_jump_1w">一周前</string>

@@ -260,6 +260,9 @@
 
     <string name="gallery_list_action_url_missed">Next page not found</string>
     <string name="gallery_list_no_more_data">There is no more data for the current listing</string>
+    <string name="gallery_list_downloaded_only">Show downloaded galleries</string>
+    <string name="gallery_list_downloaded_only_empty">No downloaded galleries on the loaded pages. Swipe up to search more.</string>
+    <string name="gallery_list_downloaded_only_not_found">No new downloaded galleries found in the next %1$d page(s)</string>
     <string name="gallery_list_date_jump_1d">Yesterday</string>
     <string name="gallery_list_date_jump_3d">Three days ago</string>
     <string name="gallery_list_date_jump_1w">One week ago</string>

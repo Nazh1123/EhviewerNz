@@ -95,6 +95,7 @@ public class BookmarksDraw {
                 return;
             }
 
+            scene.resetDownloadedOnlyModeForNewSearch();
             scene.mUrlBuilder.set(list.get(position));
             scene.mUrlBuilder.setPageIndex(0);
             scene.onUpdateUrlBuilder();

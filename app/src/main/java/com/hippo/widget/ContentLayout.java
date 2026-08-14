@@ -270,8 +270,11 @@ public class ContentLayout extends FrameLayout {
         private final RecyclerView.OnScrollListener mOnScrollListener = new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
-                if (!mRefreshLayout.isRefreshing() && mRefreshLayout.isAlmostBottom() && (mEndPage < mPages || mNextPage == -1 || mPages == -1)) {
+                if (!mRefreshLayout.isRefreshing() && mRefreshLayout.isAlmostBottom()
+                        && (mEndPage < mPages || mNextPage == -1 || mPages == -1)
+                        && shouldRequestNextPageOnScroll(dy)) {
                     // Get next page
+                    onNextPageRequestFromScroll();
                     mRefreshLayout.setFooterRefreshing(true);
                     mOnRefreshListener.onFooterRefresh();
                 }
@@ -391,6 +394,18 @@ public class ContentLayout extends FrameLayout {
 
         protected abstract void notifyItemRangeInserted(int positionStart, int itemCount);
 
+        /**
+         * Allows a scene to suppress layout-driven footer loads while keeping the default
+         * behaviour for every other content helper.
+         */
+        protected boolean shouldRequestNextPageOnScroll(int dy) {
+            return true;
+        }
+
+        /** Called immediately before a scroll-triggered next-page request starts. */
+        protected void onNextPageRequestFromScroll() {
+        }
+
         protected void onScrollToPosition(int postion) {
         }
 
@@ -449,6 +464,31 @@ public class ContentLayout extends FrameLayout {
 
         public int getPages() {
             return mPages;
+        }
+
+        /**
+         * Returns whether a real page exists after the currently loaded range. Unlike the
+         * legacy footer behaviour, this does not treat refreshing the last page as loading more.
+         */
+        public boolean hasNextPage() {
+            if (mEndPage < mPages) {
+                return true;
+            }
+            return (mPages == -1 || mNextPage == -1)
+                    && nextHref != null && !nextHref.isEmpty();
+        }
+
+        /**
+         * Starts one normal next-page request. This is used for sequential, bounded scans and
+         * deliberately reuses the same cursor and task handling as the footer scroll path.
+         */
+        public boolean requestNextPage() {
+            if (mRefreshLayout.isRefreshing() || !hasNextPage()) {
+                return false;
+            }
+            mRefreshLayout.setFooterRefreshing(true);
+            mOnRefreshListener.onFooterRefresh();
+            return true;
         }
 
         public void addAt(int index, E data) {

@@ -92,7 +92,7 @@
                 android:ellipsize="end"
                 android:singleLine="true"
                 android:textColor="?android:attr/textColorSecondary"
-                android:textSize="11sp" />
+                android:textSize="10sp" />
 
             <TextView
                 android:id="@+id/thumbnail_censorship"
@@ -101,9 +101,8 @@
                 android:gravity="center"
                 android:singleLine="true"
                 android:textColor="?android:attr/textColorSecondary"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:translationX="14dp" />
+                android:textSize="11sp"
+                android:translationX="12dp" />
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -116,7 +115,7 @@
                     android:id="@+id/thumbnail_downloaded"
                     android:layout_width="12dp"
                     android:layout_height="12dp"
-                    android:layout_marginEnd="2dp"
+                    android:layout_marginEnd="4dp"
                     android:contentDescription="@string/download_state_downloaded"
                     android:visibility="gone"
                     app:srcCompat="@drawable/v_download_x16" />
@@ -128,7 +127,7 @@
                     android:ellipsize="end"
                     android:singleLine="true"
                     android:textColor="?android:attr/textColorSecondary"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

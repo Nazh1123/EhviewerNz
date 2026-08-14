@@ -38,6 +38,7 @@ import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
@@ -179,6 +180,7 @@ public class GalleryListScene extends BaseScene
     public final static String KEY_STATE = "state";
     private static final String KEY_MULTI_SELECT_MODE = "multi_select_mode";
     private static final String KEY_SELECTED_GIDS = "selected_gids";
+    private static final String KEY_DOWNLOADED_ONLY_MODE = "downloaded_only_mode";
 
     final static int STATE_NORMAL = 0;
     final static int STATE_SIMPLE_SEARCH = 1;
@@ -192,6 +194,10 @@ public class GalleryListScene extends BaseScene
     private static final int FAB_GO_TO = 4;
     private static final int FAB_REFRESH = 5;
     private static final int FAB_RANDOM = 6;
+    private static final int FAB_DOWNLOADED_ONLY = 7;
+
+    private static final int DOWNLOADED_SCAN_PAGE_LIMIT = 5;
+    private static final int DOWNLOADED_SUBSCRIPTION_SCAN_PAGE_LIMIT = 2;
 
     private static final long ANIMATE_TIME = 300L;
 
@@ -225,6 +231,8 @@ public class GalleryListScene extends BaseScene
     private FloatingActionButton mFloatingActionButton;
     @Nullable
     private FloatingActionButton mMultiSelectFab;
+    @Nullable
+    private FloatingActionButton mDownloadedOnlyFab;
     @Nullable
     private ViewTransition mViewTransition;
     @Nullable
@@ -288,6 +296,9 @@ public class GalleryListScene extends BaseScene
     private final RecyclerView.OnScrollListener mOnScrollListener = new RecyclerView.OnScrollListener() {
         @Override
         public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+            if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                mDownloadedBrowseGestureArmed = false;
+            }
         }
 
         @Override
@@ -321,6 +332,13 @@ public class GalleryListScene extends BaseScene
     private DownloadManager.DownloadInfoListener mDownloadInfoListener;
     private boolean mMultiSelectMode;
     private final Set<Long> mSelectedGids = new HashSet<>();
+    private boolean mDownloadedOnlyMode;
+    private boolean mDownloadedPageScanActive;
+    private int mDownloadedPageScanRemaining;
+    private int mDownloadedPageScanLimit;
+    private final Set<Long> mDownloadedPageScanBaselineGids = new HashSet<>();
+    private float mDownloadedBrowseTouchDownY = Float.NaN;
+    private boolean mDownloadedBrowseGestureArmed;
     private FavouriteStatusRouter mFavouriteStatusRouter;
     private FavouriteStatusRouter.Listener mFavouriteStatusRouterListener;
     @Nullable
@@ -371,6 +389,7 @@ public class GalleryListScene extends BaseScene
         if (mMultiSelectMode) {
             exitMultiSelectMode();
         }
+        resetDownloadedOnlyModeForNewSearch();
         handleArgs(args);
         markSubscriptionOpened();
         onUpdateUrlBuilder();
@@ -402,14 +421,12 @@ public class GalleryListScene extends BaseScene
 
             @Override
             public void onAdd(@NonNull DownloadInfo info, @NonNull List<DownloadInfo> list, int position) {
-                if (mAdapter != null) {
-                    mAdapter.notifyDataSetChanged();
-                }
+                onDownloadMembershipChanged();
             }
 
             @Override
             public void onReplace(@NonNull DownloadInfo newInfo, @NonNull DownloadInfo oldInfo) {
-
+                onDownloadMembershipChanged();
             }
 
             @Override
@@ -422,16 +439,12 @@ public class GalleryListScene extends BaseScene
 
             @Override
             public void onReload() {
-                if (mAdapter != null) {
-                    mAdapter.notifyDataSetChanged();
-                }
+                onDownloadMembershipChanged();
             }
 
             @Override
             public void onChange() {
-                if (mAdapter != null) {
-                    mAdapter.notifyDataSetChanged();
-                }
+                onDownloadMembershipChanged();
             }
 
             @Override
@@ -440,9 +453,7 @@ public class GalleryListScene extends BaseScene
 
             @Override
             public void onRemove(@NonNull DownloadInfo info, @NonNull List<DownloadInfo> list, int position) {
-                if (mAdapter != null) {
-                    mAdapter.notifyDataSetChanged();
-                }
+                onDownloadMembershipChanged();
             }
 
             @Override
@@ -482,6 +493,7 @@ public class GalleryListScene extends BaseScene
         mUrlBuilder = savedInstanceState.getParcelable(KEY_LIST_URL_BUILDER);
         mState = savedInstanceState.getInt(KEY_STATE);
         mMultiSelectMode = savedInstanceState.getBoolean(KEY_MULTI_SELECT_MODE);
+        mDownloadedOnlyMode = savedInstanceState.getBoolean(KEY_DOWNLOADED_ONLY_MODE);
         long[] selectedGids = savedInstanceState.getLongArray(KEY_SELECTED_GIDS);
         if (selectedGids != null) {
             for (long gid : selectedGids) {
@@ -505,6 +517,7 @@ public class GalleryListScene extends BaseScene
         outState.putParcelable(KEY_LIST_URL_BUILDER, mUrlBuilder);
         outState.putInt(KEY_STATE, mState);
         outState.putBoolean(KEY_MULTI_SELECT_MODE, mMultiSelectMode);
+        outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
         long[] selectedGids = new long[mSelectedGids.size()];
         int selectedIndex = 0;
         for (long gid : mSelectedGids) {
@@ -725,6 +738,8 @@ public class GalleryListScene extends BaseScene
         mFabLayout = (FabLayout) ViewUtils.$$(mainLayout, R.id.fab_layout);
         mFloatingActionButton = (FloatingActionButton) ViewUtils.$$(mFabLayout, R.id.tag_filter);
         mMultiSelectFab = (FloatingActionButton) ViewUtils.$$(mFabLayout, R.id.multi_select_fab);
+        mDownloadedOnlyFab = (FloatingActionButton) ViewUtils.$$(mFabLayout,
+                R.id.downloaded_only_fab);
 
         onFilter(filterOpen, filterTagList.size());
 
@@ -742,6 +757,7 @@ public class GalleryListScene extends BaseScene
 
         mAdapter = new GalleryListAdapter(inflater, resources,
                 mRecyclerView, Settings.getListMode());
+        mAdapter.onDownloadedOnlyModeChanged();
 
         mAdapter.setThumbItemClickListener(this::onThumbItemClick);
         mRecyclerView.setSelector(Ripple.generateRippleDrawable(context, !AttrResources.getAttrBoolean(context, androidx.appcompat.R.attr.isLightTheme), new ColorDrawable(Color.TRANSPARENT)));
@@ -751,6 +767,14 @@ public class GalleryListScene extends BaseScene
         mRecyclerView.setOnItemLongClickListener(this);
         assert mOnScrollListener != null;
         mRecyclerView.addOnScrollListener(mOnScrollListener);
+        mRecyclerView.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
+            @Override
+            public boolean onInterceptTouchEvent(@NonNull RecyclerView recyclerView,
+                                                 @NonNull MotionEvent event) {
+                handleDownloadedOnlyBrowseTouch(event);
+                return false;
+            }
+        });
 //        mRecyclerView.setOnGenericMotionListener(this::onGenericMotion);
         fastScroller.setPadding(fastScroller.getPaddingLeft(), fastScroller.getPaddingTop() + paddingTopSB,
                 fastScroller.getPaddingRight(), fastScroller.getPaddingBottom());
@@ -780,6 +804,7 @@ public class GalleryListScene extends BaseScene
         mActionFabDrawable = new AddDeleteDrawable(context, resources.getColor(R.color.primary_drawable_dark, null));
         mFabLayout.getPrimaryFab().setImageDrawable(mActionFabDrawable);
         updateMultiSelectFabState(false);
+        updateDownloadedOnlyFabState();
 
         mSearchFab.setOnClickListener(this);
 
@@ -925,6 +950,8 @@ public class GalleryListScene extends BaseScene
             alertDialog.dismiss();
         }
 
+        resetDownloadedOnlyModeForNewSearch();
+
         if (filterOpen) {
             mUrlBuilder.set(searchTagBuild(tagName), ListUrlBuilder.MODE_FILTER);
             onFilter(filterOpen, filterTagList.size());
@@ -1000,6 +1027,9 @@ public class GalleryListScene extends BaseScene
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        stopDownloadedPageScan(false);
+        mDownloadedBrowseTouchDownY = Float.NaN;
+        mDownloadedBrowseGestureArmed = false;
 
         if (null != mShowcaseView) {
             ViewUtils.removeFromParent(mShowcaseView);
@@ -1035,6 +1065,7 @@ public class GalleryListScene extends BaseScene
         mSearchFab = null;
         mFloatingActionButton = null;
         mMultiSelectFab = null;
+        mDownloadedOnlyFab = null;
         mViewTransition = null;
         mLeftDrawable = null;
         mRightDrawable = null;
@@ -1319,6 +1350,7 @@ public class GalleryListScene extends BaseScene
         }
 
         if (filterOpen && filterTagList.size() > 1) {
+            resetDownloadedOnlyModeForNewSearch();
             filterTagList.remove(filterTagList.size() - 1);
             mUrlBuilder.set(listToString(filterTagList), ListUrlBuilder.MODE_FILTER);
             onFilter(filterOpen, filterTagList.size());
@@ -1354,7 +1386,7 @@ public class GalleryListScene extends BaseScene
 
     @Override
     public boolean onItemClick(EasyRecyclerView parent, View view, int position, long id) {
-        return onItemClick(view, mHelper.getDataAtEx(position));
+        return onItemClick(view, mAdapter != null ? mAdapter.getDataAt(position) : null);
     }
 
     public boolean onItemClick(View view, GalleryInfo gi) {
@@ -1387,8 +1419,7 @@ public class GalleryListScene extends BaseScene
 
     @Override
     public boolean onItemLongClick(EasyRecyclerView parent, View view, int position, long id) {
-        assert mHelper != null;
-        return onItemLongClick(mHelper.getDataAtEx(position), view);
+        return onItemLongClick(mAdapter != null ? mAdapter.getDataAt(position) : null, view);
     }
 
     public boolean onItemLongClick(GalleryInfo gi, View view) {
@@ -1493,6 +1524,166 @@ public class GalleryListScene extends BaseScene
         return true;
     }
 
+    private void onDownloadMembershipChanged() {
+        if (mAdapter != null) {
+            mAdapter.onSourceDataSetChanged();
+        }
+    }
+
+    private void setDownloadedOnlyMode(boolean enabled, boolean showEmptyTip) {
+        if (mDownloadedOnlyMode == enabled) {
+            if (!enabled) {
+                stopDownloadedPageScan(false);
+            }
+            return;
+        }
+
+        mDownloadedOnlyMode = enabled;
+        stopDownloadedPageScan(false);
+        mDownloadedBrowseGestureArmed = false;
+        if (mAdapter != null) {
+            mAdapter.onDownloadedOnlyModeChanged();
+        }
+        updateDownloadedOnlyFabState();
+
+        if (mFabLayout != null && !mMultiSelectMode) {
+            showNormalFabs(mFabLayout);
+        }
+        if (enabled && mHelper != null
+                && (!mHelper.getData().isEmpty() || mHelper.hasNextPage())) {
+            // Keep the recycler visible even when the projection is empty so an upward swipe at
+            // the bottom can request the next group of result pages.
+            mHelper.showContent();
+        } else if (!enabled && mHelper != null && mHelper.getData().isEmpty()) {
+            mHelper.showEmptyString();
+        }
+        if (enabled && showEmptyTip && mAdapter != null && mAdapter.getItemCount() == 0) {
+            showTip(R.string.gallery_list_downloaded_only_empty, LENGTH_SHORT);
+        }
+    }
+
+    void resetDownloadedOnlyModeForNewSearch() {
+        setDownloadedOnlyMode(false, false);
+    }
+
+    private void updateDownloadedOnlyFabState() {
+        if (mDownloadedOnlyFab == null) {
+            return;
+        }
+        mDownloadedOnlyFab.setImageResource(mDownloadedOnlyMode
+                ? R.drawable.v_download_box_dark_x24
+                : R.drawable.v_download_box_outline_dark_x24);
+    }
+
+    private int getDownloadedPageScanLimit() {
+        return isBookmarkSubscriptionMode()
+                ? DOWNLOADED_SUBSCRIPTION_SCAN_PAGE_LIMIT
+                : DOWNLOADED_SCAN_PAGE_LIMIT;
+    }
+
+    private void prepareDownloadedPageScan() {
+        if (!mDownloadedOnlyMode || mDownloadedPageScanActive || mAdapter == null) {
+            return;
+        }
+        mDownloadedPageScanActive = true;
+        mDownloadedBrowseGestureArmed = false;
+        mDownloadedPageScanLimit = getDownloadedPageScanLimit();
+        mDownloadedPageScanRemaining = mDownloadedPageScanLimit;
+        mDownloadedPageScanBaselineGids.clear();
+        mAdapter.addVisibleGidsTo(mDownloadedPageScanBaselineGids);
+    }
+
+    private void startDownloadedPageScan() {
+        if (!mDownloadedOnlyMode || mDownloadedPageScanActive || mHelper == null) {
+            return;
+        }
+        if (!mHelper.hasNextPage()) {
+            showTip(R.string.gallery_list_no_more_data, LENGTH_SHORT);
+            return;
+        }
+        prepareDownloadedPageScan();
+        if (!mDownloadedPageScanActive || !mHelper.requestNextPage()) {
+            stopDownloadedPageScan(false);
+        }
+    }
+
+    private void onDownloadedPageScanPageLoaded() {
+        if (!mDownloadedPageScanActive || !mDownloadedOnlyMode || mAdapter == null) {
+            return;
+        }
+
+        mDownloadedPageScanRemaining--;
+        if (mAdapter.hasVisibleGidOutside(mDownloadedPageScanBaselineGids)) {
+            stopDownloadedPageScan(false);
+            return;
+        }
+
+        if (mDownloadedPageScanRemaining <= 0 || mHelper == null
+                || !mHelper.hasNextPage()) {
+            stopDownloadedPageScan(true);
+            return;
+        }
+
+        EasyRecyclerView recyclerView = mRecyclerView;
+        if (recyclerView == null) {
+            stopDownloadedPageScan(false);
+            return;
+        }
+        recyclerView.post(() -> {
+            if (mDownloadedPageScanActive && mDownloadedOnlyMode
+                    && mHelper != null && !mHelper.requestNextPage()) {
+                stopDownloadedPageScan(true);
+            }
+        });
+    }
+
+    private void stopDownloadedPageScan(boolean showNotFoundTip) {
+        int attemptedPages = mDownloadedPageScanLimit - mDownloadedPageScanRemaining;
+        boolean wasActive = mDownloadedPageScanActive;
+        mDownloadedPageScanActive = false;
+        mDownloadedPageScanRemaining = 0;
+        mDownloadedPageScanLimit = 0;
+        mDownloadedPageScanBaselineGids.clear();
+        if (showNotFoundTip && mDownloadedOnlyMode && mHelper != null
+                && mHelper.hasNextPage()) {
+            mHelper.showContent();
+        }
+        if (showNotFoundTip && wasActive && attemptedPages > 0) {
+            showTip(getString(R.string.gallery_list_downloaded_only_not_found,
+                    attemptedPages), LENGTH_SHORT);
+        }
+    }
+
+    private void handleDownloadedOnlyBrowseTouch(@NonNull MotionEvent event) {
+        if (!mDownloadedOnlyMode || mDownloadedPageScanActive || mRecyclerView == null) {
+            mDownloadedBrowseTouchDownY = Float.NaN;
+            return;
+        }
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                mDownloadedBrowseTouchDownY = event.getY();
+                mDownloadedBrowseGestureArmed = true;
+                break;
+            case MotionEvent.ACTION_UP:
+                if (!Float.isNaN(mDownloadedBrowseTouchDownY)
+                        && mDownloadedBrowseTouchDownY - event.getY() >= mHideActionFabSlop
+                        && !mRecyclerView.canScrollVertically(1)) {
+                    startDownloadedPageScan();
+                }
+                if (mRecyclerView.getScrollState() == RecyclerView.SCROLL_STATE_IDLE) {
+                    mDownloadedBrowseGestureArmed = false;
+                }
+                mDownloadedBrowseTouchDownY = Float.NaN;
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                mDownloadedBrowseTouchDownY = Float.NaN;
+                mDownloadedBrowseGestureArmed = false;
+                break;
+            default:
+                break;
+        }
+    }
+
     private void enterMultiSelectMode() {
         mMultiSelectMode = true;
         updateMultiSelectFabState(true);
@@ -1533,6 +1724,7 @@ public class GalleryListScene extends BaseScene
             fabLayout.setSecondaryFabVisibilityAt(FAB_GO_TO, false);
             fabLayout.setSecondaryFabVisibilityAt(FAB_REFRESH, false);
             fabLayout.setSecondaryFabVisibilityAt(FAB_RANDOM, false);
+            fabLayout.setSecondaryFabVisibilityAt(FAB_DOWNLOADED_ONLY, false);
             fabLayout.setAutoCancel(false);
             fabLayout.setExpanded(true, animation);
         } else {
@@ -1555,21 +1747,19 @@ public class GalleryListScene extends BaseScene
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DELETE, false);
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT, true);
         fabLayout.setSecondaryFabVisibilityAt(FAB_TAG_FILTER, true);
-        fabLayout.setSecondaryFabVisibilityAt(FAB_GO_TO, true);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_GO_TO, !mDownloadedOnlyMode);
         fabLayout.setSecondaryFabVisibilityAt(FAB_REFRESH, true);
         fabLayout.setSecondaryFabVisibilityAt(FAB_RANDOM, true);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_DOWNLOADED_ONLY, true);
     }
 
     private void notifyGallerySelectionChanged(long gid) {
-        if (mAdapter == null || mHelper == null) {
+        if (mAdapter == null) {
             return;
         }
-        for (int i = 0, size = mHelper.size(); i < size; i++) {
-            GalleryInfo galleryInfo = mHelper.getDataAtEx(i);
-            if (galleryInfo != null && galleryInfo.gid == gid) {
-                mAdapter.notifyItemChanged(i);
-                return;
-            }
+        int position = mAdapter.findVisiblePosition(gid);
+        if (position >= 0) {
+            mAdapter.notifyItemChanged(position);
         }
     }
 
@@ -1800,11 +1990,14 @@ public class GalleryListScene extends BaseScene
                 mHelper.refresh();
                 break;
             case FAB_RANDOM:
-                List<GalleryInfo> gInfoL = mHelper.getData();
-                if (gInfoL == null || gInfoL.isEmpty()) {
+                if (mAdapter == null || mAdapter.getItemCount() == 0) {
                     return;
                 }
-                onItemClick(null, gInfoL.get((int) (Math.random() * gInfoL.size())));
+                onItemClick(null, mAdapter.getDataAt(
+                        (int) (Math.random() * mAdapter.getItemCount())));
+                break;
+            case FAB_DOWNLOADED_ONLY:
+                setDownloadedOnlyMode(!mDownloadedOnlyMode, true);
                 break;
         }
 
@@ -2137,6 +2330,7 @@ public class GalleryListScene extends BaseScene
             mUrlBuilder.setMode(newMode);
             mUrlBuilder.setKeyword(query);
         }
+        resetDownloadedOnlyModeForNewSearch();
         onUpdateUrlBuilder();
         mHelper.refresh();
         setState(STATE_NORMAL);
@@ -2323,12 +2517,14 @@ public class GalleryListScene extends BaseScene
             mHelper.setEmptyString(emptyString);
 //            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
             mHelper.onGetPageData(taskId, result, result.galleryInfoList);
+            onDownloadedPageScanPageLoaded();
         }
     }
 
     private void onGetGalleryListFailure(Exception e, int taskId) {
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
+            stopDownloadedPageScan(false);
             mHelper.onGetException(taskId, e);
         }
     }
@@ -2501,6 +2697,8 @@ public class GalleryListScene extends BaseScene
 
     private class GalleryListAdapter extends GalleryAdapterNew {
 
+        private final List<GalleryInfo> mDownloadedData = new ArrayList<>();
+
         public GalleryListAdapter(@NonNull LayoutInflater inflater,
                                   @NonNull Resources resources, @NonNull RecyclerView recyclerView, int type) {
             super(inflater, resources, recyclerView, type, true, executorService, showReadProgress);
@@ -2508,13 +2706,94 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public int getItemCount() {
+            if (mDownloadedOnlyMode) {
+                return mDownloadedData != null ? mDownloadedData.size() : 0;
+            }
             return null != mHelper ? mHelper.size() : 0;
         }
 
         @Nullable
         @Override
         public GalleryInfo getDataAt(int position) {
+            if (mDownloadedOnlyMode) {
+                return mDownloadedData != null && position >= 0
+                        && position < mDownloadedData.size()
+                        ? mDownloadedData.get(position) : null;
+            }
             return null != mHelper ? mHelper.getDataAtEx(position) : null;
+        }
+
+        void onDownloadedOnlyModeChanged() {
+            rebuildDownloadedData();
+            notifyDataSetChanged();
+        }
+
+        void onSourceDataSetChanged() {
+            if (mDownloadedOnlyMode) {
+                rebuildDownloadedData();
+            }
+            notifyDataSetChanged();
+        }
+
+        void onSourceItemRangeInserted(int positionStart, int itemCount) {
+            if (mDownloadedOnlyMode) {
+                rebuildDownloadedData();
+                notifyDataSetChanged();
+            } else {
+                notifyItemRangeInserted(positionStart, itemCount);
+            }
+        }
+
+        void onSourceItemRangeRemoved(int positionStart, int itemCount) {
+            if (mDownloadedOnlyMode) {
+                rebuildDownloadedData();
+                notifyDataSetChanged();
+            } else {
+                notifyItemRangeRemoved(positionStart, itemCount);
+            }
+        }
+
+        private void rebuildDownloadedData() {
+            mDownloadedData.clear();
+            DownloadManager downloadManager = GalleryListScene.this.mDownloadManager;
+            if (!mDownloadedOnlyMode || mHelper == null || downloadManager == null) {
+                return;
+            }
+            for (GalleryInfo galleryInfo : mHelper.getData()) {
+                if (galleryInfo != null && downloadManager.containDownloadInfo(galleryInfo.gid)) {
+                    mDownloadedData.add(galleryInfo);
+                }
+            }
+        }
+
+        int findVisiblePosition(long gid) {
+            int size = getItemCount();
+            for (int i = 0; i < size; i++) {
+                GalleryInfo galleryInfo = getDataAt(i);
+                if (galleryInfo != null && galleryInfo.gid == gid) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        void addVisibleGidsTo(@NonNull Set<Long> gids) {
+            int size = getItemCount();
+            for (int i = 0; i < size; i++) {
+                GalleryInfo galleryInfo = getDataAt(i);
+                if (galleryInfo != null) {
+                    gids.add(galleryInfo.gid);
+                }
+            }
+        }
+
+        boolean hasVisibleGidOutside(@NonNull Set<Long> gids) {
+            for (GalleryInfo galleryInfo : mDownloadedData) {
+                if (!gids.contains(galleryInfo.gid)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         @Override
@@ -2525,6 +2804,12 @@ public class GalleryListScene extends BaseScene
     }
 
     class GalleryListHelper extends GalleryInfoContentHelper {
+
+        @Override
+        public void refresh() {
+            stopDownloadedPageScan(false);
+            super.refresh();
+        }
 
         @Override
         protected void getPageData(int taskId, int type, int page) {
@@ -2641,21 +2926,34 @@ public class GalleryListScene extends BaseScene
         @Override
         protected void notifyDataSetChanged() {
             if (null != mAdapter) {
-                mAdapter.notifyDataSetChanged();
+                mAdapter.onSourceDataSetChanged();
             }
         }
 
         @Override
         protected void notifyItemRangeRemoved(int positionStart, int itemCount) {
             if (null != mAdapter) {
-                mAdapter.notifyItemRangeRemoved(positionStart, itemCount);
+                mAdapter.onSourceItemRangeRemoved(positionStart, itemCount);
             }
         }
 
         @Override
         protected void notifyItemRangeInserted(int positionStart, int itemCount) {
             if (null != mAdapter) {
-                mAdapter.notifyItemRangeInserted(positionStart, itemCount);
+                mAdapter.onSourceItemRangeInserted(positionStart, itemCount);
+            }
+        }
+
+        @Override
+        protected boolean shouldRequestNextPageOnScroll(int dy) {
+            return !mDownloadedOnlyMode || (mDownloadedBrowseGestureArmed
+                    && !mDownloadedPageScanActive && dy > 0 && hasNextPage());
+        }
+
+        @Override
+        protected void onNextPageRequestFromScroll() {
+            if (mDownloadedOnlyMode) {
+                prepareDownloadedPageScan();
             }
         }
 
