@@ -45,6 +45,7 @@ import android.view.ViewConfiguration;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -64,6 +65,8 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.transition.TransitionInflater;
 
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 import com.hippo.android.resource.AttrResources;
 import com.hippo.app.CheckBoxDialogBuilder;
 import com.hippo.beerbelly.BeerBelly;
@@ -747,6 +750,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mShare.setOnClickListener(this);
         mRate.setOnClickListener(this);
         mArtist.setOnClickListener(this);
+        mArtist.setOnLongClickListener(this);
         mSimilar.setOnClickListener(this);
         mLocalDelete.setOnClickListener(this);
         mSearchCover.setOnClickListener(this);
@@ -1568,6 +1572,94 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
     }
 
+    private void showTitleKeywordSearchDialog() {
+        Context context = getEHContext();
+        GalleryDetail galleryDetail = mGalleryDetail;
+        if (context == null || galleryDetail == null) {
+            return;
+        }
+
+        String title = EhUtils.getSuitableTitle(galleryDetail);
+        List<String> candidates = GalleryTitleKeywordExtractor.extractSearchCandidates(title);
+        if (candidates.isEmpty()) {
+            showTip(R.string.title_keyword_search_empty, LENGTH_SHORT);
+            return;
+        }
+
+        View content = LayoutInflater.from(context)
+                .inflate(R.layout.dialog_title_keyword_selection, null);
+        ChipGroup chipGroup = content.findViewById(R.id.title_keyword_group);
+
+        LayoutInflater inflater = LayoutInflater.from(context);
+        for (String candidate : candidates) {
+            Chip chip = (Chip) inflater.inflate(
+                    R.layout.item_title_keyword_chip, chipGroup, false);
+            chip.setId(View.generateViewId());
+            chip.setText(candidate);
+            chip.setTag(candidate);
+            chipGroup.addView(chip);
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(context)
+                .setTitle(R.string.title_keyword_search)
+                .setView(content)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.keyword_search, null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            GradientDrawable background = new GradientDrawable();
+            background.setColor(AttrResources.getAttrColor(
+                    context, R.attr.titleKeywordDialogBackgroundColor));
+            background.setCornerRadius(LayoutUtils.dp2pix(context, 4));
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(background);
+            }
+
+            Button searchButton = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+            searchButton.setEnabled(false);
+            chipGroup.setOnCheckedStateChangeListener((group, checkedIds) ->
+                    searchButton.setEnabled(!checkedIds.isEmpty()));
+            searchButton.setOnClickListener(button -> {
+                List<String> selected = new ArrayList<>();
+                for (int i = 0; i < chipGroup.getChildCount(); i++) {
+                    View child = chipGroup.getChildAt(i);
+                    if (child instanceof Chip chip && chip.isChecked()) {
+                        selected.add(String.valueOf(chip.getTag()));
+                    }
+                }
+                if (selected.isEmpty()) {
+                    return;
+                }
+
+                ListUrlBuilder lub = new ListUrlBuilder();
+                lub.setMode(ListUrlBuilder.MODE_NORMAL);
+                lub.setKeyword(buildTitleKeywordSearchQuery(selected));
+                dialog.dismiss();
+                GalleryListScene.startScene(this, lub);
+            });
+        });
+        dialog.show();
+    }
+
+    private static String buildTitleKeywordSearchQuery(List<String> selected) {
+        StringBuilder query = new StringBuilder();
+        for (String value : selected) {
+            String keyword = value.trim().replace("\\", "\\\\").replace("\"", "\\\"");
+            if (keyword.isEmpty()) {
+                continue;
+            }
+            if (query.length() > 0) {
+                query.append(' ');
+            }
+            if (keyword.indexOf(' ') >= 0) {
+                query.append('"').append(keyword).append('"');
+            } else {
+                query.append(keyword);
+            }
+        }
+        return query.toString();
+    }
+
     private void showSimilarGalleryList() {
         GalleryDetail gd = mGalleryDetail;
         if (null == gd) {
@@ -1956,6 +2048,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         if (mUploader == v) {
             showFilterUploaderDialog();
+        } else if (mArtist == v) {
+            showTitleKeywordSearchDialog();
+            return true;
         } else if (mDownload == v) {
 //            GalleryInfo galleryInfo = getGalleryInfo();
 //            if (galleryInfo != null) {

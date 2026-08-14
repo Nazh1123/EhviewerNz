@@ -374,6 +374,8 @@
     <string name="cannot_open_local_gallery">No app can open this local gallery item</string>
     <string name="cannot_get_local_gallery_path">Can\'t get the local gallery path</string>
     <string name="gallery_artist">Artist</string>
+    <string name="title_keyword_search">Select search keywords</string>
+    <string name="title_keyword_search_empty">No searchable title parts were found</string>
     <string name="search_cover">Search Cover</string>
     <string name="no_tags">No tags</string>
     <string name="no_comments">No comments</string>
@@ -474,7 +476,7 @@
     <string name="tag_selector_other_group">Other</string>
 
     <!-- Download -->
-    <string name="scene_download_title">%s Galleries - %s</string>
+    <string name="scene_download_title">%1$s Galleries - %2$s</string>
     <string name="scene_download_title_new">%s(%s)</string>
     <string name="scene_download_continuous_title">Downloads (%d)</string>
     <string name="no_download_info">Download items will be shown here</string>
@@ -662,7 +664,7 @@
     <string name="settings_eh_show_thumbnail_download_badge">Show download badge on thumbnails</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">Show the downloaded gallery badge in the lower-right corner in thumbnail mode</string>
     <string name="settings_eh_show_thumbnail_info_bar">Show thumbnail info bar</string>
-    <string name="settings_eh_show_thumbnail_info_bar_summary">Show time, censorship type, download status, and reading progress below large thumbnails</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">In large-thumbnail mode, show the time, censorship type, download status, and reading progress below each gallery cover</string>
     <string name="settings_eh_detail_size">Detail size</string>
     <string name="settings_eh_detail_size_long">Long</string>
     <string name="settings_eh_detail_size_short">Short</string>
@@ -683,7 +685,7 @@
     <string name="settings_eh_show_jpn_title">Show Japanese title</string>
     <string name="settings_eh_show_gallery_comment">Show Gallery Comment</string>
     <string name="settings_eh_gallery_preview_immediate_jump">Jump to new gallery previews</string>
-    <string name="settings_eh_gallery_preview_immediate_jump_summary">Swipe left to open previews directly on page 2 while More previews is visible, or after it has been visible when within 60 dp of the bottom of gallery details</string>
+    <string name="settings_eh_gallery_preview_immediate_jump_summary">Tap More previews at the bottom of gallery details, or swipe left, to open previews and skip the first page</string>
     <string name="settings_eh_show_gallery_rating">Show Gallery Rating</string>
     <string name="settings_eh_show_eh_event">Show EH events</string>
     <string name="settings_eh_show_eh_limits">Show EH limits</string>
@@ -807,7 +809,7 @@
     <string name="settings_fork_features">Fork Extra Features</string>
     <string name="settings_fork_delete_empty_galleries">Delete Empty Galleries</string>
     <string name="settings_fork_download_label_continuous_browse">Continuous Download Label Browsing</string>
-    <string name="settings_fork_download_label_continuous_browse_summary">Show every download label and its galleries continuously from top to bottom, replacing the original single-label browsing mode</string>
+    <string name="settings_fork_download_label_continuous_browse_summary">Show downloaded galleries continuously from top to bottom by label on the Downloads page</string>
     <string name="settings_fork_gallery_immediate_jump">Immediate gallery jump</string>
     <string name="settings_fork_long_press_save_summary">Long-press the next-page area to save the current image locally</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Automatically turn to the next page after a long-press save</string>
@@ -1093,7 +1095,7 @@
     <string name="wifi_server_send_fail">发送消息失败: %s</string>
     <string name="wifi_server_receive_message">收到消息: %s</string>
     <string name="wifi_server_receive_message_unknown">unknown data type</string>
-    <string name="wifi_server_opened">热点已开启 SSID: %1s \n%2s</string>
+    <string name="wifi_server_opened">热点已开启 SSID: %1$s \n%2$s</string>
     <string name="wifi_server_closed">热点已关闭</string>
     <string name="wifi_server_password">密码: %s</string>
     <string name="wifi_server_no_permission">Insufficient permission, please grant permission</string>

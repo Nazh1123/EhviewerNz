@@ -285,6 +285,8 @@
     <string name="cannot_open_local_gallery">没有可打开该本地画廊项目的应用</string>
     <string name="cannot_get_local_gallery_path">无法获取画廊本地路径</string>
     <string name="gallery_artist">作者</string>
+    <string name="title_keyword_search">选择搜索关键词</string>
+    <string name="title_keyword_search_empty">标题中没有可供搜索的内容</string>
     <string name="search_cover">搜索封面</string>
     <string name="no_tags">暂无标签</string>
     <string name="no_comments">暂无评论</string>
@@ -384,7 +386,7 @@
     <string name="tag_selector_other_group">其他</string>
 
     <!-- Download -->
-    <string name="scene_download_title">共%s个画廊 - %s</string>
+    <string name="scene_download_title">共%1$s个画廊 - %2$s</string>
     <string name="no_download_info">这里是下载项目</string>
     <string name="download_state_none">未启动</string>
     <string name="download_state_wait">等待中</string>
@@ -571,7 +573,7 @@
     <string name="settings_eh_show_thumbnail_download_badge">缩略图显示下载标识</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">缩略图模式下，在右下角显示画廊已下载标识</string>
     <string name="settings_eh_show_thumbnail_info_bar">缩略图信息栏</string>
-    <string name="settings_eh_show_thumbnail_info_bar_summary">在大缩略图下方显示时间、打码类型、下载标识与阅读进度</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">大缩略图模式下，在画廊封面下方显示时间、打码类型、下载标识与阅读进度</string>
     <string name="settings_eh_list_show_read_progress">显示阅读进度</string>
     <string name="settings_eh_list_show_read_progress_summary">在详情列表模式下显示每个画廊的阅读进度</string>
     <string name="settings_eh_detail_size">详情大小</string>
@@ -594,7 +596,7 @@
     <string name="settings_eh_show_jpn_title">显示日文标题</string>
     <string name="settings_eh_show_gallery_comment">显示画廊评论</string>
     <string name="settings_eh_gallery_preview_immediate_jump">画廊预览立即跳转</string>
-    <string name="settings_eh_gallery_preview_immediate_jump_summary">“查看更多预览”当前可见，或该按钮曾可见且页面处于距内容底部 60dp 范围内时，左滑可直接打开预览第二页</string>
+    <string name="settings_eh_gallery_preview_immediate_jump_summary">在画廊详细页底部点击“查看更多预览”或左滑，可跳转至预览页并跳过第一页。</string>
     <string name="settings_eh_show_gallery_rating">显示画廊评分</string>
     <string name="settings_eh_show_eh_event">显示E站事件</string>
     <string name="settings_eh_show_eh_limits">显示E站配额</string>
@@ -715,7 +717,7 @@
     <string name="settings_fork_features">Fork额外功能</string>
     <string name="settings_fork_delete_empty_galleries">删除空画廊</string>
     <string name="settings_fork_download_label_continuous_browse">下载标签连续浏览</string>
-    <string name="settings_fork_download_label_continuous_browse_summary">在一个页面中按标签从上到下连续显示下载画廊，并替换原有的单标签浏览模式</string>
+    <string name="settings_fork_download_label_continuous_browse_summary">在下载页面中按标签从上到下连续显示下载画廊</string>
     <string name="settings_fork_auto_subscription_updates">自动获取订阅更新</string>
     <string name="settings_fork_auto_subscription_updates_summary">至少每一个小时获取订阅内容的更新画廊数量</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH 订阅</string>
@@ -723,7 +725,7 @@
     <string name="settings_fork_long_press_save_summary">长按下一页翻页区域，将当前图片保存到本地</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">长按保存成功后自动翻至下一页</string>
     <string name="settings_fork_quick_page_turn_summary">开启后翻页区域立即响应单击；关闭后翻页区域支持双击放大。菜单和进度区域始终支持双击放大</string>
-    <string name="settings_fork_bookmark_subscription_summary">点击此项，或在书签栏设置中为书签添加订阅。后可在侧边栏中点击“书签订阅”查看依据时间排序的符合书签条件的所有画廊</string>
+    <string name="settings_fork_bookmark_subscription_summary">点击此项或在书签栏设置中为书签添加订阅。后可在侧边栏中点击“书签订阅”查看依据时间排序的符合书签条件的所有画廊</string>
     <string name="settings_advanced_proxy">代理</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>
@@ -1006,7 +1008,7 @@
     <string name="wifi_server_send_fail">发送消息失败: %s</string>
     <string name="wifi_server_receive_message">收到消息: %s</string>
     <string name="wifi_server_receive_message_unknown">未知数据类型</string>
-    <string name="wifi_server_opened">热点已开启 SSID: %1s \n%2s</string>
+    <string name="wifi_server_opened">热点已开启 SSID: %1$s \n%2$s</string>
     <string name="wifi_server_closed">热点已关闭</string>
     <string name="wifi_server_password">密码: %s</string>
     <string name="wifi_server_no_permission">权限不足，请授予权限</string>

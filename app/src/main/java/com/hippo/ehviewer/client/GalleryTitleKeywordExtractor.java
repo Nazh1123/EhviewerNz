@@ -34,7 +34,6 @@ public final class GalleryTitleKeywordExtractor {
             "^\\p{N}+p$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern NUMBER_OR_SYMBOL_PATTERN = Pattern.compile(
             "^[\\p{N}\\p{P}\\p{S}\\s]+$");
-
     // The order is significant: higher-priority bracket types come first.
     private static final Bracket[] BRACKETS = {
             new Bracket('[', ']'),
@@ -79,6 +78,49 @@ public final class GalleryTitleKeywordExtractor {
         }
 
         return findFirstFeasibleWord(removeRanges(title, rejectedRanges));
+    }
+
+    /**
+     * Splits the complete gallery title into ordered search candidates without filtering it.
+     * Consecutive letters, digits, and combining marks stay together. Whitespace separates
+     * candidates, while every punctuation or symbol code point becomes its own candidate.
+     */
+    public static List<String> extractSearchCandidates(String title) {
+        if (title == null || title.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<String> result = new ArrayList<>();
+        StringBuilder word = new StringBuilder();
+        for (int offset = 0; offset < title.length(); ) {
+            int codePoint = title.codePointAt(offset);
+            offset += Character.charCount(codePoint);
+            if (Character.isWhitespace(codePoint)) {
+                addSearchCandidate(result, word);
+            } else if (isSearchWordCodePoint(codePoint)) {
+                word.appendCodePoint(codePoint);
+            } else {
+                addSearchCandidate(result, word);
+                result.add(new String(Character.toChars(codePoint)));
+            }
+        }
+        addSearchCandidate(result, word);
+        return result;
+    }
+
+    private static boolean isSearchWordCodePoint(int codePoint) {
+        int type = Character.getType(codePoint);
+        return Character.isLetterOrDigit(codePoint)
+                || type == Character.NON_SPACING_MARK
+                || type == Character.COMBINING_SPACING_MARK
+                || type == Character.ENCLOSING_MARK;
+    }
+
+    private static void addSearchCandidate(List<String> result, StringBuilder word) {
+        if (word.length() > 0) {
+            result.add(word.toString());
+            word.setLength(0);
+        }
     }
 
     private static Range findFirstPair(String text, Bracket bracket, int fromIndex) {

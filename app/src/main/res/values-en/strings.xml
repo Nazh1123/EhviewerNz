@@ -287,6 +287,8 @@
     <string name="rate">Rate</string>
     <string name="similar_gallery">Similar</string>
     <string name="gallery_artist">Artist</string>
+    <string name="title_keyword_search">Select search keywords</string>
+    <string name="title_keyword_search_empty">No searchable title parts were found</string>
     <string name="search_cover">Search Cover</string>
     <string name="no_tags">No tags</string>
     <string name="no_comments">No comments</string>
@@ -380,7 +382,7 @@
     <string name="go_to">Go to</string>
 
     <!-- Download -->
-    <string name="scene_download_title">%s Galleries - %s</string>
+    <string name="scene_download_title">%1$s Galleries - %2$s</string>
     <string name="no_download_info">Download items will be shown here</string>
     <string name="download_state_none">Idle</string>
     <string name="download_state_wait">Waiting</string>

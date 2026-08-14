@@ -52,6 +52,7 @@
 
         <attr name="widgetColorThemePrimary" format="color" />
         <attr name="widgetColorThemeAccent" format="color" />
+        <attr name="titleKeywordDialogBackgroundColor" format="color" />
 
         <attr name="guideBackgroundColor" format="color" />
         <attr name="guideTitleColor" format="color" />
