@@ -34,6 +34,7 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
+import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.spider.SpiderQueen;
@@ -124,10 +125,20 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         SparseJLArray<DownloadInfo> allInfoMap = new SparseJLArray<>(allInfoList.size() + 10);
         mAllInfoMap = allInfoMap;
 
+        Set<String> restoredFolderTrees = new HashSet<>();
         for (int i = 0, n = allInfoList.size(); i < n; i++) {
             DownloadInfo info = allInfoList.get(i);
 
-            if (info.archiveUri != null && info.archiveUri.startsWith("content://")) {
+            LocalFolderGallerySource folderSource =
+                    LocalFolderGallerySource.parse(info.archiveUri);
+            if (folderSource != null && restoredFolderTrees.add(folderSource.treeUri)) {
+                try {
+                    mContext.getContentResolver().takePersistableUriPermission(
+                            folderSource.getTreeUri(), Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to restore local folder permission", e);
+                }
+            } else if (info.archiveUri != null && info.archiveUri.startsWith("content://")) {
                 try {
                     Uri uri = Uri.parse(info.archiveUri);
                     mContext.getContentResolver().takePersistableUriPermission(uri,
@@ -368,7 +379,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
         // Do nothing in the case of a local compressed file.
         if (galleryInfo instanceof DownloadInfo downloadInfo) {
-            if (downloadInfo.archiveUri != null && downloadInfo.archiveUri.startsWith("content://")){
+            if (LocalFolderGallerySource.isLocalFolderGallery(downloadInfo.archiveUri)
+                    || (downloadInfo.archiveUri != null
+                    && downloadInfo.archiveUri.startsWith("content://"))) {
                 return;
             }
         }
@@ -557,6 +570,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 }
             }
             list.add(info);
+            if (info.label != null) {
+                mLabelCountMap.put(info.label, (long) list.size());
+            }
             // Sort
             Collections.sort(list, DATE_DESC_COMPARATOR);
 
@@ -1038,6 +1054,37 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         for (DownloadInfoListener l : mDownloadInfoListeners) {
             l.onRenameLabel(from, to);
         }
+    }
+
+    /** Places an aggregate folder-import label after '_' labels and before all other labels. */
+    public void placeLocalFolderImportLabel(@NonNull String label) {
+        DownloadLabel target = null;
+        for (Iterator<DownloadLabel> iterator = mLabelList.iterator(); iterator.hasNext(); ) {
+            DownloadLabel current = iterator.next();
+            if (label.equals(current.getLabel())) {
+                target = current;
+                iterator.remove();
+                break;
+            }
+        }
+        if (target == null) {
+            target = EhDB.addDownloadLabel(label);
+        }
+        int position = findLocalFolderImportLabelPosition(mLabelList);
+        mLabelList.add(position, target);
+        if (!mMap.containsKey(label)) {
+            mMap.put(label, new LinkedList<>());
+        }
+        EhDB.reorderDownloadLabels(mLabelList);
+    }
+
+    static int findLocalFolderImportLabelPosition(@NonNull List<DownloadLabel> labels) {
+        int position = 0;
+        while (position < labels.size()
+                && labels.get(position).getLabel().startsWith("_")) {
+            position++;
+        }
+        return position;
     }
 
     /**

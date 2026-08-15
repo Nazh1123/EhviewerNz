@@ -49,6 +49,7 @@ import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.gallery.A7ZipArchive;
+import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.gallery.Pipe;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
@@ -110,7 +111,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     private static final ExecutorService ARCHIVE_THUMBNAIL_EXECUTOR =
             Executors.newFixedThreadPool(2);
     private static final Set<String> LOADING_ARCHIVE_THUMBNAILS =
-            ConcurrentHashMap.newKeySet();
+            Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public interface DownloadAdapterCallback {
         int getIndexPage();
@@ -237,14 +238,20 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             }
             DownloadInfo info = list.get(pos);
             holder.boundGid = info.gid;
+            boolean isImportedFolder =
+                    LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri);
+            boolean isImportedArchive = info.archiveUri != null
+                    && info.archiveUri.startsWith("content://");
+            boolean isImportedLocal = isImportedFolder || isImportedArchive;
 
             String title = EhUtils.getSuitableTitle(info);
-            // Add special prefix for imported archives
-            if (info.archiveUri != null && info.archiveUri.startsWith("content://")) {
-                title = "📦 " + title;
+            if (isImportedLocal) {
+                title = (isImportedFolder ? "📁 " : "📦 ") + title;
             }
-            // Handle thumbnail loading for imported archives
-            if (info.archiveUri != null && info.archiveUri.startsWith("content://")) {
+            if (isImportedFolder) {
+                holder.boundArchiveUri = info.archiveUri;
+                loadLocalFolderThumbnail(holder, info);
+            } else if (isImportedArchive) {
                 // For imported archives, extract first image as thumbnail
                 holder.boundArchiveUri = info.archiveUri;
                 loadArchiveThumbnail(holder, Uri.parse(info.archiveUri));
@@ -260,8 +267,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             holder.title.setText(title);
             holder.uploader.setText(info.uploader);
 
-            // Handle rating display for imported archives
-            if (info.archiveUri != null && info.archiveUri.startsWith("content://")) {
+            if (isImportedLocal) {
                 // For imported archives, show 5 stars or hide rating
                 holder.rating.setRating(5.0f);
             } else {
@@ -282,9 +288,10 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             TextView category = holder.category;
             String newCategoryText = EhUtils.getCategory(info.category);
             int categoryColor;
-            // Special handling for imported archives - prioritize archiveUri over category field
-            if (info.archiveUri != null && info.archiveUri.startsWith("content://")) {
-                newCategoryText = mScene.getString(R.string.imported_archive_category);
+            if (isImportedLocal) {
+                newCategoryText = mScene.getString(isImportedFolder
+                        ? R.string.imported_folder_category
+                        : R.string.imported_archive_category);
                 categoryColor = 0xFF4CAF50; // Green color for imported archives
             } else {
                 newCategoryText = EhUtils.getCategory(info.category);
@@ -328,10 +335,9 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         }
 
         // Check if this is an imported archive - skip state judging
-        boolean isImportedArchive;
-        isImportedArchive = info.archiveUri != null &&
-                info.archiveUri.startsWith("content://");
-        if (isImportedArchive) {
+        boolean isImportedLocal = LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
+                || (info.archiveUri != null && info.archiveUri.startsWith("content://"));
+        if (isImportedLocal) {
             bindState(holder, info, resources.getString(R.string.download_state_finish));
             return;
         }
@@ -595,6 +601,72 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         if (layoutParams instanceof StaggeredGridLayoutManager.LayoutParams) {
             ((StaggeredGridLayoutManager.LayoutParams) layoutParams).setFullSpan(
                     holder instanceof LabelHeaderHolder);
+        }
+    }
+
+    private void loadLocalFolderThumbnail(DownloadHolder holder, DownloadInfo info) {
+        String cacheKey = info.archiveUri;
+        LoadImageView thumb = holder.thumb;
+        Bitmap cachedThumbnail = ARCHIVE_THUMBNAIL_CACHE.get(cacheKey);
+        if (cachedThumbnail != null && !cachedThumbnail.isRecycled()) {
+            thumb.setImageBitmap(cachedThumbnail);
+            return;
+        }
+        thumb.setImageResource(R.drawable.v_folders_import_dark_x24);
+        if (info.thumb == null || !LOADING_ARCHIVE_THUMBNAILS.add(cacheKey)) {
+            return;
+        }
+        long requestedGid = holder.boundGid;
+        ARCHIVE_THUMBNAIL_EXECUTOR.execute(() -> {
+            Bitmap thumbnail = decodeLocalFolderThumbnail(Uri.parse(info.thumb));
+            if (thumbnail != null && !thumbnail.isRecycled()) {
+                ARCHIVE_THUMBNAIL_CACHE.put(cacheKey, thumbnail);
+            }
+            LOADING_ARCHIVE_THUMBNAILS.remove(cacheKey);
+            mScene.runOnUiThread(() -> {
+                if (thumbnail != null && !thumbnail.isRecycled()
+                        && cacheKey.equals(holder.boundArchiveUri)) {
+                    thumb.setImageBitmap(thumbnail);
+                }
+                if (thumbnail != null && !thumbnail.isRecycled()) {
+                    int position = mCallback.getAdapterPositionForGallery(requestedGid);
+                    if (position >= 0) {
+                        notifyItemChanged(position);
+                    }
+                }
+            });
+        });
+    }
+
+    private Bitmap decodeLocalFolderThumbnail(@NonNull Uri imageUri) {
+        Context context = mScene.getEHContext();
+        if (context == null) {
+            return null;
+        }
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            try (InputStream input = context.getContentResolver().openInputStream(imageUri)) {
+                if (input == null) {
+                    return null;
+                }
+                BitmapFactory.decodeStream(input, null, bounds);
+            }
+            int sampleSize = 1;
+            int targetSize = 300;
+            while (bounds.outWidth / sampleSize > targetSize * 2
+                    || bounds.outHeight / sampleSize > targetSize * 2) {
+                sampleSize *= 2;
+            }
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inSampleSize = sampleSize;
+            options.inPreferredConfig = Bitmap.Config.RGB_565;
+            try (InputStream input = context.getContentResolver().openInputStream(imageUri)) {
+                return input == null ? null : BitmapFactory.decodeStream(input, null, options);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to decode local folder thumbnail: " + imageUri, e);
+            return null;
         }
     }
 
@@ -900,9 +972,16 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
             if (thumb == v) {
                 DownloadInfo currentInfo = list.get(listPosition);
-                if (currentInfo.archiveUri != null && currentInfo.archiveUri.startsWith("content://")) {
-                    // Show info dialog for imported archive
-                    String message = mScene.getString(R.string.imported_archive_info_message) + "\n\n" + currentInfo.archiveUri;
+                LocalFolderGallerySource folderSource =
+                        LocalFolderGallerySource.parse(currentInfo.archiveUri);
+                if (folderSource != null || (currentInfo.archiveUri != null
+                        && currentInfo.archiveUri.startsWith("content://"))) {
+                    String location = folderSource != null
+                            ? folderSource.treeUri + (folderSource.relativePath.isEmpty()
+                            ? "" : "\n" + folderSource.relativePath)
+                            : currentInfo.archiveUri;
+                    String message = mScene.getString(
+                            R.string.imported_archive_info_message) + "\n\n" + location;
                     new AlertDialog.Builder(context)
                             .setTitle(R.string.imported_archive_info_title)
                             .setMessage(message)

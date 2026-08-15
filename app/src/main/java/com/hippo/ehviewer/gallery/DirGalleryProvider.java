@@ -129,13 +129,48 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     @NonNull
     @Override
     public String getImageFilename(int index) {
-        UniFile[] fileList = mFileList.get();
-        if (fileList == null || index < 0 || index >= fileList.length) {
+        String name = getFilename(index);
+        if (name == null) {
             return Integer.toString(index);
         }
-        String name = fileList[index].getName();
         String extension = FileUtils.getExtensionFromFilename(name);
         return extension == null ? name : name.substring(0, name.length() - extension.length() - 1);
+    }
+
+    @Nullable
+    public String getFilename(int index) {
+        UniFile[] fileList = mFileList.get();
+        if (fileList == null || index < 0 || index >= fileList.length) {
+            return null;
+        }
+        return fileList[index].getName();
+    }
+
+    public int findPageAtOrBeforeFilename(@Nullable String filename) {
+        UniFile[] fileList = mFileList.get();
+        if (fileList == null) {
+            return -1;
+        }
+        return findPageAtOrBeforeFilename(fileList, filename);
+    }
+
+    static int findPageAtOrBeforeFilename(
+            @NonNull UniFile[] fileList, @Nullable String filename) {
+        if (filename == null) {
+            return -1;
+        }
+        int previousPage = -1;
+        for (int i = 0; i < fileList.length; i++) {
+            int comparison = filenameComparator.compare(fileList[i].getName(), filename);
+            if (comparison == 0) {
+                return i;
+            }
+            if (comparison > 0) {
+                break;
+            }
+            previousPage = i;
+        }
+        return previousPage;
     }
 
     @Override
@@ -269,11 +304,12 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     private static FilenameFilter imageFilter =
         (dir, name) -> StringUtils.endsWith(name.toLowerCase(), SUPPORT_IMAGE_EXTENSIONS);
 
+    private static final NaturalComparator filenameComparator = new NaturalComparator();
+
     private static Comparator<UniFile> naturalComparator = new Comparator<UniFile>() {
-        private NaturalComparator comparator = new NaturalComparator();
         @Override
         public int compare(UniFile o1, UniFile o2) {
-            return comparator.compare(o1.getName(), o2.getName());
+            return filenameComparator.compare(o1.getName(), o2.getName());
         }
     };
 

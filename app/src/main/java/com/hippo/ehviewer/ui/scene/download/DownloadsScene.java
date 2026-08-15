@@ -102,6 +102,8 @@ import com.hippo.ehviewer.download.DownloadQuickOrganizer;
 import com.hippo.ehviewer.download.DownloadLabelSearchQueryResolver;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
+import com.hippo.ehviewer.gallery.LocalFolderGalleryScanner;
+import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.sync.DownloadListInfosExecutor;
 import com.hippo.ehviewer.sync.DownloadSpiderInfoExecutor;
@@ -307,6 +309,12 @@ public class DownloadsScene extends ToolbarScene
             this::handleSelectedFile
     );
 
+    @NonNull
+    private final ActivityResultLauncher<Intent> folderPickerLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            this::handleSelectedFolder
+    );
+
     @Override
     public int getNavCheckedItem() {
         return R.id.nav_downloads;
@@ -458,8 +466,12 @@ public class DownloadsScene extends ToolbarScene
             downloadsByLabel.put(label.getLabel(), new ArrayList<>());
         }
         for (DownloadInfo info : source) {
-            downloadsByLabel.computeIfAbsent(info.label, ignored -> new ArrayList<>())
-                    .add(info);
+            List<DownloadInfo> labelDownloads = downloadsByLabel.get(info.label);
+            if (labelDownloads == null) {
+                labelDownloads = new ArrayList<>();
+                downloadsByLabel.put(info.label, labelDownloads);
+            }
+            labelDownloads.add(info);
         }
 
         mContinuousItems.clear();
@@ -1033,6 +1045,9 @@ public class DownloadsScene extends ToolbarScene
             case R.id.import_local_archive:
                 importLocalArchive();
                 return true;
+            case R.id.import_local_folder:
+                importLocalFolder();
+                return true;
 //            case R.id.misc:
 //            case R.id.doujinshi:
 //            case R.id.manga:
@@ -1185,8 +1200,14 @@ public class DownloadsScene extends ToolbarScene
 
             DownloadInfo downloadInfo = list.get(listPosition);
             Intent intent = new Intent(activity, GalleryActivity.class);
-            // Check if this is an imported archive
-            if (downloadInfo.archiveUri != null && downloadInfo.archiveUri.startsWith("content://")) {
+            LocalFolderGallerySource folderSource =
+                    LocalFolderGallerySource.parse(downloadInfo.archiveUri);
+            if (folderSource != null) {
+                intent.setAction(GalleryActivity.ACTION_LOCAL_FOLDER);
+                intent.putExtra(GalleryActivity.KEY_FILENAME, folderSource.encode());
+                intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, downloadInfo);
+            } else if (downloadInfo.archiveUri != null
+                    && downloadInfo.archiveUri.startsWith("content://")) {
                 // This is an imported archive, ensure URI permission is available
                 Uri archiveUri = Uri.parse(downloadInfo.archiveUri);
                 try {
@@ -2098,6 +2119,11 @@ public class DownloadsScene extends ToolbarScene
             @Override
             protected Void doInBackground(List<? extends GalleryInfo>... params) {
                 for (GalleryInfo info : params[0]) {
+                    if (info instanceof DownloadInfo downloadInfo
+                            && LocalFolderGallerySource.isLocalFolderGallery(
+                            downloadInfo.archiveUri)) {
+                        continue;
+                    }
                     UniFile file = getGalleryDownloadDir(info);
                     EhDB.removeDownloadDirname(info.gid);
                     if (file != null) {
@@ -2285,8 +2311,10 @@ public class DownloadsScene extends ToolbarScene
                 // Check if this is an imported archive - skip SpiderInfo processing
                 boolean isImportedArchive = false;
                 if (info instanceof DownloadInfo downloadInfo) {
-                    isImportedArchive = downloadInfo.archiveUri != null &&
-                            downloadInfo.archiveUri.startsWith("content://");
+                    isImportedArchive = LocalFolderGallerySource.isLocalFolderGallery(
+                            downloadInfo.archiveUri)
+                            || (downloadInfo.archiveUri != null
+                            && downloadInfo.archiveUri.startsWith("content://"));
                 }
 
                 if (!isImportedArchive && info != null) {
@@ -2404,8 +2432,8 @@ public class DownloadsScene extends ToolbarScene
         List<DownloadInfo> request = new ArrayList<>();
         for (DownloadInfo info : candidates) {
             if (info.state != DownloadInfo.STATE_FINISH
-                    || (info.archiveUri != null
-                    && info.archiveUri.startsWith("content://"))
+                    || LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
+                    || (info.archiveUri != null && info.archiveUri.startsWith("content://"))
                     || !mSpiderInfoRequested.add(info.gid)) {
                 continue;
             }
@@ -2489,6 +2517,183 @@ public class DownloadsScene extends ToolbarScene
             }
         }
         return index;
+    }
+
+    private void importLocalFolder() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        intent.addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        try {
+            folderPickerLauncher.launch(Intent.createChooser(
+                    intent, getString(R.string.import_folder_title)));
+        } catch (RuntimeException e) {
+            Context context = getEHContext();
+            if (context != null) {
+                Toast.makeText(context, R.string.import_folder_failed, Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    private void handleSelectedFolder(ActivityResult result) {
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
+            return;
+        }
+        Uri treeUri = result.getData().getData();
+        Context sceneContext = getEHContext();
+        DownloadManager downloadManager = mDownloadManager;
+        if (treeUri == null || sceneContext == null || downloadManager == null) {
+            return;
+        }
+        Context context = sceneContext.getApplicationContext();
+        if (LocalFolderGalleryScanner.isUnsafeSelection(treeUri)) {
+            Toast.makeText(context, R.string.import_folder_unsafe_selection,
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            context.getContentResolver().takePersistableUriPermission(
+                    treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Failed to persist local folder permission", e);
+            Toast.makeText(context, R.string.import_folder_failed, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(context, R.string.import_folder_processing, Toast.LENGTH_LONG).show();
+        new Thread(() -> processLocalFolder(context, downloadManager, treeUri),
+                "LocalFolderImport").start();
+    }
+
+    private void processLocalFolder(
+            @NonNull Context context,
+            @NonNull DownloadManager downloadManager,
+            @NonNull Uri treeUri) {
+        LocalFolderGallerySource rootSource =
+                LocalFolderGallerySource.create(treeUri, "");
+        LocalFolderGalleryScanner.ScanResult scanResult;
+        try {
+            scanResult = LocalFolderGalleryScanner.scan(context, rootSource);
+        } catch (LocalFolderGalleryScanner.ScanException e) {
+            if (e.reason != LocalFolderGalleryScanner.Reason.CANCELLED) {
+                int message = e.reason == LocalFolderGalleryScanner.Reason.TOO_LARGE
+                        ? R.string.local_folder_scan_too_large
+                        : R.string.local_folder_not_accessible;
+                runOnUiThread(() -> Toast.makeText(context, message, Toast.LENGTH_LONG).show());
+            }
+            return;
+        }
+        if (scanResult.images.isEmpty()) {
+            runOnUiThread(() -> Toast.makeText(
+                    context, R.string.local_folder_no_images, Toast.LENGTH_LONG).show());
+            return;
+        }
+
+        List<FolderImportCandidate> candidates = new ArrayList<>();
+        boolean aggregateChildren = scanResult.directImageCount == 0;
+        if (!aggregateChildren) {
+            candidates.add(new FolderImportCandidate(
+                    scanResult.rootName, rootSource, scanResult.images));
+        } else {
+            LinkedHashMap<String, List<LocalFolderGalleryScanner.ImageEntry>> childImages =
+                    new LinkedHashMap<>();
+            for (LocalFolderGalleryScanner.ImageEntry image : scanResult.images) {
+                int separator = image.relativePath.indexOf('/');
+                if (separator <= 0) {
+                    continue;
+                }
+                String childName = image.relativePath.substring(0, separator);
+                List<LocalFolderGalleryScanner.ImageEntry> images =
+                        childImages.get(childName);
+                if (images == null) {
+                    images = new ArrayList<>();
+                    childImages.put(childName, images);
+                }
+                images.add(image);
+            }
+            for (Map.Entry<String, List<LocalFolderGalleryScanner.ImageEntry>> entry
+                    : childImages.entrySet()) {
+                candidates.add(new FolderImportCandidate(
+                        entry.getKey(),
+                        LocalFolderGallerySource.create(treeUri, entry.getKey()),
+                        entry.getValue()));
+            }
+        }
+
+        String label = aggregateChildren
+                ? '/' + scanResult.rootName + "/..."
+                : (Settings.getHasDefaultDownloadLabel()
+                ? Settings.getDefaultDownloadLabel() : null);
+        List<DownloadInfo> imports = new ArrayList<>();
+        long importTime = System.currentTimeMillis();
+        for (int i = 0; i < candidates.size(); i++) {
+            DownloadInfo info = createLocalFolderDownloadInfo(
+                    candidates.get(i), label, importTime - i);
+            if (!downloadManager.containDownloadInfo(info.gid)) {
+                imports.add(info);
+            }
+        }
+        if (imports.isEmpty()) {
+            runOnUiThread(() -> Toast.makeText(context,
+                    R.string.import_folder_already_imported, Toast.LENGTH_SHORT).show());
+            return;
+        }
+
+        if (aggregateChildren) {
+            downloadManager.placeLocalFolderImportLabel(label);
+        }
+        downloadManager.addDownload(imports);
+        int importedCount = imports.size();
+        runOnUiThread(() -> {
+            Toast.makeText(context, context.getString(
+                    R.string.import_folder_success, importedCount), Toast.LENGTH_SHORT).show();
+            updateForLabel();
+            updateView();
+        });
+    }
+
+    @NonNull
+    private static DownloadInfo createLocalFolderDownloadInfo(
+            @NonNull FolderImportCandidate candidate,
+            @Nullable String label,
+            long importTime) {
+        DownloadInfo info = new DownloadInfo();
+        info.gid = candidate.source.stableGalleryId();
+        info.token = "";
+        info.title = candidate.title;
+        info.titleJpn = null;
+        info.thumb = candidate.images.get(0).uri.toString();
+        info.category = EhUtils.UNKNOWN;
+        info.posted = null;
+        info.uploader = "Local Folder";
+        info.rating = -1.0f;
+        info.state = DownloadInfo.STATE_FINISH;
+        info.legacy = 0;
+        info.time = importTime;
+        info.label = label;
+        info.total = candidate.images.size();
+        info.finished = candidate.images.size();
+        info.downloaded = candidate.images.size();
+        info.archiveUri = candidate.source.encode();
+        return info;
+    }
+
+    private static final class FolderImportCandidate {
+        @NonNull
+        final String title;
+        @NonNull
+        final LocalFolderGallerySource source;
+        @NonNull
+        final List<LocalFolderGalleryScanner.ImageEntry> images;
+
+        FolderImportCandidate(
+                @NonNull String title,
+                @NonNull LocalFolderGallerySource source,
+                @NonNull List<LocalFolderGalleryScanner.ImageEntry> images) {
+            this.title = title;
+            this.source = source;
+            this.images = images;
+        }
     }
 
     private void importLocalArchive() {
@@ -2699,7 +2904,9 @@ public class DownloadsScene extends ToolbarScene
             // Delete image files
             boolean checked = mBuilder.isChecked();
             Settings.putRemoveImageFiles(checked);
-            if (checked) {
+            boolean isLocalFolder = mGalleryInfo instanceof DownloadInfo downloadInfo
+                    && LocalFolderGallerySource.isLocalFolderGallery(downloadInfo.archiveUri);
+            if (checked && !isLocalFolder) {
                 UniFile file = getExistingGalleryDownloadDir(mGalleryInfo);
                 EhDB.removeDownloadDirname(mGalleryInfo.gid);
                 if (file != null) {

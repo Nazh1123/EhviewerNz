@@ -189,6 +189,8 @@
     <string name="error_cannot_parse_the_url">Can\'t parse the url</string>
     <string name="error_not_folder_path">Not folder path</string>
     <string name="error_open_image_directory">Unable to access this image\'s folder. Grant storage access or use a file manager that exposes its local path.</string>
+    <string name="local_gallery_resume_prompt">Tap here to resume from your last reading position</string>
+    <string name="local_gallery_resume_action">Resume</string>
     <string name="error_no_provider">No provider</string>
     <string name="error_decoding_failed">Decoding failed</string>
     <string name="error_not_found">Not found</string>
@@ -1158,6 +1160,17 @@
     <string name="category_all">All</string>
 
     <string name="import_local_archive">Import local archive</string>
+    <string name="import_local_folder">Import local folder</string>
+    <string name="import_folder_title">Select image folder</string>
+    <string name="import_folder_processing">Scanning folder…</string>
+    <string name="import_folder_success">Imported %1$d local folder gallery(s)</string>
+    <string name="import_folder_already_imported">The selected folder galleries have already been imported</string>
+    <string name="import_folder_failed">Failed to import local folder</string>
+    <string name="import_folder_unsafe_selection">Select a more specific folder instead of a storage root</string>
+    <string name="local_folder_scan_too_large">The folder is too large to scan safely. Select a more specific folder (maximum 512 folders, 20,000 entries, 10,000 images, and 16 levels).</string>
+    <string name="local_folder_no_images">No supported images were found in the selected folder</string>
+    <string name="local_folder_not_accessible">The local folder is no longer accessible. Please import it again.</string>
+    <string name="imported_folder_category">Local folder</string>
     <string name="import_archive_title">Select archive file</string>
     <string name="import_archive_failed">Failed to import archive</string>
     <string name="archive_permission_lost">Permission to access archive has been lost. Please re-import the archive file.</string>

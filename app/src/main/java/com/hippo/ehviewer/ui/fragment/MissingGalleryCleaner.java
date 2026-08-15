@@ -14,6 +14,7 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.lib.yorozuya.collect.LongList;
 import com.hippo.unifile.UniFile;
@@ -138,7 +139,8 @@ final class MissingGalleryCleaner {
     }
 
     private static boolean isLocalGalleryMissing(@NonNull DownloadInfo info) {
-        if (info.archiveUri != null && info.archiveUri.startsWith("content://")) {
+        if (LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
+                || (info.archiveUri != null && info.archiveUri.startsWith("content://"))) {
             return false;
         }
         UniFile directory = SpiderDen.getExistingGalleryDownloadDir(info);

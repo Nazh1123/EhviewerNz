@@ -103,6 +103,8 @@
     <string name="error_cannot_parse_the_url">无法解析链接</string>
     <string name="error_not_folder_path">非文件夹路径</string>
     <string name="error_open_image_directory">无法读取所选图片所在目录。请授予存储访问权限，或换用可提供本地路径的文件管理器。</string>
+    <string name="local_gallery_resume_prompt">点击此处跳转至上次阅读进度</string>
+    <string name="local_gallery_resume_action">跳转</string>
     <string name="error_no_provider">无 provider</string>
     <string name="error_decoding_failed">解码失败</string>
     <string name="error_not_found">未找到</string>
@@ -1066,6 +1068,17 @@
     <string name="category_all">全部</string>
 
     <string name="import_local_archive">导入本地压缩包</string>
+    <string name="import_local_folder">导入本地文件夹</string>
+    <string name="import_folder_title">选择图片文件夹</string>
+    <string name="import_folder_processing">正在扫描文件夹…</string>
+    <string name="import_folder_success">已导入 %1$d 个本地文件夹画廊</string>
+    <string name="import_folder_already_imported">所选文件夹中的画廊均已导入</string>
+    <string name="import_folder_failed">导入本地文件夹失败</string>
+    <string name="import_folder_unsafe_selection">请勿选择存储空间根目录，请选择更具体的文件夹</string>
+    <string name="local_folder_scan_too_large">文件夹范围过大，已停止扫描。请选择更具体的文件夹（最多 512 个文件夹、20,000 个条目、10,000 张图片和 16 层目录）。</string>
+    <string name="local_folder_no_images">所选文件夹中没有支持的图片</string>
+    <string name="local_folder_not_accessible">已无法访问本地文件夹，请重新导入。</string>
+    <string name="imported_folder_category">本地文件夹</string>
     <string name="import_archive_title">选择压缩包文件</string>
     <string name="import_archive_failed">压缩包导入失败</string>
     <string name="archive_permission_lost">访问压缩包的权限已丢失，请重新导入压缩包文件。</string>
