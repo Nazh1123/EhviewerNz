@@ -34,6 +34,8 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
+import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
+import com.hippo.ehviewer.gallery.LocalFolderCoverStore;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.spider.SpiderInfo;
@@ -290,6 +292,31 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     @Nullable
     public DownloadInfo getDownloadInfo(long gid) {
         return mAllInfoMap.get(gid);
+    }
+
+    public void updateImportedGalleryPageCount(long gid, int pages) {
+        if (pages <= 0) {
+            return;
+        }
+        DownloadInfo info = mAllInfoMap.get(gid);
+        if (!ImportedGalleryProgress.isImportedGallery(info)) {
+            return;
+        }
+        if (info.pages == pages && info.total == pages
+                && info.finished == pages && info.downloaded == pages) {
+            return;
+        }
+        info.pages = pages;
+        info.total = pages;
+        info.finished = pages;
+        info.downloaded = pages;
+        EhDB.putDownloadInfo(info);
+        LinkedList<DownloadInfo> list = getInfoListForLabel(info.label);
+        if (list != null) {
+            for (DownloadInfoListener listener : mDownloadInfoListeners) {
+                listener.onUpdate(info, list, mWaitList);
+            }
+        }
     }
 
     @Nullable
@@ -739,6 +766,10 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     public void deleteDownload(long gid) {
         GalleryUpdateManager.cancel(gid);
         stopDownloadInternal(gid);
+        // Imported metadata is app-private and keyed only by gid, so cleanup is safe and
+        // unconditional even if the database record is already incomplete.
+        LocalFolderCoverStore.delete(mContext, gid);
+        ImportedGalleryProgress.remove(mContext, gid);
         DownloadInfo info = mAllInfoMap.get(gid);
         if (info != null) {
             // Remove from DB
@@ -774,6 +805,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
         for (int i = 0, n = gidList.size(); i < n; i++) {
             long gid = gidList.get(i);
+            LocalFolderCoverStore.delete(mContext, gid);
+            ImportedGalleryProgress.remove(mContext, gid);
             DownloadInfo info = mAllInfoMap.get(gid);
             if (null == info) {
                 Log.d(TAG, "Can't get download info with gid: " + gid);
@@ -812,6 +845,10 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             protected Void doInBackground(Void... voids) {
                 GalleryInfo galleryInfo = new GalleryInfo();
                 for (DownloadInfo downloadInfo : list) {
+                    if (ImportedGalleryProgress.isImportedGallery(downloadInfo)) {
+                        ImportedGalleryProgress.reset(mContext, downloadInfo.gid);
+                        continue;
+                    }
                     galleryInfo.gid = downloadInfo.gid;
                     galleryInfo.token = downloadInfo.token;
                     galleryInfo.title = downloadInfo.title;

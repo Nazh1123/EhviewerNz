@@ -102,7 +102,10 @@ import com.hippo.ehviewer.download.DownloadQuickOrganizer;
 import com.hippo.ehviewer.download.DownloadLabelSearchQueryResolver;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
+import com.hippo.ehviewer.gallery.A7ZipArchive;
+import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.gallery.LocalFolderGalleryScanner;
+import com.hippo.ehviewer.gallery.LocalFolderCoverStore;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.sync.DownloadListInfosExecutor;
@@ -123,6 +126,7 @@ import com.hippo.lib.yorozuya.collect.LongList;
 import com.hippo.ripple.Ripple;
 import com.hippo.scene.Announcer;
 import com.hippo.unifile.UniFile;
+import com.hippo.unifile.UniRandomAccessFile;
 import com.hippo.util.DrawableManager;
 import com.hippo.util.ExceptionUtils;
 import com.hippo.util.IoThreadPoolExecutor;
@@ -137,6 +141,7 @@ import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -1234,6 +1239,7 @@ public class DownloadsScene extends ToolbarScene
                 }
                 intent.setAction(Intent.ACTION_VIEW);
                 intent.setData(archiveUri);
+                intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, downloadInfo);
             } else {
                 // This is a normal download, use ACTION_EH
                 intent.setAction(GalleryActivity.ACTION_EH);
@@ -1479,10 +1485,18 @@ public class DownloadsScene extends ToolbarScene
                     if (downloadInfoList.isEmpty()) {
                         break;
                     }
+                    boolean containsRegularGallery = false;
+                    for (DownloadInfo info : downloadInfoList) {
+                        if (!isImportedGallery(info)) {
+                            containsRegularGallery = true;
+                            break;
+                        }
+                    }
                     CheckBoxDialogBuilder builder = new CheckBoxDialogBuilder(context,
                             getString(R.string.download_remove_dialog_message_2, gidList.size()),
                             getString(R.string.download_remove_dialog_check_text),
                             Settings.getRemoveImageFiles());
+                    builder.setCheckBoxVisible(containsRegularGallery);
                     DeleteRangeDialogHelper helper = new DeleteRangeDialogHelper(
                             downloadInfoList, gidList, builder);
                     builder.setTitle(R.string.download_remove_dialog_title)
@@ -2114,14 +2128,21 @@ public class DownloadsScene extends ToolbarScene
         }.executeOnExecutor(IoThreadPoolExecutor.Companion.getInstance(), files);
     }
 
+    private static boolean isImportedGallery(@Nullable GalleryInfo info) {
+        if (!(info instanceof DownloadInfo)) {
+            return false;
+        }
+        String archiveUri = ((DownloadInfo) info).archiveUri;
+        return LocalFolderGallerySource.isLocalFolderGallery(archiveUri)
+                || archiveUri != null && archiveUri.startsWith("content://");
+    }
+
     private static void deleteGalleryFilesAsync(List<? extends GalleryInfo> galleryInfoList) {
         new AsyncTask<List<? extends GalleryInfo>, Void, Void>() {
             @Override
             protected Void doInBackground(List<? extends GalleryInfo>... params) {
                 for (GalleryInfo info : params[0]) {
-                    if (info instanceof DownloadInfo downloadInfo
-                            && LocalFolderGallerySource.isLocalFolderGallery(
-                            downloadInfo.archiveUri)) {
+                    if (isImportedGallery(info)) {
                         continue;
                     }
                     UniFile file = getGalleryDownloadDir(info);
@@ -2308,19 +2329,15 @@ public class DownloadsScene extends ToolbarScene
             if (data != null) {
                 GalleryInfo info = data.getParcelableExtra("info");
 
-                // Check if this is an imported archive - skip SpiderInfo processing
-                boolean isImportedArchive = false;
-                if (info instanceof DownloadInfo downloadInfo) {
-                    isImportedArchive = LocalFolderGallerySource.isLocalFolderGallery(
-                            downloadInfo.archiveUri)
-                            || (downloadInfo.archiveUri != null
-                            && downloadInfo.archiveUri.startsWith("content://"));
-                }
-
-                if (!isImportedArchive && info != null) {
-                    // Only process SpiderInfo for regular downloads, not imported archives
+                if (info != null) {
                     mSpiderInfoMap.remove(info.gid);
-                    SpiderInfo spiderInfo = getSpiderInfo(info);
+                    Context context = getEHContext();
+                    boolean imported = info instanceof DownloadInfo
+                            && ImportedGalleryProgress.isImportedGallery((DownloadInfo) info);
+                    SpiderInfo spiderInfo = imported
+                            ? context == null ? null : ImportedGalleryProgress.toSpiderInfo(
+                            context, (DownloadInfo) info)
+                            : getSpiderInfo(info);
                     if (spiderInfo != null) {
                         mSpiderInfoMap.put(info.gid, spiderInfo);
                     }
@@ -2384,8 +2401,7 @@ public class DownloadsScene extends ToolbarScene
                 requestList.add(info);
             }
         }
-        DownloadSpiderInfoExecutor executor = new DownloadSpiderInfoExecutor(requestList, this::spiderInfoResultCallBack);
-        executor.execute();
+        requestSpiderInfo(requestList);
     }
 
     private void queryVisibleSpiderInfo() {
@@ -2429,15 +2445,29 @@ public class DownloadsScene extends ToolbarScene
     }
 
     private void requestSpiderInfo(@NonNull List<DownloadInfo> candidates) {
+        Context context = getEHContext();
         List<DownloadInfo> request = new ArrayList<>();
+        Map<Long, SpiderInfo> importedResult = new HashMap<>();
         for (DownloadInfo info : candidates) {
             if (info.state != DownloadInfo.STATE_FINISH
-                    || LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
-                    || (info.archiveUri != null && info.archiveUri.startsWith("content://"))
                     || !mSpiderInfoRequested.add(info.gid)) {
                 continue;
             }
-            request.add(info);
+            if (ImportedGalleryProgress.isImportedGallery(info)) {
+                if (context == null) {
+                    mSpiderInfoRequested.remove(info.gid);
+                    continue;
+                }
+                SpiderInfo spiderInfo = ImportedGalleryProgress.toSpiderInfo(context, info);
+                if (spiderInfo != null) {
+                    importedResult.put(info.gid, spiderInfo);
+                }
+            } else {
+                request.add(info);
+            }
+        }
+        if (!importedResult.isEmpty()) {
+            spiderInfoResultCallBack(importedResult);
         }
         if (request.isEmpty()) {
             return;
@@ -2627,9 +2657,14 @@ public class DownloadsScene extends ToolbarScene
         List<DownloadInfo> imports = new ArrayList<>();
         long importTime = System.currentTimeMillis();
         for (int i = 0; i < candidates.size(); i++) {
+            FolderImportCandidate candidate = candidates.get(i);
             DownloadInfo info = createLocalFolderDownloadInfo(
-                    candidates.get(i), label, importTime - i);
+                    candidate, label, importTime - i);
             if (!downloadManager.containDownloadInfo(info.gid)) {
+                // Keep the source URI in the database, but render future list rows from a
+                // small app-owned file. This avoids relying on a document provider every
+                // time RecyclerView binds a cover.
+                LocalFolderCoverStore.ensure(context, info.gid, info.thumb);
                 imports.add(info);
             }
         }
@@ -2671,6 +2706,7 @@ public class DownloadsScene extends ToolbarScene
         info.legacy = 0;
         info.time = importTime;
         info.label = label;
+        info.pages = candidate.images.size();
         info.total = candidate.images.size();
         info.finished = candidate.images.size();
         info.downloaded = candidate.images.size();
@@ -2838,7 +2874,7 @@ public class DownloadsScene extends ToolbarScene
 
     private boolean isValidArchiveFormat(String fileName) {
         if (fileName == null) return false;
-        String lowerName = fileName.toLowerCase();
+        String lowerName = fileName.toLowerCase(Locale.ROOT);
         return lowerName.endsWith(".zip") || lowerName.endsWith(".rar") ||
                 lowerName.endsWith(".cbz") || lowerName.endsWith(".cbr");
     }
@@ -2867,8 +2903,11 @@ public class DownloadsScene extends ToolbarScene
             downloadInfo.legacy = 0;
             downloadInfo.time = System.currentTimeMillis();
             downloadInfo.label = null;
-            downloadInfo.total = 0; // Will be set by archive provider
-            downloadInfo.finished = 0;
+            int pageCount = countArchiveImages(context, uri);
+            downloadInfo.pages = pageCount;
+            downloadInfo.total = pageCount;
+            downloadInfo.finished = pageCount;
+            downloadInfo.downloaded = pageCount;
 
             // Store the URI in the archiveUri field - this is the key identifier
             downloadInfo.archiveUri = uri.toString();
@@ -2877,6 +2916,41 @@ public class DownloadsScene extends ToolbarScene
         } catch (Exception e) {
             Log.e(TAG, "Failed to create DownloadInfo", e);
             return null;
+        }
+    }
+
+    private int countArchiveImages(@NonNull Context context, @NonNull Uri uri) {
+        UniRandomAccessFile randomAccessFile = null;
+        A7ZipArchive archive = null;
+        try {
+            UniFile file = UniFile.fromUri(context, uri);
+            if (file == null || !file.exists()) {
+                return 0;
+            }
+            randomAccessFile = file.createRandomAccessFile("r");
+            if (randomAccessFile == null) {
+                return 0;
+            }
+            archive = A7ZipArchive.create(randomAccessFile);
+            return archive == null ? 0 : archive.getArchiveEntries().size();
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to count imported archive pages: " + uri, e);
+            return 0;
+        } finally {
+            if (archive != null) {
+                try {
+                    archive.close();
+                } catch (RuntimeException e) {
+                    Log.w(TAG, "Failed to close imported archive", e);
+                }
+            }
+            if (randomAccessFile != null) {
+                try {
+                    randomAccessFile.close();
+                } catch (IOException e) {
+                    Log.w(TAG, "Failed to close imported archive file", e);
+                }
+            }
         }
     }
 
@@ -2902,11 +2976,12 @@ public class DownloadsScene extends ToolbarScene
             }
 
             // Delete image files
-            boolean checked = mBuilder.isChecked();
-            Settings.putRemoveImageFiles(checked);
-            boolean isLocalFolder = mGalleryInfo instanceof DownloadInfo downloadInfo
-                    && LocalFolderGallerySource.isLocalFolderGallery(downloadInfo.archiveUri);
-            if (checked && !isLocalFolder) {
+            boolean importedGallery = isImportedGallery(mGalleryInfo);
+            boolean checked = !importedGallery && mBuilder.isChecked();
+            if (!importedGallery) {
+                Settings.putRemoveImageFiles(checked);
+            }
+            if (checked) {
                 UniFile file = getExistingGalleryDownloadDir(mGalleryInfo);
                 EhDB.removeDownloadDirname(mGalleryInfo.gid);
                 if (file != null) {
@@ -2948,8 +3023,17 @@ public class DownloadsScene extends ToolbarScene
             }
 
             // Delete image files
-            boolean checked = mBuilder.isChecked();
-            Settings.putRemoveImageFiles(checked);
+            boolean containsRegularGallery = false;
+            for (DownloadInfo info : mDownloadInfoList) {
+                if (!isImportedGallery(info)) {
+                    containsRegularGallery = true;
+                    break;
+                }
+            }
+            boolean checked = containsRegularGallery && mBuilder.isChecked();
+            if (containsRegularGallery) {
+                Settings.putRemoveImageFiles(checked);
+            }
             if (checked) {
                 deleteGalleryFilesAsync(mDownloadInfoList);
             }

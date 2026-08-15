@@ -23,6 +23,7 @@ import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
@@ -49,6 +50,7 @@ import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.gallery.A7ZipArchive;
+import com.hippo.ehviewer.gallery.LocalFolderCoverStore;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.gallery.Pipe;
 import com.hippo.ehviewer.spider.SpiderInfo;
@@ -73,6 +75,7 @@ import com.h6ah4i.android.widget.advrecyclerview.draggable.DraggableItemAdapter;
 import com.h6ah4i.android.widget.advrecyclerview.draggable.ItemDraggableRange;
 import com.h6ah4i.android.widget.advrecyclerview.utils.AbstractDraggableItemViewHolder;
 
+import java.io.File;
 import java.io.InputStream;
 import java.util.Collections;
 import java.util.List;
@@ -111,6 +114,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     private static final ExecutorService ARCHIVE_THUMBNAIL_EXECUTOR =
             Executors.newFixedThreadPool(2);
     private static final Set<String> LOADING_ARCHIVE_THUMBNAILS =
+            Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private static final Set<String> FAILED_LOCAL_FOLDER_THUMBNAILS =
             Collections.newSetFromMap(new ConcurrentHashMap<>());
 
     public interface DownloadAdapterCallback {
@@ -212,7 +217,6 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     public void onBindViewHolder(RecyclerView.ViewHolder rawHolder, int position) {
         if (rawHolder instanceof LabelHeaderHolder) {
             LabelHeaderHolder holder = (LabelHeaderHolder) rawHolder;
-            holder.boundPosition = position;
             holder.label.setText(mCallback.getLabelHeaderTitle(position));
             holder.count.setText(Integer.toString(
                     mCallback.getLabelHeaderGalleryCount(position)));
@@ -226,6 +230,9 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             return;
         }
         DownloadHolder holder = (DownloadHolder) rawHolder;
+        holder.boundGid = Long.MIN_VALUE;
+        holder.boundArchiveUri = null;
+        holder.thumb.unload();
         List<DownloadInfo> list = mCallback.getList();
         if (list == null) {
             return;
@@ -604,29 +611,67 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         }
     }
 
+    @Override
+    public void onViewRecycled(@NonNull RecyclerView.ViewHolder rawHolder) {
+        if (rawHolder instanceof DownloadHolder) {
+            DownloadHolder holder = (DownloadHolder) rawHolder;
+            holder.boundGid = Long.MIN_VALUE;
+            holder.boundArchiveUri = null;
+            holder.thumb.unload();
+        }
+        super.onViewRecycled(rawHolder);
+    }
+
     private void loadLocalFolderThumbnail(DownloadHolder holder, DownloadInfo info) {
-        String cacheKey = info.archiveUri;
         LoadImageView thumb = holder.thumb;
-        Bitmap cachedThumbnail = ARCHIVE_THUMBNAIL_CACHE.get(cacheKey);
-        if (cachedThumbnail != null && !cachedThumbnail.isRecycled()) {
-            thumb.setImageBitmap(cachedThumbnail);
+        Context sceneContext = mScene.getEHContext();
+        if (sceneContext == null) {
+            thumb.load(R.drawable.v_folders_import_dark_x24);
             return;
         }
-        thumb.setImageResource(R.drawable.v_folders_import_dark_x24);
-        if (info.thumb == null || !LOADING_ARCHIVE_THUMBNAILS.add(cacheKey)) {
+        Context context = sceneContext.getApplicationContext();
+        String requestKey = "local-folder:" + info.gid + ':' + info.archiveUri;
+        File cover = LocalFolderCoverStore.find(context, info.gid);
+        String cacheKey = cover == null ? null : localFolderCoverCacheKey(info.gid, cover);
+        Bitmap cachedThumbnail = cacheKey == null
+                ? null : ARCHIVE_THUMBNAIL_CACHE.get(cacheKey);
+        if (cachedThumbnail != null && !cachedThumbnail.isRecycled()) {
+            thumb.load(new BitmapDrawable(context.getResources(), cachedThumbnail));
+            return;
+        }
+        thumb.load(R.drawable.v_folders_import_dark_x24);
+        if (info.thumb == null
+                || FAILED_LOCAL_FOLDER_THUMBNAILS.contains(requestKey)
+                || !LOADING_ARCHIVE_THUMBNAILS.add(requestKey)) {
             return;
         }
         long requestedGid = holder.boundGid;
+        String requestedArchiveUri = holder.boundArchiveUri;
         ARCHIVE_THUMBNAIL_EXECUTOR.execute(() -> {
-            Bitmap thumbnail = decodeLocalFolderThumbnail(Uri.parse(info.thumb));
-            if (thumbnail != null && !thumbnail.isRecycled()) {
-                ARCHIVE_THUMBNAIL_CACHE.put(cacheKey, thumbnail);
+            File ensuredCover = null;
+            Bitmap loadedThumbnail = null;
+            try {
+                ensuredCover = LocalFolderCoverStore.ensure(
+                        context, requestedGid, info.thumb);
+                loadedThumbnail = ensuredCover == null
+                        ? null : BitmapFactory.decodeFile(ensuredCover.getAbsolutePath());
+            } catch (RuntimeException | OutOfMemoryError e) {
+                Log.w(TAG, "Failed to load local folder cover for " + requestedGid, e);
+            } finally {
+                LOADING_ARCHIVE_THUMBNAILS.remove(requestKey);
             }
-            LOADING_ARCHIVE_THUMBNAILS.remove(cacheKey);
+            Bitmap thumbnail = loadedThumbnail;
+            if (thumbnail != null && !thumbnail.isRecycled()) {
+                String resultCacheKey = localFolderCoverCacheKey(requestedGid, ensuredCover);
+                ARCHIVE_THUMBNAIL_CACHE.put(resultCacheKey, thumbnail);
+            } else {
+                FAILED_LOCAL_FOLDER_THUMBNAILS.add(requestKey);
+            }
             mScene.runOnUiThread(() -> {
                 if (thumbnail != null && !thumbnail.isRecycled()
-                        && cacheKey.equals(holder.boundArchiveUri)) {
-                    thumb.setImageBitmap(thumbnail);
+                        && holder.boundGid == requestedGid
+                        && ObjectUtils.equal(requestedArchiveUri, holder.boundArchiveUri)) {
+                    thumb.load(new BitmapDrawable(context.getResources(), thumbnail));
                 }
                 if (thumbnail != null && !thumbnail.isRecycled()) {
                     int position = mCallback.getAdapterPositionForGallery(requestedGid);
@@ -638,36 +683,9 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         });
     }
 
-    private Bitmap decodeLocalFolderThumbnail(@NonNull Uri imageUri) {
-        Context context = mScene.getEHContext();
-        if (context == null) {
-            return null;
-        }
-        try {
-            BitmapFactory.Options bounds = new BitmapFactory.Options();
-            bounds.inJustDecodeBounds = true;
-            try (InputStream input = context.getContentResolver().openInputStream(imageUri)) {
-                if (input == null) {
-                    return null;
-                }
-                BitmapFactory.decodeStream(input, null, bounds);
-            }
-            int sampleSize = 1;
-            int targetSize = 300;
-            while (bounds.outWidth / sampleSize > targetSize * 2
-                    || bounds.outHeight / sampleSize > targetSize * 2) {
-                sampleSize *= 2;
-            }
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            options.inSampleSize = sampleSize;
-            options.inPreferredConfig = Bitmap.Config.RGB_565;
-            try (InputStream input = context.getContentResolver().openInputStream(imageUri)) {
-                return input == null ? null : BitmapFactory.decodeStream(input, null, options);
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "Failed to decode local folder thumbnail: " + imageUri, e);
-            return null;
-        }
+    @NonNull
+    private static String localFolderCoverCacheKey(long galleryId, @NonNull File cover) {
+        return "local-cover:" + galleryId + ':' + cover.length() + ':' + cover.lastModified();
     }
 
     private void loadArchiveThumbnail(DownloadHolder holder, Uri archiveUri) {
@@ -677,12 +695,12 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         // Check cache first
         Bitmap cachedThumbnail = ARCHIVE_THUMBNAIL_CACHE.get(uriString);
         if (cachedThumbnail != null && !cachedThumbnail.isRecycled()) {
-            thumb.setImageBitmap(cachedThumbnail);
+            thumb.load(new BitmapDrawable(thumb.getResources(), cachedThumbnail));
             return;
         }
 
         // Set default icon immediately as fallback
-        thumb.setImageResource(R.drawable.v_archive_hh_primary_x48);
+        thumb.load(R.drawable.v_archive_hh_primary_x48);
         if (!LOADING_ARCHIVE_THUMBNAILS.add(uriString)) {
             return;
         }
@@ -704,8 +722,9 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             Bitmap result = thumbnail;
             mScene.runOnUiThread(() -> {
                 if (result != null && !result.isRecycled()
+                        && holder.boundGid == requestedGid
                         && uriString.equals(holder.boundArchiveUri)) {
-                    thumb.setImageBitmap(result);
+                    thumb.load(new BitmapDrawable(thumb.getResources(), result));
                 }
                 if (result != null && !result.isRecycled()) {
                     int position = mCallback.getAdapterPositionForGallery(requestedGid);
@@ -886,7 +905,6 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         final TextView count;
         final View headerContent;
         final TextView collapsedAction;
-        int boundPosition = RecyclerView.NO_POSITION;
 
         LabelHeaderHolder(@NonNull View itemView) {
             super(itemView);
@@ -895,15 +913,20 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             headerContent = itemView.findViewById(R.id.header_content);
             collapsedAction = itemView.findViewById(R.id.collapsed_action);
             headerContent.setOnClickListener(view -> {
-                if (boundPosition != RecyclerView.NO_POSITION) {
-                    mCallback.onLabelHeaderClick(boundPosition);
+                int position = getBindingAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    mCallback.onLabelHeaderClick(position);
                 }
             });
-            headerContent.setOnLongClickListener(view -> boundPosition != RecyclerView.NO_POSITION
-                    && mCallback.onLabelHeaderLongClick(boundPosition));
+            headerContent.setOnLongClickListener(view -> {
+                int position = getBindingAdapterPosition();
+                return position != RecyclerView.NO_POSITION
+                        && mCallback.onLabelHeaderLongClick(position);
+            });
             collapsedAction.setOnClickListener(view -> {
-                if (boundPosition != RecyclerView.NO_POSITION) {
-                    mCallback.onCollapsedLabelClick(boundPosition);
+                int position = getBindingAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    mCallback.onCollapsedLabelClick(position);
                 }
             });
         }

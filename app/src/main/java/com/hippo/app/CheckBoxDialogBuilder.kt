@@ -18,6 +18,7 @@ package com.hippo.app
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.LayoutInflater
+import android.view.View
 import android.widget.CheckBox
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
@@ -45,4 +46,11 @@ class CheckBoxDialogBuilder @SuppressLint("InflateParams") constructor(
 
     val isChecked: Boolean
         get() = mCheckBox.isChecked
+
+    fun setCheckBoxVisible(visible: Boolean): CheckBoxDialogBuilder = apply {
+        mCheckBox.visibility = if (visible) View.VISIBLE else View.GONE
+        if (!visible) {
+            mCheckBox.isChecked = false
+        }
+    }
 }

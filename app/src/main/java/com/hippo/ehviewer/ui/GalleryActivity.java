@@ -82,15 +82,18 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import com.google.android.material.snackbar.Snackbar;
 import com.hippo.android.resource.AttrResources;
 import com.hippo.ehviewer.AppConfig;
+import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
+import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.event.GalleryActivityEvent;
 import com.hippo.ehviewer.gallery.ArchiveGalleryProvider;
 import com.hippo.ehviewer.gallery.DirGalleryProvider;
 import com.hippo.ehviewer.gallery.EhGalleryProvider;
 import com.hippo.ehviewer.gallery.ExternalImageFileResolver;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
+import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.gallery.LocalGalleryHistory;
 import com.hippo.ehviewer.gallery.LocalFolderGalleryProvider;
 import com.hippo.ehviewer.widget.GalleryGuideView;
@@ -484,6 +487,38 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mCurrentLocalGalleryHistoryPage = -1;
     }
 
+    private boolean isImportedGallery() {
+        return mGalleryInfo instanceof DownloadInfo
+                && ImportedGalleryProgress.isImportedGallery((DownloadInfo) mGalleryInfo);
+    }
+
+    private void persistImportedGalleryProgressNow() {
+        if (!isImportedGallery() || mGalleryInfo == null) {
+            return;
+        }
+        int page = mCurrentIndex;
+        int visiblePage = mGalleryView == null ? -1 : mGalleryView.getCurrentIndex();
+        if (visiblePage >= 0) {
+            page = visiblePage;
+        }
+        if (page < 0) {
+            return;
+        }
+        ImportedGalleryProgress.save(
+                getApplicationContext(), mGalleryInfo.gid, page, mSize);
+    }
+
+    private void updateImportedGalleryPageCount(int pages) {
+        if (!isImportedGallery() || mGalleryInfo == null || pages <= 0) {
+            return;
+        }
+        ImportedGalleryProgress.updatePageCount(
+                getApplicationContext(), mGalleryInfo.gid, pages);
+        mGalleryInfo.pages = pages;
+        EhApplication.getDownloadManager(this)
+                .updateImportedGalleryPageCount(mGalleryInfo.gid, pages);
+    }
+
     /**
      * eventbus 通知，用于修复跳转奔溃的问题
      *
@@ -586,7 +621,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         // Get start page
         int startPage;
         if (savedInstanceState == null) {
-            startPage = mPage >= 0 ? mPage : mGalleryProvider.getStartPage();
+            if (mPage >= 0) {
+                startPage = mPage;
+            } else if (isImportedGallery() && mGalleryInfo != null) {
+                startPage = ImportedGalleryProgress.getStartPage(
+                        getApplicationContext(), mGalleryInfo.gid);
+            } else {
+                startPage = mGalleryProvider.getStartPage();
+            }
         } else {
             startPage = mCurrentIndex;
         }
@@ -824,6 +866,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onDestroy() {
         persistLocalGalleryHistoryNow();
+        persistImportedGalleryProgressNow();
         if (mLocalGalleryHistorySnackbar != null) {
             mLocalGalleryHistorySnackbar.dismiss();
             mLocalGalleryHistorySnackbar = null;
@@ -906,6 +949,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onPause() {
         persistLocalGalleryHistoryNow();
+        persistImportedGalleryProgressNow();
         restoreAnimatedWebpLongPressPlayback();
         super.onPause();
 
@@ -2843,6 +2887,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case KEY_SIZE:
                     GalleryActivity.this.mSize = mValue;
+                    updateImportedGalleryPageCount(mValue);
+                    if (isImportedGallery() && mValue > 0 && mCurrentIndex >= mValue) {
+                        mCurrentIndex = mValue - 1;
+                        if (mGalleryView != null) {
+                            mGalleryView.setCurrentPage(mCurrentIndex);
+                        }
+                    }
                     if (mPendingExternalImageStart && mValue >= 0) {
                         mPendingExternalImageStart = false;
                         int startPage = mGalleryProvider != null
