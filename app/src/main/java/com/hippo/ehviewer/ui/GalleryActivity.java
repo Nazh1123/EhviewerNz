@@ -161,6 +161,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private static final long SAVE_NOTICE_ENTER_DURATION_MS = 300L;
     private static final long SAVE_NOTICE_REPEAT_DURATION_MS = 320L;
     private static final long SAVE_NOTICE_EXIT_DURATION_MS = 200L;
+    private static final float ORIENTATION_SWIPE_MIN_SCREEN_FRACTION = 0.08f;
+    private static final float ORIENTATION_SWIPE_DIRECTION_RATIO = 1.25f;
     private static final int WRITE_REQUEST_CODE = 43;
 
     private String mAction;
@@ -267,6 +269,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private float mAnimatedWebpTouchDownX;
     private float mAnimatedWebpTouchDownY;
     private int mAnimatedWebpTouchSlop;
+    private boolean mOrientationSwipeCandidate;
+    private boolean mOrientationSwipeActive;
+    private float mOrientationSwipeDownX;
+    private float mOrientationSwipeDownY;
     @Nullable
     private ImageTexture mAnimatedWebpReloadSourceTexture;
     @Nullable
@@ -969,6 +975,15 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        if (!mOrientationSwipeActive) {
+            mOrientationSwipeCandidate = false;
+        }
+        updateQuickSettingsButtons();
+    }
+
+    @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
 
@@ -1131,10 +1146,88 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
+        if (handleOrientationSwipeGesture(event)) {
+            return true;
+        }
         if (handleAnimatedWebpScrubGesture(event)) {
             return true;
         }
         return super.dispatchTouchEvent(event);
+    }
+
+    private boolean handleOrientationSwipeGesture(MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                mOrientationSwipeActive = false;
+                mOrientationSwipeCandidate = isCurrentImageOrientationDifferent();
+                if (mOrientationSwipeCandidate) {
+                    mOrientationSwipeDownX = event.getX();
+                    mOrientationSwipeDownY = event.getY();
+                }
+                return false;
+            case MotionEvent.ACTION_MOVE:
+                if (!mOrientationSwipeCandidate || event.getPointerCount() != 1) {
+                    return mOrientationSwipeActive;
+                }
+                float dx = event.getX() - mOrientationSwipeDownX;
+                float dy = event.getY() - mOrientationSwipeDownY;
+                float minDistance = Math.max(mAnimatedWebpTouchSlop * 4.0f,
+                        getWindow().getDecorView().getHeight()
+                                * ORIENTATION_SWIPE_MIN_SCREEN_FRACTION);
+                if (dy < -minDistance || (Math.abs(dx) > minDistance && Math.abs(dx) > dy)) {
+                    mOrientationSwipeCandidate = false;
+                    return false;
+                }
+                if (dy < minDistance
+                        || dy < Math.abs(dx) * ORIENTATION_SWIPE_DIRECTION_RATIO) {
+                    return false;
+                }
+
+                mOrientationSwipeCandidate = false;
+                mOrientationSwipeActive = true;
+                clearAnimatedWebpTouchGesture();
+                MotionEvent cancel = MotionEvent.obtain(event);
+                cancel.setAction(MotionEvent.ACTION_CANCEL);
+                super.dispatchTouchEvent(cancel);
+                cancel.recycle();
+                switchOrientationForCurrentImage();
+                return true;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                boolean handled = mOrientationSwipeActive;
+                clearOrientationSwipeGesture();
+                return handled;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                boolean wasActive = mOrientationSwipeActive;
+                clearOrientationSwipeGesture();
+                return wasActive;
+            default:
+                return mOrientationSwipeActive;
+        }
+    }
+
+    private boolean isCurrentImageOrientationDifferent() {
+        GalleryView galleryView = mGalleryView;
+        if (galleryView == null) {
+            return false;
+        }
+        boolean viewportLandscape = getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_LANDSCAPE;
+        return galleryView.isCurrentImageOrientationDifferent(viewportLandscape);
+    }
+
+    private void switchOrientationForCurrentImage() {
+        if (!isCurrentImageOrientationDifferent()) {
+            return;
+        }
+        boolean viewportLandscape = getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_LANDSCAPE;
+        setScreenOrientation(!viewportLandscape);
+    }
+
+    private void clearOrientationSwipeGesture() {
+        mOrientationSwipeCandidate = false;
+        mOrientationSwipeActive = false;
     }
 
     private boolean handleAnimatedWebpScrubGesture(MotionEvent event) {
@@ -1310,9 +1403,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
 
         boolean useLandscape = !currentlyLandscape;
+        setScreenOrientation(useLandscape);
+        keepQuickSettingsVisible();
+    }
+
+    private void setScreenOrientation(boolean useLandscape) {
         Settings.putScreenRotation(useLandscape ? 2 : 1);
         updateQuickSettingsButtons();
-        keepQuickSettingsVisible();
         setRequestedOrientation(useLandscape
                 ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 : ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);

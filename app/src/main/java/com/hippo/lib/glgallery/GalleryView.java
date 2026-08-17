@@ -49,6 +49,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class GalleryView extends GLView implements GestureRecognizer.Listener {
 
@@ -83,8 +84,11 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
     private static final float[] LEFT_AREA = {0.0f, 0.0f, 9.0f / 25.0f, 1.0f};
     private static final float[] RIGHT_AREA = {16.0f / 25.0f, 0.0f, 1.0f, 1.0f};
-    private static final float[] MENU_AREA = {9.0f / 25.0f, 0.0f, 16.0f / 25.0f, 1.0f / 2.0f};
-    private static final float[] SLIDER_AREA = {9.0f / 25.0f, 1.0f / 2.0f, 16.0f / 25.0f, 1.0f};
+    private static final float[] MENU_AREA = {9.0f / 25.0f, 0.15f, 16.0f / 25.0f, 0.5f};
+    private static final float[] SLIDER_TOP_AREA = {9.0f / 25.0f, 0.0f,
+            16.0f / 25.0f, 0.15f};
+    private static final float[] SLIDER_BOTTOM_AREA = {9.0f / 25.0f, 0.5f,
+            16.0f / 25.0f, 1.0f};
 
     private static final int METHOD_ON_SINGLE_TAP_UP = 0;
     private static final int METHOD_ON_SINGLE_TAP_CONFIRMED = 1;
@@ -156,7 +160,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private final Rect mLeftArea = new Rect();
     private final Rect mRightArea = new Rect();
     private final Rect mMenuArea = new Rect();
-    private final Rect mSliderArea = new Rect();
+    private final Rect mSliderTopArea = new Rect();
+    private final Rect mSliderBottomArea = new Rect();
 
     private int mLayoutMode = LAYOUT_RIGHT_TO_LEFT;
     private int mScaleMode = ImageView.SCALE_FIT;
@@ -169,6 +174,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private final List<Object[]> mArgsListTemp = new ArrayList<>(5);
 
     private final AtomicInteger mCurrentIndex = new AtomicInteger(GalleryPageView.INVALID_INDEX);
+    private final AtomicLong mCurrentImageSize = new AtomicLong();
 
     public static class Builder {
 
@@ -485,6 +491,18 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         return mCurrentIndex.get();
     }
 
+    /**
+     * Returns whether the current image and viewport use different non-square orientations.
+     * The packed size is updated on the render thread and can safely be queried by the UI thread.
+     */
+    public boolean isCurrentImageOrientationDifferent(boolean viewportLandscape) {
+        long size = mCurrentImageSize.get();
+        int width = (int) (size >>> 32);
+        int height = (int) size;
+        return width > 0 && height > 0 && width != height
+                && (width > height) != viewportLandscape;
+    }
+
     @Override
     public void requestLayout() {
         // Do not need requestLayout, because the size will not change
@@ -598,7 +616,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     @Override
     public boolean isDoubleTapRegion(float x, float y) {
         return mMenuArea.contains((int) x, (int) y)
-                || mSliderArea.contains((int) x, (int) y);
+                || isSliderArea(x, y);
     }
 
     @Override
@@ -663,6 +681,12 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     protected void onLayout(boolean changeSize, int left, int top, int right, int bottom) {
         mEdgeView.layout(left, top, right, bottom);
 
+        // A handled configuration change keeps this GalleryView and its textures alive. Mark the
+        // layout manager dirty so existing pages are measured and positioned against the new
+        // viewport instead of retaining coordinates from the previous orientation.
+        if (changeSize) {
+            mRequestFill = true;
+        }
         fill();
 
         if (changeSize) {
@@ -674,9 +698,20 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
                     (int) (RIGHT_AREA[2] * width), (int) (RIGHT_AREA[3] * height));
             mMenuArea.set((int) (MENU_AREA[0] * width), (int) (MENU_AREA[1] * height),
                     (int) (MENU_AREA[2] * width), (int) (MENU_AREA[3] * height));
-            mSliderArea.set((int) (SLIDER_AREA[0] * width), (int) (SLIDER_AREA[1] * height),
-                    (int) (SLIDER_AREA[2] * width), (int) (SLIDER_AREA[3] * height));
+            mSliderTopArea.set((int) (SLIDER_TOP_AREA[0] * width),
+                    (int) (SLIDER_TOP_AREA[1] * height),
+                    (int) (SLIDER_TOP_AREA[2] * width),
+                    (int) (SLIDER_TOP_AREA[3] * height));
+            mSliderBottomArea.set((int) (SLIDER_BOTTOM_AREA[0] * width),
+                    (int) (SLIDER_BOTTOM_AREA[1] * height),
+                    (int) (SLIDER_BOTTOM_AREA[2] * width),
+                    (int) (SLIDER_BOTTOM_AREA[3] * height));
         }
+    }
+
+    private boolean isSliderArea(float x, float y) {
+        return mSliderTopArea.contains((int) x, (int) y)
+                || mSliderBottomArea.contains((int) x, (int) y);
     }
 
     @RenderThread
@@ -718,7 +753,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             if (mListener != null) {
                 mListener.onTapErrorText(page.getIndex());
             }
-        } else if (mSliderArea.contains((int) x, (int) y)) {
+        } else if (isSliderArea(x, y)) {
             if (mListener != null) {
                 mListener.onTapSliderArea();
             }
@@ -741,7 +776,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             return;
         }
 
-        if (mSliderArea.contains((int) x, (int) y)) {
+        if (isSliderArea(x, y)) {
             GalleryPageView page = findPageUnder(x, y);
             if (page != null && page.getImageTexture() != null &&
                     page.getImageTexture().isControllableAnimation()) {
@@ -764,7 +799,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             return;
         }
 
-        if (mSliderArea.contains((int) x, (int) y)) {
+        if (isSliderArea(x, y)) {
             GalleryPageView page = findPageUnder(x, y);
             ImageTexture texture = page != null ? page.getImageTexture() : null;
             if (texture != null && texture.isControllableAnimation()
@@ -1086,8 +1121,11 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         }
         mCurrentIndex.lazySet(newCurrentIndex);
 
-        if (oldCurrentIndex != newCurrentIndex && mListener != null) {
-            mListener.onUpdateCurrentIndex(newCurrentIndex);
+        if (oldCurrentIndex != newCurrentIndex) {
+            updateCurrentImageSize(newCurrentIndex);
+            if (mListener != null) {
+                mListener.onUpdateCurrentIndex(newCurrentIndex);
+            }
         }
     }
 
@@ -1101,9 +1139,22 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     }
 
     void notifyPageImageReady(int index) {
+        if (index == mCurrentIndex.get()) {
+            updateCurrentImageSize(index);
+        }
         if (mListener != null) {
             mListener.onPageImageReady(index);
         }
+    }
+
+    @RenderThread
+    private void updateCurrentImageSize(int index) {
+        GalleryPageView page = mLayoutManager == null
+                ? null : mLayoutManager.findPageByIndex(index);
+        ImageTexture texture = page == null ? null : page.getImageTexture();
+        long size = texture == null ? 0L
+                : ((long) texture.getWidth() << 32) | (texture.getHeight() & 0xffffffffL);
+        mCurrentImageSize.lazySet(size);
     }
 
     GalleryPageView obtainPage() {

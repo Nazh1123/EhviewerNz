@@ -36,12 +36,16 @@ public class GalleryGuideView extends ViewGroup implements View.OnClickListener 
 
     private int mBgColor;
     private Paint mPaint;
-    private final float[] mPoints = new float[3 * 4];
+    private static final float MENU_AREA_TOP = 0.15f;
+    private static final float MENU_AREA_BOTTOM = 0.5f;
+
+    private final float[] mPoints = new float[4 * 4];
     private int mStep;
 
     private TextView mLeftText;
     private TextView mRightText;
     private TextView mMenuText;
+    private TextView mTopProgressText;
     private TextView mProgressText;
     private TextView mLongClickText;
 
@@ -77,6 +81,7 @@ public class GalleryGuideView extends ViewGroup implements View.OnClickListener 
         mLeftText = null;
         mRightText = null;
         mMenuText = null;
+        mTopProgressText = null;
         mProgressText = null;
         mLongClickText = null;
 
@@ -98,6 +103,7 @@ public class GalleryGuideView extends ViewGroup implements View.OnClickListener 
         mRightText = (TextView) getChildAt(1);
         mMenuText = (TextView) getChildAt(2);
         mProgressText = (TextView) getChildAt(3);
+        mTopProgressText = (TextView) getChildAt(4);
     }
 
     private void bind2() {
@@ -124,10 +130,16 @@ public class GalleryGuideView extends ViewGroup implements View.OnClickListener 
                         MeasureSpec.makeMeasureSpec(heightSize, MeasureSpec.EXACTLY));
                 mRightText.measure(MeasureSpec.makeMeasureSpec(widthSize - rightDivider, MeasureSpec.EXACTLY),
                         MeasureSpec.makeMeasureSpec(heightSize, MeasureSpec.EXACTLY));
+                int topProgressHeight = (int) (heightSize * MENU_AREA_TOP);
+                int menuBottom = (int) (heightSize * MENU_AREA_BOTTOM);
                 mMenuText.measure(MeasureSpec.makeMeasureSpec(rightDivider - leftDivider, MeasureSpec.EXACTLY),
-                        MeasureSpec.makeMeasureSpec(heightSize / 2, MeasureSpec.EXACTLY));
+                        MeasureSpec.makeMeasureSpec(menuBottom - topProgressHeight,
+                                MeasureSpec.EXACTLY));
+                mTopProgressText.measure(MeasureSpec.makeMeasureSpec(
+                                rightDivider - leftDivider, MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(topProgressHeight, MeasureSpec.EXACTLY));
                 mProgressText.measure(MeasureSpec.makeMeasureSpec(rightDivider - leftDivider, MeasureSpec.EXACTLY),
-                        MeasureSpec.makeMeasureSpec(heightSize / 2, MeasureSpec.EXACTLY));
+                        MeasureSpec.makeMeasureSpec(heightSize - menuBottom, MeasureSpec.EXACTLY));
                 break;
             default:
             case 1:
@@ -148,10 +160,13 @@ public class GalleryGuideView extends ViewGroup implements View.OnClickListener 
             case 0:
                 int leftDivider = (int) (LEFT_COLUMN_END * width);
                 int rightDivider = (int) (RIGHT_COLUMN_START * width);
+                int topProgressBottom = (int) (MENU_AREA_TOP * height);
+                int menuBottom = (int) (MENU_AREA_BOTTOM * height);
                 mLeftText.layout(0, 0, leftDivider, height);
                 mRightText.layout(rightDivider, 0, width, height);
-                mMenuText.layout(leftDivider, 0, rightDivider, height / 2);
-                mProgressText.layout(leftDivider, height / 2, rightDivider, height);
+                mTopProgressText.layout(leftDivider, 0, rightDivider, topProgressBottom);
+                mMenuText.layout(leftDivider, topProgressBottom, rightDivider, menuBottom);
+                mProgressText.layout(leftDivider, menuBottom, rightDivider, height);
                 break;
             default:
             case 1:
@@ -176,9 +191,14 @@ public class GalleryGuideView extends ViewGroup implements View.OnClickListener 
             mPoints[7] = h;
 
             mPoints[8] = (int) (LEFT_COLUMN_END * w);
-            mPoints[9] = h / 2;
+            mPoints[9] = (int) (MENU_AREA_TOP * h);
             mPoints[10] = (int) (RIGHT_COLUMN_START * w);
-            mPoints[11] = h / 2;
+            mPoints[11] = (int) (MENU_AREA_TOP * h);
+
+            mPoints[12] = (int) (LEFT_COLUMN_END * w);
+            mPoints[13] = (int) (MENU_AREA_BOTTOM * h);
+            mPoints[14] = (int) (RIGHT_COLUMN_START * w);
+            mPoints[15] = (int) (MENU_AREA_BOTTOM * h);
 
         }
     }
