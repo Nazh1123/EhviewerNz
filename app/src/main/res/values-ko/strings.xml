@@ -1066,7 +1066,7 @@
     <string name="settings_eh_show_thumbnail_download_badge">다운로드 로고를 보여주는 썸네일</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">썸네일 모드에서는 다운로드한 갤러리 로고가 오른쪽 하단에 표시됩니다.</string>
     <string name="settings_eh_show_thumbnail_info_bar">썸네일 정보 표시줄</string>
-    <string name="settings_eh_show_thumbnail_info_bar_summary">큰 썸네일 모드에서는 갤러리 커버 아래에 시간, 코딩 유형, 다운로드 로고, 읽기 진행 상황이 표시됩니다.</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">큰 썸네일 모드에서는 갤러리 표지 아래에 게시 날짜, 평점, 검열 유형, 다운로드 상태 및 읽기 진행률이 표시됩니다.</string>
     <string name="settings_eh_system_theme">시스템 테마</string>
     <string name="settings_fork_auto_subscription_updates">자동으로 구독 업데이트 받기</string>
     <string name="settings_fork_auto_subscription_updates_eh">에에 구독</string>

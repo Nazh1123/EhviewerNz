@@ -1077,7 +1077,7 @@
     <string name="settings_eh_show_thumbnail_download_badge">ภาพขนาดย่อที่แสดงโลโก้การดาวน์โหลด</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">ในโหมดภาพย่อ โลโก้แกลเลอรีที่ดาวน์โหลดจะแสดงที่มุมขวาล่าง</string>
     <string name="settings_eh_show_thumbnail_info_bar">แถบข้อมูลภาพขนาดย่อ</string>
-    <string name="settings_eh_show_thumbnail_info_bar_summary">ในโหมดภาพขนาดย่อขนาดใหญ่ เวลา ประเภทการเขียนโค้ด โลโก้การดาวน์โหลด และความคืบหน้าในการอ่านจะแสดงอยู่ใต้ปกแกลเลอรี</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">ในโหมดภาพขนาดย่อขนาดใหญ่ วันที่เผยแพร่ คะแนน ประเภทการเซ็นเซอร์ สถานะการดาวน์โหลด และความคืบหน้าในการอ่านจะแสดงอยู่ใต้ปกแกลเลอรี</string>
     <string name="settings_eh_system_theme">ธีมของระบบ</string>
     <string name="settings_fork_auto_subscription_updates">รับการอัปเดตการสมัครรับข้อมูลโดยอัตโนมัติ</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH สมัครสมาชิก</string>

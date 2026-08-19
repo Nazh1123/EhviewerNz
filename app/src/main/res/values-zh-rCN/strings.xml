@@ -575,7 +575,7 @@
     <string name="settings_eh_show_thumbnail_download_badge">缩略图显示下载标识</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">缩略图模式下，在右下角显示画廊已下载标识</string>
     <string name="settings_eh_show_thumbnail_info_bar">缩略图信息栏</string>
-    <string name="settings_eh_show_thumbnail_info_bar_summary">大缩略图模式下，在画廊封面下方显示时间、打码类型、下载标识与阅读进度</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">大缩略图模式下，在画廊封面下方显示发布日期、评分、打码类型、下载标识与阅读进度</string>
     <string name="settings_eh_list_show_read_progress">显示阅读进度</string>
     <string name="settings_eh_list_show_read_progress_summary">在详情列表模式下显示每个画廊的阅读进度</string>
     <string name="settings_eh_detail_size">详情大小</string>

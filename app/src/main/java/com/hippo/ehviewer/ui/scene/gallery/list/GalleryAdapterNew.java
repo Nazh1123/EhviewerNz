@@ -40,6 +40,7 @@ import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
+import com.hippo.ehviewer.client.EhConfig;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.download.DownloadManager;
@@ -309,9 +310,12 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 if (showInfoBar) {
                     holder.thumbnailPosted.setText(
                             GalleryListDisplayHelper.formatCompactPosted(gi.posted));
+                    holder.thumbnailRating.setText(
+                            GalleryListDisplayHelper.formatRating(gi.rating));
                     holder.thumbnailCensorship.setText(
                             GalleryListDisplayHelper.resolveCensorship(
-                                    gi.simpleTags, gi.tgList));
+                                    gi.simpleTags, gi.tgList,
+                                    gi.category == EhConfig.COSPLAY));
                     holder.thumbnailDownloaded.setVisibility(
                             downloaded ? View.VISIBLE : View.GONE);
                     bindPageProgress(holder, holder.thumbnailPages, gi, true, false);
@@ -380,6 +384,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         @Nullable
         public final TextView thumbnailPosted;
         @Nullable
+        public final TextView thumbnailRating;
+        @Nullable
         public final TextView thumbnailCensorship;
         @Nullable
         public final ImageView thumbnailDownloaded;
@@ -402,6 +408,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             selectionOutline = itemView.findViewById(R.id.selection_outline);
             thumbnailInfoBar = itemView.findViewById(R.id.thumbnail_info_bar);
             thumbnailPosted = itemView.findViewById(R.id.thumbnail_posted);
+            thumbnailRating = itemView.findViewById(R.id.thumbnail_rating);
             thumbnailCensorship = itemView.findViewById(R.id.thumbnail_censorship);
             thumbnailDownloaded = itemView.findViewById(R.id.thumbnail_downloaded);
             thumbnailPages = itemView.findViewById(R.id.thumbnail_pages);

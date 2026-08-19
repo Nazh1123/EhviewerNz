@@ -20,6 +20,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -31,6 +32,8 @@ final class GalleryListDisplayHelper {
     private static final String MOSAIC_CENSORSHIP = "other:mosaic censorship";
     private static final String FULL_CENSORSHIP = "other:full censorship";
     private static final String UNCENSORED = "other:uncensored";
+    private static final String NUDITY_ONLY = "other:nudity only";
+    private static final String NON_NUDE = "other:non-nude";
 
     private GalleryListDisplayHelper() {
     }
@@ -48,9 +51,18 @@ final class GalleryListDisplayHelper {
                 + " " + matcher.group(4) + ":" + matcher.group(5);
     }
 
+    @NonNull
+    static String formatRating(float rating) {
+        if (rating < 0f || Float.isNaN(rating) || Float.isInfinite(rating)) {
+            return "\u2014";
+        }
+        return String.format(Locale.US, "%.2f", rating);
+    }
+
     @Nullable
     static String resolveCensorship(@Nullable String[] simpleTags,
-                                    @Nullable List<String> tagList) {
+                                    @Nullable List<String> tagList,
+                                    boolean isCosplay) {
         if (containsTag(simpleTags, tagList, MOSAIC_CENSORSHIP)) {
             return "Mo";
         }
@@ -60,6 +72,14 @@ final class GalleryListDisplayHelper {
         if (containsTag(simpleTags, tagList, UNCENSORED)) {
             return "Un";
         }
+        if (isCosplay) {
+            if (containsTag(simpleTags, tagList, NUDITY_ONLY)) {
+                return "Nu";
+            }
+            if (containsTag(simpleTags, tagList, NON_NUDE)) {
+                return "Cl";
+            }
+        }
         return null;
     }
 
@@ -68,8 +88,11 @@ final class GalleryListDisplayHelper {
         if (pages <= 0) {
             return appendPageSuffix ? "" : "—/—";
         }
-        int currentPage = startPage > 0 ? startPage + 1 : 0;
-        return currentPage + "/" + pages + (appendPageSuffix ? "P" : "");
+        String suffix = appendPageSuffix ? "P" : "";
+        if (startPage <= 0) {
+            return pages + (appendPageSuffix ? "P" : "p");
+        }
+        return (startPage + 1) + "/" + pages + suffix;
     }
 
     private static boolean containsTag(@Nullable String[] simpleTags,
