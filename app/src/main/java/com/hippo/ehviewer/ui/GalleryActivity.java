@@ -1206,23 +1206,56 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
     }
 
+    private boolean isViewportLandscape() {
+        View decorView = getWindow().getDecorView();
+        int width = decorView.getWidth();
+        int height = decorView.getHeight();
+        if (width > 0 && height > 0 && width != height) {
+            return width > height;
+        }
+        return getResources().getConfiguration().orientation
+                == Configuration.ORIENTATION_LANDSCAPE;
+    }
+
     private boolean isCurrentImageOrientationDifferent() {
         GalleryView galleryView = mGalleryView;
         if (galleryView == null) {
             return false;
         }
-        boolean viewportLandscape = getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE;
-        return galleryView.isCurrentImageOrientationDifferent(viewportLandscape);
+        return galleryView.isCurrentImageOrientationDifferent(isViewportLandscape());
     }
 
     private void switchOrientationForCurrentImage() {
         if (!isCurrentImageOrientationDifferent()) {
             return;
         }
-        boolean viewportLandscape = getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE;
-        setScreenOrientation(!viewportLandscape);
+        if (isViewportLandscape()) {
+            setPortraitOrientationForSwipe();
+        } else {
+            setLandscapeOrientationForReadingDirection();
+        }
+    }
+
+    private void setLandscapeOrientationForReadingDirection() {
+        int layoutMode = mGalleryView != null ? mGalleryView.getLayoutMode() : mLayoutMode;
+        int requestedOrientation;
+        if (layoutMode == GalleryView.LAYOUT_LEFT_TO_RIGHT) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+        } else if (layoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+        } else {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        }
+
+        Settings.putScreenRotation(2);
+        updateQuickSettingsButtons();
+        setRequestedOrientation(requestedOrientation);
+    }
+
+    private void setPortraitOrientationForSwipe() {
+        Settings.putScreenRotation(1);
+        updateQuickSettingsButtons();
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
     }
 
     private void clearOrientationSwipeGesture() {
