@@ -259,6 +259,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private boolean mAnimatedWebpLongPressActive;
     private float mAnimatedWebpLongPressRestoreSpeed;
     private boolean mAnimatedWebpLongPressRestorePlaying;
+    private volatile boolean mAnimatedWebpLifecycleResumed;
+    private volatile int mAnimatedWebpLifecycleGeneration;
+    @Nullable
+    private ImageTexture mAnimatedWebpLifecyclePausedTexture;
+    private boolean mAnimatedWebpResumeAfterLifecyclePause;
     private boolean mAnimatedWebpSeeking;
     private boolean mAnimatedWebpSeekAwaitingFrame;
     private boolean mAnimatedWebpWasPlayingBeforeSeek;
@@ -871,6 +876,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        mAnimatedWebpLifecycleResumed = false;
+        mAnimatedWebpLifecycleGeneration++;
         persistLocalGalleryHistoryNow();
         persistImportedGalleryProgressNow();
         if (mLocalGalleryHistorySnackbar != null) {
@@ -954,9 +961,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onPause() {
+        mAnimatedWebpLifecycleResumed = false;
+        mAnimatedWebpLifecycleGeneration++;
         persistLocalGalleryHistoryNow();
         persistImportedGalleryProgressNow();
         restoreAnimatedWebpLongPressPlayback();
+        suspendAnimatedWebpForLifecycle(mAnimatedWebpTexture);
+        mAnimatedWebpHandler.removeCallbacksAndMessages(null);
         super.onPause();
 
         if (mGLRootView != null) {
@@ -971,6 +982,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mGLRootView != null) {
             mGLRootView.onResume();
         }
+        mAnimatedWebpLifecycleGeneration++;
+        mAnimatedWebpLifecycleResumed = true;
+        updateAnimatedWebpUi();
+        resumeAnimatedWebpAfterLifecyclePause();
         updateQuickSettingsButtons();
     }
 
@@ -1562,8 +1577,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     public void onPageImageReady(int index) {
+        boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
+        int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
         mAnimatedWebpHandler.post(() -> {
-            if (index == mCurrentIndex) {
+            if (lifecycleResumed && mAnimatedWebpLifecycleResumed &&
+                    lifecycleGeneration == mAnimatedWebpLifecycleGeneration &&
+                    index == mCurrentIndex) {
                 updateAnimatedWebpUi();
             }
         });
@@ -2662,6 +2681,27 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         return true;
     }
 
+    private void suspendAnimatedWebpForLifecycle(@Nullable ImageTexture texture) {
+        if (texture != mAnimatedWebpLifecyclePausedTexture) {
+            mAnimatedWebpLifecyclePausedTexture = texture;
+            mAnimatedWebpResumeAfterLifecyclePause =
+                    texture != null && texture.isPlaybackPlaying();
+        }
+        if (texture != null && texture.isPlaybackPlaying()) {
+            texture.setPlaybackPlaying(false);
+        }
+    }
+
+    private void resumeAnimatedWebpAfterLifecyclePause() {
+        ImageTexture texture = mAnimatedWebpLifecyclePausedTexture;
+        boolean resume = mAnimatedWebpResumeAfterLifecyclePause;
+        mAnimatedWebpLifecyclePausedTexture = null;
+        mAnimatedWebpResumeAfterLifecyclePause = false;
+        if (resume && texture != null && texture == mAnimatedWebpTexture) {
+            texture.setPlaybackPlaying(true);
+        }
+    }
+
     private void updateAnimatedWebpUi() {
         if (reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) return;
 
@@ -2685,6 +2725,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             if (candidate == null || candidate != mAnimatedWebpStallWarningTexture) {
                 hideAnimatedWebpStallWarning();
             }
+        }
+
+        if (!mAnimatedWebpLifecycleResumed) {
+            suspendAnimatedWebpForLifecycle(candidate);
         }
 
         boolean showTime = Settings.getAnimatedWebpShowTime();
@@ -2762,15 +2806,30 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     @Override
-    public void onPlaybackChanged(ImageTexture texture, boolean looped, boolean frameChanged) {
+    public void onPlaybackChanged(ImageTexture texture, boolean frameChanged) {
+        boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
+        int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
         mAnimatedWebpHandler.post(() -> {
-            if (texture != mAnimatedWebpTexture) return;
+            if (!lifecycleResumed || !mAnimatedWebpLifecycleResumed ||
+                    lifecycleGeneration != mAnimatedWebpLifecycleGeneration ||
+                    texture != mAnimatedWebpTexture) return;
             if (frameChanged) {
                 updateAnimatedWebpProgress(texture);
             } else {
                 updateAnimatedWebpUi();
             }
-            if (looped && Settings.getAnimatedWebpAutoAdvance() && mGalleryView != null &&
+        });
+    }
+
+    @Override
+    public void onPlaybackCycleCompleted(ImageTexture texture) {
+        boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
+        int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
+        mAnimatedWebpHandler.post(() -> {
+            if (!lifecycleResumed || !mAnimatedWebpLifecycleResumed ||
+                    lifecycleGeneration != mAnimatedWebpLifecycleGeneration ||
+                    texture != mAnimatedWebpTexture) return;
+            if (Settings.getAnimatedWebpAutoAdvance() && mGalleryView != null &&
                     mCurrentIndex >= 0 && mCurrentIndex + 1 < mSize) {
                 mGalleryView.setCurrentPage(mCurrentIndex + 1);
             }
@@ -2784,8 +2843,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     public void onPlaybackStalled(ImageTexture texture) {
+        boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
+        int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
         mAnimatedWebpHandler.post(() -> {
-            if (texture != mAnimatedWebpTexture || mCurrentIndex < 0 ||
+            if (!lifecycleResumed || !mAnimatedWebpLifecycleResumed ||
+                    lifecycleGeneration != mAnimatedWebpLifecycleGeneration ||
+                    texture != mAnimatedWebpTexture || mCurrentIndex < 0 ||
                     mLayoutMode == GalleryView.LAYOUT_TOP_TO_BOTTOM) return;
             mAnimatedWebpStallWarningTexture = texture;
             if (mAnimatedWebpStallWarning != null) {

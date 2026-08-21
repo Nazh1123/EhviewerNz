@@ -965,7 +965,7 @@ public class ImageTexture implements Texture, Animatable {
             mPlaybackFrameStart = SystemClock.uptimeMillis();
             mPlaybackLock.notifyAll();
         }
-        notifyPlaybackChanged(false, false);
+        notifyPlaybackChanged(false);
     }
 
     public float getPlaybackSpeed() {
@@ -983,7 +983,7 @@ public class ImageTexture implements Texture, Animatable {
             mPlaybackFrameStart = SystemClock.uptimeMillis();
             mPlaybackLock.notifyAll();
         }
-        notifyPlaybackChanged(false, false);
+        notifyPlaybackChanged(false);
     }
 
     public void seekTo(int positionMs) {
@@ -1012,10 +1012,16 @@ public class ImageTexture implements Texture, Animatable {
         mPlaybackFrameStart = now;
     }
 
-    private void notifyPlaybackChanged(boolean looped, boolean frameChanged) {
+    private void notifyPlaybackChanged(boolean frameChanged) {
         WeakReference<PlaybackListener> reference = mPlaybackListener;
         PlaybackListener listener = reference != null ? reference.get() : null;
-        if (listener != null) listener.onPlaybackChanged(this, looped, frameChanged);
+        if (listener != null) listener.onPlaybackChanged(this, frameChanged);
+    }
+
+    private void notifyPlaybackCycleCompleted() {
+        WeakReference<PlaybackListener> reference = mPlaybackListener;
+        PlaybackListener listener = reference != null ? reference.get() : null;
+        if (listener != null) listener.onPlaybackCycleCompleted(this);
     }
 
     @Override
@@ -1523,7 +1529,8 @@ public class ImageTexture implements Texture, Animatable {
                 }
                 mFrameDirty.lazySet(true);
                 invalidateSelf();
-                notifyPlaybackChanged(looped, true);
+                notifyPlaybackChanged(true);
+                if (looped) notifyPlaybackCycleCompleted();
             }
             synchronized (mImage) {
                 mImageBusy = false;
@@ -1640,7 +1647,9 @@ public class ImageTexture implements Texture, Animatable {
     }
 
     public interface PlaybackListener {
-        void onPlaybackChanged(ImageTexture texture, boolean looped, boolean frameChanged);
+        void onPlaybackChanged(ImageTexture texture, boolean frameChanged);
+
+        void onPlaybackCycleCompleted(ImageTexture texture);
 
         void onPlaybackStalled(ImageTexture texture);
     }
