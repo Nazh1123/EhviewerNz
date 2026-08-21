@@ -110,6 +110,13 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
         if (fab != null) {
             if (visible && fab.getVisibility() == View.GONE) {
                 fab.animate().cancel();
+                // A secondary FAB keeps the alpha and translation left by its previous collapse
+                // animation after it is changed to GONE. Restore the expanded properties before
+                // reusing it in an already-expanded menu, otherwise it remains visually hidden.
+                if (mExpanded) {
+                    fab.setAlpha(1f);
+                    fab.setTranslationY(0f);
+                }
                 fab.setVisibility(mExpanded ? View.VISIBLE : View.INVISIBLE);
             } else if (!visible && fab.getVisibility() != View.GONE) {
                 fab.animate().cancel();

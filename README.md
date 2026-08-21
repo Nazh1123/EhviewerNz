@@ -1,6 +1,8 @@
 # EhViewerNz
 
 EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_CN_SXJ) 的 Fork.
+- 发布分支: [BiLi_PC_Gamer](https://github.com/Nazh1123/EhviewerNz)
+- 开发分支: [Dev_Test](https://github.com/Nazh1123/EhviewerNz/tree/Dev_Test)
 
 ## Fork 功能
 
@@ -13,7 +15,7 @@ EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_C
   - [书签订阅](#订阅聚合)、[自动获取订阅更新](#订阅聚合)；
   - [下载标签连续浏览](#下载管理)、[下载标签管理](#下载管理)、[导入本地文件夹](#下载管理)；
   - [画廊多选](#画廊搜索)、[额外信息栏](#画廊搜索)；
-  - [画廊更新](#画廊详情与预览)、[提取作者](#画廊详情与预览)、[第三方打开画廊](#画廊详情与预览)、[预览UI缩放](#画廊详情与预览)；
+  - [画廊更新](#画廊详情与预览)、[提取作者](#画廊详情与预览)、[预览UI缩放](#画廊详情与预览)；
   - [原版修复](#修复)。
 
 ### 图片浏览
@@ -67,7 +69,7 @@ EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_C
 ### 画廊详情与预览
 
 - 画廊可复用旧画廊内容进行更新，并继承阅读进度。
-- 父画廊历史展示版本链列表，并标识已下载画廊。
+- 父画廊历史，展示画廊版本链列表，并标识其中已下载画廊。
 - “画廊预览立即跳转”，开启后详情页底部的预览入口将直接跳转到第二页的新内容。
 - 详情页支持向左滑动快速进入画廊预览。
 - 预览页面内支持双指缩放，即时调整每行图片（缩略图）数量，最多 `8` 张。
