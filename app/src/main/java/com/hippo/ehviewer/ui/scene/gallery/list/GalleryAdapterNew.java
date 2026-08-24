@@ -81,6 +81,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private int mType = TYPE_INVALID;
     private boolean mShowFavourite;
     private OnThumbItemClickListener myOnThumbItemClickListener;
+    private OnThumbItemLongClickListener mOnThumbItemLongClickListener;
 
     private DownloadManager mDownloadManager;
 
@@ -185,7 +186,9 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 break;
         }
 
-        GalleryAdapterNew.GalleryHolder holder = new GalleryAdapterNew.GalleryHolder(mInflater.inflate(layoutId, parent, false), myOnThumbItemClickListener, viewType);
+        GalleryAdapterNew.GalleryHolder holder = new GalleryAdapterNew.GalleryHolder(
+                mInflater.inflate(layoutId, parent, false), myOnThumbItemClickListener,
+                mOnThumbItemLongClickListener, viewType);
 
         if (viewType == TYPE_LIST) {
             ViewGroup.LayoutParams lp = holder.thumb.getLayoutParams();
@@ -366,6 +369,14 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         void onThumbItemClick(int position, View view, GalleryInfo gi);
     }
 
+    public void setThumbItemLongClickListener(OnThumbItemLongClickListener listener) {
+        mOnThumbItemLongClickListener = listener;
+    }
+
+    public interface OnThumbItemLongClickListener {
+        boolean onThumbItemLongClick(int position, View view, GalleryInfo gi);
+    }
+
     public class GalleryHolder extends RecyclerView.ViewHolder {
 
         public final LoadImageViewNew thumb;
@@ -393,7 +404,10 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         public final TextView thumbnailPages;
         public long boundGid = Long.MIN_VALUE;
 
-        public GalleryHolder(View itemView, final OnThumbItemClickListener onThumbItemClickListener, int mType) {
+        public GalleryHolder(View itemView,
+                             final OnThumbItemClickListener onThumbItemClickListener,
+                             final OnThumbItemLongClickListener onThumbItemLongClickListener,
+                             int mType) {
             super(itemView);
             thumb = itemView.findViewById(R.id.thumb_new);
             title = itemView.findViewById(R.id.title);
@@ -414,10 +428,18 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             thumbnailPages = itemView.findViewById(R.id.thumbnail_pages);
             if (mType == 0) {
                 thumb.setOnClickListener(v -> {
-                    if (onThumbItemClickListener != null) {
-                        int position = getBindingAdapterPosition();
+                    int position = getBindingAdapterPosition();
+                    if (onThumbItemClickListener != null
+                            && position != RecyclerView.NO_POSITION) {
                         onThumbItemClickListener.onThumbItemClick(position, itemView, getDataAt(position));
                     }
+                });
+                thumb.setOnLongClickListener(v -> {
+                    int position = getBindingAdapterPosition();
+                    return onThumbItemLongClickListener != null
+                            && position != RecyclerView.NO_POSITION
+                            && onThumbItemLongClickListener.onThumbItemLongClick(
+                            position, itemView, getDataAt(position));
                 });
             }
         }

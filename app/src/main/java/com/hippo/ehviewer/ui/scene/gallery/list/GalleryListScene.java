@@ -26,6 +26,7 @@ import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
@@ -760,6 +761,7 @@ public class GalleryListScene extends BaseScene
         mAdapter.onDownloadedOnlyModeChanged();
 
         mAdapter.setThumbItemClickListener(this::onThumbItemClick);
+        mAdapter.setThumbItemLongClickListener(this::onThumbItemLongClick);
         mRecyclerView.setSelector(Ripple.generateRippleDrawable(context, !AttrResources.getAttrBoolean(context, androidx.appcompat.R.attr.isLightTheme), new ColorDrawable(Color.TRANSPARENT)));
         mRecyclerView.setDrawSelectorOnTop(true);
         mRecyclerView.setClipToPadding(false);
@@ -879,6 +881,13 @@ public class GalleryListScene extends BaseScene
             popupWindow.showAtLocation(thumb, Gravity.NO_GRAVITY, location[0] + thumb.getWidth(), location[1]);
             popupWindowPosition = position;
         }
+    }
+
+    private boolean onThumbItemLongClick(int position, View view, GalleryInfo galleryInfo) {
+        if (mMultiSelectMode) {
+            return onItemLongClick(galleryInfo, view);
+        }
+        return startGalleryDownload(galleryInfo);
     }
 
     private ChipGroup buildChipGroup(GalleryInfo gi, ChipGroup tagFlowLayout) {
@@ -1419,7 +1428,72 @@ public class GalleryListScene extends BaseScene
 
     @Override
     public boolean onItemLongClick(EasyRecyclerView parent, View view, int position, long id) {
-        return onItemLongClick(mAdapter != null ? mAdapter.getDataAt(position) : null, view);
+        GalleryInfo galleryInfo = mAdapter != null ? mAdapter.getDataAt(position) : null;
+        if (tryStartDownloadFromLongPress(parent, view, galleryInfo)) {
+            return true;
+        }
+        return onItemLongClick(galleryInfo, view);
+    }
+
+    private boolean tryStartDownloadFromLongPress(@NonNull EasyRecyclerView parent,
+                                                  @Nullable View itemView,
+                                                  @Nullable GalleryInfo galleryInfo) {
+        if (mMultiSelectMode || itemView == null || galleryInfo == null || mAdapter == null) {
+            return false;
+        }
+
+        int type = mAdapter.getType();
+        boolean downloadFromWholeCover = type == GalleryAdapterNew.TYPE_LIST;
+        boolean downloadFromThumbnailZones = type == GalleryAdapterNew.TYPE_GRID
+                && Settings.isThumbnailInfoBarEffective();
+        if (!downloadFromWholeCover && !downloadFromThumbnailZones) {
+            return false;
+        }
+
+        View cover = itemView.findViewById(R.id.thumb_new);
+        if (cover == null || cover.getWidth() <= 0 || cover.getHeight() <= 0) {
+            return false;
+        }
+
+        Rect coverBounds = new Rect();
+        cover.getDrawingRect(coverBounds);
+        parent.offsetDescendantRectToMyCoords(cover, coverBounds);
+        float touchX = parent.getTouchStartX();
+        float touchY = parent.getTouchStartY();
+        boolean insideCover = touchX >= coverBounds.left && touchX < coverBounds.right
+                && touchY >= coverBounds.top && touchY < coverBounds.bottom;
+        if (downloadFromWholeCover) {
+            return insideCover && startGalleryDownload(galleryInfo);
+        }
+
+        boolean insideCoverDownloadZone = insideCover
+                && touchX >= coverBounds.left + coverBounds.width() * 0.5f
+                && touchY >= coverBounds.top + coverBounds.height() * 0.82f;
+
+        View infoBar = itemView.findViewById(R.id.thumbnail_info_bar);
+        boolean insideInfoBarDownloadZone = false;
+        if (infoBar != null && infoBar.getVisibility() == View.VISIBLE
+                && infoBar.getWidth() > 0 && infoBar.getHeight() > 0) {
+            Rect infoBarBounds = new Rect();
+            infoBar.getDrawingRect(infoBarBounds);
+            parent.offsetDescendantRectToMyCoords(infoBar, infoBarBounds);
+            insideInfoBarDownloadZone = touchX >= infoBarBounds.left
+                    + infoBarBounds.width() * 0.5f
+                    && touchX < infoBarBounds.right
+                    && touchY >= infoBarBounds.top && touchY < infoBarBounds.bottom;
+        }
+
+        return (insideCoverDownloadZone || insideInfoBarDownloadZone)
+                && startGalleryDownload(galleryInfo);
+    }
+
+    private boolean startGalleryDownload(@Nullable GalleryInfo galleryInfo) {
+        MainActivity activity = getActivity2();
+        if (galleryInfo == null || activity == null || mHelper == null) {
+            return false;
+        }
+        CommonOperations.startDownload(activity, galleryInfo, false);
+        return true;
     }
 
     public boolean onItemLongClick(GalleryInfo gi, View view) {
