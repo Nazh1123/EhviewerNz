@@ -9,7 +9,7 @@ if (file('google-services.json').exists()) {
 }
 
 
-def baseVersionName = "2.0.2.3.3"
+def baseVersionName = "2.0.2.3.4"
 
 
 def releaseKeystoreFile = rootProject.file("ehviewernz.jks")
