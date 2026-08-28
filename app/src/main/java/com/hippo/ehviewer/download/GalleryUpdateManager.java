@@ -413,7 +413,7 @@ public final class GalleryUpdateManager {
         }
         try {
             pipe.obtain();
-            SpiderInfo cached = SpiderInfo.read(pipe.open());
+            SpiderInfo cached = SpiderInfo.readHeader(pipe.open());
             return cached != null && cached.gid == gid ? cached.startPage : 0;
         } catch (IOException e) {
             return 0;

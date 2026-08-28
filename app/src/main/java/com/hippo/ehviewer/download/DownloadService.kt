@@ -365,7 +365,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         activityIntent.putExtra(StageActivity.KEY_SCENE_NAME, DownloadsScene::class.java.name)
         activityIntent.putExtra(StageActivity.KEY_SCENE_ARGS, Bundle())
         val piActivity = PendingIntent.getActivity(
-            this, ID_UPDATE_RESULT, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT
+            this, ID_UPDATE_RESULT, activityIntent, PENDING_INTENT_FLAGS
         )
 
         mGalleryUpdatedBuilder = NotificationCompat.Builder(applicationContext, CHANNEL_ID!!)
@@ -387,7 +387,9 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
 
         val stopAllIntent = Intent(this, DownloadService::class.java)
         stopAllIntent.setAction(ACTION_STOP_ALL)
-        val piStopAll = PendingIntent.getService(this, ID_UPDATE_PREPARING, stopAllIntent, 0)
+        val piStopAll = PendingIntent.getService(
+            this, ID_UPDATE_PREPARING, stopAllIntent, PENDING_INTENT_FLAGS
+        )
 
         val bundle = Bundle()
         val activityIntent = Intent(this, MainActivity::class.java)
@@ -395,7 +397,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         activityIntent.putExtra(StageActivity.KEY_SCENE_NAME, DownloadsScene::class.java.name)
         activityIntent.putExtra(StageActivity.KEY_SCENE_ARGS, bundle)
         val piActivity = PendingIntent.getActivity(
-            this, ID_UPDATE_PREPARING, activityIntent, PendingIntent.FLAG_UPDATE_CURRENT
+            this, ID_UPDATE_PREPARING, activityIntent, PENDING_INTENT_FLAGS
         )
 
         mUpdatingBuilder = NotificationCompat.Builder(applicationContext, CHANNEL_ID!!)
@@ -563,7 +565,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         mDownloadingBuilder!!
             .setSmallIcon(
                 if (isGalleryUpdate) android.R.drawable.stat_notify_sync
-                else android.R.drawable.stat_sys_download
+                else R.drawable.ic_stat_download
             )
             .setContentTitle(
                 if (isGalleryUpdate) getString(
@@ -609,7 +611,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         mDownloadingBuilder!!
             .setSmallIcon(
                 if (isGalleryUpdate) android.R.drawable.stat_notify_sync
-                else android.R.drawable.stat_sys_download
+                else R.drawable.ic_stat_download
             )
             .setContentTitle(
                 if (isGalleryUpdate) getString(
