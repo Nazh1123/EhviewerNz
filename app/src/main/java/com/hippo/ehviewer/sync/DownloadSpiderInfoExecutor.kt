@@ -2,6 +2,7 @@ package com.hippo.ehviewer.sync
 
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import com.hippo.ehviewer.callBack.SpiderInfoReadCallBack
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.dao.DownloadInfo
@@ -26,7 +27,15 @@ class DownloadSpiderInfoExecutor(
             try {
                 for (i in mList.indices) {
                     val info = mList[i]
-                    resultMap[info.gid] = getSpiderInfo(info)
+                    try {
+                        resultMap[info.gid] = getSpiderInfo(info)
+                    } catch (e: OutOfMemoryError) {
+                        Log.e(TAG, "OOM reading spider info header for gid=" + info.gid, e)
+                        resultMap[info.gid] = null
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed reading spider info header for gid=" + info.gid, e)
+                        resultMap[info.gid] = null
+                    }
                 }
             } finally {
                 handler.post(Runnable {
@@ -45,7 +54,7 @@ class DownloadSpiderInfoExecutor(
         val mDownloadDir = SpiderDen.getGalleryDownloadDir(info)
         if (mDownloadDir != null && mDownloadDir.isDirectory()) {
             val file = mDownloadDir.findFile(SpiderQueen.SPIDER_INFO_FILENAME)
-            spiderInfo = SpiderInfo.read(file)
+            spiderInfo = SpiderInfo.readHeader(file)
             if (spiderInfo != null && spiderInfo.gid == info.gid &&
                 spiderInfo.token == info.token
             ) {
@@ -53,5 +62,9 @@ class DownloadSpiderInfoExecutor(
             }
         }
         return null
+    }
+
+    companion object {
+        private const val TAG = "DownloadSpiderInfoExec"
     }
 }

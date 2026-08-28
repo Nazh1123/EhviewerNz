@@ -726,11 +726,13 @@ public class DownloadsScene extends ToolbarScene
             @Override
             public void onPageChanged(int newIndexPage) {
                 indexPage = newIndexPage;
+                queryUnreadSpiderInfo();
             }
 
             @Override
             public void onPageSizeChanged(int newPageSize) {
                 pageSize = newPageSize;
+                queryUnreadSpiderInfo();
             }
         });
         mLayoutManager = new AutoStaggeredGridLayoutManager(0, StaggeredGridLayoutManager.VERTICAL);
@@ -2341,6 +2343,7 @@ public class DownloadsScene extends ToolbarScene
                     if (spiderInfo != null) {
                         mSpiderInfoMap.put(info.gid, spiderInfo);
                     }
+                    trimSpiderInfoMapToCurrentPage();
                 }
 
 //                mSpiderInfoMap.remove(info.gid);
@@ -2377,6 +2380,38 @@ public class DownloadsScene extends ToolbarScene
         }
     }
 
+    @NonNull
+    private List<DownloadInfo> getCurrentPageList() {
+        if (mList == null) {
+            return Collections.emptyList();
+        }
+        if (mList.size() > paginationSize && canPagination) {
+            int from = pageSize * (indexPage - 1);
+            if (from < 0) {
+                from = 0;
+            }
+            if (from >= mList.size()) {
+                return Collections.emptyList();
+            }
+            int to = Math.min(from + pageSize, mList.size());
+            return mList.subList(from, to);
+        }
+        return mList;
+    }
+
+    private void trimSpiderInfoMapToCurrentPage() {
+        if (mContinuousLabelBrowse) {
+            return;
+        }
+        List<DownloadInfo> pageList = getCurrentPageList();
+        Set<Long> keep = new HashSet<>(pageList.size());
+        for (DownloadInfo info : pageList) {
+            keep.add(info.gid);
+        }
+        mSpiderInfoMap.keySet().retainAll(keep);
+        mSpiderInfoRequested.retainAll(keep);
+    }
+
     private void queryUnreadSpiderInfo() {
         if (mList == null) {
             return;
@@ -2394,9 +2429,11 @@ public class DownloadsScene extends ToolbarScene
             requestSpiderInfo(initialWindow);
             return;
         }
+        trimSpiderInfoMapToCurrentPage();
+        List<DownloadInfo> pageList = getCurrentPageList();
         List<DownloadInfo> requestList = new ArrayList<>();
-        for (int i = 0; i < mList.size(); i++) {
-            DownloadInfo info = mList.get(i);
+        for (int i = 0; i < pageList.size(); i++) {
+            DownloadInfo info = pageList.get(i);
             if (!mSpiderInfoMap.containsKey(info.gid) || mSpiderInfoMap.get(info.gid) == null) {
                 requestList.add(info);
             }
@@ -2479,6 +2516,7 @@ public class DownloadsScene extends ToolbarScene
 
     private void spiderInfoResultCallBack(Map<Long, SpiderInfo> resultMap) {
         mSpiderInfoMap.putAll(resultMap);
+        trimSpiderInfoMapToCurrentPage();
         if (mAdapter == null || mLayoutManager == null) {
             return;
         }

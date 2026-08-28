@@ -43,6 +43,8 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewConfiguration;
 import android.view.animation.DecelerateInterpolator;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -689,11 +691,13 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUpdateActionGroup = ViewUtils.$$(mHeader, R.id.update_action_card);
         mUpdateGallery = ViewUtils.$$(mHeader, R.id.update_gallery);
         mGalleryHistory = ViewUtils.$$(mHeader, R.id.gallery_history);
+        Ripple.addRipple(mThumb, isDarkTheme);
         Ripple.addRipple(mOtherActions, isDarkTheme);
         Ripple.addRipple(mDownload, isDarkTheme);
         Ripple.addRipple(mRead, isDarkTheme);
         Ripple.addRipple(mUpdateGallery, isDarkTheme);
         Ripple.addRipple(mGalleryHistory, isDarkTheme);
+        mThumb.setOnClickListener(this);
         mUploader.setOnClickListener(this);
         mCategory.setOnClickListener(this);
         mOtherActions.setOnClickListener(this);
@@ -1790,6 +1794,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             if (request()) {
                 adjustViewVisibility(STATE_REFRESH, true);
             }
+        } else if (mThumb == v) {
+            showCoverImageDialog();
         } else if (mOtherActions == v) {
             ensurePopMenu();
             if (mPopupMenu != null) {
@@ -1968,6 +1974,42 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 startActivity(intent);
             }
         }
+    }
+
+    @SuppressLint("InflateParams")
+    private void showCoverImageDialog() {
+        Context context = getEHContext();
+        GalleryInfo galleryInfo = getGalleryInfo();
+        if (context == null || galleryInfo == null || TextUtils.isEmpty(galleryInfo.thumb)) {
+            return;
+        }
+
+        LayoutInflater inflater = getLayoutInflater2();
+        if (inflater == null) {
+            return;
+        }
+
+        View content = inflater.inflate(R.layout.dialog_gallery_cover, null);
+        LoadImageView cover = content.findViewById(R.id.cover);
+        cover.load(EhCacheKeyFactory.getThumbKey(galleryInfo.gid), galleryInfo.thumb);
+
+        Dialog dialog = new Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        dialog.setContentView(content);
+        dialog.setCancelable(true);
+        dialog.setCanceledOnTouchOutside(true);
+
+        View.OnClickListener dismissListener = v -> dialog.dismiss();
+        content.setOnClickListener(dismissListener);
+        cover.setOnClickListener(dismissListener);
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
+            window.setBackgroundDrawableResource(android.R.color.black);
+            window.setWindowAnimations(R.style.CoverImageDialogAnimation);
+        }
+
+        dialog.show();
     }
 
     private void showTorrentListDialog() {
