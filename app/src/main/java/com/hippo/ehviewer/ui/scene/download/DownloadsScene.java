@@ -1812,6 +1812,9 @@ public class DownloadsScene extends ToolbarScene
         if (mAdapter != null) {
             mAdapter.notifyDataSetChanged();
         }
+        if (downloadLabelDraw != null) {
+            downloadLabelDraw.updateDownloadLabels();
+        }
         updateView();
     }
 
