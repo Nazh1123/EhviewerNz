@@ -17,6 +17,9 @@
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
 import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
@@ -44,6 +47,7 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.PopupWindow;
@@ -98,6 +102,7 @@ import com.hippo.ehviewer.client.parser.GalleryPageUrlParser;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.ui.CommonOperations;
@@ -164,6 +169,10 @@ public class GalleryListScene extends BaseScene
     }
 
     private static final int BACK_PRESSED_INTERVAL = 2000;
+    private static final long QUICK_DOWNLOAD_NOTICE_DURATION_MS = 3500L;
+    private static final long QUICK_DOWNLOAD_NOTICE_ENTER_DURATION_MS = 300L;
+    private static final long QUICK_DOWNLOAD_NOTICE_REPEAT_DURATION_MS = 320L;
+    private static final long QUICK_DOWNLOAD_NOTICE_EXIT_DURATION_MS = 200L;
 
     public final static int REQUEST_CODE_SELECT_IMAGE = 0;
 
@@ -331,6 +340,17 @@ public class GalleryListScene extends BaseScene
     private GalleryListSceneDialog tagDialog;
     private DownloadManager mDownloadManager;
     private DownloadManager.DownloadInfoListener mDownloadInfoListener;
+    @Nullable
+    private View mQuickDownloadNotice;
+    @Nullable
+    private ImageView mQuickDownloadNoticeIcon;
+    @Nullable
+    private AnimatorSet mQuickDownloadNoticeAnimator;
+    private long mQuickDownloadUndoGid = -1L;
+    private boolean mQuickDownloadUndoRemovesEntry;
+    private int mQuickDownloadNoticeGeneration;
+    private final Runnable mHideQuickDownloadNoticeRunnable =
+            this::hideQuickDownloadNotice;
     private boolean mMultiSelectMode;
     private final Set<Long> mSelectedGids = new HashSet<>();
     private boolean mDownloadedOnlyMode;
@@ -730,6 +750,10 @@ public class GalleryListScene extends BaseScene
         mShowActionFab = true;
 
         View mainLayout = ViewUtils.$$(view, R.id.main_layout);
+        mQuickDownloadNotice = ViewUtils.$$(mainLayout, R.id.quick_download_notice);
+        mQuickDownloadNoticeIcon = (ImageView) ViewUtils.$$(
+                mainLayout, R.id.quick_download_notice_icon);
+        mQuickDownloadNotice.setOnClickListener(ignored -> undoQuickDownload());
         ContentLayout contentLayout = (ContentLayout) ViewUtils.$$(mainLayout, R.id.content_layout);
         mRecyclerView = contentLayout.getRecyclerView();
         FastScroller fastScroller = contentLayout.getFastScroller();
@@ -1037,6 +1061,7 @@ public class GalleryListScene extends BaseScene
     public void onDestroyView() {
         super.onDestroyView();
         stopDownloadedPageScan(false);
+        destroyQuickDownloadNotice();
         mDownloadedBrowseTouchDownY = Float.NaN;
         mDownloadedBrowseGestureArmed = false;
 
@@ -1492,8 +1517,160 @@ public class GalleryListScene extends BaseScene
         if (galleryInfo == null || activity == null || mHelper == null) {
             return false;
         }
-        CommonOperations.startDownload(activity, galleryInfo, false);
+        CommonOperations.startDownload(activity, galleryInfo, false,
+                newDownload -> showQuickDownloadNotice(galleryInfo.gid, newDownload));
         return true;
+    }
+
+    private void showQuickDownloadNotice(long gid, boolean newDownload) {
+        View notice = mQuickDownloadNotice;
+        ImageView icon = mQuickDownloadNoticeIcon;
+        if (notice == null || icon == null) {
+            return;
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+        boolean repeated = notice.getVisibility() == View.VISIBLE
+                && notice.getAlpha() > 0.0f;
+
+        mQuickDownloadNoticeGeneration++;
+        notice.removeCallbacks(mHideQuickDownloadNoticeRunnable);
+        cancelQuickDownloadNoticeAnimation();
+        mQuickDownloadUndoGid = gid;
+        mQuickDownloadUndoRemovesEntry = newDownload;
+        notice.setClickable(true);
+        notice.setFocusable(true);
+        notice.setVisibility(View.VISIBLE);
+        CharSequence accessibilityMessage = getString(
+                R.string.quick_download_undo_description);
+        notice.setContentDescription(accessibilityMessage);
+        notice.announceForAccessibility(accessibilityMessage);
+
+        AnimatorSet animator = new AnimatorSet();
+        if (repeated) {
+            ObjectAnimator alpha = ObjectAnimator.ofFloat(
+                    notice, View.ALPHA, notice.getAlpha(), 1.0f);
+            ObjectAnimator scaleX = ObjectAnimator.ofFloat(
+                    notice, View.SCALE_X, notice.getScaleX(), 1.16f, 0.96f, 1.0f);
+            ObjectAnimator scaleY = ObjectAnimator.ofFloat(
+                    notice, View.SCALE_Y, notice.getScaleY(), 1.16f, 0.96f, 1.0f);
+            ObjectAnimator translationX = ObjectAnimator.ofFloat(
+                    notice, View.TRANSLATION_X, notice.getTranslationX(), 0.0f);
+            ObjectAnimator translationY = ObjectAnimator.ofFloat(
+                    notice, View.TRANSLATION_Y, notice.getTranslationY(),
+                    4.0f * density, 0.0f);
+            ObjectAnimator iconAlpha = ObjectAnimator.ofFloat(
+                    icon, View.ALPHA, icon.getAlpha(), 0.92f, 0.5f);
+            animator.playTogether(alpha, scaleX, scaleY, translationX,
+                    translationY, iconAlpha);
+            animator.setDuration(QUICK_DOWNLOAD_NOTICE_REPEAT_DURATION_MS);
+        } else {
+            notice.setAlpha(0.0f);
+            notice.setScaleX(0.76f);
+            notice.setScaleY(0.76f);
+            notice.setTranslationX(10.0f * density);
+            notice.setTranslationY(-10.0f * density);
+            icon.setAlpha(0.5f);
+
+            ObjectAnimator alpha = ObjectAnimator.ofFloat(
+                    notice, View.ALPHA, 0.0f, 1.0f);
+            ObjectAnimator scaleX = ObjectAnimator.ofFloat(
+                    notice, View.SCALE_X, 0.76f, 1.08f, 1.0f);
+            ObjectAnimator scaleY = ObjectAnimator.ofFloat(
+                    notice, View.SCALE_Y, 0.76f, 1.08f, 1.0f);
+            ObjectAnimator translationX = ObjectAnimator.ofFloat(
+                    notice, View.TRANSLATION_X, 10.0f * density, 0.0f);
+            ObjectAnimator translationY = ObjectAnimator.ofFloat(
+                    notice, View.TRANSLATION_Y, -10.0f * density, 0.0f);
+            animator.playTogether(alpha, scaleX, scaleY, translationX, translationY);
+            animator.setDuration(QUICK_DOWNLOAD_NOTICE_ENTER_DURATION_MS);
+        }
+        animator.setInterpolator(AnimationUtils.SLOW_FAST_SLOW_INTERPOLATOR);
+        mQuickDownloadNoticeAnimator = animator;
+        animator.start();
+        notice.postDelayed(mHideQuickDownloadNoticeRunnable,
+                QUICK_DOWNLOAD_NOTICE_DURATION_MS);
+    }
+
+    private void undoQuickDownload() {
+        long gid = mQuickDownloadUndoGid;
+        MainActivity activity = getActivity2();
+        if (gid == -1L || activity == null) {
+            return;
+        }
+
+        Intent intent = new Intent(activity, DownloadService.class);
+        intent.setAction(mQuickDownloadUndoRemovesEntry
+                ? DownloadService.ACTION_DELETE : DownloadService.ACTION_STOP);
+        intent.putExtra(DownloadService.KEY_GID, gid);
+        activity.startService(intent);
+        hideQuickDownloadNotice();
+        showTip(R.string.quick_download_undone, LENGTH_SHORT);
+    }
+
+    private void hideQuickDownloadNotice() {
+        View notice = mQuickDownloadNotice;
+        if (notice == null || notice.getVisibility() != View.VISIBLE) {
+            clearQuickDownloadUndoAction();
+            return;
+        }
+
+        notice.removeCallbacks(mHideQuickDownloadNoticeRunnable);
+        cancelQuickDownloadNoticeAnimation();
+        clearQuickDownloadUndoAction();
+        final int generation = mQuickDownloadNoticeGeneration;
+        float density = getResources().getDisplayMetrics().density;
+        AnimatorSet animator = new AnimatorSet();
+        animator.playTogether(
+                ObjectAnimator.ofFloat(notice, View.ALPHA, notice.getAlpha(), 0.0f),
+                ObjectAnimator.ofFloat(notice, View.SCALE_X, notice.getScaleX(), 0.84f),
+                ObjectAnimator.ofFloat(notice, View.SCALE_Y, notice.getScaleY(), 0.84f),
+                ObjectAnimator.ofFloat(notice, View.TRANSLATION_X,
+                        notice.getTranslationX(), 6.0f * density),
+                ObjectAnimator.ofFloat(notice, View.TRANSLATION_Y,
+                        notice.getTranslationY(), -6.0f * density));
+        animator.setDuration(QUICK_DOWNLOAD_NOTICE_EXIT_DURATION_MS);
+        animator.setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR);
+        animator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (generation == mQuickDownloadNoticeGeneration
+                        && mQuickDownloadNotice == notice) {
+                    notice.setVisibility(View.GONE);
+                }
+            }
+        });
+        mQuickDownloadNoticeAnimator = animator;
+        animator.start();
+    }
+
+    private void clearQuickDownloadUndoAction() {
+        mQuickDownloadUndoGid = -1L;
+        mQuickDownloadUndoRemovesEntry = false;
+        if (mQuickDownloadNotice != null) {
+            mQuickDownloadNotice.setClickable(false);
+            mQuickDownloadNotice.setFocusable(false);
+        }
+    }
+
+    private void cancelQuickDownloadNoticeAnimation() {
+        AnimatorSet animator = mQuickDownloadNoticeAnimator;
+        mQuickDownloadNoticeAnimator = null;
+        if (animator != null) {
+            animator.cancel();
+        }
+    }
+
+    private void destroyQuickDownloadNotice() {
+        View notice = mQuickDownloadNotice;
+        if (notice != null) {
+            notice.removeCallbacks(mHideQuickDownloadNoticeRunnable);
+        }
+        mQuickDownloadNoticeGeneration++;
+        cancelQuickDownloadNoticeAnimation();
+        clearQuickDownloadUndoAction();
+        mQuickDownloadNotice = null;
+        mQuickDownloadNoticeIcon = null;
     }
 
     public boolean onItemLongClick(GalleryInfo gi, View view) {

@@ -142,4 +142,30 @@
             style="@style/Widget.Design.FloatingActionButton"/>
 
     </com.hippo.widget.FabLayout>
+
+    <FrameLayout
+        android:id="@+id/quick_download_notice"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="@dimen/gallery_padding_top_search_bar"
+        android:layout_marginRight="16dp"
+        android:accessibilityLiveRegion="polite"
+        android:background="@drawable/gallery_save_notice_background"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?android:attr/selectableItemBackgroundBorderless"
+        android:importantForAccessibility="yes"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/quick_download_notice_icon"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="center"
+            android:alpha="0.5"
+            android:importantForAccessibility="no"
+            android:src="@drawable/v_download_dark_x24" />
+
+    </FrameLayout>
 </FrameLayout>

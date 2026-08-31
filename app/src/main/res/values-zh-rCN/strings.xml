@@ -467,6 +467,8 @@
     <string name="remember_download_label">记住下载标签</string>
     <string name="default_download_label">默认下载标签</string>
     <string name="added_to_download_list">已添加至下载列表</string>
+    <string name="quick_download_undo_description">已添加下载，点击可撤回本次下载</string>
+    <string name="quick_download_undone">已撤回本次下载</string>
     <string name="download_searching">正在搜索请稍候</string>
     <string name="download_searching_failed">搜索失败，请尝试重启软件</string>
 

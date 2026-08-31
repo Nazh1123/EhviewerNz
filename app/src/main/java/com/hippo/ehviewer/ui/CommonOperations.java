@@ -20,6 +20,7 @@ import android.app.Activity;
 import android.content.Intent;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.hippo.app.ListCheckBoxDialogBuilder;
 import com.hippo.ehviewer.EhApplication;
@@ -45,6 +46,10 @@ import java.util.Collections;
 import java.util.List;
 
 public final class CommonOperations {
+
+    public interface DownloadStartCallback {
+        void onDownloadEnqueued(boolean newDownload);
+    }
 
     public static void startGalleryUpdate(@NonNull MainActivity activity,
                                           @NonNull GalleryDetail galleryDetail) {
@@ -149,9 +154,17 @@ public final class CommonOperations {
         startDownload(activity, Collections.singletonList(galleryInfo), forceDefault);
     }
 
+    public static void startDownload(final MainActivity activity,
+                                     final GalleryInfo galleryInfo,
+                                     boolean forceDefault,
+                                     @NonNull DownloadStartCallback callback) {
+        startDownload(activity, Collections.singletonList(galleryInfo), forceDefault,
+                false, callback);
+    }
+
     // TODO Add context if activity and context are different style
     public static void startDownload(final MainActivity activity, final List<GalleryInfo> galleryInfos, boolean forceDefault) {
-        startDownload(activity, galleryInfos, forceDefault, false);
+        startDownload(activity, galleryInfos, forceDefault, false, null);
     }
 
     /**
@@ -161,13 +174,14 @@ public final class CommonOperations {
     public static void restartDownload(final MainActivity activity,
                                        final List<GalleryInfo> galleryInfos,
                                        boolean forceDefault) {
-        startDownload(activity, galleryInfos, forceDefault, true);
+        startDownload(activity, galleryInfos, forceDefault, true, null);
     }
 
     private static void startDownload(final MainActivity activity,
                                       final List<GalleryInfo> galleryInfos,
                                       boolean forceDefault,
-                                      boolean restartExisting) {
+                                      boolean restartExisting,
+                                      @Nullable DownloadStartCallback callback) {
         final DownloadManager dm = EhApplication.getDownloadManager(activity);
 
         LongList toStart = new LongList();
@@ -188,7 +202,7 @@ public final class CommonOperations {
         }
 
         if (toAdd.isEmpty()) {
-            activity.showTip(R.string.added_to_download_list, BaseScene.LENGTH_SHORT);
+            notifyDownloadEnqueued(activity, callback, false);
             return;
         }
 
@@ -209,7 +223,7 @@ public final class CommonOperations {
             // Got default label
             enqueueDownloads(activity, dm, toAdd, restartExisting, label);
             // Notify
-            activity.showTip(R.string.added_to_download_list, BaseScene.LENGTH_SHORT);
+            notifyDownloadEnqueued(activity, callback, true);
         } else {
             // Let use chose label
             List<DownloadLabel> list = dm.getLabelList();
@@ -240,10 +254,19 @@ public final class CommonOperations {
                             Settings.putHasDefaultDownloadLabel(false);
                         }
                         // Notify
-                        activity.showTip(R.string.added_to_download_list, BaseScene.LENGTH_SHORT);
+                        notifyDownloadEnqueued(activity, callback, true);
                     }, activity.getString(R.string.remember_download_label), false)
                     .setTitle(R.string.download)
                     .show();
+        }
+    }
+
+    private static void notifyDownloadEnqueued(@NonNull MainActivity activity,
+                                               @Nullable DownloadStartCallback callback,
+                                               boolean newDownload) {
+        activity.showTip(R.string.added_to_download_list, BaseScene.LENGTH_SHORT);
+        if (callback != null) {
+            callback.onDownloadEnqueued(newDownload);
         }
     }
 

@@ -559,6 +559,8 @@
     <string name="remember_download_label">Remember download label</string>
     <string name="default_download_label">Default download label</string>
     <string name="added_to_download_list">Added to download list</string>
+    <string name="quick_download_undo_description">Download added. Tap to undo this download.</string>
+    <string name="quick_download_undone">Download undone</string>
     <string name="download_searching">Searching please wait</string>
     <string name="download_searching_failed">Searching failed</string>
 
