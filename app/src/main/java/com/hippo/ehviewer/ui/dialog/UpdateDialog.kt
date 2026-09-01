@@ -96,6 +96,7 @@ class UpdateDialog(private val activity: Activity) {
 //                        gotoGithub(dialog, id)
                         downloadApk(dialog, id, downloadUrl, version)
                     }
+                    setNeutralButton(R.string.update_dialog_sponsor, null)
                     if (!mustUpdate) {
                         setNegativeButton(R.string.cancel) { dialog, _ ->
                             dialog.dismiss()
@@ -105,6 +106,12 @@ class UpdateDialog(private val activity: Activity) {
                     }
                 }.create()
                 if (isActivityAlive()) {
+                    alertDialog.setOnShowListener {
+                        alertDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                            val intent = Intent(Intent.ACTION_VIEW, GITHUB_SUPPORT_URL.toUri())
+                            activity.startActivity(intent)
+                        }
+                    }
                     alertDialog.show()
                 }
             }
