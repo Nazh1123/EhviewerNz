@@ -102,10 +102,11 @@ import com.hippo.ehviewer.client.data.PreviewSet;
 import com.hippo.ehviewer.client.data.userTag.UserTagList;
 import com.hippo.ehviewer.client.exception.NoHAtHClientException;
 import com.hippo.ehviewer.client.parser.RateGalleryParser;
+import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.Filter;
 import com.hippo.ehviewer.download.DownloadManager;
-import com.hippo.ehviewer.download.GalleryUpdateTask;
+import com.hippo.ehviewer.download.GalleryVersionMetadataTask;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.spider.SpiderQueen;
 import com.hippo.ehviewer.ui.CommonOperations;
@@ -244,6 +245,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private View mUpdateGallery;
     @Nullable
     private View mGalleryHistory;
+    @Nullable
+    private View mUpdateActionDivider;
     // Below header
     @Nullable
     private View mBelowHeader;
@@ -338,10 +341,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @Nullable
     private GalleryDetail mGalleryDetail;
     @Nullable
-    private GalleryUpdateTask mGalleryParentLookup;
-    @Nullable
-    private List<GalleryUpdateTask.ParentGallery> mResolvedGalleryParents;
-    private long mResolvedGalleryParentsForGid = -1L;
+    private GalleryVersionMetadataTask mGalleryVersionLookup;
+    private long mVersionInfoTipShownForGid = -1L;
     private int mRequestId = IntIdGenerator.INVALID_ID;
 
     @Nullable
@@ -691,6 +692,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUpdateActionGroup = ViewUtils.$$(mHeader, R.id.update_action_card);
         mUpdateGallery = ViewUtils.$$(mHeader, R.id.update_gallery);
         mGalleryHistory = ViewUtils.$$(mHeader, R.id.gallery_history);
+        mUpdateActionDivider = ViewUtils.$$(mHeader, R.id.update_action_divider);
         Ripple.addRipple(mThumb, isDarkTheme);
         Ripple.addRipple(mOtherActions, isDarkTheme);
         Ripple.addRipple(mDownload, isDarkTheme);
@@ -865,9 +867,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUpdateActionGroup = null;
         mUpdateGallery = null;
         mGalleryHistory = null;
-        if (mGalleryParentLookup != null) {
-            mGalleryParentLookup.cancel();
-            mGalleryParentLookup = null;
+        mUpdateActionDivider = null;
+        if (mGalleryVersionLookup != null) {
+            mGalleryVersionLookup.cancel();
+            mGalleryVersionLookup = null;
         }
         if (mParentChainDialog != null) {
             mParentChainDialog.destroy();
@@ -2454,72 +2457,99 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void updateGalleryVersionActionsVisibility() {
-        if (mUpdateActionGroup == null) {
+        if (mUpdateActionGroup == null || mUpdateGallery == null || mGalleryHistory == null) {
             return;
         }
         Context context = getEHContext();
         GalleryDetail detail = mGalleryDetail;
-        if (context == null || detail == null || TextUtils.isEmpty(detail.parent)) {
+        if (context == null || detail == null) {
             mUpdateActionGroup.setVisibility(View.GONE);
             return;
         }
-
-        List<GalleryUpdateTask.ParentGallery> cached =
-                GalleryUpdateTask.getCachedParents(detail);
-        if (cached != null) {
-            mResolvedGalleryParents = cached;
-            mResolvedGalleryParentsForGid = detail.gid;
-        }
-
+        boolean hasParent = !TextUtils.isEmpty(detail.parent);
+        mGalleryHistory.setVisibility(hasParent ? View.VISIBLE : View.GONE);
         DownloadManager downloadManager = EhApplication.getDownloadManager(context);
-        if (mResolvedGalleryParentsForGid == detail.gid
-                && mResolvedGalleryParents != null) {
-            boolean hasDownloadedParent = false;
-            for (GalleryUpdateTask.ParentGallery parent : mResolvedGalleryParents) {
-                if (downloadManager.containDownloadInfo(parent.gid)) {
-                    hasDownloadedParent = true;
-                    break;
-                }
-            }
-            mUpdateActionGroup.setVisibility(
-                    hasDownloadedParent ? View.VISIBLE : View.GONE);
+        boolean exactDownloaded = downloadManager.containDownloadInfo(detail.gid);
+        if (!hasParent || exactDownloaded) {
+            setGalleryVersionActionVisibility(false, hasParent);
             return;
         }
 
-        mUpdateActionGroup.setVisibility(View.GONE);
-        if (mGalleryParentLookup != null || !downloadManager.hasDownloadInfoBefore(detail.gid)) {
+        if (detail.firstGid == null) {
+            GalleryDetailUrlParser.Result parent = GalleryDetailUrlParser.parse(
+                    detail.parent, false);
+            DownloadInfo parentInfo = parent != null
+                    ? downloadManager.getDownloadInfo(parent.gid) : null;
+            if (parentInfo != null && parentInfo.firstGid != null
+                    && parentInfo.firstGid > 0L) {
+                detail.firstGid = parentInfo.firstGid;
+            }
+        }
+
+        if (detail.firstGid != null) {
+            boolean updateAvailable = detail.firstGid > 0L
+                    && downloadManager.hasOlderGalleryVersion(detail.firstGid, detail.gid);
+            setGalleryVersionActionVisibility(updateAvailable, true);
+            maybeShowMissingVersionInformationTip(downloadManager, detail, updateAvailable);
+            return;
+        }
+
+        setGalleryVersionActionVisibility(false, true);
+        if (mGalleryVersionLookup != null) {
             return;
         }
 
         final long targetGid = detail.gid;
-        GalleryUpdateTask lookup = new GalleryUpdateTask(context, detail,
-                new GalleryUpdateTask.Listener() {
+        GalleryVersionMetadataTask lookup = new GalleryVersionMetadataTask(context, detail,
+                new GalleryVersionMetadataTask.Listener() {
                     @Override
-                    public void onSuccess(
-                            @NonNull List<GalleryUpdateTask.ParentGallery> parents) {
-                        if (mGalleryParentLookup == null || mGalleryDetail == null
+                    public void onSuccess(long firstGid) {
+                        if (mGalleryVersionLookup == null || mGalleryDetail == null
                                 || mGalleryDetail.gid != targetGid) {
                             return;
                         }
-                        mGalleryParentLookup = null;
-                        mResolvedGalleryParents = parents;
-                        mResolvedGalleryParentsForGid = targetGid;
+                        mGalleryVersionLookup = null;
+                        mGalleryDetail.firstGid = firstGid;
+                        DownloadInfo downloaded = downloadManager.getDownloadInfo(targetGid);
+                        if (downloaded != null) {
+                            downloaded.firstGid = firstGid;
+                            EhDB.putDownloadInfo(downloaded);
+                            downloadManager.onGalleryVersionInfoUpdated();
+                        }
                         updateGalleryVersionActionsVisibility();
                     }
 
                     @Override
                     public void onFailure(@NonNull Exception error) {
-                        if (mGalleryParentLookup == null || mGalleryDetail == null
-                                || mGalleryDetail.gid != targetGid) {
-                            return;
+                        if (mGalleryVersionLookup != null && mGalleryDetail != null
+                                && mGalleryDetail.gid == targetGid) {
+                            mGalleryVersionLookup = null;
                         }
-                        mGalleryParentLookup = null;
-                        mResolvedGalleryParents = new ArrayList<>();
-                        mResolvedGalleryParentsForGid = targetGid;
                     }
                 });
-        mGalleryParentLookup = lookup;
+        mGalleryVersionLookup = lookup;
         lookup.start();
+    }
+
+    private void setGalleryVersionActionVisibility(boolean update, boolean history) {
+        mUpdateGallery.setVisibility(update ? View.VISIBLE : View.GONE);
+        mGalleryHistory.setVisibility(history ? View.VISIBLE : View.GONE);
+        if (mUpdateActionDivider != null) {
+            mUpdateActionDivider.setVisibility(update && history ? View.VISIBLE : View.GONE);
+        }
+        mUpdateActionGroup.setVisibility(update || history ? View.VISIBLE : View.GONE);
+    }
+
+    private void maybeShowMissingVersionInformationTip(DownloadManager manager,
+                                                        GalleryDetail detail,
+                                                        boolean updateAvailable) {
+        if (!updateAvailable && detail.firstGid != null && detail.firstGid > 0L
+                && mVersionInfoTipShownForGid != detail.gid
+                && manager.hasUnknownGalleryVersionBefore(detail.gid)) {
+            mVersionInfoTipShownForGid = detail.gid;
+            Toast.makeText(getEHContext(), R.string.gallery_version_information_unavailable,
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override
@@ -2568,14 +2598,29 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     protected void onGetGalleryDetailSuccess(GalleryDetail result) {
         if (mGalleryDetail == null || mGalleryDetail.gid != result.gid
                 || !TextUtils.equals(mGalleryDetail.token, result.token)) {
-            if (mGalleryParentLookup != null) {
-                mGalleryParentLookup.cancel();
-                mGalleryParentLookup = null;
+            if (mGalleryVersionLookup != null) {
+                mGalleryVersionLookup.cancel();
+                mGalleryVersionLookup = null;
             }
-            mResolvedGalleryParents = null;
-            mResolvedGalleryParentsForGid = -1L;
+        }
+        if (result.firstGid == null && mGalleryInfo != null
+                && mGalleryInfo.gid == result.gid) {
+            result.firstGid = mGalleryInfo.firstGid;
+        }
+        if (result.firstGid == null && TextUtils.isEmpty(result.parent)) {
+            result.firstGid = result.gid;
         }
         mGalleryDetail = result;
+        Context context = getEHContext();
+        if (context != null && result.firstGid != null) {
+            DownloadManager manager = EhApplication.getDownloadManager(context);
+            DownloadInfo downloaded = manager.getDownloadInfo(result.gid);
+            if (downloaded != null && !result.firstGid.equals(downloaded.firstGid)) {
+                downloaded.firstGid = result.firstGid;
+                EhDB.putDownloadInfo(downloaded);
+                manager.onGalleryVersionInfoUpdated();
+            }
+        }
         updateDownloadState();
         if (mDownloadState != DownloadInfo.STATE_INVALID) {
             if (mDownloadInfo != null && !mDownloadInfo.thumb.equals(result.thumb) && mDownloadInfo.gid == result.gid) {

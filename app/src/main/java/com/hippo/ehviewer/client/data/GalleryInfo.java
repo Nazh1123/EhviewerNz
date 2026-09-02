@@ -118,6 +118,14 @@ public class GalleryInfo implements Parcelable {
     public String[] simpleTags;
     public int pages;
 
+    /**
+     * The gid of the earliest gallery in this gallery's version chain.
+     * A null value means the metadata has not been fetched yet; -1 means the
+     * gallery API reported that this gallery is unavailable.
+     */
+    @Nullable
+    public Long firstGid;
+
     public int thumbWidth;
     public int thumbHeight;
 
@@ -251,6 +259,12 @@ public class GalleryInfo implements Parcelable {
         dest.writeInt(this.favoriteSlot);
         dest.writeString(this.favoriteName);
         dest.writeList(this.tgList);
+        if (this.firstGid == null) {
+            dest.writeByte((byte) 0);
+        } else {
+            dest.writeByte((byte) 1);
+            dest.writeLong(this.firstGid);
+        }
     }
 
     public GalleryInfo() {
@@ -277,6 +291,7 @@ public class GalleryInfo implements Parcelable {
         this.favoriteSlot = in.readInt();
         this.favoriteName = in.readString();
         this.tgList = in.readArrayList(String.class.getClassLoader());
+        this.firstGid = in.readByte() == 0 ? null : in.readLong();
     }
 
     public static final Creator<GalleryInfo> CREATOR = new Creator<>() {
@@ -314,11 +329,15 @@ public class GalleryInfo implements Parcelable {
         i.favoriteSlot = favoriteSlot;
         i.favoriteName = favoriteName;
         i.tgList = tgList;
+        i.firstGid = firstGid;
         if (info != null) {
             i.state = info.state;
             i.legacy = info.legacy;
             i.time = info.time;
             i.label = info.label;
+            if (i.firstGid == null) {
+                i.firstGid = info.firstGid;
+            }
         }
 
         return i;
@@ -349,6 +368,7 @@ public class GalleryInfo implements Parcelable {
         jsonObject.put("favoriteName", favoriteName);
         jsonObject.put("tgList", new JSONArray(Collections.singletonList(tgList)));
         jsonObject.put("pages", pages);
+        jsonObject.put("firstGid", firstGid);
         return jsonObject;
     }
 
@@ -388,6 +408,7 @@ public class GalleryInfo implements Parcelable {
         galleryInfo.titleJpn = object.getString("titleJpn");
         galleryInfo.token = object.getString("token");
         galleryInfo.uploader = object.getString("uploader");
+        galleryInfo.firstGid = object.getLong("firstGid");
         return galleryInfo;
     }
 }

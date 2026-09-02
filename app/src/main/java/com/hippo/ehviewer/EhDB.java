@@ -177,6 +177,8 @@ public class EhDB {
             case 7: // 7 to 8, add bookmark subscription state
                 db.execSQL("ALTER TABLE \"QUICK_SEARCH\" ADD COLUMN "
                         + "\"SUBSCRIBED\" INTEGER NOT NULL DEFAULT 0");
+            case 8: // 8 to 9, add gallery version root gid
+                db.execSQL("ALTER TABLE \"DOWNLOADS\" ADD COLUMN \"FIRST_GID\" INTEGER");
         }
     }
 

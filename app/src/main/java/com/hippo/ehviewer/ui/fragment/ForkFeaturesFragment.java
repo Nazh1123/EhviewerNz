@@ -75,6 +75,22 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
                 return true;
             });
         }
+        Preference updateGalleryVersions =
+                findPreference(DownloadFragment.KEY_UPDATE_GALLERY_VERSIONS);
+        if (updateGalleryVersions != null) {
+            updateGalleryVersions.setOnPreferenceClickListener(preference -> {
+                GalleryVersionMaintenance.showUpdateConfirmation(requireActivity());
+                return true;
+            });
+        }
+        Preference deleteOldGalleryVersions =
+                findPreference(DownloadFragment.KEY_DELETE_OLD_GALLERY_VERSIONS);
+        if (deleteOldGalleryVersions != null) {
+            deleteOldGalleryVersions.setOnPreferenceClickListener(preference -> {
+                GalleryVersionMaintenance.scanAndConfirmCleanup(requireActivity());
+                return true;
+            });
+        }
         updateManualSaveLocationSummary();
         if (mManualImageSaveLocation != null) {
             mManualImageSaveLocation.setOnPreferenceClickListener(preference -> {

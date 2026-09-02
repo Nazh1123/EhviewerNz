@@ -798,6 +798,19 @@
     <string name="settings_download_delete_missing_galleries_scanning">Checking local galleries</string>
     <string name="settings_download_delete_missing_galleries_done">Deleted %d locally missing galleries</string>
     <string name="settings_download_delete_missing_galleries_none">No locally missing galleries found</string>
+    <string name="settings_update_downloaded_gallery_versions">Update Downloaded Gallery Version Information</string>
+    <string name="settings_update_downloaded_gallery_versions_summary">Fetch the root gallery ID for downloaded galleries that do not have version information</string>
+    <string name="settings_delete_old_gallery_versions">Delete Old Galleries with a Downloaded Newer Version</string>
+    <string name="settings_delete_old_gallery_versions_summary">Keep the newest complete usable gallery in each known version family</string>
+    <string name="gallery_version_update_background_notice">Version information will be updated in the background. Requests are sent in limited batches with pauses to avoid excessive traffic.</string>
+    <string name="gallery_version_update_running">Gallery version information is already being updated</string>
+    <string name="gallery_version_update_done">Version information updated: %1$d; unavailable: %2$d; retry later: %3$d</string>
+    <string name="gallery_version_cleanup_scanning">Scanning downloaded gallery versions…</string>
+    <string name="gallery_version_cleanup_none">No removable old gallery versions found</string>
+    <string name="gallery_version_cleanup_confirm">Delete %1$d old galleries from %2$d version families? The newest complete usable gallery in each family will be kept.</string>
+    <string name="gallery_version_cleanup_done">Deleted %d old gallery versions</string>
+    <string name="gallery_version_information_unavailable">No usable gallery version information. Try updating it in Settings → Download.</string>
+    <string name="gallery_update_available">A newer version can reuse this downloaded gallery</string>
 
     <string name="settings_advanced">Advanced</string>
     <string name="settings_advanced_save_parse_error_body">Save html content when parsing error</string>

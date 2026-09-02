@@ -48,7 +48,8 @@ public class DownloadsDao extends AbstractDao<DownloadInfo, Long> {
                 "\"LEGACY\" INTEGER NOT NULL ," + // 11: legacy
                 "\"TIME\" INTEGER NOT NULL ," + // 12: time
                 "\"LABEL\" TEXT," + // 13: label
-                "\"ARCHIVE_URI\" TEXT);"); // 14: archiveUri
+                "\"ARCHIVE_URI\" TEXT," + // 14: archiveUri
+                "\"FIRST_GID\" INTEGER);"); // 15: firstGid
     }
 
     /**
@@ -113,6 +114,11 @@ public class DownloadsDao extends AbstractDao<DownloadInfo, Long> {
         if (archiveUri != null) {
             stmt.bindString(15, archiveUri);
         }
+
+        Long firstGid = entity.getFirstGid();
+        if (firstGid != null) {
+            stmt.bindLong(16, firstGid);
+        }
     }
 
     @Override
@@ -169,6 +175,11 @@ public class DownloadsDao extends AbstractDao<DownloadInfo, Long> {
         if (archiveUri != null) {
             stmt.bindString(15, archiveUri);
         }
+
+        Long firstGid = entity.getFirstGid();
+        if (firstGid != null) {
+            stmt.bindLong(16, firstGid);
+        }
     }
 
     @Override
@@ -188,7 +199,8 @@ public class DownloadsDao extends AbstractDao<DownloadInfo, Long> {
             cursor.getInt(offset + 11), // legacy
             cursor.getLong(offset + 12), // time
             cursor.isNull(offset + 13) ? null : cursor.getString(offset + 13), // label
-            cursor.isNull(offset + 14) ? null : cursor.getString(offset + 14) // archiveUri
+            cursor.isNull(offset + 14) ? null : cursor.getString(offset + 14), // archiveUri
+            cursor.isNull(offset + 15) ? null : cursor.getLong(offset + 15) // firstGid
         );
         return entity;
     }
@@ -218,6 +230,7 @@ public class DownloadsDao extends AbstractDao<DownloadInfo, Long> {
         public final static Property Time = new Property(12, long.class, "time", false, "TIME");
         public final static Property Label = new Property(13, String.class, "label", false, "LABEL");
         public final static Property ArchiveUri = new Property(14, String.class, "archiveUri", false, "ARCHIVE_URI");
+        public final static Property FirstGid = new Property(15, Long.class, "firstGid", false, "FIRST_GID");
     }
      
     @Override
@@ -237,6 +250,7 @@ public class DownloadsDao extends AbstractDao<DownloadInfo, Long> {
         entity.setTime(cursor.getLong(offset + 12));
         entity.setLabel(cursor.isNull(offset + 13) ? null : cursor.getString(offset + 13));
         entity.setArchiveUri(cursor.isNull(offset + 14) ? null : cursor.getString(offset + 14));
+        entity.setFirstGid(cursor.isNull(offset + 15) ? null : cursor.getLong(offset + 15));
      }
     
     @Override

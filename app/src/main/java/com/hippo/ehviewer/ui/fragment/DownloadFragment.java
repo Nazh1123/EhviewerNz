@@ -68,6 +68,8 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
     public static final String KEY_IMPORT_DOWNLOAD_ITEMS = "import_download_items";
     public static final String KEY_CLEAN_INVALID_DOWNLOAD = "clean_invalid_download";
     public static final String KEY_DELETE_MISSING_GALLERIES = "delete_missing_galleries";
+    public static final String KEY_UPDATE_GALLERY_VERSIONS = "update_gallery_versions";
+    public static final String KEY_DELETE_OLD_GALLERY_VERSIONS = "delete_old_gallery_versions";
 
     @Nullable
     private Preference mDownloadLocation;
@@ -88,6 +90,8 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         Preference importDownloadItems = findPreference(KEY_IMPORT_DOWNLOAD_ITEMS);
         Preference cleanInvalidDownload = findPreference(KEY_CLEAN_INVALID_DOWNLOAD);
         Preference deleteMissingGalleries = findPreference(KEY_DELETE_MISSING_GALLERIES);
+        Preference updateGalleryVersions = findPreference(KEY_UPDATE_GALLERY_VERSIONS);
+        Preference deleteOldGalleryVersions = findPreference(KEY_DELETE_OLD_GALLERY_VERSIONS);
         Preference preloadImage = findPreference("preload_image");
         Preference imageResolutionPref = findPreference(Settings.KEY_IMAGE_RESOLUTION);
 
@@ -140,6 +144,12 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         }
         if (deleteMissingGalleries != null) {
             deleteMissingGalleries.setOnPreferenceClickListener(this);
+        }
+        if (updateGalleryVersions != null) {
+            updateGalleryVersions.setOnPreferenceClickListener(this);
+        }
+        if (deleteOldGalleryVersions != null) {
+            deleteOldGalleryVersions.setOnPreferenceClickListener(this);
         }
     }
 
@@ -205,6 +215,12 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         } else if (KEY_DELETE_MISSING_GALLERIES.equals(key)) {
             MissingGalleryCleaner.showConfirmation(requireActivity(),
                     R.string.settings_download_delete_missing_galleries);
+            return true;
+        } else if (KEY_UPDATE_GALLERY_VERSIONS.equals(key)) {
+            GalleryVersionMaintenance.showUpdateConfirmation(requireActivity());
+            return true;
+        } else if (KEY_DELETE_OLD_GALLERY_VERSIONS.equals(key)) {
+            GalleryVersionMaintenance.scanAndConfirmCleanup(requireActivity());
             return true;
         }
         return false;

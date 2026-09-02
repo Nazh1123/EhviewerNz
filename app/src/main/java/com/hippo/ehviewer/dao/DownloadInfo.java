@@ -57,7 +57,7 @@ public class DownloadInfo extends GalleryInfo {
 	@Generated
 	public DownloadInfo(long gid, String token, String title, String titleJpn, String thumb, int category,
 			String posted, String uploader, float rating, String simpleLanguage, int state, int legacy, long time,
-			String label, String archiveUri) {
+			String label, String archiveUri, Long firstGid) {
 		this.gid = gid;
 		this.token = token;
 		this.title = title;
@@ -73,6 +73,7 @@ public class DownloadInfo extends GalleryInfo {
 		this.time = time;
 		this.label = label;
 		this.archiveUri = archiveUri;
+		this.firstGid = firstGid;
 	}
 
 	public long getGid() {
@@ -195,6 +196,14 @@ public class DownloadInfo extends GalleryInfo {
 		this.archiveUri = archiveUri;
 	}
 
+	public Long getFirstGid() {
+		return firstGid;
+	}
+
+	public void setFirstGid(Long firstGid) {
+		this.firstGid = firstGid;
+	}
+
 	@Override
 	public int describeContents() {
 		return 0;
@@ -231,6 +240,7 @@ public class DownloadInfo extends GalleryInfo {
 		this.rating = galleryInfo.rating;
 		this.simpleTags = galleryInfo.simpleTags;
 		this.simpleLanguage = galleryInfo.simpleLanguage;
+		this.firstGid = galleryInfo.firstGid;
 	}
 
 	public void updateInfo(GalleryInfo galleryInfo) {
@@ -244,6 +254,9 @@ public class DownloadInfo extends GalleryInfo {
 		this.rating = galleryInfo.rating;
 		this.simpleTags = galleryInfo.simpleTags;
 		this.simpleLanguage = galleryInfo.simpleLanguage;
+		if (galleryInfo.firstGid != null) {
+			this.firstGid = galleryInfo.firstGid;
+		}
 	}
 
 	public JSONObject toJson() {

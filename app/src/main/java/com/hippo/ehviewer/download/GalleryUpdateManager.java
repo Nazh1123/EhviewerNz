@@ -264,7 +264,14 @@ public final class GalleryUpdateManager {
             return false;
         }
 
-        SpiderInfo source = readDownloadedSpiderInfo(plan.sourceGid);
+        return migrateReadingProgress(context, plan.sourceGid, targetInfo);
+    }
+
+    /** Transfers reading progress without creating a persistent update plan. */
+    public static boolean migrateReadingProgress(@NonNull Context context, long sourceGid,
+                                                 @NonNull GalleryInfo targetInfo) {
+
+        SpiderInfo source = readDownloadedSpiderInfo(sourceGid);
         SpiderInfo target = readDownloadedSpiderInfo(targetInfo.gid);
         if (source == null || target == null || source.pTokenMap == null
                 || target.pTokenMap == null) {
@@ -274,7 +281,7 @@ public final class GalleryUpdateManager {
         // Reading progress is also kept in the spider-info cache. Merge only startPage here:
         // the downloaded file owns the current gallery metadata and pToken table.
         source.startPage = Math.max(source.startPage,
-                readCachedStartPage(context, plan.sourceGid));
+                readCachedStartPage(context, sourceGid));
         target.startPage = Math.max(target.startPage,
                 readCachedStartPage(context, targetInfo.gid));
 
@@ -305,7 +312,7 @@ public final class GalleryUpdateManager {
 
         latestTarget.startPage = mappedPage;
         latestTarget.writeNewSpiderInfoToLocal(new SpiderDen(targetInfo), context);
-        Log.i(TAG, "Migrated reading progress from " + plan.sourceGid + " page "
+        Log.i(TAG, "Migrated reading progress from " + sourceGid + " page "
                 + source.startPage + " to " + targetInfo.gid + " page " + mappedPage);
         return true;
     }

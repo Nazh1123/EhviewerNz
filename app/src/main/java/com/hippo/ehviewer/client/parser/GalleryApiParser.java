@@ -39,6 +39,14 @@ public class GalleryApiParser {
             if (gi == null) {
                 continue;
             }
+            gi.firstGid = resolveFirstGid(gid, g.optString("first_gid"),
+                    g.optString("error"));
+            if (gi.firstGid < 0L) {
+                // The request reached the gallery API, but this individual gallery is no
+                // longer readable (removed, invalid, and so on). Keep this distinct from a
+                // transport failure, for which parse() is never called and the value stays null.
+                continue;
+            }
             gi.title = ParserUtils.trim(g.getString("title"));
             gi.titleJpn = ParserUtils.trim(g.getString("title_jpn"));
             gi.category = EhUtils.getCategory(g.getString("category"));
@@ -57,6 +65,14 @@ public class GalleryApiParser {
             gi.pages = NumberUtils.parseIntSafely(g.getString("filecount"), 0);
             gi.generateSLang();
         }
+    }
+
+    static long resolveFirstGid(long gid, String firstGid, String error) {
+        if (error != null && !error.isEmpty()) {
+            return -1L;
+        }
+        long parsed = NumberUtils.parseLongSafely(firstGid, -1L);
+        return parsed > 0L ? parsed : gid;
     }
 
     private static GalleryInfo getGalleryInfoByGid(List<GalleryInfo> galleryInfoList, long gid) {

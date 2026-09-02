@@ -32,7 +32,7 @@ public class EhDaoGenerator {
     private static final String OUT_DIR = "app/src/main/java";
     private static final String DELETE_DIR = OUT_DIR+"/com/hippo/ehviewer/dao";
 
-    private static final int VERSION = 8;
+    private static final int VERSION = 9;
 
     private static final String DOWNLOAD_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/DownloadInfo.java";
     private static final String HISTORY_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/HistoryInfo.java";
@@ -190,6 +190,8 @@ public class EhDaoGenerator {
         entity.addIntProperty("legacy").notNull();
         entity.addLongProperty("time").notNull();
         entity.addStringProperty("label");
+        entity.addStringProperty("archiveUri");
+        entity.addLongProperty("firstGid");
     }
 
     private static void addDownloadLabel(Schema schema) {
@@ -316,11 +318,13 @@ public class EhDaoGenerator {
         javaClass.removeField(javaClass.getField("uploader"));
         javaClass.removeField(javaClass.getField("rating"));
         javaClass.removeField(javaClass.getField("simpleLanguage"));
+        javaClass.removeField(javaClass.getField("firstGid"));
         // Set all field public
         javaClass.getField("state").setPublic();
         javaClass.getField("legacy").setPublic();
         javaClass.getField("time").setPublic();
         javaClass.getField("label").setPublic();
+        javaClass.getField("archiveUri").setPublic();
         // Add Parcelable stuff
         javaClass.addMethod("\t@Override\n" +
                 "\tpublic int describeContents() {\n" +
@@ -333,6 +337,7 @@ public class EhDaoGenerator {
                 "\t\tdest.writeInt(this.legacy);\n" +
                 "\t\tdest.writeLong(this.time);\n" +
                 "\t\tdest.writeString(this.label);\n" +
+                "\t\tdest.writeString(this.archiveUri);\n" +
                 "\t}");
         javaClass.addMethod("\tprotected DownloadInfo(Parcel in) {\n" +
                 "\t\tsuper(in);\n" +
@@ -340,6 +345,7 @@ public class EhDaoGenerator {
                 "\t\tthis.legacy = in.readInt();\n" +
                 "\t\tthis.time = in.readLong();\n" +
                 "\t\tthis.label = in.readString();\n" +
+                "\t\tthis.archiveUri = in.readString();\n" +
                 "\t}").setConstructor(true);
         javaClass.addField("\tpublic static final Creator<DownloadInfo> CREATOR = new Creator<DownloadInfo>() {\n" +
                 "\t\t@Override\n" +
@@ -380,6 +386,7 @@ public class EhDaoGenerator {
                 "\t\tthis.rating = galleryInfo.rating;\n" +
                 "\t\tthis.simpleTags = galleryInfo.simpleTags;\n" +
                 "\t\tthis.simpleLanguage = galleryInfo.simpleLanguage;\n" +
+                "\t\tthis.firstGid = galleryInfo.firstGid;\n" +
                 "\t}").setConstructor(true);
         javaClass.addMethod("public void updateInfo(GalleryInfo galleryInfo) {\n" +
                 "\t\tthis.token = galleryInfo.token;\n" +
@@ -392,6 +399,9 @@ public class EhDaoGenerator {
                 "\t\tthis.rating = galleryInfo.rating;\n" +
                 "\t\tthis.simpleTags = galleryInfo.simpleTags;\n" +
                 "\t\tthis.simpleLanguage = galleryInfo.simpleLanguage;\n" +
+                "\t\tif (galleryInfo.firstGid != null) {\n" +
+                "\t\t\tthis.firstGid = galleryInfo.firstGid;\n" +
+                "\t\t}\n" +
                 "\t}");
         javaClass.addImport("com.hippo.ehviewer.client.data.GalleryInfo");
 
@@ -406,6 +416,7 @@ public class EhDaoGenerator {
                 "\t\tjsonObject.put(\"state\",state);\n" +
                 "\t\tjsonObject.put(\"time\",time);\n" +
                 "\t\tjsonObject.put(\"total\",total);\n" +
+                "\t\tjsonObject.put(\"archiveUri\",archiveUri);\n" +
                 "\t\treturn  jsonObject;\n" +
                 "\t}");
         javaClass.addImport("com.alibaba.fastjson.JSONObject");
@@ -421,6 +432,7 @@ public class EhDaoGenerator {
                 "\t\tdownloadInfo.state = object.getIntValue(\"state\");\n" +
                 "\t\tdownloadInfo.time = object.getLongValue(\"time\");\n" +
                 "\t\tdownloadInfo.total = object.getIntValue(\"total\");\n" +
+                "\t\tdownloadInfo.archiveUri = object.getString(\"archiveUri\");\n" +
                 "\t\treturn downloadInfo;\n" +
                 "\t}");
         javaClass.addImport("com.alibaba.fastjson.JSONArray");

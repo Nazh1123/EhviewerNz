@@ -247,9 +247,20 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         if (null == gi) {
             holder.boundGid = Long.MIN_VALUE;
             holder.selectionOutline.setVisibility(View.GONE);
+            holder.downloaded.setVisibility(View.GONE);
+            holder.downloaded.setRotation(0.0f);
+            if (holder.thumbnailDownloaded != null) {
+                holder.thumbnailDownloaded.setVisibility(View.GONE);
+                holder.thumbnailDownloaded.setRotation(0.0f);
+            }
             return;
         }
         holder.boundGid = gi.gid;
+
+        boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
+        boolean updateAvailable = !downloaded && gi.firstGid != null && gi.firstGid > 0L
+                && mDownloadManager.hasOlderGalleryVersion(gi.firstGid, gi.gid);
+        bindVersionBadge(holder.downloaded, updateAvailable);
 
         holder.selectionOutline.setVisibility(
                 isGallerySelected(gi) ? View.VISIBLE : View.GONE);
@@ -288,7 +299,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     holder.simpleLanguage.setVisibility(View.VISIBLE);
                 }
                 holder.favourite.setVisibility((mShowFavourite && gi.favoriteSlot >= -1 && gi.favoriteSlot <= 10) ? View.VISIBLE : View.GONE);
-                holder.downloaded.setVisibility(mDownloadManager.containDownloadInfo(gi.gid) ? View.VISIBLE : View.GONE);
+                holder.downloaded.setVisibility(
+                        downloaded || updateAvailable ? View.VISIBLE : View.GONE);
                 break;
             }
             case TYPE_GRID: {
@@ -304,11 +316,11 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     ((TriangleDrawable) drawable).setColor(color);
                 }
                 holder.simpleLanguage.setText(gi.simpleLanguage);
-                boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
                 boolean showInfoBar = Settings.isThumbnailInfoBarEffective();
                 holder.thumbnailInfoBar.setVisibility(showInfoBar ? View.VISIBLE : View.GONE);
                 holder.downloaded.setVisibility(!showInfoBar &&
-                        Settings.getShowThumbnailDownloadBadge() && downloaded
+                        Settings.getShowThumbnailDownloadBadge()
+                                && (downloaded || updateAvailable)
                         ? View.VISIBLE : View.GONE);
                 if (showInfoBar) {
                     holder.thumbnailPosted.setText(
@@ -320,13 +332,20 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                                     gi.simpleTags, gi.tgList,
                                     gi.category == EhConfig.COSPLAY));
                     holder.thumbnailDownloaded.setVisibility(
-                            downloaded ? View.VISIBLE : View.GONE);
+                            downloaded || updateAvailable ? View.VISIBLE : View.GONE);
+                    bindVersionBadge(holder.thumbnailDownloaded, updateAvailable);
                     bindPageProgress(holder, holder.thumbnailPages, gi, true, false);
                 }
                 break;
             }
         }
         ViewCompat.setTransitionName(holder.thumb, TransitionNameFactory.getThumbTransitionName(gi.gid));
+    }
+
+    private void bindVersionBadge(@NonNull ImageView badge, boolean updateAvailable) {
+        badge.setRotation(updateAvailable ? 180.0f : 0.0f);
+        badge.setContentDescription(mResources.getString(updateAvailable
+                ? R.string.gallery_update_available : R.string.download_state_downloaded));
     }
 
     private void bindPageProgress(@NonNull GalleryHolder holder,

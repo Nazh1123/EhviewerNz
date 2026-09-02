@@ -63,7 +63,9 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Set;
+import java.util.TreeSet;
 
 public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
@@ -78,6 +80,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     private final LinkedList<DownloadInfo> mAllInfoList;
     // All download info map
     private final SparseJLArray<DownloadInfo> mAllInfoMap;
+    // Positive first_gid -> downloaded gids. Local imports and unavailable records are excluded.
+    private final Map<Long, NavigableSet<Long>> mGalleryVersionMap = new HashMap<>();
     // label and info list map, without default label info list
     private final Map<String, LinkedList<DownloadInfo>> mMap;
 
@@ -177,6 +181,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         mWaitList = new LinkedList<>();
         mSpeedReminder = new SpeedReminder();
         mDownloadInfoListeners = new ArrayList<>();
+        rebuildGalleryVersionIndex();
 
         // Retry cleanup if the app was killed after an updated gallery finished but before all
         // parent folders were removed.
@@ -203,6 +208,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
         mAllInfoMap.remove(oldInfo.gid);
         mAllInfoMap.put(newInfo.gid, newInfo);
+        rebuildGalleryVersionIndex();
 
 
         for (DownloadInfoListener l : mDownloadInfoListeners) {
@@ -240,6 +246,96 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     /** Cheap preflight used before resolving a parent chain over the network. */
     public boolean hasDownloadInfoBefore(long gid) {
         return gid > 0L && mAllInfoMap.size() > 0 && mAllInfoMap.keyAt(0) < gid;
+    }
+
+    public static boolean isImportedGallery(@Nullable DownloadInfo info) {
+        return info != null && (LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
+                || (info.archiveUri != null && info.archiveUri.startsWith("content://")));
+    }
+
+    public synchronized void rebuildGalleryVersionIndex() {
+        mGalleryVersionMap.clear();
+        for (DownloadInfo info : mAllInfoList) {
+            if (info.firstGid == null || info.firstGid <= 0L || isImportedGallery(info)) {
+                continue;
+            }
+            mGalleryVersionMap.computeIfAbsent(info.firstGid, ignored -> new TreeSet<>())
+                    .add(info.gid);
+        }
+    }
+
+    public synchronized boolean hasOlderGalleryVersion(long firstGid, long targetGid) {
+        NavigableSet<Long> gids = mGalleryVersionMap.get(firstGid);
+        return gids != null && gids.lower(targetGid) != null;
+    }
+
+    public synchronized boolean hasUnknownGalleryVersionBefore(long targetGid) {
+        for (DownloadInfo info : mAllInfoList) {
+            if (info.gid < targetGid && info.firstGid == null && !isImportedGallery(info)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @NonNull
+    public synchronized List<Long> getOlderGalleryVersionGids(long firstGid, long targetGid) {
+        NavigableSet<Long> gids = mGalleryVersionMap.get(firstGid);
+        if (gids == null) {
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(gids.headSet(targetGid, false));
+    }
+
+    @Nullable
+    public synchronized DownloadInfo findClosestOlderGalleryVersion(
+            long firstGid, long targetGid) {
+        NavigableSet<Long> gids = mGalleryVersionMap.get(firstGid);
+        if (gids == null) {
+            return null;
+        }
+        for (Long gid : gids.headSet(targetGid, false).descendingSet()) {
+            DownloadInfo info = mAllInfoMap.get(gid);
+            if (info != null && !isImportedGallery(info)
+                    && info.state != DownloadInfo.STATE_WAIT
+                    && info.state != DownloadInfo.STATE_DOWNLOAD
+                    && info.state != DownloadInfo.STATE_UPDATE) {
+                return info;
+            }
+        }
+        return null;
+    }
+
+    public boolean isCompleteUsableGallery(@Nullable DownloadInfo info) {
+        if (info == null || isImportedGallery(info) || info.state != DownloadInfo.STATE_FINISH
+                || info.legacy != 0) {
+            return false;
+        }
+        UniFile dir = SpiderDen.getExistingGalleryDownloadDir(info);
+        if (dir == null || !dir.isDirectory()) {
+            return false;
+        }
+        SpiderInfo spiderInfo = SpiderInfo.read(
+                dir.findFile(SpiderQueen.SPIDER_INFO_FILENAME));
+        if (spiderInfo == null || spiderInfo.gid != info.gid || spiderInfo.pages <= 0) {
+            return false;
+        }
+        for (int index = 0; index < spiderInfo.pages; index++) {
+            UniFile image = SpiderDen.findImageFile(dir, index);
+            if (image == null || !image.exists() || image.length() <= 0L
+                    || !SpiderDen.isReadableImage(image)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Call after a background metadata pass has updated DownloadInfo objects in place. */
+    public void onGalleryVersionInfoUpdated() {
+        rebuildGalleryVersionIndex();
+        for (DownloadInfoListener listener : mDownloadInfoListeners) {
+            listener.onUpdateAll();
+        }
     }
 
     @NonNull
@@ -452,6 +548,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             // Add to all download list and map
             mAllInfoList.addFirst(info);
             mAllInfoMap.put(galleryInfo.gid, info);
+            rebuildGalleryVersionIndex();
 
             // Add to wait list
             mWaitList.add(info);
@@ -613,6 +710,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
         // Sort all download list
         Collections.sort(mAllInfoList, DATE_DESC_COMPARATOR);
+        rebuildGalleryVersionIndex();
 
         // Notify
         new Handler(Looper.getMainLooper()).post(() -> {
@@ -661,6 +759,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         // Add to all download list and map
         mAllInfoList.addFirst(info);
         mAllInfoMap.put(galleryInfo.gid, info);
+        rebuildGalleryVersionIndex();
 
         // Save to
         EhDB.putDownloadInfo(info);
@@ -699,7 +798,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
         // Save to
         EhDB.putDownloadInfo(info);
+        mAllInfoList.addFirst(info);
         mAllInfoMap.put(galleryInfo.gid, info);
+        rebuildGalleryVersionIndex();
     }
 
 
@@ -778,6 +879,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             // Remove all list and map
             mAllInfoList.remove(info);
             mAllInfoMap.remove(info.gid);
+            rebuildGalleryVersionIndex();
 
             // Remove label list
             LinkedList<DownloadInfo> list = getInfoListForLabel(info.label);
@@ -826,6 +928,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 list.remove(info);
             }
         }
+        rebuildGalleryVersionIndex();
 
         // Update listener
         for (DownloadInfoListener l : mDownloadInfoListeners) {

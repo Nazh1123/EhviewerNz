@@ -232,6 +232,11 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
             return;
         }
 
+        boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
+        boolean updateAvailable = !downloaded && gi.firstGid != null && gi.firstGid > 0L
+                && mDownloadManager.hasOlderGalleryVersion(gi.firstGid, gi.gid);
+        bindVersionBadge(holder.downloaded, updateAvailable);
+
         switch (mType) {
             default:
             case TYPE_LIST: {
@@ -274,7 +279,8 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
                     holder.simpleLanguage.setVisibility(View.VISIBLE);
                 }
                 holder.favourited.setVisibility((mShowFavourited && gi.favoriteSlot >= -1 && gi.favoriteSlot <= 10) ? View.VISIBLE : View.GONE);
-                holder.downloaded.setVisibility(mDownloadManager.containDownloadInfo(gi.gid) ? View.VISIBLE : View.GONE);
+                holder.downloaded.setVisibility(
+                        downloaded || updateAvailable ? View.VISIBLE : View.GONE);
                 break;
             }
             case TYPE_GRID: {
@@ -292,7 +298,7 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
                 holder.simpleLanguage.setText(gi.simpleLanguage);
                 holder.downloaded.setVisibility(
                         Settings.getShowThumbnailDownloadBadge() &&
-                                mDownloadManager.containDownloadInfo(gi.gid)
+                                (downloaded || updateAvailable)
                                 ? View.VISIBLE : View.GONE);
                 break;
             }
@@ -300,5 +306,11 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
 
         // Update transition name
         ViewCompat.setTransitionName(holder.thumb, TransitionNameFactory.getThumbTransitionName(gi.gid));
+    }
+
+    private void bindVersionBadge(@NonNull ImageView badge, boolean updateAvailable) {
+        badge.setRotation(updateAvailable ? 180.0f : 0.0f);
+        badge.setContentDescription(mResources.getString(updateAvailable
+                ? R.string.gallery_update_available : R.string.download_state_downloaded));
     }
 }

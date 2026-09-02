@@ -68,7 +68,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
     private var m509Delay: NotificationDelay? = null
     private var mUpdatingDelay: NotificationDelay? = null
     private var mGalleryUpdatedDelay: NotificationDelay? = null
-    private val mGalleryUpdateTasks = mutableMapOf<Long, GalleryUpdateTask>()
+    private val mGalleryUpdateTasks = mutableMapOf<Long, GalleryVersionMetadataTask>()
     private val mActiveGalleryUpdateGids = mutableSetOf<Long>()
 
     // WakeLock 用于防止CPU被限制（针对后台下载优化）
@@ -422,6 +422,10 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         if (mGalleryUpdateTasks.containsKey(target.gid)) {
             return
         }
+        val downloadManager = mDownloadManager ?: return
+        if (downloadManager.containDownloadInfo(target.gid)) {
+            return
+        }
 
         acquireWakeLock()
         ensureUpdatingBuilder()
@@ -440,34 +444,49 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
             .setProgress(0, 0, true)
         mUpdatingDelay!!.startForeground()
 
-        lateinit var task: GalleryUpdateTask
-        task = GalleryUpdateTask(applicationContext, target,
-            object : GalleryUpdateTask.Listener {
-                override fun onSuccess(parents: List<GalleryUpdateTask.ParentGallery>) {
+        fun beginWithFirstGid(firstGid: Long) {
+            val source = downloadManager.findClosestOlderGalleryVersion(
+                firstGid, target.gid
+            )
+            val olderGids = downloadManager.getOlderGalleryVersionGids(firstGid, target.gid)
+            if (source == null || olderGids.isEmpty()) {
+                showGalleryUpdateFailure(
+                    target,
+                    getString(R.string.gallery_update_no_downloaded_parent)
+                )
+                refreshGalleryUpdateNotification()
+                checkStopSelf()
+                return
+            }
+            target.firstGid = firstGid
+            refreshGalleryUpdateNotification()
+            mActiveGalleryUpdateGids.add(target.gid)
+            downloadManager.startGalleryUpdate(target, source.gid, olderGids)
+            checkStopSelf()
+        }
+
+        if (target.firstGid != null) {
+            if (target.firstGid!! > 0L) {
+                beginWithFirstGid(target.firstGid!!)
+            } else {
+                showGalleryUpdateFailure(
+                    target, getString(R.string.gallery_update_no_downloaded_parent)
+                )
+                refreshGalleryUpdateNotification()
+                checkStopSelf()
+            }
+            return
+        }
+
+        lateinit var task: GalleryVersionMetadataTask
+        task = GalleryVersionMetadataTask(applicationContext, target,
+            object : GalleryVersionMetadataTask.Listener {
+                override fun onSuccess(firstGid: Long) {
                     if (mGalleryUpdateTasks[target.gid] !== task) {
                         return
                     }
                     mGalleryUpdateTasks.remove(target.gid)
-                    val parentGids = parents.map { it.gid }
-                    val downloadedParents = parentGids.filter {
-                        mDownloadManager?.containDownloadInfo(it) == true
-                    }
-                    if (downloadedParents.isEmpty()) {
-                        showGalleryUpdateFailure(
-                            target,
-                            getString(R.string.gallery_update_no_downloaded_parent)
-                        )
-                        refreshGalleryUpdateNotification()
-                        checkStopSelf()
-                        return
-                    }
-
-                    refreshGalleryUpdateNotification()
-                    mActiveGalleryUpdateGids.add(target.gid)
-                    mDownloadManager?.startGalleryUpdate(
-                        target, downloadedParents.first(), downloadedParents
-                    )
-                    checkStopSelf()
+                    beginWithFirstGid(firstGid)
                 }
 
                 override fun onFailure(error: Exception) {
