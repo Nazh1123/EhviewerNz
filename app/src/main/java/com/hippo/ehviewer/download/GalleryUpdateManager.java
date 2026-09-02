@@ -66,6 +66,44 @@ public final class GalleryUpdateManager {
     private GalleryUpdateManager() {
     }
 
+    /** Reading position resolved entirely from the downloaded gallery and local cache. */
+    public static final class LocalReadingProgress {
+        public final int currentPage;
+        public final int totalPages;
+
+        LocalReadingProgress(int currentPage, int totalPages) {
+            this.currentPage = currentPage;
+            this.totalPages = totalPages;
+        }
+    }
+
+    /**
+     * Returns the progress that would be migrated from a gallery-update source.
+     * This performs local file/cache reads only and must be called off the main thread.
+     */
+    @NonNull
+    public static LocalReadingProgress loadLocalReadingProgress(
+            @NonNull Context context, @NonNull DownloadInfo info) {
+        SpiderInfo downloaded = readDownloadedSpiderInfoHeader(info.gid);
+        SpiderInfo cached = readCachedSpiderInfo(context, info.gid);
+
+        int startPage = 0;
+        int totalPages = Math.max(info.pages, info.total);
+        if (downloaded != null) {
+            startPage = Math.max(startPage, downloaded.startPage);
+            totalPages = Math.max(totalPages, downloaded.pages);
+        }
+        if (cached != null) {
+            startPage = Math.max(startPage, cached.startPage);
+            totalPages = Math.max(totalPages, cached.pages);
+        }
+
+        totalPages = Math.max(0, totalPages);
+        int currentPage = startPage > 0 && totalPages > 0
+                ? Math.min(startPage, totalPages - 1) + 1 : 0;
+        return new LocalReadingProgress(currentPage, totalPages);
+    }
+
     public static final class UpdatePlan {
         public final long targetGid;
         public final long sourceGid;
@@ -412,18 +450,37 @@ public final class GalleryUpdateManager {
         return result != null && result.gid == gid ? result : null;
     }
 
+    @Nullable
+    private static SpiderInfo readDownloadedSpiderInfoHeader(long gid) {
+        GalleryInfo placeholder = new GalleryInfo();
+        placeholder.gid = gid;
+        UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
+        if (dir == null || !dir.isDirectory()) {
+            return null;
+        }
+        SpiderInfo result = SpiderInfo.readHeader(
+                dir.findFile(SpiderQueen.SPIDER_INFO_FILENAME));
+        return result != null && result.gid == gid ? result : null;
+    }
+
     private static int readCachedStartPage(@NonNull Context context, long gid) {
+        SpiderInfo cached = readCachedSpiderInfo(context, gid);
+        return cached != null ? cached.startPage : 0;
+    }
+
+    @Nullable
+    private static SpiderInfo readCachedSpiderInfo(@NonNull Context context, long gid) {
         SimpleDiskCache cache = EhApplication.getSpiderInfoCache(context);
         InputStreamPipe pipe = cache.getInputStreamPipe(Long.toString(gid));
         if (pipe == null) {
-            return 0;
+            return null;
         }
         try {
             pipe.obtain();
             SpiderInfo cached = SpiderInfo.readHeader(pipe.open());
-            return cached != null && cached.gid == gid ? cached.startPage : 0;
+            return cached != null && cached.gid == gid ? cached : null;
         } catch (IOException e) {
-            return 0;
+            return null;
         } finally {
             pipe.close();
             pipe.release();

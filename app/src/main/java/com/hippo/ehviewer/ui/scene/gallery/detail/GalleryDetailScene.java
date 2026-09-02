@@ -106,6 +106,7 @@ import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.Filter;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.download.GalleryUpdateManager;
 import com.hippo.ehviewer.download.GalleryVersionMetadataTask;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.spider.SpiderQueen;
@@ -244,7 +245,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @Nullable
     private View mUpdateGallery;
     @Nullable
-    private View mGalleryHistory;
+    private TextView mGalleryHistory;
     @Nullable
     private View mUpdateActionDivider;
     // Below header
@@ -343,6 +344,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @Nullable
     private GalleryVersionMetadataTask mGalleryVersionLookup;
     private long mVersionInfoTipShownForGid = -1L;
+    private long mVersionProgressTargetGid = -1L;
+    private long mVersionProgressSourceGid = -1L;
+    private int mVersionProgressGeneration;
     private int mRequestId = IntIdGenerator.INVALID_ID;
 
     @Nullable
@@ -691,7 +695,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mRead = ViewUtils.$$(mActionGroup, R.id.read);
         mUpdateActionGroup = ViewUtils.$$(mHeader, R.id.update_action_card);
         mUpdateGallery = ViewUtils.$$(mHeader, R.id.update_gallery);
-        mGalleryHistory = ViewUtils.$$(mHeader, R.id.gallery_history);
+        mGalleryHistory = (TextView) ViewUtils.$$(mHeader, R.id.gallery_history);
         mUpdateActionDivider = ViewUtils.$$(mHeader, R.id.update_action_divider);
         Ripple.addRipple(mThumb, isDarkTheme);
         Ripple.addRipple(mOtherActions, isDarkTheme);
@@ -826,6 +830,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         if (info != null && mGalleryDetail != null && mPages != null) {
             bindReadProgress(info);
         }
+        mVersionProgressTargetGid = -1L;
+        mVersionProgressSourceGid = -1L;
+        mVersionProgressGeneration++;
         updateGalleryVersionActionsVisibility();
     }
 
@@ -867,6 +874,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUpdateActionGroup = null;
         mUpdateGallery = null;
         mGalleryHistory = null;
+        mVersionProgressTargetGid = -1L;
+        mVersionProgressSourceGid = -1L;
+        mVersionProgressGeneration++;
         mUpdateActionDivider = null;
         if (mGalleryVersionLookup != null) {
             mGalleryVersionLookup.cancel();
@@ -2463,15 +2473,14 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Context context = getEHContext();
         GalleryDetail detail = mGalleryDetail;
         if (context == null || detail == null) {
-            mUpdateActionGroup.setVisibility(View.GONE);
+            setGalleryVersionActionVisibility(false, false);
             return;
         }
         boolean hasParent = !TextUtils.isEmpty(detail.parent);
-        mGalleryHistory.setVisibility(hasParent ? View.VISIBLE : View.GONE);
         DownloadManager downloadManager = EhApplication.getDownloadManager(context);
         boolean exactDownloaded = downloadManager.containDownloadInfo(detail.gid);
         if (!hasParent || exactDownloaded) {
-            setGalleryVersionActionVisibility(false, hasParent);
+            setGalleryVersionActionVisibility(false, false);
             return;
         }
 
@@ -2487,14 +2496,19 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
 
         if (detail.firstGid != null) {
-            boolean updateAvailable = detail.firstGid > 0L
-                    && downloadManager.hasOlderGalleryVersion(detail.firstGid, detail.gid);
-            setGalleryVersionActionVisibility(updateAvailable, true);
+            DownloadInfo source = detail.firstGid > 0L
+                    ? downloadManager.findClosestOlderGalleryVersion(
+                            detail.firstGid, detail.gid) : null;
+            boolean updateAvailable = source != null;
+            setGalleryVersionActionVisibility(updateAvailable, updateAvailable);
+            if (source != null) {
+                bindGalleryVersionSourceProgress(context, detail.gid, source);
+            }
             maybeShowMissingVersionInformationTip(downloadManager, detail, updateAvailable);
             return;
         }
 
-        setGalleryVersionActionVisibility(false, true);
+        setGalleryVersionActionVisibility(false, false);
         if (mGalleryVersionLookup != null) {
             return;
         }
@@ -2538,6 +2552,45 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             mUpdateActionDivider.setVisibility(update && history ? View.VISIBLE : View.GONE);
         }
         mUpdateActionGroup.setVisibility(update || history ? View.VISIBLE : View.GONE);
+        if (!history) {
+            mVersionProgressTargetGid = -1L;
+            mVersionProgressSourceGid = -1L;
+            mVersionProgressGeneration++;
+        }
+    }
+
+    private void bindGalleryVersionSourceProgress(@NonNull Context context, long targetGid,
+                                                  @NonNull DownloadInfo source) {
+        if (mVersionProgressTargetGid == targetGid
+                && mVersionProgressSourceGid == source.gid) {
+            return;
+        }
+        mVersionProgressTargetGid = targetGid;
+        mVersionProgressSourceGid = source.gid;
+        final int generation = ++mVersionProgressGeneration;
+
+        int localTotal = Math.max(0, Math.max(source.pages, source.total));
+        mGalleryHistory.setText(context.getString(
+                R.string.gallery_old_version_progress, 0, localTotal));
+
+        Context application = context.getApplicationContext();
+        EhApplication.getExecutorService(application).execute(() -> {
+            GalleryUpdateManager.LocalReadingProgress progress =
+                    GalleryUpdateManager.loadLocalReadingProgress(application, source);
+            handler.post(() -> {
+                GalleryDetail current = mGalleryDetail;
+                if (mGalleryHistory == null || current == null
+                        || current.gid != targetGid
+                        || mVersionProgressTargetGid != targetGid
+                        || mVersionProgressSourceGid != source.gid
+                        || mVersionProgressGeneration != generation) {
+                    return;
+                }
+                mGalleryHistory.setText(application.getString(
+                        R.string.gallery_old_version_progress,
+                        progress.currentPage, progress.totalPages));
+            });
+        });
     }
 
     private void maybeShowMissingVersionInformationTip(DownloadManager manager,

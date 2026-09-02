@@ -1128,6 +1128,8 @@
     <string name="error_open_image_directory">無法讀取所選圖片所在目錄。請授予儲存存取權限，或換用可提供本機路徑的檔案管理器。</string>
     <string name="gallery_history_empty">此畫廊沒有父親畫廊歷史</string>
     <string name="gallery_history_title">畫廊歷史</string>
+    <string name="gallery_old_version">舊畫廊</string>
+    <string name="gallery_old_version_progress">舊畫廊 (%1$d/%2$d)</string>
     <string name="gallery_list_downloaded_only">查看已下載畫廊</string>
     <string name="gallery_list_downloaded_only_empty">已載入頁面中沒有已下載畫廊，可繼續向上滑動查找</string>
     <string name="gallery_list_downloaded_only_not_found">接下來的 %1$d 頁中找不到新的已下載畫廊</string>

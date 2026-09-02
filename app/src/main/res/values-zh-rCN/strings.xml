@@ -1116,6 +1116,8 @@
     <string name="parent_gallery_list_failed">父画廊列表加载失败：%s</string>
     <string name="gallery_history_empty">此画廊没有父画廊历史</string>
     <string name="gallery_history_title">画廊历史</string>
+    <string name="gallery_old_version">旧画廊</string>
+    <string name="gallery_old_version_progress">旧画廊 (%1$d/%2$d)</string>
     <string name="gallery_update_no_new_version">此画廊没有更新版本</string>
     <string name="gallery_update_no_parent">所选画廊没有父画廊</string>
     <string name="gallery_update_resolving">正在解析完整的父画廊链…</string>

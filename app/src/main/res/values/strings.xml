@@ -1208,6 +1208,8 @@
     <string name="parent_gallery_list_failed">Failed to load parent galleries: %s</string>
     <string name="gallery_history_empty">This gallery has no parent history</string>
     <string name="gallery_history_title">Gallery history</string>
+    <string name="gallery_old_version">Old gallery</string>
+    <string name="gallery_old_version_progress">Old gallery (%1$d/%2$d)</string>
     <string name="gallery_update_no_new_version">This gallery has no newer version</string>
     <string name="gallery_update_no_parent">The selected gallery has no parent gallery</string>
     <string name="gallery_update_resolving">Resolving the complete parent chain…</string>

@@ -239,7 +239,7 @@
                         android:background="?selectableItemBackgroundBorderless"
                         android:clickable="true"
                         android:focusable="true"
-                        android:text="@string/history"
+                        android:text="@string/gallery_old_version"
                         android:textColor="?attr/textColorThemeAccent" />
 
                 </LinearLayout>
