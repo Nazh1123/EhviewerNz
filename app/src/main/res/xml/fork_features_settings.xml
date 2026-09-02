@@ -155,7 +155,7 @@
         app:allowDividerAbove="true"
         app:iconSpaceReserved="false" />
 
-    <Preference
+    <com.hippo.ehviewer.preference.DeleteOldGalleryVersionsPreference
         android:key="delete_old_gallery_versions"
         android:summary="@string/settings_delete_old_gallery_versions_summary"
         android:title="@string/settings_delete_old_gallery_versions"

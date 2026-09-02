@@ -83,14 +83,6 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
                 return true;
             });
         }
-        Preference deleteOldGalleryVersions =
-                findPreference(DownloadFragment.KEY_DELETE_OLD_GALLERY_VERSIONS);
-        if (deleteOldGalleryVersions != null) {
-            deleteOldGalleryVersions.setOnPreferenceClickListener(preference -> {
-                GalleryVersionMaintenance.scanAndConfirmCleanup(requireActivity());
-                return true;
-            });
-        }
         updateManualSaveLocationSummary();
         if (mManualImageSaveLocation != null) {
             mManualImageSaveLocation.setOnPreferenceClickListener(preference -> {
