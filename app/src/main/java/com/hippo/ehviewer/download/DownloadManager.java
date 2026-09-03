@@ -865,7 +865,12 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     public void deleteDownload(long gid) {
+        boolean galleryUpdate = GalleryUpdateManager.getPlan(gid) != null;
         GalleryUpdateManager.cancel(gid);
+        if (galleryUpdate) {
+            GalleryUpdateManager.notifyUpdateStateChanged(
+                    gid, GalleryUpdateManager.UPDATE_STATE_FAILED);
+        }
         stopDownloadInternal(gid);
         // Imported metadata is app-private and keyed only by gid, so cleanup is safe and
         // unconditional even if the database record is already incomplete.
@@ -901,7 +906,13 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
     public void deleteRangeDownload(LongList gidList) {
         for (int i = 0, n = gidList.size(); i < n; i++) {
-            GalleryUpdateManager.cancel(gidList.get(i));
+            long gid = gidList.get(i);
+            boolean galleryUpdate = GalleryUpdateManager.getPlan(gid) != null;
+            GalleryUpdateManager.cancel(gid);
+            if (galleryUpdate) {
+                GalleryUpdateManager.notifyUpdateStateChanged(
+                        gid, GalleryUpdateManager.UPDATE_STATE_FAILED);
+            }
         }
         stopRangeDownloadInternal(gidList);
 
@@ -1638,6 +1649,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     info.downloaded = mDownloaded;
                     info.total = mTotal;
                     info.legacy = mTotal - mFinished;
+                    boolean galleryUpdate = GalleryUpdateManager.getPlan(info.gid) != null;
                     if (info.legacy == 0) {
                         info.state = DownloadInfo.STATE_FINISH;
                     } else {
@@ -1652,6 +1664,12 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                         // pass may now be sufficient to migrate progress; retry on every continuation.
                         IoThreadPoolExecutor.Companion.getInstance().execute(() ->
                                 GalleryUpdateManager.migrateReadingProgress(mContext, info));
+                    }
+                    if (galleryUpdate) {
+                        GalleryUpdateManager.notifyUpdateStateChanged(info.gid,
+                                info.state == DownloadInfo.STATE_FINISH
+                                        ? GalleryUpdateManager.UPDATE_STATE_UPDATED
+                                        : GalleryUpdateManager.UPDATE_STATE_FAILED);
                     }
                     // Notify
                     if (mDownloadListener != null) {

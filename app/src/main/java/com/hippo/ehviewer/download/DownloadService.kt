@@ -420,13 +420,46 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
 
     private fun startGalleryUpdate(target: GalleryDetail) {
         if (mGalleryUpdateTasks.containsKey(target.gid)) {
+            GalleryUpdateManager.notifyUpdateStateChanged(
+                target.gid, GalleryUpdateManager.UPDATE_STATE_PREPARING
+            )
             return
         }
         val downloadManager = mDownloadManager ?: return
         if (downloadManager.containDownloadInfo(target.gid)) {
+            val info = downloadManager.getDownloadInfo(target.gid)
+            val plan = GalleryUpdateManager.getPlan(target.gid)
+            when {
+                info?.state == DownloadInfo.STATE_FINISH ->
+                    GalleryUpdateManager.notifyUpdateStateChanged(
+                        target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATED
+                    )
+                plan != null && info != null
+                        && info.state != DownloadInfo.STATE_WAIT
+                        && info.state != DownloadInfo.STATE_DOWNLOAD -> {
+                    GalleryUpdateManager.notifyUpdateStateChanged(
+                        target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATING
+                    )
+                    mActiveGalleryUpdateGids.add(target.gid)
+                    downloadManager.startGalleryUpdate(
+                        target, plan.sourceGid, plan.parentGids
+                    )
+                }
+                info?.state == DownloadInfo.STATE_WAIT
+                        || info?.state == DownloadInfo.STATE_DOWNLOAD ->
+                    GalleryUpdateManager.notifyUpdateStateChanged(
+                        target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATING
+                    )
+                else -> GalleryUpdateManager.notifyUpdateStateChanged(
+                    target.gid, GalleryUpdateManager.UPDATE_STATE_FAILED
+                )
+            }
             return
         }
 
+        GalleryUpdateManager.notifyUpdateStateChanged(
+            target.gid, GalleryUpdateManager.UPDATE_STATE_PREPARING
+        )
         acquireWakeLock()
         ensureUpdatingBuilder()
         mUpdatingBuilder!!
@@ -504,12 +537,20 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
     }
 
     private fun cancelGalleryUpdateTasks() {
+        mGalleryUpdateTasks.keys.forEach {
+            GalleryUpdateManager.notifyUpdateStateChanged(
+                it, GalleryUpdateManager.UPDATE_STATE_FAILED
+            )
+        }
         mGalleryUpdateTasks.values.forEach { it.cancel() }
         mGalleryUpdateTasks.clear()
         mUpdatingDelay?.cancel()
     }
 
     private fun showGalleryUpdateFailure(target: GalleryDetail, error: String) {
+        GalleryUpdateManager.notifyUpdateStateChanged(
+            target.gid, GalleryUpdateManager.UPDATE_STATE_FAILED
+        )
         val text = getString(
             R.string.gallery_update_notification_failed,
             EhUtils.getSuitableTitle(target), error

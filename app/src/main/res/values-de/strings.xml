@@ -946,6 +946,10 @@
     <string name="error_open_image_directory">Das Verzeichnis mit dem ausgewählten Bild kann nicht gelesen werden. Bitte gewähren Sie Speicherzugriff oder verwenden Sie stattdessen einen Dateimanager, der einen lokalen Pfad bereitstellt.</string>
     <string name="gallery_history_empty">Diese Galerie hat keinen übergeordneten Galerieverlauf</string>
     <string name="gallery_history_title">Geschichte der Galerie</string>
+    <string name="gallery_old_version">Alte Galerie</string>
+    <string name="gallery_old_version_progress">Alte Galerie (%1$d/%2$d)</string>
+    <string name="gallery_update_state_updating">Wird aktualisiert</string>
+    <string name="gallery_update_state_updated">Aktualisiert</string>
     <string name="gallery_list_downloaded_only">Heruntergeladene Galerie ansehen</string>
     <string name="gallery_list_downloaded_only_empty">Auf der geladenen Seite befindet sich keine heruntergeladene Galerie. Sie können weiter nach oben scrollen, um es zu finden.</string>
     <string name="gallery_list_downloaded_only_not_found">Auf der nächsten %1$d-Seite wurden keine neuen heruntergeladenen Galerien gefunden</string>

@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Persists gallery-update plans and reuses parent pages by pToken.
@@ -60,10 +61,43 @@ public final class GalleryUpdateManager {
 
     private static final Map<Long, UpdatePlan> PLAN_CACHE = new ConcurrentHashMap<>();
     private static final Map<Long, SourcePages> SOURCE_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Long, Integer> UPDATE_STATE_CACHE = new ConcurrentHashMap<>();
     private static final Set<Long> CLEANUP_IN_PROGRESS =
             Collections.synchronizedSet(new HashSet<>());
+    private static final CopyOnWriteArrayList<UpdateStateListener> UPDATE_STATE_LISTENERS =
+            new CopyOnWriteArrayList<>();
+
+    public static final int UPDATE_STATE_PREPARING = 0;
+    public static final int UPDATE_STATE_UPDATING = 1;
+    public static final int UPDATE_STATE_FAILED = 2;
+    public static final int UPDATE_STATE_UPDATED = 3;
 
     private GalleryUpdateManager() {
+    }
+
+    /** Receives transient state changes for gallery updates running in this app process. */
+    public interface UpdateStateListener {
+        void onGalleryUpdateStateChanged(long targetGid, int state);
+    }
+
+    public static void addUpdateStateListener(@NonNull UpdateStateListener listener) {
+        UPDATE_STATE_LISTENERS.addIfAbsent(listener);
+    }
+
+    public static void removeUpdateStateListener(@NonNull UpdateStateListener listener) {
+        UPDATE_STATE_LISTENERS.remove(listener);
+    }
+
+    @Nullable
+    public static Integer getUpdateState(long targetGid) {
+        return UPDATE_STATE_CACHE.get(targetGid);
+    }
+
+    public static void notifyUpdateStateChanged(long targetGid, int state) {
+        UPDATE_STATE_CACHE.put(targetGid, state);
+        for (UpdateStateListener listener : UPDATE_STATE_LISTENERS) {
+            listener.onGalleryUpdateStateChanged(targetGid, state);
+        }
     }
 
     /** Reading position resolved entirely from the downloaded gallery and local cache. */
@@ -161,6 +195,7 @@ public final class GalleryUpdateManager {
             preferences.edit().putString(KEY_PREFIX + targetGid, json.toString()).apply();
             PLAN_CACHE.put(targetGid, new UpdatePlan(targetGid, sourceGid, normalizedParents));
             SOURCE_CACHE.remove(targetGid);
+            notifyUpdateStateChanged(targetGid, UPDATE_STATE_UPDATING);
         } catch (JSONException e) {
             Log.w(TAG, "Unable to persist gallery update plan", e);
         }

@@ -1011,6 +1011,10 @@
     <string name="error_open_image_directory">ไม่สามารถอ่านไดเร็กทอรีที่มีรูปภาพที่เลือกได้ โปรดให้สิทธิ์การเข้าถึงพื้นที่เก็บข้อมูล หรือใช้ตัวจัดการไฟล์ที่ให้เส้นทางในเครื่องแทน</string>
     <string name="gallery_history_empty">แกลเลอรีนี้ไม่มีประวัติแกลเลอรีหลัก</string>
     <string name="gallery_history_title">ประวัติแกลเลอรี่</string>
+    <string name="gallery_old_version">แกลเลอรีเก่า</string>
+    <string name="gallery_old_version_progress">แกลเลอรีเก่า (%1$d/%2$d)</string>
+    <string name="gallery_update_state_updating">กำลังอัปเดต</string>
+    <string name="gallery_update_state_updated">อัปเดตแล้ว</string>
     <string name="gallery_list_downloaded_only">ดูแกลเลอรีที่ดาวน์โหลด</string>
     <string name="gallery_list_downloaded_only_empty">ไม่มีแกลเลอรีที่ดาวน์โหลดในหน้าที่โหลด คุณสามารถเลื่อนขึ้นต่อไปเพื่อค้นหาได้</string>
     <string name="gallery_list_downloaded_only_not_found">ไม่พบแกลเลอรีที่ดาวน์โหลดใหม่ในหน้า %1$d ถัดไป</string>

@@ -1008,6 +1008,10 @@
     <string name="error_open_image_directory">El directorio que contiene la imagen seleccionada no se puede leer. Conceda acceso al almacenamiento o utilice un administrador de archivos que proporcione una ruta local.</string>
     <string name="gallery_history_empty">Esta galería no tiene historial de galería principal.</string>
     <string name="gallery_history_title">historia de la galería</string>
+    <string name="gallery_old_version">Galería antigua</string>
+    <string name="gallery_old_version_progress">Galería antigua (%1$d/%2$d)</string>
+    <string name="gallery_update_state_updating">Actualizando</string>
+    <string name="gallery_update_state_updated">Actualizada</string>
     <string name="gallery_list_downloaded_only">Ver galería descargada</string>
     <string name="gallery_list_downloaded_only_empty">No hay ninguna galería descargada en la página cargada. Puede continuar desplazándose hacia arriba para encontrarlo.</string>
     <string name="gallery_list_downloaded_only_not_found">No se encontraron nuevas galerías descargadas en la siguiente página %1$d</string>

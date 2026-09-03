@@ -959,6 +959,10 @@
     <string name="error_open_image_directory">選択した画像が含まれるディレクトリを読み取ることができません。ストレージへのアクセスを許可するか、代わりにローカル パスを提供するファイル マネージャーを使用してください。</string>
     <string name="gallery_history_empty">このギャラリーには親ギャラリー履歴がありません</string>
     <string name="gallery_history_title">ギャラリーの歴史</string>
+    <string name="gallery_old_version">旧ギャラリー</string>
+    <string name="gallery_old_version_progress">旧ギャラリー (%1$d/%2$d)</string>
+    <string name="gallery_update_state_updating">更新中</string>
+    <string name="gallery_update_state_updated">更新済み</string>
     <string name="gallery_list_downloaded_only">ダウンロードしたギャラリーを表示する</string>
     <string name="gallery_list_downloaded_only_empty">読み込まれたページにはダウンロードされたギャラリーがありません。上にスクロールし続けると見つけられます。</string>
     <string name="gallery_list_downloaded_only_not_found">次の %1$d ページには新しくダウンロードされたギャラリーが見つかりません</string>

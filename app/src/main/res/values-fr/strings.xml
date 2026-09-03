@@ -934,6 +934,10 @@
     <string name="error_open_image_directory">Le répertoire contenant l\'image sélectionnée ne peut pas être lu. Veuillez accorder l\'accès au stockage ou utiliser un gestionnaire de fichiers qui fournit un chemin local.</string>
     <string name="gallery_history_empty">Cette galerie n\'a pas d\'historique de galerie parent</string>
     <string name="gallery_history_title">histoire de la galerie</string>
+    <string name="gallery_old_version">Ancienne galerie</string>
+    <string name="gallery_old_version_progress">Ancienne galerie (%1$d/%2$d)</string>
+    <string name="gallery_update_state_updating">Mise à jour en cours</string>
+    <string name="gallery_update_state_updated">Mise à jour effectuée</string>
     <string name="gallery_list_downloaded_only">Voir la galerie téléchargée</string>
     <string name="gallery_list_downloaded_only_empty">Il n\'y a pas de galerie téléchargée sur la page chargée. Vous pouvez continuer à faire défiler vers le haut pour le trouver.</string>
     <string name="gallery_list_downloaded_only_not_found">Aucune nouvelle galerie téléchargée trouvée dans la prochaine page %1$d</string>
