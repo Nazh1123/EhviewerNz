@@ -17,6 +17,8 @@
 
 <!-- German translations by UShimamura -->
 <resources>
+    <string name="settings_gallery_long_press_quick_download">Gallery long-press quick download</string>
+    <string name="settings_gallery_long_press_quick_download_summary">Long-press a designated area of a gallery item to start downloading it immediately</string>
 
     <!--  排行榜  -->
     <string name="gallery_toplists">Gallery Toplists</string>

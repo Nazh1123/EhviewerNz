@@ -479,6 +479,15 @@ public class Settings {
         return getShowThumbnailInfoBar() && getListMode() == 1 && getThumbSize() == 0;
     }
 
+    public static final String KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD =
+            "gallery_long_press_quick_download";
+    private static final boolean DEFAULT_GALLERY_LONG_PRESS_QUICK_DOWNLOAD = false;
+
+    public static boolean getGalleryLongPressQuickDownload() {
+        return getBoolean(KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD,
+                DEFAULT_GALLERY_LONG_PRESS_QUICK_DOWNLOAD);
+    }
+
     public static final String KEY_AUTO_SUBSCRIPTION_UPDATES =
             "auto_subscription_updates";
     public static final String KEY_AUTO_SUBSCRIPTION_UPDATES_EH =

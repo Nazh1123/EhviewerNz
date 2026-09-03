@@ -129,6 +129,12 @@
         android:title="@string/settings_eh_show_thumbnail_info_bar" />
 
     <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="gallery_long_press_quick_download"
+        android:summary="@string/settings_gallery_long_press_quick_download_summary"
+        android:title="@string/settings_gallery_long_press_quick_download" />
+
+    <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
         android:key="gallery_preview_immediate_jump"
         android:summary="@string/settings_eh_gallery_preview_immediate_jump_summary"

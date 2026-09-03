@@ -33,7 +33,7 @@ final class GalleryVersionMaintenance {
 
     private static final int API_BATCH_SIZE = 25;
     private static final int BATCHES_PER_BURST = 4;
-    private static final long BURST_PAUSE_MS = 5200L;
+    private static final long BURST_PAUSE_MS = 8400L;
     private static final AtomicBoolean UPDATE_RUNNING = new AtomicBoolean();
 
     private GalleryVersionMaintenance() {

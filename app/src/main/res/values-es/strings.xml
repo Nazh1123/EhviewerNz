@@ -1084,6 +1084,8 @@
     <string name="settings_eh_show_thumbnail_download_badge_summary">En modo miniatura, el logotipo descargado de la galería se muestra en la esquina inferior derecha</string>
     <string name="settings_eh_show_thumbnail_info_bar">Barra de información en miniatura</string>
     <string name="settings_eh_show_thumbnail_info_bar_summary">En el modo de miniatura grande, se muestran la fecha de publicación, la valoración, el tipo de censura, el estado de descarga y el progreso de lectura debajo de la portada de la galería.</string>
+    <string name="settings_gallery_long_press_quick_download">Descarga rápida de galerías con pulsación larga</string>
+    <string name="settings_gallery_long_press_quick_download_summary">Mantén pulsada el área indicada de una galería para iniciar la descarga inmediatamente</string>
     <string name="settings_eh_system_theme">Tema del sistema</string>
     <string name="settings_fork_auto_subscription_updates">Obtenga actualizaciones de suscripción automáticamente</string>
     <string name="settings_fork_auto_subscription_updates_eh">Suscríbete</string>

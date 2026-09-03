@@ -1022,6 +1022,8 @@
     <string name="settings_eh_show_thumbnail_download_badge_summary">Im Miniaturbildmodus wird das heruntergeladene Galerie-Logo in der unteren rechten Ecke angezeigt</string>
     <string name="settings_eh_show_thumbnail_info_bar">Miniaturbild-Informationsleiste</string>
     <string name="settings_eh_show_thumbnail_info_bar_summary">Im großen Miniaturbildmodus werden unter dem Galeriecover Veröffentlichungsdatum, Bewertung, Zensurtyp, Downloadstatus und Lesefortschritt angezeigt.</string>
+    <string name="settings_gallery_long_press_quick_download">Galerie per langem Drücken schnell herunterladen</string>
+    <string name="settings_gallery_long_press_quick_download_summary">Den vorgesehenen Bereich eines Galerieeintrags lange drücken, um den Download sofort zu starten</string>
     <string name="settings_eh_system_theme">Systemthema</string>
     <string name="settings_fork_auto_subscription_updates">Erhalten Sie automatisch Abonnementaktualisierungen</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH Abonnieren</string>

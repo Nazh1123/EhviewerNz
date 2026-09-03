@@ -750,10 +750,13 @@ public class GalleryListScene extends BaseScene
         mShowActionFab = true;
 
         View mainLayout = ViewUtils.$$(view, R.id.main_layout);
-        mQuickDownloadNotice = ViewUtils.$$(mainLayout, R.id.quick_download_notice);
-        mQuickDownloadNoticeIcon = (ImageView) ViewUtils.$$(
-                mainLayout, R.id.quick_download_notice_icon);
-        mQuickDownloadNotice.setOnClickListener(ignored -> undoQuickDownload());
+        boolean longPressQuickDownload = Settings.getGalleryLongPressQuickDownload();
+        if (longPressQuickDownload) {
+            mQuickDownloadNotice = ViewUtils.$$(mainLayout, R.id.quick_download_notice);
+            mQuickDownloadNoticeIcon = (ImageView) ViewUtils.$$(
+                    mainLayout, R.id.quick_download_notice_icon);
+            mQuickDownloadNotice.setOnClickListener(ignored -> undoQuickDownload());
+        }
         ContentLayout contentLayout = (ContentLayout) ViewUtils.$$(mainLayout, R.id.content_layout);
         mRecyclerView = contentLayout.getRecyclerView();
         FastScroller fastScroller = contentLayout.getFastScroller();
@@ -785,7 +788,9 @@ public class GalleryListScene extends BaseScene
         mAdapter.onDownloadedOnlyModeChanged();
 
         mAdapter.setThumbItemClickListener(this::onThumbItemClick);
-        mAdapter.setThumbItemLongClickListener(this::onThumbItemLongClick);
+        if (longPressQuickDownload) {
+            mAdapter.setThumbItemLongClickListener(this::onThumbItemLongClick);
+        }
         mRecyclerView.setSelector(Ripple.generateRippleDrawable(context, !AttrResources.getAttrBoolean(context, androidx.appcompat.R.attr.isLightTheme), new ColorDrawable(Color.TRANSPARENT)));
         mRecyclerView.setDrawSelectorOnTop(true);
         mRecyclerView.setClipToPadding(false);
@@ -908,6 +913,9 @@ public class GalleryListScene extends BaseScene
     }
 
     private boolean onThumbItemLongClick(int position, View view, GalleryInfo galleryInfo) {
+        if (!Settings.getGalleryLongPressQuickDownload()) {
+            return false;
+        }
         if (mMultiSelectMode) {
             return onItemLongClick(galleryInfo, view);
         }
@@ -1463,7 +1471,8 @@ public class GalleryListScene extends BaseScene
     private boolean tryStartDownloadFromLongPress(@NonNull EasyRecyclerView parent,
                                                   @Nullable View itemView,
                                                   @Nullable GalleryInfo galleryInfo) {
-        if (mMultiSelectMode || itemView == null || galleryInfo == null || mAdapter == null) {
+        if (!Settings.getGalleryLongPressQuickDownload() || mMultiSelectMode
+                || itemView == null || galleryInfo == null || mAdapter == null) {
             return false;
         }
 
@@ -1514,7 +1523,8 @@ public class GalleryListScene extends BaseScene
 
     private boolean startGalleryDownload(@Nullable GalleryInfo galleryInfo) {
         MainActivity activity = getActivity2();
-        if (galleryInfo == null || activity == null || mHelper == null) {
+        if (!Settings.getGalleryLongPressQuickDownload()
+                || galleryInfo == null || activity == null || mHelper == null) {
             return false;
         }
         CommonOperations.startDownload(activity, galleryInfo, false,

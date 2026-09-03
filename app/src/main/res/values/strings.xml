@@ -675,6 +675,8 @@
     <string name="settings_eh_show_thumbnail_download_badge_summary">Show the downloaded gallery badge in the lower-right corner in thumbnail mode</string>
     <string name="settings_eh_show_thumbnail_info_bar">Show thumbnail info bar</string>
     <string name="settings_eh_show_thumbnail_info_bar_summary">In large-thumbnail mode, show the time, rating, censorship type, download status, and reading progress below each gallery cover</string>
+    <string name="settings_gallery_long_press_quick_download">Gallery long-press quick download</string>
+    <string name="settings_gallery_long_press_quick_download_summary">Long-press a designated area of a gallery item to start downloading it immediately</string>
     <string name="settings_eh_detail_size">Detail size</string>
     <string name="settings_eh_detail_size_long">Long</string>
     <string name="settings_eh_detail_size_short">Short</string>

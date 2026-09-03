@@ -37,6 +37,8 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
                 findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
         Preference showThumbnailInfoBar =
                 findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR);
+        Preference galleryLongPressQuickDownload =
+                findPreference(Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD);
         Preference.OnPreferenceChangeListener galleryListPreferenceListener =
                 (preference, newValue) -> {
                 if (getActivity() != null) {
@@ -50,6 +52,10 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         }
         if (showThumbnailInfoBar != null) {
             showThumbnailInfoBar.setOnPreferenceChangeListener(
+                    galleryListPreferenceListener);
+        }
+        if (galleryLongPressQuickDownload != null) {
+            galleryLongPressQuickDownload.setOnPreferenceChangeListener(
                     galleryListPreferenceListener);
         }
         Preference bookmarkSubscriptionSettings =

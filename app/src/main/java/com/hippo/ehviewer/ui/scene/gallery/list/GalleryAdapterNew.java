@@ -453,13 +453,14 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                         onThumbItemClickListener.onThumbItemClick(position, itemView, getDataAt(position));
                     }
                 });
-                thumb.setOnLongClickListener(v -> {
-                    int position = getBindingAdapterPosition();
-                    return onThumbItemLongClickListener != null
-                            && position != RecyclerView.NO_POSITION
-                            && onThumbItemLongClickListener.onThumbItemLongClick(
-                            position, itemView, getDataAt(position));
-                });
+                if (onThumbItemLongClickListener != null) {
+                    thumb.setOnLongClickListener(v -> {
+                        int position = getBindingAdapterPosition();
+                        return position != RecyclerView.NO_POSITION
+                                && onThumbItemLongClickListener.onThumbItemLongClick(
+                                position, itemView, getDataAt(position));
+                    });
+                }
             }
         }
 

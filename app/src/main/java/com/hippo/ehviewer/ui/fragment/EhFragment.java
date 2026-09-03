@@ -46,6 +46,8 @@ public class EhFragment extends BasePreferenceFragmentCompat
                 findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
         Preference showThumbnailInfoBar =
                 findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR);
+        Preference galleryLongPressQuickDownload =
+                findPreference(Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD);
         Preference detailSize = findPreference(Settings.KEY_DETAIL_SIZE);
         Preference thumbSize = findPreference(Settings.KEY_THUMB_SIZE);
         Preference historyInfoSize = findPreference(Settings.KEY_HISTORY_INFO_SIZE);
@@ -66,6 +68,7 @@ public class EhFragment extends BasePreferenceFragmentCompat
         listMode.setOnPreferenceChangeListener(this);
         showThumbnailDownloadBadge.setOnPreferenceChangeListener(this);
         showThumbnailInfoBar.setOnPreferenceChangeListener(this);
+        galleryLongPressQuickDownload.setOnPreferenceChangeListener(this);
         detailSize.setOnPreferenceChangeListener(this);
         thumbSize.setOnPreferenceChangeListener(this);
         historyInfoSize.setOnPreferenceChangeListener(this);
@@ -92,7 +95,8 @@ public class EhFragment extends BasePreferenceFragmentCompat
             return true;
         } else if (Settings.KEY_LIST_MODE.equals(key) ||
                 Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE.equals(key) ||
-                Settings.KEY_SHOW_THUMBNAIL_INFO_BAR.equals(key)) {
+                Settings.KEY_SHOW_THUMBNAIL_INFO_BAR.equals(key) ||
+                Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD.equals(key)) {
             getActivity().setResult(Activity.RESULT_OK);
             return true;
         } else if (Settings.KEY_DETAIL_SIZE.equals(key)) {
