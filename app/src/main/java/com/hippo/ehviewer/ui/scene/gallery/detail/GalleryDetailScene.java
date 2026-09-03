@@ -2504,19 +2504,32 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         boolean hasParent = !TextUtils.isEmpty(detail.parent);
         DownloadManager downloadManager = EhApplication.getDownloadManager(context);
+        DownloadInfo exactDownload = downloadManager.getDownloadInfo(detail.gid);
+        GalleryUpdateManager.UpdatePlan updatePlan =
+                GalleryUpdateManager.getPlan(detail.gid);
+        if (mGalleryUpdateSessionGid != detail.gid && updatePlan != null
+                && exactDownload != null
+                && exactDownload.state != DownloadInfo.STATE_FINISH) {
+            // Recover an interrupted update after returning to or recreating the detail page.
+            mGalleryUpdateSessionGid = detail.gid;
+        }
         if (mGalleryUpdateSessionGid == detail.gid) {
             Integer updateState = GalleryUpdateManager.getUpdateState(detail.gid);
             if (updateState != null) {
                 updateGalleryUpdateButtonState(updateState);
             }
-            updateGalleryUpdateButtonState(downloadManager.getDownloadInfo(detail.gid));
+            updateGalleryUpdateButtonState(exactDownload);
+            if (exactDownload != null
+                    && exactDownload.state != DownloadInfo.STATE_FINISH
+                    && !downloadManager.isDownloadActive(detail.gid)) {
+                mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_FAILED;
+            }
             bindGalleryUpdateButtonState();
             setGalleryVersionActionVisibility(true, true);
 
             DownloadInfo source = null;
-            GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(detail.gid);
-            if (plan != null) {
-                source = downloadManager.getDownloadInfo(plan.sourceGid);
+            if (updatePlan != null) {
+                source = downloadManager.getDownloadInfo(updatePlan.sourceGid);
             }
             if (source == null && detail.firstGid != null && detail.firstGid > 0L) {
                 source = downloadManager.findClosestOlderGalleryVersion(
@@ -2530,8 +2543,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_AVAILABLE;
         bindGalleryUpdateButtonState();
-        boolean exactDownloaded = downloadManager.containDownloadInfo(detail.gid);
-        if (!hasParent || exactDownloaded) {
+        boolean exactDownloadBlocksUpdate = exactDownload != null
+                && (exactDownload.state == DownloadInfo.STATE_FINISH
+                || downloadManager.isDownloadActive(detail.gid));
+        if (!hasParent || exactDownloadBlocksUpdate) {
             setGalleryVersionActionVisibility(false, false);
             return;
         }

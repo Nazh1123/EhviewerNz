@@ -444,6 +444,18 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
     }
 
+    public boolean isDownloadActive(long gid) {
+        if (mCurrentTask != null && mCurrentTask.gid == gid) {
+            return true;
+        }
+        for (DownloadInfo info : mWaitList) {
+            if (info.gid == gid) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void addDownloadInfoListener(@Nullable DownloadInfoListener downloadInfoListener) {
         mDownloadInfoListeners.add(downloadInfoListener);
     }
@@ -513,7 +525,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         DownloadInfo info = mAllInfoMap.get(galleryInfo.gid);
 
         if (info != null) { // Get it in download list
-            if (info.state != DownloadInfo.STATE_WAIT) {
+            if (!isDownloadActive(info.gid)) {
                 // Set state DownloadInfo.STATE_WAIT
                 info.state = DownloadInfo.STATE_WAIT;
                 // Add to wait list
@@ -1360,6 +1372,13 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                                    @NonNull List<Long> parentGids) {
         DownloadInfo source = getDownloadInfo(sourceGid);
         String label = source != null ? source.label : null;
+        DownloadInfo existingTarget = getDownloadInfo(target.gid);
+        if (existingTarget != null && target.firstGid != null
+                && !target.firstGid.equals(existingTarget.firstGid)) {
+            existingTarget.firstGid = target.firstGid;
+            EhDB.putDownloadInfo(existingTarget);
+            rebuildGalleryVersionIndex();
+        }
         GalleryUpdateManager.register(target.gid, sourceGid, parentGids);
         startDownload(target, label);
 

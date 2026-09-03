@@ -429,32 +429,34 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         if (downloadManager.containDownloadInfo(target.gid)) {
             val info = downloadManager.getDownloadInfo(target.gid)
             val plan = GalleryUpdateManager.getPlan(target.gid)
-            when {
-                info?.state == DownloadInfo.STATE_FINISH ->
-                    GalleryUpdateManager.notifyUpdateStateChanged(
-                        target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATED
-                    )
-                plan != null && info != null
-                        && info.state != DownloadInfo.STATE_WAIT
-                        && info.state != DownloadInfo.STATE_DOWNLOAD -> {
-                    GalleryUpdateManager.notifyUpdateStateChanged(
-                        target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATING
-                    )
+            if (info?.state == DownloadInfo.STATE_FINISH) {
+                GalleryUpdateManager.notifyUpdateStateChanged(
+                    target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATED
+                )
+                return
+            }
+
+            val running = downloadManager.isDownloadActive(target.gid)
+            if (plan != null && info != null) {
+                GalleryUpdateManager.notifyUpdateStateChanged(
+                    target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATING
+                )
+                if (!running) {
                     mActiveGalleryUpdateGids.add(target.gid)
                     downloadManager.startGalleryUpdate(
                         target, plan.sourceGid, plan.parentGids
                     )
                 }
-                info?.state == DownloadInfo.STATE_WAIT
-                        || info?.state == DownloadInfo.STATE_DOWNLOAD ->
-                    GalleryUpdateManager.notifyUpdateStateChanged(
-                        target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATING
-                    )
-                else -> GalleryUpdateManager.notifyUpdateStateChanged(
-                    target.gid, GalleryUpdateManager.UPDATE_STATE_FAILED
-                )
+                return
             }
-            return
+            if (running) {
+                GalleryUpdateManager.notifyUpdateStateChanged(
+                    target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATING
+                )
+                return
+            }
+            // A partial target without a persisted plan can still be recovered below by
+            // rebuilding the plan from its surviving older gallery.
         }
 
         GalleryUpdateManager.notifyUpdateStateChanged(
