@@ -1120,4 +1120,8 @@
     <string name="dir_picker">Seleccionar carpeta</string>
     <string name="directory_not_writable">Esta carpeta no se puede escribir</string>
     <string name="news">noticias</string>
+    <string name="settings_update_downloaded_gallery_versions">Actualizar información de versiones de galerías</string>
+    <string name="settings_update_downloaded_gallery_versions_summary">Obtener el GID de la galería original de las galerías descargadas para actualizar galerías</string>
+    <string name="settings_delete_old_gallery_versions">Eliminar versiones antiguas de galerías</string>
+    <string name="settings_delete_old_gallery_versions_summary">Examinar las cadenas de versiones de las galerías descargadas y conservar la galería completa utilizable más reciente</string>
 </resources>

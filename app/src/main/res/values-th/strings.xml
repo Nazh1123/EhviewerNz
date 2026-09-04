@@ -1128,4 +1128,8 @@
     <string name="settings_read_reverse_volume_page">ทิศทางการหมุนหน้าปุ่มปรับระดับเสียงย้อนกลับ</string>
     <string name="settings_read_screen_rotation_sensor">หมุนอัตโนมัติ</string>
     <string name="yes">ใช่</string>
+    <string name="settings_update_downloaded_gallery_versions">อัปเดตข้อมูลเวอร์ชันแกลเลอรี</string>
+    <string name="settings_update_downloaded_gallery_versions_summary">ดึง GID ของแกลเลอรีเวอร์ชันแรกสำหรับแกลเลอรีที่ดาวน์โหลดไว้ เพื่อใช้ในการอัปเดตแกลเลอรี</string>
+    <string name="settings_delete_old_gallery_versions">ลบแกลเลอรีเวอร์ชันเก่า</string>
+    <string name="settings_delete_old_gallery_versions_summary">สแกนสายเวอร์ชันของแกลเลอรีที่ดาวน์โหลดไว้ และเก็บแกลเลอรีล่าสุดที่สมบูรณ์และใช้งานได้</string>
 </resources>

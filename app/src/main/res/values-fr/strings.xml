@@ -1114,4 +1114,8 @@
     <string name="wifi_server_send_success">Message envoyé avec succès : %s</string>
     <string name="yes">Oui</string>
     <string name="yesterday_top_list">hier</string>
+    <string name="settings_update_downloaded_gallery_versions">Mettre à jour les informations de version des galeries</string>
+    <string name="settings_update_downloaded_gallery_versions_summary">Récupérer le GID de la galerie d’origine des galeries téléchargées pour les mises à jour</string>
+    <string name="settings_delete_old_gallery_versions">Supprimer les anciennes versions des galeries</string>
+    <string name="settings_delete_old_gallery_versions_summary">Analyser les chaînes de versions des galeries téléchargées et conserver la galerie complète utilisable la plus récente</string>
 </resources>

@@ -1066,4 +1066,8 @@
     <string name="webview_unavailable_message">システムに付属の Android システム WebView を正常にロードできません (破損しているか、システム アーキテクチャと一致していない可能性があります)。アプリストアで「Android System WebView」を更新するか、開発者向けオプションでWebViewの実装を切り替えるか、「Cookieによるログイン」をご利用ください。</string>
     <string name="webview_unavailable_title">システム WebView は使用できません</string>
     <string name="settings_eh_show_gallery_rating">ギャラリーの評価を表示する</string>
+    <string name="settings_update_downloaded_gallery_versions">ギャラリーのバージョン情報を更新</string>
+    <string name="settings_update_downloaded_gallery_versions_summary">ダウンロード済みギャラリーの初版ギャラリー GID を取得し、ギャラリーの更新に使用します</string>
+    <string name="settings_delete_old_gallery_versions">古いバージョンのギャラリーを削除</string>
+    <string name="settings_delete_old_gallery_versions_summary">ダウンロード済みギャラリーのバージョン履歴を確認し、最新の完全に利用可能なギャラリーを残します</string>
 </resources>

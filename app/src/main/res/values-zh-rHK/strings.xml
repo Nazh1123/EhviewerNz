@@ -1195,4 +1195,8 @@
     <string name="update_subscriptions">更新訂閱</string>
     <string name="webview_unavailable_message">系統隨附的 Android 系統 WebView 無法正常載入（可能已損壞或與系統架構不符）。請在應用程式商店更新「Android 系統 WebView」、在開發者選項中切換 WebView 實現，或使用「透過 Cookie 登入」。</string>
     <string name="webview_unavailable_title">系統 WebView 不可用</string>
+    <string name="settings_update_downloaded_gallery_versions">更新畫廊版本資訊</string>
+    <string name="settings_update_downloaded_gallery_versions_summary">取得已下載畫廊的最初版本畫廊 GID，用於畫廊更新</string>
+    <string name="settings_delete_old_gallery_versions">刪除舊版本畫廊</string>
+    <string name="settings_delete_old_gallery_versions_summary">掃描檢查已下載畫廊版本鏈，保留最新完整可用畫廊</string>
 </resources>

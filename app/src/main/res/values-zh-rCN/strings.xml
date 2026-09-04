@@ -708,10 +708,10 @@
     <string name="settings_download_delete_missing_galleries_scanning">正在检查本地画廊</string>
     <string name="settings_download_delete_missing_galleries_done">已删除 %d 个本地不存在的画廊</string>
     <string name="settings_download_delete_missing_galleries_none">没有本地不存在的画廊</string>
-    <string name="settings_update_downloaded_gallery_versions">更新已下载画廊的版本信息</string>
-    <string name="settings_update_downloaded_gallery_versions_summary">为尚无版本信息的已下载画廊获取最初父画廊 GID</string>
-    <string name="settings_delete_old_gallery_versions">删除存在已下载新版本的旧版本画廊</string>
-    <string name="settings_delete_old_gallery_versions_summary">每个已知版本系列保留最新的完整可用画廊</string>
+    <string name="settings_update_downloaded_gallery_versions">更新画廊版本信息</string>
+    <string name="settings_update_downloaded_gallery_versions_summary">获取已下载画廊的最初版本画廊GID，用于画廊更新</string>
+    <string name="settings_delete_old_gallery_versions">删除旧版本画廊</string>
+    <string name="settings_delete_old_gallery_versions_summary">扫描检查已下载画廊版本链，保留最新完整可用画廊</string>
     <string name="gallery_version_update_background_notice">版本信息将在后台更新。请求会分批发送并定时暂停，以避免请求过于频繁。</string>
     <string name="gallery_version_update_running">正在更新画廊版本信息</string>
     <string name="gallery_version_update_done">版本信息更新完成：已更新 %1$d；不可用 %2$d；稍后重试 %3$d</string>

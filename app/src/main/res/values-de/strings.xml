@@ -1057,4 +1057,8 @@
     <string name="theme_black">schwarzes Thema</string>
     <string name="theme_dark">dunkles Thema</string>
     <string name="theme_light">Helles Thema</string>
+    <string name="settings_update_downloaded_gallery_versions">Galerieversionsinformationen aktualisieren</string>
+    <string name="settings_update_downloaded_gallery_versions_summary">Die GID der ursprünglichen Galerie für heruntergeladene Galerien abrufen, um Galerieaktualisierungen zu ermöglichen</string>
+    <string name="settings_delete_old_gallery_versions">Alte Galerieversionen löschen</string>
+    <string name="settings_delete_old_gallery_versions_summary">Versionsketten heruntergeladener Galerien prüfen und die neueste vollständige, verwendbare Galerie behalten</string>
 </resources>

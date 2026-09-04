@@ -877,4 +877,8 @@
     <string name="imported_archive_info_message">This is an item imported from local storage</string>
     <string name="imported_archive_category">Local Import</string>
 
+    <string name="settings_update_downloaded_gallery_versions">Update Gallery Version Information</string>
+    <string name="settings_update_downloaded_gallery_versions_summary">Fetch the root gallery GID of downloaded galleries for gallery updates</string>
+    <string name="settings_delete_old_gallery_versions">Delete Old Gallery Versions</string>
+    <string name="settings_delete_old_gallery_versions_summary">Scan downloaded gallery version chains and keep the newest complete usable gallery</string>
 </resources>
