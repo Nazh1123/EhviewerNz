@@ -29,6 +29,8 @@ import java.io.File;
 
 public class ExportDataPreference extends TaskPreference {
 
+  private static final String KEY_EXPORT_DATA_COMPATIBLE = "export_data_compatible";
+
   public ExportDataPreference(Context context) {
     super(context);
   }
@@ -44,21 +46,29 @@ public class ExportDataPreference extends TaskPreference {
   @NonNull
   @Override
   protected Task onCreateTask() {
-    return new ExportDataTask(getContext());
+    return new ExportDataTask(getContext(), KEY_EXPORT_DATA_COMPATIBLE.equals(getKey()));
   }
 
   private static class ExportDataTask extends Task {
 
-    public ExportDataTask(@NonNull Context context) {
+    private final boolean compatible;
+
+    public ExportDataTask(@NonNull Context context, boolean compatible) {
       super(context);
+      this.compatible = compatible;
     }
 
     @Override
     protected Object doInBackground(Void... voids) {
       File dir = AppConfig.getExternalDataDir();
       if (dir != null) {
-        File file = new File(dir, ReadableTime.getFilenamableTime(System.currentTimeMillis()) + ".db");
-        if (EhDB.exportDB(getApplication(), file)) {
+        String suffix = compatible ? "_compatible.db" : ".db";
+        File file = new File(dir,
+            ReadableTime.getFilenamableTime(System.currentTimeMillis()) + suffix);
+        boolean exported = compatible
+            ? EhDB.exportDBCompatible(getApplication(), file)
+            : EhDB.exportDB(getApplication(), file);
+        if (exported) {
           return file;
         }
       }

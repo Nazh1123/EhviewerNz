@@ -121,6 +121,11 @@
         android:title="@string/settings_advanced_export_data"
         app:allowDividerAbove="true" />
 
+    <com.hippo.ehviewer.preference.ExportDataPreference
+        android:key="export_data_compatible"
+        android:summary="@string/settings_advanced_export_data_compatible_summary"
+        android:title="@string/settings_advanced_export_data_compatible" />
+
     <Preference
         android:key="import_data"
         android:summary="@string/settings_advanced_import_data_summary"

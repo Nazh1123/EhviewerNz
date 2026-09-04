@@ -621,6 +621,9 @@
     <string name="settings_privacy_pattern_protection_set">Modèle de déverrouillage défini</string>
     <string name="settings_advanced_export_data">Exporter les données</string>
     <string name="settings_advanced_export_data_summary">Sauvegarder les données au stockage externe, y compris la liste de téléchargement, la liste de recherche rapide</string>
+    <string name="settings_advanced_export_data_compatible">Exporter les données (compatible)</string>
+    <string name="settings_advanced_export_data_compatible_summary">Compatible avec l’application d’origine du dépôt upstream</string>
+    <string name="gallery_version_update_progress">Mise à jour de first_gid : %1$d/%2$d</string>
     <string name="settings_advanced_export_data_to">Données exportées à %s</string>
     <string name="settings_advanced_export_data_failed">Échec d\'exportation de données</string>
     <string name="settings_advanced_import_data">Importer les données</string>

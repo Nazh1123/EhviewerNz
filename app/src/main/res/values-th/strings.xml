@@ -666,6 +666,9 @@
     <string name="settings_privacy_pattern_protection_set">การป้องกันแบบรูปแบบถูกตั้งค่าเรียบร้อยแล้ว</string>
     <string name="settings_advanced_export_data">สำเนาข้อมูล</string>
     <string name="settings_advanced_export_data_summary">บันทึกข้อมูลต่างๆเช่นรายการดาวน์โหลด และค้นหาอย่างด่วนลงพื้นที่จัดเก็บภายนอก</string>
+    <string name="settings_advanced_export_data_compatible">ส่งออกข้อมูล (เข้ากันได้)</string>
+    <string name="settings_advanced_export_data_compatible_summary">เข้ากันได้กับแอปต้นฉบับจากที่เก็บ upstream</string>
+    <string name="gallery_version_update_progress">กำลังอัปเดต first_gid: %1$d/%2$d</string>
     <string name="settings_advanced_export_data_to">ได้สำเนาข้อมูลแล้วจัดเก็บที่ %s</string>
     <string name="settings_advanced_export_data_failed">การสำเนาข้อมูลล้มเหลว</string>
     <string name="settings_advanced_import_data">นำเข้าข้อมูล</string>

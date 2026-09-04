@@ -686,6 +686,9 @@
     <string name="settings_privacy_pattern_protection_set">Sperrmuster festgelegt</string>
     <string name="settings_advanced_export_data">Daten exportieren</string>
     <string name="settings_advanced_export_data_summary">Daten, z. B. Downloadliste, Sofortsucheliste, zum externen Speicher speichern</string>
+    <string name="settings_advanced_export_data_compatible">Daten exportieren (kompatibel)</string>
+    <string name="settings_advanced_export_data_compatible_summary">Kompatibel mit der Original-App aus dem Upstream-Repository</string>
+    <string name="gallery_version_update_progress">first_gid wird aktualisiert: %1$d/%2$d</string>
     <string name="settings_advanced_export_data_to">Daten wurden zu %s exportiert</string>
     <string name="settings_advanced_export_data_failed">Datenexport gescheitert</string>
     <string name="settings_advanced_import_data">Daten importieren</string>

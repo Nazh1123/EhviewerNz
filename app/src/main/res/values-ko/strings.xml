@@ -679,6 +679,9 @@
     <string name="settings_privacy_pattern_protection_set">패턴 보호가 설정됨</string>
     <string name="settings_advanced_export_data">데이터 내보내기</string>
     <string name="settings_advanced_export_data_summary">다운로드 목록, 빠른 검색 목록 등의 데이터를 외부 저장소에 저장</string>
+    <string name="settings_advanced_export_data_compatible">데이터 내보내기 (호환)</string>
+    <string name="settings_advanced_export_data_compatible_summary">업스트림 저장소의 원본 앱과 호환됩니다</string>
+    <string name="gallery_version_update_progress">first_gid 업데이트 중: %1$d/%2$d</string>
     <string name="settings_advanced_export_data_to">%s 경로에 데이터를 내보냈습니다.</string>
     <string name="settings_advanced_export_data_failed">데이터를 내보내지 못했습니다.</string>
     <string name="settings_advanced_import_data">데이터 가져오기</string>

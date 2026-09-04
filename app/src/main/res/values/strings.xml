@@ -854,6 +854,9 @@
     <string name="settings_privacy_pattern_protection_set">Pattern protection has been set</string>
     <string name="settings_advanced_export_data">Export data</string>
     <string name="settings_advanced_export_data_summary">Save data like download list, quick search list, to external storage</string>
+    <string name="settings_advanced_export_data_compatible">Export data (compatible)</string>
+    <string name="settings_advanced_export_data_compatible_summary">Compatible with the original app from the upstream repository</string>
+    <string name="gallery_version_update_progress">Updating first_gid: %1$d/%2$d</string>
     <string name="settings_advanced_export_data_to">Exported data to %s</string>
     <string name="settings_advanced_export_data_failed">Failed to export data</string>
     <string name="settings_advanced_import_data">Import data</string>

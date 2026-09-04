@@ -630,6 +630,9 @@
     <string name="settings_privacy_pattern_protection_set">La protección por patrón ha sido configurado</string>
     <string name="settings_advanced_export_data">Exportar datos</string>
     <string name="settings_advanced_export_data_summary">Guardar datos en almacenamiento externo, tales como la lista de descarga, lista de búsqueda rápida, entre otros</string>
+    <string name="settings_advanced_export_data_compatible">Exportar datos (compatible)</string>
+    <string name="settings_advanced_export_data_compatible_summary">Compatible con la aplicación original del repositorio upstream</string>
+    <string name="gallery_version_update_progress">Actualizando first_gid: %1$d/%2$d</string>
     <string name="settings_advanced_export_data_to">Datos exportados en %s</string>
     <string name="settings_advanced_export_data_failed">Exportación de datos fallido</string>
     <string name="settings_advanced_import_data">Importar datos</string>

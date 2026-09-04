@@ -630,6 +630,9 @@
     <string name="settings_privacy_pattern_protection_set">パターン保護は設定されています</string>
     <string name="settings_advanced_export_data">データをエクスポート</string>
     <string name="settings_advanced_export_data_summary">ダウンロードリストやクイック検索などのデータを内部ストレージにエクスポートします</string>
+    <string name="settings_advanced_export_data_compatible">データをエクスポート（互換）</string>
+    <string name="settings_advanced_export_data_compatible_summary">上流リポジトリのオリジナル版アプリと互換性があります</string>
+    <string name="gallery_version_update_progress">first_gid を更新中：%1$d/%2$d</string>
     <string name="settings_advanced_export_data_to">データを「%s」にエクスポート</string>
     <string name="settings_advanced_export_data_failed">データをエクスポートできませんでした</string>
     <string name="settings_advanced_import_data">データをインポート</string>

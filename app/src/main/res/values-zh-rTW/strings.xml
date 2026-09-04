@@ -700,6 +700,9 @@
     <string name="settings_privacy_pattern_protection_set">已設定繪圖解鎖</string>
     <string name="settings_advanced_export_data">匯出檔案</string>
     <string name="settings_advanced_export_data_summary">儲存資料至外接儲存設備，例如下載列表，快速搜尋列表</string>
+    <string name="settings_advanced_export_data_compatible">匯出檔案 (相容)</string>
+    <string name="settings_advanced_export_data_compatible_summary">相容上游儲存庫的原版 App</string>
+    <string name="gallery_version_update_progress">正在更新 first_gid：%1$d/%2$d</string>
     <string name="settings_advanced_export_data_to">已匯出資料至 %s</string>
     <string name="settings_advanced_export_data_failed">無法匯出資料</string>
     <string name="settings_advanced_import_data">匯入檔案</string>
