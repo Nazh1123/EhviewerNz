@@ -1132,4 +1132,6 @@
     <string name="settings_update_downloaded_gallery_versions_summary">ดึง GID ของแกลเลอรีเวอร์ชันแรกสำหรับแกลเลอรีที่ดาวน์โหลดไว้ เพื่อใช้ในการอัปเดตแกลเลอรี</string>
     <string name="settings_delete_old_gallery_versions">ลบแกลเลอรีเวอร์ชันเก่า</string>
     <string name="settings_delete_old_gallery_versions_summary">สแกนสายเวอร์ชันของแกลเลอรีที่ดาวน์โหลดไว้ และเก็บแกลเลอรีล่าสุดที่สมบูรณ์และใช้งานได้</string>
+    <string name="gallery_version_database_upgrade_prompt">ต้องการอัปเดตข้อมูลสายเวอร์ชันของแกลเลอรีในเบื้องหลัง เพื่อใช้ตรวจสอบขณะเรียกดูว่าแกลเลอรีสามารถอัปเดตจากเวอร์ชันเก่าได้หรือไม่ หากยกเลิก คุณสามารถอัปเดตภายหลังได้จากเมนูการตั้งค่า</string>
+    <string name="gallery_version_update_in_background">อัปเดตในเบื้องหลัง</string>
 </resources>

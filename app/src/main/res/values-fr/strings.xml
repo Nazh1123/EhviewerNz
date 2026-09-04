@@ -1118,4 +1118,6 @@
     <string name="settings_update_downloaded_gallery_versions_summary">Récupérer le GID de la galerie d’origine des galeries téléchargées pour les mises à jour</string>
     <string name="settings_delete_old_gallery_versions">Supprimer les anciennes versions des galeries</string>
     <string name="settings_delete_old_gallery_versions_summary">Analyser les chaînes de versions des galeries téléchargées et conserver la galerie complète utilisable la plus récente</string>
+    <string name="gallery_version_database_upgrade_prompt">Mettre à jour en arrière-plan les informations sur les chaînes de versions des galeries afin de déterminer, lors de la navigation, si une galerie peut être mise à jour depuis une ancienne version ? Si vous annulez, vous pourrez effectuer cette mise à jour ultérieurement dans les paramètres.</string>
+    <string name="gallery_version_update_in_background">Mettre à jour en arrière-plan</string>
 </resources>

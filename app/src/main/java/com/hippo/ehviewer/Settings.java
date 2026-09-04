@@ -1924,4 +1924,15 @@ public class Settings {
     public static void putUpdateTime(long updateTime) {
         putLong(KEY_LAST_UPDATE_TIME,updateTime);
     }
+
+    private static final String KEY_GALLERY_VERSION_UPDATE_PROMPT_PENDING =
+            "gallery_version_update_prompt_pending";
+
+    public static boolean isGalleryVersionUpdatePromptPending() {
+        return getBoolean(KEY_GALLERY_VERSION_UPDATE_PROMPT_PENDING, false);
+    }
+
+    public static void setGalleryVersionUpdatePromptPending(boolean pending) {
+        putBoolean(KEY_GALLERY_VERSION_UPDATE_PROMPT_PENDING, pending);
+    }
 }

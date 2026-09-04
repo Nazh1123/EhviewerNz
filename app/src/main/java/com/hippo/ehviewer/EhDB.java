@@ -80,6 +80,7 @@ import java.util.Objects;
 public class EhDB {
 
     private static final String TAG = EhDB.class.getSimpleName();
+    private static final int GALLERY_VERSION_INFO_SCHEMA_VERSION = 9;
 
     public static int MAX_HISTORY_COUNT = 100;
 
@@ -103,6 +104,10 @@ public class EhDB {
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
             upgradeDB(db, oldVersion);
+            if (oldVersion < GALLERY_VERSION_INFO_SCHEMA_VERSION
+                    && newVersion >= GALLERY_VERSION_INFO_SCHEMA_VERSION) {
+                Settings.setGalleryVersionUpdatePromptPending(true);
+            }
         }
     }
 
@@ -1017,6 +1022,8 @@ public class EhDB {
                     file.getPath(), null, SQLiteDatabase.NO_LOCALIZED_COLLATORS);
             int newVersion = DaoMaster.SCHEMA_VERSION;
             int oldVersion = db.getVersion();
+            boolean needsGalleryVersionInfoUpdate =
+                    oldVersion < GALLERY_VERSION_INFO_SCHEMA_VERSION;
             if (oldVersion < newVersion) {
                 upgradeDB(db, oldVersion);
                 db.setVersion(newVersion);
@@ -1097,6 +1104,10 @@ public class EhDB {
                 if (!currentGalleryTags.contains(tags)) {
                     insertGalleryTags(tags);
                 }
+            }
+
+            if (needsGalleryVersionInfoUpdate) {
+                Settings.setGalleryVersionUpdatePromptPending(true);
             }
 
             return null;

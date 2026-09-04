@@ -81,6 +81,7 @@ import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.SearchLanguageQuery;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
+import com.hippo.ehviewer.ui.fragment.GalleryVersionMaintenance;
 import com.hippo.ehviewer.ui.main.UserImageChange;
 import com.hippo.ehviewer.ui.scene.AnalyticsScene;
 import com.hippo.ehviewer.ui.scene.BaseScene;
@@ -175,6 +176,8 @@ public final class MainActivity extends StageActivity
     private TextView mGlobalSubscriptionBadge;
     @Nullable
     private TextView mSubscriptionUpdateCountdown;
+    @Nullable
+    private AlertDialog mGalleryVersionUpdatePrompt;
     private boolean mSubscriptionUpdatesStarted;
     private boolean mSubscriptionCountdownRunning;
 
@@ -729,7 +732,10 @@ public final class MainActivity extends StageActivity
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
+        if (mGalleryVersionUpdatePrompt != null) {
+            mGalleryVersionUpdatePrompt.dismiss();
+            mGalleryVersionUpdatePrompt = null;
+        }
 
         mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
         mSubscriptionUpdateHandler.removeCallbacks(
@@ -745,6 +751,7 @@ public final class MainActivity extends StageActivity
         mGlobalSubscriptionBadge = null;
         mSubscriptionUpdateCountdown = null;
         mSubscriptionUpdateManager = null;
+        super.onDestroy();
     }
 
     @Override
@@ -756,6 +763,37 @@ public final class MainActivity extends StageActivity
         scheduleSubscriptionUpdateCheck();
 
         checkClipboardUrl();
+        showGalleryVersionUpdatePromptIfNeeded();
+    }
+
+    private void showGalleryVersionUpdatePromptIfNeeded() {
+        if (!Settings.isGalleryVersionUpdatePromptPending()
+                || mGalleryVersionUpdatePrompt != null || isFinishing()
+                || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1
+                && isDestroyed())) {
+            return;
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setIcon(R.mipmap.ic_launcher)
+                .setTitle(R.string.settings_update_downloaded_gallery_versions)
+                .setMessage(R.string.gallery_version_database_upgrade_prompt)
+                .setNegativeButton(R.string.cancel, (ignored, which) ->
+                        Settings.setGalleryVersionUpdatePromptPending(false))
+                .setPositiveButton(R.string.gallery_version_update_in_background,
+                        (ignored, which) -> {
+                            Settings.setGalleryVersionUpdatePromptPending(false);
+                            GalleryVersionMaintenance.startBackgroundUpdate(this);
+                        })
+                .setCancelable(false)
+                .create();
+        mGalleryVersionUpdatePrompt = dialog;
+        dialog.setOnDismissListener(ignored -> {
+            if (mGalleryVersionUpdatePrompt == dialog) {
+                mGalleryVersionUpdatePrompt = null;
+            }
+        });
+        dialog.show();
     }
 
     @Override

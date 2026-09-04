@@ -1061,4 +1061,6 @@
     <string name="settings_update_downloaded_gallery_versions_summary">Die GID der ursprünglichen Galerie für heruntergeladene Galerien abrufen, um Galerieaktualisierungen zu ermöglichen</string>
     <string name="settings_delete_old_gallery_versions">Alte Galerieversionen löschen</string>
     <string name="settings_delete_old_gallery_versions_summary">Versionsketten heruntergeladener Galerien prüfen und die neueste vollständige, verwendbare Galerie behalten</string>
+    <string name="gallery_version_database_upgrade_prompt">Galerie-Versionsketteninformationen im Hintergrund aktualisieren, damit beim Durchsuchen erkannt werden kann, ob eine Galerie aus einer älteren Version aktualisiert werden kann? Wenn Sie abbrechen, können Sie die Aktualisierung später in den Einstellungen durchführen.</string>
+    <string name="gallery_version_update_in_background">Im Hintergrund aktualisieren</string>
 </resources>

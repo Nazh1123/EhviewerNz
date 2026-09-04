@@ -1149,4 +1149,6 @@
     <string name="settings_update_downloaded_gallery_versions_summary">取得已下載畫廊的最初版本畫廊 GID，用於畫廊更新</string>
     <string name="settings_delete_old_gallery_versions">刪除舊版本畫廊</string>
     <string name="settings_delete_old_gallery_versions_summary">掃描檢查已下載畫廊版本鏈，保留最新完整可用畫廊</string>
+    <string name="gallery_version_database_upgrade_prompt">是否在背景更新畫廊版本鏈資訊，用於瀏覽畫廊時判斷是否可由舊版本更新？如果選擇取消，後續可在設定選單中進行更新。</string>
+    <string name="gallery_version_update_in_background">背景更新</string>
 </resources>

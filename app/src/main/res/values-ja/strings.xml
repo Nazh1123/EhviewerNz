@@ -1070,4 +1070,6 @@
     <string name="settings_update_downloaded_gallery_versions_summary">ダウンロード済みギャラリーの初版ギャラリー GID を取得し、ギャラリーの更新に使用します</string>
     <string name="settings_delete_old_gallery_versions">古いバージョンのギャラリーを削除</string>
     <string name="settings_delete_old_gallery_versions_summary">ダウンロード済みギャラリーのバージョン履歴を確認し、最新の完全に利用可能なギャラリーを残します</string>
+    <string name="gallery_version_database_upgrade_prompt">ギャラリーの閲覧時に旧バージョンから更新できるかどうかを判断するため、ギャラリーのバージョン履歴情報をバックグラウンドで更新しますか？キャンセルした場合は、後で設定メニューから更新できます。</string>
+    <string name="gallery_version_update_in_background">バックグラウンドで更新</string>
 </resources>

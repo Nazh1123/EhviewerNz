@@ -28,8 +28,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Shared implementation for the two gallery-version maintenance setting entries. */
-final class GalleryVersionMaintenance {
+/** Shared implementation for gallery-version maintenance entries and upgrade prompts. */
+public final class GalleryVersionMaintenance {
 
     private static final int API_BATCH_SIZE = 25;
     private static final int BATCHES_PER_BURST = 4;
@@ -39,7 +39,7 @@ final class GalleryVersionMaintenance {
     private GalleryVersionMaintenance() {
     }
 
-    static void showUpdateConfirmation(@NonNull Context context) {
+    public static void showUpdateConfirmation(@NonNull Context context) {
         if (UPDATE_RUNNING.get()) {
             Toast.makeText(context, R.string.gallery_version_update_running,
                     Toast.LENGTH_SHORT).show();
@@ -50,8 +50,17 @@ final class GalleryVersionMaintenance {
                 .setMessage(R.string.gallery_version_update_background_notice)
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(android.R.string.ok,
-                        (dialog, which) -> new UpdateTask(context).execute())
+                        (dialog, which) -> startBackgroundUpdate(context))
                 .show();
+    }
+
+    public static void startBackgroundUpdate(@NonNull Context context) {
+        if (UPDATE_RUNNING.get()) {
+            Toast.makeText(context, R.string.gallery_version_update_running,
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new UpdateTask(context).execute();
     }
 
     private static final class UpdateTask extends AsyncTask<Void, Void, UpdateResult> {

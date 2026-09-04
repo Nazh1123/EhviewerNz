@@ -712,6 +712,8 @@
     <string name="settings_update_downloaded_gallery_versions_summary">获取已下载画廊的最初版本画廊GID，用于画廊更新</string>
     <string name="settings_delete_old_gallery_versions">删除旧版本画廊</string>
     <string name="settings_delete_old_gallery_versions_summary">扫描检查已下载画廊版本链，保留最新完整可用画廊</string>
+    <string name="gallery_version_database_upgrade_prompt">是否后台更新画廊版本链信息，用于在浏览画廊时判断是否由旧版本更新。如果选择取消，后续可在设置菜单中进行更新。</string>
+    <string name="gallery_version_update_in_background">后台更新</string>
     <string name="gallery_version_update_background_notice">版本信息将在后台更新。请求会分批发送并定时暂停，以避免请求过于频繁。</string>
     <string name="gallery_version_update_running">正在更新画廊版本信息</string>
     <string name="gallery_version_update_done">版本信息更新完成：已更新 %1$d；不可用 %2$d；稍后重试 %3$d</string>
