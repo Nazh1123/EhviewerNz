@@ -194,19 +194,15 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
 
     private void configureDownloadBadge(@NonNull ImageView badge) {
         int sizeRes;
-        int drawableRes;
         switch (Settings.getThumbSize()) {
             case 0:
                 sizeRes = R.dimen.gallery_grid_download_badge_large;
-                drawableRes = R.drawable.v_download_badge_x24;
                 break;
             case 2:
                 sizeRes = R.dimen.gallery_grid_download_badge_small;
-                drawableRes = R.drawable.v_download_badge_x16;
                 break;
             default:
                 sizeRes = R.dimen.gallery_grid_download_badge_middle;
-                drawableRes = R.drawable.v_download_badge_x20;
                 break;
         }
         int size = mResources.getDimensionPixelSize(sizeRes);
@@ -214,7 +210,18 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
         layoutParams.width = size;
         layoutParams.height = size;
         badge.setLayoutParams(layoutParams);
-        badge.setImageResource(drawableRes);
+        badge.setImageResource(getGridDownloadBadgeDrawableRes());
+    }
+
+    private int getGridDownloadBadgeDrawableRes() {
+        switch (Settings.getThumbSize()) {
+            case 0:
+                return R.drawable.v_download_badge_x24;
+            case 2:
+                return R.drawable.v_download_badge_x16;
+            default:
+                return R.drawable.v_download_badge_x20;
+        }
     }
 
     @Override
@@ -235,7 +242,9 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
         boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
         boolean updateAvailable = !downloaded && gi.firstGid != null && gi.firstGid > 0L
                 && mDownloadManager.hasOlderGalleryVersion(gi.firstGid, gi.gid);
-        bindVersionBadge(holder.downloaded, updateAvailable);
+        bindVersionBadge(holder.downloaded, updateAvailable,
+                mType == TYPE_GRID ? getGridDownloadBadgeDrawableRes()
+                        : R.drawable.v_download_x16);
 
         switch (mType) {
             default:
@@ -308,8 +317,10 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
         ViewCompat.setTransitionName(holder.thumb, TransitionNameFactory.getThumbTransitionName(gi.gid));
     }
 
-    private void bindVersionBadge(@NonNull ImageView badge, boolean updateAvailable) {
-        badge.setRotation(updateAvailable ? 180.0f : 0.0f);
+    private void bindVersionBadge(@NonNull ImageView badge, boolean updateAvailable,
+                                  int downloadedDrawableRes) {
+        badge.setImageResource(updateAvailable
+                ? R.drawable.v_updatable_x24 : downloadedDrawableRes);
         badge.setContentDescription(mResources.getString(updateAvailable
                 ? R.string.gallery_update_available : R.string.download_state_downloaded));
     }
