@@ -3021,7 +3021,15 @@ public class GalleryListScene extends BaseScene
                 return;
             }
             for (GalleryInfo galleryInfo : mHelper.getData()) {
-                if (galleryInfo != null && downloadManager.containDownloadInfo(galleryInfo.gid)) {
+                if (galleryInfo == null) {
+                    continue;
+                }
+                boolean downloaded = downloadManager.containDownloadInfo(galleryInfo.gid);
+                // Match the update badge using the existing local gallery version index.
+                boolean updateAvailable = !downloaded && galleryInfo.firstGid != null
+                        && galleryInfo.firstGid > 0L
+                        && downloadManager.hasOlderGalleryVersion(galleryInfo.firstGid, galleryInfo.gid);
+                if (downloaded || updateAvailable) {
                     mDownloadedData.add(galleryInfo);
                 }
             }
