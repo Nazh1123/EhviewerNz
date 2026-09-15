@@ -1258,4 +1258,5 @@
     <string name="settings_animated_webp_long_press_speed">Long-press speed</string>
     <string name="settings_animated_webp_long_press_speed_summary">%1$sx - Long-press the lower-middle area of the screen to play at %1$sx; at 1.0, long-press opens the menu instead</string>
     <string name="settings_animated_webp_long_press_speed_invalid">Enter a value from 0.1 to 3.0 with at most one decimal place</string>
+    <string name="gallery_detail_back_to_top">Back to top</string>
 </resources>

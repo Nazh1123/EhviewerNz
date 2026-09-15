@@ -1163,4 +1163,5 @@
     <string name="settings_animated_webp_long_press_speed">长按倍速</string>
     <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 长按屏幕中下区域，以 %1$sx 倍速播放；设为 1.0 时长按改为唤出菜单</string>
     <string name="settings_animated_webp_long_press_speed_invalid">请输入 0.1–3.0 范围内最多一位小数的数值</string>
+    <string name="gallery_detail_back_to_top">回到最上方</string>
 </resources>

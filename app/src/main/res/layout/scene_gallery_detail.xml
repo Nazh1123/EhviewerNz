@@ -17,6 +17,7 @@
 <!--内容详情页-->
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -56,5 +57,18 @@
         android:layout_marginEnd="12dp"
         android:alpha="0"
         android:visibility="invisible"/>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/back_to_top"
+        style="@style/Widget.Design.FloatingActionButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="@dimen/corner_fab_margin"
+        android:layout_marginBottom="@dimen/corner_fab_margin"
+        android:contentDescription="@string/gallery_detail_back_to_top"
+        android:visibility="gone"
+        app:backgroundTint="?attr/widgetColorThemePrimary"
+        app:srcCompat="@drawable/v_back_to_top_dark_x24" />
 
 </FrameLayout>

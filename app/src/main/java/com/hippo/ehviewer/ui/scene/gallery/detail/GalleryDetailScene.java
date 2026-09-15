@@ -317,6 +317,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @Nullable
     private GalleryDetailScrollView mDetailScrollView;
     @Nullable
+    private View mBackToTop;
+    @Nullable
     private View mSwipePreviewIndicator;
     private int mSwipePreviewIndicatorOffset;
     private boolean mSwipePreviewIndicatorVisible;
@@ -593,6 +595,14 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         ViewGroup main = (ViewGroup) ViewUtils.$$(view, R.id.main);
         mDetailScrollView = (GalleryDetailScrollView) ViewUtils.$$(main, R.id.scroll_view);
+        mBackToTop = ViewUtils.$$(main, R.id.back_to_top);
+        mBackToTop.setOnClickListener(v -> {
+            if (mDetailScrollView != null) {
+                mDetailScrollView.smoothScrollTo(0, 0);
+            }
+        });
+        mDetailScrollView.setOnScrollChangeListener(
+                (v, scrollX, scrollY, oldScrollX, oldScrollY) -> updateBackToTopVisibility());
         View mainView = mDetailScrollView;
         View progressView = ViewUtils.$$(main, R.id.progress_view);
         mTip = (TextView) ViewUtils.$$(main, R.id.tip);
@@ -611,6 +621,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mSwipePreviewIndicator.setTranslationX(mSwipePreviewIndicatorOffset);
         main.addOnLayoutChangeListener((v, left, top, right, bottom,
                                         oldLeft, oldTop, oldRight, oldBottom) -> {
+            updateBackToTopVisibility();
             View indicator = mSwipePreviewIndicator;
             int indicatorHeight = (bottom - top) / 2;
             if (indicator != null && indicatorHeight > 0
@@ -866,10 +877,15 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         setDrawerGestureBlocker(null);
         if (mDetailScrollView != null) {
+            mDetailScrollView.setOnScrollChangeListener(null);
             mDetailScrollView.setOnSwipeLeftListener(null);
             mDetailScrollView.setSwipeExclusionView(null);
             mDetailScrollView.setSwipeActivationView(null);
             mDetailScrollView = null;
+        }
+        if (mBackToTop != null) {
+            mBackToTop.setOnClickListener(null);
+            mBackToTop = null;
         }
         if (mSwipePreviewIndicator != null) {
             mSwipePreviewIndicator.animate().cancel();
@@ -1096,6 +1112,20 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
     }
 
+    private void updateBackToTopVisibility() {
+        if (mBackToTop == null || mDetailScrollView == null) {
+            return;
+        }
+        // Only compare distances on scroll/layout events; no polling or view traversal.
+        int viewportHeight = mDetailScrollView.getHeight();
+        boolean visible = mState == STATE_NORMAL && viewportHeight > 0
+                && mDetailScrollView.getScrollY() >= viewportHeight;
+        int visibility = visible ? View.VISIBLE : View.GONE;
+        if (mBackToTop.getVisibility() != visibility) {
+            mBackToTop.setVisibility(visibility);
+        }
+    }
+
     private void adjustViewVisibility(int state, boolean animation) {
         if (state == mState) {
             return;
@@ -1106,6 +1136,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         int oldState = mState;
         mState = state;
+        updateBackToTopVisibility();
 
         animation = !TRANSITION_ANIMATION_DISABLED && animation;
 
