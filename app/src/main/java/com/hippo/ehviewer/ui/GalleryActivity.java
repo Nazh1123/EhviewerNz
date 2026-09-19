@@ -129,6 +129,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.Locale;
@@ -306,6 +308,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private long mLastLongPressSaveAt;
     private int mLastLongPressSaveIndex = -1;
     private int mSaveNoticeGeneration;
+    // One accepted save/undo at a time; file I/O never runs on the UI thread.
+    private boolean mImageFileOperationPending;
+    private final ThreadPoolExecutor mImageFileExecutor = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(1),
+            runnable -> new Thread(runnable, "GalleryImageSave"));
 
     private boolean canFinish = false;
     private boolean autoTransferring = false;
@@ -876,6 +883,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        mImageFileExecutor.shutdownNow();
         mAnimatedWebpLifecycleResumed = false;
         mAnimatedWebpLifecycleGeneration++;
         persistLocalGalleryHistoryNow();
@@ -1794,32 +1802,48 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void saveImage(int page) {
-        saveImage(page, false);
+        saveImage(page, false, false, false);
     }
 
-    private boolean saveImage(int page, boolean previousPageSave) {
-        if (null == mGalleryProvider) {
-            return false;
-        }
-
-        UniFile effectiveDir = Settings.getManualImageSaveLocation();
-        if (effectiveDir == null) {
-            showSaveErrorNotice(getText(R.string.error_cant_save_image));
-            return false;
-        }
-
-        UniFile file = saveImageInDirectory(page, effectiveDir);
-        if (file == null) {
-            showSaveErrorNotice(getText(R.string.error_cant_save_image));
-            return false;
-        }
-
-        showSaveNotice(getString(R.string.image_saved, file.getUri()),
-                file, page, previousPageSave);
-
-        // Sync media store
-        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, file.getUri()));
-        return true;
+    private void saveImage(int page, boolean previousPageSave,
+                           boolean turnPageAfterSave, boolean longPress) {
+        GalleryProvider2 provider = mGalleryProvider;
+        if (provider == null || mImageFileOperationPending || mImageFileExecutor.isShutdown()) return;
+        boolean shouldTurn = turnPageAfterSave && Settings.getLongPressSaveTurnPage();
+        mImageFileOperationPending = true;
+        mImageFileExecutor.execute(() -> {
+            UniFile saved = null;
+            try {
+                // Resolving the directory can itself access SAF/storage.
+                UniFile directory = Settings.getManualImageSaveLocation();
+                if (directory != null) saved = saveImageInDirectory(provider, page, directory);
+            } catch (Throwable e) {
+                ExceptionUtils.throwIfFatal(e);
+                Log.w(TAG, "Unable to save gallery image", e);
+            }
+            UniFile file = saved;
+            SimpleHandler.getInstance().post(() -> {
+                mImageFileOperationPending = false;
+                if (isFinishing() || isDestroyed() || mGalleryProvider != provider) return;
+                if (file == null) {
+                    showSaveErrorNotice(getText(R.string.error_cant_save_image));
+                    return;
+                }
+                showSaveNotice(getString(R.string.image_saved, file.getUri()),
+                        file, page, previousPageSave);
+                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, file.getUri()));
+                if (longPress) {
+                    mLastLongPressSaveIndex = page;
+                    mLastLongPressSaveAt = SystemClock.elapsedRealtime();
+                }
+                // Do not turn an unrelated page if the reader moved or left during the copy.
+                if (shouldTurn && mAnimatedWebpLifecycleResumed
+                        && mCurrentIndex == page && mGalleryView != null) {
+                    if (mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT) mGalleryView.pageLeft();
+                    else mGalleryView.pageRight();
+                }
+            });
+        });
     }
 
     private void showSaveNotice(CharSequence message) {
@@ -1902,31 +1926,40 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void undoLastImageSave() {
         UniFile file = mSaveNoticeUndoFile;
-        if (file == null) {
-            return;
-        }
-
-        boolean removed = false;
-        try {
-            removed = !file.exists() || file.delete() || !file.exists();
-        } catch (Throwable e) {
-            ExceptionUtils.throwIfFatal(e);
-            Log.w(TAG, "Failed to undo image save at " + file.getUri(), e);
-        }
-        if (!removed) {
-            Toast.makeText(this, R.string.error_cant_undo_image_save,
-                    Toast.LENGTH_SHORT).show();
-            return;
-        }
-
+        if (file == null || mImageFileOperationPending || mImageFileExecutor.isShutdown()) return;
+        int generation = mSaveNoticeGeneration;
         int undonePage = mSaveNoticeUndoPage;
-        if (undonePage == mLastLongPressSaveIndex) {
-            mLastLongPressSaveIndex = -1;
-            mLastLongPressSaveAt = 0L;
-        }
-        sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, file.getUri()));
-        hideSaveNotice();
-        Toast.makeText(this, R.string.image_save_undone, Toast.LENGTH_SHORT).show();
+        mImageFileOperationPending = true;
+        if (mSaveNotice != null) mSaveNotice.setClickable(false);
+        mImageFileExecutor.execute(() -> {
+            boolean removed = false;
+            try {
+                removed = !file.exists() || file.delete() || !file.exists();
+            } catch (Throwable e) {
+                ExceptionUtils.throwIfFatal(e);
+                Log.w(TAG, "Failed to undo image save at " + file.getUri(), e);
+            }
+            boolean success = removed;
+            SimpleHandler.getInstance().post(() -> {
+                mImageFileOperationPending = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (!success) {
+                    if (mSaveNoticeUndoFile == file && mSaveNotice != null) {
+                        mSaveNotice.setClickable(true);
+                    }
+                    Toast.makeText(this, R.string.error_cant_undo_image_save,
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (undonePage == mLastLongPressSaveIndex) {
+                    mLastLongPressSaveIndex = -1;
+                    mLastLongPressSaveAt = 0L;
+                }
+                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, file.getUri()));
+                if (generation == mSaveNoticeGeneration) hideSaveNotice();
+                Toast.makeText(this, R.string.image_save_undone, Toast.LENGTH_SHORT).show();
+            });
+        });
     }
 
     private void showSaveErrorNotice(CharSequence message) {
@@ -1990,12 +2023,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     @Nullable
-    private UniFile saveImageInDirectory(int page, @NonNull UniFile dir) {
+    private static UniFile saveImageInDirectory(@NonNull GalleryProvider2 provider,
+                                               int page, @NonNull UniFile dir) {
         try {
-            return mGalleryProvider != null
-                    ? mGalleryProvider.save(
-                            page, dir, mGalleryProvider.getImageFilename(page))
-                    : null;
+            return provider.save(page, dir, provider.getImageFilename(page));
         } catch (Throwable e) {
             ExceptionUtils.throwIfFatal(e);
             Log.w(TAG, "Failed to save image to " + dir.getUri(), e);
@@ -2734,6 +2765,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
 
+        // Failure may occur before this listener is attached, or while the Activity is paused.
+        if (candidate != null && candidate.hasPlaybackDecodeFailed()
+                && candidate != mAnimatedWebpStallWarningTexture) {
+            onPlaybackStalled(candidate);
+        }
+
         if (!mAnimatedWebpLifecycleResumed) {
             suspendAnimatedWebpForLifecycle(candidate);
         }
@@ -3034,20 +3071,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 return;
             }
 
-            if (!saveImage(index, previousPageSave)) {
-                return;
-            }
-            mLastLongPressSaveIndex = index;
-            mLastLongPressSaveAt = SystemClock.elapsedRealtime();
-
-            if (turnPageAfterSave && Settings.getLongPressSaveTurnPage()
-                    && mGalleryView != null) {
-                if (mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT) {
-                    mGalleryView.pageLeft();
-                } else {
-                    mGalleryView.pageRight();
-                }
-            }
+            saveImage(index, previousPageSave, turnPageAfterSave, true);
         }
 
         private void onLongPressPage(final int index) {

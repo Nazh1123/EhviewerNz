@@ -1355,6 +1355,7 @@ public class GalleryListScene extends BaseScene
     @Override
     public void onResume() {
         super.onResume();
+        if (mAdapter != null) mAdapter.invalidateReadingProgress();
         if (isBookmarkSubscriptionMode() && mBookmarkSubscriptionCoordinator != null
                 && !mBookmarkSubscriptionCoordinator.isLoading()
                 && !mBookmarkSubscriptionCoordinator.matchesSubscriptions(

@@ -231,16 +231,19 @@ public final class SpiderQueen implements Runnable {
 //    }
 
     public static int findStartPage(@NonNull Context context, @NonNull GalleryInfo galleryInfo) {
-        Log.e("StartTime",System.currentTimeMillis()+"");
+        return findStartPage(context, galleryInfo.gid);
+    }
+
+    public static int findStartPage(@NonNull Context context, long gid) {
         SpiderInfo spiderInfo = null;
         SimpleDiskCache msic;
         EhApplication application = (EhApplication) context.getApplicationContext();
         msic = EhApplication.getSpiderInfoCache(application);
-        InputStreamPipe pipe = msic.getInputStreamPipe(Long.toString(galleryInfo.gid));
+        InputStreamPipe pipe = msic.getInputStreamPipe(Long.toString(gid));
         if (null != pipe) {
             try {
                 pipe.obtain();
-                spiderInfo = SpiderInfo.read(pipe.open());
+                spiderInfo = SpiderInfo.readHeader(pipe.open());
             } catch (IOException ignore) {
                 // Ignore
 //                Crashes.trackError(ignore);
@@ -254,7 +257,6 @@ public final class SpiderQueen implements Runnable {
         if (spiderInfo != null) {
             startPage = spiderInfo.startPage;
         }
-        Log.e("EndTime",System.currentTimeMillis()+"");
         return startPage;
     }
 

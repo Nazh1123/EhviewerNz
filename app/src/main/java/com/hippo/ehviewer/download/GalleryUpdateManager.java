@@ -57,6 +57,7 @@ public final class GalleryUpdateManager {
     private static final String KEY_PREFIX = "target_";
     private static final String JSON_SOURCE_GID = "source_gid";
     private static final String JSON_PARENT_GIDS = "parent_gids";
+    private static final String JSON_PROGRESS_MIGRATED = "progress_migrated";
     private static final String FAILED_PTOKEN = "failed";
 
     private static final Map<Long, UpdatePlan> PLAN_CACHE = new ConcurrentHashMap<>();
@@ -143,6 +144,7 @@ public final class GalleryUpdateManager {
         public final long sourceGid;
         @NonNull
         public final List<Long> parentGids;
+        public volatile boolean progressMigrated;
 
         UpdatePlan(long targetGid, long sourceGid, @NonNull List<Long> parentGids) {
             this.targetGid = targetGid;
@@ -194,6 +196,7 @@ public final class GalleryUpdateManager {
             json.put(JSON_PARENT_GIDS, parents);
             preferences.edit().putString(KEY_PREFIX + targetGid, json.toString()).apply();
             PLAN_CACHE.put(targetGid, new UpdatePlan(targetGid, sourceGid, normalizedParents));
+            CLEANUP_IN_PROGRESS.remove(targetGid);
             SOURCE_CACHE.remove(targetGid);
             notifyUpdateStateChanged(targetGid, UPDATE_STATE_UPDATING);
         } catch (JSONException e) {
@@ -233,6 +236,7 @@ public final class GalleryUpdateManager {
                 return null;
             }
             UpdatePlan plan = new UpdatePlan(targetGid, sourceGid, parentGids);
+            plan.progressMigrated = json.optBoolean(JSON_PROGRESS_MIGRATED, false);
             PLAN_CACHE.put(targetGid, plan);
             return plan;
         } catch (JSONException e) {
@@ -360,7 +364,7 @@ public final class GalleryUpdateManager {
 
         // A non-zero target page means the user has already read the new gallery. Never replace
         // that newer, gallery-specific choice with progress inherited from its parent.
-        if (target.startPage > 0) {
+        if (target.startPage > 0 || source.startPage <= 0) {
             return true;
         }
 
@@ -368,7 +372,9 @@ public final class GalleryUpdateManager {
         if (mappedPage < 0) {
             // The target's pToken table can still be incomplete after a failed download. Leave
             // the plan intact so a later continuation can retry the migration.
-            return false;
+            // A fully replaced gallery has no surviving anchor. There is nothing to
+            // migrate once both token tables are complete; partial tables must retry.
+            return hasCompletePTokenMap(source) && hasCompletePTokenMap(target);
         }
 
         // Re-read before writing to narrow the race with a reader opened while the background
@@ -385,9 +391,47 @@ public final class GalleryUpdateManager {
 
         latestTarget.startPage = mappedPage;
         latestTarget.writeNewSpiderInfoToLocal(new SpiderDen(targetInfo), context);
+        // The legacy writer swallows I/O errors. Verify persistence before allowing
+        // cleanup to destroy the only copy of the parent's reading position.
+        SpiderInfo persisted = readDownloadedSpiderInfo(targetInfo.gid);
+        if (persisted == null || persisted.startPage != mappedPage
+                || persisted.pages != latestTarget.pages
+                || persisted.pTokenMap == null
+                || persisted.pTokenMap.size() != latestTarget.pTokenMap.size()
+                || readCachedStartPage(context, targetInfo.gid) != mappedPage) {
+            return false;
+        }
         Log.i(TAG, "Migrated reading progress from " + sourceGid + " page "
                 + source.startPage + " to " + targetInfo.gid + " page " + mappedPage);
         return true;
+    }
+
+    private static boolean hasCompletePTokenMap(@NonNull SpiderInfo info) {
+        if (info.pages <= 0 || info.pTokenMap == null) return false;
+        for (int page = 0; page < info.pages; page++) {
+            if (!isUsablePToken(info.pTokenMap.get(page))) return false;
+        }
+        return true;
+    }
+
+    /** Worker-thread checkpoint: retries must not need an already removed source folder. */
+    public static synchronized boolean markProgressMigrated(@NonNull UpdatePlan plan) {
+        SharedPreferences prefs = preferences();
+        if (prefs == null || getPlan(plan.targetGid) != plan) return false;
+        try {
+            String raw = prefs.getString(KEY_PREFIX + plan.targetGid, null);
+            if (raw == null) return false;
+            JSONObject json = new JSONObject(raw);
+            json.put(JSON_PROGRESS_MIGRATED, true);
+            if (!prefs.edit().putString(KEY_PREFIX + plan.targetGid, json.toString()).commit()) {
+                return false;
+            }
+            plan.progressMigrated = true;
+            return true;
+        } catch (JSONException e) {
+            Log.w(TAG, "Unable to checkpoint gallery reading progress", e);
+            return false;
+        }
     }
 
     /** Returns -1 until a source progress anchor can be matched to the target pToken table. */

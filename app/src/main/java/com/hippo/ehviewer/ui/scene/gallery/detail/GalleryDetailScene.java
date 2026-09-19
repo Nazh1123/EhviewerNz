@@ -2624,9 +2624,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                         mGalleryDetail.firstGid = firstGid;
                         DownloadInfo downloaded = downloadManager.getDownloadInfo(targetGid);
                         if (downloaded != null) {
-                            downloaded.firstGid = firstGid;
-                            EhDB.putDownloadInfo(downloaded);
-                            downloadManager.onGalleryVersionInfoUpdated();
+                            downloadManager.updateGalleryVersionInfo(downloaded, firstGid);
                         }
                         updateGalleryVersionActionsVisibility();
                     }
@@ -2842,9 +2840,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             DownloadManager manager = EhApplication.getDownloadManager(context);
             DownloadInfo downloaded = manager.getDownloadInfo(result.gid);
             if (downloaded != null && !result.firstGid.equals(downloaded.firstGid)) {
-                downloaded.firstGid = result.firstGid;
-                EhDB.putDownloadInfo(downloaded);
-                manager.onGalleryVersionInfoUpdated();
+                manager.updateGalleryVersionInfo(downloaded, result.firstGid);
             }
         }
         updateDownloadState();

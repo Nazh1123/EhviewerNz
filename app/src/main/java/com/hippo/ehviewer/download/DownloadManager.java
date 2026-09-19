@@ -63,9 +63,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableSet;
 import java.util.Set;
-import java.util.TreeSet;
 
 public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
@@ -81,7 +79,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     // All download info map
     private final SparseJLArray<DownloadInfo> mAllInfoMap;
     // Positive first_gid -> downloaded gids. Local imports and unavailable records are excluded.
-    private final Map<Long, NavigableSet<Long>> mGalleryVersionMap = new HashMap<>();
+    private final GalleryVersionIndex mGalleryVersionIndex = new GalleryVersionIndex();
     // label and info list map, without default label info list
     private final Map<String, LinkedList<DownloadInfo>> mMap;
 
@@ -189,27 +187,28 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     public void replaceInfo(DownloadInfo newInfo, DownloadInfo oldInfo) {
-
-        for (int i = 0; i < mAllInfoList.size(); i++) {
-            if (oldInfo.gid == mAllInfoList.get(i).gid) {
-                mAllInfoList.set(i, newInfo);
-                break;
-            }
-        }
-        final List<DownloadInfo> infoList = getInfoListForLabel(oldInfo.label);
-        if (infoList != null) {
-            for (int i = 0; i < infoList.size(); i++) {
-                if (oldInfo.gid == infoList.get(i).gid) {
-                    infoList.set(i, newInfo);
+        synchronized (this) {
+            for (int i = 0; i < mAllInfoList.size(); i++) {
+                if (oldInfo.gid == mAllInfoList.get(i).gid) {
+                    mAllInfoList.set(i, newInfo);
                     break;
                 }
             }
+            final List<DownloadInfo> infoList = getInfoListForLabel(oldInfo.label);
+            if (infoList != null) {
+                for (int i = 0; i < infoList.size(); i++) {
+                    if (oldInfo.gid == infoList.get(i).gid) {
+                        infoList.set(i, newInfo);
+                        break;
+                    }
+                }
+            }
+
+            mAllInfoMap.remove(oldInfo.gid);
+            mAllInfoMap.put(newInfo.gid, newInfo);
+            mGalleryVersionIndex.remove(oldInfo.gid);
+            updateGalleryVersionIndex(newInfo);
         }
-
-        mAllInfoMap.remove(oldInfo.gid);
-        mAllInfoMap.put(newInfo.gid, newInfo);
-        rebuildGalleryVersionIndex();
-
 
         for (DownloadInfoListener l : mDownloadInfoListeners) {
             l.onReplace(newInfo, oldInfo);
@@ -254,19 +253,32 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     public synchronized void rebuildGalleryVersionIndex() {
-        mGalleryVersionMap.clear();
+        mGalleryVersionIndex.clear();
         for (DownloadInfo info : mAllInfoList) {
-            if (info.firstGid == null || info.firstGid <= 0L || isImportedGallery(info)) {
-                continue;
-            }
-            mGalleryVersionMap.computeIfAbsent(info.firstGid, ignored -> new TreeSet<>())
-                    .add(info.gid);
+            updateGalleryVersionIndex(info);
         }
     }
 
+    // Call while holding this manager's lock, together with the corresponding record change.
+    private void updateGalleryVersionIndex(@NonNull DownloadInfo info) {
+        mGalleryVersionIndex.update(info.gid, info.firstGid, isImportedGallery(info));
+    }
+
+    private synchronized void addToAllDownloads(@NonNull DownloadInfo info, boolean atFront) {
+        if (atFront) mAllInfoList.addFirst(info);
+        else mAllInfoList.add(info);
+        mAllInfoMap.put(info.gid, info);
+        updateGalleryVersionIndex(info);
+    }
+
+    private synchronized void removeFromAllDownloads(@NonNull DownloadInfo info) {
+        mAllInfoList.remove(info);
+        mAllInfoMap.remove(info.gid);
+        mGalleryVersionIndex.remove(info.gid);
+    }
+
     public synchronized boolean hasOlderGalleryVersion(long firstGid, long targetGid) {
-        NavigableSet<Long> gids = mGalleryVersionMap.get(firstGid);
-        return gids != null && gids.lower(targetGid) != null;
+        return mGalleryVersionIndex.hasOlder(firstGid, targetGid);
     }
 
     public synchronized boolean hasUnknownGalleryVersionBefore(long targetGid) {
@@ -280,30 +292,20 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
     @NonNull
     public synchronized List<Long> getOlderGalleryVersionGids(long firstGid, long targetGid) {
-        NavigableSet<Long> gids = mGalleryVersionMap.get(firstGid);
-        if (gids == null) {
-            return Collections.emptyList();
-        }
-        return new ArrayList<>(gids.headSet(targetGid, false));
+        return mGalleryVersionIndex.getOlder(firstGid, targetGid);
     }
 
     @Nullable
     public synchronized DownloadInfo findClosestOlderGalleryVersion(
             long firstGid, long targetGid) {
-        NavigableSet<Long> gids = mGalleryVersionMap.get(firstGid);
-        if (gids == null) {
-            return null;
-        }
-        for (Long gid : gids.headSet(targetGid, false).descendingSet()) {
-            DownloadInfo info = mAllInfoMap.get(gid);
-            if (info != null && !isImportedGallery(info)
+        Long gid = mGalleryVersionIndex.findClosestOlder(firstGid, targetGid, candidate -> {
+            DownloadInfo info = mAllInfoMap.get(candidate);
+            return info != null && !isImportedGallery(info)
                     && info.state != DownloadInfo.STATE_WAIT
                     && info.state != DownloadInfo.STATE_DOWNLOAD
-                    && info.state != DownloadInfo.STATE_UPDATE) {
-                return info;
-            }
-        }
-        return null;
+                    && info.state != DownloadInfo.STATE_UPDATE;
+        });
+        return gid == null ? null : mAllInfoMap.get(gid);
     }
 
     public boolean isCompleteUsableGallery(@Nullable DownloadInfo info) {
@@ -333,6 +335,20 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     /** Call after a background metadata pass has updated DownloadInfo objects in place. */
     public void onGalleryVersionInfoUpdated() {
         rebuildGalleryVersionIndex();
+        for (DownloadInfoListener listener : mDownloadInfoListeners) {
+            listener.onUpdateAll();
+        }
+    }
+
+    /** Apply single-gallery metadata without rebuilding unrelated version families. */
+    public void updateGalleryVersionInfo(@NonNull DownloadInfo info, @Nullable Long firstGid) {
+        synchronized (this) {
+            // A delayed lookup must not restore a deleted or replaced download record.
+            if (mAllInfoMap.get(info.gid) != info) return;
+            info.firstGid = firstGid;
+            updateGalleryVersionIndex(info);
+        }
+        EhDB.putDownloadInfo(info);
         for (DownloadInfoListener listener : mDownloadInfoListeners) {
             listener.onUpdateAll();
         }
@@ -558,9 +574,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             list.addFirst(info);
 
             // Add to all download list and map
-            mAllInfoList.addFirst(info);
-            mAllInfoMap.put(galleryInfo.gid, info);
-            rebuildGalleryVersionIndex();
+            addToAllDownloads(info, true);
 
             // Add to wait list
             mWaitList.add(info);
@@ -713,16 +727,16 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             Collections.sort(list, DATE_DESC_COMPARATOR);
 
             // Add to all download list and map
-            mAllInfoList.add(info);
-            mAllInfoMap.put(info.gid, info);
+            addToAllDownloads(info, false);
 
             // Save to
             EhDB.putDownloadInfo(info);
         }
 
         // Sort all download list
-        Collections.sort(mAllInfoList, DATE_DESC_COMPARATOR);
-        rebuildGalleryVersionIndex();
+        synchronized (this) {
+            Collections.sort(mAllInfoList, DATE_DESC_COMPARATOR);
+        }
 
         // Notify
         new Handler(Looper.getMainLooper()).post(() -> {
@@ -769,9 +783,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         list.addFirst(info);
 
         // Add to all download list and map
-        mAllInfoList.addFirst(info);
-        mAllInfoMap.put(galleryInfo.gid, info);
-        rebuildGalleryVersionIndex();
+        addToAllDownloads(info, true);
 
         // Save to
         EhDB.putDownloadInfo(info);
@@ -810,9 +822,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
         // Save to
         EhDB.putDownloadInfo(info);
-        mAllInfoList.addFirst(info);
-        mAllInfoMap.put(galleryInfo.gid, info);
-        rebuildGalleryVersionIndex();
+        addToAllDownloads(info, true);
     }
 
 
@@ -894,9 +904,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             EhDB.removeDownloadInfo(info.gid);
 
             // Remove all list and map
-            mAllInfoList.remove(info);
-            mAllInfoMap.remove(info.gid);
-            rebuildGalleryVersionIndex();
+            removeFromAllDownloads(info);
 
             // Remove label list
             LinkedList<DownloadInfo> list = getInfoListForLabel(info.label);
@@ -942,8 +950,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             EhDB.removeDownloadInfo(info.gid);
 
             // Remove from all info map
-            mAllInfoList.remove(info);
-            mAllInfoMap.remove(info.gid);
+            removeFromAllDownloads(info);
 
             // Remove from label list
             LinkedList<DownloadInfo> list = getInfoListForLabel(info.label);
@@ -951,7 +958,6 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 list.remove(info);
             }
         }
-        rebuildGalleryVersionIndex();
 
         // Update listener
         for (DownloadInfoListener l : mDownloadInfoListeners) {
@@ -1375,9 +1381,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         DownloadInfo existingTarget = getDownloadInfo(target.gid);
         if (existingTarget != null && target.firstGid != null
                 && !target.firstGid.equals(existingTarget.firstGid)) {
-            existingTarget.firstGid = target.firstGid;
-            EhDB.putDownloadInfo(existingTarget);
-            rebuildGalleryVersionIndex();
+            updateGalleryVersionInfo(existingTarget, target.firstGid);
         }
         GalleryUpdateManager.register(target.gid, sourceGid, parentGids);
         startDownload(target, label);
@@ -1410,6 +1414,39 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             return;
         }
 
+        GalleryUpdateManager.notifyUpdateStateChanged(
+                targetGid, GalleryUpdateManager.UPDATE_STATE_UPDATING);
+        IoThreadPoolExecutor.Companion.getInstance().execute(() -> {
+            boolean prepared = false;
+            try {
+                // FINISH only counts files; interrupted downloads can leave empty or
+                // unreadable images. Never remove a parent based on that state alone.
+                prepared = GalleryUpdatePreparation.prepare(plan.progressMigrated,
+                        () -> isCompleteUsableGallery(targetInfo),
+                        () -> GalleryUpdateManager.migrateReadingProgress(mContext, targetInfo),
+                        () -> GalleryUpdateManager.markProgressMigrated(plan));
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Unable to validate gallery update " + targetGid, e);
+            }
+            boolean ready = prepared;
+            SimpleHandler.getInstance().post(() -> {
+                // The user may have cancelled/replaced this plan while validation ran.
+                if (GalleryUpdateManager.getPlan(targetGid) != plan) return;
+                if (!ready || mAllInfoMap.get(targetGid) != targetInfo
+                        || targetInfo.state != DownloadInfo.STATE_FINISH) {
+                    GalleryUpdateManager.finishCleanup(targetGid, false);
+                    GalleryUpdateManager.notifyUpdateStateChanged(
+                            targetGid, GalleryUpdateManager.UPDATE_STATE_FAILED);
+                    return;
+                }
+                deleteUpdatedGalleryParents(targetInfo, plan);
+            });
+        });
+    }
+
+    private void deleteUpdatedGalleryParents(@NonNull DownloadInfo targetInfo,
+                                            @NonNull GalleryUpdateManager.UpdatePlan plan) {
+        long targetGid = targetInfo.gid;
         LongList gids = new LongList();
         for (Long gid : plan.parentGids) {
             if (gid != null && mAllInfoMap.get(gid) != null) {
@@ -1421,22 +1458,32 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
 
         IoThreadPoolExecutor.Companion.getInstance().execute(() -> {
-            // Preserve the newest target-specific progress and migrate the parent's pToken anchor
-            // before its folder is removed.
-            GalleryUpdateManager.migrateReadingProgress(mContext, targetInfo);
             boolean success = true;
-            for (Long gid : plan.parentGids) {
-                GalleryInfo placeholder = new GalleryInfo();
-                placeholder.gid = gid;
-                UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
-                boolean deleted = dir == null || !dir.exists() || dir.delete();
-                if (deleted) {
-                    EhDB.removeDownloadDirname(gid);
-                } else {
-                    success = false;
+            try {
+                for (Long gid : plan.parentGids) {
+                    if (GalleryUpdateManager.getPlan(targetGid) != plan) return;
+                    GalleryInfo placeholder = new GalleryInfo();
+                    placeholder.gid = gid;
+                    UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
+                    boolean deleted = dir == null || !dir.exists() || dir.delete();
+                    if (deleted) {
+                        EhDB.removeDownloadDirname(gid);
+                    } else {
+                        success = false;
+                    }
                 }
+            } catch (RuntimeException e) {
+                success = false;
+                Log.w(TAG, "Unable to remove gallery update parents " + targetGid, e);
             }
-            GalleryUpdateManager.finishCleanup(targetGid, success);
+            boolean completed = success;
+            SimpleHandler.getInstance().post(() -> {
+                if (GalleryUpdateManager.getPlan(targetGid) != plan) return;
+                GalleryUpdateManager.finishCleanup(targetGid, completed);
+                GalleryUpdateManager.notifyUpdateStateChanged(targetGid, completed
+                        ? GalleryUpdateManager.UPDATE_STATE_UPDATED
+                        : GalleryUpdateManager.UPDATE_STATE_FAILED);
+            });
         });
     }
 
@@ -1687,7 +1734,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     if (galleryUpdate) {
                         GalleryUpdateManager.notifyUpdateStateChanged(info.gid,
                                 info.state == DownloadInfo.STATE_FINISH
-                                        ? GalleryUpdateManager.UPDATE_STATE_UPDATED
+                                        ? GalleryUpdateManager.UPDATE_STATE_UPDATING
                                         : GalleryUpdateManager.UPDATE_STATE_FAILED);
                     }
                     // Notify

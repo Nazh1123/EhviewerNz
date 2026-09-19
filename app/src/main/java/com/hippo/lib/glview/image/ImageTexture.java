@@ -749,6 +749,7 @@ public class ImageTexture implements Texture, Animatable {
     private long mPlaybackFrameStart;
     private float mPlaybackFrameElapsed;
     private boolean mPlaybackFramePrepared;
+    private volatile boolean mPlaybackDecodeFailed;
     private final int mPlaybackDuration;
     private WeakReference<PlaybackListener> mPlaybackListener;
     private final Object mStallLock = new Object();
@@ -957,8 +958,13 @@ public class ImageTexture implements Texture, Animatable {
         }
     }
 
+    public boolean hasPlaybackDecodeFailed() {
+        return mPlaybackDecodeFailed;
+    }
+
     public void setPlaybackPlaying(boolean playing) {
         if (!mControllableAnimation) return;
+        if (playing && mPlaybackDecodeFailed) return;
         synchronized (mPlaybackLock) {
             updateElapsedLocked();
             mPlaybackPlaying = playing;
@@ -1026,6 +1032,7 @@ public class ImageTexture implements Texture, Animatable {
 
     @Override
     public void start() {
+        if (mPlaybackDecodeFailed) return;
         synchronized (mImage) {
             if (!mImageBusy) {
                 mImageBusy = true;
@@ -1455,6 +1462,22 @@ public class ImageTexture implements Texture, Animatable {
                     }
                     synchronized (mPlaybackLock) {
                         mPlaybackFramePrepared = prepared;
+                    }
+                    if (!prepared) {
+                        // A corrupt later frame or allocation failure cannot be repaired by
+                        // immediately decoding the same frame again. Keep the last canvas,
+                        // stop this decoder, and expose the existing downgrade action.
+                        mPlaybackDecodeFailed = true;
+                        mRunning.set(false);
+                        mRequestAnimation.set(false);
+                        synchronized (mPlaybackLock) {
+                            mPlaybackPlaying = false;
+                        }
+                        notifyPlaybackChanged(false);
+                        WeakReference<PlaybackListener> reference = mPlaybackListener;
+                        PlaybackListener listener = reference != null ? reference.get() : null;
+                        if (listener != null) listener.onPlaybackStalled(ImageTexture.this);
+                        break;
                     }
                     long targetInterval = Math.max(1L, (long) Math.ceil(
                             mPlaybackFrameDelay / prepareSpeed));

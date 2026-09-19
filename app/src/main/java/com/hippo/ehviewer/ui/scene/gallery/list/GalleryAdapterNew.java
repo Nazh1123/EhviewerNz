@@ -44,6 +44,7 @@ import com.hippo.ehviewer.client.EhConfig;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.gallery.ReadingProgressCache;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
 import com.hippo.ehviewer.widget.SimpleRatingView;
 import com.hippo.ehviewer.widget.TileThumbNew;
@@ -85,13 +86,15 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
 
     private DownloadManager mDownloadManager;
 
-    private final ExecutorService executor;
+    private final ReadingProgressCache mReadingProgress;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
 
     public GalleryAdapterNew(@NonNull LayoutInflater inflater, @NonNull Resources resources,
                              @NonNull RecyclerView recyclerView, int type, boolean showFavourited, ExecutorService executor, boolean showReadProgress) {
-        this.executor = executor;
+        android.content.Context context = inflater.getContext().getApplicationContext();
+        mReadingProgress = new ReadingProgressCache(executor,
+                gid -> SpiderQueen.findStartPage(context, gid));
         this.showReadProgress = showReadProgress;
         mInflater = inflater;
         mResources = resources;
@@ -250,6 +253,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
 
     @Override
     public void onBindViewHolder(GalleryAdapterNew.GalleryHolder holder, int position) {
+        cancelProgressRequest(holder);
         GalleryInfo gi = getDataAt(position);
         if (null == gi) {
             holder.boundGid = Long.MIN_VALUE;
@@ -378,16 +382,42 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 : GalleryListDisplayHelper.formatPageProgress(0, gi.pages, false));
         long gid = gi.gid;
         int pages = gi.pages;
-        executor.submit(() -> {
-            int startPage = SpiderQueen.findStartPage(mInflater.getContext(), gi);
+        int generation = holder.progressGeneration;
+        holder.progressRequest = mReadingProgress.request(gid, startPage -> {
             String text = GalleryListDisplayHelper.formatPageProgress(
                     startPage, pages, appendPageSuffix);
             handler.post(() -> {
-                if (holder.boundGid == gid) {
+                if (holder.boundGid == gid && holder.progressGeneration == generation) {
                     target.setText(text);
                 }
             });
         });
+    }
+
+    public void invalidateReadingProgress() {
+        mReadingProgress.clear();
+        notifyDataSetChanged();
+    }
+
+    private void cancelProgressRequest(@NonNull GalleryHolder holder) {
+        holder.progressGeneration++;
+        if (holder.progressRequest != null) {
+            holder.progressRequest.cancel();
+            holder.progressRequest = null;
+        }
+    }
+
+    @Override
+    public void onViewRecycled(@NonNull GalleryHolder holder) {
+        cancelProgressRequest(holder);
+        holder.boundGid = Long.MIN_VALUE;
+        super.onViewRecycled(holder);
+    }
+
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        mReadingProgress.clear();
+        super.onDetachedFromRecyclerView(recyclerView);
     }
 
     public void setThumbItemClickListener(OnThumbItemClickListener listener) {
@@ -432,6 +462,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         @Nullable
         public final TextView thumbnailPages;
         public long boundGid = Long.MIN_VALUE;
+        private int progressGeneration;
+        @Nullable private ReadingProgressCache.Request progressRequest;
 
         public GalleryHolder(View itemView,
                              final OnThumbItemClickListener onThumbItemClickListener,
