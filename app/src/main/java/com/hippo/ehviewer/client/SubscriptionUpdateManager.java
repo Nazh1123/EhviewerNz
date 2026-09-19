@@ -49,7 +49,8 @@ public final class SubscriptionUpdateManager {
     public static final long CANCEL_RETRY_DELAY_MS = 3L * 60L * 1000L;
     public static final long AUTOMATIC_CHECK_REUSE_WINDOW_MS = 30L * 1000L;
 
-    private static final int MAX_CONCURRENT_REQUESTS = 5;
+    private static final int MAX_CONCURRENT_REQUESTS = 8;
+    private static final String KEY_SOURCE_PROGRESS = "subscription_source_progress_v1";
 
     private static final String KEY_LAST_CHECK_TIME =
             "subscription_updates_last_check_time";
@@ -123,7 +124,7 @@ public final class SubscriptionUpdateManager {
 
     /**
      * A successful source response retained from the most recent automatic check. The source can
-     * represent either the EH subscription or one subscribed quick search.
+     * represent either the EH subscription or a planned group of bookmark searches.
      */
     public static final class AutomaticCheckSource {
         @NonNull public final List<GalleryInfo> galleryInfoList;
@@ -134,13 +135,17 @@ public final class SubscriptionUpdateManager {
         public final long boundaryGid;
         public final boolean hasBoundary;
         public final boolean exhausted;
+        private final long startedRealtime;
 
         private final ListUrlBuilder mBuilder = new ListUrlBuilder();
+        @Nullable private final String mBookmarkSourceKey;
 
         AutomaticCheckSource(@NonNull Source source) {
             mBuilder.set(source.builder);
+            mBookmarkSourceKey = source.plan != null ? source.plan.getCacheKey() : null;
             galleryInfoList = Collections.unmodifiableList(
-                    new ArrayList<>(source.galleryInfoList));
+                    SubscriptionGallerySnapshot.copy(source.galleryInfoList));
+            startedRealtime = source.startedRealtime;
             initialResultCount = source.initialResultCount;
             pageIndex = source.pageIndex;
             nextHref = source.nextHref;
@@ -154,24 +159,32 @@ public final class SubscriptionUpdateManager {
             return mBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION;
         }
 
-        public boolean matchesQuickSearch(@Nullable QuickSearch quickSearch) {
-            return !isEhSubscription() && mBuilder.equalsQuickSearch(quickSearch);
+        public boolean matchesBookmarkSource(BookmarkSubscriptionPlanner.Source source) {
+            return source.getCacheKey().equals(mBookmarkSourceKey);
+        }
+
+        public boolean isFresh() {
+            return isAutomaticCheckResultFresh(startedRealtime, SystemClock.elapsedRealtime());
         }
     }
 
-    /** A one-shot snapshot that can seed a subscription page without repeating its requests. */
+    /** A short-lived snapshot reusable by both subscription entry points. */
     public static final class AutomaticCheckResult {
         @NonNull public final List<AutomaticCheckSource> sources;
+        private final String contextKey;
 
-        AutomaticCheckResult(@NonNull List<AutomaticCheckSource> sources) {
+        AutomaticCheckResult(@NonNull List<AutomaticCheckSource> sources, String contextKey) {
             this.sources = Collections.unmodifiableList(new ArrayList<>(sources));
+            this.contextKey = contextKey;
         }
+
+        public boolean matchesContext() { return contextKey.equals(SubscriptionSearchContext.key()); }
 
         boolean hasSourceForMode(int mode) {
             for (AutomaticCheckSource source : sources) {
-                if (mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
+                if (source.isFresh() && (mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
                         || (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
-                        && !source.isEhSubscription())) {
+                        && !source.isEhSubscription()))) {
                     return true;
                 }
             }
@@ -181,9 +194,13 @@ public final class SubscriptionUpdateManager {
 
     private static final class Source {
         final Group group;
+        @Nullable final BookmarkSubscriptionPlanner.Source plan;
         final ListUrlBuilder builder = new ListUrlBuilder();
-        final long cursorGid;
-        final boolean baselineInitialized;
+        long cursorGid;
+        boolean baselineInitialized;
+        String progressKey;
+        long startedRealtime;
+        int retries;
         final Set<Long> discoveredGids = new HashSet<>();
         final ArrayList<GalleryInfo> galleryInfoList = new ArrayList<>();
 
@@ -203,6 +220,7 @@ public final class SubscriptionUpdateManager {
 
         Source(long cursorGid, boolean baselineInitialized) {
             group = Group.EH;
+            plan = null;
             this.cursorGid = cursorGid;
             this.baselineInitialized = baselineInitialized;
             builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
@@ -210,11 +228,12 @@ public final class SubscriptionUpdateManager {
         }
 
         Source(long cursorGid, boolean baselineInitialized,
-               @NonNull QuickSearch quickSearch) {
+               @NonNull BookmarkSubscriptionPlanner.Source plan) {
             group = Group.BOOKMARK;
+            this.plan = plan;
             this.cursorGid = cursorGid;
             this.baselineInitialized = baselineInitialized;
-            builder.set(quickSearch);
+            builder.set(plan.createBuilder());
             builder.setPageIndex(0);
         }
     }
@@ -226,6 +245,10 @@ public final class SubscriptionUpdateManager {
     private final ArrayList<Source> mSources = new ArrayList<>();
     private final Set<Long> mEhUnreadGids;
     private final Set<Long> mBookmarkUnreadGids;
+    private final SubscriptionProgressStore mProgress;
+    private String mSearchContext;
+    private int mOldEhCount;
+    private int mOldBookmarkCount;
 
     @Nullable private Listener mListener;
     @Nullable private AutomaticCheckResult mRecentAutomaticCheckResult;
@@ -256,6 +279,7 @@ public final class SubscriptionUpdateManager {
         mEhUnreadGids = parseGids(Settings.getString(KEY_UNREAD_EH_GIDS, ""));
         mBookmarkUnreadGids = parseGids(
                 Settings.getString(KEY_UNREAD_BOOKMARK_GIDS, ""));
+        mProgress = new SubscriptionProgressStore(Settings.getString(KEY_SOURCE_PROGRESS, ""));
     }
 
     public void setListener(@Nullable Listener listener) {
@@ -276,8 +300,7 @@ public final class SubscriptionUpdateManager {
     }
 
     /**
-     * Returns the recent automatic-check data once, if it is still fresh and useful for the mode.
-     * A successful take consumes the snapshot for both subscription entry points.
+     * Returns fresh automatic-check data without consuming it for the other entry point.
      */
     @Nullable
     public AutomaticCheckResult takeRecentAutomaticCheckResult(int mode) {
@@ -286,7 +309,7 @@ public final class SubscriptionUpdateManager {
             return null;
         }
         long now = SystemClock.elapsedRealtime();
-        if (!isAutomaticCheckResultFresh(mRecentAutomaticCheckCompletedRealtime, now)) {
+        if (!result.matchesContext() || !isAutomaticCheckResultFresh(mRecentAutomaticCheckCompletedRealtime, now)) {
             mRecentAutomaticCheckResult = null;
             mRecentAutomaticCheckCompletedRealtime = 0L;
             return null;
@@ -294,8 +317,6 @@ public final class SubscriptionUpdateManager {
         if (!result.hasSourceForMode(mode)) {
             return null;
         }
-        mRecentAutomaticCheckResult = null;
-        mRecentAutomaticCheckCompletedRealtime = 0L;
         return result;
     }
 
@@ -334,10 +355,11 @@ public final class SubscriptionUpdateManager {
             return false;
         }
 
-        if (!manual) {
-            mRecentAutomaticCheckResult = null;
-            mRecentAutomaticCheckCompletedRealtime = 0L;
-        }
+        mRecentAutomaticCheckResult = null;
+        mRecentAutomaticCheckCompletedRealtime = 0L;
+        mSearchContext = SubscriptionSearchContext.key();
+        mOldEhCount = mEhUnreadGids.size();
+        mOldBookmarkCount = mBookmarkUnreadGids.size();
 
         mChecking = true;
         mManual = manual;
@@ -391,6 +413,7 @@ public final class SubscriptionUpdateManager {
         if (!mChecking) {
             return;
         }
+        if (!mManual && mSearchContext.equals(SubscriptionSearchContext.key())) cacheAutomaticCheckResult();
         mGeneration++;
         for (Source source : mSources) {
             if (source.request != null) {
@@ -479,13 +502,10 @@ public final class SubscriptionUpdateManager {
             if (preparationFailure != null) {
                 mBookmarkPreparationFailed = true;
             } else if (quickSearches != null) {
-                for (QuickSearch quickSearch : quickSearches) {
-                    if (!quickSearch.subscribed || !isSupported(quickSearch)
-                            || containsEquivalentBookmarkSource(quickSearch)) {
-                        continue;
-                    }
+                for (BookmarkSubscriptionPlanner.Source plan
+                        : BookmarkSubscriptionPlanner.plan(quickSearches)) {
                     addSource(new Source(mBookmarkCursorGid,
-                            mBookmarkBaselineInitialized, quickSearch));
+                            mBookmarkBaselineInitialized, plan));
                     mBookmarkSourceCount++;
                 }
             }
@@ -499,34 +519,15 @@ public final class SubscriptionUpdateManager {
     }
 
     private void addSource(@NonNull Source source) {
+        source.progressKey = SubscriptionProgressStore.key(mSearchContext,
+                source.plan == null ? "eh-subscription" : source.plan.getCacheKey());
+        SubscriptionProgressStore.Progress progress = mProgress.get(source.progressKey,
+                source.cursorGid, source.baselineInitialized);
+        source.cursorGid = progress.cursor();
+        source.baselineInitialized = progress.initialized();
         source.queued = true;
         mSources.add(source);
         mQueue.addLast(source);
-    }
-
-    private boolean containsEquivalentBookmarkSource(@NonNull QuickSearch quickSearch) {
-        for (Source source : mSources) {
-            if (source.group == Group.BOOKMARK
-                    && source.builder.equalsQuickSearch(quickSearch)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isSupported(@Nullable QuickSearch quickSearch) {
-        if (quickSearch == null) {
-            return false;
-        }
-        switch (quickSearch.mode) {
-            case ListUrlBuilder.MODE_NORMAL:
-            case ListUrlBuilder.MODE_UPLOADER:
-            case ListUrlBuilder.MODE_TAG:
-            case ListUrlBuilder.MODE_FILTER:
-                return true;
-            default:
-                return false;
-        }
     }
 
     private void pumpRequests(int generation) {
@@ -535,6 +536,7 @@ public final class SubscriptionUpdateManager {
             Source source = mQueue.removeFirst();
             source.queued = false;
             source.loading = true;
+            if (source.pageIndex == 0 && source.retries == 0) source.startedRealtime = SystemClock.elapsedRealtime();
 
             String url;
             if (source.pageIndex == 0) {
@@ -554,7 +556,8 @@ public final class SubscriptionUpdateManager {
 
             EhRequest request = new EhRequest()
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
-                    .setArgs(url, source.builder.getMode())
+                    .setArgs(url, source.builder.getMode(), true,
+                            source.plan != null && source.plan.isMergedUploaderSearch())
                     .setCallback(new EhClient.Callback<GalleryListParser.Result>() {
                         @Override
                         public void onSuccess(GalleryListParser.Result result) {
@@ -563,7 +566,7 @@ public final class SubscriptionUpdateManager {
 
                         @Override
                         public void onFailure(Exception e) {
-                            onPageFailure(generation, source);
+                            onPageFailure(generation, source, e);
                         }
 
                         @Override
@@ -584,6 +587,7 @@ public final class SubscriptionUpdateManager {
             return;
         }
         finishRequest(source);
+        source.retries = 0;
 
         if (source.pageIndex == 0) {
             source.initialResultCount = result.rawResultCount;
@@ -624,11 +628,23 @@ public final class SubscriptionUpdateManager {
         pumpRequests(generation);
     }
 
-    private void onPageFailure(int generation, @NonNull Source source) {
+    private void onPageFailure(int generation, @NonNull Source source, Exception error) {
         if (!mChecking || generation != mGeneration || source.complete) {
             return;
         }
         finishRequest(source);
+        long delay = SubscriptionRetry.delayMillis(error, source.retries);
+        if (delay >= 0) {
+            source.retries++;
+            source.queued = true;
+            mMainHandler.postDelayed(() -> {
+                if (!mChecking || generation != mGeneration) return;
+                mQueue.addLast(source);
+                pumpRequests(generation);
+            }, delay);
+            pumpRequests(generation);
+            return;
+        }
         completeSource(source, false);
         pumpRequests(generation);
     }
@@ -647,6 +663,13 @@ public final class SubscriptionUpdateManager {
         source.successful = success;
         source.loading = false;
         source.queued = false;
+        if (success && mSearchContext.equals(SubscriptionSearchContext.key())) {
+            Set<Long> unread = source.group == Group.EH ? mEhUnreadGids : mBookmarkUnreadGids;
+            if (unread.addAll(source.discoveredGids)) persistGids(
+                    source.group == Group.EH ? KEY_UNREAD_EH_GIDS : KEY_UNREAD_BOOKMARK_GIDS, unread);
+            mProgress.complete(source.progressKey, Math.max(source.cursorGid, source.maxObservedGid));
+            Settings.putString(KEY_SOURCE_PROGRESS, mProgress.serialize());
+        }
         mCompletedSources++;
         if (source.group == Group.EH) {
             if (success) {
@@ -678,13 +701,12 @@ public final class SubscriptionUpdateManager {
             return;
         }
 
-        int oldEhCount = mEhUnreadGids.size();
-        int oldBookmarkCount = mBookmarkUnreadGids.size();
-        boolean ehSuccess = !mEhEnabled
-                || (mEhFailureCount == 0 && mCompletedSourcesFor(Group.EH) == mEhSourceCount);
-        boolean bookmarkSuccess = !mBookmarkEnabled
+        boolean sameContext = mSearchContext.equals(SubscriptionSearchContext.key());
+        boolean ehSuccess = sameContext && (!mEhEnabled
+                || (mEhFailureCount == 0 && mCompletedSourcesFor(Group.EH) == mEhSourceCount));
+        boolean bookmarkSuccess = sameContext && (!mBookmarkEnabled
                 || (!mBookmarkPreparationFailed && mBookmarkFailureCount == 0
-                && mCompletedSourcesFor(Group.BOOKMARK) == mBookmarkSourceCount);
+                && mCompletedSourcesFor(Group.BOOKMARK) == mBookmarkSourceCount));
 
         if (mEhEnabled && ehSuccess) {
             commitGroup(Group.EH, mEhCursorGid, mEhMaxObservedGid);
@@ -694,15 +716,15 @@ public final class SubscriptionUpdateManager {
                     mBookmarkMaxObservedGid);
         }
 
-        if (!mManual) {
+        if (!mManual && sameContext) {
             cacheAutomaticCheckResult();
         }
 
         resetCheckTimer();
         mChecking = false;
-        int newEhCount = Math.max(0, mEhUnreadGids.size() - oldEhCount);
+        int newEhCount = Math.max(0, mEhUnreadGids.size() - mOldEhCount);
         int newBookmarkCount = Math.max(0,
-                mBookmarkUnreadGids.size() - oldBookmarkCount);
+                mBookmarkUnreadGids.size() - mOldBookmarkCount);
         CheckResult result = new CheckResult(mManual,
                 !ehSuccess || !bookmarkSuccess, newEhCount, newBookmarkCount,
                 getSnapshot());
@@ -772,7 +794,7 @@ public final class SubscriptionUpdateManager {
             mRecentAutomaticCheckResult = null;
             mRecentAutomaticCheckCompletedRealtime = 0L;
         } else {
-            mRecentAutomaticCheckResult = new AutomaticCheckResult(sources);
+            mRecentAutomaticCheckResult = new AutomaticCheckResult(sources, mSearchContext);
             mRecentAutomaticCheckCompletedRealtime = SystemClock.elapsedRealtime();
         }
     }

@@ -1701,11 +1701,11 @@ public class GalleryListScene extends BaseScene
 
         boolean downloaded = mDownloadManager.getDownloadState(gi.gid) != DownloadInfo.STATE_INVALID;
         boolean favourited = gi.favoriteSlot != -2;
-        ListUrlBuilder matchingBookmarkSearch = isBookmarkSubscriptionMode()
+        boolean hasMatchingBookmark = isBookmarkSubscriptionMode()
                 && mBookmarkSubscriptionCoordinator != null
-                ? mBookmarkSubscriptionCoordinator.buildSearchForGallery(gi.gid) : null;
+                && mBookmarkSubscriptionCoordinator.hasSearchForGallery(gi.gid);
 
-        int menuSize = matchingBookmarkSearch != null ? 4 : 3;
+        int menuSize = hasMatchingBookmark ? 4 : 3;
         CharSequence[] items = new CharSequence[menuSize];
         items[0] = context.getString(R.string.read);
         items[1] = context.getString(downloaded
@@ -1718,7 +1718,7 @@ public class GalleryListScene extends BaseScene
         icons[1] = downloaded ? R.drawable.v_delete_x24 : R.drawable.v_download_x24;
         icons[2] = favourited ? R.drawable.v_heart_broken_x24 : R.drawable.v_heart_x24;
 
-        if (matchingBookmarkSearch != null) {
+        if (hasMatchingBookmark) {
             items[3] = context.getString(R.string.search_corresponding_bookmarks);
             icons[3] = R.drawable.v_magnify_x24;
         }
@@ -1776,8 +1776,19 @@ public class GalleryListScene extends BaseScene
                             }
                             break;
                         case 3: // Search matching bookmark subscriptions
-                            if (matchingBookmarkSearch != null) {
-                                searchMatchingBookmarks(matchingBookmarkSearch);
+                            if (hasMatchingBookmark && mBookmarkSubscriptionCoordinator != null) {
+                                mBookmarkSubscriptionCoordinator.resolveSearchForGallery(gi.gid,
+                                        new EhClient.Callback<ListUrlBuilder>() {
+                                            @Override public void onSuccess(ListUrlBuilder builder) {
+                                                if (getActivity2() == null) return;
+                                                if (builder != null) searchMatchingBookmarks(builder);
+                                                else showTip(R.string.gallery_list_no_more_data, LENGTH_SHORT);
+                                            }
+                                            @Override public void onFailure(Exception error) {
+                                                if (getActivity2() != null) showTip(error.getMessage(), LENGTH_LONG);
+                                            }
+                                            @Override public void onCancel() { }
+                                        });
                             }
                             break;
                     }

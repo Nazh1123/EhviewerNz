@@ -97,6 +97,7 @@ import org.jsoup.select.Elements;
 public class EhEngine {
 
     private static final String TAG = EhEngine.class.getSimpleName();
+    private static final SubscriptionMetadataCache SUBSCRIPTION_METADATA = new SubscriptionMetadataCache();
 
     private static final String SAD_PANDA_DISPOSITION = "inline; filename=\"sadpanda.jpg\"";
     private static final String SAD_PANDA_TYPE = "image/gif";
@@ -209,6 +210,11 @@ public class EhEngine {
     }
 
     private static void fillGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient, List<GalleryInfo> list, String url, boolean filter) throws Throwable {
+        fillGalleryList(task, okHttpClient, list, url, filter, null);
+    }
+
+    private static void fillGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
+            List<GalleryInfo> list, String url, boolean filter, @Nullable String subscriptionScope) throws Throwable {
         // Filter title and uploader
         if (filter) {
             for (int i = 0, n = list.size(); i < n; i++) {
@@ -249,7 +255,12 @@ public class EhEngine {
                 hasRated ||
                 needThumbnailInfo;
         if (needApi) {
-            fillGalleryListByApi(task, okHttpClient, list, url);
+            if (subscriptionScope != null) {
+                SUBSCRIPTION_METADATA.fill(subscriptionScope, list,
+                        items -> fillGalleryListByApi(task, okHttpClient, items, url));
+            } else {
+                fillGalleryListByApi(task, okHttpClient, list, url);
+            }
         }
 
         // Filter tag
@@ -272,6 +283,13 @@ public class EhEngine {
 
     public static GalleryListParser.Result getGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
                                                           String url,int mode) throws Throwable {
+        return getGalleryList(task, okHttpClient, url, mode, false, false);
+    }
+
+    public static GalleryListParser.Result getGalleryList(@Nullable EhClient.Task task,
+            OkHttpClient okHttpClient, String url, int mode,
+            boolean subscriptionSearch, boolean requireUploader) throws Throwable {
+        String subscriptionScope = subscriptionSearch ? SubscriptionSearchContext.key() : null;
         String referer = EhUrl.getReferer();
         Log.d(TAG, url);
         Request request = new EhRequestBuilder(url, referer).build();
@@ -292,20 +310,60 @@ public class EhEngine {
             headers = response.headers();
             assert response.body() != null;
             body = response.body().string();
-            result = GalleryListParser.parse(body, mode);
+            if (subscriptionSearch && !response.isSuccessful()) {
+                throw new IOException("Subscription search returned HTTP " + code);
+            }
+            result = subscriptionSearch
+                    ? GalleryListParser.parseMergedUploaderSearch(body, mode)
+                    : GalleryListParser.parse(body, mode);
         } catch (Throwable e) {
             ExceptionUtils.throwIfFatal(e);
             throwException(call, code, headers, body, e);
             throw e;
         }
 
-        fillGalleryList(task, okHttpClient, result.galleryInfoList, url, true);
+        if (requireUploader) {
+            // Some list display modes omit uploaders. Resolve only missing metadata so
+            // bookmark attribution stays exact, including when automatic results are reused.
+            List<GalleryInfo> missingUploaders = new ArrayList<>();
+            for (GalleryInfo gallery : result.galleryInfoList) {
+                if (TextUtils.isEmpty(gallery.uploader)) missingUploaders.add(gallery);
+            }
+            if (!missingUploaders.isEmpty()) {
+                SUBSCRIPTION_METADATA.fill(subscriptionScope, missingUploaders,
+                        items -> fillGalleryListByApi(task, okHttpClient, items, url));
+                for (GalleryInfo gallery : missingUploaders) {
+                    if (TextUtils.isEmpty(gallery.uploader)) {
+                        throw new IllegalStateException("Unable to resolve subscription uploader");
+                    }
+                }
+            }
+        }
+        fillGalleryList(task, okHttpClient, result.galleryInfoList, url, true, subscriptionScope);
 
         if (code == 200 && url.equals("https://exhentai.org/") && body.isEmpty()) {
             result.customErrorString = GetText.getString(R.string.error_igneous_wrong);
         }
 
         return result;
+    }
+
+    /** Verify an ambiguous tag match only when the user requests its source bookmark. */
+    public static boolean verifyBookmark(EhClient.Task task, OkHttpClient client,
+            String url, int mode, long gid) throws Throwable {
+        okhttp3.HttpUrl parsed = okhttp3.HttpUrl.parse(url);
+        if (parsed == null || gid <= 0 || gid == Long.MAX_VALUE) throw new IllegalArgumentException("Invalid gallery");
+        String bounded = parsed.newBuilder().removeAllQueryParameters("prev")
+                .removeAllQueryParameters("page").setQueryParameter("next", Long.toString(gid + 1)).build().toString();
+        Call call = client.newCall(new EhRequestBuilder(bounded, EhUrl.getReferer()).build());
+        task.setCall(call);
+        try (Response response = call.execute()) {
+            if (!response.isSuccessful() || response.body() == null)
+                throw new IOException("Bookmark lookup failed: HTTP " + response.code());
+            GalleryListParser.Result result = GalleryListParser.parseMergedUploaderSearch(response.body().string(), mode);
+            for (GalleryInfo gallery : result.galleryInfoList) if (gallery.gid == gid) return true;
+            return false;
+        }
     }
 
     // At least, GalleryInfo contain valid gid and token

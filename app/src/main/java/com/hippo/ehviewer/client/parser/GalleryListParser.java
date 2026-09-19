@@ -16,6 +16,8 @@
 
 package com.hippo.ehviewer.client.parser;
 
+import com.hippo.ehviewer.client.data.ListUrlBuilder;
+
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -92,6 +94,27 @@ public class GalleryListParser {
             ExceptionUtils.throwIfFatal(e);
             throw new ParseException("Can't parse gallery list pages", body);
         }
+    }
+
+    /** A malformed combined query must not advance the subscription's checked cursor. */
+    public static Result parseMergedUploaderSearch(@NonNull String body, int mode)
+            throws Exception {
+        Document document = Jsoup.parse(body);
+        for (Element paragraph : document.select("p")) {
+            String text = paragraph.text();
+            if (text.contains("unsupported syntax") || text.startsWith("You cannot combine")
+                    || text.startsWith("You can only use")) {
+                throw new ParseException(text, body);
+            }
+        }
+        if (mode == ListUrlBuilder.MODE_SUBSCRIPTION && document.select(".itg").isEmpty()
+                && document.select("p").stream()
+                .anyMatch(p -> p.text().startsWith("You do not have any watched tags"))) {
+            Result result = new Result();
+            result.noWatchedTags = true;
+            return result;
+        }
+        return parse(document, body, mode);
     }
 
     public static Result parse(@NonNull String body, int mode) throws Exception {

@@ -17,12 +17,18 @@
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
 import android.text.TextUtils;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.annotation.Nullable;
 
 import com.hippo.ehviewer.client.EhClient;
+import com.hippo.ehviewer.client.BookmarkSubscriptionPlanner;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
+import com.hippo.ehviewer.client.SubscriptionSearchContext;
+import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
+import com.hippo.ehviewer.client.SubscriptionRetry;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
@@ -48,7 +54,7 @@ import java.util.Set;
 final class BookmarkSubscriptionCoordinator {
 
     private static final int DEFAULT_BATCH_SIZE = 25;
-    private static final int MAX_CONCURRENT_REQUESTS = 5;
+    private static final int MAX_CONCURRENT_REQUESTS = 8;
 
     interface Listener {
         void onBookmarkSubscriptionBatch(int taskId, List<GalleryInfo> data,
@@ -60,7 +66,7 @@ final class BookmarkSubscriptionCoordinator {
 
     private static final class Source {
         final int id;
-        @Nullable final QuickSearch quickSearch;
+        @Nullable final BookmarkSubscriptionPlanner.Source plan;
         final ListUrlBuilder builder = new ListUrlBuilder();
         final ArrayList<GalleryInfo> buffer = new ArrayList<>();
 
@@ -74,17 +80,19 @@ final class BookmarkSubscriptionCoordinator {
         boolean queued;
         boolean loading;
         @Nullable EhRequest request;
+        int retries;
+        @Nullable String retryUrl;
 
-        Source(int id, QuickSearch quickSearch) {
+        Source(int id, BookmarkSubscriptionPlanner.Source plan) {
             this.id = id;
-            this.quickSearch = quickSearch;
-            builder.set(quickSearch);
+            this.plan = plan;
+            builder.set(plan.createBuilder());
             builder.setPageIndex(0);
         }
 
         Source(int id) {
             this.id = id;
-            quickSearch = null;
+            plan = null;
             builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
             builder.setPageIndex(0);
         }
@@ -106,6 +114,7 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     private final EhClient mClient;
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
     private final Listener mListener;
     private final ArrayList<Source> mSources = new ArrayList<>();
     private final ArrayDeque<PendingRequest> mRequestQueue = new ArrayDeque<>();
@@ -113,6 +122,21 @@ final class BookmarkSubscriptionCoordinator {
     private final Map<Long, LinkedHashSet<QuickSearch>> mMatchingQuickSearches =
             new HashMap<>();
     private final ArrayList<GalleryInfo> mPendingBatch = new ArrayList<>();
+    private final Map<Long, LinkedHashSet<QuickSearch>> mUnresolvedQuickSearches = new HashMap<>();
+    @Nullable private Resolution mResolution;
+
+    private static final class Resolution {
+        final long gid;
+        final ArrayDeque<QuickSearch> candidates;
+        final LinkedHashSet<QuickSearch> matches = new LinkedHashSet<>();
+        final EhClient.Callback<ListUrlBuilder> callback;
+        @Nullable EhRequest request;
+        Resolution(long gid, Set<QuickSearch> candidates, EhClient.Callback<ListUrlBuilder> callback) {
+            this.gid = gid;
+            this.candidates = new ArrayDeque<>(candidates);
+            this.callback = callback;
+        }
+    }
 
     private int mGeneration;
     private int mTaskId;
@@ -132,18 +156,7 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     static boolean isSupported(QuickSearch quickSearch) {
-        if (quickSearch == null) {
-            return false;
-        }
-        switch (quickSearch.mode) {
-            case ListUrlBuilder.MODE_NORMAL:
-            case ListUrlBuilder.MODE_UPLOADER:
-            case ListUrlBuilder.MODE_TAG:
-            case ListUrlBuilder.MODE_FILTER:
-                return true;
-            default:
-                return false;
-        }
+        return BookmarkSubscriptionPlanner.isSupported(quickSearch);
     }
 
     static String getFingerprint(List<QuickSearch> quickSearches,
@@ -152,7 +165,10 @@ final class BookmarkSubscriptionCoordinator {
         if (includeEhSubscription) {
             builder.append("eh-subscription;");
         }
-        for (QuickSearch quickSearch : quickSearches) {
+        List<QuickSearch> sorted = new ArrayList<>(quickSearches);
+        sorted.sort(java.util.Comparator.comparing(q -> String.valueOf(q.id)));
+        builder.append(SubscriptionSearchContext.key()).append(';');
+        for (QuickSearch quickSearch : sorted) {
             if (!quickSearch.subscribed || !isSupported(quickSearch)) {
                 continue;
             }
@@ -192,6 +208,9 @@ final class BookmarkSubscriptionCoordinator {
         if (matches == null || matches.isEmpty()) {
             return null;
         }
+
+        List<BookmarkSubscriptionPlanner.Source> union = BookmarkSubscriptionPlanner.plan(new ArrayList<>(matches));
+        if (union.size() == 1) return union.get(0).createBuilder();
 
         ListUrlBuilder builder = new ListUrlBuilder();
         if (matches.size() == 1) {
@@ -252,6 +271,60 @@ final class BookmarkSubscriptionCoordinator {
         return builder;
     }
 
+    boolean hasSearchForGallery(long gid) {
+        return mUnresolvedQuickSearches.containsKey(gid) || buildSearchForGallery(gid) != null;
+    }
+
+    void resolveSearchForGallery(long gid, EhClient.Callback<ListUrlBuilder> callback) {
+        if (mResolution != null) return;
+        Set<QuickSearch> candidates = mUnresolvedQuickSearches.get(gid);
+        if (candidates == null || candidates.isEmpty()) {
+            callback.onSuccess(buildSearchForGallery(gid));
+            return;
+        }
+        mResolution = new Resolution(gid, candidates, callback);
+        pumpResolution();
+    }
+
+    private void pumpResolution() {
+        Resolution resolution = mResolution;
+        if (resolution == null || resolution.request != null || mActiveRequests >= MAX_CONCURRENT_REQUESTS) return;
+        QuickSearch candidate = resolution.candidates.pollFirst();
+        if (candidate == null) {
+            mMatchingQuickSearches.computeIfAbsent(resolution.gid, ignored -> new LinkedHashSet<>())
+                    .addAll(resolution.matches);
+            mUnresolvedQuickSearches.remove(resolution.gid);
+            mResolution = null;
+            resolution.callback.onSuccess(buildSearchForGallery(resolution.gid));
+            return;
+        }
+        ListUrlBuilder builder = new ListUrlBuilder();
+        builder.set(candidate);
+        int generation = mGeneration;
+        resolution.request = new EhRequest().setMethod(EhClient.METHOD_VERIFY_BOOKMARK)
+                .setArgs(builder.build(), builder.getMode(), resolution.gid)
+                .setCallback(new EhClient.Callback<Boolean>() {
+                    @Override public void onSuccess(Boolean matches) {
+                        if (generation != mGeneration || mResolution != resolution) return;
+                        resolution.request = null;
+                        mActiveRequests--;
+                        if (matches) resolution.matches.add(candidate);
+                        pumpResolution();
+                        pumpRequests();
+                    }
+                    @Override public void onFailure(Exception error) {
+                        if (generation != mGeneration || mResolution != resolution) return;
+                        mResolution = null;
+                        mActiveRequests--;
+                        resolution.callback.onFailure(error);
+                        pumpRequests();
+                    }
+                    @Override public void onCancel() { }
+                });
+        mActiveRequests++;
+        mClient.execute(resolution.request);
+    }
+
     void refresh(int taskId, List<QuickSearch> quickSearches,
                  boolean includeEhSubscription,
                  @Nullable SubscriptionUpdateManager.AutomaticCheckResult automaticResult) {
@@ -268,12 +341,9 @@ final class BookmarkSubscriptionCoordinator {
             mSources.add(new Source(mSources.size()));
         }
 
-        for (QuickSearch quickSearch : quickSearches) {
-            if (!quickSearch.subscribed || !isSupported(quickSearch)
-                    || containsEquivalentSource(quickSearch)) {
-                continue;
-            }
-            mSources.add(new Source(mSources.size(), quickSearch));
+        for (BookmarkSubscriptionPlanner.Source plan
+                : BookmarkSubscriptionPlanner.plan(quickSearches)) {
+            mSources.add(new Source(mSources.size(), plan));
         }
 
         if (mSources.isEmpty()) {
@@ -316,6 +386,9 @@ final class BookmarkSubscriptionCoordinator {
 
     void cancel() {
         mGeneration++;
+        if (mResolution != null && mResolution.request != null) mResolution.request.cancel();
+        mResolution = null;
+        mUnresolvedQuickSearches.clear();
         mLoading = false;
         mRefresh = false;
         mRequestQueue.clear();
@@ -336,27 +409,19 @@ final class BookmarkSubscriptionCoordinator {
         mLatestBookmarkGid = 0L;
     }
 
-    private boolean containsEquivalentSource(QuickSearch quickSearch) {
-        for (Source source : mSources) {
-            if (source.builder.equalsQuickSearch(quickSearch)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     @Nullable
     private static SubscriptionUpdateManager.AutomaticCheckSource findCachedSource(
             @Nullable SubscriptionUpdateManager.AutomaticCheckResult automaticResult,
             Source source) {
-        if (automaticResult == null) {
+        if (automaticResult == null || !automaticResult.matchesContext()) {
             return null;
         }
         for (SubscriptionUpdateManager.AutomaticCheckSource cachedSource
                 : automaticResult.sources) {
-            if (source.quickSearch == null
+            if (!cachedSource.isFresh()) continue;
+            if (source.plan == null
                     ? cachedSource.isEhSubscription()
-                    : cachedSource.matchesQuickSearch(source.quickSearch)) {
+                    : cachedSource.matchesBookmarkSource(source.plan)) {
                 return cachedSource;
             }
         }
@@ -373,7 +438,7 @@ final class BookmarkSubscriptionCoordinator {
         source.boundaryGid = cachedSource.boundaryGid;
         source.hasBoundary = cachedSource.hasBoundary;
         source.exhausted = cachedSource.exhausted;
-        setSourceGalleryInfos(source, cachedSource.galleryInfoList);
+        setSourceGalleryInfos(source, SubscriptionGallerySnapshot.copy(cachedSource.galleryInfoList));
     }
 
     private void enqueue(Source source, boolean initial) {
@@ -385,6 +450,7 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     private void pumpRequests() {
+        pumpResolution();
         while (mActiveRequests < MAX_CONCURRENT_REQUESTS && !mRequestQueue.isEmpty()) {
             PendingRequest pending = mRequestQueue.removeFirst();
             Source source = pending.source();
@@ -392,7 +458,9 @@ final class BookmarkSubscriptionCoordinator {
             source.loading = true;
 
             String url;
-            if (pending.initial()) {
+            if (source.retries > 0 && source.retryUrl != null) {
+                url = source.retryUrl;
+            } else if (pending.initial()) {
                 source.pageIndex = 0;
                 source.builder.setPageIndex(0);
                 url = source.builder.build();
@@ -410,10 +478,12 @@ final class BookmarkSubscriptionCoordinator {
                 continue;
             }
 
+            source.retryUrl = url;
             int generation = mGeneration;
             EhRequest request = new EhRequest()
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
-                    .setArgs(url, source.builder.getMode())
+                    .setArgs(url, source.builder.getMode(), true,
+                            source.plan != null && source.plan.isMergedUploaderSearch())
                     .setCallback(new EhClient.Callback<GalleryListParser.Result>() {
                         @Override
                         public void onSuccess(GalleryListParser.Result result) {
@@ -443,6 +513,8 @@ final class BookmarkSubscriptionCoordinator {
         }
         Source source = mSources.get(sourceId);
         finishRequest(source, initial);
+        source.retries = 0;
+        source.retryUrl = null;
 
         if (initial) {
             mBatchSize = Math.max(mBatchSize, result.rawResultCount);
@@ -468,20 +540,24 @@ final class BookmarkSubscriptionCoordinator {
         source.bufferIndex = 0;
         source.buffer.addAll(galleryInfoList);
         for (GalleryInfo galleryInfo : galleryInfoList) {
-            if (source.quickSearch == null) {
+            if (source.plan == null) {
                 mLatestEhGid = Math.max(mLatestEhGid, galleryInfo.gid);
             } else {
                 mLatestBookmarkGid = Math.max(
                         mLatestBookmarkGid, galleryInfo.gid);
             }
-            if (source.quickSearch != null) {
+            if (source.plan != null) {
                 LinkedHashSet<QuickSearch> matches =
                         mMatchingQuickSearches.get(galleryInfo.gid);
                 if (matches == null) {
                     matches = new LinkedHashSet<>();
                     mMatchingQuickSearches.put(galleryInfo.gid, matches);
                 }
-                matches.add(source.quickSearch);
+                matches.addAll(source.plan.matchingGalleryBookmarks(galleryInfo));
+                if (source.plan.requiresVerification()) {
+                    mUnresolvedQuickSearches.computeIfAbsent(galleryInfo.gid, ignored -> new LinkedHashSet<>())
+                            .addAll(source.plan.getBookmarks());
+                }
             }
         }
         Collections.sort(source.buffer,
@@ -493,6 +569,20 @@ final class BookmarkSubscriptionCoordinator {
             return;
         }
         Source source = mSources.get(sourceId);
+        long delay = SubscriptionRetry.delayMillis(error, source.retries);
+        if (delay >= 0) {
+            finishRequest(source, false);
+            source.retries++;
+            source.queued = true;
+            mHandler.postDelayed(() -> {
+                if (generation != mGeneration) return;
+                source.queued = false;
+                enqueue(source, initial);
+                pumpRequests();
+            }, delay);
+            pumpRequests();
+            return;
+        }
         finishRequest(source, initial);
         source.exhausted = true;
         if (mFirstFailure == null) {

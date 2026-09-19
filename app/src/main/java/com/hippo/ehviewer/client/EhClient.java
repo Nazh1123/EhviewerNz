@@ -71,6 +71,7 @@ public class EhClient {
     public static final int METHOD_RESET_LIMIT = 26;
     public static final int METHOD_GET_EDIT_COMMENT = 29;
     public static final int METHOD_GET_GALLERY_CHAIN_METADATA = 30;
+    public static final int METHOD_VERIFY_BOOKMARK = 31;
 
     private final ThreadPoolExecutor mRequestThreadPool;
     private final OkHttpClient mOkHttpClient;
@@ -158,7 +159,13 @@ public class EhClient {
                     case METHOD_SIGN_IN:
                         return EhEngine.signIn(this, mOkHttpClient, (String) params[0], (String) params[1]);
                     case METHOD_GET_GALLERY_LIST:
-                        return EhEngine.getGalleryList(this, mOkHttpClient, (String) params[0], (int) params[1]);
+                        return EhEngine.getGalleryList(this, mOkHttpClient,
+                                (String) params[0], (int) params[1],
+                                params.length > 2 && Boolean.TRUE.equals(params[2]),
+                                params.length > 3 && Boolean.TRUE.equals(params[3]));
+                    case METHOD_VERIFY_BOOKMARK:
+                        return EhEngine.verifyBookmark(this, mOkHttpClient,
+                                (String) params[0], (int) params[1], (long) params[2]);
                     case METHOD_GET_GALLERY_DETAIL:
                         return EhEngine.getGalleryDetail(this, mOkHttpClient, (String) params[0]);
                     case METHOD_GET_GALLERY_CHAIN_METADATA:
