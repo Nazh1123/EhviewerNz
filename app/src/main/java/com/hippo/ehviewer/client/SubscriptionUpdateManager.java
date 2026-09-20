@@ -47,7 +47,7 @@ public final class SubscriptionUpdateManager {
 
     public static final long CHECK_INTERVAL_MS = 60L * 60L * 1000L;
     public static final long CANCEL_RETRY_DELAY_MS = 3L * 60L * 1000L;
-    public static final long AUTOMATIC_CHECK_REUSE_WINDOW_MS = 30L * 1000L;
+    public static final long CHECK_REUSE_WINDOW_MS = 30L * 1000L;
 
     private static final int MAX_CONCURRENT_REQUESTS = 8;
     private static final String KEY_SOURCE_PROGRESS = "subscription_source_progress_v1";
@@ -123,10 +123,10 @@ public final class SubscriptionUpdateManager {
     }
 
     /**
-     * A successful source response retained from the most recent automatic check. The source can
+     * A successful source response retained from the most recent update check. The source can
      * represent either the EH subscription or a planned group of bookmark searches.
      */
-    public static final class AutomaticCheckSource {
+    public static final class RecentCheckSource {
         @NonNull public final List<GalleryInfo> galleryInfoList;
         public final int initialResultCount;
         public final int pageIndex;
@@ -140,7 +140,7 @@ public final class SubscriptionUpdateManager {
         private final ListUrlBuilder mBuilder = new ListUrlBuilder();
         @Nullable private final String mBookmarkSourceKey;
 
-        AutomaticCheckSource(@NonNull Source source) {
+        RecentCheckSource(@NonNull Source source) {
             mBuilder.set(source.builder);
             mBookmarkSourceKey = source.plan != null ? source.plan.getCacheKey() : null;
             galleryInfoList = Collections.unmodifiableList(
@@ -164,16 +164,16 @@ public final class SubscriptionUpdateManager {
         }
 
         public boolean isFresh() {
-            return isAutomaticCheckResultFresh(startedRealtime, SystemClock.elapsedRealtime());
+            return isCheckResultFresh(startedRealtime, SystemClock.elapsedRealtime());
         }
     }
 
-    /** A short-lived snapshot reusable by both subscription entry points. */
-    public static final class AutomaticCheckResult {
-        @NonNull public final List<AutomaticCheckSource> sources;
+    /** A short-lived snapshot reusable by bookmark and global subscription entry points. */
+    public static final class RecentCheckResult {
+        @NonNull public final List<RecentCheckSource> sources;
         private final String contextKey;
 
-        AutomaticCheckResult(@NonNull List<AutomaticCheckSource> sources, String contextKey) {
+        RecentCheckResult(@NonNull List<RecentCheckSource> sources, String contextKey) {
             this.sources = Collections.unmodifiableList(new ArrayList<>(sources));
             this.contextKey = contextKey;
         }
@@ -181,7 +181,7 @@ public final class SubscriptionUpdateManager {
         public boolean matchesContext() { return contextKey.equals(SubscriptionSearchContext.key()); }
 
         boolean hasSourceForMode(int mode) {
-            for (AutomaticCheckSource source : sources) {
+            for (RecentCheckSource source : sources) {
                 if (source.isFresh() && (mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
                         || (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
                         && !source.isEhSubscription()))) {
@@ -251,8 +251,8 @@ public final class SubscriptionUpdateManager {
     private int mOldBookmarkCount;
 
     @Nullable private Listener mListener;
-    @Nullable private AutomaticCheckResult mRecentAutomaticCheckResult;
-    private long mRecentAutomaticCheckCompletedRealtime;
+    @Nullable private RecentCheckResult mRecentCheckResult;
+    private long mRecentCheckCompletedRealtime;
     private int mGeneration;
     private int mActiveRequests;
     private int mCompletedSources;
@@ -300,18 +300,18 @@ public final class SubscriptionUpdateManager {
     }
 
     /**
-     * Returns fresh automatic-check data without consuming it for the other entry point.
+     * Returns fresh update-check data without consuming it for the other entry points.
      */
     @Nullable
-    public AutomaticCheckResult takeRecentAutomaticCheckResult(int mode) {
-        AutomaticCheckResult result = mRecentAutomaticCheckResult;
+    public RecentCheckResult getRecentCheckResult(int mode) {
+        RecentCheckResult result = mRecentCheckResult;
         if (result == null) {
             return null;
         }
         long now = SystemClock.elapsedRealtime();
-        if (!result.matchesContext() || !isAutomaticCheckResultFresh(mRecentAutomaticCheckCompletedRealtime, now)) {
-            mRecentAutomaticCheckResult = null;
-            mRecentAutomaticCheckCompletedRealtime = 0L;
+        if (!result.matchesContext() || !isCheckResultFresh(mRecentCheckCompletedRealtime, now)) {
+            mRecentCheckResult = null;
+            mRecentCheckCompletedRealtime = 0L;
             return null;
         }
         if (!result.hasSourceForMode(mode)) {
@@ -355,8 +355,8 @@ public final class SubscriptionUpdateManager {
             return false;
         }
 
-        mRecentAutomaticCheckResult = null;
-        mRecentAutomaticCheckCompletedRealtime = 0L;
+        mRecentCheckResult = null;
+        mRecentCheckCompletedRealtime = 0L;
         mSearchContext = SubscriptionSearchContext.key();
         mOldEhCount = mEhUnreadGids.size();
         mOldBookmarkCount = mBookmarkUnreadGids.size();
@@ -413,7 +413,7 @@ public final class SubscriptionUpdateManager {
         if (!mChecking) {
             return;
         }
-        if (!mManual && mSearchContext.equals(SubscriptionSearchContext.key())) cacheAutomaticCheckResult();
+        if (mSearchContext.equals(SubscriptionSearchContext.key())) cacheRecentCheckResult();
         mGeneration++;
         for (Source source : mSources) {
             if (source.request != null) {
@@ -716,8 +716,8 @@ public final class SubscriptionUpdateManager {
                     mBookmarkMaxObservedGid);
         }
 
-        if (!mManual && sameContext) {
-            cacheAutomaticCheckResult();
+        if (sameContext) {
+            cacheRecentCheckResult();
         }
 
         resetCheckTimer();
@@ -783,19 +783,19 @@ public final class SubscriptionUpdateManager {
         }
     }
 
-    private void cacheAutomaticCheckResult() {
-        ArrayList<AutomaticCheckSource> sources = new ArrayList<>();
+    private void cacheRecentCheckResult() {
+        ArrayList<RecentCheckSource> sources = new ArrayList<>();
         for (Source source : mSources) {
             if (source.successful) {
-                sources.add(new AutomaticCheckSource(source));
+                sources.add(new RecentCheckSource(source));
             }
         }
         if (sources.isEmpty()) {
-            mRecentAutomaticCheckResult = null;
-            mRecentAutomaticCheckCompletedRealtime = 0L;
+            mRecentCheckResult = null;
+            mRecentCheckCompletedRealtime = 0L;
         } else {
-            mRecentAutomaticCheckResult = new AutomaticCheckResult(sources, mSearchContext);
-            mRecentAutomaticCheckCompletedRealtime = SystemClock.elapsedRealtime();
+            mRecentCheckResult = new RecentCheckResult(sources, mSearchContext);
+            mRecentCheckCompletedRealtime = SystemClock.elapsedRealtime();
         }
     }
 
@@ -877,9 +877,8 @@ public final class SubscriptionUpdateManager {
         return Math.max(intervalCheckTime, cancelRetryNotBeforeTime);
     }
 
-    static boolean isAutomaticCheckResultFresh(long completedRealtime,
-                                                long nowRealtime) {
-        return completedRealtime >= 0L && nowRealtime >= completedRealtime
-                && nowRealtime - completedRealtime <= AUTOMATIC_CHECK_REUSE_WINDOW_MS;
+    static boolean isCheckResultFresh(long cachedRealtime, long nowRealtime) {
+        return cachedRealtime >= 0L && nowRealtime >= cachedRealtime
+                && nowRealtime - cachedRealtime <= CHECK_REUSE_WINDOW_MS;
     }
 }

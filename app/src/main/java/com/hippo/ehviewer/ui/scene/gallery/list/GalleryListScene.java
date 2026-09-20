@@ -367,7 +367,7 @@ public class GalleryListScene extends BaseScene
     @Nullable
     private SubscriptionUpdateManager mSubscriptionUpdateManager;
     @Nullable
-    private SubscriptionUpdateManager.AutomaticCheckResult mAutomaticCheckResult;
+    private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
 
     @Override
     public int getNavCheckedItem() {
@@ -556,7 +556,7 @@ public class GalleryListScene extends BaseScene
         }
         mClient = null;
         mUrlBuilder = null;
-        mAutomaticCheckResult = null;
+        mRecentCheckResult = null;
         mSubscriptionUpdateManager = null;
         mDownloadManager.removeDownloadInfoListener(mDownloadInfoListener);
         mFavouriteStatusRouter.removeListener(mFavouriteStatusRouterListener);
@@ -2813,7 +2813,7 @@ public class GalleryListScene extends BaseScene
             return;
         }
         int mode = mUrlBuilder.getMode();
-        mAutomaticCheckResult = null;
+        mRecentCheckResult = null;
         if (mode == ListUrlBuilder.MODE_SUBSCRIPTION
                 || mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
                 || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
@@ -2821,8 +2821,8 @@ public class GalleryListScene extends BaseScene
         }
         if (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
                 || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
-            mAutomaticCheckResult =
-                    mSubscriptionUpdateManager.takeRecentAutomaticCheckResult(mode);
+            mRecentCheckResult =
+                    mSubscriptionUpdateManager.getRecentCheckResult(mode);
         }
     }
 
@@ -3130,9 +3130,9 @@ public class GalleryListScene extends BaseScene
 
         private void loadBookmarkSubscriptions(int taskId, @NonNull MainActivity activity,
                                                boolean includeEhSubscription) {
-            SubscriptionUpdateManager.AutomaticCheckResult automaticCheckResult =
-                    mAutomaticCheckResult;
-            mAutomaticCheckResult = null;
+            SubscriptionUpdateManager.RecentCheckResult recentCheckResult =
+                    mRecentCheckResult;
+            mRecentCheckResult = null;
             executorService.execute(() -> {
                 final List<QuickSearch> subscriptions;
                 try {
@@ -3155,7 +3155,7 @@ public class GalleryListScene extends BaseScene
                             getBookmarkSubscriptionCoordinator();
                     if (coordinator != null) {
                         coordinator.refresh(taskId, subscriptions, includeEhSubscription,
-                                automaticCheckResult);
+                                recentCheckResult);
                     }
                 });
             });

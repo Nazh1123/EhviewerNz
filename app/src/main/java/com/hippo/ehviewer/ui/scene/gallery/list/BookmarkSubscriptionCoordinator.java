@@ -327,7 +327,7 @@ final class BookmarkSubscriptionCoordinator {
 
     void refresh(int taskId, List<QuickSearch> quickSearches,
                  boolean includeEhSubscription,
-                 @Nullable SubscriptionUpdateManager.AutomaticCheckResult automaticResult) {
+                 @Nullable SubscriptionUpdateManager.RecentCheckResult recentResult) {
         cancel();
         mTaskId = taskId;
         mRefresh = true;
@@ -355,8 +355,8 @@ final class BookmarkSubscriptionCoordinator {
 
         mInitialRequestsRemaining = 0;
         for (Source source : mSources) {
-            SubscriptionUpdateManager.AutomaticCheckSource cachedSource =
-                    findCachedSource(automaticResult, source);
+            SubscriptionUpdateManager.RecentCheckSource cachedSource =
+                    findCachedSource(recentResult, source);
             if (cachedSource != null) {
                 applyCachedSource(source, cachedSource);
             } else {
@@ -410,14 +410,14 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     @Nullable
-    private static SubscriptionUpdateManager.AutomaticCheckSource findCachedSource(
-            @Nullable SubscriptionUpdateManager.AutomaticCheckResult automaticResult,
+    private static SubscriptionUpdateManager.RecentCheckSource findCachedSource(
+            @Nullable SubscriptionUpdateManager.RecentCheckResult recentResult,
             Source source) {
-        if (automaticResult == null || !automaticResult.matchesContext()) {
+        if (recentResult == null || !recentResult.matchesContext()) {
             return null;
         }
-        for (SubscriptionUpdateManager.AutomaticCheckSource cachedSource
-                : automaticResult.sources) {
+        for (SubscriptionUpdateManager.RecentCheckSource cachedSource
+                : recentResult.sources) {
             if (!cachedSource.isFresh()) continue;
             if (source.plan == null
                     ? cachedSource.isEhSubscription()
@@ -430,7 +430,7 @@ final class BookmarkSubscriptionCoordinator {
 
     private void applyCachedSource(
             Source source,
-            SubscriptionUpdateManager.AutomaticCheckSource cachedSource) {
+            SubscriptionUpdateManager.RecentCheckSource cachedSource) {
         mBatchSize = Math.max(mBatchSize, cachedSource.initialResultCount);
         source.pageIndex = cachedSource.pageIndex;
         source.nextHref = cachedSource.nextHref;

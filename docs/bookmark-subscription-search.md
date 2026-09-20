@@ -16,7 +16,7 @@
 
 - API 元数据按搜索上下文、GID 和 token 去重；重叠的在途查询等待同一份结果。继续使用原有每批最多 25 条的 API 请求。
 - 元数据缓存有效期 30 秒、最多 512 条。成功结果共享，失败不进入缓存；每个使用方拿到独立的可变数组。
-- 自动检查结果可在 30 秒内被多个订阅入口复用，按每个源首次请求时间判断新鲜度。列表拿到独立副本，避免收藏和布局修改污染缓存。
+- “更新订阅”的自动检查和手动点击结果均可在 30 秒内被书签、全局订阅入口复用，按每个源首次请求时间判断新鲜度。检查中途进入列表也会保留已完整成功的源，缺失或失败的源重新请求。独立 EH 订阅页保持原有网络请求逻辑；列表拿到独立副本，避免收藏和布局修改污染缓存。
 - 缓存上下文包含站点、Cookie、EH 配置、本地过滤规则及元数据显示设置，使用摘要作为键。手动刷新仍请求网络。
 - 没有强制使用 `inline_set` 修改网页显示模式；减少补全请求采用共享元数据方案。
 
@@ -30,10 +30,10 @@
 
 官方依据：[搜索语法](https://ehwiki.org/wiki/Gallery_Searching)、[My Tags](https://ehwiki.org/wiki/My_Tags)、[API](https://ehwiki.org/wiki/API)。之前的匿名搜索已验证共同条件、标签 OR 和分类并集；本轮另用 4 次匿名搜索验证 GID 定位的匹配、非匹配和标签路径。
 
-针对性单元测试覆盖合并限制、归属、稳定分组、长度拆分、元数据并发去重与过期、失败恢复、缓存副本和独立进度。
+针对性单元测试覆盖合并限制、归属、稳定分组、长度拆分、元数据并发去重与过期、失败恢复、缓存副本和独立进度。`SubscriptionCheckReuseTest` 另覆盖手动及自动更新后的跨入口请求去重、取消和部分失败、30 秒边界、上下文变化以及独立 EH 订阅入口不复用。
 
 ```powershell
-.\gradlew.bat :app:testAppReleaseDebugUnitTest --tests '*BookmarkSubscriptionPlannerTest' --tests '*MergedUploaderSearchParserTest' --tests '*SubscriptionMetadataCacheTest' --tests '*SubscriptionProgressStoreTest' --tests '*GalleryApiParserTest' --no-daemon
+.\gradlew.bat :app:testAppReleaseDebugUnitTest --tests '*BookmarkSubscriptionPlannerTest' --tests '*MergedUploaderSearchParserTest' --tests '*SubscriptionMetadataCacheTest' --tests '*SubscriptionProgressStoreTest' --tests '*SubscriptionCheckReuseTest' --tests '*GalleryApiParserTest' --no-daemon
 ```
 
 尚未在手机上使用用户的真实书签集合测量请求节省比例及首屏时间。
