@@ -81,7 +81,7 @@ public class EhDB {
 
     private static final String TAG = EhDB.class.getSimpleName();
     private static final int UPSTREAM_SCHEMA_VERSION = 7;
-    private static final int GALLERY_VERSION_INFO_SCHEMA_VERSION = 9;
+    private static final int LAST_LEGACY_SCHEMA_VERSION = 9;
 
     public static int MAX_HISTORY_COUNT = 100;
 
@@ -104,15 +104,20 @@ public class EhDB {
 
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+            boolean needsGalleryVersionInfoUpdate = !hasColumn(db, "DOWNLOADS", "FIRST_GID");
             upgradeDB(db, oldVersion);
-            if (oldVersion < GALLERY_VERSION_INFO_SCHEMA_VERSION
-                    && newVersion >= GALLERY_VERSION_INFO_SCHEMA_VERSION) {
+            if (needsGalleryVersionInfoUpdate) {
                 Settings.setGalleryVersionUpdatePromptPending(true);
             }
         }
     }
 
     private static void upgradeDB(SQLiteDatabase db, int oldVersion) {
+        // A larger fork version is not evidence that an unknown upstream schema is compatible.
+        if (oldVersion < 2 || (oldVersion > LAST_LEGACY_SCHEMA_VERSION
+                && oldVersion != DaoMaster.SCHEMA_VERSION)) {
+            throw new SQLiteException("Unsupported database version: " + oldVersion);
+        }
         switch (oldVersion) {
 //            case 1: // 1 to 2, add FILTER
 //                FilterDao.createTable(db, true);
@@ -180,12 +185,57 @@ public class EhDB {
                     Log.w("EhDB", "Failed to add ARCHIVE_URI column, might already exist", e);
                     Analytics.recordException(e);
                 }
-            case 7: // 7 to 8, add bookmark subscription state
-                db.execSQL("ALTER TABLE \"QUICK_SEARCH\" ADD COLUMN "
-                        + "\"SUBSCRIBED\" INTEGER NOT NULL DEFAULT 0");
-            case 8: // 8 to 9, add gallery version root gid
-                db.execSQL("ALTER TABLE \"DOWNLOADS\" ADD COLUMN \"FIRST_GID\" INTEGER");
         }
+        // Upstream 8 added LOCATION, while legacy fork 8 added SUBSCRIBED.
+        // Inspect the actual schema so both lineages (and interrupted old imports) migrate.
+        if (!hasColumn(db, "QUICK_SEARCH", "SUBSCRIBED")) {
+            db.execSQL("ALTER TABLE \"QUICK_SEARCH\" ADD COLUMN "
+                    + "\"SUBSCRIBED\" INTEGER NOT NULL DEFAULT 0");
+        }
+        if (!hasColumn(db, "DOWNLOADS", "FIRST_GID")) {
+            db.execSQL("ALTER TABLE \"DOWNLOADS\" ADD COLUMN \"FIRST_GID\" INTEGER");
+        }
+    }
+
+    private static boolean hasColumn(SQLiteDatabase db, String table, String column) {
+        try (Cursor cursor = db.rawQuery("PRAGMA table_info(\"" + table + "\")", null)) {
+            int nameIndex = cursor.getColumnIndexOrThrow("name");
+            while (cursor.moveToNext()) {
+                if (column.equalsIgnoreCase(cursor.getString(nameIndex))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // Called on an expendable copy, before any imported rows reach the live database.
+    static boolean prepareImportDatabase(SQLiteDatabase db) {
+        boolean needsGalleryVersionInfoUpdate = !hasColumn(db, "DOWNLOADS", "FIRST_GID");
+        db.beginTransaction();
+        try {
+            upgradeDB(db, db.getVersion());
+            DaoSession session = new DaoMaster(db).newSession();
+            for (AbstractDao<?, ?> dao : session.getAllDaos()) {
+                StringBuilder sql = new StringBuilder("SELECT ");
+                for (String column : dao.getAllColumns()) {
+                    if (sql.length() > 7) {
+                        sql.append(", ");
+                    }
+                    // Qualify names so SQLite cannot treat a missing quoted column as a string.
+                    sql.append("T.\"").append(column).append('"');
+                }
+                sql.append(" FROM \"").append(dao.getTablename()).append("\" T LIMIT 0");
+                try (Cursor cursor = db.rawQuery(sql.toString(), null)) {
+                    cursor.getCount();
+                }
+            }
+            db.setVersion(DaoMaster.SCHEMA_VERSION);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+        return needsGalleryVersionInfoUpdate;
     }
 
     private static class OldDBHelper extends SQLiteOpenHelper {
@@ -1088,19 +1138,29 @@ public class EhDB {
      * @return error string, null for no error
      */
     public static synchronized String importDB(Context context, File file, Handler handler) {
+        File importFile = null;
         try {
-            SQLiteDatabase db = SQLiteDatabase.openDatabase(
-                    file.getPath(), null, SQLiteDatabase.NO_LOCALIZED_COLLATORS);
-            int newVersion = DaoMaster.SCHEMA_VERSION;
-            int oldVersion = db.getVersion();
-            boolean needsGalleryVersionInfoUpdate =
-                    oldVersion < GALLERY_VERSION_INFO_SCHEMA_VERSION;
-            if (oldVersion < newVersion) {
-                upgradeDB(db, oldVersion);
-                db.setVersion(newVersion);
-            } else if (oldVersion > newVersion) {
-                return context.getString(R.string.cant_read_the_file);
+            // Never rewrite the user's backup with fork-only columns or version numbers.
+            importFile = File.createTempFile("eh-import-", ".db", context.getCacheDir());
+            try (InputStream input = new FileInputStream(file);
+                    OutputStream output = new FileOutputStream(importFile)) {
+                IOUtils.copy(input, output);
             }
+            return importDBFromCopy(context, importFile, handler);
+        } catch (IOException e) {
+            Log.w(TAG, "Failed to copy database for import", e);
+            return context.getString(R.string.cant_read_the_file);
+        } finally {
+            if (importFile != null) {
+                SQLiteDatabase.deleteDatabase(importFile);
+            }
+        }
+    }
+
+    private static String importDBFromCopy(Context context, File file, Handler handler) {
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(
+                file.getPath(), null, SQLiteDatabase.NO_LOCALIZED_COLLATORS)) {
+            boolean needsGalleryVersionInfoUpdate = prepareImportDatabase(db);
 
             DaoMaster daoMaster = new DaoMaster(db);
             DaoSession session = daoMaster.newSession();
@@ -1184,7 +1244,7 @@ public class EhDB {
             return null;
         } catch (Throwable e) {
             ExceptionUtils.throwIfFatal(e);
-            // Ignore
+            Log.w(TAG, "Failed to import database", e);
             return context.getString(R.string.cant_read_the_file);
         }
     }

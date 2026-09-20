@@ -32,7 +32,8 @@ public class EhDaoGenerator {
     private static final String OUT_DIR = "app/src/main/java";
     private static final String DELETE_DIR = OUT_DIR+"/com/hippo/ehviewer/dao";
 
-    private static final int VERSION = 9;
+    // Fork schema range; keep DaoMaster.SCHEMA_VERSION in sync.
+    private static final int VERSION = 1_000_009;
 
     private static final String DOWNLOAD_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/DownloadInfo.java";
     private static final String HISTORY_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/HistoryInfo.java";
