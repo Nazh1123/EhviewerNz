@@ -33,7 +33,7 @@ public class EhDaoGenerator {
     private static final String DELETE_DIR = OUT_DIR+"/com/hippo/ehviewer/dao";
 
     // Fork schema range; keep DaoMaster.SCHEMA_VERSION in sync.
-    private static final int VERSION = 1_000_009;
+    private static final int VERSION = 1_000_010;
 
     private static final String DOWNLOAD_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/DownloadInfo.java";
     private static final String HISTORY_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/HistoryInfo.java";
@@ -99,6 +99,7 @@ public class EhDaoGenerator {
         entity.addStringProperty("reclass");
         entity.addDateProperty("create_time");
         entity.addDateProperty("update_time");
+        entity.addStringProperty("location");
     }
 
 
@@ -122,6 +123,7 @@ public class EhDaoGenerator {
         javaClass.getField("reclass").setPublic();
         javaClass.getField("create_time").setPublic();
         javaClass.getField("update_time").setPublic();
+        javaClass.getField("location").setPublic();
 
         javaClass.addMethod("\t@Override\n" +
                 "\tpublic String toString() {\n" +

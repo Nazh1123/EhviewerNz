@@ -57,6 +57,9 @@ public class EhDBCompatibilityTest {
         db.execSQL("INSERT INTO DOWNLOADS (GID, TOKEN, TITLE, CATEGORY, RATING, STATE, LEGACY, "
                 + "TIME, ARCHIVE_URI) VALUES (42, 'token', 'title', 0, 4.5, 0, 0, 123, 'file:///test.zip')");
         db.execSQL("INSERT INTO Gallery_Tags (GID, ARTIST) VALUES (42, 'artist')");
+        if (version == 8) {
+            db.execSQL("UPDATE Gallery_Tags SET LOCATION = 'beach'");
+        }
         return db;
     }
 
@@ -77,6 +80,8 @@ public class EhDBCompatibilityTest {
             try (SQLiteDatabase db = upstream(version)) {
                 assertTrue(EhDB.prepareImportDatabase(db));
                 assertImportedRows(db, false, null);
+                assertEquals(version == 8 ? "beach" : null,
+                        new DaoMaster(db).newSession().getGalleryTagsDao().load(42L).location);
                 // Repeat preparation must neither add duplicate columns nor lose rows.
                 assertFalse(EhDB.prepareImportDatabase(db));
                 assertImportedRows(db, false, null);
@@ -114,7 +119,7 @@ public class EhDBCompatibilityTest {
 
     @Test
     public void rejectsUnknownVersionsWithoutChangingThem() throws Exception {
-        for (int version : new int[] {0, 1, 10, 1_000_010}) {
+        for (int version : new int[] {0, 1, 10, 1_000_008, DaoMaster.SCHEMA_VERSION + 1}) {
             try (SQLiteDatabase db = upstream(8)) {
                 db.setVersion(version);
                 try {
@@ -159,6 +164,10 @@ public class EhDBCompatibilityTest {
     }
 
     private void importBackup(int version) throws Exception {
+        importBackup(version, false);
+    }
+
+    private void importBackup(int version, boolean existingTags) throws Exception {
         Context context = RuntimeEnvironment.getApplication();
         initializePreferences(context);
         File backup = new File(context.getCacheDir(), "upstream.db");
@@ -169,13 +178,19 @@ public class EhDBCompatibilityTest {
         try (SQLiteDatabase destination = SQLiteDatabase.create(null)) {
             DaoMaster.createAllTables(new org.greenrobot.greendao.database.StandardDatabase(destination), false);
             DaoSession session = new DaoMaster(destination).newSession();
+            if (existingTags) {
+                destination.execSQL("INSERT INTO Gallery_Tags (GID, ARTIST) VALUES (42, 'existing')");
+            }
             ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", session);
             assertNull(EhDB.importDB(context, backup, new Handler(Looper.getMainLooper())));
             assertEquals("title", session.getDownloadsDao().load(42L).title);
             assertEquals("test", session.getQuickSearchDao().loadAll().get(0).name);
             assertFalse(session.getQuickSearchDao().loadAll().get(0).subscribed);
-            assertEquals("artist", session.getGalleryTagsDao().load(42L).getArtist());
+            assertEquals(existingTags ? "existing" : "artist", session.getGalleryTagsDao().load(42L).getArtist());
+            assertEquals(version == 8 ? "beach" : null, session.getGalleryTagsDao().load(42L).location);
             assertTrue(Settings.isGalleryVersionUpdatePromptPending());
+            assertNull(EhDB.importDB(context, backup, new Handler(Looper.getMainLooper())));
+            assertEquals(1, session.getGalleryTagsDao().count());
         } finally {
             ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
         }
@@ -196,6 +211,12 @@ public class EhDBCompatibilityTest {
     }
 
     @Test
+    @Config(application = ImportTestApplication.class)
+    public void importsLocationIntoExistingTagCache() throws Exception {
+        importBackup(8, true);
+    }
+
+    @Test
     public void rejectsMalformedBackupBeforeTouchingLiveData() throws Exception {
         Context context = RuntimeEnvironment.getApplication();
         File backup = new File(context.getCacheDir(), "malformed.db");
@@ -213,13 +234,13 @@ public class EhDBCompatibilityTest {
     public void upgradesInstalledLegacyForkDatabases() throws Exception {
         Context context = RuntimeEnvironment.getApplication();
         initializePreferences(context);
-        for (int version : new int[] {8, 9}) {
+        for (int version : new int[] {8, 9, 1_000_009}) {
             File installed = context.getDatabasePath("eh.db");
             installed.getParentFile().mkdirs();
             try (SQLiteDatabase source = upstream(7, installed)) {
                 source.execSQL("ALTER TABLE QUICK_SEARCH ADD COLUMN SUBSCRIBED INTEGER NOT NULL DEFAULT 0");
                 source.execSQL("UPDATE QUICK_SEARCH SET SUBSCRIBED = 1");
-                if (version == 9) {
+                if (version >= 9) {
                     source.execSQL("ALTER TABLE DOWNLOADS ADD COLUMN FIRST_GID INTEGER");
                     source.execSQL("UPDATE DOWNLOADS SET FIRST_GID = 40");
                 }
@@ -230,7 +251,8 @@ public class EhDBCompatibilityTest {
             DaoSession session = ReflectionHelpers.getStaticField(EhDB.class, "sDaoSession");
             try {
                 assertImportedRows((SQLiteDatabase) session.getDatabase().getRawDatabase(),
-                        true, version == 9 ? 40L : null);
+                        true, version >= 9 ? 40L : null);
+                assertNull(session.getGalleryTagsDao().load(42L).location);
                 assertEquals(version == 8, Settings.isGalleryVersionUpdatePromptPending());
             } finally {
                 session.getDatabase().close();
@@ -241,26 +263,70 @@ public class EhDBCompatibilityTest {
     }
 
     @Test
-    public void compatibleExportKeepsVersion7ShapeAndCanBeReimported() throws Exception {
+    public void compatibleExportKeepsVersion8ShapeAndCanBeReimported() throws Exception {
         try (SQLiteDatabase db = upstream(7)) {
             EhDB.prepareImportDatabase(db);
             db.execSQL("UPDATE QUICK_SEARCH SET SUBSCRIBED = 1");
             db.execSQL("UPDATE DOWNLOADS SET FIRST_GID = 40");
+            db.execSQL("UPDATE Gallery_Tags SET LOCATION = 'beach'");
             Method export = EhDB.class.getDeclaredMethod("makeUpstreamCompatible", SQLiteDatabase.class);
             export.setAccessible(true);
             export.invoke(null, db);
-            assertEquals(7, db.getVersion());
+            assertEquals(8, db.getVersion());
             try (Cursor cursor = db.rawQuery("SELECT * FROM QUICK_SEARCH", null)) {
                 assertEquals(-1, cursor.getColumnIndex("SUBSCRIBED"));
             }
             try (Cursor cursor = db.rawQuery("SELECT * FROM DOWNLOADS", null)) {
                 assertEquals(-1, cursor.getColumnIndex("FIRST_GID"));
             }
-            // Current upstream can upgrade this compatible export to its schema 8.
-            db.execSQL("ALTER TABLE Gallery_Tags ADD COLUMN LOCATION TEXT");
-            db.setVersion(8);
+            // Match all upstream 8 table columns, including LOCATION.
+            try (SQLiteDatabase expected = upstream(8)) {
+                for (org.greenrobot.greendao.AbstractDao<?, ?> dao : new DaoMaster(db).newSession().getAllDaos()) {
+                    String query = "SELECT * FROM \"" + dao.getTablename() + "\" LIMIT 0";
+                    try (Cursor actualColumns = db.rawQuery(query, null);
+                            Cursor expectedColumns = expected.rawQuery(query, null)) {
+                        assertArrayEquals(expectedColumns.getColumnNames(), actualColumns.getColumnNames());
+                    }
+                }
+            }
             assertTrue(EhDB.prepareImportDatabase(db));
             assertImportedRows(db, false, null);
+            assertEquals("beach", new DaoMaster(db).newSession().getGalleryTagsDao().load(42L).location);
+        }
+    }
+
+    @Test
+    public void importsPreviousFork1000009Backup() throws Exception {
+        try (SQLiteDatabase db = upstream(7)) {
+            db.execSQL("ALTER TABLE QUICK_SEARCH ADD COLUMN SUBSCRIBED INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("UPDATE QUICK_SEARCH SET SUBSCRIBED = 1");
+            db.execSQL("ALTER TABLE DOWNLOADS ADD COLUMN FIRST_GID INTEGER");
+            db.execSQL("UPDATE DOWNLOADS SET FIRST_GID = 40");
+            db.setVersion(1_000_009);
+            assertFalse(EhDB.prepareImportDatabase(db));
+            assertImportedRows(db, true, 40L);
+            assertNull(new DaoMaster(db).newSession().getGalleryTagsDao().load(42L).location);
+        }
+    }
+
+    @Test
+    public void normalAndCompatibleBackupsPreserveLocation() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        try (SQLiteDatabase source = upstream(8)) {
+            EhDB.prepareImportDatabase(source);
+            ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", new DaoMaster(source).newSession());
+            for (boolean compatible : new boolean[] {false, true}) {
+                File backup = new File(context.getCacheDir(), "export-" + compatible + ".db");
+                assertTrue(compatible ? EhDB.exportDBCompatible(context, backup) : EhDB.exportDB(context, backup));
+                try (SQLiteDatabase exported = SQLiteDatabase.openDatabase(backup.getPath(), null, 0)) {
+                    assertEquals(compatible ? 8 : DaoMaster.SCHEMA_VERSION, exported.getVersion());
+                    EhDB.prepareImportDatabase(exported);
+                    assertImportedRows(exported, false, null);
+                    assertEquals("beach", new DaoMaster(exported).newSession().getGalleryTagsDao().load(42L).location);
+                }
+            }
+        } finally {
+            ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
         }
     }
 }

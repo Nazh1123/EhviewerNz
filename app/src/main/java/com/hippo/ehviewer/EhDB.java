@@ -80,8 +80,9 @@ import java.util.Objects;
 public class EhDB {
 
     private static final String TAG = EhDB.class.getSimpleName();
-    private static final int UPSTREAM_SCHEMA_VERSION = 7;
+    private static final int UPSTREAM_SCHEMA_VERSION = 8;
     private static final int LAST_LEGACY_SCHEMA_VERSION = 9;
+    private static final int FIRST_FORK_SCHEMA_VERSION = 1_000_009;
 
     public static int MAX_HISTORY_COUNT = 100;
 
@@ -114,8 +115,9 @@ public class EhDB {
 
     private static void upgradeDB(SQLiteDatabase db, int oldVersion) {
         // A larger fork version is not evidence that an unknown upstream schema is compatible.
-        if (oldVersion < 2 || (oldVersion > LAST_LEGACY_SCHEMA_VERSION
-                && oldVersion != DaoMaster.SCHEMA_VERSION)) {
+        if (oldVersion < 2 || oldVersion > DaoMaster.SCHEMA_VERSION
+                || (oldVersion > LAST_LEGACY_SCHEMA_VERSION
+                && oldVersion < FIRST_FORK_SCHEMA_VERSION)) {
             throw new SQLiteException("Unsupported database version: " + oldVersion);
         }
         switch (oldVersion) {
@@ -194,6 +196,10 @@ public class EhDB {
         }
         if (!hasColumn(db, "DOWNLOADS", "FIRST_GID")) {
             db.execSQL("ALTER TABLE \"DOWNLOADS\" ADD COLUMN \"FIRST_GID\" INTEGER");
+        }
+        // Fork 1000009 and legacy fork 8/9 predate upstream's location tag namespace.
+        if (!hasColumn(db, "Gallery_Tags", "LOCATION")) {
+            db.execSQL("ALTER TABLE \"Gallery_Tags\" ADD COLUMN \"LOCATION\" TEXT");
         }
     }
 
@@ -1043,6 +1049,8 @@ public class EhDB {
                     return false;
                 if (!copyDao(sDaoSession.getFilterDao(), exportSession.getFilterDao()))
                     return false;
+                if (!copyDao(sDaoSession.getGalleryTagsDao(), exportSession.getGalleryTagsDao()))
+                    return false;
                 if (upstreamCompatible) {
                     makeUpstreamCompatible(db);
                 }
@@ -1230,10 +1238,15 @@ public class EhDB {
             }
 
             List<GalleryTags> galleryTagsList = session.getGalleryTagsDao().queryBuilder().list();
-            List<GalleryTags> currentGalleryTags = sDaoSession.getGalleryTagsDao().queryBuilder().list();
             for (GalleryTags tags : galleryTagsList) {
-                if (!currentGalleryTags.contains(tags)) {
+                GalleryTags current = sDaoSession.getGalleryTagsDao().load(tags.gid);
+                if (current == null) {
                     insertGalleryTags(tags);
+                } else if ((current.location == null || current.location.isEmpty())
+                        && tags.location != null && !tags.location.isEmpty()) {
+                    // Enrich an existing legacy cache without replacing its other tag data.
+                    current.location = tags.location;
+                    updateGalleryTags(current);
                 }
             }
 
