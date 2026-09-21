@@ -19,6 +19,7 @@ package com.hippo.ehviewer.download;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Handler;
@@ -180,6 +181,10 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         mSpeedReminder = new SpeedReminder();
         mDownloadInfoListeners = new ArrayList<>();
         rebuildGalleryVersionIndex();
+        // Migrate before galleries can be moved or removed from a legacy import label.
+        for (DownloadLabel label : mLabelList) {
+            getLocalFolderImportTrees(label.getLabel());
+        }
 
         // Retry cleanup if the app was killed after an updated gallery finished but before all
         // parent folders were removed.
@@ -428,6 +433,47 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             for (DownloadInfoListener listener : mDownloadInfoListeners) {
                 listener.onUpdate(info, list, mWaitList);
             }
+        }
+    }
+
+    /** Reconcile a completed scan on the main thread without changing existing ownership/progress. */
+    public FolderSyncResult applyLocalFolderScan(@NonNull List<DownloadInfo> candidates,
+            @Nullable String label, boolean refreshExisting) {
+        List<DownloadInfo> additions = new ArrayList<>();
+        int updated = 0;
+        for (DownloadInfo candidate : candidates) {
+            DownloadInfo existing = getDownloadInfo(candidate.gid);
+            if (existing == null) {
+                candidate.label = label;
+                ImportedGalleryProgress.updatePageCount(mContext, candidate.gid, candidate.pages);
+                additions.add(candidate);
+            } else if (refreshExisting && candidate.archiveUri != null
+                    && candidate.archiveUri.equals(existing.archiveUri)) {
+                // Page totals are transient in DownloadsDao; use the persistent local
+                // reading metadata to avoid reporting false updates after a restart.
+                ImportedGalleryProgress.Entry progress = ImportedGalleryProgress.get(mContext, existing.gid);
+                int previousPages = existing.pages > 0 ? existing.pages
+                        : progress == null ? 0 : progress.pages;
+                ImportedGalleryProgress.updatePageCount(mContext, existing.gid, candidate.pages);
+                updateImportedGalleryPageCount(existing.gid, candidate.pages);
+                if (previousPages != candidate.pages) {
+                    updated++;
+                }
+            }
+        }
+        if (!additions.isEmpty()) {
+            addDownload(additions);
+        }
+        return new FolderSyncResult(additions.size(), updated);
+    }
+
+    public static final class FolderSyncResult {
+        public final int added;
+        public final int updated;
+
+        FolderSyncResult(int added, int updated) {
+            this.added = added;
+            this.updated = updated;
         }
     }
 
@@ -1190,6 +1236,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     public void renameLabel(@NonNull String from, @NonNull String to) {
+        // Remember legacy imports before their original generated label name changes.
+        getLocalFolderImportTrees(from);
         // Find in label list
         boolean found = false;
         for (DownloadLabel raw : mLabelList) {
@@ -1256,6 +1304,62 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         return position;
     }
 
+    private SharedPreferences localFolderLabels() {
+        return mContext.getSharedPreferences("local_folder_labels", Context.MODE_PRIVATE);
+    }
+
+    @Nullable
+    public DownloadLabel findDownloadLabel(@Nullable String label) {
+        for (DownloadLabel item : mLabelList) {
+            if (ObjectUtils.equal(item.getLabel(), label)) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    /** Sources belong to the label ID, so renaming or emptying it keeps synchronization. */
+    public void rememberLocalFolderImport(@NonNull String label, @NonNull String treeUri) {
+        DownloadLabel item = findDownloadLabel(label);
+        if (item == null) {
+            return;
+        }
+        String key = String.valueOf(item.getId());
+        Set<String> trees = new HashSet<>(localFolderLabels().getStringSet(
+                key, Collections.emptySet()));
+        trees.add(treeUri);
+        localFolderLabels().edit().putStringSet(key, trees).apply();
+    }
+
+    @NonNull
+    public Set<String> getLocalFolderImportTrees(@Nullable String label) {
+        DownloadLabel item = findDownloadLabel(label);
+        if (item == null) {
+            return Collections.emptySet();
+        }
+        String key = String.valueOf(item.getId());
+        Set<String> trees = new HashSet<>(localFolderLabels().getStringSet(
+                key, Collections.emptySet()));
+        // Older versions only stored sources on the imported galleries. Recover them
+        // for generated aggregate labels; ordinary labels must not become sync targets.
+        if (label != null && label.startsWith("/") && label.endsWith("/...")) {
+            List<DownloadInfo> downloads = mMap.get(label);
+            if (downloads != null) {
+                for (DownloadInfo info : downloads) {
+                    LocalFolderGallerySource source = LocalFolderGallerySource.parse(info.archiveUri);
+                    if (source != null && !source.relativePath.isEmpty()) {
+                        trees.add(source.treeUri);
+                    }
+                }
+            }
+        }
+        if (!trees.isEmpty() && !trees.equals(localFolderLabels().getStringSet(
+                key, Collections.emptySet()))) {
+            localFolderLabels().edit().putStringSet(key, trees).apply();
+        }
+        return trees;
+    }
+
     /**
      * Moves every download from {@code from} into the existing {@code to} label and removes the
      * source label. The destination label keeps its current position in the label list.
@@ -1285,6 +1389,11 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         if (sourceList == null || destinationList == null) {
             return false;
         }
+
+        for (String tree : getLocalFolderImportTrees(from)) {
+            rememberLocalFolderImport(to, tree);
+        }
+        localFolderLabels().edit().remove(String.valueOf(sourceLabel.getId())).apply();
 
         List<DownloadInfo> changedInfo = mergeDownloadInfoLists(sourceList, destinationList, to);
         // Persist the new ownership before deleting the source label so an interrupted merge
@@ -1332,6 +1441,12 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         Set<String> targetLabels = new HashSet<>(labels);
         if (targetLabels.isEmpty()) {
             return;
+        }
+
+        for (DownloadLabel item : mLabelList) {
+            if (targetLabels.contains(item.getLabel())) {
+                localFolderLabels().edit().remove(String.valueOf(item.getId())).apply();
+            }
         }
 
         List<DownloadLabel> removedLabels = new ArrayList<>();

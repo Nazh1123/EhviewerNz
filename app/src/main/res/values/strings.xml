@@ -1259,4 +1259,9 @@
     <string name="settings_animated_webp_long_press_speed_summary">%1$sx - Long-press the lower-middle area of the screen to play at %1$sx; at 1.0, long-press opens the menu instead</string>
     <string name="settings_animated_webp_long_press_speed_invalid">Enter a value from 0.1 to 3.0 with at most one decimal place</string>
     <string name="gallery_detail_back_to_top">Back to top</string>
+    <string name="sync_local_folder">Sync</string>
+    <string name="sync_folder_processing">Scanning local folder…</string>
+    <string name="sync_folder_success">Sync complete: %1$d added, %2$d updated</string>
+    <string name="sync_folder_failed">Could not sync local folder</string>
+    <string name="sync_folder_label_removed">Sync cancelled: the download label was removed</string>
 </resources>

@@ -36,12 +36,15 @@ import android.graphics.drawable.NinePatchDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
@@ -194,6 +197,10 @@ public class DownloadsScene extends ToolbarScene
     private List<DownloadInfo> mBackList;
     private boolean mContinuousLabelBrowse;
     private boolean mForceSingleLabelBrowse;
+    private static final java.util.concurrent.atomic.AtomicBoolean sFolderScanRunning =
+            new java.util.concurrent.atomic.AtomicBoolean();
+    @Nullable
+    private MenuItem mSyncFolderMenuItem;
     private final List<ContinuousDownloadItem> mContinuousItems = new ArrayList<>();
     private final Map<Long, Integer> mContinuousGalleryPositions = new HashMap<>();
     private final Map<String, Integer> mContinuousHeaderPositions = new HashMap<>();
@@ -451,6 +458,7 @@ public class DownloadsScene extends ToolbarScene
 //        filterByCategory();
         updateTitle();
         updatePaginationIndicator();
+        updateFolderSyncMenu();
         if (!mContinuousLabelBrowse) {
             Settings.putRecentDownloadLabel(mLabel);
         }
@@ -921,6 +929,7 @@ public class DownloadsScene extends ToolbarScene
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        mSyncFolderMenuItem = null;
 
         if (null != mShowcaseView) {
             ViewUtils.removeFromParent(mShowcaseView);
@@ -968,6 +977,9 @@ public class DownloadsScene extends ToolbarScene
 
         int id = item.getItemId();
         switch (id) {
+            case R.id.sync_local_folder:
+                syncLocalFolderLabel(mLabel);
+                return true;
             case R.id.action_start_all: {
                 Intent intent = new Intent(activity, DownloadService.class);
                 intent.setAction(DownloadService.ACTION_START_ALL);
@@ -1342,6 +1354,14 @@ public class DownloadsScene extends ToolbarScene
     public boolean onLabelHeaderLongClick(int position) {
         if (!mContinuousLabelBrowse || !isLabelHeaderPosition(position)) {
             return false;
+        }
+        String label = mContinuousItems.get(position).label;
+        if (mDownloadManager != null
+                && !mDownloadManager.getLocalFolderImportTrees(label).isEmpty()) {
+            if (mRecyclerView != null && !mRecyclerView.isInCustomChoice()) {
+                syncLocalFolderLabel(label);
+            }
+            return true;
         }
         String query = DownloadLabelSearchQueryResolver.resolve(
                 mContinuousItems.get(position).label);
@@ -1782,7 +1802,9 @@ public class DownloadsScene extends ToolbarScene
         if (mList == null || (mList != list && !mList.contains(info))) {
             return;
         }
-        if (mContinuousLabelBrowse && info.state == DownloadInfo.STATE_FINISH) {
+        if (ImportedGalleryProgress.isImportedGallery(info) && getEHContext() != null) {
+            mSpiderInfoMap.put(info.gid, ImportedGalleryProgress.toSpiderInfo(getEHContext(), info));
+        } else if (mContinuousLabelBrowse && info.state == DownloadInfo.STATE_FINISH) {
             requestSpiderInfo(Collections.singletonList(info));
         }
         int index = mList.indexOf(info);
@@ -1871,6 +1893,7 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onUpdateLabels() {
+        updateFolderSyncMenu();
         if (mContinuousLabelBrowse) {
             refreshContinuousStructure();
         }
@@ -2606,6 +2629,52 @@ public class DownloadsScene extends ToolbarScene
         }
     }
 
+    @Override
+    public void onMenuCreated(Menu menu) {
+        super.onMenuCreated(menu);
+        mSyncFolderMenuItem = menu.findItem(R.id.sync_local_folder);
+        updateFolderSyncMenu();
+    }
+
+    private void updateFolderSyncMenu() {
+        if (mSyncFolderMenuItem != null) {
+            mSyncFolderMenuItem.setVisible(!mContinuousLabelBrowse && mDownloadManager != null
+                    && !mDownloadManager.getLocalFolderImportTrees(mLabel).isEmpty());
+        }
+    }
+
+    private void syncLocalFolderLabel(@Nullable String label) {
+        Context sceneContext = getEHContext();
+        DownloadManager manager = mDownloadManager;
+        if (sceneContext == null || manager == null) {
+            return;
+        }
+        DownloadLabel target = manager.findDownloadLabel(label);
+        Set<String> trees = manager.getLocalFolderImportTrees(label);
+        if (target == null || trees.isEmpty()) {
+            return;
+        }
+        Context context = sceneContext.getApplicationContext();
+        if (!sFolderScanRunning.compareAndSet(false, true)) {
+            Toast.makeText(context, R.string.sync_folder_processing, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Toast.makeText(context, R.string.sync_folder_processing, Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                for (String tree : trees) {
+                    processLocalFolder(context, manager, Uri.parse(tree), target);
+                }
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Local folder synchronization failed", e);
+                new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(
+                        context, R.string.sync_folder_failed, Toast.LENGTH_LONG).show());
+            } finally {
+                new Handler(Looper.getMainLooper()).post(() -> sFolderScanRunning.set(false));
+            }
+        }, "LocalFolderSync").start();
+    }
+
     private void handleSelectedFolder(ActivityResult result) {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
             return;
@@ -2632,14 +2701,27 @@ public class DownloadsScene extends ToolbarScene
         }
 
         Toast.makeText(context, R.string.import_folder_processing, Toast.LENGTH_LONG).show();
-        new Thread(() -> processLocalFolder(context, downloadManager, treeUri),
-                "LocalFolderImport").start();
+        if (!sFolderScanRunning.compareAndSet(false, true)) {
+            return;
+        }
+        new Thread(() -> {
+            try {
+                processLocalFolder(context, downloadManager, treeUri, null);
+            } catch (RuntimeException e) {
+                Log.e(TAG, "Local folder import failed", e);
+                new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(
+                        context, R.string.import_folder_failed, Toast.LENGTH_LONG).show());
+            } finally {
+                new Handler(Looper.getMainLooper()).post(() -> sFolderScanRunning.set(false));
+            }
+        }, "LocalFolderImport").start();
     }
 
     private void processLocalFolder(
             @NonNull Context context,
             @NonNull DownloadManager downloadManager,
-            @NonNull Uri treeUri) {
+            @NonNull Uri treeUri,
+            @Nullable DownloadLabel syncLabel) {
         LocalFolderGallerySource rootSource =
                 LocalFolderGallerySource.create(treeUri, "");
         LocalFolderGalleryScanner.ScanResult scanResult;
@@ -2661,7 +2743,8 @@ public class DownloadsScene extends ToolbarScene
         }
 
         List<FolderImportCandidate> candidates = new ArrayList<>();
-        boolean aggregateChildren = scanResult.directImageCount == 0;
+        // Keep an aggregate label's original grouping even if root-level images appear later.
+        boolean aggregateChildren = syncLabel != null || scanResult.directImageCount == 0;
         if (!aggregateChildren) {
             candidates.add(new FolderImportCandidate(
                     scanResult.rootName, rootSource, scanResult.images));
@@ -2701,30 +2784,34 @@ public class DownloadsScene extends ToolbarScene
             FolderImportCandidate candidate = candidates.get(i);
             DownloadInfo info = createLocalFolderDownloadInfo(
                     candidate, label, importTime - i);
-            if (!downloadManager.containDownloadInfo(info.gid)) {
-                // Keep the source URI in the database, but render future list rows from a
-                // small app-owned file. This avoids relying on a document provider every
-                // time RecyclerView binds a cover.
-                LocalFolderCoverStore.ensure(context, info.gid, info.thumb);
-                imports.add(info);
+            LocalFolderCoverStore.ensure(context, info.gid, info.thumb);
+            imports.add(info);
+        }
+        // Commit on the main thread: download lists and their UI listeners are shared.
+        // This also completes if the scene was closed while the folder was being scanned.
+        new Handler(Looper.getMainLooper()).post(() -> {
+            if (syncLabel != null && !downloadManager.getLabelList().contains(syncLabel)) {
+                Toast.makeText(context, R.string.sync_folder_label_removed, Toast.LENGTH_LONG).show();
+                return;
             }
-        }
-        if (imports.isEmpty()) {
-            runOnUiThread(() -> Toast.makeText(context,
-                    R.string.import_folder_already_imported, Toast.LENGTH_SHORT).show());
-            return;
-        }
-
-        if (aggregateChildren) {
-            downloadManager.placeLocalFolderImportLabel(label);
-        }
-        downloadManager.addDownload(imports);
-        int importedCount = imports.size();
-        runOnUiThread(() -> {
-            Toast.makeText(context, context.getString(
-                    R.string.import_folder_success, importedCount), Toast.LENGTH_SHORT).show();
-            updateForLabel();
-            updateView();
+            String targetLabel = syncLabel == null ? label : syncLabel.getLabel();
+            DownloadManager.FolderSyncResult result = downloadManager.applyLocalFolderScan(
+                    imports, targetLabel, syncLabel != null);
+            if (aggregateChildren) {
+                if (syncLabel == null && result.added > 0) {
+                    downloadManager.placeLocalFolderImportLabel(targetLabel);
+                }
+                downloadManager.rememberLocalFolderImport(targetLabel, treeUri.toString());
+            }
+            String message = syncLabel != null
+                    ? context.getString(R.string.sync_folder_success, result.added, result.updated)
+                    : result.added == 0 ? context.getString(R.string.import_folder_already_imported)
+                    : context.getString(R.string.import_folder_success, result.added);
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+            if (mRecyclerView != null) {
+                updateForLabel();
+                updateView();
+            }
         });
     }
 

@@ -20,6 +20,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/sync_local_folder"
+        android:title="@string/sync_local_folder"
+        android:visible="false"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/sort_download_list"
         android:icon="@drawable/ic_sort_filter"
         android:title="@string/download_sort_list"

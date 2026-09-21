@@ -1204,4 +1204,9 @@
     <string name="settings_delete_old_gallery_versions_summary">掃描檢查已下載畫廊版本鏈，保留最新完整可用畫廊</string>
     <string name="gallery_version_database_upgrade_prompt">是否在背景更新畫廊版本鏈資訊，用於瀏覽畫廊時判斷是否可由舊版本更新？如果選擇取消，後續可在設定選單中進行更新。</string>
     <string name="gallery_version_update_in_background">背景更新</string>
+    <string name="sync_local_folder">同步</string>
+    <string name="sync_folder_processing">正在掃描本機資料夾…</string>
+    <string name="sync_folder_success">同步完成：新增 %1$d 項，更新 %2$d 項</string>
+    <string name="sync_folder_failed">本機資料夾同步失敗</string>
+    <string name="sync_folder_label_removed">同步已取消：下載標籤已被移除</string>
 </resources>
