@@ -51,6 +51,8 @@ import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.OrientationEventListener;
+import android.view.Surface;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
@@ -298,6 +300,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private boolean mOrientationSwipeActive;
     private float mOrientationSwipeDownX;
     private float mOrientationSwipeDownY;
+    @Nullable
+    private OrientationEventListener mOrientationEventListener;
+    private int mDeviceOrientation = OrientationEventListener.ORIENTATION_UNKNOWN;
+    private boolean mPendingLandscapeSensorOrientation;
+    private boolean mNaturalLandscapeForSwipe;
     @Nullable
     private ImageTexture mAnimatedWebpReloadSourceTexture;
     @Nullable
@@ -632,6 +639,17 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             w.setFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS, WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
         }
         super.onCreate(savedInstanceState);
+        mOrientationEventListener = new OrientationEventListener(this) {
+            @Override
+            public void onOrientationChanged(int orientation) {
+                mDeviceOrientation = orientation;
+                if (mPendingLandscapeSensorOrientation
+                        && isLandscapeGravity(orientation, mNaturalLandscapeForSwipe)) {
+                    mPendingLandscapeSensorOrientation = false;
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                }
+            }
+        };
         StrictMode.VmPolicy.Builder builder = new StrictMode.VmPolicy.Builder();
         StrictMode.setVmPolicy(builder.build());
         builder.detectFileUriExposure();
@@ -1015,6 +1033,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onPause() {
+        if (mOrientationEventListener != null) {
+            mOrientationEventListener.disable();
+        }
+        mDeviceOrientation = OrientationEventListener.ORIENTATION_UNKNOWN;
         mAnimatedWebpLifecycleResumed = false;
         mAnimatedWebpLifecycleGeneration++;
         persistLocalGalleryHistoryNow();
@@ -1032,6 +1054,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onResume() {
         super.onResume();
+        if (mOrientationEventListener != null && mOrientationEventListener.canDetectOrientation()) {
+            mOrientationEventListener.enable();
+        }
 
         if (mGLRootView != null) {
             mGLRootView.onResume();
@@ -1277,7 +1302,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 mOrientationSwipeActive = false;
-                mOrientationSwipeCandidate = isCurrentImageOrientationDifferent();
+                mOrientationSwipeCandidate = isHorizontalReadingDirection()
+                        && isCurrentImageOrientationDifferent();
                 if (mOrientationSwipeCandidate) {
                     mOrientationSwipeDownX = event.getX();
                     mOrientationSwipeDownY = event.getY();
@@ -1286,6 +1312,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             case MotionEvent.ACTION_MOVE:
                 if (!mOrientationSwipeCandidate || event.getPointerCount() != 1) {
                     return mOrientationSwipeActive;
+                }
+                if (!isHorizontalReadingDirection()) {
+                    mOrientationSwipeCandidate = false;
+                    return false;
                 }
                 float dx = event.getX() - mOrientationSwipeDownX;
                 float dy = event.getY() - mOrientationSwipeDownY;
@@ -1344,8 +1374,17 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         return galleryView.isCurrentImageOrientationDifferent(isViewportLandscape());
     }
 
+    private boolean isHorizontalReadingDirection() {
+        if (mGalleryView == null) {
+            return false;
+        }
+        int layoutMode = mGalleryView.getLayoutMode();
+        return layoutMode == GalleryView.LAYOUT_LEFT_TO_RIGHT
+                || layoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT;
+    }
+
     private void switchOrientationForCurrentImage() {
-        if (!isCurrentImageOrientationDifferent()) {
+        if (!isHorizontalReadingDirection() || !isCurrentImageOrientationDifferent()) {
             return;
         }
         if (isViewportLandscape()) {
@@ -1357,21 +1396,41 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void setLandscapeOrientationForReadingDirection() {
         int layoutMode = mGalleryView != null ? mGalleryView.getLayoutMode() : mLayoutMode;
-        int requestedOrientation;
-        if (layoutMode == GalleryView.LAYOUT_LEFT_TO_RIGHT) {
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
-        } else if (layoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT) {
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
-        } else {
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
-        }
+        int preferredOrientation = layoutMode == GalleryView.LAYOUT_LEFT_TO_RIGHT
+                ? ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+                : ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+        mNaturalLandscapeForSwipe = isNaturalLandscape();
+        boolean sensorAvailable = mOrientationEventListener != null
+                && mOrientationEventListener.canDetectOrientation();
+        boolean gravityShowsLandscape = sensorAvailable
+                && isLandscapeGravity(mDeviceOrientation, mNaturalLandscapeForSwipe);
+        mPendingLandscapeSensorOrientation = sensorAvailable && !gravityShowsLandscape;
 
         Settings.putScreenRotation(2);
         updateQuickSettingsButtons();
-        setRequestedOrientation(requestedOrientation);
+        setRequestedOrientation(gravityShowsLandscape
+                ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                : preferredOrientation);
+    }
+
+    private boolean isNaturalLandscape() {
+        int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        boolean unrotatedDisplay = rotation == Surface.ROTATION_0
+                || rotation == Surface.ROTATION_180;
+        return isViewportLandscape() == unrotatedDisplay;
+    }
+
+    private static boolean isLandscapeGravity(int orientation, boolean naturalLandscape) {
+        if (orientation == OrientationEventListener.ORIENTATION_UNKNOWN) {
+            return false;
+        }
+        // In the natural landscape position, 0 and 180 degrees are the landscape sides.
+        int angle = (orientation + (naturalLandscape ? 90 : 0)) % 180;
+        return angle >= 30 && angle <= 150;
     }
 
     private void setPortraitOrientationForSwipe() {
+        mPendingLandscapeSensorOrientation = false;
         Settings.putScreenRotation(1);
         updateQuickSettingsButtons();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
@@ -1561,6 +1620,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void setScreenOrientation(boolean useLandscape) {
+        mPendingLandscapeSensorOrientation = false;
         Settings.putScreenRotation(useLandscape ? 2 : 1);
         updateQuickSettingsButtons();
         setRequestedOrientation(useLandscape
@@ -2539,6 +2599,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
             boolean oldReadingFullscreen = Settings.getReadingFullscreen();
 
+            mPendingLandscapeSensorOrientation = false;
             Settings.putScreenRotation(screenRotation);
             Settings.putReadingDirection(layoutMode);
             Settings.putPageScaling(scaleMode);
