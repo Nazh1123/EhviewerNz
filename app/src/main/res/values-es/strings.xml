@@ -983,7 +983,9 @@
     <string name="settings_animated_webp_progress_control_summary">Desliza en el cuarto inferior de la pantalla para cambiar la posición de reproducción</string>
     <string name="settings_animated_webp_sequential_playback_summary">Abre automáticamente la imagen siguiente al terminar la reproducción</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">Muestra el botón de reproducción/pausa del cambio automático cuando el control de páginas está visible</string>
-    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - Mantén pulsada la zona central inferior de la pantalla para reproducir a %1$sx; con 1.0, la pulsación larga abre el menú</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - Mantén pulsada la zona central inferior de la pantalla para reproducir a %1$sx; con 1.0, la pulsación larga abre el menú; tras mantener pulsado, desliza horizontalmente para cambiar la velocidad</string>
+    <string name="animated_webp_long_press_speed_hint">%1$sx, arrastra para cambiar</string>
+    <string name="animated_webp_long_press_speed_value">%1$sx</string>
     <string name="animated_webp_stall_warning">La reproducción de GIF está bloqueada; haga clic para reducir la sobrecarga de decodificación</string>
     <string name="bookmark_subscription_disable">Eliminar suscripción a favoritos</string>
     <string name="bookmark_subscription_disabled">"%s" se ha eliminado de la suscripción a favoritos</string>

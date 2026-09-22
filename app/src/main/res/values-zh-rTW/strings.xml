@@ -1064,7 +1064,9 @@
     <string name="settings_animated_webp_auto_transfer_button">自動翻頁按鈕</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">叫出頁面滑動條時顯示自動翻頁的播放／暫停按鈕</string>
     <string name="settings_animated_webp_long_press_speed">長按倍速</string>
-    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 長按螢幕中下區域，以 %1$sx 倍速播放；設為 1.0 時長按改為叫出選單</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 長按螢幕中下區域，以 %1$sx 倍速播放；設為 1.0 時長按改為叫出選單；長按後可透過水平移動更改倍率</string>
+    <string name="animated_webp_long_press_speed_hint">%1$sx，拖曳以變更</string>
+    <string name="animated_webp_long_press_speed_value">%1$sx</string>
     <string name="settings_animated_webp_long_press_speed_invalid">請輸入 0.1–3.0 範圍內、最多一位小數的數值</string>
     <string name="animated_webp_stall_warning">動圖播放發生卡頓；點擊以降低解碼開銷</string>
     <string name="bookmark_subscription_disable">移出書籤訂閱</string>

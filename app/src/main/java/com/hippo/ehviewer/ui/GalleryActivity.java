@@ -259,6 +259,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private ImageTexture mAnimatedWebpLongPressTexture;
     private boolean mAnimatedWebpLongPressActive;
+    @Nullable
+    private TextView mAnimatedWebpLongPressNotice;
+    @Nullable
+    private AnimatedWebpLongPressSpeed mAnimatedWebpLongPressSpeedSelection;
+    // Guarded by this, including the callbacks made on the GL thread.
+    private boolean mAnimatedWebpLongPressTouchDown;
+    private boolean mAnimatedWebpLongPressCaptured;
+    private float mAnimatedWebpLongPressTouchX;
     private float mAnimatedWebpLongPressRestoreSpeed;
     private boolean mAnimatedWebpLongPressRestorePlaying;
     private volatile boolean mAnimatedWebpLifecycleResumed;
@@ -322,6 +330,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private ScheduledExecutorService transferService = Executors.newSingleThreadScheduledExecutor();
     private final Handler transHandle = new Handler(Looper.getMainLooper());
     private final Handler mAnimatedWebpHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mAnimatedWebpLongPressNoticeUpdater =
+            this::updateAnimatedWebpLongPressNotice;
     private final ValueAnimator.AnimatorUpdateListener mUpdateSliderListener = new ValueAnimator.AnimatorUpdateListener() {
         @Override
         public void onAnimationUpdate(ValueAnimator animation) {
@@ -765,6 +775,21 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 });
 
         mAnimatedWebpPanel = findViewById(R.id.animated_webp_panel);
+        mAnimatedWebpLongPressNotice = findViewById(R.id.animated_webp_long_press_notice);
+        ViewCompat.setOnApplyWindowInsetsListener(mAnimatedWebpLongPressNotice,
+                (view, insets) -> {
+                    androidx.core.graphics.Insets safeInsets = insets.getInsets(
+                            WindowInsetsCompat.Type.systemBars()
+                                    | WindowInsetsCompat.Type.displayCutout());
+                    FrameLayout.LayoutParams params =
+                            (FrameLayout.LayoutParams) view.getLayoutParams();
+                    params.topMargin = safeInsets.top + getResources().getDimensionPixelSize(
+                            R.dimen.gallery_widget_margin_v);
+                    params.leftMargin = safeInsets.left + (int) (16 * getResources()
+                            .getDisplayMetrics().density);
+                    view.setLayoutParams(params);
+                    return insets;
+                });
         mAnimatedWebpControls = findViewById(R.id.animated_webp_controls);
         mAnimatedWebpTime = findViewById(R.id.animated_webp_time);
         mAnimatedWebpSeek = findViewById(R.id.animated_webp_seek);
@@ -939,6 +964,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSaveNoticeIcon = null;
         mSaveNoticePreviousBadge = null;
         mAnimatedWebpPanel = null;
+        mAnimatedWebpLongPressNotice = null;
         mAnimatedWebpControls = null;
         mAnimatedWebpTime = null;
         mAnimatedWebpSeek = null;
@@ -1169,6 +1195,17 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
+        if (handleAnimatedWebpLongPressGesture(event)) {
+            if (event.getActionMasked() == MotionEvent.ACTION_UP
+                    || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
+                // Finish the original GL gesture without dispatching a tap or a fling.
+                MotionEvent cancel = MotionEvent.obtain(event);
+                cancel.setAction(MotionEvent.ACTION_CANCEL);
+                super.dispatchTouchEvent(cancel);
+                cancel.recycle();
+            }
+            return true;
+        }
         if (handleOrientationSwipeGesture(event)) {
             return true;
         }
@@ -1176,6 +1213,44 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             return true;
         }
         return super.dispatchTouchEvent(event);
+    }
+
+    private synchronized boolean handleAnimatedWebpLongPressGesture(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            restoreAnimatedWebpLongPressPlayback();
+            mAnimatedWebpLongPressTouchDown = true;
+            mAnimatedWebpLongPressCaptured = false;
+            mAnimatedWebpLongPressTouchX = event.getX();
+            return false;
+        }
+        mAnimatedWebpLongPressTouchX = event.getX();
+        boolean captured = mAnimatedWebpLongPressCaptured;
+        if (captured) {
+            clearAnimatedWebpTouchGesture();
+            clearOrientationSwipeGesture();
+            if (action == MotionEvent.ACTION_MOVE && event.getPointerCount() == 1
+                    && mAnimatedWebpLongPressActive
+                    && mAnimatedWebpLongPressSpeedSelection != null
+                    && mAnimatedWebpLongPressSpeedSelection.move(
+                            event.getX(), SystemClock.uptimeMillis())) {
+                if (mAnimatedWebpLongPressTexture != null) {
+                    mAnimatedWebpLongPressTexture.setPlaybackSpeed(
+                            mAnimatedWebpLongPressSpeedSelection.getSpeed());
+                }
+                postAnimatedWebpLongPressNoticeUpdate();
+            }
+        }
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL
+                || action == MotionEvent.ACTION_POINTER_DOWN) {
+            mAnimatedWebpLongPressTouchDown = false;
+            restoreAnimatedWebpLongPressPlayback();
+            // After a second pointer, swallow the remainder of this gesture as well.
+            if (action != MotionEvent.ACTION_POINTER_DOWN) {
+                mAnimatedWebpLongPressCaptured = false;
+            }
+        }
+        return captured;
     }
 
     private boolean handleOrientationSwipeGesture(MotionEvent event) {
@@ -1208,6 +1283,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
                 mOrientationSwipeCandidate = false;
                 mOrientationSwipeActive = true;
+                cancelAnimatedWebpLongPressTouch();
                 clearAnimatedWebpTouchGesture();
                 MotionEvent cancel = MotionEvent.obtain(event);
                 cancel.setAction(MotionEvent.ACTION_CANCEL);
@@ -1308,6 +1384,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                         return false;
                     }
                     mAnimatedWebpTouchDragging = true;
+                    cancelAnimatedWebpLongPressTouch();
                     MotionEvent cancel = MotionEvent.obtain(event);
                     cancel.setAction(MotionEvent.ACTION_CANCEL);
                     super.dispatchTouchEvent(cancel);
@@ -2938,12 +3015,58 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 || mLayoutMode == GalleryView.LAYOUT_TOP_TO_BOTTOM
                 || texture != mAnimatedWebpTexture
                 || Math.abs(speed - 1.0f) < 0.0001f
+                || !mAnimatedWebpLongPressTouchDown
+                || !mAnimatedWebpLifecycleResumed
                 || mAnimatedWebpLongPressActive) {
             return false;
         }
+        if (mAnimatedWebpLongPressSpeedSelection == null) {
+            mAnimatedWebpLongPressSpeedSelection = new AnimatedWebpLongPressSpeed(
+                    speed, getResources().getDisplayMetrics().density);
+        }
+        mAnimatedWebpLongPressSpeedSelection.begin(
+                mAnimatedWebpLongPressTouchX, SystemClock.uptimeMillis());
         mAnimatedWebpLongPressActive = true;
-        applyAnimatedWebpLongPressPlayback(texture, speed);
+        mAnimatedWebpLongPressCaptured = true;
+        applyAnimatedWebpLongPressPlayback(texture,
+                mAnimatedWebpLongPressSpeedSelection.getSpeed());
+        postAnimatedWebpLongPressNoticeUpdate();
         return true;
+    }
+
+    private synchronized void cancelAnimatedWebpLongPressTouch() {
+        mAnimatedWebpLongPressTouchDown = false;
+        restoreAnimatedWebpLongPressPlayback();
+    }
+
+    private void postAnimatedWebpLongPressNoticeUpdate() {
+        mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpLongPressNoticeUpdater);
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            updateAnimatedWebpLongPressNotice();
+        } else {
+            mAnimatedWebpHandler.post(mAnimatedWebpLongPressNoticeUpdater);
+        }
+    }
+
+    private synchronized void updateAnimatedWebpLongPressNotice() {
+        mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpLongPressNoticeUpdater);
+        if (mAnimatedWebpLongPressNotice == null) return;
+        if (!mAnimatedWebpLongPressActive || mAnimatedWebpLongPressSpeedSelection == null) {
+            mAnimatedWebpLongPressNotice.setVisibility(View.GONE);
+            return;
+        }
+        boolean adjustable = mAnimatedWebpLongPressSpeedSelection.isAdjustable(
+                SystemClock.uptimeMillis());
+        String speed = String.format(Locale.US, "%.1f",
+                mAnimatedWebpLongPressSpeedSelection.getSpeed());
+        mAnimatedWebpLongPressNotice.setText(getString(adjustable
+                ? R.string.animated_webp_long_press_speed_hint
+                : R.string.animated_webp_long_press_speed_value, speed));
+        mAnimatedWebpLongPressNotice.setVisibility(View.VISIBLE);
+        if (adjustable) {
+            mAnimatedWebpHandler.postAtTime(mAnimatedWebpLongPressNoticeUpdater,
+                    mAnimatedWebpLongPressSpeedSelection.getDeadline());
+        }
     }
 
     @Override
@@ -2954,6 +3077,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private synchronized void restoreAnimatedWebpLongPressPlayback() {
         mAnimatedWebpLongPressActive = false;
         restoreAnimatedWebpLongPressTexture();
+        postAnimatedWebpLongPressNoticeUpdate();
     }
 
     private synchronized void transferAnimatedWebpLongPressPlayback(
@@ -2971,16 +3095,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (!Settings.getAnimatedWebpAutoAdvance()
                 || !Settings.getExperimentalAnimatedWebpEnabled()
                 || mLayoutMode == GalleryView.LAYOUT_TOP_TO_BOTTOM) {
-            mAnimatedWebpLongPressActive = false;
+            restoreAnimatedWebpLongPressPlayback();
             return;
         }
 
-        float speed = Settings.getAnimatedWebpLongPressSpeed();
-        if (Math.abs(speed - 1.0f) < 0.0001f) {
-            mAnimatedWebpLongPressActive = false;
-            return;
-        }
-        applyAnimatedWebpLongPressPlayback(nextTexture, speed);
+        applyAnimatedWebpLongPressPlayback(nextTexture,
+                mAnimatedWebpLongPressSpeedSelection.getSpeed());
     }
 
     private void applyAnimatedWebpLongPressPlayback(@NonNull ImageTexture texture,

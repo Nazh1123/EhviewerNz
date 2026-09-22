@@ -374,4 +374,23 @@
         android:src="@drawable/v_animated_webp_warning_x24"
         android:visibility="gone" />
 
+    <TextView
+        android:id="@+id/animated_webp_long_press_notice"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|left"
+        android:layout_marginLeft="16dp"
+        android:layout_marginTop="28dp"
+        android:layout_marginRight="16dp"
+        android:accessibilityLiveRegion="polite"
+        android:background="@drawable/bg_animated_webp_long_press_notice"
+        android:paddingStart="12dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:textColor="@android:color/white"
+        android:textSize="14sp"
+        android:visibility="gone"
+        tools:ignore="RtlHardcoded" />
+
 </FrameLayout>

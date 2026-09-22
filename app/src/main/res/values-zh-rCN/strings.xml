@@ -1161,7 +1161,9 @@
     <string name="settings_animated_webp_auto_transfer_button">自动翻页按钮</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">唤出页面滑动条时显示自动翻页的播放/暂停按钮</string>
     <string name="settings_animated_webp_long_press_speed">长按倍速</string>
-    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 长按屏幕中下区域，以 %1$sx 倍速播放；设为 1.0 时长按改为唤出菜单</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 长按屏幕中下区域，以 %1$sx 倍速播放；设为 1.0 时长按改为唤出菜单；长按后可通过水平移动更改倍率</string>
+    <string name="animated_webp_long_press_speed_hint">%1$sx，拖拽以改动</string>
+    <string name="animated_webp_long_press_speed_value">%1$sx</string>
     <string name="settings_animated_webp_long_press_speed_invalid">请输入 0.1–3.0 范围内最多一位小数的数值</string>
     <string name="gallery_detail_back_to_top">回到最上方</string>
     <string name="sync_local_folder">同步</string>
