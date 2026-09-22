@@ -201,6 +201,8 @@ public class DownloadsScene extends ToolbarScene
             new java.util.concurrent.atomic.AtomicBoolean();
     @Nullable
     private MenuItem mSyncFolderMenuItem;
+    @Nullable
+    private MenuItem mStartAllMenuItem;
     private final List<ContinuousDownloadItem> mContinuousItems = new ArrayList<>();
     private final Map<Long, Integer> mContinuousGalleryPositions = new HashMap<>();
     private final Map<String, Integer> mContinuousHeaderPositions = new HashMap<>();
@@ -930,6 +932,7 @@ public class DownloadsScene extends ToolbarScene
     public void onDestroyView() {
         super.onDestroyView();
         mSyncFolderMenuItem = null;
+        mStartAllMenuItem = null;
 
         if (null != mShowcaseView) {
             ViewUtils.removeFromParent(mShowcaseView);
@@ -1592,25 +1595,110 @@ public class DownloadsScene extends ToolbarScene
     }
 
     private void applyDownloadListMode(boolean continuousLabelBrowse) {
+        // Resolve before detaching the old rows; null is a valid (default) label.
+        String normalLabel = Settings.getRecentDownloadLabel();
+        if (mContinuousLabelBrowse && !continuousLabelBrowse) {
+            int position = findCenteredContinuousPosition();
+            if (position != RecyclerView.NO_POSITION) {
+                normalLabel = mContinuousItems.get(position).label;
+            }
+        }
+        // Finish operations using the old position mapping before switching between
+        // section headers and the single-label gallery list.
+        if (mDragDropManager != null) {
+            mDragDropManager.cancelDrag();
+        }
+        if (mRecyclerView != null) {
+            mRecyclerView.stopScroll();
+            if (mRecyclerView.isInCustomChoice()) {
+                mRecyclerView.outOfCustomChoiceMode();
+            }
+            RecyclerView.ItemAnimator animator = mRecyclerView.getItemAnimator();
+            if (animator != null) {
+                animator.endAnimations();
+            }
+            // A mode change replaces the row structure. Drop attached/cached rows and
+            // RecyclerView's old layout state instead of treating it as a content update.
+            mRecyclerView.setAdapter(null);
+        }
         mContinuousLabelBrowse = continuousLabelBrowse;
-        mLabel = null;
+        mLabel = continuousLabelBrowse ? null : normalLabel;
+        mContinuousItems.clear();
+        mContinuousGalleryPositions.clear();
+        mContinuousHeaderPositions.clear();
+        mContinuousRestorePosition = RecyclerView.NO_POSITION;
+        mContinuousRestoreOffset = 0;
         searchKey = null;
         mSelectedCategory = EhUtils.ALL_CATEGORY;
         indexPage = 1;
+        needInitPage = false;
+        doNotScroll = false;
+        if (myPageChangeListener != null) {
+            myPageChangeListener.setIndexPage(indexPage);
+            myPageChangeListener.setNeedInitPage(false);
+            myPageChangeListener.setDoNotScroll(false);
+        }
         if (mCategorySpinner != null) {
             mCategorySpinner.setSelection(0);
         }
-        if (mRecyclerView != null && mRecyclerView.isInCustomChoice()) {
-            mRecyclerView.outOfCustomChoiceMode();
-        }
         updateForLabel();
-        updateView();
         if (mLayoutManager != null) {
+            mLayoutManager.invalidateSpanAssignments();
             mLayoutManager.scrollToPositionWithOffset(0, 0);
         }
+        if (mRecyclerView != null) {
+            mRecyclerView.setAdapter(mAdapter);
+            mRecyclerView.setVisibility(View.VISIBLE);
+        }
+        updateView();
         if (downloadLabelDraw != null) {
             downloadLabelDraw.updateDownloadLabels();
         }
+    }
+
+    /** Only inspect attached, visible rows when switching modes, never on every scroll. */
+    private int findCenteredContinuousPosition() {
+        if (mRecyclerView == null || mRecyclerView.getVisibility() != View.VISIBLE) {
+            return RecyclerView.NO_POSITION;
+        }
+        int left = mRecyclerView.getPaddingLeft();
+        int top = mRecyclerView.getPaddingTop();
+        int right = mRecyclerView.getWidth() - mRecyclerView.getPaddingRight();
+        int bottom = mRecyclerView.getHeight() - mRecyclerView.getPaddingBottom();
+        if (right <= left || bottom <= top) {
+            return RecyclerView.NO_POSITION;
+        }
+        float centerX = (left + right) / 2f;
+        float centerY = (top + bottom) / 2f;
+        float nearestDistance = Float.MAX_VALUE;
+        int nearestPosition = RecyclerView.NO_POSITION;
+        for (int i = 0; i < mRecyclerView.getChildCount(); i++) {
+            View child = mRecyclerView.getChildAt(i);
+            int position = mRecyclerView.getChildAdapterPosition(child);
+            if (position < 0 || position >= mContinuousItems.size()
+                    || child.getVisibility() != View.VISIBLE) {
+                continue;
+            }
+            float childLeft = child.getX();
+            float childTop = child.getY();
+            float childRight = childLeft + child.getWidth();
+            float childBottom = childTop + child.getHeight();
+            if (childRight <= left || childLeft >= right
+                    || childBottom <= top || childTop >= bottom) {
+                continue;
+            }
+            // Use distance to the row rectangle so tall cards containing the center
+            // win; gaps between cards select the nearest visible row deterministically.
+            float dx = Math.max(0, Math.max(childLeft - centerX, centerX - childRight));
+            float dy = Math.max(0, Math.max(childTop - centerY, centerY - childBottom));
+            float distance = dx * dx + dy * dy;
+            if (distance < nearestDistance
+                    || (distance == nearestDistance && position < nearestPosition)) {
+                nearestDistance = distance;
+                nearestPosition = position;
+            }
+        }
+        return nearestPosition;
     }
 
     private void quickOrganizeDownloads(@NonNull Context context,
@@ -2633,13 +2721,18 @@ public class DownloadsScene extends ToolbarScene
     public void onMenuCreated(Menu menu) {
         super.onMenuCreated(menu);
         mSyncFolderMenuItem = menu.findItem(R.id.sync_local_folder);
+        mStartAllMenuItem = menu.findItem(R.id.action_start_all);
         updateFolderSyncMenu();
     }
 
     private void updateFolderSyncMenu() {
+        boolean canSync = !mContinuousLabelBrowse && mDownloadManager != null
+                && !mDownloadManager.getLocalFolderImportTrees(mLabel).isEmpty();
         if (mSyncFolderMenuItem != null) {
-            mSyncFolderMenuItem.setVisible(!mContinuousLabelBrowse && mDownloadManager != null
-                    && !mDownloadManager.getLocalFolderImportTrees(mLabel).isEmpty());
+            mSyncFolderMenuItem.setVisible(canSync);
+        }
+        if (mStartAllMenuItem != null) {
+            mStartAllMenuItem.setVisible(!canSync);
         }
     }
 
