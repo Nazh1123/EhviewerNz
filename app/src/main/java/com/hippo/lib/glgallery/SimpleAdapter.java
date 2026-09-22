@@ -116,6 +116,8 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
                 ImageTexture imageTexture = new ImageTexture(image);
                 mUploader.addTexture(imageTexture);
                 page.showImage();
+                // Apply gallery playback/visibility before setImage starts decoding.
+                mGalleryView.notifyAnimatedPageVisibility(page, imageTexture);
                 page.setImage(imageTexture);
                 mGalleryView.notifyPageImageReady(index);
                 if (mShowIndex) {

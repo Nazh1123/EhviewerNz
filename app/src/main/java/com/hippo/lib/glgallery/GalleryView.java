@@ -1147,6 +1147,27 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         }
     }
 
+    private final Rect mAnimatedPageVisibilityRect = new Rect();
+
+    // Called on the render thread for the current and neighbouring pager pages.
+    void notifyAnimatedPageVisibility(GalleryPageView page, ImageTexture texture) {
+        if (texture == null || !texture.isControllableAnimation() || mListener == null) {
+            return;
+        }
+        ImageView imageView = page.getImageView();
+        Rect visible = mAnimatedPageVisibilityRect;
+        imageView.getValidRect(visible);
+        long area = (long) imageView.getWidth() * imageView.getHeight();
+        float fraction = area > 0
+                ? (float) ((long) visible.width() * visible.height() / (double) area)
+                : 0f;
+        mListener.onAnimatedPageVisibility(texture, fraction);
+    }
+
+    void notifyAnimatedPageVisibility(GalleryPageView page) {
+        notifyAnimatedPageVisibility(page, page.getImageTexture());
+    }
+
     @RenderThread
     private void updateCurrentImageSize(int index) {
         GalleryPageView page = mLayoutManager == null
@@ -1338,6 +1359,9 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         void onUpdateCurrentIndex(int index);
 
         void onPageImageReady(int index);
+
+        @RenderThread
+        void onAnimatedPageVisibility(ImageTexture texture, float visibleFraction);
 
         @RenderThread
         void onTapSliderArea();

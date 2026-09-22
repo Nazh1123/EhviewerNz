@@ -410,14 +410,17 @@ class PagerLayoutManager extends GalleryView.LayoutManager {
             if (mCurrent != null) {
                 layoutPage(mCurrent, widthSpec, heightSpec,
                         offset, 0, width + offset, height);
+                galleryView.notifyAnimatedPageVisibility(mCurrent);
             }
             if (leftPage != null) {
                 layoutPage(leftPage, widthSpec, heightSpec,
                         -mInterval - width + offset, 0, -mInterval + offset, height);
+                galleryView.notifyAnimatedPageVisibility(leftPage);
             }
             if (rightPage != null) {
                 layoutPage(rightPage, widthSpec, heightSpec,
                         width + mInterval + offset, 0, width + mInterval + width + offset, height);
+                galleryView.notifyAnimatedPageVisibility(rightPage);
             }
         }
     }
