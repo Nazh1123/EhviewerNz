@@ -173,6 +173,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private static final long SAVE_NOTICE_EXIT_DURATION_MS = 200L;
     private static final float ORIENTATION_SWIPE_MIN_SCREEN_FRACTION = 0.08f;
     private static final float ORIENTATION_SWIPE_DIRECTION_RATIO = 1.25f;
+    private static final double ANIMATED_WEBP_RELATIVE_SEEK_GAIN = 2.0;
     private static final int WRITE_REQUEST_CODE = 43;
 
     private String mAction;
@@ -295,6 +296,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private boolean mAnimatedWebpTouchDragging;
     private float mAnimatedWebpTouchDownX;
     private float mAnimatedWebpTouchDownY;
+    private int mAnimatedWebpTouchStartPosition;
+    private boolean mAnimatedWebpSeekBarTouchActive;
+    private boolean mAnimatedWebpSeekBarTouchDragging;
+    private float mAnimatedWebpSeekBarTouchDownX;
+    private float mAnimatedWebpSeekBarTouchDownY;
+    private int mAnimatedWebpSeekBarTouchStartPosition;
     private int mAnimatedWebpTouchSlop;
     private boolean mOrientationSwipeCandidate;
     private boolean mOrientationSwipeActive;
@@ -856,6 +863,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 finishAnimatedWebpSeek(seekBar.getProgress());
             }
         });
+        mAnimatedWebpSeek.setOnTouchListener(this::handleAnimatedWebpSeekBarTouch);
         mSize = mGalleryProvider.size();
         mCurrentIndex = startPage;
         if (mGalleryView != null) {
@@ -1449,6 +1457,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 if (mAnimatedWebpTouchCandidate) {
                     mAnimatedWebpTouchDownX = event.getX();
                     mAnimatedWebpTouchDownY = event.getY();
+                    mAnimatedWebpTouchStartPosition = mAnimatedWebpTexture.getPlaybackPosition();
                 }
                 return false;
             case MotionEvent.ACTION_MOVE:
@@ -1470,11 +1479,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     cancel.recycle();
                     beginAnimatedWebpSeek();
                 }
-                requestAnimatedWebpSeekPreview(animatedWebpPositionForX(event.getX()), false);
+                requestAnimatedWebpSeekPreview(animatedWebpPositionForDrag(event.getX()), false);
                 return true;
             case MotionEvent.ACTION_UP:
                 if (mAnimatedWebpTouchDragging) {
-                    finishAnimatedWebpSeek(animatedWebpPositionForX(event.getX()));
+                    finishAnimatedWebpSeek(animatedWebpPositionForDrag(event.getX()));
                     clearAnimatedWebpTouchGesture();
                     return true;
                 }
@@ -1496,6 +1505,70 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
     }
 
+    private boolean handleAnimatedWebpSeekBarTouch(View view, MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            if (mAnimatedWebpTexture == null || !Settings.getAnimatedWebpAllowSeek()
+                    || (mSeekBarPanel != null
+                    && mSeekBarPanel.getVisibility() == View.VISIBLE)) {
+                return false;
+            }
+            mAnimatedWebpSeekBarTouchActive = true;
+            mAnimatedWebpSeekBarTouchDragging = false;
+            mAnimatedWebpSeekBarTouchDownX = event.getX();
+            mAnimatedWebpSeekBarTouchDownY = event.getY();
+            mAnimatedWebpSeekBarTouchStartPosition =
+                    mAnimatedWebpTexture.getPlaybackPosition();
+            mAnimatedWebpRequestedPosition = mAnimatedWebpSeekBarTouchStartPosition;
+            return true;
+        }
+        if (!mAnimatedWebpSeekBarTouchActive) return true;
+
+        switch (action) {
+            case MotionEvent.ACTION_MOVE:
+                if (event.getPointerCount() != 1) return true;
+                float dx = event.getX() - mAnimatedWebpSeekBarTouchDownX;
+                if (!mAnimatedWebpSeekBarTouchDragging) {
+                    float dy = event.getY() - mAnimatedWebpSeekBarTouchDownY;
+                    if (Math.abs(dx) <= mAnimatedWebpTouchSlop
+                            || Math.abs(dx) <= Math.abs(dy)) return true;
+                    mAnimatedWebpSeekBarTouchDragging = true;
+                    beginAnimatedWebpSeek();
+                }
+                requestAnimatedWebpSeekPreview(animatedWebpSeekBarPositionForDrag(dx), false);
+                return true;
+            case MotionEvent.ACTION_UP:
+                if (mAnimatedWebpSeekBarTouchDragging) {
+                    finishAnimatedWebpSeek(animatedWebpSeekBarPositionForDrag(
+                            event.getX() - mAnimatedWebpSeekBarTouchDownX));
+                } else {
+                    // Preserve SeekBar's native tap-to-position behavior without letting
+                    // ACTION_DOWN move the thumb before a drag has been recognized.
+                    MotionEvent down = MotionEvent.obtain(event.getDownTime(),
+                            event.getDownTime(), MotionEvent.ACTION_DOWN,
+                            mAnimatedWebpSeekBarTouchDownX,
+                            mAnimatedWebpSeekBarTouchDownY, event.getMetaState());
+                    try {
+                        view.onTouchEvent(down);
+                        view.onTouchEvent(event);
+                    } finally {
+                        down.recycle();
+                    }
+                }
+                mAnimatedWebpSeekBarTouchActive = false;
+                return true;
+            case MotionEvent.ACTION_POINTER_DOWN:
+            case MotionEvent.ACTION_CANCEL:
+                if (mAnimatedWebpSeekBarTouchDragging) {
+                    finishAnimatedWebpSeek(mAnimatedWebpRequestedPosition);
+                }
+                mAnimatedWebpSeekBarTouchActive = false;
+                return true;
+            default:
+                return true;
+        }
+    }
+
     private boolean canStartAnimatedWebpScrub(MotionEvent event) {
         if (mAnimatedWebpTexture == null || !Settings.getAnimatedWebpAllowSeek()) {
             return false;
@@ -1506,8 +1579,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 isPointInsideView(event.getRawX(), event.getRawY(), mSeekBarPanel)) {
             return false;
         }
-        // Let the real progress bar keep normal SeekBar semantics. The rest of
-        // the lower quarter is the larger, invisible scrubbing target.
+        // The visible seek bar distinguishes taps from relative drags itself.
+        // The rest of the lower quarter is the larger, invisible target.
         return mAnimatedWebpSeek == null || !isPointInsideView(
                 event.getRawX(), event.getRawY(), mAnimatedWebpSeek);
     }
@@ -1520,12 +1593,32 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 rawY >= location[1] && rawY < location[1] + view.getHeight();
     }
 
-    private int animatedWebpPositionForX(float x) {
+    private int animatedWebpPositionForDrag(float x) {
         ImageTexture texture = mAnimatedWebpTexture;
         View decor = getWindow().getDecorView();
-        if (texture == null || decor.getWidth() <= 0) return 0;
-        float fraction = Math.max(0f, Math.min(1f, x / decor.getWidth()));
-        return Math.round(Math.max(0, texture.getPlaybackDuration() - 1) * fraction);
+        if (texture == null) return mAnimatedWebpTouchStartPosition;
+        return calculateAnimatedWebpSeekPosition(mAnimatedWebpTouchStartPosition,
+                x - mAnimatedWebpTouchDownX, decor.getWidth(),
+                texture.getPlaybackDuration());
+    }
+
+    private int animatedWebpSeekBarPositionForDrag(float dragDistance) {
+        ImageTexture texture = mAnimatedWebpTexture;
+        if (texture == null) return mAnimatedWebpSeekBarTouchStartPosition;
+        return calculateAnimatedWebpSeekPosition(mAnimatedWebpSeekBarTouchStartPosition,
+                dragDistance, getWindow().getDecorView().getWidth(),
+                texture.getPlaybackDuration());
+    }
+
+    static int calculateAnimatedWebpSeekPosition(int startPosition, float dragDistance,
+                                                 int screenWidth, int duration) {
+        if (duration <= 0) return 0;
+        int maxPosition = duration - 1;
+        if (screenWidth <= 0) return Math.max(0, Math.min(maxPosition, startPosition));
+        // Half a screen of dragging changes the position by one full duration.
+        long offset = Math.round(maxPosition * ANIMATED_WEBP_RELATIVE_SEEK_GAIN
+                * ((double) dragDistance / screenWidth));
+        return (int) Math.max(0L, Math.min(maxPosition, (long) startPosition + offset));
     }
 
     private void clearAnimatedWebpTouchGesture() {
