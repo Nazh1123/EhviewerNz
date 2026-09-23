@@ -2917,6 +2917,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         boolean allowSeek = Settings.getAnimatedWebpAllowSeek();
         boolean sliderVisible = mSeekBarPanel != null &&
                 mSeekBarPanel.getVisibility() == View.VISIBLE;
+        // The gallery play choice keeps animation controls available until playback resumes.
+        // Seeking and visibility pauses do not change this choice.
+        boolean keepControlsVisible = !mAnimatedWebpGalleryPlaying;
+        boolean showControlButtons = sliderVisible || keepControlsVisible;
         int sliderOffset = sliderVisible && mSeekBarPanel != null
                 ? mSeekBarPanel.getHeight() : 0;
         boolean visible = candidate != null;
@@ -2948,7 +2952,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
         if (mAnimatedWebpControls != null) {
-            mAnimatedWebpControls.setVisibility(showTime || sliderVisible
+            mAnimatedWebpControls.setVisibility(showTime || showControlButtons
                     ? View.VISIBLE : View.GONE);
             ViewGroup.LayoutParams raw = mAnimatedWebpControls.getLayoutParams();
             if (raw instanceof FrameLayout.LayoutParams) {
@@ -2970,16 +2974,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
         if (mAnimatedWebpPlayPause != null) {
-            mAnimatedWebpPlayPause.setVisibility(sliderVisible ? View.VISIBLE : View.INVISIBLE);
+            mAnimatedWebpPlayPause.setVisibility(
+                    showControlButtons ? View.VISIBLE : View.INVISIBLE);
             mAnimatedWebpPlayPause.setImageResource(mAnimatedWebpGalleryPlaying
                     ? R.drawable.v_pause_x24 : R.drawable.v_play_x24);
         }
         if (mAnimatedWebpSpeed != null) {
-            mAnimatedWebpSpeed.setVisibility(sliderVisible ? View.VISIBLE : View.INVISIBLE);
+            mAnimatedWebpSpeed.setVisibility(
+                    showControlButtons ? View.VISIBLE : View.INVISIBLE);
         }
         if (mAnimatedWebpSequential != null) {
             mAnimatedWebpSequential.setVisibility(
-                    sliderVisible ? View.VISIBLE : View.INVISIBLE);
+                    showControlButtons ? View.VISIBLE : View.INVISIBLE);
         }
         if (mAutoTransferPanel != null && sliderVisible) {
             mAutoTransferPanel.setVisibility(Settings.getAnimatedWebpAutoTransferButton()
