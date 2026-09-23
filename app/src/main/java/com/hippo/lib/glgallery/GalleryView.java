@@ -156,6 +156,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private boolean mScroll = false;
     private boolean mFirstScroll = false;
     private boolean mSliderLongPressHandled = false;
+    private volatile boolean mAnimatedPageControlAreasEnabled;
 
     private final Rect mLeftArea = new Rect();
     private final Rect mRightArea = new Rect();
@@ -589,6 +590,10 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         mGestureRecognizer.setPageAreaDoubleTapEnabled(enabled);
     }
 
+    public void setAnimatedPageControlAreasEnabled(boolean enabled) {
+        mAnimatedPageControlAreasEnabled = enabled;
+    }
+
     @Override
     public boolean onSingleTapUp(float x, float y) {
         postMethod(METHOD_ON_SINGLE_TAP_UP, x, y);
@@ -616,7 +621,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     @Override
     public boolean isDoubleTapRegion(float x, float y) {
         return mMenuArea.contains((int) x, (int) y)
-                || isSliderArea(x, y);
+                || isSliderArea(x, y)
+                || isAnimatedPageControlArea(x, y);
     }
 
     @Override
@@ -714,6 +720,15 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
                 || mSliderBottomArea.contains((int) x, (int) y);
     }
 
+    private boolean isAnimatedPageControlArea(float x, float y) {
+        // Keep the existing page-turn rectangles; only the lower third gains animation
+        // gestures while a controllable animation is the current page.
+        return mAnimatedPageControlAreasEnabled
+                && y >= getHeight() * 0.7f
+                && (mLeftArea.contains((int) x, (int) y)
+                || mRightArea.contains((int) x, (int) y));
+    }
+
     @RenderThread
     public void onDataChanged() {
         try{
@@ -776,6 +791,11 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             return;
         }
 
+        if (isAnimatedPageControlArea(x, y)) {
+            if (mListener != null) mListener.onDoubleTapSliderArea();
+            return;
+        }
+
         if (isSliderArea(x, y)) {
             GalleryPageView page = findPageUnder(x, y);
             if (page != null && page.getImageTexture() != null &&
@@ -797,6 +817,18 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
         if (mLayoutManager == null) {
             return;
+        }
+
+        if (isAnimatedPageControlArea(x, y)) {
+            GalleryPageView page = mLayoutManager.findPageByIndex(
+                    mLayoutManager.getInternalCurrentIndex());
+            ImageTexture texture = page != null ? page.getImageTexture() : null;
+            if (texture != null && texture.isControllableAnimation()) {
+                if (mListener != null && mListener.onLongPressSliderArea(texture)) {
+                    mSliderLongPressHandled = true;
+                }
+                return;
+            }
         }
 
         if (isSliderArea(x, y)) {

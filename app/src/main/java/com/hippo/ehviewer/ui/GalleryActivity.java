@@ -2921,6 +2921,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 ? mSeekBarPanel.getHeight() : 0;
         boolean visible = candidate != null;
         updatePageSliderTint(visible);
+        if (mGalleryView != null) {
+            mGalleryView.setAnimatedPageControlAreasEnabled(visible);
+        }
         if (mAnimatedWebpPanel != null) {
             mAnimatedWebpPanel.setVisibility(visible ? View.VISIBLE : View.GONE);
         }
