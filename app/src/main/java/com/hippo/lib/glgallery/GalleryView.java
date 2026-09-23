@@ -157,6 +157,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private boolean mFirstScroll = false;
     private boolean mSliderLongPressHandled = false;
     private volatile boolean mAnimatedPageControlAreasEnabled;
+    private volatile boolean mPageSwipeInProgress;
 
     private final Rect mLeftArea = new Rect();
     private final Rect mRightArea = new Rect();
@@ -592,6 +593,10 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
     public void setAnimatedPageControlAreasEnabled(boolean enabled) {
         mAnimatedPageControlAreasEnabled = enabled;
+    }
+
+    public boolean isPageSwipeInProgress() {
+        return mPageSwipeInProgress;
     }
 
     @Override
@@ -1138,6 +1143,9 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         if (mLayoutManager != null && mLayoutManager.onUpdateAnimation(time)) {
             invalidate();
         }
+
+        mPageSwipeInProgress = mLayoutManager != null && mLayoutManager == mPagerLayoutManager
+                && mPagerLayoutManager.isSwipeInProgress();
 
         fill();
         mWillFill = false;

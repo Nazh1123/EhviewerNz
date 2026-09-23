@@ -719,6 +719,10 @@ class PagerLayoutManager extends GalleryView.LayoutManager {
         return invalidate;
     }
 
+    boolean isSwipeInProgress() {
+        return mOffset != 0 || mSmoothScroller.isRunning() || mPageFling.isRunning();
+    }
+
     @Override
     public void onDataChanged() {
         AssertUtils.assertNotNull("The PagerLayoutManager is not attached", mAdapter);

@@ -4,8 +4,11 @@ import android.app.Application;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.Handler;
+import android.os.Looper;
 
 import com.hippo.ehviewer.Settings;
+import com.hippo.lib.glgallery.GalleryPageView;
+import com.hippo.lib.glgallery.GalleryView;
 import com.hippo.lib.glview.image.ImageTexture;
 import com.hippo.lib.glview.image.ImageWrapper;
 import com.hippo.lib.image.Image;
@@ -17,8 +20,10 @@ import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.ConscryptMode;
+import org.robolectric.annotation.LooperMode;
 import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
@@ -55,6 +60,7 @@ public class AnimatedWebpGalleryPlaybackTest {
                 .shutdownNow();
         ((ExecutorService) ReflectionHelpers.getField(activity, "transferService"))
                 .shutdownNow();
+        Settings.putAnimatedWebpAutoAdvance(false);
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre", null);
     }
 
@@ -105,8 +111,13 @@ public class AnimatedWebpGalleryPlaybackTest {
         assertFalse(oldPage.isPlaybackPlaying());
         assertTrue(newPage.isPlaybackPlaying());
 
-        // Reverse the swipe before it completes: the old page enters again,
-        // while the new page starts disappearing from the opposite edge.
+        // A short reversal must not immediately flip either page's playback.
+        activity.onAnimatedPageVisibility(oldPage, 0.53f);
+        activity.onAnimatedPageVisibility(newPage, 0.47f);
+        assertFalse(oldPage.isPlaybackPlaying());
+        assertTrue(newPage.isPlaybackPlaying());
+
+        // Reversing by more than 10% of the screen width commits both changes.
         activity.onAnimatedPageVisibility(oldPage, 0.6f);
         activity.onAnimatedPageVisibility(newPage, 0.4f);
         assertTrue(oldPage.isPlaybackPlaying());
@@ -115,6 +126,8 @@ public class AnimatedWebpGalleryPlaybackTest {
         activity.onAnimatedPageVisibility(oldPage, 0.76f);
         assertTrue(oldPage.isPlaybackPlaying());
         activity.onAnimatedPageVisibility(oldPage, 0.75f);
+        assertTrue(oldPage.isPlaybackPlaying());
+        activity.onAnimatedPageVisibility(oldPage, 0.65f);
         assertFalse(oldPage.isPlaybackPlaying());
     }
 
@@ -154,6 +167,46 @@ public class AnimatedWebpGalleryPlaybackTest {
         activity.onAnimatedPageVisibility(next, 1f);
         assertFalse(next.isPlaybackPlaying());
         assertEquals(1f, next.getPlaybackSpeed(), 0f);
+    }
+
+    @Test
+    @LooperMode(LooperMode.Mode.PAUSED)
+    public void completedCycleSkipsAutoAdvanceDuringPageSwipe() {
+        GalleryView view = new GalleryView.Builder(RuntimeEnvironment.getApplication(),
+                new GalleryView.Adapter() {
+                    @Override public void onBind(GalleryPageView page, int index) {}
+                    @Override public void onUnbind(GalleryPageView page, int index) {}
+                    @Override public String getError() { return null; }
+                    @Override public int size() { return 2; }
+                }).build();
+        ImageTexture texture = texture();
+        ReflectionHelpers.setField(activity, "mGalleryView", view);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        ReflectionHelpers.setField(activity, "mCurrentIndex", 0);
+        ReflectionHelpers.setField(activity, "mSize", 2);
+        Settings.putAnimatedWebpAutoAdvance(true);
+        List<Integer> methods = ReflectionHelpers.getField(view, "mMethodList");
+        List<Object[]> args = ReflectionHelpers.getField(view, "mArgsList");
+
+        activity.onPlaybackCycleCompleted(texture);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, methods.size());
+        assertEquals(1, args.get(0)[0]);
+        methods.clear();
+        args.clear();
+
+        // The swipe ended while the completion callback was waiting in the queue.
+        ReflectionHelpers.setField(view, "mPageSwipeInProgress", true);
+        activity.onPlaybackCycleCompleted(texture);
+        ReflectionHelpers.setField(view, "mPageSwipeInProgress", false);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(methods.isEmpty());
+
+        // The swipe began after the callback was queued.
+        activity.onPlaybackCycleCompleted(texture);
+        ReflectionHelpers.setField(view, "mPageSwipeInProgress", true);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(methods.isEmpty());
     }
 
     private ImageTexture texture() {

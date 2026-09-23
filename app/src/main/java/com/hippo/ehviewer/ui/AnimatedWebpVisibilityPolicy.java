@@ -1,20 +1,43 @@
 package com.hippo.ehviewer.ui;
 
-/** Direction-aware thresholds for animated pages during horizontal swipes. */
+/** Visibility thresholds and reversal hysteresis for animated pager pages. */
 final class AnimatedWebpVisibilityPolicy {
-    private AnimatedWebpVisibilityPolicy() {}
+    private static final float START_FRACTION = 0.5f;
+    private static final float STOP_FRACTION = 0.75f;
+    // Pager pages span the viewport width, so this is 10% of the screen width.
+    private static final float REVERSAL_FRACTION = 0.1f;
 
-    static boolean shouldPlay(boolean wasPlaying, float previousFraction,
-                              float visibleFraction) {
-        // Increasing visibility means the page is entering from either side.
-        // Decreasing visibility means one quarter has disappeared at 75% left.
-        // Keeping the prior state on equal visibility avoids repeated toggles.
-        if (visibleFraction > previousFraction && visibleFraction >= 0.5f) {
-            return true;
+    private float visibleFraction;
+    // Highest visibility while playing, or lowest visibility while paused.
+    private float extremeFraction;
+    private boolean playing;
+
+    float getVisibleFraction() {
+        return visibleFraction;
+    }
+
+    boolean isPlaying() {
+        return playing;
+    }
+
+    void update(float fraction) {
+        if (fraction == visibleFraction) return;
+
+        if (playing) {
+            extremeFraction = Math.max(extremeFraction, fraction);
+            if (fraction < visibleFraction && fraction <= STOP_FRACTION
+                    && fraction <= extremeFraction - REVERSAL_FRACTION) {
+                playing = false;
+                extremeFraction = fraction;
+            }
+        } else {
+            extremeFraction = Math.min(extremeFraction, fraction);
+            if (fraction > visibleFraction && fraction >= START_FRACTION
+                    && fraction >= extremeFraction + REVERSAL_FRACTION) {
+                playing = true;
+                extremeFraction = fraction;
+            }
         }
-        if (visibleFraction < previousFraction && visibleFraction <= 0.75f) {
-            return false;
-        }
-        return wasPlaying;
+        visibleFraction = fraction;
     }
 }

@@ -270,8 +270,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             new WeakHashMap<>();
 
     private static final class AnimatedPagePlayback {
-        float visibleFraction;
-        boolean visibilityPlaying;
+        final AnimatedWebpVisibilityPolicy visibility = new AnimatedWebpVisibilityPolicy();
     }
     @Nullable
     private ImageTexture mAnimatedWebpStallWarningTexture;
@@ -3109,11 +3108,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public void onPlaybackCycleCompleted(ImageTexture texture) {
         boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
         int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
+        // The decoder callback can outlive a swipe before the main thread handles it.
+        boolean swipeInProgress = mGalleryView != null && mGalleryView.isPageSwipeInProgress();
         mAnimatedWebpHandler.post(() -> {
             if (!lifecycleResumed || !mAnimatedWebpLifecycleResumed ||
                     lifecycleGeneration != mAnimatedWebpLifecycleGeneration ||
                     texture != mAnimatedWebpTexture) return;
             if (Settings.getAnimatedWebpAutoAdvance() && mGalleryView != null &&
+                    !swipeInProgress && !mGalleryView.isPageSwipeInProgress() &&
                     mCurrentIndex >= 0 && mCurrentIndex + 1 < mSize) {
                 mGalleryView.setCurrentPage(mCurrentIndex + 1);
             }
@@ -3202,11 +3204,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                                                        float visibleFraction) {
         float fraction = Math.max(0f, Math.min(1f, visibleFraction));
         AnimatedPagePlayback page = mAnimatedPagePlayback.get(texture);
-        if (page != null && page.visibleFraction == fraction) return;
+        if (page != null && page.visibility.getVisibleFraction() == fraction) return;
         if (page == null) mAnimatedPagePlayback.put(texture, page = new AnimatedPagePlayback());
-        page.visibilityPlaying = AnimatedWebpVisibilityPolicy.shouldPlay(
-                page.visibilityPlaying, page.visibleFraction, fraction);
-        page.visibleFraction = fraction;
+        page.visibility.update(fraction);
         updateAnimatedPagePlayback(texture, page);
     }
 
@@ -3228,7 +3228,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             return; // Seeking pauses this page without changing the user's choice.
         }
         boolean playing = mAnimatedWebpLifecycleResumed && mAnimatedWebpGalleryPlaying
-                && page.visibilityPlaying;
+                && page.visibility.isPlaying();
         if (texture.isPlaybackPlaying() != playing) {
             texture.setPlaybackPlaying(playing);
         }
