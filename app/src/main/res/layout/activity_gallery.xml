@@ -341,7 +341,7 @@
             android:layout_gravity="center"
             android:alpha="0.5"
             android:importantForAccessibility="no"
-            android:src="@drawable/v_quicksave_x24"
+            android:src="@drawable/v_save_x24"
             android:tint="?attr/iconColor" />
 
     </FrameLayout>

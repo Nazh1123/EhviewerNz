@@ -2117,9 +2117,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSaveNoticeGeneration++;
         notice.removeCallbacks(mHideSaveNoticeRunnable);
         cancelSaveNoticeAnimation();
-        icon.setImageResource(previousPageSave ? R.drawable.v_quicksave_previous_x24
-                : overwritten ? R.drawable.v_quicksave_overwrite_x24
-                : R.drawable.v_quicksave_x24);
+        icon.setImageResource(previousPageSave ? R.drawable.v_save_previous_x24
+                : overwritten ? R.drawable.v_save_overwrite_x24
+                : R.drawable.v_save_x24);
         mSaveNoticeUndoFile = undoFile;
         mSaveNoticeUndoPage = undoFile != null ? savedPage : -1;
         notice.setClickable(undoFile != null);

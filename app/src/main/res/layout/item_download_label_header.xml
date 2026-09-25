@@ -81,7 +81,7 @@
             android:contentDescription="@string/download_label_action_enter"
             android:focusable="true"
             android:padding="12dp"
-            android:src="@drawable/v_go_to_dark_x24"
+            android:src="@drawable/v_detail_dark_x24"
             android:tint="?attr/iconColor" />
     </LinearLayout>
 
