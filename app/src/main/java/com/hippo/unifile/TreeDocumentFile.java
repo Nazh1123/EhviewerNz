@@ -52,11 +52,17 @@ class TreeDocumentFile extends UniFile {
 
     @Override
     public UniFile createFile(String displayName) {
+        CreateFileResult result = createFileWithStatus(displayName);
+        return result != null ? result.file : null;
+    }
+
+    @Override
+    public CreateFileResult createFileWithStatus(String displayName) {
         UniFile child = findFile(displayName);
 
         if (child != null) {
             if (child.isFile()) {
-                return child;
+                return new CreateFileResult(child, false);
             } else {
                 Log.w(TAG, "Try to create file " + displayName + ", but it is not file");
                 return null;
@@ -69,13 +75,15 @@ class TreeDocumentFile extends UniFile {
                 String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
                 if (!TextUtils.isEmpty(mimeType)) {
                     final Uri result = DocumentsContractApi21.createFile(mContext, mUri, mimeType, name);
-                    return (result != null) ? new TreeDocumentFile(this, mContext, result, displayName) : null;
+                    return (result != null) ? new CreateFileResult(
+                            new TreeDocumentFile(this, mContext, result, displayName), true) : null;
                 }
             }
 
             // Not dot in displayName or dot is the first char or can't get MimeType
             final Uri result = DocumentsContractApi21.createFile(mContext, mUri, "application/octet-stream", displayName);
-            return (result != null) ? new TreeDocumentFile(this, mContext, result, displayName) : null;
+            return (result != null) ? new CreateFileResult(
+                    new TreeDocumentFile(this, mContext, result, displayName), true) : null;
         }
     }
 
@@ -247,9 +255,16 @@ class TreeDocumentFile extends UniFile {
 
     @Override
     public UniFile findFile(String displayName) {
-        Uri childUri = DocumentsContractApi21.buildChildUri(mUri, displayName);
-        return com.hippo.unifile.DocumentsContractApi19.exists(mContext, childUri) ?
-                new TreeDocumentFile(this, mContext, childUri, displayName) : null;
+        Uri childUri;
+        if ("com.android.externalstorage.documents".equals(mUri.getAuthority())) {
+            // This provider uses path-based IDs; a direct lookup avoids listing large folders.
+            childUri = DocumentsContractApi21.buildChildUri(mUri, displayName);
+            if (!DocumentsContractApi19.exists(mContext, childUri)) return null;
+        } else {
+            childUri = DocumentsContractApi21.findChildUri(mContext, mUri, displayName);
+            if (childUri == null) return null;
+        }
+        return new TreeDocumentFile(this, mContext, childUri, displayName);
     }
 
     @Override

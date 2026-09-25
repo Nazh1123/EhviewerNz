@@ -679,23 +679,30 @@ public final class SpiderQueen implements Runnable {
             return false;
         }
 
-        OutputStream os = null;
         try {
-            os = file.openOutputStream();
             pipe.obtain();
-            IOUtils.copy(pipe.open(), os);
+            InputStream input = pipe.open();
+            try (OutputStream output = file.openOutputStream(false)) {
+                IOUtils.copy(input, output);
+            }
             return true;
         } catch (IOException e) {
             return false;
         } finally {
             pipe.close();
             pipe.release();
-            IOUtils.closeQuietly(os);
         }
     }
 
     @Nullable
     public UniFile save(int index, @NonNull UniFile dir, @NonNull String filename) {
+        GalleryProvider2.SaveResult result = saveWithResult(index, dir, filename);
+        return result != null ? result.file : null;
+    }
+
+    @Nullable
+    public GalleryProvider2.SaveResult saveWithResult(int index, @NonNull UniFile dir,
+                                                     @NonNull String filename) {
         int state = getPageState(index);
         if (STATE_FINISHED != state) {
             return null;
@@ -706,7 +713,7 @@ public final class SpiderQueen implements Runnable {
             return null;
         }
 
-        OutputStream os = null;
+        GalleryProvider2.SaveResult destination = null;
         try {
             pipe.obtain();
 
@@ -716,21 +723,27 @@ public final class SpiderQueen implements Runnable {
             BitmapFactory.decodeStream(pipe.open(), null, options);
             pipe.close();
             String extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(options.outMimeType);
-            UniFile dst = dir.createFile(null != extension ? filename + "." + extension : filename);
-            if (null == dst) {
+            InputStream input = pipe.open();
+            destination = GalleryProvider2.prepareSaveDestination(
+                    dir, null != extension ? filename + "." + extension : filename);
+            if (destination == null) {
                 return null;
             }
 
             // Copy
-            os = dst.openOutputStream();
-            IOUtils.copy(pipe.open(), os);
-            return dst;
+            try (OutputStream output = destination.file.openOutputStream(false)) {
+                IOUtils.copy(input, output);
+            }
+            return destination;
         } catch (IOException e) {
+            if (destination != null) destination.deleteIfCreated();
             return null;
+        } catch (RuntimeException e) {
+            if (destination != null) destination.deleteIfCreated();
+            throw e;
         } finally {
             pipe.close();
             pipe.release();
-            IOUtils.closeQuietly(os);
         }
     }
 

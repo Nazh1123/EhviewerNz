@@ -640,6 +640,8 @@
     <string name="gallery_menu_title">Menu</string>
     <string name="share_image">Share image</string>
     <string name="image_saved">Image saved to %s</string>
+    <string name="image_overwritten">Existing image overwritten at %s</string>
+    <string name="image_save_skipped">Image is already the saved file; skipped</string>
     <string name="image_save_undo_description">%1$s. Tap to undo this save.</string>
     <string name="image_save_undone">Image save undone</string>
     <string name="error_cant_undo_image_save">Can\'t undo image save</string>

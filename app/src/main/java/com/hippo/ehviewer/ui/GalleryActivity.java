@@ -241,8 +241,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private ImageView mSaveNoticeIcon;
     @Nullable
-    private TextView mSaveNoticePreviousBadge;
-    @Nullable
     private UniFile mSaveNoticeUndoFile;
     private int mSaveNoticeUndoPage = -1;
     @Nullable
@@ -796,8 +794,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         mSaveNotice = ViewUtils.$$(this, R.id.save_notice);
         mSaveNoticeIcon = (ImageView) ViewUtils.$$(this, R.id.save_notice_icon);
-        mSaveNoticePreviousBadge = (TextView) ViewUtils.$$(
-                this, R.id.save_notice_previous_badge);
         mSaveNotice.setOnClickListener(view -> undoLastImageSave());
         mAnimatedWebpStallWarning = findViewById(R.id.animated_webp_stall_warning);
         mAnimatedWebpStallWarning.setOnClickListener(
@@ -1007,7 +1003,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         clearSaveNoticeAction();
         mSaveNotice = null;
         mSaveNoticeIcon = null;
-        mSaveNoticePreviousBadge = null;
         mAnimatedWebpPanel = null;
         mAnimatedWebpLongPressNotice = null;
         mAnimatedWebpControls = null;
@@ -2061,7 +2056,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         boolean shouldTurn = turnPageAfterSave && Settings.getLongPressSaveTurnPage();
         mImageFileOperationPending = true;
         mImageFileExecutor.execute(() -> {
-            UniFile saved = null;
+            GalleryProvider2.SaveResult saved = null;
             try {
                 // Resolving the directory can itself access SAF/storage.
                 UniFile directory = Settings.getManualImageSaveLocation();
@@ -2070,17 +2065,25 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 ExceptionUtils.throwIfFatal(e);
                 Log.w(TAG, "Unable to save gallery image", e);
             }
-            UniFile file = saved;
+            GalleryProvider2.SaveResult result = saved;
             SimpleHandler.getInstance().post(() -> {
                 mImageFileOperationPending = false;
                 if (isFinishing() || isDestroyed() || mGalleryProvider != provider) return;
-                if (file == null) {
+                if (result == null) {
                     showSaveErrorNotice(getText(R.string.error_cant_save_image));
                     return;
                 }
-                showSaveNotice(getString(R.string.image_saved, file.getUri()),
-                        file, page, previousPageSave);
-                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, file.getUri()));
+                if (result.skipped) {
+                    hideSaveNotice();
+                    Toast.makeText(this, R.string.image_save_skipped, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                showSaveNotice(getString(result.overwritten
+                                ? R.string.image_overwritten : R.string.image_saved,
+                        result.file.getUri()), result.overwritten ? null : result.file,
+                        page, previousPageSave, result.overwritten);
+                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE,
+                        result.file.getUri()));
                 if (longPress) {
                     mLastLongPressSaveIndex = page;
                     mLastLongPressSaveAt = SystemClock.elapsedRealtime();
@@ -2096,11 +2099,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void showSaveNotice(CharSequence message) {
-        showSaveNotice(message, null, -1, false);
+        showSaveNotice(message, null, -1, false, false);
     }
 
     private void showSaveNotice(CharSequence message, @Nullable UniFile undoFile,
-                                int savedPage, boolean previousPageSave) {
+                                int savedPage, boolean previousPageSave, boolean overwritten) {
         View notice = mSaveNotice;
         ImageView icon = mSaveNoticeIcon;
         if (notice == null || icon == null) {
@@ -2114,14 +2117,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSaveNoticeGeneration++;
         notice.removeCallbacks(mHideSaveNoticeRunnable);
         cancelSaveNoticeAnimation();
+        icon.setImageResource(previousPageSave ? R.drawable.v_quicksave_previous_x24
+                : overwritten ? R.drawable.v_quicksave_overwrite_x24
+                : R.drawable.v_quicksave_x24);
         mSaveNoticeUndoFile = undoFile;
         mSaveNoticeUndoPage = undoFile != null ? savedPage : -1;
         notice.setClickable(undoFile != null);
         notice.setFocusable(undoFile != null);
-        if (mSaveNoticePreviousBadge != null) {
-            mSaveNoticePreviousBadge.setVisibility(
-                    previousPageSave ? View.VISIBLE : View.GONE);
-        }
         notice.setVisibility(View.VISIBLE);
         CharSequence accessibilityMessage = undoFile != null
                 ? getString(R.string.image_save_undo_description, message)
@@ -2258,9 +2260,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mSaveNotice.setClickable(false);
             mSaveNotice.setFocusable(false);
         }
-        if (mSaveNoticePreviousBadge != null) {
-            mSaveNoticePreviousBadge.setVisibility(View.GONE);
-        }
     }
 
     private void cancelSaveNoticeAnimation() {
@@ -2272,10 +2271,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     @Nullable
-    private static UniFile saveImageInDirectory(@NonNull GalleryProvider2 provider,
-                                               int page, @NonNull UniFile dir) {
+    private static GalleryProvider2.SaveResult saveImageInDirectory(
+            @NonNull GalleryProvider2 provider, int page, @NonNull UniFile dir) {
         try {
-            return provider.save(page, dir, provider.getImageFilename(page));
+            return provider.saveWithResult(page, dir, provider.getImageFilename(page));
         } catch (Throwable e) {
             ExceptionUtils.throwIfFatal(e);
             Log.w(TAG, "Failed to save image to " + dir.getUri(), e);

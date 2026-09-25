@@ -94,6 +94,13 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
         }
     }
 
+    @Nullable
+    @Override
+    public SaveResult saveWithResult(int index, @NonNull UniFile dir,
+                                     @NonNull String filename) {
+        return mSpiderQueen != null ? mSpiderQueen.saveWithResult(index, dir, filename) : null;
+    }
+
     @Override
     public void putStartPage(int page) {
         if (mSpiderQueen != null) {

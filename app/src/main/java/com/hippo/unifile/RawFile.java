@@ -75,24 +75,20 @@ class RawFile extends UniFile {
 
     @Override
     public UniFile createFile(String displayName) {
+        CreateFileResult result = createFileWithStatus(displayName);
+        return result != null ? result.file : null;
+    }
+
+    @Override
+    public CreateFileResult createFileWithStatus(String displayName) {
         final File target = new File(mFile, displayName);
-        if (target.exists()) {
-            if (target.isFile()) {
-                return new RawFile(this, target);
-            } else {
-                return null;
-            }
-        } else {
-            OutputStream os = null;
-            try {
-                os = new FileOutputStream(target);
-                return new RawFile(this, target);
-            } catch (IOException e) {
-                Log.w(TAG, "Failed to createFile " + displayName + ": " + e);
-                return null;
-            } finally {
-                Utils.closeQuietly(os);
-            }
+        try {
+            boolean created = target.createNewFile();
+            return created || target.isFile()
+                    ? new CreateFileResult(new RawFile(this, target), created) : null;
+        } catch (IOException e) {
+            Log.w(TAG, "Failed to createFile " + displayName + ": " + e);
+            return null;
         }
     }
 

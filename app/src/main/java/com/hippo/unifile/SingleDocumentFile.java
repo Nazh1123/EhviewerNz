@@ -42,6 +42,11 @@ class SingleDocumentFile extends UniFile {
     }
 
     @Override
+    public CreateFileResult createFileWithStatus(String displayName) {
+        return null;
+    }
+
+    @Override
     public UniFile createDirectory(String displayName) {
         return null;
     }

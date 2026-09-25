@@ -93,7 +93,7 @@ final class Contracts {
     @NonNull
     static OutputStream openOutputStream(Context context, Uri uri, boolean append) throws IOException {
         try {
-            OutputStream os = context.getContentResolver().openOutputStream(uri, append ? "wa" : "w");
+            OutputStream os = context.getContentResolver().openOutputStream(uri, append ? "wa" : "wt");
             if (os == null) {
                 throw new IOException("Can't open OutputStream");
             }

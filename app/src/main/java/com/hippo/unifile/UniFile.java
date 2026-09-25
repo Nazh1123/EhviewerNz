@@ -202,6 +202,21 @@ public abstract class UniFile {
      */
     public abstract UniFile createFile(String displayName);
 
+    /** A file returned by createFileWithStatus and whether this call created it. */
+    public static final class CreateFileResult {
+        @NonNull public final UniFile file;
+        public final boolean created;
+
+        CreateFileResult(@NonNull UniFile file, boolean created) {
+            this.file = file;
+            this.created = created;
+        }
+    }
+
+    /** Create or reuse a file while reporting which action occurred. */
+    @Nullable
+    public abstract CreateFileResult createFileWithStatus(String displayName);
+
     /**
      * Create a new directory as a direct child of this directory.
      *

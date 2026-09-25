@@ -51,4 +51,44 @@ public abstract class GalleryProvider2 extends GalleryProvider {
      */
     @Nullable
     public abstract UniFile save(int index, @NonNull UniFile dir, @NonNull String filename);
+
+    /** The destination and the actual action taken by this save. */
+    public static final class SaveResult {
+        @NonNull public final UniFile file;
+        public final boolean overwritten;
+        public final boolean skipped;
+
+        private SaveResult(@NonNull UniFile file, boolean overwritten, boolean skipped) {
+            this.file = file;
+            this.overwritten = overwritten;
+            this.skipped = skipped;
+        }
+
+        public SaveResult skipped() {
+            return new SaveResult(file, overwritten, true);
+        }
+
+        /** Remove a partial new file after a failed copy, leaving existing files untouched. */
+        public void deleteIfCreated() {
+            if (overwritten) return;
+            try {
+                file.delete();
+            } catch (RuntimeException ignored) {
+                // Best effort; the original copy failure remains the reported error.
+            }
+        }
+    }
+
+    /** Resolve the exact filename before writing, so the result reflects the actual destination. */
+    @Nullable
+    public static SaveResult prepareSaveDestination(@NonNull UniFile dir,
+                                                    @NonNull String filename) {
+        UniFile.CreateFileResult result = dir.createFileWithStatus(filename);
+        return result != null ? new SaveResult(result.file, !result.created, false) : null;
+    }
+
+    /** @param filename without extension */
+    @Nullable
+    public abstract SaveResult saveWithResult(int index, @NonNull UniFile dir,
+                                              @NonNull String filename);
 }

@@ -72,6 +72,31 @@ final class DocumentsContractApi21 {
                 getTreeDocumentPath(uri) + "/" + displayName);
     }
 
+    /** Document IDs are opaque for many providers, so locate children by display name. */
+    public static Uri findChildUri(Context context, Uri parent, String displayName) {
+        final Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(parent,
+                DocumentsContract.getDocumentId(parent));
+        Cursor cursor = null;
+        try {
+            cursor = context.getContentResolver().query(childrenUri, new String[]{
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME}, null, null, null);
+            if (cursor == null) throw new IllegalStateException("Unable to list " + parent);
+            while (cursor.moveToNext()) {
+                if (displayName.equals(cursor.getString(1))) {
+                    return DocumentsContract.buildDocumentUriUsingTree(parent,
+                            cursor.getString(0));
+                }
+            }
+        } catch (Throwable e) {
+            Utils.throwIfFatal(e);
+            throw new IllegalStateException("Failed to find child in " + parent, e);
+        } finally {
+            Utils.closeQuietly(cursor);
+        }
+        return null;
+    }
+
     public static Uri[] listFiles(Context context, Uri self) {
         final ContentResolver resolver = context.getContentResolver();
         final Uri childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(self,

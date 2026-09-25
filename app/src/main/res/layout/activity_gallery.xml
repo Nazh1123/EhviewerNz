@@ -341,23 +341,8 @@
             android:layout_gravity="center"
             android:alpha="0.5"
             android:importantForAccessibility="no"
-            android:src="@drawable/v_download_dark_x24" />
-
-        <TextView
-            android:id="@+id/save_notice_previous_badge"
-            android:layout_width="14dp"
-            android:layout_height="14dp"
-            android:layout_gravity="bottom|end"
-            android:layout_marginRight="3dp"
-            android:layout_marginBottom="3dp"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:importantForAccessibility="no"
-            android:text="p"
-            android:textColor="?attr/iconColor"
-            android:textSize="10sp"
-            android:visibility="gone"
-            tools:ignore="HardcodedText,RtlHardcoded" />
+            android:src="@drawable/v_quicksave_x24"
+            android:tint="?attr/iconColor" />
 
     </FrameLayout>
 

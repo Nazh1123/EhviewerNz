@@ -140,12 +140,12 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
         if (image == null) {
             return false;
         }
-        try (InputStream input = context.getContentResolver().openInputStream(image.uri);
-             OutputStream output = destination.openOutputStream()) {
-            if (input == null) {
-                return false;
+        if (image.uri.equals(destination.getUri())) return true;
+        try (InputStream input = context.getContentResolver().openInputStream(image.uri)) {
+            if (input == null) return false;
+            try (OutputStream output = destination.openOutputStream(false)) {
+                IOUtils.copy(input, output);
             }
-            IOUtils.copy(input, output);
             return true;
         } catch (IOException | RuntimeException ignored) {
             return false;
@@ -155,14 +155,34 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
     @Nullable
     @Override
     public UniFile save(int index, @NonNull UniFile directory, @NonNull String filename) {
+        SaveResult result = saveWithResult(index, directory, filename);
+        return result != null ? result.file : null;
+    }
+
+    @Nullable
+    @Override
+    public SaveResult saveWithResult(int index, @NonNull UniFile directory,
+                                     @NonNull String filename) {
         LocalFolderGalleryScanner.ImageEntry image = getImage(index);
         if (image == null) {
             return null;
         }
         String extension = FileUtils.getExtensionFromFilename(image.filename);
-        UniFile destination = directory.createFile(
-                extension == null ? filename : filename + '.' + extension);
-        return destination != null && save(index, destination) ? destination : null;
+        SaveResult destination = null;
+        try (InputStream input = context.getContentResolver().openInputStream(image.uri)) {
+            if (input == null) return null;
+            destination = prepareSaveDestination(directory,
+                    extension == null ? filename : filename + '.' + extension);
+            if (destination == null) return null;
+            if (image.uri.equals(destination.file.getUri())) return destination.skipped();
+            try (OutputStream output = destination.file.openOutputStream(false)) {
+                IOUtils.copy(input, output);
+            }
+            return destination;
+        } catch (IOException | RuntimeException ignored) {
+            if (destination != null) destination.deleteIfCreated();
+            return null;
+        }
     }
 
     @Override

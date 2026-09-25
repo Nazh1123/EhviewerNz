@@ -153,6 +153,12 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
     return null;
   }
 
+  @Nullable
+  @Override
+  public SaveResult saveWithResult(int index, @NonNull UniFile dir, @NonNull String filename) {
+    return null;
+  }
+
   private class ArchiveTask implements Runnable {
     @Override
     public void run() {

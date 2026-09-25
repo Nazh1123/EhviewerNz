@@ -179,25 +179,27 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         if (null == fileList || index < 0 || index >= fileList.length) {
             return false;
         }
-
-        InputStream is = null;
-        OutputStream os = null;
-        try {
-            is = fileList[index].openInputStream();
-            os = file.openOutputStream();
-            IOUtils.copy(is, os);
+        UniFile source = fileList[index];
+        if (source.getUri().equals(file.getUri())) return true;
+        try (InputStream input = source.openInputStream();
+             OutputStream output = file.openOutputStream(false)) {
+            IOUtils.copy(input, output);
             return true;
         } catch (IOException e) {
             return false;
-        } finally {
-            IOUtils.closeQuietly(is);
-            IOUtils.closeQuietly(os);
         }
     }
 
     @Nullable
     @Override
     public UniFile save(int index, @NonNull UniFile dir, @NonNull String filename) {
+        SaveResult result = saveWithResult(index, dir, filename);
+        return result != null ? result.file : null;
+    }
+
+    @Nullable
+    @Override
+    public SaveResult saveWithResult(int index, @NonNull UniFile dir, @NonNull String filename) {
         UniFile[] fileList = mFileList.get();
         if (null == fileList || index < 0 || index >= fileList.length) {
             return null;
@@ -205,23 +207,22 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
 
         UniFile src = fileList[index];
         String extension = FileUtils.getExtensionFromFilename(src.getName());
-        UniFile dst = dir.createFile(null != extension ? filename + "." + extension : filename);
-        if (null == dst) {
-            return null;
-        }
-
-        InputStream is = null;
-        OutputStream os = null;
-        try {
-            is = src.openInputStream();
-            os = dst.openOutputStream();
-            IOUtils.copy(is, os);
-            return dst;
+        SaveResult destination = null;
+        try (InputStream input = src.openInputStream()) {
+            destination = prepareSaveDestination(dir,
+                    extension != null ? filename + "." + extension : filename);
+            if (destination == null) return null;
+            if (src.getUri().equals(destination.file.getUri())) return destination.skipped();
+            try (OutputStream output = destination.file.openOutputStream(false)) {
+                IOUtils.copy(input, output);
+            }
+            return destination;
         } catch (IOException e) {
+            if (destination != null) destination.deleteIfCreated();
             return null;
-        } finally {
-            IOUtils.closeQuietly(is);
-            IOUtils.closeQuietly(os);
+        } catch (RuntimeException e) {
+            if (destination != null) destination.deleteIfCreated();
+            throw e;
         }
     }
 
