@@ -1400,6 +1400,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         // cannot leave downloads referring to a label that no longer exists.
         EhDB.putDownloadInfo(changedInfo);
         EhDB.removeDownloadLabel(sourceLabel);
+        Settings.setDownloadLabelExpanded(sourceLabel.getId(), sourceLabel.getLabel(), false);
 
         mMap.remove(from);
         mLabelList.remove(sourceLabel);
@@ -1461,6 +1462,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             return;
         }
         EhDB.removeDownloadLabels(removedLabels);
+        for (DownloadLabel removedLabel : removedLabels) {
+            Settings.setDownloadLabelExpanded(removedLabel.getId(), removedLabel.getLabel(), false);
+        }
 
         List<DownloadInfo> changedInfo = new ArrayList<>();
         for (DownloadLabel raw : removedLabels) {

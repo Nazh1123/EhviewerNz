@@ -932,7 +932,6 @@
     <string name="download_delete_empty_labels_message">Supprimer les balises de téléchargement %d sans galerie ?</string>
     <string name="download_delete_empty_labels_none">Pas de balises de téléchargement vides</string>
     <string name="download_filter_by_kind">Filtrer par type</string>
-    <string name="download_label_collapsed_action">Les galeries %d se sont effondrées ; cliquez pour voir cette étiquette</string>
     <string name="download_label_search_unsupported">Cette balise ne prend pas en charge la recherche dans la galerie</string>
     <string name="download_toggle_list_mode">Basculer en mode liste</string>
     <string name="error_cant_undo_image_save">Cette sauvegarde d\'image ne peut pas être annulée.</string>

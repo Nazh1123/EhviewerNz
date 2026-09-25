@@ -1006,7 +1006,6 @@
     <string name="download_delete_empty_labels_message">¿Eliminar las etiquetas de descarga %d sin galería?</string>
     <string name="download_delete_empty_labels_none">No hay etiquetas de descarga vacías</string>
     <string name="download_filter_by_kind">Filtrar por tipo</string>
-    <string name="download_label_collapsed_action">Galerías %d colapsaron; haga clic para ver esta etiqueta</string>
     <string name="download_label_search_unsupported">Esta etiqueta no admite la búsqueda en la galería.</string>
     <string name="download_toggle_list_mode">Alternar modo de lista</string>
     <string name="error_cant_undo_image_save">Esta imagen guardada no se puede deshacer.</string>

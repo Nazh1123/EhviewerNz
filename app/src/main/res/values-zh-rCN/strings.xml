@@ -419,7 +419,10 @@
     <string name="default_download_label_name">默认</string>
     <string name="scene_download_continuous_title">下载（%d）</string>
     <string name="default_download_label_cannot_rename">默认下载标签无法重命名</string>
-    <string name="download_label_collapsed_action">已折叠 %d 个画廊；点击查看该标签</string>
+    <string name="download_label_action_rename">重命名</string>
+    <string name="download_label_action_enter">进入</string>
+    <string name="download_label_action_expand">展开标签</string>
+    <string name="download_label_action_collapse">折叠标签</string>
     <string name="download_label_search_unsupported">该标签不支持画廊搜索</string>
     <string name="download_move_dialog_title">移动</string>
     <string name="quick_organize">快速收纳</string>

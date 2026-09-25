@@ -957,7 +957,6 @@
     <string name="download_delete_empty_labels_message">ギャラリーなしで %d ダウンロード タグを削除しますか?</string>
     <string name="download_delete_empty_labels_none">空のダウンロードタグはありません</string>
     <string name="download_filter_by_kind">タイプでフィルタリングする</string>
-    <string name="download_label_collapsed_action">%d ギャラリーが崩壊しました。クリックしてこのラベルを表示します</string>
     <string name="download_label_search_unsupported">このタグはギャラリー検索をサポートしていません</string>
     <string name="download_toggle_list_mode">リストモードの切り替え</string>
     <string name="error_cant_undo_image_save">この画像保存は元に戻すことができません。</string>

@@ -1009,7 +1009,6 @@
     <string name="download_delete_empty_labels_message">ลบแท็กดาวน์โหลด %d โดยไม่มีแกลเลอรีหรือไม่</string>
     <string name="download_delete_empty_labels_none">ไม่มีแท็กดาวน์โหลดที่ว่างเปล่า</string>
     <string name="download_filter_by_kind">กรองตามประเภท</string>
-    <string name="download_label_collapsed_action">แกลเลอรี %d ยุบ; คลิกเพื่อดูป้ายกำกับนี้</string>
     <string name="download_label_search_unsupported">แท็กนี้ไม่สนับสนุนการค้นหาแกลเลอรี</string>
     <string name="download_toggle_list_mode">สลับโหมดรายการ</string>
     <string name="error_cant_undo_image_save">การบันทึกรูปภาพนี้ไม่สามารถเลิกทำได้</string>

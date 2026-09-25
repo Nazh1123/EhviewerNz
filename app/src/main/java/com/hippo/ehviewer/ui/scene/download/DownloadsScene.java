@@ -178,7 +178,6 @@ public class DownloadsScene extends ToolbarScene
 
     private static final long ANIMATE_TIME = 300L;
     private static final int FAB_QUICK_ORGANIZE = 7;
-    private static final int CONTINUOUS_LABEL_EXPAND_LIMIT = 50;
 
     @Nullable
     private AddDeleteDrawable mActionFabDrawable;
@@ -212,6 +211,8 @@ public class DownloadsScene extends ToolbarScene
         @Nullable
         final String label;
         @Nullable
+        final Long labelId;
+        @Nullable
         final String title;
         @Nullable
         final DownloadInfo downloadInfo;
@@ -221,10 +222,12 @@ public class DownloadsScene extends ToolbarScene
         final long stableId;
 
         private ContinuousDownloadItem(boolean header, @Nullable String label,
+                @Nullable Long labelId,
                 @Nullable String title, @Nullable DownloadInfo downloadInfo,
                 int galleryIndex, int galleryCount, boolean collapsed, long stableId) {
             this.header = header;
             this.label = label;
+            this.labelId = labelId;
             this.title = title;
             this.downloadInfo = downloadInfo;
             this.galleryIndex = galleryIndex;
@@ -233,14 +236,15 @@ public class DownloadsScene extends ToolbarScene
             this.stableId = stableId;
         }
 
-        static ContinuousDownloadItem header(@Nullable String label, String title,
+        static ContinuousDownloadItem header(@Nullable String label, @Nullable Long labelId,
+                String title,
                 int galleryCount, boolean collapsed, long stableId) {
-            return new ContinuousDownloadItem(true, label, title, null,
+            return new ContinuousDownloadItem(true, label, labelId, title, null,
                     -1, galleryCount, collapsed, stableId);
         }
 
         static ContinuousDownloadItem gallery(DownloadInfo info, int galleryIndex) {
-            return new ContinuousDownloadItem(false, info.label, null, info,
+            return new ContinuousDownloadItem(false, info.label, null, null, info,
                     galleryIndex, 0, false, info.gid);
         }
     }
@@ -499,7 +503,7 @@ public class DownloadsScene extends ToolbarScene
             defaultDownloads = Collections.emptyList();
         }
         if (!defaultDownloads.isEmpty() || (includeEmptyLabels && !labels.isEmpty())) {
-            appendContinuousSection(null,
+            appendContinuousSection(null, null,
                     getString(R.string.default_download_label_name),
                     Long.MIN_VALUE, defaultDownloads, orderedDownloads);
         }
@@ -515,7 +519,7 @@ public class DownloadsScene extends ToolbarScene
                 long stableId = labelId != null
                         ? Long.MIN_VALUE + labelId + 1L
                         : Long.MIN_VALUE / 2L + labelName.hashCode();
-                appendContinuousSection(labelName, labelName, stableId,
+                appendContinuousSection(labelName, labelId, labelName, stableId,
                         downloads, orderedDownloads);
             }
         }
@@ -526,21 +530,22 @@ public class DownloadsScene extends ToolbarScene
                 String title = labelName != null ? labelName
                         : getString(R.string.default_download_label_name);
                 long stableId = Long.MIN_VALUE / 2L + title.hashCode();
-                appendContinuousSection(labelName, title, stableId,
+                appendContinuousSection(labelName, null, title, stableId,
                         entry.getValue(), orderedDownloads);
             }
         }
         mList = orderedDownloads;
     }
 
-    private void appendContinuousSection(@Nullable String label, @NonNull String title,
+    private void appendContinuousSection(@Nullable String label, @Nullable Long labelId,
+            @NonNull String title,
             long stableId, @NonNull List<DownloadInfo> downloads,
             @NonNull List<DownloadInfo> orderedDownloads) {
         int headerPosition = mContinuousItems.size();
         mContinuousHeaderPositions.put(label, headerPosition);
-        boolean collapsed = downloads.size() > CONTINUOUS_LABEL_EXPAND_LIMIT;
+        boolean collapsed = !Settings.isDownloadLabelExpanded(labelId, label);
         mContinuousItems.add(ContinuousDownloadItem.header(
-                label, title, downloads.size(), collapsed, stableId));
+                label, labelId, title, downloads.size(), collapsed, stableId));
         for (DownloadInfo info : downloads) {
             int galleryIndex = orderedDownloads.size();
             orderedDownloads.add(info);
@@ -759,7 +764,28 @@ public class DownloadsScene extends ToolbarScene
         mRecyclerView.setLayoutManager(mLayoutManager);
         mRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                if (newState == RecyclerView.SCROLL_STATE_DRAGGING
+                        && mOriginalAdapter != null
+                        && mOriginalAdapter.hasOpenLabelActions()) {
+                    recyclerView.post(() -> {
+                        if (mOriginalAdapter != null) {
+                            mOriginalAdapter.dismissLabelActions();
+                        }
+                    });
+                }
+            }
+
+            @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                if ((dx != 0 || dy != 0) && mOriginalAdapter != null
+                        && mOriginalAdapter.hasOpenLabelActions()) {
+                    recyclerView.post(() -> {
+                        if (mOriginalAdapter != null) {
+                            mOriginalAdapter.dismissLabelActions();
+                        }
+                    });
+                }
                 if (mContinuousLabelBrowse) {
                     queryVisibleSpiderInfo();
                 }
@@ -1350,43 +1376,65 @@ public class DownloadsScene extends ToolbarScene
                 || recyclerView.isInCustomChoice() || !isLabelHeaderPosition(position)) {
             return;
         }
-        showRenameContinuousLabelDialog(mContinuousItems.get(position).label);
+        ContinuousDownloadItem header = mContinuousItems.get(position);
+        View headerView = mLayoutManager != null
+                ? mLayoutManager.findViewByPosition(position) : null;
+        int headerTop = headerView != null ? headerView.getTop() : 0;
+        Settings.setDownloadLabelExpanded(header.labelId, header.label, header.collapsed);
+        if (mList != null) {
+            boolean includeEmptyLabels = TextUtils.isEmpty(searchKey)
+                    && mSelectedCategory == EhUtils.ALL_CATEGORY;
+            rebuildContinuousItems(new ArrayList<>(mList), includeEmptyLabels);
+            if (mAdapter != null) {
+                mAdapter.notifyDataSetChanged();
+            }
+            if (mLayoutManager != null) {
+                mLayoutManager.scrollToPositionWithOffset(position, headerTop);
+            }
+            queryVisibleSpiderInfo();
+        }
     }
 
     @Override
-    public boolean onLabelHeaderLongClick(int position) {
-        if (!mContinuousLabelBrowse || !isLabelHeaderPosition(position)) {
-            return false;
+    public void onLabelHeaderRename(int position) {
+        if (mContinuousLabelBrowse && isLabelHeaderPosition(position)
+                && mRecyclerView != null && !mRecyclerView.isInCustomChoice()) {
+            showRenameContinuousLabelDialog(mContinuousItems.get(position).label);
+        }
+    }
+
+    @Override
+    public void onLabelHeaderSearchOrSync(int position) {
+        if (!mContinuousLabelBrowse || !isLabelHeaderPosition(position)
+                || mRecyclerView == null || mRecyclerView.isInCustomChoice()) {
+            return;
         }
         String label = mContinuousItems.get(position).label;
-        if (mDownloadManager != null
-                && !mDownloadManager.getLocalFolderImportTrees(label).isEmpty()) {
-            if (mRecyclerView != null && !mRecyclerView.isInCustomChoice()) {
-                syncLocalFolderLabel(label);
-            }
-            return true;
+        if (isLabelHeaderSyncable(position)) {
+            syncLocalFolderLabel(label);
+            return;
         }
         String query = DownloadLabelSearchQueryResolver.resolve(
-                mContinuousItems.get(position).label);
+                label);
         if (query == null) {
             Context context = getEHContext();
             if (context != null) {
                 Toast.makeText(context, R.string.download_label_search_unsupported,
                         Toast.LENGTH_SHORT).show();
             }
-            return true;
+            return;
         }
         rememberContinuousScrollPosition();
         ListUrlBuilder builder = new ListUrlBuilder();
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
         builder.setKeyword(query);
         GalleryListScene.startScene(this, builder);
-        return true;
     }
 
     @Override
-    public void onCollapsedLabelClick(int position) {
-        if (!mContinuousLabelBrowse || !isLabelHeaderCollapsed(position)) {
+    public void onLabelHeaderEnter(int position) {
+        if (!mContinuousLabelBrowse || !isLabelHeaderPosition(position)
+                || mRecyclerView == null || mRecyclerView.isInCustomChoice()) {
             return;
         }
         rememberContinuousScrollPosition();
@@ -1595,6 +1643,9 @@ public class DownloadsScene extends ToolbarScene
     }
 
     private void applyDownloadListMode(boolean continuousLabelBrowse) {
+        if (mOriginalAdapter != null) {
+            mOriginalAdapter.dismissLabelActions();
+        }
         // Resolve before detaching the old rows; null is a valid (default) label.
         String normalLabel = Settings.getRecentDownloadLabel();
         if (mContinuousLabelBrowse && !continuousLabelBrowse) {
@@ -2134,6 +2185,13 @@ public class DownloadsScene extends ToolbarScene
     public boolean isLabelHeaderCollapsed(int position) {
         return isLabelHeaderPosition(position)
                 && mContinuousItems.get(position).collapsed;
+    }
+
+    @Override
+    public boolean isLabelHeaderSyncable(int position) {
+        return isLabelHeaderPosition(position) && mDownloadManager != null
+                && !mDownloadManager.getLocalFolderImportTrees(
+                mContinuousItems.get(position).label).isEmpty();
     }
 
     @Override

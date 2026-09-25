@@ -944,7 +944,6 @@
     <string name="download_delete_empty_labels_message">%d Download-Tags ohne Galerie entfernen?</string>
     <string name="download_delete_empty_labels_none">Keine leeren Download-Tags</string>
     <string name="download_filter_by_kind">Nach Typ filtern</string>
-    <string name="download_label_collapsed_action">%d-Galerien sind zusammengebrochen; Klicken Sie, um dieses Etikett anzuzeigen</string>
     <string name="download_label_search_unsupported">Dieses Tag unterstützt keine Galeriesuche</string>
     <string name="download_toggle_list_mode">Listenmodus umschalten</string>
     <string name="error_cant_undo_image_save">Diese Bildspeicherung kann nicht rückgängig gemacht werden.</string>

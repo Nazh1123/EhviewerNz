@@ -47,9 +47,12 @@ import com.hippo.lib.yorozuya.MathUtils;
 import com.hippo.lib.yorozuya.NumberUtils;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 public class Settings {
 
@@ -1853,6 +1856,34 @@ public class Settings {
 
     public static void setDownloadLabelContinuousBrowse(boolean value) {
         putBoolean(KEY_DOWNLOAD_LABEL_CONTINUOUS_BROWSE, value);
+    }
+
+    private static final String KEY_EXPANDED_DOWNLOAD_LABELS = "expanded_download_labels";
+
+    private static String downloadLabelExpansionKey(@Nullable Long labelId,
+                                                    @Nullable String label) {
+        if (label == null) {
+            return "default";
+        }
+        return labelId != null ? "id:" + labelId : "name:" + label;
+    }
+
+    public static boolean isDownloadLabelExpanded(@Nullable Long labelId,
+                                                  @Nullable String label) {
+        Set<String> expanded = sSettingsPre.getStringSet(
+                KEY_EXPANDED_DOWNLOAD_LABELS, Collections.emptySet());
+        return expanded != null && expanded.contains(downloadLabelExpansionKey(labelId, label));
+    }
+
+    public static void setDownloadLabelExpanded(@Nullable Long labelId,
+                                                @Nullable String label, boolean expanded) {
+        Set<String> saved = sSettingsPre.getStringSet(
+                KEY_EXPANDED_DOWNLOAD_LABELS, Collections.emptySet());
+        Set<String> updated = new HashSet<>(saved != null ? saved : Collections.emptySet());
+        String key = downloadLabelExpansionKey(labelId, label);
+        if (expanded ? updated.add(key) : updated.remove(key)) {
+            sSettingsPre.edit().putStringSet(KEY_EXPANDED_DOWNLOAD_LABELS, updated).apply();
+        }
     }
 
     public static final String KEY_SHOW_READ_PROGRESS = "show_read_progress";

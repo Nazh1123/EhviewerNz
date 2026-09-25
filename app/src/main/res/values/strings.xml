@@ -510,7 +510,10 @@
     <string name="drawer_download_label_title">Label</string>
     <string name="default_download_label_name">Default</string>
     <string name="default_download_label_cannot_rename">The default download label cannot be renamed</string>
-    <string name="download_label_collapsed_action">%d galleries collapsed; tap to view this label</string>
+    <string name="download_label_action_rename">Rename</string>
+    <string name="download_label_action_enter">Open</string>
+    <string name="download_label_action_expand">Expand label</string>
+    <string name="download_label_action_collapse">Collapse label</string>
     <string name="download_label_search_unsupported">This label does not support gallery search</string>
     <string name="download_move_dialog_title">Move</string>
     <string name="quick_organize">Quick organize</string>

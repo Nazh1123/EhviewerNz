@@ -998,7 +998,6 @@
     <string name="download_delete_empty_labels_message">갤러리 없이 %d 다운로드 태그를 제거하시겠습니까?</string>
     <string name="download_delete_empty_labels_none">빈 다운로드 태그가 없습니다.</string>
     <string name="download_filter_by_kind">유형별로 필터링</string>
-    <string name="download_label_collapsed_action">%d 갤러리가 무너졌습니다. 이 라벨을 보려면 클릭하세요.</string>
     <string name="download_label_search_unsupported">이 태그는 갤러리 검색을 지원하지 않습니다.</string>
     <string name="download_toggle_list_mode">목록 모드 전환</string>
     <string name="error_cant_undo_image_save">이 이미지 저장은 취소할 수 없습니다.</string>

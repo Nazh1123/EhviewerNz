@@ -31,6 +31,7 @@ import android.util.LruCache;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -101,6 +102,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     private final int mListThumbHeight;
     private final DownloadsScene mScene;
     private final DownloadAdapterCallback mCallback;
+    private long mActionHeaderId = RecyclerView.NO_ID;
+    private LabelHeaderHolder mActiveActionHolder;
 
     private View movedItem = null;
 
@@ -135,9 +138,11 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         String getLabelHeaderTitle(int position);
         int getLabelHeaderGalleryCount(int position);
         boolean isLabelHeaderCollapsed(int position);
+        boolean isLabelHeaderSyncable(int position);
         void onLabelHeaderClick(int position);
-        boolean onLabelHeaderLongClick(int position);
-        void onCollapsedLabelClick(int position);
+        void onLabelHeaderRename(int position);
+        void onLabelHeaderSearchOrSync(int position);
+        void onLabelHeaderEnter(int position);
         long getDisplayItemId(int position);
         void onGroupedDownloadOrderChanged();
         boolean canReorderCurrentList();
@@ -221,11 +226,29 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             holder.count.setText(Integer.toString(
                     mCallback.getLabelHeaderGalleryCount(position)));
             boolean collapsed = mCallback.isLabelHeaderCollapsed(position);
-            holder.collapsedAction.setVisibility(collapsed ? View.VISIBLE : View.GONE);
-            if (collapsed) {
-                holder.collapsedAction.setText(mScene.getString(
-                        R.string.download_label_collapsed_action,
-                        mCallback.getLabelHeaderGalleryCount(position)));
+            holder.headerContent.setContentDescription(holder.label.getText() + ", "
+                    + holder.count.getText() + ", " + mScene.getString(collapsed
+                    ? R.string.download_label_action_expand
+                    : R.string.download_label_action_collapse));
+            boolean syncable = mCallback.isLabelHeaderSyncable(position);
+            holder.searchOrSync.setImageResource(syncable
+                    ? R.drawable.v_refresh_dark_x24 : R.drawable.v_magnify_dark_x24);
+            holder.searchOrSync.setContentDescription(mScene.getString(syncable
+                    ? R.string.sync_local_folder : R.string.search));
+            long headerId = getItemId(position);
+            if (mActiveActionHolder == holder && holder.boundHeaderId != headerId) {
+                mActiveActionHolder = null;
+                mActionHeaderId = RecyclerView.NO_ID;
+            }
+            holder.boundHeaderId = headerId;
+            holder.actionAnimationGeneration++;
+            holder.actions.animate().cancel();
+            holder.actions.setAlpha(1f);
+            holder.actions.setTranslationX(0f);
+            holder.actions.setVisibility(mActionHeaderId == headerId
+                    ? View.VISIBLE : View.GONE);
+            if (mActionHeaderId == headerId) {
+                mActiveActionHolder = holder;
             }
             return;
         }
@@ -613,7 +636,15 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
     @Override
     public void onViewRecycled(@NonNull RecyclerView.ViewHolder rawHolder) {
-        if (rawHolder instanceof DownloadHolder) {
+        if (rawHolder instanceof LabelHeaderHolder) {
+            LabelHeaderHolder holder = (LabelHeaderHolder) rawHolder;
+            if (mActiveActionHolder == holder) {
+                mActiveActionHolder = null;
+                mActionHeaderId = RecyclerView.NO_ID;
+            }
+            holder.actionAnimationGeneration++;
+            holder.actions.animate().cancel();
+        } else if (rawHolder instanceof DownloadHolder) {
             DownloadHolder holder = (DownloadHolder) rawHolder;
             holder.boundGid = Long.MIN_VALUE;
             holder.boundArchiveUri = null;
@@ -899,36 +930,117 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         return null;
     }
 
+    public void dismissLabelActions() {
+        if (mActionHeaderId == RecyclerView.NO_ID) {
+            return;
+        }
+        long previousId = mActionHeaderId;
+        mActionHeaderId = RecyclerView.NO_ID;
+        LabelHeaderHolder holder = mActiveActionHolder;
+        mActiveActionHolder = null;
+        if (holder != null && holder.boundHeaderId == previousId) {
+            holder.hideActions();
+        }
+    }
+
+    public boolean hasOpenLabelActions() {
+        return mActionHeaderId != RecyclerView.NO_ID;
+    }
+
     private class LabelHeaderHolder extends AbstractDraggableItemViewHolder {
 
+        long boundHeaderId = RecyclerView.NO_ID;
+        int actionAnimationGeneration;
         final TextView label;
         final TextView count;
         final View headerContent;
-        final TextView collapsedAction;
+        final View actions;
+        final ImageButton searchOrSync;
 
         LabelHeaderHolder(@NonNull View itemView) {
             super(itemView);
             label = itemView.findViewById(R.id.label);
             count = itemView.findViewById(R.id.count);
             headerContent = itemView.findViewById(R.id.header_content);
-            collapsedAction = itemView.findViewById(R.id.collapsed_action);
+            actions = itemView.findViewById(R.id.label_actions);
+            searchOrSync = itemView.findViewById(R.id.action_search_or_sync);
             headerContent.setOnClickListener(view -> {
                 int position = getBindingAdapterPosition();
                 if (position != RecyclerView.NO_POSITION) {
+                    dismissLabelActions();
                     mCallback.onLabelHeaderClick(position);
                 }
             });
             headerContent.setOnLongClickListener(view -> {
                 int position = getBindingAdapterPosition();
-                return position != RecyclerView.NO_POSITION
-                        && mCallback.onLabelHeaderLongClick(position);
+                if (position == RecyclerView.NO_POSITION) {
+                    return false;
+                }
+                if (mActionHeaderId != RecyclerView.NO_ID
+                        && mActiveActionHolder != this) {
+                    dismissLabelActions();
+                }
+                mActionHeaderId = DownloadAdapter.this.getItemId(position);
+                mActiveActionHolder = this;
+                showActions();
+                return true;
             });
-            collapsedAction.setOnClickListener(view -> {
+            itemView.findViewById(R.id.action_rename).setOnClickListener(view -> {
                 int position = getBindingAdapterPosition();
-                if (position != RecyclerView.NO_POSITION) {
-                    mCallback.onCollapsedLabelClick(position);
+                if (isCurrentActionTarget(position)) {
+                    dismissLabelActions();
+                    mCallback.onLabelHeaderRename(position);
                 }
             });
+            searchOrSync.setOnClickListener(view -> {
+                int position = getBindingAdapterPosition();
+                if (isCurrentActionTarget(position)) {
+                    dismissLabelActions();
+                    mCallback.onLabelHeaderSearchOrSync(position);
+                }
+            });
+            itemView.findViewById(R.id.action_enter).setOnClickListener(view -> {
+                int position = getBindingAdapterPosition();
+                if (isCurrentActionTarget(position)) {
+                    dismissLabelActions();
+                    mCallback.onLabelHeaderEnter(position);
+                }
+            });
+        }
+
+        private boolean isCurrentActionTarget(int position) {
+            return position != RecyclerView.NO_POSITION
+                    && mActionHeaderId == DownloadAdapter.this.getItemId(position);
+        }
+
+        private float actionSlideDistance() {
+            return 24f * itemView.getResources().getDisplayMetrics().density;
+        }
+
+        private void showActions() {
+            actionAnimationGeneration++;
+            actions.animate().cancel();
+            actions.setVisibility(View.VISIBLE);
+            actions.setAlpha(0f);
+            actions.setTranslationX(actionSlideDistance());
+            actions.animate().alpha(1f).translationX(0f)
+                    .setDuration(180).withEndAction(null).start();
+        }
+
+        private void hideActions() {
+            final int generation = ++actionAnimationGeneration;
+            actions.animate().cancel();
+            if (actions.getVisibility() != View.VISIBLE) {
+                return;
+            }
+            actions.animate().alpha(0f).translationX(actionSlideDistance())
+                    .setDuration(180).withEndAction(() -> {
+                        if (generation == actionAnimationGeneration) {
+                            actions.setVisibility(View.GONE);
+                            actions.setAlpha(1f);
+                            actions.setTranslationX(0f);
+                        }
+                    }).start();
         }
     }
 

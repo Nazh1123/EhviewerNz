@@ -16,6 +16,6 @@
 
 package com.hippo.ehviewer.ui.scene.download;
 
-/** A stackable, forced single-label download page opened from a collapsed section. */
+/** A stackable, forced single-label download page opened from a label header. */
 public final class SingleLabelDownloadsScene extends DownloadsScene {
 }

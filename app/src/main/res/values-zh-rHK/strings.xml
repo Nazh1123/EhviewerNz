@@ -450,7 +450,10 @@
     <string name="default_download_label_name">預設</string>
     <string name="scene_download_continuous_title">下載（%d）</string>
     <string name="default_download_label_cannot_rename">預設下載標籤無法重新命名</string>
-    <string name="download_label_collapsed_action">已摺疊 %d 個畫廊；點擊查看此標籤</string>
+    <string name="download_label_action_rename">重新命名</string>
+    <string name="download_label_action_enter">進入</string>
+    <string name="download_label_action_expand">展開標籤</string>
+    <string name="download_label_action_collapse">摺疊標籤</string>
     <string name="download_label_search_unsupported">此標籤不支援畫廊搜尋</string>
     <string name="download_move_dialog_title">移動</string>
     <string name="quick_organize">快速收納</string>
