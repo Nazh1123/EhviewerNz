@@ -129,7 +129,7 @@ public class DownloadLabelDraw {
                 label = labels.get(position);
             }
             if (scene.isContinuousLabelBrowse()) {
-                scene.scrollToDownloadLabel(label);
+                scene.expandAndScrollToDownloadLabel(label);
                 scene.closeDrawer(Gravity.RIGHT);
                 return;
             }
@@ -188,7 +188,7 @@ public class DownloadLabelDraw {
                 label = labels.get(position);
             }
             if (scene.isContinuousLabelBrowse()) {
-                scene.scrollToDownloadLabel(label);
+                scene.expandAndScrollToDownloadLabel(label);
                 scene.closeDrawer(Gravity.RIGHT);
                 return;
             }

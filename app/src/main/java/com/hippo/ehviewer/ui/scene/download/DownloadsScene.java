@@ -2251,6 +2251,28 @@ public class DownloadsScene extends ToolbarScene
         return true;
     }
 
+    boolean expandAndScrollToDownloadLabel(@Nullable String label) {
+        if (!mContinuousLabelBrowse || mList == null) {
+            return false;
+        }
+        Integer position = mContinuousHeaderPositions.get(label);
+        if (position == null) {
+            return false;
+        }
+        ContinuousDownloadItem header = mContinuousItems.get(position);
+        if (header.collapsed) {
+            Settings.setDownloadLabelExpanded(header.labelId, header.label, true);
+            boolean includeEmptyLabels = TextUtils.isEmpty(searchKey)
+                    && mSelectedCategory == EhUtils.ALL_CATEGORY;
+            rebuildContinuousItems(new ArrayList<>(mList), includeEmptyLabels);
+            if (mAdapter != null) {
+                mAdapter.notifyDataSetChanged();
+            }
+            queryVisibleSpiderInfo();
+        }
+        return scrollToDownloadLabel(label);
+    }
+
     private void rememberContinuousScrollPosition() {
         if (!mContinuousLabelBrowse || mLayoutManager == null) {
             return;
