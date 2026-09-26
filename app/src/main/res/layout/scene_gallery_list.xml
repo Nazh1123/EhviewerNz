@@ -151,7 +151,7 @@
         android:layout_marginTop="@dimen/gallery_padding_top_search_bar"
         android:layout_marginRight="16dp"
         android:accessibilityLiveRegion="polite"
-        android:background="@drawable/gallery_save_notice_background"
+        android:background="@drawable/gallery_quick_download_notice_background"
         android:clickable="true"
         android:focusable="true"
         android:foreground="?android:attr/selectableItemBackgroundBorderless"

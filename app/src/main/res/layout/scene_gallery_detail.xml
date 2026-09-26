@@ -69,6 +69,7 @@
         android:contentDescription="@string/gallery_detail_back_to_top"
         android:visibility="gone"
         app:backgroundTint="?attr/widgetColorThemePrimary"
+        app:maxImageSize="32dp"
         app:srcCompat="@drawable/v_back_to_top_dark_x24" />
 
 </FrameLayout>

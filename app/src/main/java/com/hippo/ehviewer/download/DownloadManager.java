@@ -618,6 +618,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 return;
             }
             list.addFirst(info);
+            expandDownloadLabel(info.label);
 
             // Add to all download list and map
             addToAllDownloads(info, true);
@@ -766,6 +767,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 }
             }
             list.add(info);
+            expandDownloadLabel(info.label);
             if (info.label != null) {
                 mLabelCountMap.put(info.label, (long) list.size());
             }
@@ -827,6 +829,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             return;
         }
         list.addFirst(info);
+        expandDownloadLabel(info.label);
 
         // Add to all download list and map
         addToAllDownloads(info, true);
@@ -865,6 +868,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             return;
         }
         list.addFirst(info);
+        expandDownloadLabel(info.label);
 
         // Save to
         EhDB.putDownloadInfo(info);
@@ -1316,6 +1320,12 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             }
         }
         return null;
+    }
+
+    private void expandDownloadLabel(@Nullable String label) {
+        DownloadLabel downloadLabel = findDownloadLabel(label);
+        Settings.setDownloadLabelExpanded(downloadLabel != null ? downloadLabel.getId() : null,
+                label, true);
     }
 
     /** Sources belong to the label ID, so renaming or emptying it keeps synchronization. */
