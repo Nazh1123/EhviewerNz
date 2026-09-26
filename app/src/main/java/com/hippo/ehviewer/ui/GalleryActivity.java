@@ -2080,7 +2080,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 }
                 showSaveNotice(getString(result.overwritten
                                 ? R.string.image_overwritten : R.string.image_saved,
-                        result.file.getUri()), result.overwritten ? null : result.file,
+                        result.file.getUri()), result.file,
                         page, previousPageSave, result.overwritten);
                 sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE,
                         result.file.getUri()));
