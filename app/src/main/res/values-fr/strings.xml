@@ -1013,7 +1013,9 @@
     <string name="settings_eh_show_thumbnail_download_badge">Miniature montrant le logo de téléchargement</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">En mode vignette, le logo de la galerie téléchargée s\'affiche dans le coin inférieur droit</string>
     <string name="settings_eh_show_thumbnail_info_bar">Barre d\'informations sur les miniatures</string>
-    <string name="settings_eh_show_thumbnail_info_bar_summary">En mode grandes vignettes, la date de publication, la note, le type de censure, l\'état du téléchargement et la progression de la lecture sont affichés sous la couverture de la galerie.</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">En mode grandes vignettes, afficher les informations de la galerie sous sa couverture</string>
+    <string name="settings_eh_show_thumbnail_info_title">Titre de la galerie</string>
+    <string name="settings_eh_show_thumbnail_info_details">Date, note, type de censure, progression de lecture</string>
     <string name="settings_gallery_long_press_quick_download">Téléchargement rapide par appui long</string>
     <string name="settings_gallery_long_press_quick_download_summary">Appuyez longuement sur la zone indiquée d\'une galerie pour lancer immédiatement son téléchargement</string>
     <string name="settings_eh_system_theme">Thème système</string>

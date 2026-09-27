@@ -93,7 +93,16 @@ public class Settings {
             putString(KEY_SEARCH_LANGUAGE, getInitialSearchLanguage());
         }
         migrateQuickPageTurnSetting();
+        migrateThumbnailInfoBarSetting();
         getStartTransferTime();
+    }
+
+    private static void migrateThumbnailInfoBarSetting() {
+        // Existing users who enabled the bar should keep its original detail row.
+        if (!sSettingsPre.contains(KEY_SHOW_THUMBNAIL_INFO_DETAILS)
+                && getShowThumbnailInfoBar()) {
+            putBoolean(KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        }
     }
 
     private static EhConfig loadEhConfig() {
@@ -478,8 +487,23 @@ public class Settings {
                 DEFAULT_SHOW_THUMBNAIL_INFO_BAR);
     }
 
+    public static final String KEY_SHOW_THUMBNAIL_INFO_TITLE =
+            "show_thumbnail_info_title";
+    public static final String KEY_SHOW_THUMBNAIL_INFO_DETAILS =
+            "show_thumbnail_info_details";
+
+    public static boolean getShowThumbnailInfoTitle() {
+        return getBoolean(KEY_SHOW_THUMBNAIL_INFO_TITLE, false);
+    }
+
+    public static boolean getShowThumbnailInfoDetails() {
+        return getBoolean(KEY_SHOW_THUMBNAIL_INFO_DETAILS, false);
+    }
+
     public static boolean isThumbnailInfoBarEffective() {
-        return getShowThumbnailInfoBar() && getListMode() == 1 && getThumbSize() == 0;
+        return getShowThumbnailInfoBar()
+                && (getShowThumbnailInfoTitle() || getShowThumbnailInfoDetails())
+                && getListMode() == 1 && getThumbSize() == 0;
     }
 
     public static final String KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD =

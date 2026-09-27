@@ -17,7 +17,8 @@ public final class SubscriptionSearchContext {
         parts.add(EhUrl.getHost());
         parts.add(Settings.getEhConfig().uconfig());
         parts.add("gallery-pages:" + Settings.getShowGalleryPages());
-        parts.add("thumbnail-info:" + Settings.isThumbnailInfoBarEffective());
+        parts.add("thumbnail-info-details:" + (Settings.isThumbnailInfoBarEffective()
+                && Settings.getShowThumbnailInfoDetails()));
         for (Cookie cookie : EhApplication.getEhCookieStore(EhApplication.getInstance())
                 .loadForRequest(HttpUrl.parse(EhUrl.getHost()))) {
             parts.add(cookie.name() + "=" + cookie.value());

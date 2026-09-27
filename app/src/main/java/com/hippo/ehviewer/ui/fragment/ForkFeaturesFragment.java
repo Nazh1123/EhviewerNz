@@ -35,8 +35,6 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         mManualImageSaveLocation = findPreference(KEY_MANUAL_IMAGE_SAVE_LOCATION);
         Preference showThumbnailDownloadBadge =
                 findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
-        Preference showThumbnailInfoBar =
-                findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR);
         Preference galleryLongPressQuickDownload =
                 findPreference(Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD);
         Preference.OnPreferenceChangeListener galleryListPreferenceListener =
@@ -50,10 +48,11 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
             showThumbnailDownloadBadge.setOnPreferenceChangeListener(
                     galleryListPreferenceListener);
         }
-        if (showThumbnailInfoBar != null) {
-            showThumbnailInfoBar.setOnPreferenceChangeListener(
-                    galleryListPreferenceListener);
-        }
+        ThumbnailInfoBarPreferences.bind(this, () -> {
+            if (getActivity() != null) {
+                getActivity().setResult(Activity.RESULT_OK);
+            }
+        });
         if (galleryLongPressQuickDownload != null) {
             galleryLongPressQuickDownload.setOnPreferenceChangeListener(
                     galleryListPreferenceListener);

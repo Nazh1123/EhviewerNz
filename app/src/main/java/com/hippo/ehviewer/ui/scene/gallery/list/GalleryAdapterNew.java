@@ -329,24 +329,34 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 holder.simpleLanguage.setText(gi.simpleLanguage);
                 boolean showInfoBar = Settings.isThumbnailInfoBarEffective();
                 holder.thumbnailInfoBar.setVisibility(showInfoBar ? View.VISIBLE : View.GONE);
-                holder.downloaded.setVisibility(!showInfoBar &&
+                holder.downloaded.setVisibility((!showInfoBar
+                        || !Settings.getShowThumbnailInfoDetails()) &&
                         Settings.getShowThumbnailDownloadBadge()
                                 && (downloaded || updateAvailable)
                         ? View.VISIBLE : View.GONE);
                 if (showInfoBar) {
-                    holder.thumbnailPosted.setText(
-                            GalleryListDisplayHelper.formatCompactPosted(gi.posted));
-                    holder.thumbnailRating.setText(
-                            GalleryListDisplayHelper.formatRating(gi.rating));
-                    holder.thumbnailCensorship.setText(
-                            GalleryListDisplayHelper.resolveCensorship(
-                                    gi.simpleTags, gi.tgList,
-                                    gi.category == EhConfig.COSPLAY));
-                    holder.thumbnailDownloaded.setVisibility(
-                            downloaded || updateAvailable ? View.VISIBLE : View.GONE);
-                    bindVersionBadge(holder.thumbnailDownloaded, updateAvailable,
-                            R.drawable.v_download_x16);
-                    bindPageProgress(holder, holder.thumbnailPages, gi, true, false);
+                    boolean showTitle = Settings.getShowThumbnailInfoTitle();
+                    boolean showDetails = Settings.getShowThumbnailInfoDetails();
+                    holder.thumbnailInfoTitle.setVisibility(showTitle ? View.VISIBLE : View.GONE);
+                    holder.thumbnailInfoDetails.setVisibility(showDetails ? View.VISIBLE : View.GONE);
+                    if (showTitle) {
+                        holder.thumbnailInfoTitle.setText(EhUtils.getSuitableTitle(gi));
+                    }
+                    if (showDetails) {
+                        holder.thumbnailPosted.setText(
+                                GalleryListDisplayHelper.formatCompactPosted(gi.posted));
+                        holder.thumbnailRating.setText(
+                                GalleryListDisplayHelper.formatRating(gi.rating));
+                        holder.thumbnailCensorship.setText(
+                                GalleryListDisplayHelper.resolveCensorship(
+                                        gi.simpleTags, gi.tgList,
+                                        gi.category == EhConfig.COSPLAY));
+                        holder.thumbnailDownloaded.setVisibility(
+                                downloaded || updateAvailable ? View.VISIBLE : View.GONE);
+                        bindVersionBadge(holder.thumbnailDownloaded, updateAvailable,
+                                R.drawable.v_download_x16);
+                        bindPageProgress(holder, holder.thumbnailPages, gi, true, false);
+                    }
                 }
                 break;
             }
@@ -452,6 +462,10 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         @Nullable
         public final View thumbnailInfoBar;
         @Nullable
+        public final TextView thumbnailInfoTitle;
+        @Nullable
+        public final View thumbnailInfoDetails;
+        @Nullable
         public final TextView thumbnailPosted;
         @Nullable
         public final TextView thumbnailRating;
@@ -482,6 +496,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             downloaded = itemView.findViewById(R.id.downloaded);
             selectionOutline = itemView.findViewById(R.id.selection_outline);
             thumbnailInfoBar = itemView.findViewById(R.id.thumbnail_info_bar);
+            thumbnailInfoTitle = itemView.findViewById(R.id.thumbnail_info_title);
+            thumbnailInfoDetails = itemView.findViewById(R.id.thumbnail_info_details);
             thumbnailPosted = itemView.findViewById(R.id.thumbnail_posted);
             thumbnailRating = itemView.findViewById(R.id.thumbnail_rating);
             thumbnailCensorship = itemView.findViewById(R.id.thumbnail_censorship);

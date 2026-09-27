@@ -249,6 +249,7 @@ public class EhEngine {
         }
 
         boolean needThumbnailInfo = Settings.isThumbnailInfoBarEffective()
+                && Settings.getShowThumbnailInfoDetails()
                 && (!allHaveTags || !allHavePages);
         boolean needApi = (filter && sEhFilter.needTags() && !hasTags) ||
                 (Settings.getShowGalleryPages() && !hasPages) ||
