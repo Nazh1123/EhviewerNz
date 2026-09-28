@@ -1,8 +1,16 @@
 # EhViewerNz
 
-EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_CN_SXJ) 的 Fork, 着重于添加用户操作体验相关功能。
-- 发布分支: [BiLi_PC_Gamer](https://github.com/Nazh1123/EhviewerNz)
-- 开发分支: [Dev_Test](https://github.com/Nazh1123/EhviewerNz/tree/Dev_Test)
+<img align="right" src="fastlane/metadata/android/en-US/images/icon.png" alt="EhViewerNz 应用图标" width="220">
+
+EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_CN_SXJ) 的 Fork 项目<br>
+着重于添加用户操作体验相关功能
+
+|||
+| :--- | :--- |
+| 发布：[BiLi_PC_Gamer](https://github.com/Nazh1123/EhviewerNz) | <img align="center" src="https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fapi.github.com%2Frepos%2FNazh1123%2FEhviewerNz%2Fcommits%2FBiLi_PC_Gamer&amp;search=%22committer%22%5Cs*%3A%5Cs*%5C%7B%5B%5E%7D%5D*%22date%22%5Cs*%3A%5Cs*%22(%5B0-9%5D%7B4%7D-%5B0-9%5D%7B2%7D-%5B0-9%5D%7B2%7D)&amp;replace=%241&amp;label=last%20commit" alt="最近提交日期"> |
+| 开发：[Dev_Test](https://github.com/Nazh1123/EhviewerNz/tree/Dev_Test) | <img align="center" src="https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fapi.github.com%2Frepos%2FNazh1123%2FEhviewerNz%2Fcommits%2FDev_Test&amp;search=%22committer%22%5Cs*%3A%5Cs*%5C%7B%5B%5E%7D%5D*%22date%22%5Cs*%3A%5Cs*%22(%5B0-9%5D%7B4%7D-%5B0-9%5D%7B2%7D-%5B0-9%5D%7B2%7D)&amp;replace=%241&amp;label=last%20commit" alt="最近提交日期"> |
+| 最新发布 | <a href="https://github.com/Nazh1123/EhviewerNz/releases/latest"><img align="center" src="https://img.shields.io/github/release/Nazh1123/EhviewerNz?label=latest%20release" alt="Latest release"></a> |
+|||
 
 ## 主要功能
 
@@ -34,14 +42,14 @@ EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_C
 
 ### 画廊详情与预览
 
-- [画廊更新](#画廊更新)，画廊可复用旧画廊内容 (基于画廊最初版本GID 和图片pToken) 进行更新，并继承阅读进度。
+- [“画廊更新”](#画廊更新)，画廊可复用旧画廊内容 (基于画廊最初版本GID 和图片pToken) 进行更新，并继承阅读进度。
 - 预览页面支持左滑快速进入，页内支持双指缩放，即时调整每行图片 (缩略图) 数量，最多 `8` 张。
 - “作者”按钮，搜索画廊[作者关键词](#关键词提取)；长按按钮可将完整标题拆解，以供用户选择组合进行搜索。
 - “回到最上方”按钮，在详情页可快速返回页面顶部。
 
 ### 下载管理
 
-- [“下载标签连续浏览”](#下载标签连续浏览)，可在同一页面连续展示不同下载标签内的画廊，并提供标签管理功能。
+- [“下载标签连续浏览”](#下载标签)，可在同一页面连续展示不同下载标签内的画廊，并提供标签管理功能。
 - 已下载画廊搜索支持不区分大小写。
 - 下载列表界面右下角新增按钮“归类收纳”，可通过多选已下载画廊，根据[作者关键词](#关键词提取)进行分类并放入对应下载标签，标签支持 `#注释`。
 - “导入本地文件夹”，将本地文件夹内图片导入为画廊，并提供同步文件夹功能。
@@ -49,7 +57,7 @@ EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_C
 
 ### 画廊搜索
 
-- “额外信息栏”，大缩略图模式可在封面下方显示发布时间、打码类型、下载标识、更新标识与阅读进度。
+- “额外信息栏”，以缩略图(大)模式浏览时可在封面下方显示标题、发布时间、打码类型、下载标识、更新标识与阅读进度，并提供色彩高亮选项。
 - 画廊搜索页右下角按键提供：
   - “仅已下载”模式，可在搜索与列表中筛选本地已下载和可更新画廊。
   - “画廊多选”模式，可批量下载或删除选中画廊。
@@ -59,7 +67,10 @@ EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_C
 - 修复上游版本中从画廊详情页返回下载列表后无法翻页的问题。
 - 修复上游版本中点击应用图标进入应用时，可能异常进入上次页面的问题。
 
-## 功能详细
+<br><br>
+
+## 
+## 功能详细说明
 
 ### 动图播放控制
 
@@ -114,15 +125,15 @@ EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_C
   - 无可用括号内文本时尝试获取标题的第一个单词；
 - 全部失效时使用画廊上传者作为关键词。
 
-## 杂项
+### 杂项
 
 - 画廊搜索页支持长按快速下载：
-    - 大缩略图模式且开启额外信息栏时，长按画廊右下角执行下载；
+    - 缩略图(大)模式且开启额外信息栏时，长按画廊右下角执行下载；
     - 详细模式，长按画廊封面执行下载。
 - 画廊详细页内支持：
   - “画廊预览立即跳转”，开启后详情页底部的预览入口将直接跳转到第二页的新内容；
   - 向左滑动快速进入画廊预览，并自动判断是否跳转第二页；
-  - 右上角更多菜单提供本地打开和路径复制按钮。
+  - 右上角更多菜单提供本地打开和本地路径复制按钮。
 - 侧边栏提供“搜索语言项”按钮，可当前搜索条件中添加或删除语言标签并进行搜索，可在设置更改不同语言标签。
 - “删除本地不存在的画廊”，扫描并清理下载列表中目录缺失或空目录的记录。
 - 书签管理界面支持重命名和查看书签原关键词。
