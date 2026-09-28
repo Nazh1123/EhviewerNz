@@ -8,7 +8,7 @@
     android:viewportHeight="24">
 
     <path
-        android:strokeWidth="2"
+        android:strokeWidth="1.8"
         android:strokeLineJoin="round"
         android:strokeColor="?attr/drawableColorPrimary"
         android:pathData="M4.5 12H9.5V19.5H14.5V12H19.5L12 4.5Z"/>

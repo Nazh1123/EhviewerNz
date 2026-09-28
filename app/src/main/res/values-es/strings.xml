@@ -1090,6 +1090,7 @@
     <string name="settings_eh_show_thumbnail_info_bar_summary">En el modo de miniaturas grandes, mostrar la información de la galería debajo de la portada</string>
     <string name="settings_eh_show_thumbnail_info_title">Título de la galería</string>
     <string name="settings_eh_show_thumbnail_info_details">Fecha, valoración, tipo de censura, progreso de lectura</string>
+    <string name="settings_eh_show_thumbnail_info_highlight">Resaltado de color</string>
     <string name="settings_gallery_long_press_quick_download">Descarga rápida de galerías con pulsación larga</string>
     <string name="settings_gallery_long_press_quick_download_summary">Mantén pulsada el área indicada de una galería para iniciar la descarga inmediatamente</string>
     <string name="settings_eh_system_theme">Tema del sistema</string>

@@ -1093,6 +1093,7 @@
     <string name="settings_eh_show_thumbnail_info_bar_summary">เมื่อเรียกดูในโหมดภาพขนาดย่อขนาดใหญ่ ให้แสดงข้อมูลแกลเลอรีใต้ปก</string>
     <string name="settings_eh_show_thumbnail_info_title">ชื่อแกลเลอรี</string>
     <string name="settings_eh_show_thumbnail_info_details">วันที่ คะแนน ประเภทการเซ็นเซอร์ ความคืบหน้าในการอ่าน</string>
+    <string name="settings_eh_show_thumbnail_info_highlight">เน้นสี</string>
     <string name="settings_gallery_long_press_quick_download">ดาวน์โหลดแกลเลอรีด่วนด้วยการกดค้าง</string>
     <string name="settings_gallery_long_press_quick_download_summary">กดค้างบริเวณที่กำหนดของรายการแกลเลอรีเพื่อเริ่มดาวน์โหลดทันที</string>
     <string name="settings_eh_system_theme">ธีมของระบบ</string>

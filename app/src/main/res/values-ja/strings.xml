@@ -1041,6 +1041,7 @@
     <string name="settings_eh_show_thumbnail_info_bar_summary">大きなサムネイルモードで閲覧するとき、ギャラリーの表紙の下に情報を表示します</string>
     <string name="settings_eh_show_thumbnail_info_title">ギャラリーのタイトル</string>
     <string name="settings_eh_show_thumbnail_info_details">日付、評価、修正タイプ、閲覧進捗</string>
+    <string name="settings_eh_show_thumbnail_info_highlight">色の強調</string>
     <string name="settings_gallery_long_press_quick_download">ギャラリー長押しクイックダウンロード</string>
     <string name="settings_gallery_long_press_quick_download_summary">ギャラリー項目の指定領域を長押しすると、すぐにダウンロードを開始します</string>
     <string name="settings_eh_system_theme">システムテーマ</string>

@@ -1028,6 +1028,7 @@
     <string name="settings_eh_show_thumbnail_info_bar_summary">Im Modus mit großen Miniaturbildern Galerieinformationen unter dem Cover anzeigen</string>
     <string name="settings_eh_show_thumbnail_info_title">Galerietitel</string>
     <string name="settings_eh_show_thumbnail_info_details">Datum, Bewertung, Zensurtyp, Lesefortschritt</string>
+    <string name="settings_eh_show_thumbnail_info_highlight">Farbliche Hervorhebung</string>
     <string name="settings_gallery_long_press_quick_download">Galerie per langem Drücken schnell herunterladen</string>
     <string name="settings_gallery_long_press_quick_download_summary">Den vorgesehenen Bereich eines Galerieeintrags lange drücken, um den Download sofort zu starten</string>
     <string name="settings_eh_system_theme">Systemthema</string>

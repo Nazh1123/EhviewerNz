@@ -1082,6 +1082,7 @@
     <string name="settings_eh_show_thumbnail_info_bar_summary">큰 썸네일 모드에서 탐색할 때 갤러리 표지 아래에 정보를 표시합니다</string>
     <string name="settings_eh_show_thumbnail_info_title">갤러리 제목</string>
     <string name="settings_eh_show_thumbnail_info_details">날짜, 평점, 검열 유형, 읽기 진행률</string>
+    <string name="settings_eh_show_thumbnail_info_highlight">색상 강조</string>
     <string name="settings_gallery_long_press_quick_download">갤러리 길게 눌러 빠른 다운로드</string>
     <string name="settings_gallery_long_press_quick_download_summary">갤러리 항목의 지정 영역을 길게 눌러 즉시 다운로드를 시작합니다</string>
     <string name="settings_eh_system_theme">시스템 테마</string>

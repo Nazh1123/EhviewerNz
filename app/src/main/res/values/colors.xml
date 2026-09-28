@@ -87,6 +87,11 @@
     <color name="deep_green_600">#ff31B404</color>
     <color name="yellow_800">#fff9a825</color>
     <color name="deep_orange_400">#ffff7043</color>
+    <!-- Theme-specific colors for thumbnail info highlights. -->
+    <color name="thumbnail_info_yellow_light">#ff796214</color>
+    <color name="thumbnail_info_teal_light">#ff287566</color>
+    <color name="thumbnail_info_yellow_dark">#ffc7a762</color>
+    <color name="thumbnail_info_teal_dark">#ff82bbaa</color>
     <color name="black">#ff000000</color>
     <color name="grey_975">#ff080808</color>
     <color name="grey_950">#ff111111</color>

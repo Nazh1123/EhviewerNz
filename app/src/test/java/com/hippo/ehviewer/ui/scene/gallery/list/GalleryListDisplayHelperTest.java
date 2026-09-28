@@ -23,6 +23,8 @@ import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class GalleryListDisplayHelperTest {
 
@@ -42,6 +44,29 @@ public class GalleryListDisplayHelperTest {
     public void formatRatingUsesPlaceholderForInvalidValue() {
         assertEquals("\u2014", GalleryListDisplayHelper.formatRating(-1f));
         assertEquals("\u2014", GalleryListDisplayHelper.formatRating(Float.NaN));
+    }
+
+    @Test
+    public void ratingHighlightUsesViridisAndClampsAtEnds() {
+        assertEquals(0xff440154, GalleryListDisplayHelper.ratingHighlightColor(0f, false));
+        assertEquals(0xff440154, GalleryListDisplayHelper.ratingHighlightColor(0.2f, false));
+        assertEquals(0xff327572, GalleryListDisplayHelper.ratingHighlightColor(2.5f, false));
+        assertEquals(0xff756a11, GalleryListDisplayHelper.ratingHighlightColor(4.8f, false));
+        assertEquals(0xff756a11, GalleryListDisplayHelper.ratingHighlightColor(5f, false));
+        assertEquals(0xffb09db4, GalleryListDisplayHelper.ratingHighlightColor(0f, true));
+        assertEquals(0xff7bafad, GalleryListDisplayHelper.ratingHighlightColor(2.5f, true));
+        assertEquals(0xffcbbe48, GalleryListDisplayHelper.ratingHighlightColor(5f, true));
+        int betweenSamples = GalleryListDisplayHelper.ratingHighlightColor(2.57f, false);
+        assertTrue(betweenSamples != 0xff327572 && betweenSamples != 0xff30766e);
+    }
+
+    @Test
+    public void onlyUncensoredAndNudityOnlyTypesAreHighlighted() {
+        assertTrue(GalleryListDisplayHelper.isHighlightCensorship("Un"));
+        assertTrue(GalleryListDisplayHelper.isHighlightCensorship("Nu"));
+        assertFalse(GalleryListDisplayHelper.isHighlightCensorship("Mo"));
+        assertFalse(GalleryListDisplayHelper.isHighlightCensorship("Cl"));
+        assertFalse(GalleryListDisplayHelper.isHighlightCensorship(null));
     }
 
     @Test

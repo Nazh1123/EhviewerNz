@@ -1131,6 +1131,7 @@
     <string name="settings_eh_show_thumbnail_info_bar_summary">以縮圖模式 (大) 瀏覽時，在畫廊封面下方顯示畫廊資訊</string>
     <string name="settings_eh_show_thumbnail_info_title">畫廊標題</string>
     <string name="settings_eh_show_thumbnail_info_details">日期、評分、打碼類型、閱讀進度</string>
+    <string name="settings_eh_show_thumbnail_info_highlight">色彩高亮</string>
     <string name="settings_gallery_long_press_quick_download">畫廊長按快速下載</string>
     <string name="settings_gallery_long_press_quick_download_summary">長按畫廊項目的指定區域即可快速開始下載</string>
     <string name="settings_eh_system_theme">系統主題</string>

@@ -13,6 +13,7 @@ final class ThumbnailInfoBarPreferences {
         TwoStatePreference bar = fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR);
         TwoStatePreference title = fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_TITLE);
         TwoStatePreference details = fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS);
+        TwoStatePreference highlight = fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT);
         if (bar == null || title == null || details == null) {
             return;
         }
@@ -39,5 +40,11 @@ final class ThumbnailInfoBarPreferences {
             onChanged.run();
             return true;
         });
+        if (highlight != null) {
+            highlight.setOnPreferenceChangeListener((preference, newValue) -> {
+                onChanged.run();
+                return true;
+            });
+        }
     }
 }

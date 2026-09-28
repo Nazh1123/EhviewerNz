@@ -126,6 +126,12 @@
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
+        android:dependency="show_thumbnail_info_details"
+        android:key="show_thumbnail_info_highlight"
+        android:title="@string/settings_eh_show_thumbnail_info_highlight" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
         android:key="gallery_long_press_quick_download"
         android:summary="@string/settings_gallery_long_press_quick_download_summary"
         android:title="@string/settings_gallery_long_press_quick_download" />

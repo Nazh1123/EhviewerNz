@@ -491,6 +491,8 @@ public class Settings {
             "show_thumbnail_info_title";
     public static final String KEY_SHOW_THUMBNAIL_INFO_DETAILS =
             "show_thumbnail_info_details";
+    public static final String KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT =
+            "show_thumbnail_info_highlight";
 
     public static boolean getShowThumbnailInfoTitle() {
         return getBoolean(KEY_SHOW_THUMBNAIL_INFO_TITLE, false);
@@ -498,6 +500,10 @@ public class Settings {
 
     public static boolean getShowThumbnailInfoDetails() {
         return getBoolean(KEY_SHOW_THUMBNAIL_INFO_DETAILS, false);
+    }
+
+    public static boolean getShowThumbnailInfoHighlight() {
+        return getBoolean(KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT, false);
     }
 
     public static boolean isThumbnailInfoBarEffective() {
