@@ -81,6 +81,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private final int mListThumbHeight;
     private final boolean mDarkTheme;
     private final int mInfoHighlightYellow;
+    private final int mInfoMaxRatingColor;
     private final int mInfoTeal;
     private final ColorStateList mInfoDownloadedTint;
     private final ColorStateList mInfoUpdateTint;
@@ -108,10 +109,11 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         mInfoHighlightYellow = resources.getColor(mDarkTheme
                 ? R.color.thumbnail_info_yellow_dark : R.color.thumbnail_info_yellow_light,
                 inflater.getContext().getTheme());
+        mInfoMaxRatingColor = GalleryListDisplayHelper.ratingHighlightColor(5.0f, mDarkTheme);
         mInfoTeal = resources.getColor(mDarkTheme
                 ? R.color.thumbnail_info_teal_dark : R.color.thumbnail_info_teal_light,
                 inflater.getContext().getTheme());
-        mInfoDownloadedTint = ColorStateList.valueOf(mInfoHighlightYellow);
+        mInfoDownloadedTint = ColorStateList.valueOf(mInfoMaxRatingColor);
         mInfoUpdateTint = ColorStateList.valueOf(mInfoTeal);
         mRecyclerView = recyclerView;
         mLayoutManager = new AutoStaggeredGridLayoutManager(0, StaggeredGridLayoutManager.VERTICAL);
@@ -379,14 +381,15 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                         holder.thumbnailCensorship.setText(censorship);
                         if (highlightColors
                                 && GalleryListDisplayHelper.isHighlightCensorship(censorship)) {
-                            holder.thumbnailCensorship.setTextColor(mInfoHighlightYellow);
+                            holder.thumbnailCensorship.setTextColor(mInfoMaxRatingColor);
                         } else {
                             holder.thumbnailCensorship.setTextColor(holder.thumbnailInfoTextColors);
                         }
                         holder.thumbnailDownloaded.setVisibility(
                                 downloaded || updateAvailable ? View.VISIBLE : View.GONE);
                         bindVersionBadge(holder.thumbnailDownloaded, updateAvailable,
-                                R.drawable.v_download_x16);
+                                highlightColors ? R.drawable.v_download_tintable_x16
+                                        : R.drawable.v_download_x16);
                         holder.thumbnailDownloaded.setImageTintList(
                                 highlightColors && (downloaded || updateAvailable)
                                         ? (updateAvailable ? mInfoUpdateTint : mInfoDownloadedTint)
