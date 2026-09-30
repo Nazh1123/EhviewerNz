@@ -101,6 +101,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     private final int mListThumbWidth;
     private final int mListThumbHeight;
     private final DownloadsScene mScene;
+    private final OriginalAlbumThumbnailLoader mAlbumThumbnails;
     private final DownloadAdapterCallback mCallback;
     private long mActionHeaderId = RecyclerView.NO_ID;
     private LabelHeaderHolder mActiveActionHolder;
@@ -152,6 +153,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     public DownloadAdapter(DownloadsScene scene, DownloadAdapterCallback callback) {
         DRAG_ENABLE = Settings.getDragDownloadGallery();
         this.mScene = scene;
+        mAlbumThumbnails = new OriginalAlbumThumbnailLoader(scene);
         this.mCallback = callback;
         
         LayoutInflater mInflater1;
@@ -256,6 +258,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         holder.boundGid = Long.MIN_VALUE;
         holder.boundArchiveUri = null;
         holder.thumb.unload();
+        holder.thumb.setTag(R.id.thumb, null);
         List<DownloadInfo> list = mCallback.getList();
         if (list == null) {
             return;
@@ -272,11 +275,12 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                     LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri);
             boolean isImportedArchive = info.archiveUri != null
                     && info.archiveUri.startsWith("content://");
-            boolean isImportedLocal = isImportedFolder || isImportedArchive;
+            boolean isLocalAlbum = DownloadAlbumImporter.Companion.isLocalAlbum(info);
+            boolean isImportedLocal = isImportedFolder || isImportedArchive || isLocalAlbum;
 
             String title = EhUtils.getSuitableTitle(info);
             if (isImportedLocal) {
-                title = (isImportedFolder ? "📁 " : "📦 ") + title;
+                title = ((isImportedFolder || isLocalAlbum) ? "📁 " : "📦 ") + title;
             }
             if (isImportedFolder) {
                 holder.boundArchiveUri = info.archiveUri;
@@ -285,6 +289,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                 // For imported archives, extract first image as thumbnail
                 holder.boundArchiveUri = info.archiveUri;
                 loadArchiveThumbnail(holder, Uri.parse(info.archiveUri));
+            } else if (isLocalAlbum) {
+                mAlbumThumbnails.loadLocalAlbumThumbnail(holder.thumb, info);
             } else {
                 holder.boundArchiveUri = null;
                 // Normal thumbnail loading for regular downloads
@@ -649,6 +655,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             holder.boundGid = Long.MIN_VALUE;
             holder.boundArchiveUri = null;
             holder.thumb.unload();
+            holder.thumb.setTag(R.id.thumb, null);
         }
         super.onViewRecycled(rawHolder);
     }
@@ -1110,7 +1117,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                 LocalFolderGallerySource folderSource =
                         LocalFolderGallerySource.parse(currentInfo.archiveUri);
                 if (folderSource != null || (currentInfo.archiveUri != null
-                        && currentInfo.archiveUri.startsWith("content://"))) {
+                        && currentInfo.archiveUri.startsWith("content://"))
+                        || DownloadAlbumImporter.Companion.isLocalAlbum(currentInfo)) {
                     String location = folderSource != null
                             ? folderSource.treeUri + (folderSource.relativePath.isEmpty()
                             ? "" : "\n" + folderSource.relativePath)

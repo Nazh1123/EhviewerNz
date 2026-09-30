@@ -4,8 +4,12 @@ import static org.junit.Assert.*;
 
 import android.app.Application;
 import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.res.Resources;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Looper;
+import android.util.SparseBooleanArray;
 import android.view.ContextThemeWrapper;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,7 +17,9 @@ import android.widget.TextView;
 
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
+import androidx.appcompat.app.AlertDialog;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.h6ah4i.android.widget.advrecyclerview.draggable.RecyclerViewDragDropManager;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.R;
@@ -22,8 +28,12 @@ import com.hippo.ehviewer.dao.DaoMaster;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadAdapter;
+import com.hippo.ehviewer.ui.scene.download.part.DownloadBatchActions;
+import com.hippo.ehviewer.ui.scene.download.part.DownloadChoiceListener;
 import com.hippo.ehviewer.widget.MyEasyRecyclerView;
+import com.hippo.widget.FabLayout;
 import com.hippo.widget.recyclerview.AutoStaggeredGridLayoutManager;
 
 import org.greenrobot.greendao.database.StandardDatabase;
@@ -36,6 +46,7 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.ConscryptMode;
+import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.util.ReflectionHelpers;
 
 import java.time.Duration;
@@ -69,6 +80,11 @@ public class DownloadListModeTest {
             downloads.add(info);
         }
         manager.addDownload(downloads);
+        // New downloads expand their labels. These tests start from explicit
+        // collapsed sections so they exercise folding independently of that policy.
+        for (DownloadLabel label : manager.getLabelList()) {
+            Settings.setDownloadLabelExpanded(label.getId(), label.getLabel(), false);
+        }
         scene = new TestScene(context);
         ReflectionHelpers.setField(scene, "mDownloadManager", manager);
         recycler = new MyEasyRecyclerView(context);
@@ -85,6 +101,7 @@ public class DownloadListModeTest {
         ReflectionHelpers.setField(scene, "mRecyclerView", recycler);
         ReflectionHelpers.setField(scene, "mLayoutManager", layout);
         ReflectionHelpers.setField(scene, "mAdapter", adapter);
+        recycler.setCustomCheckedListener(new DownloadChoiceListener(scene));
         selectLabel("first");
     }
 
@@ -170,6 +187,75 @@ public class DownloadListModeTest {
         scene.onLabelHeaderClick(firstHeader);
         assertTrue(scene.isLabelHeaderCollapsed(firstHeader));
         assertEquals(collapsedCount, scene.getDisplayItemCount());
+    }
+
+    @Test
+    public void batchSelectAllSkipsHeadersAndCollapsedGalleries() {
+        makeSmallSections();
+        switchMode(true);
+        scene.onLabelHeaderClick(findHeader("first"));
+        recycler.setChoiceMode(MyEasyRecyclerView.CHOICE_MODE_MULTIPLE_CUSTOM);
+        recycler.intoCustomChoiceMode();
+
+        batchActions().onClickSecondaryFab(null, null, 0);
+
+        assertEquals(20, recycler.getCheckedItemCount());
+        SparseBooleanArray checked = recycler.getCheckedItemPositions();
+        for (int i = 0; i < checked.size(); i++) {
+            if (!checked.valueAt(i)) continue;
+            int position = checked.keyAt(i);
+            assertFalse(scene.isLabelHeaderPosition(position));
+            assertEquals("first", scene.getList().get(scene.positionInList(position)).label);
+        }
+    }
+
+    @Test
+    public void batchDeleteMapsGroupedPositionsAndIgnoresCheckedHeaders() {
+        makeSmallSections();
+        switchMode(true);
+        scene.onLabelHeaderClick(findHeader("first"));
+        recycler.setChoiceMode(MyEasyRecyclerView.CHOICE_MODE_MULTIPLE_CUSTOM);
+        recycler.intoCustomChoiceMode();
+        recycler.checkAll(); // Include headers to exercise defensive position mapping.
+        Settings.putRemoveImageFiles(false);
+
+        batchActions().onClickSecondaryFab(null, null, 3);
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertNotNull(dialog);
+        dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+
+        DownloadManager manager = scene.getDownloadManager();
+        assertFalse(manager.containDownloadInfo(1));
+        assertFalse(manager.containDownloadInfo(20));
+        assertTrue(manager.containDownloadInfo(121));
+        assertTrue(manager.containDownloadInfo(140));
+        assertFalse(recycler.isInCustomChoice());
+    }
+
+    private DownloadBatchActions batchActions() {
+        Context context = scene.getContext();
+        return new DownloadBatchActions(new DownloadBatchActions.Host() {
+            @Override public Context getEHContext() { return context; }
+            @Override public MainActivity getActivity2() { return new MainActivity(); }
+            @Override public MyEasyRecyclerView getRecyclerView() { return recycler; }
+            @Override public List<DownloadInfo> getList() { return scene.getList(); }
+            @Override public DownloadManager getDownloadManager() { return scene.getDownloadManager(); }
+            @Override public int positionInList(int position) { return scene.positionInList(position); }
+            @Override public boolean isContinuousLabelBrowse() { return scene.isContinuousLabelBrowse(); }
+            @Override public boolean isLabelHeaderPosition(int position) { return scene.isLabelHeaderPosition(position); }
+            @Override public void quickOrganizeDownloads(Context ctx, List<DownloadInfo> infos) {
+                throw new AssertionError("Unexpected quick organize");
+            }
+            @Override public FabLayout getFabLayout() { return null; }
+            @Override public void onClickPrimaryFab(FabLayout view, FloatingActionButton fab) {}
+            @Override public void launchGalleryActivity(Intent intent) {
+                throw new AssertionError("Unexpected gallery launch");
+            }
+            @Override public Resources getResources() { return context.getResources(); }
+            @Override public String getString(int id) { return context.getString(id); }
+            @Override public String getString(int id, Object... args) { return context.getString(id, args); }
+        });
     }
 
     @Test

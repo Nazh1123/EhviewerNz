@@ -22,6 +22,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.hippo.ehviewer.dao.DownloadInfo;
+import com.hippo.ehviewer.download.DownloadManager;
 
 import org.junit.Test;
 
@@ -64,5 +65,16 @@ public class ImportedGalleryProgressTest {
         assertTrue(ImportedGalleryProgress.isImportedGallery(folder));
         assertTrue(ImportedGalleryProgress.isImportedGallery(archive));
         assertFalse(ImportedGalleryProgress.isImportedGallery(regular));
+    }
+
+    @Test
+    public void originalAlbumKeepsUpstreamProgressAndSkipsOnlineGalleryUpdates() {
+        DownloadInfo album = new DownloadInfo();
+        album.archiveUri = "local-album:content://documents/tree/pictures";
+        album.token = "local";
+        album.state = DownloadInfo.STATE_FINISH;
+
+        assertFalse(ImportedGalleryProgress.isImportedGallery(album));
+        assertTrue(DownloadManager.isImportedGallery(album));
     }
 }
