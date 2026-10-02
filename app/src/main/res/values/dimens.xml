@@ -131,6 +131,7 @@
     <dimen name="gallery_page_text">56sp</dimen>
     <dimen name="gallery_widget_margin_h">12dp</dimen>
     <dimen name="gallery_widget_margin_v">12dp</dimen>
+    <dimen name="gallery_notice_margin_top">28dp</dimen>
 
     <dimen name="gallery_guide_divider_width">3dp</dimen>
 

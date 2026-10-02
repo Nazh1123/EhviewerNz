@@ -3,7 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -289,6 +288,12 @@
             android:name=".download.ArchiverDownloadService"
             android:foregroundServiceType="dataSync"
             android:label="@string/archiver_download_service_label" />
+        <service
+            android:name=".translation.TranslationService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="dataSync"
+            android:label="@string/translation_service_label" />
 
         <provider
             android:name="com.hippo.content.FileProvider"

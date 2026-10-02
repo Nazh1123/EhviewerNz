@@ -186,7 +186,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
                     return
                 }
                 activeTasks.remove(info.gid)
-                if (call.isCanceled) {
+                if (call.isCanceled()) {
                     notifyCancel(info.gid, taskId)
                     ArchiverDownloadService.stop(appContext)
                     return
@@ -202,7 +202,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
                     response.close()
                     return
                 }
-                val code = response.code()
+                val code = response.code
                 if (code == 416) {
                     response.close()
                     handleRangeNotSatisfiable(task, zipFile, info, taskId)
@@ -222,7 +222,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
                     ArchiverDownloadService.stop(appContext)
                     return
                 }
-                val body = response.body()
+                val body = response.body
                 if (body == null) {
                     activeTasks.remove(info.gid)
                     deleteZipFile(zipFile)
@@ -253,7 +253,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
                                 val buffer = ByteArray(BUFFER_SIZE)
                                 var downloaded = writeOffset
                                 while (true) {
-                                    if (task.paused || call.isCanceled) {
+                                    if (task.paused || call.isCanceled()) {
                                         if (task.paused || task.call !== call) {
                                             throw PauseSignal()
                                         }
@@ -302,7 +302,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
                         activeTasks.remove(info.gid)
                         deleteZipFile(zipFile)
                         clearTaskSettings(info.gid, taskId)
-                        if (call.isCanceled) {
+                        if (call.isCanceled()) {
                             notifyCancel(info.gid, taskId)
                         } else {
                             notifyFailure(info.gid, taskId, e)

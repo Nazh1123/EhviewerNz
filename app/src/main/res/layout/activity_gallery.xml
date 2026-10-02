@@ -79,6 +79,19 @@
         android:visibility="invisible">
 
         <ImageButton
+            android:id="@+id/quick_translation"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/translation_title"
+            android:padding="12dp"
+            android:src="@drawable/v_translate_x24" />
+
+        <ImageButton
             android:id="@+id/quick_screen_orientation"
             android:layout_width="0dp"
             android:layout_height="48dp"
@@ -318,12 +331,14 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <include layout="@layout/reader_translation_progress" />
+
     <FrameLayout
         android:id="@+id/save_notice"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:layout_gravity="top|end"
-        android:layout_marginTop="28dp"
+        android:layout_marginTop="@dimen/gallery_notice_margin_top"
         android:layout_marginRight="16dp"
         android:accessibilityLiveRegion="polite"
         android:background="@drawable/gallery_save_notice_background"

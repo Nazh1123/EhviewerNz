@@ -1,0 +1,7 @@
+Google Material Icons
+https://github.com/google/material-design-icons
+License: Apache License 2.0 (see material-icons-LICENSE.txt).
+
+The translate icon is converted from the upstream SVG paths to a themed
+Android VectorDrawable resource (v_translate_x24.xml). Path syntax was
+adjusted for VectorDrawable.

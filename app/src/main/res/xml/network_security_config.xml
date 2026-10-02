@@ -16,14 +16,11 @@
   -->
 
 <network-security-config>
-    <base-config>
+    <!-- Self-hosted LLM APIs may use HTTP on user-configured LAN IPs or hostnames. -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system"/>
             <certificates src="user"/>
         </trust-anchors>
     </base-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">ehtracker.org</domain>
-    </domain-config>
-<!--    <base-config cleartextTrafficPermitted="true"/>-->
 </network-security-config>

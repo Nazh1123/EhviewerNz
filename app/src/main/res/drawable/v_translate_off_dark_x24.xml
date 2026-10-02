@@ -1,0 +1,14 @@
+<!-- Google Material Icons: translate, Apache-2.0. Adapted with a deletion slash. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="?attr/colorOnSecondary" android:strokeWidth="1.8"
+        android:pathData="M2,2 L22,22" />
+
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="?attr/widgetColorThemeAccent" android:strokeWidth="1"
+        android:pathData="M12.56 13.44l-2.32-2.16c1.2-1.6 2.08-3.36 2.56-4.72H14.96V5.36h-5.28L9.36 3.92H8.16L8.48 5.36H3.44v1.28h8C10.96 7.92 10.32 9.04 9.2 10.28 8.456 9.456 7.92 8.72 7.6 7.52h-1.52c.72 1.92 1.12 2.64 2.24 3.84C6.88 12.96 5.52 14 4.08 14.8L4.8 16.16C6.96 14.8 7.76 14.08 9.36 12.32l2.64 2.48zM16.8 9.2h-1.6L11.6 18.8h1.6l.896-2.4h3.8L18.8 18.8h1.6l-3.6-9.6zM14.704 14.8 16 11.336 17.296 14.8h-2.592z"/>
+    <path android:fillColor="?attr/colorOnSecondary"
+        android:pathData="M12.56 13.44l-2.32-2.16c1.2-1.6 2.08-3.36 2.56-4.72H14.96V5.36h-5.28L9.36 3.92H8.16L8.48 5.36H3.44v1.28h8C10.96 7.92 10.32 9.04 9.2 10.28 8.456 9.456 7.92 8.72 7.6 7.52h-1.52c.72 1.92 1.12 2.64 2.24 3.84C6.88 12.96 5.52 14 4.08 14.8L4.8 16.16C6.96 14.8 7.76 14.08 9.36 12.32l2.64 2.48zM16.8 9.2h-1.6L11.6 18.8h1.6l.896-2.4h3.8L18.8 18.8h1.6l-3.6-9.6zM14.704 14.8 16 11.336 17.296 14.8h-2.592z"/>
+</vector>

@@ -9,7 +9,7 @@ if (file('google-services.json').exists()) {
 }
 
 
-def baseVersionName = "2.0.2.4.2"
+def baseVersionName = "2.0.2.4.2-offline.2"
 
 
 def releaseKeystoreFile = rootProject.file("ehviewernz.jks")
@@ -30,36 +30,31 @@ if (hasSigningProperties) {
     }
 }
 def hasReleaseSigning = hasReleaseKeystore && hasSigningProperties
-def batchDebugAppName = System.getenv("EHVIEWER_BATCH_DEBUG_APP_NAME") == "1"
-def batchVersionSuffix = System.getenv("EHVIEWER_BATCH_VERSION_SUFFIX")?.trim()
 
 android {
     namespace 'com.hippo.ehviewer'
     testNamespace 'com.hippo.ehviewer.debug'
     compileSdk 35
-//    buildToolsVersion "30.0.3"
-//    ndkVersion '26.1.10909125'
+    ndkVersion '28.2.13676358'
 
     flavorDimensions "distribute"
     productFlavors {
         appRelease {
             dimension "distribute"
         }
-//        googlePlay {
-//            dimension "distribute"
-//        }
     }
 
     defaultConfig {
-        applicationId "com.nz.ehviewernz"
-        minSdkVersion 23
+        applicationId "com.nz.ehviewernz.translate"
+        minSdkVersion 26
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 30
         versionCode 111
-        versionName batchVersionSuffix ? "${baseVersionName}.${batchVersionSuffix}" : baseVersionName
-        manifestPlaceholders = [appLabel: "@string/app_name"]
+        versionName baseVersionName
+        manifestPlaceholders = [appLabel: "EhViewerNz Translate"]
         vectorDrawables.useSupportLibrary = true
-        resourceConfigurations += ['zh', 'zh-rCN', 'zh-rHK', 'zh-rTW', 'es', 'ja', 'ko', 'fr', 'de', 'th']
+        resourceConfigurations += ['en', 'zh', 'zh-rCN', 'zh-rHK', 'zh-rTW', 'es', 'ja', 'ko', 'fr', 'de', 'th']
         testOptions.unitTests.includeAndroidResources = true
         // Robolectric needs access to JDK internals when running on Java 21.
         testOptions.unitTests.all {
@@ -76,11 +71,10 @@ android {
         multiDexEnabled true
         ndk {
             moduleName "native-lib"
-            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+            abiFilters "arm64-v8a"
         }
         externalNativeBuild {
             cmake {
-//                path 'src/main/cpp/CMakeLists.txt'
                 cppFlags ''
             }
         }
@@ -107,31 +101,23 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"com.nz.ehviewernz.fileprovider"'
+            buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"com.nz.ehviewernz.translate.fileprovider"'
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.getByName("release")
             }
         }
         debug {
             applicationIdSuffix ".debug"
-            buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"com.nz.ehviewernz.debug.fileprovider"'
-            if (batchDebugAppName) {
-                manifestPlaceholders = [appLabel: "EhViewerNz-debug"]
-            }
+            buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"com.nz.ehviewernz.translate.debug.fileprovider"'
+            manifestPlaceholders = [appLabel: "EhViewerNz Translate Debug"]
         }
     }
 
     externalNativeBuild {
         cmake {
-//            version '3.30.5'
             path file('src/main/cpp/CMakeLists.txt')
         }
     }
-//    sourceSets {
-//        main {
-//            java.srcDirs += 'src/main/java-gen'
-//        }
-//    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21
@@ -146,15 +132,20 @@ android {
         buildConfig = true
     }
 
+    // ggml enumerates CPU variants beside the JNI library before selecting one.
+    // Extract them on installation so runtime selection works on every supported OS.
+    packagingOptions {
+        jniLibs { useLegacyPackaging = true }
+    }
+
 }
 
-//tasks.withType(JavaCompile) {
-//    task -> task.dependsOn copyNotice
-//}
 
 dependencies {
-//    测试工具
-//    debugCompileOnly 'com.gu.android:toolargetool:0.3.0'
+    implementation project(':translation-engine')
+    implementation 'com.google.mlkit:translate:17.0.3'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
 
     implementation 'com.google.android.material:material:1.14.0'
 
@@ -217,8 +208,8 @@ dependencies {
 //    implementation 'com.squareup.okhttp3:okhttp:5.0.0-alpha.11'
 //    implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:5.0.0-alpha.11'
     // 还是旧版稳定好用
-    implementation 'com.squareup.okhttp3:okhttp:3.14.7'
-    implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:3.14.7'
+    implementation 'com.squareup.okhttp3:okhttp:5.1.0'
+    implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:5.1.0'
     implementation 'com.github.xiaojieonly:Android-Request-Inspector-WebView:70403bb'
 
     implementation 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
@@ -233,16 +224,20 @@ dependencies {
 
     //事件通知
     implementation 'org.greenrobot:eventbus:3.3.1'
-    //loading组件
-    implementation 'com.github.ybq:Android-SpinKit:1.4.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     // 引入 Google 的弹性流式布局库
     implementation 'com.google.android.flexbox:flexbox:3.0.0'
 
 
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:5.1.0'
+    testImplementation 'com.squareup.okhttp3:okhttp-tls:5.1.0'
     testImplementation 'org.robolectric:robolectric:4.16'
+    // Robolectric delegates javax.* to the host; GL lifecycle tests need the real interfaces.
+    testRuntimeOnly 'org.khronos:opengl-api:gl1.1-android-2.1_r1'
     testImplementation 'org.jooq:joor:0.9.6'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
 
     // https://mvnrepository.com/artifact/androidx.webkit/webkit
     runtimeOnly group: 'androidx.webkit', name: 'webkit', version: '1.13.0'
@@ -261,5 +256,12 @@ configurations.configureEach {
         force 'com.github.seven332:image:09b43c0c68'
 
         exclude group: 'com.github.seven332', module: 'okhttp'
+    }
+}
+
+// Exercise release-only menu behavior with Robolectric as well as debug builds.
+androidComponents {
+    beforeVariants(selector().withBuildType("release")) { variant ->
+        variant.enableUnitTest = true
     }
 }

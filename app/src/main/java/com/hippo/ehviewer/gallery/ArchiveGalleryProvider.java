@@ -66,6 +66,14 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
   }
 
   @Override
+  public GalleryProvider2 createTranslationProvider(Context context) {
+    return file != null ? new ArchiveGalleryProvider(context.getApplicationContext(), file.getUri()) : null;
+  }
+
+  @Override
+  public String getTranslationIdentity() { return file != null ? "archive:" + file.getUri() : null; }
+
+  @Override
   public void start() {
     super.start();
 

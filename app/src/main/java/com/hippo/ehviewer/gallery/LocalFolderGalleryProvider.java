@@ -70,6 +70,16 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
     }
 
     @Override
+    public GalleryProvider2 createTranslationProvider(Context context) {
+        return source != null ? new LocalFolderGalleryProvider(context, source.encode()) : null;
+    }
+
+    @Override
+    public String getTranslationIdentity() {
+        return source != null ? source.encode() : null;
+    }
+
+    @Override
     public void start() {
         super.start();
         backgroundThread = new PriorityThread(this,

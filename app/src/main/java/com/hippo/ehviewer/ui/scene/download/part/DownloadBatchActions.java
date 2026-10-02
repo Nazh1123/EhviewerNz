@@ -102,7 +102,11 @@ public class DownloadBatchActions {
 
     @NonNull
     private final Host mHost;
-    private static final int FAB_QUICK_ORGANIZE = 7;
+    private static final int FAB_DELETE_TRANSLATIONS = 4;
+    private static final int FAB_MOVE = 5;
+    private static final int FAB_RANDOM = 6;
+    private static final int FAB_DRAG = 7;
+    private static final int FAB_QUICK_ORGANIZE = 8;
 
     public DownloadBatchActions(@NonNull Host host) {
         mHost = host;
@@ -136,8 +140,8 @@ public class DownloadBatchActions {
             LongList gidList = null;
             List<DownloadInfo> downloadInfoList = null;
             boolean collectGid = position == 1 || position == 2 || position == 3; // Start, Stop, Delete
-            boolean collectDownloadInfo = position == 3 || position == 4
-                    || position == FAB_QUICK_ORGANIZE; // Delete, Move, or Quick organize
+            boolean collectDownloadInfo = position == 3 || position == FAB_MOVE
+                    || position == FAB_QUICK_ORGANIZE || position == FAB_DELETE_TRANSLATIONS;
             if (collectGid) {
                 gidList = new LongList();
             }
@@ -209,7 +213,7 @@ public class DownloadBatchActions {
                             .show();
                     break;
                 }
-                case 4: {// Move
+                case FAB_MOVE: {// Move
                     if (downloadInfoList.isEmpty()) {
                         break;
                     }
@@ -229,16 +233,32 @@ public class DownloadBatchActions {
                             .show();
                     break;
                 }
-                case 5:
+                case FAB_RANDOM:
                     if (mHost.getList() == null || mHost.getList().isEmpty()) {
                         return;
                     }
                     mHost.onClickPrimaryFab(mHost.getFabLayout(), null);
                     viewRandom();
                     break;
-                case 6:
+                case FAB_DRAG:
                     setDragEnable(fab);
                     break;
+                case FAB_DELETE_TRANSLATIONS: {
+                    if (downloadInfoList.isEmpty()) {
+                        break;
+                    }
+                    long[] galleryIds = downloadInfoList.stream().mapToLong(info -> info.gid).toArray();
+                    new AlertDialog.Builder(context)
+                            .setTitle(R.string.translation_delete_results)
+                            .setMessage(mHost.getString(R.string.translation_delete_results_confirm, galleryIds.length))
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                                recyclerView.outOfCustomChoiceMode();
+                                com.hippo.ehviewer.translation.TranslationStorage.deleteGalleries(context, galleryIds);
+                            })
+                            .show();
+                    break;
+                }
                 case FAB_QUICK_ORGANIZE:
                     if (downloadInfoList.isEmpty()) {
                         break;

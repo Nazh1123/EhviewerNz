@@ -156,6 +156,8 @@ public final class LocalFolderGalleryScanner {
                 String relativePath = directory.relativePath.isEmpty()
                         ? name : directory.relativePath + '/' + name;
                 if (child.directory) {
+                    // Persistent translated pages must not become new source pages on rescan.
+                    if ("_translated".equalsIgnoreCase(name)) continue;
                     if (directory.depth >= MAX_DEPTH) {
                         throw new ScanException(Reason.TOO_LARGE);
                     }

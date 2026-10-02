@@ -109,6 +109,19 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     }
 
     @Override
+    public GalleryProvider2 createTranslationProvider(Context context) {
+        return new EhGalleryProvider(context.getApplicationContext(), mGalleryInfo);
+    }
+
+    @Override
+    public String getTranslationIdentity() { return "eh:" + mGalleryInfo.gid; }
+
+    @Override
+    public void prepareTranslationSource(int index) {
+        if (mSpiderQueen != null) mSpiderQueen.prepareTranslationSource(index);
+    }
+
+    @Override
     public int size() {
         if (mSpiderQueen != null) {
             return mSpiderQueen.size();
