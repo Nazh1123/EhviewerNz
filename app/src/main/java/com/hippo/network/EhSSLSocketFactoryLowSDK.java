@@ -38,14 +38,12 @@ public class EhSSLSocketFactoryLowSDK extends SSLSocketFactory {
     @Override
     public Socket createSocket(Socket s, String host, int port, boolean autoClose) throws IOException {
         if (!Settings.getDF()) {
-            return mSSLSocketFactory.createSocket(s, host, port, autoClose);
+            return ((SSLSocketFactory) getDefault()).createSocket(s, host, port, autoClose);
         }
         InetAddress address = s.getInetAddress();
         Log.d("EhSSLSocketFactory", "Host: " + host + " Address: " + address.getHostAddress());
-        // Layer TLS over the existing connection so pooling, cancellation and proxy
-        // tunnels continue to use the socket managed by OkHttp.
-        return enableTLSOnSocket(mSSLSocketFactory.createSocket(
-                s, address.getHostAddress(), port, autoClose));
+        if (autoClose) s.close();
+        return enableTLSOnSocket(mSSLSocketFactory.createSocket(address, port));
     }
 
     @Override

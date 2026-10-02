@@ -112,8 +112,8 @@ class TranslationModels internal constructor(private val context: Context, manif
                 val requestCall = client.newCall(Request.Builder().url(entry.getString("url")).build())
                 call = requestCall
                 requestCall.withModelResponse { response ->
-                    check(response.isSuccessful) { "Model download HTTP ${response.code}" }
-                    response.body.byteStream().use { input ->
+                    check(response.isSuccessful) { "Model download HTTP ${response.code()}" }
+                    requireNotNull(response.body()).byteStream().use { input ->
                         tmp.outputStream().use { out ->
                             val buffer = ByteArray(65536)
                             var total = 0L

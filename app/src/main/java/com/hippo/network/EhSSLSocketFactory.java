@@ -22,30 +22,20 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
 public class EhSSLSocketFactory extends SSLSocketFactory {
-    private final SSLSocketFactory mSSLSocketFactory;
-
-    public EhSSLSocketFactory() {
-        this((SSLSocketFactory) getDefault());
-    }
-
-    EhSSLSocketFactory(SSLSocketFactory sslSocketFactory) {
-        mSSLSocketFactory = sslSocketFactory;
-    }
-
     @Override
     public String[] getDefaultCipherSuites() {
-        return mSSLSocketFactory.getDefaultCipherSuites();
+        return ((SSLSocketFactory) getDefault()).getDefaultCipherSuites();
     }
 
     @Override
     public String[] getSupportedCipherSuites() {
-        return mSSLSocketFactory.getSupportedCipherSuites();
+        return ((SSLSocketFactory) getDefault()).getSupportedCipherSuites();
     }
 
     @Override
     public Socket createSocket(Socket s, String host, int port, boolean autoClose) throws IOException {
         if (!Settings.getDF()) {
-            return mSSLSocketFactory.createSocket(s, host, port, autoClose);
+            return ((SSLSocketFactory) getDefault()).createSocket(s, host, port, autoClose);
         }
         InetAddress address = s.getInetAddress();
         if (address != null) {
@@ -54,30 +44,28 @@ public class EhSSLSocketFactory extends SSLSocketFactory {
                 Log.d("EhSSLSocketFactory", "Host: " + host + " Address: " + hostAddress);
             }
         }
-        // Keep OkHttp's connected socket (including a proxy tunnel and its timeouts).
-        // Closing it and opening another TCP connection also makes OkHttp 5 reject
-        // the resulting pooled connection as unhealthy on every subsequent request.
-        return mSSLSocketFactory.createSocket(s, address.getHostAddress(), port, autoClose);
+        if (autoClose) s.close();
+        return getDefault().createSocket(address, port);
     }
 
     @Override
     public Socket createSocket(String host, int port) throws IOException {
-        return mSSLSocketFactory.createSocket(host, port);
+        return getDefault().createSocket(host, port);
     }
 
     @Override
     public Socket createSocket(String host, int port, InetAddress localHost, int localPort) throws IOException {
-        return mSSLSocketFactory.createSocket(host, port, localHost, localPort);
+        return getDefault().createSocket(host, port, localHost, localPort);
     }
 
     @Override
     public Socket createSocket(InetAddress host, int port) throws IOException {
-        return mSSLSocketFactory.createSocket(host, port);
+        return getDefault().createSocket(host, port);
     }
 
     @Override
     public Socket createSocket(InetAddress address, int port, InetAddress localAddress, int localPort) throws IOException {
-        return mSSLSocketFactory.createSocket(address, port, localAddress, localPort);
+        return getDefault().createSocket(address, port, localAddress, localPort);
     }
 
     private class NoSSLv3SSLSocket extends DelegateSSLSocket {

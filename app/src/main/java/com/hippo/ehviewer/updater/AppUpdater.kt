@@ -39,10 +39,6 @@ class AppUpdater private constructor() {
 
         @JvmStatic
         fun update(activity: Activity, manualChecking: Boolean) {
-            if (BuildConfig.APPLICATION_ID.startsWith("com.nz.ehviewernz.translate")) {
-                if (manualChecking) Toast.makeText(activity, R.string.translation_update_manual, Toast.LENGTH_LONG).show()
-                return
-            }
             if (!manualChecking && !Settings.getIsUpdateTime()) {
                 return
             }
@@ -60,9 +56,9 @@ class AppUpdater private constructor() {
                         .build()
                     val release = client.newCall(request).execute().use { response ->
                         if (!response.isSuccessful) {
-                            throw IllegalStateException("GitHub returned HTTP ${response.code}")
+                            throw IllegalStateException("GitHub returned HTTP ${response.code()}")
                         }
-                        val body = response.body?.string()
+                        val body = response.body()?.string()
                             ?: throw IllegalStateException("GitHub returned an empty response")
                         JSON.parseObject(body)
                     }

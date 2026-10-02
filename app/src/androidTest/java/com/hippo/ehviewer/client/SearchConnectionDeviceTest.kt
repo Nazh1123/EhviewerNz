@@ -58,14 +58,14 @@ class SearchConnectionDeviceTest {
                     for (url in urls) {
                         try {
                             client.newCall(Request.Builder().url(url).build()).execute().use { response ->
-                                val body = response.body.string()
+                                val body = requireNotNull(response.body()).string()
                                 if (response.isSuccessful && body.contains("class=\"itg")) successful++
                             }
                         } catch (_: Exception) { /* Report only counts; URLs contain saved searches. */ }
                     }
                 }
             } finally {
-                client.connectionPool.evictAll()
+                client.connectionPool().evictAll()
             }
             Measurement(fixed, urls.size * 2, successful, handshakes.get(), SystemClock.elapsedRealtime() - start)
                 .also { Log.i("SearchConnectionBenchmark", it.toString()) }

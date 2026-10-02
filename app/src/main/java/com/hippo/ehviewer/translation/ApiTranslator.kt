@@ -8,8 +8,8 @@ import li.joye.yakuyomi.engine.LlmProviders
 import li.joye.yakuyomi.engine.Usage
 import li.joye.yakuyomi.engine.TranslationOutputLimitException
 import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MediaType
+import okhttp3.RequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -44,7 +44,7 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
         if (includeTemperature) LlmProviders.requestParams("custom", config.model, config.thinking, config.temperature)
             .forEach { (key, value) -> json.put(key, value) }
         val request = Request.Builder().url(options.apiUrl.trim())
-            .post(json.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .post(RequestBody.create(MediaType.get("application/json; charset=utf-8"), json.toString()))
             .apply { if (options.apiKey.isNotBlank()) header("Authorization", "Bearer ${options.apiKey.trim()}") }
             .build()
         return try { suspendCancellableCoroutine { continuation ->
@@ -59,12 +59,12 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
                     val result = runCatching {
                         response.use {
                             // Do not expose provider response bodies, prompts, URLs or credentials in logs.
-                            val body = it.body.string()
+                            val body = requireNotNull(it.body()).string()
                             if (!it.isSuccessful) {
-                                if (includeTemperature && it.code == 400 && body.contains("temperature", true) &&
+                                if (includeTemperature && it.code() == 400 && body.contains("temperature", true) &&
                                     listOf("unsupported", "not supported", "not allowed", "invalid").any { word -> body.contains(word, true) })
                                     throw UnsupportedTemperature()
-                                throw IOException("API HTTP ${it.code}")
+                                throw IOException("API HTTP ${it.code()}")
                             }
                             val responseJson = JSONObject(body)
                             val choice = responseJson.getJSONArray("choices").getJSONObject(0)
@@ -94,9 +94,9 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
     }
 
     override fun close() {
-        client.dispatcher.cancelAll()
-        client.connectionPool.evictAll()
-        client.dispatcher.executorService.shutdown()
+        client.dispatcher().cancelAll()
+        client.connectionPool().evictAll()
+        client.dispatcher().executorService().shutdown()
     }
 
     private class UnsupportedTemperature : IOException("API does not accept temperature")
