@@ -759,6 +759,12 @@ public final class MainActivity extends StageActivity
         super.onResume();
 
         setNavCheckedItem(mNavCheckedItem);
+        if (mNavView != null) {
+            MenuItem searchLanguageItem = mNavView.getMenu().findItem(R.id.nav_search_language);
+            if (searchLanguageItem != null) {
+                searchLanguageItem.setVisible(Settings.isSearchLanguageEnabled());
+            }
+        }
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
 
@@ -1016,6 +1022,9 @@ public final class MainActivity extends StageActivity
     }
 
     private void toggleSearchLanguage() {
+        if (!Settings.isSearchLanguageEnabled()) {
+            return;
+        }
         String language = Settings.getSearchLanguage();
         SceneFragment topScene = getTopScene();
         if (topScene instanceof GalleryListScene) {

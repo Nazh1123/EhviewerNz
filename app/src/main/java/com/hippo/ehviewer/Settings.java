@@ -911,6 +911,11 @@ public class Settings {
     }
 
     public static final String KEY_SEARCH_LANGUAGE = "search_language";
+    public static final String SEARCH_LANGUAGE_DISABLED = "disabled";
+
+    public static boolean isSearchLanguageEnabled() {
+        return !SEARCH_LANGUAGE_DISABLED.equals(getSearchLanguage());
+    }
 
     @NonNull
     public static String getSearchLanguage() {

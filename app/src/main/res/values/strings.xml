@@ -849,6 +849,7 @@
     <string name="settings_advanced_read_cache_size">Read cache size</string>
     <string name="settings_advanced_app_language_title">App language</string>
     <string name="settings_search_language">Search Language Tag</string>
+    <string name="settings_search_language_disabled">Off</string>
     <string name="settings_fork_features">Fork Extra Features</string>
     <string name="settings_fork_category_gallery">Gallery and Search</string>
     <string name="settings_fork_category_reading">Reading and Saving</string>

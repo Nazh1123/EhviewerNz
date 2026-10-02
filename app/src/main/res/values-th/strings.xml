@@ -662,6 +662,7 @@
     <string name="settings_advanced_read_cache_size">ขนาดในการเก็บไฟล์ชั่วคราวเพื่ออ่าน</string>
     <string name="settings_advanced_app_language_title">ภาษาของแอป</string>
     <string name="settings_search_language">แท็กภาษาสำหรับการค้นหา</string>
+    <string name="settings_search_language_disabled">ปิด</string>
     <string name="settings_advanced_proxy">พร็อกซี่</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>

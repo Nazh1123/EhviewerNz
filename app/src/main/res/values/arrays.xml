@@ -375,6 +375,7 @@
     </string-array>
 
     <string-array name="search_language_entries">
+        <item>@string/settings_search_language_disabled</item>
         <item>@string/language_japanese</item>
         <item>@string/language_english</item>
         <item>@string/language_chinese</item>
@@ -393,6 +394,7 @@
     </string-array>
 
     <string-array name="search_language_entry_values" translatable="false">
+        <item>disabled</item>
         <item>japanese</item>
         <item>english</item>
         <item>chinese</item>

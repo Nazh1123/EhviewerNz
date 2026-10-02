@@ -461,6 +461,7 @@
     <string name="settings_eh_excluded_languages">Ausgeschlossene Sprachen</string>
     <string name="settings_advanced_app_language_title">Sprache der App (Language)</string>
     <string name="settings_search_language">Suchsprachen-Tag</string>
+    <string name="settings_search_language_disabled">Aus</string>
     <string name="torrent_count">Torrent (%d)</string>
     <string name="settings_eh_excluded_languages_summary">Galerie von den ausgeschlossenen Sprachen werden in der Galerieliste und der Suchen versteckt</string>
     <string name="settings_eh_excluded_tag_namespaces">Ausgeschlossene Namensraum-Etiketten</string>
