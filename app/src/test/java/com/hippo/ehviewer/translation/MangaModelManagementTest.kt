@@ -68,7 +68,8 @@ class MangaModelManagementTest {
 
     @Test fun cancellingDownloadInterruptsAStalledBodyAndRemovesThePartialFile() = runBlocking {
         MockWebServer().use { server ->
-            server.enqueue(MockResponse().setBody(payloads.values.first()).setBodyDelay(30, TimeUnit.SECONDS))
+            // Exceeds the 3 s cancellation deadline but lets MockWebServer 3 shut down within 5 s.
+            server.enqueue(MockResponse().setBody(payloads.values.first()).setBodyDelay(4, TimeUnit.SECONDS))
             val store = models(server.url("/model").toString())
             val bodyStarted = CompletableDeferred<Unit>()
             val job = launch(Dispatchers.IO) { store.download { _, _, _ -> bodyStarted.complete(Unit) } }

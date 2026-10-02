@@ -47,8 +47,8 @@ class NativeModelDownloader(private val store: NativeModelStore,
                 }
                 try {
                     call.awaitModelResponse().use { response ->
-                        check(response.isSuccessful) { "Model download HTTP ${response.code}" }
-                        response.body.byteStream().use { input ->
+                        check(response.isSuccessful) { "Model download HTTP ${response.code()}" }
+                        requireNotNull(response.body()).byteStream().use { input ->
                             temp.outputStream().use { output ->
                                 val buffer = ByteArray(65536)
                                 var total = 0L
@@ -86,10 +86,10 @@ class NativeModelDownloader(private val store: NativeModelStore,
         } finally { temp.delete() }
     }
 
-    fun cancel() = client.dispatcher.cancelAll()
+    fun cancel() = client.dispatcher().cancelAll()
     override fun close() {
         cancel()
-        client.connectionPool.evictAll()
-        client.dispatcher.executorService.shutdown()
+        client.connectionPool().evictAll()
+        client.dispatcher().executorService().shutdown()
     }
 }

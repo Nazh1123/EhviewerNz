@@ -32,9 +32,7 @@ import android.util.Log
 import androidx.appcompat.app.AlertDialog
 import okhttp3.FormBody
 import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
@@ -194,7 +192,7 @@ class GetProfileScene : SolidScene() {
                 val response = okHttpClient!!.newCall(okRequest).execute()
                 
                 // 处理重定向响应（3xx状态码）
-                val statusCode = response.code
+                val statusCode = response.code()
                 if (statusCode in 300..399) {
                     val redirectUrl = response.header("Location")
                     if (redirectUrl != null) {
@@ -204,7 +202,7 @@ class GetProfileScene : SolidScene() {
                     }
                 }
                 
-                if (response.body == null) {
+                if (response.body() == null) {
                     response.close()
                     throw IOException("请求结果为空")
                 }
@@ -228,7 +226,7 @@ class GetProfileScene : SolidScene() {
 
         override fun onPageFinished(view: WebView, url: String) {
             ehContext ?: return
-            url.toHttpUrlOrNull() ?: return
+            HttpUrl.parse(url) ?: return
             val manager = CookieManager.getInstance()
             manager.getCookie(EhUrl.HOST_E)
             readPageContent()
@@ -301,28 +299,28 @@ class GetProfileScene : SolidScene() {
                             // JSON 数据
                             // 注意：实际请求体内容需要通过库的 API 获取
                             RequestBody.create(
-                                "application/json; charset=utf-8".toMediaTypeOrNull(),
+                                MediaType.parse("application/json; charset=utf-8"),
                                 "{}"
                             )
                         }
                         contentType.contains("application/xml") || contentType.contains("text/xml") -> {
                             // XML 数据
                             RequestBody.create(
-                                "application/xml; charset=utf-8".toMediaTypeOrNull(),
+                                MediaType.parse("application/xml; charset=utf-8"),
                                 ""
                             )
                         }
                         contentType.contains("text/plain") -> {
                             // 纯文本
                             RequestBody.create(
-                                "text/plain; charset=utf-8".toMediaTypeOrNull(),
+                                MediaType.parse("text/plain; charset=utf-8"),
                                 ""
                             )
                         }
                         contentType.isNotEmpty() && method != "GET" -> {
                             // 其他类型的请求体
                             RequestBody.create(
-                                contentType.toMediaTypeOrNull(),
+                                MediaType.parse(contentType),
                                 ByteArray(0)
                             )
                         }
@@ -343,7 +341,7 @@ class GetProfileScene : SolidScene() {
                 val bodyString = getBodyMethod.invoke(request) as? String
                 if (!bodyString.isNullOrEmpty()) {
                     val contentType = request.headers["Content-Type"] ?: "application/octet-stream"
-                    RequestBody.create(contentType.toMediaTypeOrNull(), bodyString)
+                    RequestBody.create(MediaType.parse(contentType), bodyString)
                 } else {
                     null
                 }
@@ -432,19 +430,19 @@ class GetProfileScene : SolidScene() {
                 .toTypedArray()[0]
 
             // Get the response code and message
-            val statusCode = okHttpResponse.code
-            val reasonPhraseRaw = okHttpResponse.message
+            val statusCode = okHttpResponse.code()
+            val reasonPhraseRaw = okHttpResponse.message()
             val reasonPhrase =
                 if (reasonPhraseRaw.isNullOrEmpty()) defaultReasonPhrase(statusCode) else reasonPhraseRaw
 
             // Get headers as a Map
             val responseHeaders: MutableMap<String, String?> = HashMap()
-            for (headerName in okHttpResponse.headers.names()) {
+            for (headerName in okHttpResponse.headers().names()) {
                 responseHeaders[headerName] = okHttpResponse.header(headerName)
             }
 
             // Create the WebResourceResponse
-            if (okHttpResponse.body == null) {
+            if (okHttpResponse.body() == null) {
                 return WebResourceResponse(
                     mimeType,
                     encoding,
@@ -460,7 +458,7 @@ class GetProfileScene : SolidScene() {
                 statusCode,
                 reasonPhrase,
                 responseHeaders,
-                okHttpResponse.body!!.byteStream()
+                okHttpResponse.body()!!.byteStream()
             )
         }
 
@@ -532,16 +530,16 @@ class GetProfileScene : SolidScene() {
 
         override fun onPageFinished(view: WebView, url: String) {
 //            val context: Context =  ehContext ?: return
-//            val httpUrl = url.toHttpUrlOrNull() ?: return
+//            val httpUrl = HttpUrl.parse(url) ?: return
 
 //            val cookieString = CookieManager.getInstance().getCookie(EhUrl.HOST_E)
 //            val cookies = parseCookies(httpUrl, cookieString)
             var getId = false
             var getHash = false
 //            for (cookie in cookies) {
-//                if (EhCookieStore.KEY_IPD_MEMBER_ID == cookie.name) {
+//                if (EhCookieStore.KEY_IPD_MEMBER_ID == cookie.name()) {
 //                    getId = true
-//                } else if (EhCookieStore.KEY_IPD_PASS_HASH == cookie.name) {
+//                } else if (EhCookieStore.KEY_IPD_PASS_HASH == cookie.name()) {
 //                    getHash = true
 //                }
 //                addCookie(context, EhUrl.DOMAIN_EX, cookie)

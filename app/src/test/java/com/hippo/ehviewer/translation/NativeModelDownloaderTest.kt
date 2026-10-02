@@ -151,7 +151,8 @@ class NativeModelDownloaderTest {
 
     @Test fun cancellationInterruptsBodyReadAndRetainsOldModel() = runBlocking {
         MockWebServer().use { server ->
-            server.enqueue(MockResponse().setBody(Buffer().write(payload)).setBodyDelay(30, TimeUnit.SECONDS))
+            // Exceeds the 3 s cancellation deadline but lets MockWebServer 3 shut down within 5 s.
+            server.enqueue(MockResponse().setBody(Buffer().write(payload)).setBodyDelay(4, TimeUnit.SECONDS))
             val client = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build()
             NativeModelDownloader(store, client).use { downloader ->
                 val job = launch(Dispatchers.IO) { downloader.downloadAndImport(model(server), { _, _ -> }) }

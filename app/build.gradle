@@ -9,7 +9,7 @@ if (file('google-services.json').exists()) {
 }
 
 
-def baseVersionName = "2.0.2.4.2-offline.2"
+def baseVersionName = "2.0.2.4.2"
 
 
 def releaseKeystoreFile = rootProject.file("ehviewernz.jks")
@@ -30,11 +30,15 @@ if (hasSigningProperties) {
     }
 }
 def hasReleaseSigning = hasReleaseKeystore && hasSigningProperties
+def batchDebugAppName = System.getenv("EHVIEWER_BATCH_DEBUG_APP_NAME") == "1"
+def batchVersionSuffix = System.getenv("EHVIEWER_BATCH_VERSION_SUFFIX")?.trim()
 
 android {
     namespace 'com.hippo.ehviewer'
     testNamespace 'com.hippo.ehviewer.debug'
     compileSdk 35
+//    buildToolsVersion "30.0.3"
+//    ndkVersion '26.1.10909125'
     ndkVersion '28.2.13676358'
 
     flavorDimensions "distribute"
@@ -42,17 +46,20 @@ android {
         appRelease {
             dimension "distribute"
         }
+//        googlePlay {
+//            dimension "distribute"
+//        }
     }
 
     defaultConfig {
-        applicationId "com.nz.ehviewernz.translate"
+        applicationId "com.nz.ehviewernz"
         minSdkVersion 26
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 30
         versionCode 111
-        versionName baseVersionName
-        manifestPlaceholders = [appLabel: "EhViewerNz Translate"]
+        versionName batchVersionSuffix ? "${baseVersionName}.${batchVersionSuffix}" : baseVersionName
+        manifestPlaceholders = [appLabel: "@string/app_name"]
         vectorDrawables.useSupportLibrary = true
         resourceConfigurations += ['en', 'zh', 'zh-rCN', 'zh-rHK', 'zh-rTW', 'es', 'ja', 'ko', 'fr', 'de', 'th']
         testOptions.unitTests.includeAndroidResources = true
@@ -75,6 +82,7 @@ android {
         }
         externalNativeBuild {
             cmake {
+//                path 'src/main/cpp/CMakeLists.txt'
                 cppFlags ''
             }
         }
@@ -101,23 +109,32 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"com.nz.ehviewernz.translate.fileprovider"'
+            buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"com.nz.ehviewernz.fileprovider"'
             if (hasReleaseSigning) {
                 signingConfig signingConfigs.getByName("release")
             }
         }
         debug {
             applicationIdSuffix ".debug"
-            buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"com.nz.ehviewernz.translate.debug.fileprovider"'
-            manifestPlaceholders = [appLabel: "EhViewerNz Translate Debug"]
+            buildConfigField 'String', 'FILE_PROVIDER_AUTHORITY', '"com.nz.ehviewernz.debug.fileprovider"'
+            if (batchDebugAppName) {
+                manifestPlaceholders = [appLabel: "EhViewerNz-debug"]
+            }
         }
     }
 
     externalNativeBuild {
         cmake {
+//            version '3.30.5'
             path file('src/main/cpp/CMakeLists.txt')
         }
     }
+
+//    sourceSets {
+//        main {
+//            java.srcDirs += 'src/main/java-gen'
+//        }
+//    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21
@@ -141,11 +158,17 @@ android {
 }
 
 
+//tasks.withType(JavaCompile) {
+//    task -> task.dependsOn copyNotice
+//}
+
 dependencies {
     implementation project(':translation-engine')
     implementation 'com.google.mlkit:translate:17.0.3'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+//    测试工具
+//    debugCompileOnly 'com.gu.android:toolargetool:0.3.0'
 
     implementation 'com.google.android.material:material:1.14.0'
 
@@ -208,8 +231,8 @@ dependencies {
 //    implementation 'com.squareup.okhttp3:okhttp:5.0.0-alpha.11'
 //    implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:5.0.0-alpha.11'
     // 还是旧版稳定好用
-    implementation 'com.squareup.okhttp3:okhttp:5.1.0'
-    implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:5.1.0'
+    implementation 'com.squareup.okhttp3:okhttp:3.14.7'
+    implementation 'com.squareup.okhttp3:okhttp-dnsoverhttps:3.14.7'
     implementation 'com.github.xiaojieonly:Android-Request-Inspector-WebView:70403bb'
 
     implementation 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
@@ -224,14 +247,15 @@ dependencies {
 
     //事件通知
     implementation 'org.greenrobot:eventbus:3.3.1'
+    //loading组件
+    implementation 'com.github.ybq:Android-SpinKit:1.4.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     // 引入 Google 的弹性流式布局库
     implementation 'com.google.android.flexbox:flexbox:3.0.0'
 
 
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'com.squareup.okhttp3:mockwebserver:5.1.0'
-    testImplementation 'com.squareup.okhttp3:okhttp-tls:5.1.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:3.14.7'
     testImplementation 'org.robolectric:robolectric:4.16'
     // Robolectric delegates javax.* to the host; GL lifecycle tests need the real interfaces.
     testRuntimeOnly 'org.khronos:opengl-api:gl1.1-android-2.1_r1'

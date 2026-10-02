@@ -6,7 +6,7 @@ import li.joye.yakuyomi.engine.EngineConfig
 import li.joye.yakuyomi.engine.OcrConfig
 import li.joye.yakuyomi.engine.TranslatorConfig
 import li.joye.yakuyomi.engine.InpainterConfig
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.HttpUrl
 
 enum class TranslationBackend { NATIVE_LLM, ML_KIT, LLM_API }
 
@@ -43,8 +43,8 @@ data class TranslationOptions(
         inpaint.toString(), inputImageIdentity).joinToString("\n")
 
     fun validApiUrl(): Boolean {
-        val url = apiUrl.trim().toHttpUrlOrNull() ?: return false
-        return url.username.isEmpty() && url.password.isEmpty() && url.fragment == null
+        val url = HttpUrl.parse(apiUrl.trim()) ?: return false
+        return url.username().isEmpty() && url.password().isEmpty() && url.fragment() == null
     }
 
     fun targetLanguageName() = TranslationLanguages.promptName(target)

@@ -4,14 +4,31 @@ apply plugin: 'org.jetbrains.kotlin.android'
 // Compile the pinned upstream sources with the reader's toolchain. Night reading
 // is intentionally outside this translation-only adapter; upstream stays pristine.
 def engineRoot = rootProject.file('third_party/yakuyomi-engine/engine')
+if (!new File(engineRoot, 'src/main/cpp/CMakeLists.txt').isFile()
+        || !new File(engineRoot, 'src/main/kotlin').isDirectory()) {
+    throw new GradleException('Translation-engine submodule is missing. Run from the repository root: '
+            + 'git submodule update --init --recursive -- third_party/yakuyomi-engine')
+}
 def translationSources = layout.buildDirectory.dir('generated/translationSources')
 def prepareTranslationSources = tasks.register('prepareTranslationSources', Sync) {
+    inputs.property('readerOkHttpVersion', '3.14.7')
+    filteringCharset = 'UTF-8'
     from new File(engineRoot, 'src/main/kotlin')
     // The local LlmTranslator overlay keeps the pinned prompt/parser and adds an
     // injectable cancellable transport shared by the API and JNI backends.
     // Renderer keeps the pinned drawing algorithm and adds a background-independent
     // layout command layer for local inpainting/layout overlap.
     exclude '**/NightReadRenderer.kt', '**/CharSeg.kt', '**/LlmTranslator.kt', '**/Renderer.kt'
+    // Adapt only the pinned networking helpers to the reader's OkHttp 3 API.
+    // Keep the upstream checkout pristine and avoid upgrading the whole app.
+    filesMatching(['**/ModelDownloader.kt', '**/LlmModels.kt']) {
+        filter { line ->
+            line.replace('resp.code', 'resp.code()')
+                    .replace('resp.body.string()', 'requireNotNull(resp.body()).string()')
+                    .replace('val body = resp.body', 'val body = requireNotNull(resp.body())')
+                    .replace(' // okhttp5：body 非空', '')
+        }
+    }
     into translationSources
 }
 android {
@@ -49,7 +66,7 @@ android {
 }
 dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
-    implementation 'com.squareup.okhttp3:okhttp:5.1.0'
+    implementation 'com.squareup.okhttp3:okhttp:3.14.7'
     testImplementation 'junit:junit:4.13.2'
 }
 

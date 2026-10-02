@@ -117,7 +117,7 @@ def verify_compilation(root):
 
 def verify_manifest(path):
     root = ET.parse(path).getroot()
-    require(root.get("package") == "com.nz.ehviewernz.translate", "Unexpected release package")
+    require(root.get("package") == "com.nz.ehviewernz", "Unexpected release package")
     sdk = root.find("uses-sdk")
     require(sdk is not None and sdk.get(ANDROID + "minSdkVersion") == "26", "Expected Android 8.0 minimum")
     app = root.find("application")

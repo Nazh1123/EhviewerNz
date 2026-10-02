@@ -1,0 +1,35 @@
+name: Translation release validation
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-35' 'ndk;28.2.13676358' 'cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Build release and translation regression tests
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleAppReleaseRelease :app:testAppReleaseDebugUnitTest --tests 'com.hippo.ehviewer.translation.*' --tests 'com.hippo.ehviewer.gallery.*' :translation-engine:testDebugUnitTest
+          ./gradlew :app:testAppReleaseReleaseUnitTest --tests 'com.hippo.ehviewer.translation.ReaderTranslationControllerTest' --tests 'com.hippo.ehviewer.translation.TranslationNavigationTest'
+      - name: Verify portable native release
+        run: |
+          python tools/verify_release.py app/build/outputs/apk/appRelease/release/app-appRelease-release-unsigned.apk --native-build translation-engine/.cxx/RelWithDebInfo --manifest app/build/intermediates/merged_manifests/appReleaseRelease/processAppReleaseReleaseManifest/AndroidManifest.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EhViewerNz-arm64-release-unsigned
+          path: app/build/outputs/apk/appRelease/release/*.apk

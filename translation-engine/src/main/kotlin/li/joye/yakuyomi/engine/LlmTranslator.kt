@@ -4,10 +4,10 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -182,18 +182,18 @@ class LlmTranslator(
         LlmProviders.requestParams(cfg.provider, model, cfg.thinking, cfg.temperature)
             .filterKeys { !(dropThinking && it in THINKING_KEYS) }
             .forEach { (k, v) -> json.put(k, toJson(v)) }
-        val body = json.toString().toRequestBody("application/json".toMediaType())
+        val body = RequestBody.create(MediaType.get("application/json"), json.toString())
         val req = Request.Builder()
             .url(cfg.apiBase)
             .addHeader("Authorization", "Bearer $apiKey")
             .post(body)
             .build()
         client.newCall(req).execute().use { resp ->
-            val text = resp.body.string() // okhttp5：body 非空
+            val text = requireNotNull(resp.body()).string()
             // ★帶上 provider 的 error body：這串會經 TranslateResult.error → Pipeline → PageTranslator
             //   落進每章的 .yakuyomi_errors.txt，400 的真正原因（例如 model 退役的「Model Not Exist」、
             //   402 餘額不足、401 key 錯）直接看得到，不再只有一個沒資訊的 "HTTP 400"。截 300 字免灌爆 log。
-            if (!resp.isSuccessful) throw RuntimeException("HTTP ${resp.code} ${text.take(300)}")
+            if (!resp.isSuccessful) throw RuntimeException("HTTP ${resp.code()} ${text.take(300)}")
             val obj = JSONObject(text)
             // 擷取 token 用量（非串流＝整包 usage 都在 body；缺欄/代理不回＝null、由呼叫端當未知）。
             val usage = obj.optJSONObject("usage")?.let { u ->
