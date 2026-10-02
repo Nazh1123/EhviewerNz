@@ -758,6 +758,11 @@
     <string name="settings_advanced_app_language_title">App 界面语言</string>
     <string name="settings_search_language">搜索语言项</string>
     <string name="settings_fork_features">Fork额外功能</string>
+    <string name="settings_fork_category_gallery">画廊与搜索</string>
+    <string name="settings_fork_category_reading">阅读与保存</string>
+    <string name="settings_fork_category_animated_webp">动态 WebP</string>
+    <string name="settings_fork_category_subscriptions">订阅</string>
+    <string name="settings_fork_category_downloads">下载管理</string>
     <string name="settings_fork_delete_empty_galleries">删除空画廊</string>
     <string name="settings_fork_download_label_continuous_browse">下载标签连续浏览</string>
     <string name="settings_fork_download_label_continuous_browse_summary">在下载页面中按标签从上到下连续显示下载画廊</string>

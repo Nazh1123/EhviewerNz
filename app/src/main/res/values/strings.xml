@@ -850,6 +850,11 @@
     <string name="settings_advanced_app_language_title">App language</string>
     <string name="settings_search_language">Search Language Tag</string>
     <string name="settings_fork_features">Fork Extra Features</string>
+    <string name="settings_fork_category_gallery">Gallery and Search</string>
+    <string name="settings_fork_category_reading">Reading and Saving</string>
+    <string name="settings_fork_category_animated_webp">Animated WebP</string>
+    <string name="settings_fork_category_subscriptions">Subscriptions</string>
+    <string name="settings_fork_category_downloads">Download Management</string>
     <string name="settings_fork_delete_empty_galleries">Delete Empty Galleries</string>
     <string name="settings_fork_download_label_continuous_browse">Continuous Download Label Browsing</string>
     <string name="settings_fork_download_label_continuous_browse_summary">Show downloaded galleries continuously from top to bottom by label on the Downloads page</string>
