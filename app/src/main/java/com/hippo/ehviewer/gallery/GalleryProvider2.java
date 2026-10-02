@@ -16,12 +16,20 @@
 
 package com.hippo.ehviewer.gallery;
 
+import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.hippo.lib.glgallery.GalleryProvider;
 import com.hippo.unifile.UniFile;
 
 public abstract class GalleryProvider2 extends GalleryProvider {
+
+    /** A source-only copy, with no reader, Activity, or GL surface attached. */
+    @Nullable
+    public GalleryProvider2 createTranslationProvider(Context context) { return null; }
+
+    @Nullable
+    public String getTranslationIdentity() { return null; }
 
     // With dot
     public static final String[] SUPPORT_IMAGE_EXTENSIONS = {
@@ -37,6 +45,9 @@ public abstract class GalleryProvider2 extends GalleryProvider {
     }
 
     public void putStartPage(int page) {}
+
+    /** Local providers already have source files. Online providers may fetch without decoding. */
+    public void prepareTranslationSource(int index) {}
 
     /**
      * @return without extension

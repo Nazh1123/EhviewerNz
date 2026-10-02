@@ -5,3 +5,8 @@ An Unofficial E-Hentai Application for Android.
 
 香风智乃是最可爱的女孩子。
 chino kafuu is the cutest girl.
+
+Local AI translation uses llama.cpp (MIT), revision
+48de2a1bcb5b8fdbc8dc41b4c562850ab8d528d2, https://github.com/ggml-org/llama.cpp.
+Copyright and permission notices are included in assets/licenses/llama.cpp-LICENSE.txt
+and assets/licenses/llama.cpp-json-LICENSE.txt. User-imported model licenses are separate.

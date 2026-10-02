@@ -1,0 +1,59 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+// Compile the pinned upstream sources with the reader's toolchain. Night reading
+// is intentionally outside this translation-only adapter; upstream stays pristine.
+def engineRoot = rootProject.file('third_party/yakuyomi-engine/engine')
+def translationSources = layout.buildDirectory.dir('generated/translationSources')
+def prepareTranslationSources = tasks.register('prepareTranslationSources', Sync) {
+    from new File(engineRoot, 'src/main/kotlin')
+    // The local LlmTranslator overlay keeps the pinned prompt/parser and adds an
+    // injectable cancellable transport shared by the API and JNI backends.
+    // Renderer keeps the pinned drawing algorithm and adds a background-independent
+    // layout command layer for local inpainting/layout overlap.
+    exclude '**/NightReadRenderer.kt', '**/CharSeg.kt', '**/LlmTranslator.kt', '**/Renderer.kt'
+    into translationSources
+}
+android {
+    namespace 'li.joye.yakuyomi.engine'
+    compileSdk 35
+    ndkVersion '28.2.13676358'
+    defaultConfig {
+        minSdk 26
+        ndk { abiFilters 'arm64-v8a' }
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++17'
+                arguments '-DANDROID_STL=c++_static'
+            }
+        }
+    }
+    sourceSets {
+        main {
+            manifest.srcFile new File(engineRoot, 'src/main/AndroidManifest.xml')
+            java.srcDirs = [translationSources, 'src/main/kotlin']
+            assets.srcDirs = [new File(engineRoot, 'src/main/assets'), 'src/main/assets']
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+    kotlinOptions { jvmTarget = '21' }
+}
+dependencies {
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
+    implementation 'com.squareup.okhttp3:okhttp:5.1.0'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+tasks.named('preBuild').configure { dependsOn prepareTranslationSources }
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    dependsOn prepareTranslationSources
+}

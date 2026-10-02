@@ -544,6 +544,15 @@ public final class SpiderQueen implements Runnable {
         return request(index, true, false, true);
     }
 
+    /** Fetch only this source page. Do not change reader neighbors or decode an invisible page. */
+    public void prepareTranslationSource(int index) {
+        if (mQueenThread == null || index < 0 || index >= size()) return;
+        if (getPageState(index) == STATE_NONE) {
+            synchronized (mRequestPageQueue) { mRequestPageQueue.add(index); }
+            tryToEnsureWorkers();
+        }
+    }
+
     private int getPageState(int index) {
         synchronized (mPageStateLock) {
             if (mPageStateArray != null && index >= 0 && index < mPageStateArray.length) {

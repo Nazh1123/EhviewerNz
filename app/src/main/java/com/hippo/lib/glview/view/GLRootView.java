@@ -105,6 +105,9 @@ public class GLRootView extends GLSurfaceView
 
     private final ArrayDeque<OnGLIdleListener> mIdleListeners =
             new ArrayDeque<>();
+    // Guarded by mIdleListeners. GLSurfaceView drains queued events before acknowledging pause.
+    private boolean mIdlePaused;
+    private boolean mIdleResumePending;
 
     private final IdleRunner mIdleRunner = new IdleRunner();
 
@@ -332,6 +335,7 @@ public class GLRootView extends GLSurfaceView
         }
 
         synchronized (mIdleListeners) {
+            if (!mIdlePaused) mIdleResumePending = false;
             if (!mIdleListeners.isEmpty()) mIdleRunner.enable();
         }
 
@@ -402,8 +406,23 @@ public class GLRootView extends GLSurfaceView
 
     @Override
     public void onPause() {
+        synchronized (mIdleListeners) {
+            // Stop both new producers and self-repeating callbacks before the blocking handshake.
+            mIdlePaused = true;
+            mIdleResumePending = true;
+        }
         unfreeze();
         super.onPause();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        synchronized (mIdleListeners) {
+            mIdlePaused = false;
+        }
+        // A new frame recreates the EGL surface/context before resuming retained idle work.
+        requestRenderForced();
     }
 
     @Override
@@ -609,7 +628,7 @@ public class GLRootView extends GLSurfaceView
             OnGLIdleListener listener;
             synchronized (mIdleListeners) {
                 mActive = false;
-                if (mIdleListeners.isEmpty()) return;
+                if (mIdlePaused || mIdleResumePending || mIdleListeners.isEmpty()) return;
                 listener = mIdleListeners.removeFirst();
             }
             mRenderLock.lock();
@@ -627,7 +646,7 @@ public class GLRootView extends GLSurfaceView
 
         public void enable() {
             // Who gets the flag can add it to the queue
-            if (mActive) return;
+            if (mIdlePaused || mIdleResumePending || mActive) return;
             mActive = true;
             queueEvent(this);
         }

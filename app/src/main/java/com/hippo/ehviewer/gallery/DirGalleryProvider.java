@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.gallery;
 
+import android.content.Context;
 import android.os.Process;
 import android.util.Log;
 import androidx.annotation.NonNull;
@@ -68,6 +69,14 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         mDir = dir;
         mInitialFilename = initialFilename;
     }
+
+    @Override
+    public GalleryProvider2 createTranslationProvider(Context context) {
+        return new DirGalleryProvider(mDir);
+    }
+
+    @Override
+    public String getTranslationIdentity() { return "dir:" + mDir.getUri(); }
 
     @Override
     public int getStartPage() {

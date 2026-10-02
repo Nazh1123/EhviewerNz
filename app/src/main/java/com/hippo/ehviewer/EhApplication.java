@@ -294,6 +294,7 @@ public class EhApplication extends RecordingApplication {
 
         if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
             clearMemoryCache();
+            com.hippo.ehviewer.translation.TranslationRuntime.trimMemory();
         }
     }
 

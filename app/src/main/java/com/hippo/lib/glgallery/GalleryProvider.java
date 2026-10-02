@@ -44,6 +44,9 @@ public abstract class GalleryProvider {
     private volatile GLRoot mGLRoot;
 
     private final ImageCache mImageCache = new ImageCache();
+    private final ImageCache mTranslatedCache = new ImageCache();
+    private volatile boolean mShowTranslations;
+    private final java.util.Set<Integer> mOriginalPages = ConcurrentHashMap.newKeySet();
     private final ConcurrentHashMap<Integer, Integer> mAnimatedWebpDecodeModes =
             new ConcurrentHashMap<>();
 
@@ -63,6 +66,8 @@ public abstract class GalleryProvider {
     public void stop() {
         OSUtils.checkMainLoop();
         mImageCache.evictAll();
+        mTranslatedCache.evictAll();
+        mOriginalPages.clear();
     }
 
     public void setGLRoot(GLRoot glRoot) {
@@ -77,7 +82,8 @@ public abstract class GalleryProvider {
     public abstract int size();
 
     public final void request(int index) {
-        ImageWrapper imageWrapper = mImageCache.get(index);
+        ImageWrapper imageWrapper = getVisibleTranslation(index);
+        if (imageWrapper == null) imageWrapper = mImageCache.get(index);
         if (imageWrapper != null) {
             notifyPageSucceed(index, imageWrapper);
         } else {
@@ -145,7 +151,50 @@ public abstract class GalleryProvider {
     }
 
     public void notifyPageSucceed(int index, ImageWrapper image) {
+        ImageWrapper translated = getVisibleTranslation(index);
+        if (translated != null) image = translated;
         notify(NotifyTask.TYPE_SUCCEED, index, 0.0f, image, null);
+    }
+
+    /** Translation owns a separate bounded cache; original save/share paths stay intact. */
+    public void setTranslatedPage(int index, Image image) {
+        mTranslatedCache.add(index, new ImageWrapper(image));
+        if (mShowTranslations && !mOriginalPages.contains(index)) notifyDataChanged(index);
+    }
+
+    private ImageWrapper getVisibleTranslation(int index) {
+        return mShowTranslations && !mOriginalPages.contains(index)
+                ? mTranslatedCache.get(index) : null;
+    }
+
+    /** Compare one page without disabling translation or changing neighboring pages. */
+    public void toggleTranslatedPage(int index) {
+        if (!mShowTranslations || !hasTranslatedPage(index)) return;
+        if (!mOriginalPages.add(index)) mOriginalPages.remove(index);
+        notifyDataChanged(index);
+    }
+
+    public boolean hasTranslatedPage(int index) {
+        return mTranslatedCache.get(index) != null;
+    }
+
+    public void removeTranslatedPage(int index) {
+        mTranslatedCache.remove(index);
+        mOriginalPages.remove(index);
+        notifyDataChanged(index);
+    }
+
+    public void setShowTranslations(boolean show) {
+        mShowTranslations = show;
+        mOriginalPages.clear();
+        for (Integer index : mTranslatedCache.snapshot().keySet()) notifyDataChanged(index);
+    }
+
+    public void clearTranslatedPages() {
+        java.util.Set<Integer> pages = mTranslatedCache.snapshot().keySet();
+        mTranslatedCache.evictAll();
+        mOriginalPages.clear();
+        for (Integer index : pages) notifyDataChanged(index);
     }
 
     public void notifyPageFailed(int index, String error) {

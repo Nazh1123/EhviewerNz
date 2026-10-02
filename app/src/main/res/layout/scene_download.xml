@@ -132,6 +132,15 @@
                 style="@style/Widget.Design.FloatingActionButton.Mini"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:contentDescription="@string/translation_delete_results"
+                app:backgroundTint="?attr/widgetColorThemeAccent"
+                app:tint="@null"
+                app:srcCompat="@drawable/v_translate_off_dark_x24" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                style="@style/Widget.Design.FloatingActionButton.Mini"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 app:backgroundTint="?attr/widgetColorThemeAccent"
                 app:srcCompat="@drawable/v_folder_move_dark_x24" />
 

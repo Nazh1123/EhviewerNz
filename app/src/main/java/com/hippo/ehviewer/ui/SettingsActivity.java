@@ -34,7 +34,21 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.ui.fragment.SettingsHeaders;
 import com.hippo.util.DrawableManager;
 
-public final class SettingsActivity extends EhActivity {
+public final class SettingsActivity extends EhActivity implements PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
+    public static final String EXTRA_TRANSLATION = "translation_settings";
+
+    @Override
+    public boolean onPreferenceStartFragment(PreferenceFragmentCompat caller, Preference preference) {
+        String name = preference.getFragment();
+        if (name == null) return false;
+        androidx.fragment.app.Fragment fragment = getSupportFragmentManager().getFragmentFactory()
+                .instantiate(getClassLoader(), name);
+        fragment.setArguments(preference.getExtras());
+        getSupportFragmentManager().beginTransaction().replace(R.id.settings, fragment)
+                .addToBackStack(name).commit();
+        setSettingsTitle(preference.getTitle());
+        return true;
+    }
 
     private static final int REQUEST_CODE_FRAGMENT = 0;
 
@@ -70,11 +84,21 @@ public final class SettingsActivity extends EhActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
         setActionBarUpIndicator(DrawableManager.getVectorDrawable(this, R.drawable.v_arrow_left_dark_x24));
+        getSupportFragmentManager().addOnBackStackChangedListener(() -> {
+            if (getSupportFragmentManager().findFragmentById(R.id.settings) instanceof SettingsHeaders) {
+                setSettingsTitle(R.string.settings);
+            }
+        });
         if (savedInstanceState==null){
             getSupportFragmentManager()
                     .beginTransaction()
                     .replace(R.id.settings,new SettingsHeaders())
                     .commit();
+            if (getIntent().getBooleanExtra(EXTRA_TRANSLATION, false)) {
+                getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.settings, new com.hippo.ehviewer.ui.fragment.TranslationFragment())
+                        .addToBackStack(null).commit();
+            }
         }
     }
 

@@ -151,7 +151,6 @@ public class DownloadsScene extends ToolbarScene
         DownloadChoiceListener.Host, DownloadGuideHelper.Host {
 
     private static final String TAG = DownloadsScene.class.getSimpleName();
-    private static final int FAB_QUICK_ORGANIZE = 7;
     private final DownloadArchiveImporter mArchiveImporter = new DownloadArchiveImporter(this);
     private final DownloadAlbumImporter mAlbumImporter = new DownloadAlbumImporter(this);
     private final DownloadBatchActions mBatchActions = new DownloadBatchActions(this);
@@ -170,6 +169,9 @@ public class DownloadsScene extends ToolbarScene
     public static final int LOCAL_GALLERY_INFO_CHANGE = 909;
 
     private static final long ANIMATE_TIME = 300L;
+    private static final int FAB_DELETE_TRANSLATIONS = 4;
+    private static final int FAB_DRAG = 7;
+    private static final int FAB_QUICK_ORGANIZE = 8;
 
     @Nullable
     private AddDeleteDrawable mActionFabDrawable;
@@ -775,7 +777,7 @@ public class DownloadsScene extends ToolbarScene
         mFabLayout.setOnExpandListener(this);
         mActionFabDrawable = new AddDeleteDrawable(context, resources.getColor(R.color.primary_drawable_dark, null));
         mFabLayout.getPrimaryFab().setImageDrawable(mActionFabDrawable);
-        FloatingActionButton fab = mFabLayout.getSecondaryFabAt(6);
+        FloatingActionButton fab = mFabLayout.getSecondaryFabAt(FAB_DRAG);
         if (DRAG_ENABLE) {
             fab.setImageDrawable(ResourcesCompat.getDrawable(getResources(), R.drawable.v_mobile_hand_left_x24, context.getTheme()));
         } else {
@@ -784,6 +786,9 @@ public class DownloadsScene extends ToolbarScene
         TooltipCompat.setTooltipText(
                 mFabLayout.getSecondaryFabAt(FAB_QUICK_ORGANIZE),
                 getString(R.string.quick_organize));
+        TooltipCompat.setTooltipText(
+                mFabLayout.getSecondaryFabAt(FAB_DELETE_TRANSLATIONS),
+                getString(R.string.translation_delete_results));
         addAboveSnackView(mFabLayout);
 
         updateView();

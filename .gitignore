@@ -26,3 +26,7 @@ open_source_licenses.html
 build_*.bat
 _build.bat
 *.lnk
+*.log
+/translation-engine/build/
+/translation-engine/.cxx/
+/artifacts/

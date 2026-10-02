@@ -15,3 +15,8 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+# JNI exports use the class and native method names.
+-keep class li.joye.yakuyomi.engine.NativeLlm { *; }
+-keep class li.joye.yakuyomi.engine.NativePrefixCache { *; }
+-keep class li.joye.yakuyomi.engine.TranslationOutputLimitException { *; }

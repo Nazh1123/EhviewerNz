@@ -233,6 +233,46 @@ public class DownloadListModeTest {
         assertFalse(recycler.isInCustomChoice());
     }
 
+    @Test
+    public void translationDeleteButtonUsesSelectedGalleriesWithoutRemovingDownloads() {
+        makeSmallSections();
+        switchMode(true);
+        scene.onLabelHeaderClick(findHeader("first"));
+        recycler.setChoiceMode(MyEasyRecyclerView.CHOICE_MODE_MULTIPLE_CUSTOM);
+        recycler.intoCustomChoiceMode();
+        recycler.checkAll();
+
+        batchActions().onClickSecondaryFab(null, null, 4);
+
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertNotNull(dialog);
+        TextView message = dialog.findViewById(android.R.id.message);
+        assertEquals(scene.getContext().getString(
+                R.string.translation_delete_results_confirm, 20), message.getText().toString());
+        dialog.getButton(DialogInterface.BUTTON_NEGATIVE).performClick();
+        assertTrue(scene.getDownloadManager().containDownloadInfo(1));
+        assertTrue(scene.getDownloadManager().containDownloadInfo(20));
+    }
+
+    @Test
+    public void quickOrganizeButtonUsesItsShiftedPositionAfterTranslationDeleteWasAdded() {
+        makeSmallSections();
+        switchMode(true);
+        scene.onLabelHeaderClick(findHeader("first"));
+        recycler.setChoiceMode(MyEasyRecyclerView.CHOICE_MODE_MULTIPLE_CUSTOM);
+        recycler.intoCustomChoiceMode();
+        recycler.checkAll();
+
+        batchActions().onClickSecondaryFab(null, null, 8);
+
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertNotNull(dialog);
+        TextView message = dialog.findViewById(android.R.id.message);
+        assertEquals(scene.getContext().getString(
+                R.string.quick_organize_confirm, 20), message.getText().toString());
+        dialog.getButton(DialogInterface.BUTTON_NEGATIVE).performClick();
+    }
+
     private DownloadBatchActions batchActions() {
         Context context = scene.getContext();
         return new DownloadBatchActions(new DownloadBatchActions.Host() {

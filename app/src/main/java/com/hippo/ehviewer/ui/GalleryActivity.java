@@ -96,6 +96,7 @@ import com.hippo.ehviewer.gallery.DirGalleryProvider;
 import com.hippo.ehviewer.gallery.EhGalleryProvider;
 import com.hippo.ehviewer.gallery.ExternalImageFileResolver;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
+import com.hippo.ehviewer.translation.ReaderTranslationController;
 import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.gallery.LocalGalleryHistory;
 import com.hippo.ehviewer.gallery.LocalFolderGalleryProvider;
@@ -201,6 +202,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private GalleryView mGalleryView;
     @Nullable
     private GalleryProvider2 mGalleryProvider;
+    private ReaderTranslationController mTranslationController;
     @Nullable
     private GalleryAdapter mGalleryAdapter;
 
@@ -367,6 +369,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             if (null != mQuickSettingsPanel) {
                 mQuickSettingsPanel.requestLayout();
             }
+            updateTranslationProgressPosition();
         }
     };
 
@@ -396,6 +399,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             if (mQuickSettingsPanel != null) {
                 mQuickSettingsPanel.setVisibility(View.INVISIBLE);
             }
+            updateTranslationProgressPosition();
             if (pageSliderWasVisible) {
                 updateAnimatedWebpUi();
             }
@@ -710,6 +714,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
 
         setContentView(R.layout.activity_gallery);
+        mTranslationController = new ReaderTranslationController(
+                this, mGalleryProvider, findViewById(R.id.quick_translation), mGalleryInfo);
         mGLRootView = (GLRootView) ViewUtils.$$(this, R.id.gl_root_view);
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();
@@ -771,6 +777,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
             return insets;
         });
+        mQuickSettingsPanel.addOnLayoutChangeListener((view, left, top, right, bottom,
+                oldLeft, oldTop, oldRight, oldBottom) -> updateTranslationProgressPosition());
         updateQuickSettingsButtons();
 
         mSeekBarPanel = ViewUtils.$$(this, R.id.seek_bar_panel);
@@ -863,6 +871,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpSeek.setOnTouchListener(this::handleAnimatedWebpSeekBarTouch);
         mSize = mGalleryProvider.size();
         mCurrentIndex = startPage;
+        if (mTranslationController != null) mTranslationController.onPageChanged(startPage);
         if (mGalleryView != null) {
             mLayoutMode = mGalleryView.getLayoutMode();
         }
@@ -950,6 +959,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        if (mTranslationController != null) {
+            mTranslationController.close(isFinishing());
+            mTranslationController = null;
+        }
         mImageFileExecutor.shutdownNow();
         mAnimatedWebpLifecycleResumed = false;
         mAnimatedWebpLifecycleGeneration++;
@@ -1039,6 +1052,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onPause() {
+        if (mTranslationController != null) mTranslationController.pause(isFinishing());
         if (mOrientationEventListener != null) {
             mOrientationEventListener.disable();
         }
@@ -1060,6 +1074,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onResume() {
         super.onResume();
+        if (mTranslationController != null) mTranslationController.resume();
         if (mOrientationEventListener != null && mOrientationEventListener.canDetectOrientation()) {
             mOrientationEventListener.enable();
         }
@@ -1834,6 +1849,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     public void onPageImageReady(int index) {
+        SimpleHandler.getInstance().post(() -> {
+            if (mTranslationController != null) mTranslationController.onPageReady(index);
+        });
         boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
         int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
         mAnimatedWebpHandler.post(() -> {
@@ -1928,6 +1946,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 //    }
 
 
+    private void updateTranslationProgressPosition() {
+        if (mTranslationController != null && mQuickSettingsPanel != null) {
+            mTranslationController.onQuickSettingsPositionChanged(
+                    mQuickSettingsPanel.getVisibility() == View.VISIBLE,
+                    mQuickSettingsPanel.getBottom() + mQuickSettingsPanel.getTranslationY());
+        }
+    }
+
     private void showSlider(View sliderPanel, ObjectAnimator animator) {
         if (null != animator) {
             animator.cancel();
@@ -1944,6 +1970,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
 
         sliderPanel.setVisibility(View.VISIBLE);
+        updateTranslationProgressPosition();
 
 
         animator.setDuration(SLIDER_ANIMATION_DURING);
@@ -2420,7 +2447,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         builder.setTitle(resources.getString(R.string.page_menu_title, page + 1));
 
         final CharSequence[] items;
-        items = new CharSequence[]{getString(R.string.page_menu_refresh), getString(R.string.page_menu_share), getString(R.string.page_menu_save), getString(R.string.page_menu_save_to)};
+        items = new CharSequence[]{getString(R.string.page_menu_refresh), getString(R.string.page_menu_share), getString(R.string.page_menu_save), getString(R.string.page_menu_save_to), getString(R.string.translation_title)};
         pageDialogListener(builder, items, page);
         builder.show();
     }
@@ -2433,6 +2460,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
             switch (which) {
                 case 0: // Refresh
+                    if (mTranslationController != null) mTranslationController.onPageReload(page);
                     mGalleryProvider.removeCache(page);
                     mGalleryProvider.forceRequest(page);
                     break;
@@ -2444,6 +2472,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case 3: // Save to
                     saveImageTo(page);
+                    break;
+                case 4:
+                    if (mTranslationController != null) mTranslationController.showMenu(page);
                     break;
             }
         });
@@ -3476,6 +3507,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case KEY_CURRENT_INDEX:
                     GalleryActivity.this.mCurrentIndex = mValue;
+                    if (mTranslationController != null) mTranslationController.onPageChanged(mValue);
                     updateLocalGalleryHistoryPage(mValue);
                     updateSlider();
                     updateProgress();
