@@ -1,9 +1,7 @@
 name: Translation release validation
 on:
   workflow_dispatch:
-  push:
-    branches: ['Dev_Test']
-  pull_request:
+
 permissions:
   contents: read
 jobs:
