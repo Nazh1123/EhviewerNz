@@ -77,6 +77,7 @@
         <com.hippo.ehviewer.preference.StartTransferTimePreference
             android:key="start_transfer_time"
             android:title="@string/settings_read_auto_transfer_time" />
+    <!-- Retired switches: use key bindings.
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
@@ -96,6 +97,7 @@
             android:key="gallery_quick_page_turn"
             android:summary="@string/settings_fork_quick_page_turn_summary"
             android:title="@string/settings_read_quick_page_turn" />
+    -->
 
     </PreferenceCategory>
 

@@ -93,7 +93,7 @@ public class Settings {
         if (!sSettingsPre.contains(KEY_SEARCH_LANGUAGE)) {
             putString(KEY_SEARCH_LANGUAGE, getInitialSearchLanguage());
         }
-        migrateQuickPageTurnSetting();
+        // migrateQuickPageTurnSetting(); // Legacy switches migrate into ReaderKeyProfiles instead.
         migrateThumbnailInfoBarSetting();
         getStartTransferTime();
     }
@@ -862,6 +862,7 @@ public class Settings {
         }
     }
 
+    /* Retired: long-press save and quick page turning are controlled by key bindings.
     private static final String KEY_DIRECT_SAVE = "gallery_direct_save";
     private static final boolean DEFAULT_DIRECT_SAVE = false;
 
@@ -909,6 +910,7 @@ public class Settings {
     public static void putQuickPageTurn(boolean value) {
         putBoolean(KEY_QUICK_PAGE_TURN, value);
     }
+    */
 
     public static final String KEY_SEARCH_LANGUAGE = "search_language";
     public static final String SEARCH_LANGUAGE_DISABLED = "disabled";

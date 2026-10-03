@@ -180,7 +180,8 @@
 
         </LinearLayout>
 
-        <androidx.appcompat.widget.SwitchCompat
+        <!-- Retired switches: use key bindings.
+<androidx.appcompat.widget.SwitchCompat
             android:id="@+id/direct_save"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -220,6 +221,7 @@
             android:layout_height="wrap_content"
             android:text="@string/settings_read_quick_page_turn"
             android:textColor="?android:attr/textColorPrimary" />
+        -->
 
 
         <androidx.appcompat.widget.SwitchCompat

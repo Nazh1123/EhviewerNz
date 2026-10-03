@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="reader_keys_title">Keys</string>
+    <string name="reader_keys_title">Key bindings</string>
+    <string name="reader_keys_double_tap_none">No action (allows rapid single taps)</string>
     <string name="reader_keys_profile_number">Profile %1$d</string>
+    <string name="reader_keys_profile_label">%1$d. %2$s</string>
+    <string name="reader_keys_quick_profile">Switch profile: %1$s</string>
+    <string name="reader_keys_profile_keyword">Profile</string>
+    <string name="reader_keys_switched_named">Switched to %1$s</string>
+    <string name="reader_keys_switched_custom">Switched to profile %1$s</string>
     <string name="reader_keys_current_profile">Active: %1$s</string>
     <string name="reader_keys_select_profile">Select profile</string>
     <string name="reader_keys_new">New profile</string>
@@ -10,6 +16,7 @@
     <string name="reader_keys_rename">Rename</string>
     <string name="reader_keys_copy">Duplicate</string>
     <string name="reader_keys_delete">Delete</string>
+    <string name="reader_keys_recommended">Use recommended profile</string>
     <string name="reader_keys_reset">Restore defaults</string>
     <string name="reader_keys_keep_one">Keep at least one profile</string>
     <string name="reader_keys_delete_question">Delete this profile and its unsaved edits?</string>

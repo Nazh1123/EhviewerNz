@@ -4,6 +4,9 @@ import android.app.Application;
 import android.content.Context;
 import com.hippo.lib.glgallery.ReaderKeyMap;
 import com.hippo.lib.glgallery.GalleryView;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -27,6 +30,23 @@ public class ReaderKeyProfilesTest {
     }
 
     @After public void cleanup() { ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre", null); }
+
+    @Test public void recommendedProfileMatchesCapturedDeviceSnapshotAndIsIndependent() throws Exception {
+        try (InputStream snapshot = getClass().getResourceAsStream("/reader-keys-device-profile-1.json")) {
+            assertNotNull(snapshot);
+            ReaderKeyProfiles.Profile captured = ReaderKeyProfiles.Profile.fromJson(
+                    new JSONObject(new String(snapshot.readAllBytes(), StandardCharsets.UTF_8)));
+            ReaderKeyProfiles.Profile recommended = ReaderKeyProfiles.recommended("夜间");
+            for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
+                assertArrayEquals(captured.keys(direction), recommended.keys(direction));
+            }
+            assertEquals(captured.animatedControlPercent, recommended.animatedControlPercent);
+            assertEquals(captured.orientationSwipe, recommended.orientationSwipe);
+            assertEquals("夜间", recommended.name);
+            recommended.keys(0)[0] = ReaderKeyMap.NONE;
+            assertEquals(captured.keys(0)[0], ReaderKeyProfiles.recommended("").keys(0)[0]);
+        }
+    }
 
     @Test public void profilesPersistIndependentMappingsAndSelection() {
         ReaderKeyProfiles store = ReaderKeyProfiles.load();
@@ -97,13 +117,11 @@ public class ReaderKeyProfilesTest {
         assertFalse(profile.toJson().has("holdSpeed"));
     }
 
-    @Test public void concreteDefaultsRespectReadingDirectionAndSaveSettings() {
-        assertEquals(ReaderKeyMap.LEFT, ReaderKeyDefaults.action(0, 0, 0, false, false, false));
-        assertEquals(ReaderKeyMap.NONE, ReaderKeyDefaults.action(0, 1, 0, true, false, false));
-        assertEquals(ReaderKeyMap.ZOOM, ReaderKeyDefaults.action(0, 1, 0, false, false, false));
-        assertEquals(ReaderKeyMap.SAVE_NEXT, ReaderKeyDefaults.action(2, 2, 0, false, true, true));
-        assertEquals(ReaderKeyMap.PAGE_MENU, ReaderKeyDefaults.action(0, 2, 0, false, true, true));
-        assertEquals(ReaderKeyMap.SAVE, ReaderKeyDefaults.action(0, 2, 1, false, true, false));
+    @Test public void defaultsNoLongerDependOnRetiredSwitches() {
+        assertEquals(ReaderKeyMap.LEFT, ReaderKeyDefaults.action(0, 0));
+        assertEquals(ReaderKeyMap.ZOOM, ReaderKeyDefaults.action(0, 1));
+        assertEquals(ReaderKeyMap.PAGE_MENU, ReaderKeyDefaults.action(2, 2));
+        assertEquals(ReaderKeyMap.PAGE_MENU, ReaderKeyDefaults.action(0, 2));
     }
 
     @Test public void directionsPersistAndCopyIndependentlyWithinEachProfile() {
@@ -140,5 +158,29 @@ public class ReaderKeyProfilesTest {
         assertEquals(42, profile.animatedControlPercent);
         assertEquals(ReaderKeyProfiles.SWIPE_UP, profile.orientationSwipe);
         assertFalse(profile.toJson().has("normal"));
+    }
+
+    @Test public void retiredSwitchesMigrateOnceWithoutOverwritingExplicitKeys() {
+        Settings.putBoolean("gallery_quick_page_turn", true);
+        Settings.putBoolean("gallery_direct_save", true);
+        Settings.putBoolean("gallery_quick_save_turn_page", true);
+        Settings.putString("reader_key_profiles_v1",
+                "{\"version\":3,\"profiles\":[{\"directions\":[[-1,7,8]]}]}");
+        ReaderKeyProfiles store = ReaderKeyProfiles.load();
+        assertEquals(ReaderKeyMap.ZOOM, store.active().keys(0)[1]);
+        assertEquals(ReaderKeyMap.PAGE_MENU, store.active().keys(0)[2]);
+        assertEquals(ReaderKeyMap.NONE, store.active().keys(0)[7]);
+        assertEquals(ReaderKeyMap.SAVE_NEXT, store.active().keys(0)[8]);
+        assertEquals(ReaderKeyMap.SAVE_NEXT, store.active().keys(1)[2]);
+        store.active().keys(0)[7] = ReaderKeyMap.LEGACY;
+        store.save();
+        assertEquals(ReaderKeyMap.LEGACY, ReaderKeyProfiles.load().active().keys(0)[7]);
+    }
+
+    @Test public void legacyDoubleTapFlagMigratesToQuickTapKeyWithoutAnyExistingProfile() {
+        Settings.putBoolean("gallery_double_tap_zoom", false);
+        ReaderKeyProfiles store = ReaderKeyProfiles.load();
+        assertEquals(ReaderKeyMap.NONE, store.active().keys(0)[1]);
+        assertEquals(ReaderKeyMap.LEGACY, store.active().keys(0)[13]);
     }
 }

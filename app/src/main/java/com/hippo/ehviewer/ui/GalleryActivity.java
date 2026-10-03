@@ -105,6 +105,7 @@ import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
 import com.hippo.ehviewer.widget.ReversibleSeekBar;
 import com.hippo.ehviewer.widget.TouchThroughSeekBar;
+import com.hippo.ehviewer.widget.ReaderKeyProfileDrawable;
 import com.hippo.lib.glgallery.GalleryProvider;
 import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.glgallery.GalleryView;
@@ -227,9 +228,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private ImageButton mQuickReadingDirection;
     @Nullable
-    private ImageButton mQuickDirectSave;
-    @Nullable
-    private ImageButton mQuickPageTurn;
+    private ImageButton mQuickReaderKeyProfile;
+    // @Nullable
+    // private ImageButton mQuickDirectSave;
+    // @Nullable
+    // private ImageButton mQuickPageTurn;
     @Nullable
     private ImageButton mQuickAnimatedWebp;
     @Nullable
@@ -723,7 +726,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();
         mGalleryView = new GalleryView.Builder(this, mGalleryAdapter).setListener(this).setLayoutMode(Settings.getReadingDirection()).setScaleMode(Settings.getPageScaling()).setStartPosition(Settings.getStartPosition()).setStartPage(startPage).setBackgroundColor(AttrResources.getAttrColor(this, android.R.attr.colorBackground)).setEdgeColor(AttrResources.getAttrColor(this, R.attr.colorEdgeEffect) & 0xffffff | 0x33000000).setPagerInterval(Settings.getShowPageInterval() ? resources.getDimensionPixelOffset(R.dimen.gallery_pager_interval) : 0).setScrollInterval(Settings.getShowPageInterval() ? resources.getDimensionPixelOffset(R.dimen.gallery_scroll_interval) : 0).setPageMinHeight(resources.getDimensionPixelOffset(R.dimen.gallery_page_min_height)).setPageInfoInterval(resources.getDimensionPixelOffset(R.dimen.gallery_page_info_interval)).setProgressColor(ResourcesUtils.getAttrColor(this, androidx.appcompat.R.attr.colorPrimary)).setProgressSize(resources.getDimensionPixelOffset(R.dimen.gallery_progress_size)).setPageTextColor(AttrResources.getAttrColor(this, android.R.attr.textColorSecondary)).setPageTextSize(resources.getDimensionPixelOffset(R.dimen.gallery_page_text_size)).setPageTextTypeface(Typeface.DEFAULT).setErrorTextColor(resources.getColor(R.color.red_500, null)).setErrorTextSize(resources.getDimensionPixelOffset(R.dimen.gallery_error_text_size)).setDefaultErrorString(resources.getString(R.string.error_unknown)).setEmptyString(resources.getString(R.string.error_empty)).build();
-        mGalleryView.setPageAreaDoubleTapEnabled(!Settings.getQuickPageTurn());
+        // mGalleryView.setPageAreaDoubleTapEnabled(!Settings.getQuickPageTurn());
+        mGalleryView.setPageAreaDoubleTapEnabled(true);
         mGLRootView.setContentPane(mGalleryView);
         mGLRootView.setOnGenericMotionListener(this::onGenericMotion);
         mAnimatedWebpTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
@@ -758,17 +762,19 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mQuickSettingsPanel, R.id.quick_screen_orientation);
         mQuickReadingDirection = (ImageButton) ViewUtils.$$(
                 mQuickSettingsPanel, R.id.quick_reading_direction);
-        mQuickDirectSave = (ImageButton) ViewUtils.$$(
-                mQuickSettingsPanel, R.id.quick_direct_save);
-        mQuickPageTurn = (ImageButton) ViewUtils.$$(
-                mQuickSettingsPanel, R.id.quick_page_turn);
+        // mQuickDirectSave = (ImageButton) ViewUtils.$$(
+                // mQuickSettingsPanel, R.id.quick_direct_save);
+        // mQuickPageTurn = (ImageButton) ViewUtils.$$(
+                // mQuickSettingsPanel, R.id.quick_page_turn);
         mQuickAnimatedWebp = (ImageButton) ViewUtils.$$(
                 mQuickSettingsPanel, R.id.quick_animated_webp);
         mQuickScreenOrientation.setOnClickListener(this::toggleQuickScreenOrientation);
         mQuickReadingDirection.setOnClickListener(this::toggleQuickReadingDirection);
-        mQuickDirectSave.setOnClickListener(this::toggleQuickDirectSave);
-        mQuickPageTurn.setOnClickListener(this::toggleQuickPageTurn);
+        // mQuickDirectSave.setOnClickListener(this::toggleQuickDirectSave);
+        // mQuickPageTurn.setOnClickListener(this::toggleQuickPageTurn);
         mQuickAnimatedWebp.setOnClickListener(this::toggleQuickAnimatedWebp);
+        mQuickReaderKeyProfile = mQuickSettingsPanel.findViewById(R.id.quick_reader_key_profile);
+        bindQuickReaderKeyProfile();
         ViewCompat.setOnApplyWindowInsetsListener(mQuickSettingsPanel, (view, insets) -> {
             int statusBarInset = insets.getInsets(
                     WindowInsetsCompat.Type.statusBars()).top;
@@ -1007,8 +1013,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mQuickSettingsPanel = null;
         mQuickScreenOrientation = null;
         mQuickReadingDirection = null;
-        mQuickDirectSave = null;
-        mQuickPageTurn = null;
+        mQuickReaderKeyProfile = null;
+        // mQuickDirectSave = null;
+        // mQuickPageTurn = null;
         mQuickAnimatedWebp = null;
         mSeekBarPanel = null;
         mAutoTransferPanel = null;
@@ -1659,8 +1666,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void updateQuickSettingsButtons() {
+        updateQuickReaderKeyProfile();
         if (mQuickScreenOrientation == null || mQuickReadingDirection == null
-                || mQuickDirectSave == null || mQuickPageTurn == null
+                // || mQuickDirectSave == null || mQuickPageTurn == null
                 || mQuickAnimatedWebp == null) {
             return;
         }
@@ -1699,8 +1707,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 break;
         }
 
-        updateQuickToggleButton(mQuickDirectSave, Settings.getDirectSave());
-        updateQuickToggleButton(mQuickPageTurn, Settings.getQuickPageTurn());
+        // updateQuickToggleButton(mQuickDirectSave, Settings.getDirectSave());
+        // updateQuickToggleButton(mQuickPageTurn, Settings.getQuickPageTurn());
         updateQuickToggleButton(mQuickAnimatedWebp,
                 Settings.getExperimentalAnimatedWebpEnabled());
     }
@@ -1762,6 +1770,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         keepQuickSettingsVisible();
     }
 
+    /* Retired toggles: use key bindings instead.
     private void toggleQuickDirectSave(View view) {
         Settings.putDirectSave(!Settings.getDirectSave());
         updateQuickSettingsButtons();
@@ -1777,6 +1786,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         updateQuickSettingsButtons();
         keepQuickSettingsVisible();
     }
+
+    */
 
     private void toggleQuickAnimatedWebp(View view) {
         Settings.putExperimentalAnimatedWebpEnabled(
@@ -1869,7 +1880,33 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         });
     }
 
+    private void bindQuickReaderKeyProfile() {
+        mQuickReaderKeyProfile.setOnClickListener(view -> {
+            ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+            switchReaderKeyProfile(profiles, (profiles.selected + 1) % profiles.profiles.size());
+            keepQuickSettingsVisible();
+        });
+        mQuickReaderKeyProfile.setOnLongClickListener(view -> {
+            chooseReaderKeyProfile();
+            keepQuickSettingsVisible();
+            return true;
+        });
+    }
+
+    private void updateQuickReaderKeyProfile() {
+        if (mQuickReaderKeyProfile == null) return;
+        ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        String name = profiles.active().name;
+        if (name.isEmpty()) name = getString(R.string.reader_keys_profile_number, profiles.selected + 1);
+        String label = getString(R.string.reader_keys_profile_label, profiles.selected + 1, name);
+        mQuickReaderKeyProfile.setImageDrawable(new ReaderKeyProfileDrawable(this, profiles.selected + 1));
+        String description = getString(R.string.reader_keys_quick_profile, label);
+        mQuickReaderKeyProfile.setContentDescription(description);
+        ViewCompat.setTooltipText(mQuickReaderKeyProfile, description);
+    }
+
     private void applyReaderKeyProfile() {
+        updateQuickReaderKeyProfile();
         if (mGalleryView == null) return;
         ReaderKeyProfiles.Profile profile = ReaderKeyProfiles.load().active();
         restoreAnimatedWebpLongPressPlayback();
@@ -1879,7 +1916,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         clearOrientationSwipeGesture();
         mReaderOrientationSwipe = profile.orientationSwipe;
         mGalleryView.setReaderKeyMap(profile.map());
-        mGalleryView.setPageAreaDoubleTapEnabled(!Settings.getQuickPageTurn());
+        // mGalleryView.setPageAreaDoubleTapEnabled(!Settings.getQuickPageTurn());
+        mGalleryView.setPageAreaDoubleTapEnabled(true);
     }
 
     private void chooseReaderKeyProfile() {
@@ -1887,16 +1925,25 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         String[] names = new String[profiles.profiles.size()];
         for (int i = 0; i < names.length; i++) {
             String name = profiles.profiles.get(i).name;
-            names[i] = name.isEmpty() ? getString(R.string.reader_keys_profile_number, i + 1) : name;
+            if (name.isEmpty()) name = getString(R.string.reader_keys_profile_number, i + 1);
+            names[i] = getString(R.string.reader_keys_profile_label, i + 1, name);
         }
         new AlertDialog.Builder(this).setTitle(R.string.reader_keys_select_profile)
                 .setSingleChoiceItems(names, profiles.selected, (dialog, which) -> {
-                    profiles.selected = which;
-                    profiles.save();
-                    applyReaderKeyProfile();
+                    switchReaderKeyProfile(profiles, which);
                     dialog.dismiss();
-                    Toast.makeText(this, names[which], Toast.LENGTH_SHORT).show();
                 }).setNegativeButton(android.R.string.cancel, null).show();
+    }
+
+    private void switchReaderKeyProfile(ReaderKeyProfiles profiles, int selected) {
+        profiles.selected = selected;
+        profiles.save();
+        applyReaderKeyProfile();
+        String name = profiles.active().name;
+        if (name.isEmpty()) name = getString(R.string.reader_keys_profile_number, selected + 1);
+        int message = name.contains(getString(R.string.reader_keys_profile_keyword))
+                ? R.string.reader_keys_switched_named : R.string.reader_keys_switched_custom;
+        Toast.makeText(this, getString(message, name), Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -2164,7 +2211,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                            boolean turnPageAfterSave, boolean longPress, boolean explicitTurn) {
         GalleryProvider2 provider = mGalleryProvider;
         if (provider == null || mImageFileOperationPending || mImageFileExecutor.isShutdown()) return;
-        boolean shouldTurn = turnPageAfterSave && (explicitTurn || Settings.getLongPressSaveTurnPage());
+        // boolean shouldTurn = turnPageAfterSave && (explicitTurn || Settings.getLongPressSaveTurnPage());
+        boolean shouldTurn = turnPageAfterSave && explicitTurn;
         mImageFileOperationPending = true;
         mImageFileExecutor.execute(() -> {
             GalleryProvider2.SaveResult saved = null;
@@ -2547,9 +2595,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         private final Spinner mStartPosition;
         private final SeekBar mStartTransferTime;
         private final EditText mStartTransferTimeInput;
-        private final SwitchCompat mDirectSave;
-        private final SwitchCompat mLongPressSaveTurnPage;
-        private final SwitchCompat mQuickPageTurn;
+        // private final SwitchCompat mDirectSave;
+        // private final SwitchCompat mLongPressSaveTurnPage;
+        // private final SwitchCompat mQuickPageTurn;
         private final SwitchCompat mKeepScreenOn;
         private final SwitchCompat mShowClock;
         private final SwitchCompat mShowProgress;
@@ -2581,9 +2629,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mStartPosition = mView.findViewById(R.id.start_position);
             mStartTransferTime = mView.findViewById(R.id.start_transfer_time);
             mStartTransferTimeInput = mView.findViewById(R.id.start_transfer_time_input);
-            mDirectSave = mView.findViewById(R.id.direct_save);
-            mLongPressSaveTurnPage = mView.findViewById(R.id.long_press_save_turn_page);
-            mQuickPageTurn = mView.findViewById(R.id.quick_page_turn);
+            // mDirectSave = mView.findViewById(R.id.direct_save);
+            // mLongPressSaveTurnPage = mView.findViewById(R.id.long_press_save_turn_page);
+            // mQuickPageTurn = mView.findViewById(R.id.quick_page_turn);
             mKeepScreenOn = mView.findViewById(R.id.keep_screen_on);
             mShowClock = mView.findViewById(R.id.show_clock);
             mShowProgress = mView.findViewById(R.id.show_progress);
@@ -2609,9 +2657,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mScaleMode.setSelection(Settings.getPageScaling());
             mStartPosition.setSelection(Settings.getStartPosition());
             configureStartTransferTime();
-            mDirectSave.setChecked(Settings.getDirectSave());
-            mLongPressSaveTurnPage.setChecked(Settings.getLongPressSaveTurnPage());
-            mQuickPageTurn.setChecked(Settings.getQuickPageTurn());
+            // mDirectSave.setChecked(Settings.getDirectSave());
+            // mLongPressSaveTurnPage.setChecked(Settings.getLongPressSaveTurnPage());
+            // mQuickPageTurn.setChecked(Settings.getQuickPageTurn());
             mKeepScreenOn.setChecked(Settings.getKeepScreenOn());
             mShowClock.setChecked(Settings.getShowClock());
             mShowProgress.setChecked(Settings.getShowProgress());
@@ -2639,11 +2687,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             });
             updateAnimatedWebpSettingsVisibility(mAnimatedWebpEnabled.isChecked());
 
-            mDirectSave.setOnCheckedChangeListener(this::onDirectSaveChange);
+            // mDirectSave.setOnCheckedChangeListener(this::onDirectSaveChange);
             mVolumePage.setOnCheckedChangeListener(this::onVolumePageChange);
 
-            mLongPressSaveTurnPage.setVisibility(
-                    Settings.getDirectSave() ? View.VISIBLE : View.GONE);
+            // mLongPressSaveTurnPage.setVisibility(
+                    // Settings.getDirectSave() ? View.VISIBLE : View.GONE);
 
             if (Settings.getVolumePage()) {
                 mReverseVolumePage.setVisibility(View.VISIBLE);
@@ -2767,9 +2815,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
 
+        /* Replaced by SAVE / SAVE_NEXT bindings.
         private void onDirectSaveChange(CompoundButton compoundButton, boolean checked) {
-            mLongPressSaveTurnPage.setVisibility(checked ? View.VISIBLE : View.GONE);
+            // mLongPressSaveTurnPage.setVisibility(checked ? View.VISIBLE : View.GONE);
         }
+        */
 
         public View getView() {
             return mView;
@@ -2785,9 +2835,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             int layoutMode = GalleryView.sanitizeLayoutMode(mReadingDirection.getSelectedItemPosition());
             int scaleMode = GalleryView.sanitizeScaleMode(mScaleMode.getSelectedItemPosition());
             int startPosition = GalleryView.sanitizeStartPosition(mStartPosition.getSelectedItemPosition());
-            boolean directSave = mDirectSave.isChecked();
-            boolean longPressSaveTurnPage = mLongPressSaveTurnPage.isChecked();
-            boolean quickPageTurn = mQuickPageTurn.isChecked();
+            // boolean directSave = mDirectSave.isChecked();
+            // boolean longPressSaveTurnPage = mLongPressSaveTurnPage.isChecked();
+            // boolean quickPageTurn = mQuickPageTurn.isChecked();
             boolean keepScreenOn = mKeepScreenOn.isChecked();
             boolean showClock = mShowClock.isChecked();
             boolean showProgress = mShowProgress.isChecked();
@@ -2817,9 +2867,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             Settings.putPageScaling(scaleMode);
             Settings.putStartPosition(startPosition);
             Settings.putStartTransferTime(transferTime);
-            Settings.putDirectSave(directSave);
-            Settings.putLongPressSaveTurnPage(longPressSaveTurnPage);
-            Settings.putQuickPageTurn(quickPageTurn);
+            // Settings.putDirectSave(directSave);
+            // Settings.putLongPressSaveTurnPage(longPressSaveTurnPage);
+            // Settings.putQuickPageTurn(quickPageTurn);
             Settings.putKeepScreenOn(keepScreenOn);
             Settings.putShowClock(showClock);
             Settings.putShowProgress(showProgress);
@@ -2862,7 +2912,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mGalleryView.setLayoutMode(layoutMode);
             mGalleryView.setScaleMode(scaleMode);
             mGalleryView.setStartPosition(startPosition);
-            mGalleryView.setPageAreaDoubleTapEnabled(!quickPageTurn);
+            // mGalleryView.setPageAreaDoubleTapEnabled(!quickPageTurn);
+            mGalleryView.setPageAreaDoubleTapEnabled(true);
             if (keepScreenOn) {
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             } else {
@@ -3494,6 +3545,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
 
+        /* Retired switch-driven save handling.
         private void performLongPressSave(int index, boolean turnPageAfterSave,
                                           boolean previousPageSave) {
             if (mGalleryProvider == null || index < 0 || index >= mSize) {
@@ -3510,19 +3562,25 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             saveImage(index, previousPageSave, turnPageAfterSave, true);
         }
 
+        */
+
         private void onLongPressPage(final int index) {
             showPageDialog(index);
         }
 
         private void onLongPressNextPageArea(final int index) {
+            /*
             if (Settings.getDirectSave()) {
                 performLongPressSave(index, true, false);
             } else {
                 showPageDialog(index);
             }
+            */
+            showPageDialog(index);
         }
 
         private void onLongPressPreviousPageArea(final int index) {
+            /*
             int previousIndex = index - 1;
             if (Settings.getDirectSave()
                     && Settings.getExperimentalAnimatedWebpEnabled()
@@ -3533,6 +3591,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             } else {
                 showPageDialog(index);
             }
+            */
+            showPageDialog(index);
         }
 
         @Override

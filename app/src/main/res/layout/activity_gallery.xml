@@ -112,6 +112,16 @@
             android:src="@drawable/v_arrow_left_x24" />
 
         <ImageButton
+            android:id="@+id/quick_reader_key_profile"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/reader_keys_select_profile"
+            android:padding="12dp" />
+
+        <!-- Retired switches: use key bindings.
+<ImageButton
             android:id="@+id/quick_direct_save"
             android:layout_width="0dp"
             android:layout_height="48dp"
@@ -130,6 +140,7 @@
             android:contentDescription="@string/settings_read_quick_page_turn"
             android:padding="12dp"
             android:src="@drawable/v_fast_forward_x24" />
+        -->
 
         <ImageButton
             android:id="@+id/quick_animated_webp"

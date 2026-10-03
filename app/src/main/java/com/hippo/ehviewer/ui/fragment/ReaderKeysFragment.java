@@ -207,6 +207,9 @@ public final class ReaderKeysFragment extends Fragment {
 
     private boolean dirty() { return !draft.toJson().toString().equals(profiles.active().toJson().toString()); }
     private String profileName(int index) {
+        return getString(R.string.reader_keys_profile_label, index + 1, profileTitle(index));
+    }
+    private String profileTitle(int index) {
         String name = profiles.profiles.get(index).name;
         return name.isEmpty() ? getString(R.string.reader_keys_profile_number, index + 1) : name;
     }
@@ -246,8 +249,7 @@ public final class ReaderKeysFragment extends Fragment {
     }
 
     private String defaultLabel(int area, int gesture) {
-        int value = ReaderKeyDefaults.action(area, gesture, direction, Settings.getQuickPageTurn(),
-                Settings.getDirectSave(), Settings.getLongPressSaveTurnPage());
+        int value = ReaderKeyDefaults.action(area, gesture);
         String label;
         if (value == ReaderKeyMap.LEFT || value == ReaderKeyMap.RIGHT) {
             boolean left = value == ReaderKeyMap.LEFT;
@@ -262,9 +264,12 @@ public final class ReaderKeysFragment extends Fragment {
     }
     private String actionLabel(int area, int gesture) {
         int value = draft.keys(direction)[area * ReaderKeyMap.GESTURE_COUNT + gesture];
-        return value == ReaderKeyMap.LEGACY ? defaultLabel(area, gesture) : actionCaption(value);
+        return value == ReaderKeyMap.LEGACY ? defaultLabel(area, gesture) : actionCaption(value, gesture);
     }
-    private String actionCaption(int value) {
+    private String actionCaption(int value, int gesture) {
+        if (value == ReaderKeyMap.NONE && gesture == ReaderKeyMap.DOUBLE_TAP) {
+            return getString(R.string.reader_keys_double_tap_none);
+        }
         if (direction == GalleryView.LAYOUT_TOP_TO_BOTTOM && (value == ReaderKeyMap.LEFT || value == ReaderKeyMap.RIGHT)) {
             return getString(value == ReaderKeyMap.LEFT ? R.string.reader_keys_scroll_up : R.string.reader_keys_scroll_down);
         }
@@ -277,6 +282,7 @@ public final class ReaderKeysFragment extends Fragment {
             if (gesture > 0) text.append('\n');
             text.append(gestures[gesture]).append(": ").append(actionLabel(area, gesture));
         }
+        if (preview && area == ReaderKeyMap.CENTER_TOP) text.append("\n...");
         return text.toString();
     }
     private void chooseGesture() {
@@ -289,7 +295,7 @@ public final class ReaderKeysFragment extends Fragment {
         int count = ReaderKeyMap.SAVE_NEXT + 2;
         String[] labels = new String[count];
         labels[0] = defaultLabel(region, gesture);
-        for (int i = 1; i < count; i++) labels[i] = actionCaption(i - 1);
+        for (int i = 1; i < count; i++) labels[i] = actionCaption(i - 1, gesture);
         int index = region * ReaderKeyMap.GESTURE_COUNT + gesture;
         int[] keys = draft.keys(direction);
         int selected = keys[index] + 1;
@@ -382,7 +388,8 @@ public final class ReaderKeysFragment extends Fragment {
 
     private void manageProfile() {
         String[] items = {getString(R.string.reader_keys_rename), getString(R.string.reader_keys_copy),
-                getString(R.string.reader_keys_delete), getString(R.string.reader_keys_reset)};
+                getString(R.string.reader_keys_delete), getString(R.string.reader_keys_recommended),
+                getString(R.string.reader_keys_reset)};
         new AlertDialog.Builder(requireContext()).setTitle(R.string.reader_keys_manage)
                 .setItems(items, (dialog, which) -> {
                     switch (which) {
@@ -398,7 +405,8 @@ public final class ReaderKeysFragment extends Fragment {
                                         profiles.save(); draft = profiles.active().copy(); refresh();
                                     }).setNegativeButton(android.R.string.cancel, null).show();
                         }
-                        case 3 -> new AlertDialog.Builder(requireContext()).setMessage(R.string.reader_keys_reset_question)
+                        case 3 -> { draft = ReaderKeyProfiles.recommended(draft.name); refresh(); }
+                        case 4 -> new AlertDialog.Builder(requireContext()).setMessage(R.string.reader_keys_reset_question)
                                 .setPositiveButton(android.R.string.ok, (d, w) -> {
                                     draft = new ReaderKeyProfiles.Profile(draft.name); refresh();
                                 }).setNegativeButton(android.R.string.cancel, null).show();
@@ -409,7 +417,7 @@ public final class ReaderKeysFragment extends Fragment {
     private void rename() {
         EditText input = new EditText(requireContext());
         input.setSingleLine(true);
-        input.setText(draft.name.isEmpty() ? profileName(profiles.selected) : draft.name);
+        input.setText(draft.name.isEmpty() ? profileTitle(profiles.selected) : draft.name);
         new AlertDialog.Builder(requireContext()).setTitle(R.string.reader_keys_rename).setView(input)
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> {
                     draft.name = input.getText().toString().trim(); refresh();

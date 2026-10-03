@@ -30,7 +30,7 @@
         app:fragment="com.hippo.ehviewer.ui.fragment.ReadFragment" />
 
     <com.hippo.ehviewer.ui.fragment.BasePreference
-        android:icon="@drawable/v_settings_primary_x24"
+        android:icon="@drawable/v_keyboard_primary_x24"
         android:title="@string/reader_keys_title"
         app:allowDividerAbove="true"
         app:fragment="com.hippo.ehviewer.ui.fragment.ReaderKeysFragment" />

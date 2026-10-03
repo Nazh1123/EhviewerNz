@@ -7,6 +7,11 @@ import com.hippo.lib.glgallery.ReaderKeyMap;
 public final class ReaderKeyDefaults {
     private ReaderKeyDefaults() { }
 
+    /** Fixed defaults for key profiles after retiring the global switches. */
+    public static int action(int region, int gesture) {
+        return action(region, gesture, GalleryView.LAYOUT_LEFT_TO_RIGHT, false, false, false);
+    }
+
     public static int action(int region, int gesture, int direction, boolean quick,
             boolean directSave, boolean saveTurn) {
         boolean left = region == ReaderKeyMap.LEFT_TOP || region == ReaderKeyMap.LEFT_BOTTOM;

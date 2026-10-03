@@ -79,6 +79,7 @@ public final class ReaderKeyProfiles {
         ReaderKeyProfiles result = new ReaderKeyProfiles();
         try {
             JSONObject data = new JSONObject(Settings.getString(KEY, "{}"));
+            boolean migrateSwitches = data.optInt("version", 0) < 4;
             JSONArray entries = data.optJSONArray("profiles");
             if (entries != null) {
                 for (int i = 0; i < entries.length(); i++) {
@@ -87,6 +88,8 @@ public final class ReaderKeyProfiles {
                 }
             }
             result.selected = data.optInt("selected", 0);
+            if (result.profiles.isEmpty()) result.profiles.add(new Profile(""));
+            if (migrateSwitches) for (Profile profile : result.profiles) migrateLegacySwitches(profile);
         } catch (JSONException ignored) { /* Restore defaults if storage is malformed. */ }
         if (result.profiles.isEmpty()) result.profiles.add(new Profile(""));
         result.selected = Math.max(0, Math.min(result.selected, result.profiles.size() - 1));
@@ -95,12 +98,53 @@ public final class ReaderKeyProfiles {
 
     public Profile active() { return profiles.get(selected); }
 
+    /** Snapshot of profile 1 read from the debug app on the connected device on 2026-10-03. */
+    public static Profile recommended(String name) {
+        Profile profile = new Profile(name);
+        profile.animatedControlPercent = 30;
+        profile.orientationSwipe = SWIPE_DOWN;
+        for (int direction : new int[]{GalleryView.LAYOUT_LEFT_TO_RIGHT, GalleryView.LAYOUT_RIGHT_TO_LEFT}) {
+            int[] keys = profile.keys(direction);
+            for (int region = ReaderKeyMap.LEFT_TOP; region <= ReaderKeyMap.RIGHT_BOTTOM; region++) {
+                keys[region * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
+                boolean left = region == ReaderKeyMap.LEFT_TOP || region == ReaderKeyMap.LEFT_BOTTOM;
+                boolean next = direction == GalleryView.LAYOUT_RIGHT_TO_LEFT ? left : !left;
+                if (next) keys[region * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.SAVE_NEXT;
+            }
+        }
+        int[] vertical = profile.keys(GalleryView.LAYOUT_TOP_TO_BOTTOM);
+        vertical[ReaderKeyMap.RIGHT_TOP * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.SAVE;
+        vertical[ReaderKeyMap.RIGHT_BOTTOM * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.SAVE;
+        return profile;
+    }
+
+    /** One-time compatibility only; retired switches never control runtime actions. */
+    private static void migrateLegacySwitches(Profile profile) {
+        boolean quick = Settings.getBoolean("gallery_quick_page_turn",
+                !Settings.getBoolean("gallery_double_tap_zoom", true));
+        boolean save = Settings.getBoolean("gallery_direct_save", false);
+        boolean saveTurn = Settings.getBoolean("gallery_quick_save_turn_page", false);
+        for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
+            int[] keys = profile.keys(direction);
+            for (int region = ReaderKeyMap.LEFT_TOP; region <= ReaderKeyMap.RIGHT_BOTTOM; region++) {
+                int doubleTap = region * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.DOUBLE_TAP;
+                if (quick && keys[doubleTap] == ReaderKeyMap.LEGACY) keys[doubleTap] = ReaderKeyMap.NONE;
+                boolean left = region == ReaderKeyMap.LEFT_TOP || region == ReaderKeyMap.LEFT_BOTTOM;
+                boolean next = direction == GalleryView.LAYOUT_RIGHT_TO_LEFT ? left : !left;
+                int longPress = region * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.LONG_PRESS;
+                if (save && next && keys[longPress] == ReaderKeyMap.LEGACY) {
+                    keys[longPress] = saveTurn ? ReaderKeyMap.SAVE_NEXT : ReaderKeyMap.SAVE;
+                }
+            }
+        }
+    }
+
     public void save() {
         JSONObject data = new JSONObject();
         JSONArray entries = new JSONArray();
         for (Profile profile : profiles) entries.put(profile.toJson());
         try {
-            data.put("version", 3);
+            data.put("version", 4);
             data.put("selected", selected);
             data.put("profiles", entries);
         } catch (JSONException e) { throw new IllegalStateException(e); }

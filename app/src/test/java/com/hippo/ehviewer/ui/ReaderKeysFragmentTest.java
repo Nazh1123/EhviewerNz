@@ -99,7 +99,8 @@ public class ReaderKeysFragmentTest {
         assertTrue(left.startsWith("单击: 上一页 (默认)"));
         assertFalse(left.contains("左上"));
         assertTrue(left.contains("双击: 缩放图片 (默认)"));
-        assertFalse(text(ReaderKeyMap.CENTER_TOP).contains("\n"));
+        assertTrue(text(ReaderKeyMap.CENTER_TOP).endsWith("\n..."));
+        assertFalse(text(ReaderKeyMap.CENTER_TOP).contains("双击"));
         root.findViewById(R.id.reader_keys_direction).performClick();
         assertTrue(text(ReaderKeyMap.LEFT_TOP).startsWith("单击: 下一页 (默认)"));
         root.findViewById(R.id.reader_keys_direction).performClick();
@@ -192,6 +193,178 @@ public class ReaderKeysFragmentTest {
         ReflectionHelpers.setField(fragment, "region", ReaderKeyMap.LEFT_TOP);
         ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, 0));
         latest().getListView().performItemClick(null, action + 1, action + 1);
+    }
+
+    @Test public void onlyExplicitDoubleTapNoneGetsQuickTapHint() {
+        ReflectionHelpers.setField(fragment, "region", ReaderKeyMap.LEFT_TOP);
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.DOUBLE_TAP));
+        AlertDialog choices = latest();
+        assertEquals("缩放图片 (默认)", choices.getListView().getAdapter().getItem(0));
+        assertEquals("无操作 (允许快速单击)", choices.getListView().getAdapter().getItem(1));
+        choices.getListView().performItemClick(null, 1, 1);
+        assertTrue(text(0).contains("双击: 无操作 (允许快速单击)"));
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.TAP));
+        assertEquals("无操作", latest().getListView().getAdapter().getItem(1));
+        assertEquals("键位", controller.get().getString(R.string.reader_keys_title));
+    }
+
+    @Test public void retiredSwitchesAreAbsentAndReadingMenuStillInflates() throws Exception {
+        Context context = controller.get();
+        androidx.preference.PreferenceManager manager = new androidx.preference.PreferenceManager(context);
+        for (int xml : new int[]{R.xml.read_settings, R.xml.fork_features_settings}) {
+            androidx.preference.PreferenceScreen screen = manager.inflateFromResource(context, xml, null);
+            assertNull(screen.findPreference("gallery_direct_save"));
+            assertNull(screen.findPreference("gallery_quick_page_turn"));
+            assertNull(screen.findPreference("gallery_quick_save_turn_page"));
+        }
+        GalleryActivity gallery = Robolectric.buildActivity(GalleryActivity.class).get();
+        gallery.setTheme(R.style.AppTheme_Settings);
+        try {
+            Class<?> helper = Class.forName("com.hippo.ehviewer.ui.GalleryActivity$GalleryMenuHelper");
+            java.lang.reflect.Constructor<?> constructor = helper.getDeclaredConstructor(GalleryActivity.class, Context.class);
+            constructor.setAccessible(true);
+            Object menu = constructor.newInstance(gallery, gallery);
+            View view = ReflectionHelpers.callInstanceMethod(menu, "getView");
+            assertNotNull(view.findViewById(R.id.reader_key_editor));
+            assertFalse(hasText(view, context.getString(R.string.settings_read_direct_save)));
+            assertFalse(hasText(view, context.getString(R.string.settings_read_quick_page_turn)));
+        } finally {
+            ((java.util.concurrent.ExecutorService) ReflectionHelpers.getField(gallery, "mImageFileExecutor")).shutdownNow();
+            ((java.util.concurrent.ExecutorService) ReflectionHelpers.getField(gallery, "transferService")).shutdownNow();
+            ((android.os.Handler) ReflectionHelpers.getField(gallery, "mAnimatedWebpHandler")).removeCallbacksAndMessages(null);
+        }
+    }
+
+    private boolean hasText(View view, String text) {
+        if (view instanceof android.widget.TextView label && text.contentEquals(label.getText())) return true;
+        if (view instanceof android.view.ViewGroup group) {
+            for (int index = 0; index < group.getChildCount(); index++) if (hasText(group.getChildAt(index), text)) return true;
+        }
+        return false;
+    }
+
+    @Test public void profileOrdinalIsDisplayedButNeverAddedToTheSavedName() {
+        ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        profiles.active().name = "配置3";
+        profiles.profiles.add(new ReaderKeyProfiles.Profile("夜间"));
+        profiles.save();
+        openEditor(); layout(360, 800);
+        android.widget.TextView button = root.findViewById(R.id.reader_keys_profile);
+        assertTrue(button.getText().toString().startsWith("1. 配置3"));
+        button.performClick();
+        AlertDialog choices = latest();
+        assertEquals("1. 配置3", choices.getListView().getAdapter().getItem(0));
+        assertEquals("2. 夜间", choices.getListView().getAdapter().getItem(1));
+        choices.getListView().performItemClick(null, 1, 1);
+        assertTrue(button.getText().toString().startsWith("2. 夜间"));
+        ReflectionHelpers.callInstanceMethod(fragment, "rename");
+        EditText input = find(latest().getWindow().getDecorView(), EditText.class);
+        assertEquals("夜间", input.getText().toString());
+        latest().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        root.findViewById(R.id.reader_keys_save).performClick();
+        assertEquals("夜间", ReaderKeyProfiles.load().active().name);
+    }
+
+    @Test public void recommendedMenuPreservesNameAndOtherProfilesAndSavesAllDirections() {
+        ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        profiles.active().name = "夜间";
+        profiles.active().animatedControlPercent = 77;
+        profiles.active().orientationSwipe = ReaderKeyProfiles.SWIPE_OFF;
+        profiles.active().keys(0)[0] = ReaderKeyMap.NONE;
+        ReaderKeyProfiles.Profile other = new ReaderKeyProfiles.Profile("另外一份");
+        other.keys(1)[0] = ReaderKeyMap.NEXT;
+        profiles.profiles.add(other);
+        profiles.save();
+        openEditor(); layout(360, 800);
+        root.findViewById(R.id.reader_keys_manage).performClick();
+        AlertDialog menu = latest();
+        assertEquals("使用推荐配置", menu.getListView().getAdapter().getItem(3));
+        assertEquals("恢复默认配置", menu.getListView().getAdapter().getItem(4));
+        menu.getListView().performItemClick(null, 3, 3);
+        assertTrue(text(ReaderKeyMap.LEFT_TOP).contains("双击: 无操作 (允许快速单击)"));
+        assertEquals(77, ReaderKeyProfiles.load().active().animatedControlPercent);
+        assertTrue(((android.widget.TextView) root.findViewById(R.id.reader_keys_profile)).getText().toString().contains("*"));
+        root.findViewById(R.id.reader_keys_save).performClick();
+        ReaderKeyProfiles saved = ReaderKeyProfiles.load();
+        assertEquals(0, saved.selected);
+        assertEquals("夜间", saved.active().name);
+        ReaderKeyProfiles.Profile recommendation = ReaderKeyProfiles.recommended("夜间");
+        for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
+            assertArrayEquals(recommendation.keys(direction), saved.active().keys(direction));
+        }
+        assertEquals(30, saved.active().animatedControlPercent);
+        assertEquals(ReaderKeyProfiles.SWIPE_DOWN, saved.active().orientationSwipe);
+        assertEquals(ReaderKeyMap.NEXT, saved.profiles.get(1).keys(1)[0]);
+        root.findViewById(R.id.reader_keys_manage).performClick();
+        latest().getListView().performItemClick(null, 4, 4);
+        latest().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        root.findViewById(R.id.reader_keys_save).performClick();
+        assertEquals(ReaderKeyMap.LEGACY, ReaderKeyProfiles.load().active().keys(0)[1]);
+    }
+
+    @Test public void readerProfileSelectorUpdatesNumberedQuickIconAndSelection() throws Exception {
+        ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        profiles.active().name = "配置3";
+        profiles.profiles.add(new ReaderKeyProfiles.Profile("夜间"));
+        profiles.save();
+        GalleryActivity gallery = Robolectric.buildActivity(GalleryActivity.class).get();
+        gallery.setTheme(R.style.AppTheme_Gallery_Dark);
+        android.widget.ImageButton quick = new android.widget.ImageButton(gallery);
+        ReflectionHelpers.setField(gallery, "mQuickReaderKeyProfile", quick);
+        try {
+            ReflectionHelpers.callInstanceMethod(gallery, "bindQuickReaderKeyProfile");
+            ReflectionHelpers.callInstanceMethod(gallery, "updateQuickReaderKeyProfile");
+            assertEquals("切换配置：1. 配置3", quick.getContentDescription().toString());
+            quick.performClick();
+            assertEquals(1, ReaderKeyProfiles.load().selected);
+            assertEquals("切换配置：2. 夜间", quick.getContentDescription().toString());
+            assertEquals("已切换至配置 夜间", org.robolectric.shadows.ShadowToast.getTextOfLatestToast());
+            assertTrue(quick.performLongClick());
+            assertEquals(1, ReaderKeyProfiles.load().selected);
+            AlertDialog choices = latest();
+            assertEquals("2. 夜间", choices.getListView().getAdapter().getItem(1));
+            choices.getListView().performItemClick(null, 0, 0);
+            assertEquals(0, ReaderKeyProfiles.load().selected);
+            assertEquals("切换配置：1. 配置3", quick.getContentDescription().toString());
+            assertEquals("已切换至 配置3", org.robolectric.shadows.ShadowToast.getTextOfLatestToast());
+            quick.performClick();
+            quick.performClick();
+            assertEquals(0, ReaderKeyProfiles.load().selected);
+            profiles.profiles.remove(1);
+            profiles.active().name = "";
+            profiles.save();
+            quick.performClick();
+            assertEquals(0, ReaderKeyProfiles.load().selected);
+            assertEquals("已切换至 配置 1", org.robolectric.shadows.ShadowToast.getTextOfLatestToast());
+            Bitmap image = Bitmap.createBitmap(240, 96, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(image);
+            canvas.drawColor(gallery.getColor(R.color.grey_850));
+            for (int ordinal = 1; ordinal <= 3; ordinal++) {
+                android.graphics.drawable.Drawable icon = new com.hippo.ehviewer.widget.ReaderKeyProfileDrawable(gallery, ordinal);
+                icon.setBounds((ordinal - 1) * 80 + 16, 24, (ordinal - 1) * 80 + 64, 72);
+                icon.draw(canvas);
+            }
+            File directory = new File("build/reader-key-previews");
+            assertTrue(directory.isDirectory() || directory.mkdirs());
+            try (FileOutputStream output = new FileOutputStream(new File(directory, "quick-profile-icons.png"))) {
+                assertTrue(image.compress(Bitmap.CompressFormat.PNG, 100, output));
+            }
+            image.recycle();
+            Bitmap keyboard = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888);
+            Canvas keyboardCanvas = new Canvas(keyboard);
+            android.graphics.drawable.Drawable keyboardIcon = controller.get().getDrawable(R.drawable.v_keyboard_primary_x24);
+            keyboardIcon.setBounds(24, 24, 72, 72);
+            keyboardIcon.draw(keyboardCanvas);
+            try (FileOutputStream output = new FileOutputStream(new File(directory, "keyboard-icon.png"))) {
+                assertTrue(keyboard.compress(Bitmap.CompressFormat.PNG, 100, output));
+            }
+            keyboard.recycle();
+        } finally {
+            ((java.util.concurrent.ExecutorService) ReflectionHelpers.getField(gallery, "mImageFileExecutor")).shutdownNow();
+            ((java.util.concurrent.ExecutorService) ReflectionHelpers.getField(gallery, "transferService")).shutdownNow();
+            ((android.os.Handler) ReflectionHelpers.getField(gallery, "mAnimatedWebpHandler")).removeCallbacksAndMessages(null);
+        }
     }
 
     private void render(String name, int widthDp, int heightDp) throws Exception {
