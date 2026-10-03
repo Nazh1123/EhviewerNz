@@ -18,7 +18,8 @@ def prepareTranslationSources = tasks.register('prepareTranslationSources', Sync
     // injectable cancellable transport shared by the API and JNI backends.
     // Renderer keeps the pinned drawing algorithm and adds a background-independent
     // layout command layer for local inpainting/layout overlap.
-    exclude '**/NightReadRenderer.kt', '**/CharSeg.kt', '**/LlmTranslator.kt', '**/Renderer.kt'
+    // Grouping keeps upstream geometry and supplies language-aware line joins.
+    exclude '**/NightReadRenderer.kt', '**/CharSeg.kt', '**/LlmTranslator.kt', '**/Renderer.kt', '**/Grouping.kt'
     // Adapt only the pinned networking helpers to the reader's OkHttp 3 API.
     // Keep the upstream checkout pristine and avoid upgrading the whole app.
     filesMatching(['**/ModelDownloader.kt', '**/LlmModels.kt']) {

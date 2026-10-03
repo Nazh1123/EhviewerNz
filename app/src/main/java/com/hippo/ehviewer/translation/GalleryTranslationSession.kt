@@ -44,6 +44,21 @@ internal class GalleryTranslationSession(
     var readerOpen = true
         private set
     val settings = TranslationSettings(context)
+    @Volatile private var sourceLanguage = GallerySourceLanguage()
+    private fun resolvedOptions(options: TranslationOptions) = sourceLanguage.options(options)
+    private suspend fun identifySourceLanguage(options: TranslationOptions, texts: List<String>,
+                                              request: TranslationPageRequest, epoch: Int) {
+        if (options.source != TranslationLanguages.AUTO_SOURCE) return
+        val detected = sourceLanguage.observe(texts) {
+            if (generation != epoch) throw SupersededTranslationPage()
+            request.ensureRelevant()
+        }
+        if (detected != null) withContext(Dispatchers.Main) {
+            android.widget.Toast.makeText(context, context.getString(R.string.translation_source_detected,
+                TranslationLanguages.displayName(detected, context.resources.configuration.locales[0])),
+                android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
     private val models = TranslationModels(context)
     private val memoryPolicy = NativeMemoryPolicy(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -339,7 +354,8 @@ internal class GalleryTranslationSession(
                                 ensureActive()
                                 request.ensureRelevant()
                                 request.sourceName = provider.getTranslationFilename(page)
-                                val results = resultStore(options, request.sourceName)
+                                var pageOptions = resolvedOptions(options)
+                                var results = resultStore(pageOptions, request.sourceName)
                                 withContext(Dispatchers.Main) {
                                     if (generation == epoch) completedNames[page] = checkNotNull(request.sourceName)
                                 }
@@ -347,8 +363,8 @@ internal class GalleryTranslationSession(
                                     status(epoch, page, R.string.translation_animation)
                                     return@withContext
                                 }
-                                val key = results.key(source)
-                                val preparationKey = results.preparationKey(source)
+                                var key = results.key(source)
+                                var preparationKey = results.preparationKey(source)
                                 val cached = resultLock.withLock {
                                     if (request.force) return@withLock false
                                     val existing = results.existingImage(key)
@@ -367,9 +383,10 @@ internal class GalleryTranslationSession(
                                     } else false
                                 }
                                 if (cached) return@withContext
-                                val resume = if (request.retryMissing) results.readResume(key) else null
+                                var resume = if (request.retryMissing) results.readResume(key) else null
                                 if (modelsUnavailable || !models.ready() ||
-                                    options.backend == TranslationBackend.NATIVE_LLM && !NativeModelStore(context).ready(options)) {
+                                    options.backend == TranslationBackend.NATIVE_LLM &&
+                                    options.source != TranslationLanguages.AUTO_SOURCE && !NativeModelStore(context).ready(options)) {
                                     modelsUnavailable = true
                                     modelsRequired(epoch, request)
                                     return@withContext
@@ -377,8 +394,8 @@ internal class GalleryTranslationSession(
                                 if (engine == null) {
                                     // Cached results need neither model checksums nor a language model.
                                     val modelSet = try {
-                                        if (options.backend == TranslationBackend.ML_KIT) {
-                                            check(OfflineTranslator.isReady(options.target)) { "Language model missing" }
+                                        if (options.backend == TranslationBackend.ML_KIT && options.source != TranslationLanguages.AUTO_SOURCE) {
+                                            check(OfflineTranslator.isReady(pageOptions.target, pageOptions.mlKitSource)) { "Language model missing" }
                                         }
                                         models.verified()
                                     } catch (cancel: CancellationException) {
@@ -388,15 +405,18 @@ internal class GalleryTranslationSession(
                                         modelsRequired(epoch, request)
                                         return@withContext
                                     }
-                                    val selected: li.joye.yakuyomi.engine.Translator = when (options.backend) {
-                                        TranslationBackend.NATIVE_LLM -> NativeTranslator(context, options,
+                                    suspend fun createTranslator(selectedOptions: TranslationOptions): li.joye.yakuyomi.engine.Translator = when (selectedOptions.backend) {
+                                        TranslationBackend.NATIVE_LLM -> NativeTranslator(context, selectedOptions,
                                             prefixCacheProvider = { TranslationRuntime.nativePrefixCache() }) {
                                             if (generation != epoch) throw SupersededTranslationPage()
                                             checkNotNull(activeRequest).ensureRelevant()
                                         }
-                                        TranslationBackend.ML_KIT -> OfflineTranslator(options.target)
-                                        TranslationBackend.LLM_API -> ApiTranslator(options)
+                                        TranslationBackend.ML_KIT -> OfflineTranslator(selectedOptions.target, selectedOptions.mlKitSource)
+                                        TranslationBackend.LLM_API -> ApiTranslator(selectedOptions)
                                     }
+                                    val selected = if (options.source == TranslationLanguages.AUTO_SOURCE)
+                                        GallerySourceTranslator({ resolvedOptions(options) }, ::createTranslator)
+                                    else createTranslator(options)
                                     translator = selected as AutoCloseable
                                     val guarded = object : li.joye.yakuyomi.engine.DetailedTranslator {
                                         override suspend fun translateDetailed(queries: List<String>): li.joye.yakuyomi.engine.LlmTranslator.TranslateResult {
@@ -414,8 +434,16 @@ internal class GalleryTranslationSession(
                                         }
                                     }
                                     engine = TranslationEngineFactory.create(context, modelSet, options, guarded,
-                                        beforeImageStage = { (selected as? NativeTranslator)?.unloadModel() },
-                                        retainNativeModels = ::retainNativeModels)
+                                        beforeImageStage = {
+                                            (selected as? NativeTranslator)?.unloadModel()
+                                            (selected as? GallerySourceTranslator)?.unloadNativeModel()
+                                        },
+                                        retainNativeModels = ::retainNativeModels,
+                                        resolvedOptions = { resolvedOptions(options) },
+                                        onRecognized = { lines ->
+                                            identifySourceLanguage(options, lines.map { it.text },
+                                                checkNotNull(currentCoroutineContext()[TranslationPageRequest]), epoch)
+                                        })
                                     if (options.backend == TranslationBackend.LLM_API) checkNotNull(engine).warmUp()
                                 }
                                 if (request.force && !request.retryMissing) resultLock.withLock {
@@ -425,7 +453,9 @@ internal class GalleryTranslationSession(
                                 val activeEngine = checkNotNull(engine)
                                 request.ensureRelevant()
                                 val bitmap = decodeBounded(source, options.backend)
-                                var prepared = TranslationRuntime.preparedPages.take(preparationKey)
+                                // A new automatic task must classify fresh OCR from the current model.
+                                var prepared = if (options.source == TranslationLanguages.AUTO_SOURCE && sourceLanguage.language == null)
+                                    null else TranslationRuntime.preparedPages.take(preparationKey)
                                 val reused = prepared != null
                                 var retainPreparation = true
                                 try {
@@ -446,16 +476,46 @@ internal class GalleryTranslationSession(
                                     }
                                     ensureActive()
                                     request.ensureRelevant()
-                                    if (resume != null) prepared?.restoreTranslations(options.cacheIdentity(), resume)
+                                    // First-page OCR can resolve "auto". Store this very page under the resolved
+                                    // language identity so the next session cannot reuse an unspecified prompt.
+                                    val afterOcrOptions = resolvedOptions(options)
+                                    if (afterOcrOptions.cacheIdentity() != pageOptions.cacheIdentity()) {
+                                        pageOptions = afterOcrOptions
+                                        results = resultStore(pageOptions, request.sourceName)
+                                        key = results.key(source)
+                                        preparationKey = results.preparationKey(source)
+                                        resume = if (request.retryMissing) results.readResume(key) else null
+                                    }
+                                    if (pageOptions.backend == TranslationBackend.NATIVE_LLM && prepared!!.regions.isNotEmpty() &&
+                                        !NativeModelStore(context).ready(pageOptions)) {
+                                        modelsUnavailable = true
+                                        modelsRequired(epoch, request)
+                                        return@withContext
+                                    }
+                                    if (pageOptions.backend == TranslationBackend.ML_KIT && prepared!!.regions.isNotEmpty()) {
+                                        if (pageOptions.source == TranslationLanguages.AUTO_SOURCE) {
+                                            status(epoch, page, R.string.translation_failed)
+                                            withContext(Dispatchers.Main) {
+                                                android.widget.Toast.makeText(context, R.string.translation_source_unknown, android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                            return@withContext
+                                        }
+                                        if (!OfflineTranslator.isReady(pageOptions.target, pageOptions.mlKitSource)) {
+                                            modelsUnavailable = true
+                                            modelsRequired(epoch, request)
+                                            return@withContext
+                                        }
+                                    }
+                                    if (resume != null) prepared?.restoreTranslations(pageOptions.cacheIdentity(), resume!!)
                                     if (withContext(Dispatchers.Main) { TranslationTasks.scheduler.shouldYield(checkNotNull(turn)) }) {
                                         yielded.set(true)
                                         throw YieldTranslationTurn()
                                     }
-                                    val saved = finishTranslation(epoch, request, key, options, bitmap,
-                                        resume = { prepared?.translationResume(options.cacheIdentity())?.takeIf { it.missingCount > 0 } }) {
+                                    val saved = finishTranslation(epoch, request, key, pageOptions, bitmap,
+                                        resume = { prepared?.translationResume(pageOptions.cacheIdentity())?.takeIf { it.missingCount > 0 } }) {
                                         activeEngine.translatePrepared(bitmap, prepared, reused, report) { !request.isObsolete }
                                     }
-                                    retainPreparation = !saved || prepared?.translationResume(options.cacheIdentity())?.missingCount?.let { it > 0 } == true
+                                    retainPreparation = !saved || prepared?.translationResume(pageOptions.cacheIdentity())?.missingCount?.let { it > 0 } == true
                                     ensureActive()
                                     request.ensureRelevant()
                                     if (!saved) status(epoch, page,
@@ -486,7 +546,9 @@ internal class GalleryTranslationSession(
                                 }
                             }
                         }
-                        runTranslationPages(options.pageConcurrency, parallelReady = { engine != null }, next = {
+                        runTranslationPages(options.pageConcurrency, parallelReady = {
+                            engine != null && (options.source != TranslationLanguages.AUTO_SOURCE || sourceLanguage.language != null)
+                        }, next = {
                             ensureActive()
                             if (yielded.get() || withContext(Dispatchers.Main) {
                                     TranslationTasks.scheduler.shouldYield(checkNotNull(turn))
@@ -789,6 +851,7 @@ internal class GalleryTranslationSession(
         fullGallery = false
         serviceRequested = false
         generation++
+        sourceLanguage = GallerySourceLanguage()
         retainedModels.release()
         cancelResultLoader()
         retentionJob?.cancel()

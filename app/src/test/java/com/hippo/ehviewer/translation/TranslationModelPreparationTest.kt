@@ -25,7 +25,7 @@ class TranslationModelPreparationTest {
             val complete = AtomicInteger()
             TranslationModelPreparation(controller.get(), { complete.incrementAndGet() },
                 downloadManga = { manga.incrementAndGet() },
-                downloadLanguage = { language.incrementAndGet() }, checkWifi = {}).use { preparation ->
+                downloadLanguage = { _, _ -> language.incrementAndGet() }, notifyDownloadNetwork = {}).use { preparation ->
                 preparation.prepareManga()
                 awaitCompletion(complete)
                 assertEquals(1, manga.get())
@@ -36,7 +36,7 @@ class TranslationModelPreparationTest {
 
     @Test fun preparingLanguageDoesNotContactMangaDownloadSourceEvenOnFailure() {
         val context = RuntimeEnvironment.getApplication()
-        TranslationSettings(context).save(TranslationOptions(backend = TranslationBackend.ML_KIT, target = "fr"))
+        TranslationSettings(context).save(TranslationOptions(backend = TranslationBackend.ML_KIT, target = "fr", source = "en"))
         val intent = Intent(context, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_TRANSLATION, true)
         Robolectric.buildActivity(SettingsActivity::class.java, intent).setup().use { controller ->
             val manga = AtomicInteger()
@@ -44,15 +44,42 @@ class TranslationModelPreparationTest {
             val complete = AtomicInteger()
             TranslationModelPreparation(controller.get(), { complete.incrementAndGet() },
                 downloadManga = { manga.incrementAndGet() },
-                downloadLanguage = { target ->
+                downloadLanguage = { source, target ->
+                    assertEquals("en", source)
                     assertEquals("fr", target)
                     language.incrementAndGet()
                     error("Google download unavailable")
-                }, checkWifi = {}).use { preparation ->
+                }, notifyDownloadNetwork = {}).use { preparation ->
                 preparation.prepareMlKit()
                 awaitCompletion(complete)
                 assertEquals(0, manga.get())
                 assertEquals(1, language.get())
+            }
+        }
+    }
+
+    @Test fun cellularNoticeDoesNotPreventMangaOrLanguagePreparation() {
+        val context = RuntimeEnvironment.getApplication()
+        TranslationSettings(context).save(TranslationOptions(backend = TranslationBackend.ML_KIT, target = "fr", source = "en"))
+        val intent = Intent(context, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_TRANSLATION, true)
+        Robolectric.buildActivity(SettingsActivity::class.java, intent).setup().use { controller ->
+            val cellular = org.robolectric.shadows.ShadowNetworkCapabilities.newInstance().also {
+                shadowOf(it).addTransportType(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+            }
+            for (languageOnly in listOf(false, true)) {
+                val downloads = AtomicInteger()
+                val complete = AtomicInteger()
+                TranslationModelPreparation(controller.get(), { complete.incrementAndGet() },
+                    downloadManga = { downloads.incrementAndGet() },
+                    downloadLanguage = { source, target ->
+                        assertEquals("en", source); assertEquals("fr", target)
+                        downloads.incrementAndGet()
+                    }, notifyDownloadNetwork = { notifyModelDownloadNetwork(context, cellular) }).use { preparation ->
+                    if (languageOnly) preparation.prepareMlKit() else preparation.prepareManga()
+                    awaitCompletion(complete)
+                    assertEquals(1, downloads.get())
+                    assertTrue(org.robolectric.shadows.ShadowToast.showedToast(context.getString(com.hippo.ehviewer.R.string.translation_mobile_download)))
+                }
             }
         }
     }

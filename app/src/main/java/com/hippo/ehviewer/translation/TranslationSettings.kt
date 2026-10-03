@@ -17,6 +17,7 @@ data class TranslationOptions(
     val apiModel: String = "", val apiKey: String = "",
     val persistDownloaded: Boolean = false, val cacheSizeMb: Int = 256,
     val nativeModelId: String = "", val nativeModelName: String = "",
+    val source: String = TranslationLanguages.DEFAULT_SOURCE,
 ) {
     val cacheLimitBytes: Long get() = cacheSizeMb * 1024L * 1024L
     val inputImageIdentity: String get() =
@@ -26,20 +27,20 @@ data class TranslationOptions(
     else 1
 
     fun preparationIdentity(): String = engineConfig().let {
-        listOf("ehnz-preparation-v1", "981ae85617bb3323949d57b7d6e3e10181435325", inputImageIdentity,
+        listOf("ehnz-preparation-v2-multilingual", "981ae85617bb3323949d57b7d6e3e10181435325", inputImageIdentity, source,
             // Line concurrency changes scheduling, not recognized text or coordinates.
             // Keep preprocessing reusable when switching to the native memory policy.
             it.detector.toString(), it.ocr.copy(concurrency = OcrConfig().concurrency).toString(),
             it.inpainter.toString()).joinToString("\n")
     }
 
-    fun cacheIdentity(): String = listOf("ehnz-overlay-v1", "981ae85617bb3323949d57b7d6e3e10181435325",
+    fun cacheIdentity(): String = listOf("ehnz-overlay-v2-multilingual", "981ae85617bb3323949d57b7d6e3e10181435325",
         when (backend) {
-            TranslationBackend.NATIVE_LLM -> "llama-jni-v11-japanese-source-strict-regions-prefix-kv\n$nativeModelId"
-            TranslationBackend.ML_KIT -> "mlkit-17.0.3-ja"
-            TranslationBackend.LLM_API -> "llm-api-v3-segments-981ae856\n${apiUrl.trim()}\n${apiModel.trim()}"
+            TranslationBackend.NATIVE_LLM -> "llama-jni-v12-multilingual-strict-regions-prefix-kv\n$nativeModelId"
+            TranslationBackend.ML_KIT -> "mlkit-17.0.3-multilingual"
+            TranslationBackend.LLM_API -> "llm-api-v4-multilingual-segments-981ae856\n${apiUrl.trim()}\n${apiModel.trim()}"
         },
-        if (backend == TranslationBackend.ML_KIT) target else "${TranslationLanguages.SOURCE}\n$target",
+        "$source\n$target",
         inpaint.toString(), inputImageIdentity).joinToString("\n")
 
     fun validApiUrl(): Boolean {
@@ -49,9 +50,11 @@ data class TranslationOptions(
 
     fun targetLanguageName() = TranslationLanguages.promptName(target)
 
-    fun sourceLanguageName() = TranslationLanguages.promptName(TranslationLanguages.SOURCE)
+    fun sourceLanguageName() = if (source == "zh") "Chinese" else TranslationLanguages.promptName(source)
 
-    fun sampleText() = "明日は学校へ行きます。"
+    val mlKitSource: String get() = TranslationLanguages.mlKitSource(source)
+
+    fun sampleText() = TranslationLanguages.sampleText(source)
 
     /** An unsupported saved target must never reach ML Kit's client/model APIs. */
     fun withBackend(backend: TranslationBackend): TranslationOptions {
@@ -62,7 +65,8 @@ data class TranslationOptions(
             "zh-Hant" -> "zh-TW"
             else -> target
         }
-        val updated = copy(backend = backend, target = mappedTarget)
+        val updated = copy(backend = backend, target = mappedTarget,
+            source = source.takeIf { it in TranslationLanguages.sources } ?: TranslationLanguages.DEFAULT_SOURCE)
         return if (TranslationLanguages.validTarget(updated)) updated
             else updated.copy(target = if (backend == TranslationBackend.ML_KIT) "zh" else "zh-CN")
     }
@@ -117,9 +121,12 @@ class TranslationSettings(context: Context) {
         prefs.getString("api_model", "") ?: "", prefs.getString("api_key", "") ?: "",
         prefs.getBoolean("persist_downloaded", false),
         prefs.getInt("cache_size_mb", 256).takeIf { it in CACHE_SIZES_MB } ?: 256,
-        prefs.getString("native_model_id", "") ?: "", prefs.getString("native_model_name", "") ?: "").let { it.withBackend(it.backend) }
+        prefs.getString("native_model_id", "") ?: "", prefs.getString("native_model_name", "") ?: "",
+        // Ignore legacy prompt-only source values; opt in through the new source selector.
+        prefs.getString("source_language", null) ?: TranslationLanguages.DEFAULT_SOURCE).let { it.withBackend(it.backend) }
     fun save(options: TranslationOptions) {
         require(TranslationLanguages.validTarget(options))
+        require(TranslationLanguages.validSource(options))
         require(options.ahead in 0..10)
         require(options.validApiUrl())
         require(options.cacheSizeMb in CACHE_SIZES_MB)
@@ -130,7 +137,8 @@ class TranslationSettings(context: Context) {
             putString("api_model", options.apiModel.trim()); putString("api_key", options.apiKey.trim())
             putBoolean("persist_downloaded", options.persistDownloaded); putInt("cache_size_mb", options.cacheSizeMb)
             putString("native_model_id", options.nativeModelId); putString("native_model_name", options.nativeModelName)
-            // A saved source only changed LLM prompts; the bundled OCR remains Japanese.
+            putString("source_language", options.source)
+            // Remove the obsolete prompt-only preference instead of reviving its values.
             remove("source")
         }
     }

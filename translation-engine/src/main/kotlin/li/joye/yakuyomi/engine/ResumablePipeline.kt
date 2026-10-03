@@ -25,7 +25,7 @@ class PreparedPage(
     internal var translationIdentity: String? = null
     internal val translations = mutableMapOf<Int, String>()
     private fun regionSignatures() = regions.map { region ->
-        region.lines.joinToString("\n") { "${it.quad}|${it.text}" }
+        "${region.sourceSeparator}|" + region.lines.joinToString("\n") { "${it.quad}|${it.text}" }
     }
 
     fun translationResume(identity: String): TranslationResume? =
@@ -74,6 +74,9 @@ class ResumablePipeline(
     // the ownership of work already running. Other backends use the fixed flags.
     private val selectInpaintingOverlap: (() -> Boolean)? = null,
     private val afterPreparedPage: () -> Unit = {},
+    private val sourceSeparator: String = "",
+    private val sourceSeparatorProvider: () -> String = { sourceSeparator },
+    private val translationIdentityProvider: () -> String? = { translationIdentity },
 ) : TranslationEngine {
     suspend fun prepare(page: Bitmap,
                         onProgress: suspend (TranslationStage, Float) -> Unit = { _, _ -> },
@@ -93,7 +96,10 @@ class ResumablePipeline(
             EngineTrace.log("resume.ocr.enter")
             if (detection.lines.isNotEmpty()) recognize(page, detection.lines)
             EngineTrace.log("resume.ocr.exit")
-            val regions = Grouping.group(detection.lines).filter { it.sourceText.isNotBlank() }
+            // Inpainting uses the whole region's bounding box. Dropping only a rejected
+            // line can still erase it inside its neighbors' box; retain that bubble instead.
+            val regions = Grouping.group(detection.lines, sourceSeparatorProvider())
+                .filter { region -> region.lines.all { it.text.isNotBlank() } }
             val ocrMs = System.currentTimeMillis() - ocrStart
             onProgress(TranslationStage.OCR, 1f)
             return PreparedPage(detection.textMask, regions, detection.lines.size, detectMs, ocrMs)
@@ -115,6 +121,8 @@ class ResumablePipeline(
         var promptTokens = 0
         var completionTokens = 0
         var translationError: String? = null
+        // Automatic source selection finishes during OCR, before any translation checkpoint is used.
+        val translationIdentity = translationIdentityProvider()
         fun stats(kept: Int = 0, renderMs: Long = 0) = PageStats(prepared.lines, prepared.regions.size, kept,
             detectMs, ocrMs, translateMs, inpaintMs, renderMs,
             System.currentTimeMillis() - start + detectMs + ocrMs, promptTokens, completionTokens)
@@ -240,7 +248,7 @@ class ResumablePipeline(
                             it.translatedText = line.translatedText
                         }
                     }
-                    TextRegion(lines, region.direction, region.angle, region.cx, region.cy, region.boxW, region.boxH).also {
+                    TextRegion(lines, region.direction, region.angle, region.cx, region.cy, region.boxW, region.boxH, region.sourceSeparator).also {
                         it.translatedText = region.translatedText
                         it.onArt = region.onArt
                         it.dbgStd = region.dbgStd

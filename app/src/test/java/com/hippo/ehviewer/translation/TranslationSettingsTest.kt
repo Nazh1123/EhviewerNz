@@ -241,14 +241,14 @@ class TranslationSettingsTest {
         assertTrue(api.preparationIdentity().contains("original-size"))
         assertTrue(api.cacheIdentity().contains("original-size"))
         assertFalse(api.cacheIdentity().contains("max-edge-2048"))
-        assertTrue(native.cacheIdentity().contains("llama-jni-v11-japanese-source-strict-regions-prefix-kv"))
+        assertTrue(native.cacheIdentity().contains("llama-jni-v12-multilingual-strict-regions-prefix-kv"))
         assertFalse(native.cacheIdentity().contains("llama-jni-v10-strict-regions-prefix-kv"))
         assertFalse(native.cacheIdentity().contains("llama-jni-v8-user-manga-prefix-kv"))
         assertFalse(native.cacheIdentity().contains("llama-jni-v7-user-manga-prefix-kv"))
         assertFalse(native.cacheIdentity().contains("llama-jni-v6-compact-manga-prefix-kv"))
         assertFalse(native.cacheIdentity().contains("llama-jni-v5-prefix-kv"))
-        assertTrue(api.cacheIdentity().contains("llm-api-v3-segments"))
-        assertTrue(mlkit.cacheIdentity().contains("mlkit-17.0.3-ja"))
+        assertTrue(api.cacheIdentity().contains("llm-api-v4-multilingual-segments"))
+        assertTrue(mlkit.cacheIdentity().contains("mlkit-17.0.3-multilingual"))
         assertFalse(api.cacheIdentity().contains("llm-api-v1\n"))
     }
 

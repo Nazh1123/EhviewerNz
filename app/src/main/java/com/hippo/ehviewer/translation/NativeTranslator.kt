@@ -135,7 +135,9 @@ class NativeTranslator private constructor(
             val region = LlmBatching.translate(listOf(source)) {
                 val fromClause = options.sourceLanguageName().let { if (it.isEmpty()) "" else "$it " }
                 val instruction = if (options.targetLanguageName() == "Simplified Chinese")
-                    "将以下文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释："
+                    if (options.source == TranslationLanguages.DEFAULT_SOURCE)
+                        "将以下文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释："
+                    else "将以下${options.sourceLanguageName()}文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释："
                 else "Translate the following ${fromClause}segment into ${options.targetLanguageName()}, without additional explanation."
                 val messages = JSONArray().put(JSONObject().put("role", "user").put("content", "$instruction\n\n$source"))
                 val response = try {

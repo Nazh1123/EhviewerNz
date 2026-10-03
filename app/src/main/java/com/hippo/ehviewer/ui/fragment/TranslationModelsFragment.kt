@@ -41,6 +41,7 @@ class TranslationModelsFragment : Fragment() {
     private var mangaReady: Boolean? = null
     private var section = 0
     private var languageTarget = "zh"
+    private var languageSource = TranslationLanguages.DEFAULT_SOURCE
     private var scope: CoroutineScope? = null
     private var work: Job? = null
     private var status: Job? = null
@@ -62,6 +63,7 @@ class TranslationModelsFragment : Fragment() {
         languageTarget = savedInstanceState?.getString("language_target")
             ?: TranslationSettings(requireContext()).read().withBackend(TranslationBackend.ML_KIT).target
         if (languageTarget !in TranslationLanguages.mlKitTargets) languageTarget = "zh"
+        languageSource = TranslationSettings(requireContext()).read().source
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -177,7 +179,7 @@ class TranslationModelsFragment : Fragment() {
             ready, listOf("${size(models.storedBytes())} / ${size(models.totalBytes)}", getString(R.string.translation_model_file_count, models.requiredNames.size)),
             listOf(action(if (ready) R.string.translation_model_check_download else R.string.translation_model_download, ModelButtonKind.PRIMARY) {
                 operate(getString(R.string.translation_model_manga_title)) {
-                    requireModelDownloadWifi(requireContext().applicationContext); locked { models.download(::reportProgress) }
+                    notifyModelDownloadNetwork(requireContext().applicationContext); locked { models.download(::reportProgress) }
                 }
             }, action(R.string.translation_model_import) {
                 showDialog(AlertDialog.Builder(requireContext()).setTitle(R.string.translation_model_import_manga)
@@ -204,11 +206,6 @@ class TranslationModelsFragment : Fragment() {
     }
 
     private fun addNativeCard(id: String, name: String, bytes: Long, available: Boolean, selected: Boolean, catalog: NativeDownloadModel?) {
-        val title = when (catalog) {
-            NativeModelCatalog.models[0] -> "HY-MT 1.5"
-            NativeModelCatalog.models[1] -> getString(R.string.translation_model_manga_llm_card_title)
-            else -> name
-        }
         val description = getString(when (catalog) {
             NativeModelCatalog.models[0] -> R.string.translation_model_hy_card_description
             NativeModelCatalog.models[1] -> R.string.translation_model_manga_llm_card_description
@@ -221,37 +218,43 @@ class TranslationModelsFragment : Fragment() {
                 listOf(action(R.string.translation_model_delete, ModelButtonKind.DELETE) { confirmDelete(name) { locked { store.delete(id) } } })
         } else if (catalog != null) listOf(action(R.string.translation_model_download, ModelButtonKind.PRIMARY) {
             operate(name) {
-                requireModelDownloadWifi(requireContext().applicationContext)
+                notifyModelDownloadNetwork(requireContext().applicationContext)
                 NativeModelDownloader(store).use {
                     downloader = it
                     it.downloadAndImport(catalog, { copied, total -> reportProgress(name, copied, total) }, { reportStage(getString(R.string.translation_native_download_validating)) })
                 }
             }
         }) else emptyList()
-        card("translation_native_$id", title, description, R.drawable.v_download_box_outline_dark_x24,
+        card("translation_native_$id", name, description, R.drawable.v_download_box_outline_dark_x24,
             getString(if (selected && available) R.string.translation_model_current_badge else if (available) R.string.translation_model_installed else R.string.translation_model_not_downloaded),
             selected && available, listOf(size(bytes)) + if (catalog == null) emptyList() else listOf("1.8B · Q4_K_M"), actions,
             name + "\n\n" + getString(if (catalog == null) R.string.translation_native_model_help else if (catalog == NativeModelCatalog.models[0]) R.string.translation_model_hy_help else R.string.translation_model_manga_llm_help))
     }
 
     private fun renderLanguages() {
-        val name = TranslationLanguages.displayName(languageTarget, resources.configuration.locales[0])
-        val ready = languages?.let { TranslationLanguages.SOURCE in it && (languageTarget == "en" || languageTarget in it) }
-        card("translation_language_download", getString(R.string.translation_model_language_card_title), "日语 → $name", R.drawable.v_translate_x24,
+        val locale = resources.configuration.locales[0]
+        val name = TranslationLanguages.displayName(languageTarget, locale)
+        val source = TranslationLanguages.mlKitSource(languageSource)
+        val required = OfflineTranslator.requiredLanguages(source, languageTarget)
+        val ready = if (required.isEmpty()) true else languages?.let { OfflineTranslator.isReady(source, languageTarget, it) }
+        card("translation_language_download", getString(R.string.translation_model_language_card_title),
+            "${if (languageSource == TranslationLanguages.AUTO_SOURCE) getString(R.string.translation_source_auto)
+                else TranslationLanguages.displayName(languageSource, locale)} → $name", R.drawable.v_translate_x24,
             getString(if (ready == null) R.string.translation_model_status_unknown else if (ready) R.string.translation_model_installed else R.string.translation_model_missing),
             ready == true, listOf(getString(R.string.translation_model_language_size)), listOf(
                 action(R.string.translation_model_download, ModelButtonKind.PRIMARY) {
                     val target = languageTarget
                     operate(getString(R.string.translation_model_language_download), false) {
-                        requireModelDownloadWifi(requireContext().applicationContext); locked { OfflineTranslator(target).use { it.prepare() } }
+                        notifyModelDownloadNetwork(requireContext().applicationContext); locked { OfflineTranslator(target, source).use { it.prepare() } }
                     }
                 }, action(R.string.translation_model_choose_language) { chooseLanguage() }, action(R.string.translation_model_refresh) { refresh() }
-            ), getString(R.string.translation_model_language_help))
+            ), getString(R.string.translation_model_language_help) + if (source == TranslationLanguages.AUTO_SOURCE)
+                "\n\n${getString(R.string.translation_source_auto_mlkit_help)}" else "")
         if (languages.isNullOrEmpty()) cards.addView(modelText(requireContext(), getString(if (languages == null)
             R.string.translation_model_language_unknown else R.string.translation_model_language_empty), 13f, palette.secondary))
         for (language in languages.orEmpty().sorted()) {
             val label = TranslationLanguages.displayName(language, resources.configuration.locales[0])
-            card("translation_language_$language", label, getString(if (language == TranslationLanguages.SOURCE)
+            card("translation_language_$language", label, getString(if (language == source)
                 R.string.translation_model_language_source_short else R.string.translation_model_language_target_short), R.drawable.v_check_dark_x24,
                 getString(R.string.translation_model_installed), false, emptyList(), listOf(action(R.string.translation_model_delete, ModelButtonKind.DELETE) {
                     confirmDelete(label) { locked { OfflineTranslator.deleteLanguage(language) } }

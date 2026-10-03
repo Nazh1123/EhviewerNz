@@ -7,10 +7,18 @@ import li.joye.yakuyomi.engine.*
 object TranslationEngineFactory {
     fun create(context: Context, models: ModelSet, options: TranslationOptions,
                translator: Translator, beforeImageStage: () -> Unit = {},
-               retainNativeModels: () -> Boolean = { false }): ResumablePipeline {
+               retainNativeModels: () -> Boolean = { false },
+               onRecognized: suspend (List<TextLine>) -> Unit = {},
+               resolvedOptions: () -> TranslationOptions = { options }): ResumablePipeline {
         val config = options.engineConfig()
         val alphabet = context.assets.open("models/alphabet-all-v5.txt").bufferedReader().use { it.readLines() }
         val batchSize = if (options.backend == TranslationBackend.ML_KIT) 1 else Int.MAX_VALUE
+        val sourceSeparator = TranslationLanguages.lineSeparator(options.source)
+        suspend fun recognize(ocr: Ocr, page: android.graphics.Bitmap, lines: List<TextLine>) {
+            ocr.recognize(page, lines)
+            lines.forEach { it.text = TranslationOcrText.clean(it.text) }
+            onRecognized(lines)
+        }
         if (options.backend == TranslationBackend.NATIVE_LLM) {
             val detector = TranslationStageModel { Detector(requireNotNull(models.detectorNcnn), config.detector) }
             val ocr = TranslationStageModel { Ocr(models.ocr, alphabet, config.ocr) }
@@ -35,7 +43,7 @@ object TranslationEngineFactory {
                 },
                 recognize = { page, lines ->
                     policy.beforeImage()
-                    try { ocr.get().recognize(page, lines) } finally { policy.afterImage() }
+                    try { recognize(ocr.get(), page, lines) } finally { policy.afterImage() }
                 },
                 inpaint = { page, regions, mask ->
                     policy.beforeImage()
@@ -45,6 +53,9 @@ object TranslationEngineFactory {
                 translationIdentity = options.cacheIdentity(),
                 translationBatchSize = batchSize, retainAnalysis = false,
                 selectInpaintingOverlap = policy::beginPage, afterPreparedPage = policy::endPage,
+                sourceSeparator = sourceSeparator,
+                sourceSeparatorProvider = { TranslationLanguages.lineSeparator(resolvedOptions().source) },
+                translationIdentityProvider = { resolvedOptions().cacheIdentity() },
             )
         }
         val detector = Detector(requireNotNull(models.detectorNcnn), config.detector)
@@ -53,11 +64,14 @@ object TranslationEngineFactory {
             ocr = Ocr(models.ocr, alphabet, config.ocr)
             val inpainter = Inpainter(requireNotNull(models.aotInpainterNcnn), config.inpainter)
             val recognizer = ocr
-            return ResumablePipeline(detector::detect, { page, lines -> recognizer.recognize(page, lines) },
+            return ResumablePipeline(detector::detect, { page, lines -> recognize(recognizer, page, lines) },
                 inpainter::inpaint, translator, config,
                 release = { runCatching { detector.close() }; runCatching { recognizer.close() }; runCatching { inpainter.close() } },
                 warm = { detector.warmUp(); recognizer.warmUp(); inpainter.warmUp() },
-                translationIdentity = options.cacheIdentity(), translationBatchSize = batchSize, retainAnalysis = false)
+                translationIdentity = options.cacheIdentity(), translationBatchSize = batchSize, retainAnalysis = false,
+                sourceSeparator = sourceSeparator,
+                sourceSeparatorProvider = { TranslationLanguages.lineSeparator(resolvedOptions().source) },
+                translationIdentityProvider = { resolvedOptions().cacheIdentity() })
         } catch (error: Throwable) {
             ocr?.close()
             detector.close()

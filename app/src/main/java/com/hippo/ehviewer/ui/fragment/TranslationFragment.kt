@@ -2,7 +2,11 @@ package com.hippo.ehviewer.ui.fragment
 
 import android.os.Bundle
 import android.text.InputType
+import android.view.ViewGroup
+import android.widget.SeekBar
 import android.widget.Toast
+import androidx.appcompat.widget.AppCompatSeekBar
+import androidx.core.widget.doAfterTextChanged
 import androidx.preference.*
 import androidx.appcompat.app.AlertDialog
 import com.hippo.ehviewer.R
@@ -19,6 +23,7 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
     private val nativePreferences = mutableListOf<Preference>()
     private lateinit var nativeModel: Preference
     private lateinit var targetLanguage: ListPreference
+    private lateinit var sourceLanguage: ListPreference
     private var apiTest: Job? = null
     private var nativeWork: Job? = null
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
@@ -61,6 +66,12 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 refreshStatus()
                 true
             }
+        })
+        add(Preference(context).apply {
+            key = "translation_model_management"
+            setTitle(R.string.translation_model_management)
+            setSummary(R.string.translation_model_management_help)
+            fragment = TranslationModelsFragment::class.java.name
         })
         nativeModel = Preference(context).apply {
             key = "translation_native_model"
@@ -178,6 +189,25 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
         add(test)
         apiPreferences.forEach { it.isVisible = options.backend == TranslationBackend.LLM_API }
         category(R.string.translation_category_reading)
+        sourceLanguage = ListPreference(context).apply {
+            key = "translation_source"
+            setTitle(R.string.translation_source)
+            setDialogTitle(R.string.translation_source)
+            summaryProvider = Preference.SummaryProvider<ListPreference> {
+                "${it.entry}\n${getString(if (it.value == TranslationLanguages.AUTO_SOURCE)
+                    R.string.translation_source_auto_help else R.string.translation_source_help)}"
+            }
+            setOnPreferenceChangeListener { _, value ->
+                val updated = settings.read().copy(source = value.toString())
+                if (!TranslationLanguages.validSource(updated)) false else {
+                    settings.save(updated)
+                    refreshLanguages()
+                    refreshStatus()
+                    true
+                }
+            }
+        }
+        add(sourceLanguage)
         targetLanguage = ListPreference(context).apply {
             key = "translation_target"
             setTitle(R.string.translation_target)
@@ -186,7 +216,8 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 val current = settings.read()
                 val name = it.entry?.toString().orEmpty()
                 getString(if (current.backend == TranslationBackend.ML_KIT)
-                    R.string.translation_target_mlkit_summary else R.string.translation_target_llm_summary, name)
+                    R.string.translation_target_mlkit_summary else R.string.translation_target_llm_summary,
+                    name)
             }
             setOnPreferenceChangeListener { _, value ->
                 val updated = settings.read().copy(target = value.toString())
@@ -204,6 +235,7 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
         add(EditTextPreference(context).apply {
             key = "translation_ahead"
             setTitle(R.string.translation_ahead)
+            setDialogTitle(R.string.translation_ahead)
             setDialogMessage(R.string.translation_ahead_help)
             text = options.ahead.toString()
             summaryProvider = Preference.SummaryProvider<EditTextPreference> {
@@ -211,7 +243,34 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 if (count == 0) getString(R.string.translation_current_only)
                 else getString(R.string.translation_ahead_summary, count)
             }
-            setOnBindEditTextListener { it.inputType = InputType.TYPE_CLASS_NUMBER; it.setSelectAllOnFocus(true) }
+            setOnBindEditTextListener { input ->
+                input.inputType = InputType.TYPE_CLASS_NUMBER
+                input.setSingleLine(true)
+                input.setSelectAllOnFocus(true)
+                val slider = AppCompatSeekBar(input.context).apply {
+                    tag = "translation_ahead_slider"
+                    max = 10
+                    progress = input.text.toString().toIntOrNull()?.coerceIn(0, max) ?: 2
+                    contentDescription = getString(R.string.translation_ahead)
+                }
+                (input.parent as ViewGroup).addView(slider, ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, (48 * resources.displayMetrics.density).toInt()))
+                slider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                        if (input.text.toString().toIntOrNull() != progress) {
+                            input.setText(progress.toString())
+                            input.setSelection(input.length())
+                        }
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar) = Unit
+                })
+                input.doAfterTextChanged { text ->
+                    text.toString().toIntOrNull()?.takeIf { it in 0..slider.max }?.let {
+                        slider.progress = it
+                    }
+                }
+            }
             setOnPreferenceChangeListener { _, value ->
                 val count = value.toString().toIntOrNull()
                 if (count == null || count !in 0..10) {
@@ -226,13 +285,6 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
             setSummary(R.string.translation_inpaint_help)
             isChecked = options.inpaint
             setOnPreferenceChangeListener { _, value -> settings.save(settings.read().copy(inpaint = value as Boolean)); true }
-        })
-        category(R.string.translation_category_models)
-        add(Preference(context).apply {
-            key = "translation_model_management"
-            setTitle(R.string.translation_model_management)
-            setSummary(R.string.translation_model_management_help)
-            fragment = TranslationModelsFragment::class.java.name
         })
         category(R.string.translation_category_storage)
         add(SwitchPreferenceCompat(context).apply {
@@ -300,6 +352,12 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
         val mlKit = options.backend == TranslationBackend.ML_KIT
         val codes = TranslationLanguages.targets(options.backend)
         val locale = resources.configuration.locales[0]
+        sourceLanguage.entries = TranslationLanguages.sources.map {
+            if (it == TranslationLanguages.AUTO_SOURCE) getString(R.string.translation_source_auto)
+            else TranslationLanguages.displayName(it, locale)
+        }.toTypedArray()
+        sourceLanguage.entryValues = TranslationLanguages.sources.toTypedArray()
+        sourceLanguage.value = options.source
         targetLanguage.entries = if (!mlKit) resources.getStringArray(R.array.translation_llm_target_entries) else codes.map { code ->
             when (code) {
                 "zh" -> getString(R.string.translation_target_zh)
@@ -316,10 +374,15 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
         val options = settings.read()
         nativeModel.summary = options.nativeModelName.takeIf { it.isNotBlank() }
             ?: getString(R.string.translation_native_not_selected)
+        if (options.nativeModelId == NativeModelCatalog.models[1].sha256 &&
+            (options.source != "ja" || options.target != "zh-CN")) {
+            nativeModel.summary = "${nativeModel.summary}\n${getString(R.string.translation_native_pair_help)}"
+        }
     }
     override fun onResume() {
         super.onResume()
         (activity as? SettingsActivity)?.setSettingsTitle(R.string.settings_translation)
+        refreshLanguages()
         refreshStatus()
     }
 

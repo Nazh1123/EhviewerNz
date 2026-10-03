@@ -22,16 +22,35 @@ class ApiTranslatorTest {
     private fun options(server: MockWebServer) = TranslationOptions(backend = TranslationBackend.LLM_API,
         apiUrl = server.url("/v1/chat/completions").toString())
 
+    @Test fun selectedNonJapaneseSourcesReachRealApiTransport() {
+        MockWebServer().use { server ->
+            for ((source, name) in listOf("en" to "English", "ko" to "Korean", "zh-TW" to "Traditional Chinese (Taiwan)")) {
+                server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"<|1|>Bonjour"}}]}"""))
+                val selected = options(server).copy(source = source, target = "fr")
+                ApiTranslator(selected).use { assertEquals(listOf("Bonjour"), runBlocking { it.translate(listOf(selected.sampleText())) }) }
+                val messages = JSONObject(server.takeRequest(1, TimeUnit.SECONDS)!!.body.readUtf8()).getJSONArray("messages")
+                assertTrue(messages.getJSONObject(0).getString("content").contains("$name text into French"))
+                assertEquals("<|1|>${selected.sampleText()}", messages.getJSONObject(1).getString("content"))
+            }
+        }
+    }
+
     @Test fun japaneseSourceAndSelectedChineseRegionReachApiRequests() {
         MockWebServer().use { server ->
-            for ((target, region) in listOf("zh-HK" to "Hong Kong", "zh-TW" to "Taiwan")) {
+            for ((target, name) in listOf("zh-CN" to "Simplified Chinese",
+                "zh-HK" to "Traditional Chinese (Hong Kong)", "zh-TW" to "Traditional Chinese (Taiwan)")) {
                 server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"<|1|>譯文"}}]}"""))
                 ApiTranslator(options(server).copy(target = target)).use {
                     runBlocking { it.translate(listOf("こんにちは")) }
                 }
                 val body = JSONObject(server.takeRequest(1, TimeUnit.SECONDS)!!.body.readUtf8())
                 val prompt = body.getJSONArray("messages").getJSONObject(0).getString("content")
-                assertTrue(prompt.contains("Japanese text into Traditional Chinese ($region)"))
+                assertTrue(prompt.contains("Japanese text into $name"))
+                if (target == "zh-CN") {
+                    assertFalse(prompt.contains("大陆"))
+                    assertFalse(prompt.contains("Mainland", ignoreCase = true))
+                    assertFalse(prompt.contains("Simplified Chinese ("))
+                }
             }
         }
     }

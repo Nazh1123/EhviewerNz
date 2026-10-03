@@ -44,6 +44,12 @@ class TranslationNavigationTest {
             for (oldKey in listOf("translation_native_auto_import", "translation_prepare", "translation_prepare_mlkit"))
                 assertNull(settings.findPreference<androidx.preference.Preference>(oldKey))
             val backend = requireNotNull(settings.findPreference<ListPreference>("translation_backend"))
+            assertSame(backend.parent, management.parent)
+            val engineGroup = requireNotNull(backend.parent)
+            assertSame(backend, engineGroup.getPreference(0))
+            assertSame(management, engineGroup.getPreference(1))
+            for (index in 0 until settings.preferenceScreen.preferenceCount)
+                assertNotEquals("离线模型", settings.preferenceScreen.getPreference(index).title)
             for (mode in listOf("NATIVE_LLM", "LLM_API", "ML_KIT")) {
                 assertTrue(backend.callChangeListener(mode))
                 assertTrue(management.isVisible)
@@ -64,6 +70,8 @@ class TranslationNavigationTest {
             assertNotNull(root.findViewWithTag<android.view.View>("translation_native_import"))
             for (model in NativeModelCatalog.models) {
                 assertNotNull(root.findViewWithTag<android.view.View>("translation_native_${model.sha256}"))
+                assertEquals(activity.getString(R.string.translation_model_details_for, model.name),
+                    button("translation_native_${model.sha256}/details").contentDescription.toString())
                 assertEquals("下载", button("translation_native_${model.sha256}/action/${R.string.translation_model_download}").text.toString())
             }
             button("translation_model_tab_2").performClick()
@@ -86,7 +94,7 @@ class TranslationNavigationTest {
             val manager = activity.supportFragmentManager
             manager.executePendingTransactions()
             val fragment = manager.findFragmentById(R.id.settings) as TranslationFragment
-            assertNull(fragment.findPreference<ListPreference>("translation_source"))
+            assertNotNull(fragment.findPreference<ListPreference>("translation_source"))
             val target = requireNotNull(fragment.findPreference<ListPreference>("translation_target"))
             val backend = requireNotNull(fragment.findPreference<ListPreference>("translation_backend"))
             fun choose(preference: ListPreference, code: String) {
@@ -108,12 +116,20 @@ class TranslationNavigationTest {
                 assertEquals(code, preference.value)
             }
             val appLanguage = Settings.getAppLanguage()
+            val source = requireNotNull(fragment.findPreference<ListPreference>("translation_source"))
+            assertEquals(TranslationLanguages.sources, source.entryValues.map { it.toString() })
+            for (code in TranslationLanguages.sources) {
+                choose(source, code)
+                assertEquals(code, TranslationSettings(activity).read().source)
+                assertEquals(target.entry.toString(), target.summary.toString().substringBefore('\n'))
+            }
+            choose(source, "ja")
             for (mode in listOf("NATIVE_LLM", "LLM_API")) {
                 assertTrue(backend.callChangeListener(mode))
                 for (code in listOf("fr", "zh-HK", "zh-TW", "zh-CN")) {
                     choose(target, code)
                     assertEquals(code, TranslationSettings(activity).read().target)
-                    assertTrue(target.summary.toString().startsWith("日语 → ${target.entry}"))
+                    assertEquals(target.entry.toString(), target.summary.toString().substringBefore('\n'))
                 }
             }
             assertEquals(appLanguage, Settings.getAppLanguage())
@@ -127,7 +143,7 @@ class TranslationNavigationTest {
             val activity = controller.get()
             activity.supportFragmentManager.executePendingTransactions()
             val fragment = activity.supportFragmentManager.findFragmentById(R.id.settings) as TranslationFragment
-            assertNull(fragment.findPreference<ListPreference>("translation_source"))
+            assertNotNull(fragment.findPreference<ListPreference>("translation_source"))
             val target = requireNotNull(fragment.findPreference<ListPreference>("translation_target"))
             val backend = requireNotNull(fragment.findPreference<ListPreference>("translation_backend"))
             val entries = listOf("德语", "英语", "西班牙语", "法语", "日语", "韩语", "泰语",
@@ -138,12 +154,12 @@ class TranslationNavigationTest {
                 assertTrue(backend.callChangeListener(mode))
                 assertEquals(entries, target.entries.map { it.toString() })
                 assertEquals(values, target.entryValues.map { it.toString() })
-                assertNull(fragment.findPreference<ListPreference>("translation_source"))
+                assertNotNull(fragment.findPreference<ListPreference>("translation_source"))
                 for (code in values) {
                     assertTrue(target.callChangeListener(code))
                     assertEquals(code, TranslationSettings(activity).read().target)
                 }
-                assertTrue(target.summary.toString().startsWith("日语 → ${target.entry}"))
+                assertEquals(target.entry.toString(), target.summary.toString().substringBefore('\n'))
                 assertFalse(target.callChangeListener("custom"))
             }
             assertTrue(target.callChangeListener("zh-TW"))
@@ -151,15 +167,15 @@ class TranslationNavigationTest {
             assertTrue(backend.callChangeListener("ML_KIT"))
             assertEquals(TranslationLanguages.mlKitTargets, target.entryValues.map { it.toString() })
             assertEquals("zh", target.value)
-            assertNull(fragment.findPreference<ListPreference>("translation_source"))
-            assertTrue(target.summary.toString().startsWith("日语 → ${target.entry}"))
+            assertNotNull(fragment.findPreference<ListPreference>("translation_source"))
+            assertEquals(target.entry.toString(), target.summary.toString().substringBefore('\n'))
             assertFalse(target.entryValues.contains("system"))
             assertTrue(target.callChangeListener("fr"))
             assertEquals("fr", TranslationSettings(activity).read().target)
             assertTrue(backend.callChangeListener("LLM_API"))
             assertEquals("fr", target.value)
-            assertNull(fragment.findPreference<ListPreference>("translation_source"))
-            assertTrue(target.summary.toString().startsWith("日语 → ${target.entry}"))
+            assertNotNull(fragment.findPreference<ListPreference>("translation_source"))
+            assertEquals(target.entry.toString(), target.summary.toString().substringBefore('\n'))
             assertNull(fragment.findPreference<androidx.preference.Preference>("translation_custom_target"))
         }
     }
@@ -178,7 +194,7 @@ class TranslationNavigationTest {
             manager.executePendingTransactions()
             val fragment = manager.findFragmentById(R.id.settings) as TranslationFragment
             assertEquals(listOf(R.string.translation_category_engine, R.string.translation_category_reading,
-                R.string.translation_category_models, R.string.translation_category_storage,
+                R.string.translation_category_storage,
                 R.string.translation_category_about).map { activity.getString(it) },
                 (0 until fragment.preferenceScreen.preferenceCount).map {
                     fragment.preferenceScreen.getPreference(it).title.toString()
@@ -201,7 +217,28 @@ class TranslationNavigationTest {
             assertEquals(5, TranslationSettings(activity).read().ahead)
             assertFalse(ahead.callChangeListener("11"))
             assertEquals(5, TranslationSettings(activity).read().ahead)
+            ahead.text = "5"
+            ahead.performClick()
+            manager.executePendingTransactions()
+            val aheadDialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+            assertEquals("预翻译页数", aheadDialog.findViewById<android.widget.TextView>(
+                androidx.appcompat.R.id.alertTitle)!!.text.toString())
+            val input = aheadDialog.findViewById<android.widget.EditText>(android.R.id.edit)!!
+            val slider = aheadDialog.window!!.decorView.findViewWithTag<android.widget.SeekBar>("translation_ahead_slider")!!
+            assertEquals(10, slider.max)
+            assertEquals(5, slider.progress)
+            input.setText("7")
+            assertEquals(7, slider.progress)
+            slider.progress = 0
+            assertEquals("0", input.text.toString())
+            aheadDialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).performClick()
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+            manager.executePendingTransactions()
+            assertEquals(0, TranslationSettings(activity).read().ahead)
+            assertEquals(activity.getString(R.string.translation_current_only), ahead.summary.toString())
             val target = requireNotNull(fragment.findPreference<ListPreference>("translation_target"))
+            assertEquals(target.entry.toString(), target.summary.toString().substringBefore('\n'))
+            assertFalse(target.summary.toString().contains("→"))
             assertTrue(target.callChangeListener("en"))
             assertEquals("en", TranslationSettings(activity).read().target)
             val backend = requireNotNull(fragment.findPreference<ListPreference>("translation_backend"))
@@ -225,6 +262,8 @@ class TranslationNavigationTest {
             assertFalse(url.callChangeListener("invalid"))
             assertEquals("hy-mt", TranslationSettings(activity).read().apiModel)
             assertTrue(backend.callChangeListener("ML_KIT"))
+            assertEquals(target.entry.toString(), target.summary.toString().substringBefore('\n'))
+            assertFalse(target.summary.toString().contains("→"))
             assertFalse(url.isVisible)
             assertFalse(nativeModel.isVisible)
             assertTrue(backend.callChangeListener("NATIVE_LLM"))
