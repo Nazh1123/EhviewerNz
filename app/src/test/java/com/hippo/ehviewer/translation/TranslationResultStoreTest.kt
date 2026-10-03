@@ -20,187 +20,153 @@ class TranslationResultStoreTest {
     private val galleryDir get() = File(temp.root, "gallery").apply { mkdirs() }
     private val savedDir get() = File(galleryDir, "_translated")
     private val legacyDir get() = File(temp.root, "legacy")
-    private fun store(options: TranslationOptions = TranslationOptions(), gid: Long? = 1,
-                      downloaded: Boolean = true) =
-        TranslationResultStore(cacheDir, UniFile.fromFile(galleryDir), options, gid, downloaded, legacyDir)
-
-    private fun TranslationResultStore.write(key: String, text: String) =
-        writeImage(key) { it.write(text.toByteArray()) }
-
+    private fun store(enabled: Boolean = false, name: String = "001", gid: Long? = 1,
+                      downloaded: Boolean = true) = TranslationResultStore(cacheDir, UniFile.fromFile(galleryDir),
+        TranslationOptions(persistDownloaded = enabled), gid, downloaded, name)
+    private fun TranslationResultStore.write(key: String, text: String) = writeImage(key) { it.write(text.toByteArray()) }
     private fun UniFile.readText() = openInputStream().bufferedReader().use { it.readText() }
 
-    @Test fun partialPreviewAndCheckpointSurviveReopeningMigrationAndCacheClearing() {
-        val key = "g1_partial"
-        val checkpoint = TranslationResume(listOf("region-a", "region-b"), mapOf(0 to "你好"))
-        val cached = store()
-        cached.writePartial(key, checkpoint) { it.write("preview".toByteArray()) }
-        assertNull(File(cacheDir, "$key.png").takeIf { it.exists() })
-        assertTrue(TranslationResultStore.isPartial(requireNotNull(store().existingImage(key))))
-        assertEquals(checkpoint, store().readResume(key))
-        val persistent = store(TranslationOptions(persistDownloaded = true))
-        persistent.retain(key, requireNotNull(persistent.existingImage(key)))
-        TranslationCache(cacheDir).clear()
-        assertEquals("preview", store().existingImage(key)!!.readText())
-        assertEquals(checkpoint, store().readResume(key))
-        persistent.writeImage(key) { it.write("complete".toByteArray()) }
-        assertFalse(TranslationResultStore.isPartial(store().existingImage(key)!!))
-        assertEquals("complete", store().existingImage(key)!!.readText())
-        assertNull(store().readResume(key))
-        assertEquals(setOf("$key.png"), savedDir.list()!!.toSet())
+    @Test fun savedOverlayIsFoundDirectlyByNameWithoutAnIndexOrMatchingHash() {
+        val results = store(true)
+        assertEquals("001_tl.png", results.write("g1_hash", "overlay").name)
+        assertEquals("overlay", store().existingImage("g1_different_hash")?.readText())
+        assertNull(store(name = "002").existingImage("g1_hash"))
+        assertEquals(setOf("001_tl.png"), savedDir.list()!!.toSet())
     }
 
-    @Test fun brokenCheckpointKeepsPreviewPartialAndCannotSupplyTranslations() {
+    @Test fun sameNamedPagesInDifferentChaptersKeepTheirDirectoryHierarchy() {
+        store(true, "Chapter A/001").write("g1_a", "first")
+        store(true, "Chapter B/001").write("g1_b", "second")
+        assertEquals("first", store(name = "Chapter A/001").existingImage("unused")?.readText())
+        assertEquals("second", store(name = "Chapter B/001").existingImage("unused")?.readText())
+        assertTrue(File(savedDir, "Chapter A/001_tl.png").isFile)
+        assertTrue(File(savedDir, "Chapter B/001_tl.png").isFile)
+    }
+
+    @Test fun translatingTheSameSourceReplacesItsNamedOverlayWithoutSuffixes() {
+        store(true).write("g1_zh", "Chinese")
+        store(true).write("g1_en", "English")
+        assertEquals("English", store().existingImage("unused")?.readText())
+        assertEquals(setOf("001_tl.png"), savedDir.list()!!.toSet())
+    }
+
+    @Test fun savedOverlayCanBeOpenedWithoutAnyMetadata() {
+        savedDir.mkdirs()
+        File(savedDir, "001_tl.png").writeText("external overlay")
+        assertEquals("external overlay", store().existingImage("unused")?.readText())
+    }
+
+    @Test fun oldHashNamedImagesAreNotLoadedOrMigrated() {
+        savedDir.mkdirs(); legacyDir.mkdirs(); cacheDir.mkdirs()
+        File(savedDir, "g1_hash.png").writeText("old full page")
+        File(legacyDir, "g1_hash.png").writeText("legacy full page")
+        File(cacheDir, "g1_hash.png").writeText("old cache")
+        assertNull(store(true).existingImage("g1_hash"))
+        assertEquals(setOf("g1_hash.png"), savedDir.list()!!.toSet())
+    }
+
+    @Test fun partialPreviewAndCheckpointSurviveCacheAdoptionAndReopening() {
         val key = "g1_partial"
-        val results = store()
-        results.writePartial(key, TranslationResume(listOf("a", "b"), mapOf(0 to "你好"))) { it.write(1) }
-        val checkpoint = File(cacheDir, "$key.regions")
+        val resume = TranslationResume(listOf("a", "b"), mapOf(0 to "译文"))
+        store().writePartial(key, resume) { it.write("preview".toByteArray()) }
+        val persistent = store(true)
+        assertEquals("001_tl.partial", persistent.retain(key, persistent.existingImage(key)!!).name)
+        TranslationCache(cacheDir).clear()
+        assertEquals("preview", store().existingImage(key)?.readText())
+        assertEquals(resume, store().readResume(key))
+        assertNull(store().readResume("different-configuration"))
+        persistent.write(key, "complete")
+        assertEquals(setOf("001_tl.png"), savedDir.list()!!.toSet())
+        assertNull(store().readResume(key))
+    }
+
+    @Test fun brokenOrMissingCheckpointKeepsThePreviewPartial() {
+        val key = "g1_partial"
+        store().writePartial(key, TranslationResume(listOf("a", "b"), mapOf(0 to "译文"))) { it.write(1) }
+        val checkpoint = File(cacheDir, "${key}_tl.regions")
         for (json in listOf("broken", """{"version":1,"key":"wrong","regions":["a"],"translations":{"0":"wrong"}}""",
                 """{"version":1,"key":"$key","regions":["a"],"translations":{"4":"wrong"}}""")) {
             checkpoint.writeText(json)
-            assertNull(results.readResume(key))
-            assertTrue(TranslationResultStore.isPartial(results.existingImage(key)!!))
+            assertNull(store().readResume(key))
+            assertTrue(TranslationResultStore.isPartial(store().existingImage(key)!!))
         }
         checkpoint.delete()
-        assertNull(results.readResume(key))
-        assertNotNull(results.existingImage(key))
-        results.invalidate(key)
-        assertNull(results.existingImage(key))
+        assertNull(store().readResume(key))
+        assertNotNull(store().existingImage(key))
     }
 
-    @Test fun partialPreviewAndTextAreEvictedAndDeletedTogether() {
-        val key = "g1_partial"
-        val checkpoint = TranslationResume(listOf("a", "b"), mapOf(0 to "你好"))
-        store().writePartial(key, checkpoint) { it.write(ByteArray(200)) }
+    @Test fun cachePartialAndCheckpointAreEvictedTogether() {
+        store().writePartial("g1_partial", TranslationResume(listOf("a", "b"), mapOf(0 to "译文"))) { it.write(ByteArray(200)) }
         TranslationCache(cacheDir, 1).prune()
         assertTrue(cacheDir.list()!!.isEmpty())
-        val persistent = store(TranslationOptions(persistDownloaded = true))
-        persistent.writePartial(key, checkpoint) { it.write(1) }
-        assertTrue(TranslationResultStore.deleteGalleries(cacheDir, legacyDir, setOf(1L), mapOf(1L to UniFile.fromFile(galleryDir)!!)))
-        assertTrue(savedDir.list()!!.isEmpty())
     }
 
-    @Test fun persistenceRequiresBothOptInAndDownloadedGalleryIdentity() {
-        val source = temp.newFile().apply { writeText("source") }
-        val enabled = TranslationOptions(persistDownloaded = true)
-        for (results in listOf(store(), store(enabled, downloaded = false), store(enabled, gid = null))) {
-            assertEquals(File(cacheDir, "${results.key(source)}.png").absolutePath,
-                results.write(results.key(source), "translated").uri.path)
+    @Test fun persistenceRequiresOptInAndWritableGalleryIdentity() {
+        for (results in listOf(store(), store(true, downloaded = false), store(true, gid = null))) {
+            assertEquals(File(cacheDir, "g1_page_tl.png").absolutePath, results.write("g1_page", "overlay").uri.path)
         }
-        val results = store(enabled)
-        assertEquals(File(savedDir, "${results.key(source)}.png").absolutePath,
-            results.write(results.key(source), "translated").uri.path)
+        assertEquals(File(savedDir, "001_tl.png").absolutePath, store(true).write("g1_page", "overlay").uri.path)
+        val unavailable = TranslationResultStore(cacheDir, null, TranslationOptions(persistDownloaded = true), 1, true, "001")
+        assertEquals(File(cacheDir, "g1_page_tl.png").absolutePath, unavailable.write("g1_page", "overlay").uri.path)
     }
 
-    @Test fun savedResultsSurviveCacheEvictionClearingAndDisablingPersistence() {
-        val source = temp.newFile().apply { writeText("source") }
-        val options = TranslationOptions(persistDownloaded = true)
-        val results = store(options)
-        val key = results.key(source)
-        results.write(key, "translated")
-        results.recordSkipped("g1_empty")
+    @Test fun savedResultsSurviveCacheClearingAndDisablingPersistence() {
+        store(true).write("g1_page", "overlay")
+        store(true, "002").recordSkipped("g1_empty")
         TranslationCache(cacheDir, 0).prune()
         TranslationCache(cacheDir).clear()
-        val reopened = store()
-        assertEquals("translated", reopened.existingImage(key)?.readText())
-        assertTrue(reopened.isSkipped("g1_empty"))
-        assertEquals("source", source.readText())
-        assertNull(store(options.copy(target = "en")).existingImage(store(options.copy(target = "en")).key(source)))
-        source.writeText("changed source")
-        assertNull(reopened.existingImage(reopened.key(source)))
+        assertEquals("overlay", store().existingImage("unused")?.readText())
+        assertTrue(store(name = "002").isSkipped("unused"))
     }
 
-    @Test fun enablingPersistenceAdoptsCachedImagesAndNoTextMarkers() {
-        val source = temp.newFile().apply { writeText("source") }
-        val cached = store()
-        val key = cached.key(source)
-        cached.write(key, "translated")
-        cached.recordSkipped("g1_empty")
-        val persistent = store(TranslationOptions(persistDownloaded = true))
-        persistent.retain(key, requireNotNull(persistent.existingImage(key)))
-        assertTrue(persistent.isSkipped("g1_empty"))
+    @Test fun enablingPersistenceAdoptsCurrentCacheWithoutEvictingOtherPendingPages() {
+        store().write("g1_one", "first")
+        store().write("g1_two", "second")
+        store().recordSkipped("g1_empty")
+        val first = store(true)
+        first.retain("g1_one", first.existingImage("g1_one")!!)
+        assertTrue(store(true, "003").isSkipped("g1_empty"))
+        val second = store(true, "002")
+        second.retain("g1_two", second.existingImage("g1_two")!!)
         TranslationCache(cacheDir).clear()
-        assertEquals("translated", persistent.existingImage(key)?.readText())
-        assertTrue(persistent.isSkipped("g1_empty"))
-        assertFalse(savedDir.listFiles()!!.any { it.extension == "part" })
+        assertEquals("first", store().existingImage("unused")?.readText())
+        assertEquals("second", store(name = "002").existingImage("unused")?.readText())
     }
 
-    @Test fun deletingSelectedGalleriesCoversBothStoresAndAllSettingsWithoutTouchingOthers() {
-        val original = temp.newFile("original.png").apply { writeText("source") }
-        cacheDir.mkdirs(); savedDir.mkdirs(); legacyDir.mkdirs()
-        for (dir in listOf(cacheDir, savedDir, legacyDir)) {
-            for (name in listOf("g1_zh.png", "g1_en.png", "g1_empty.skip", "g1_page.png.part",
-                "g-2_zh.png", "g10_zh.png", "anonymous.png", "g1_notes.txt")) File(dir, name).writeText("data")
-        }
-        val directories = mapOf(1L to requireNotNull(UniFile.fromFile(galleryDir)),
-            -2L to requireNotNull(UniFile.fromFile(galleryDir)))
-        assertTrue(TranslationResultStore.deleteGalleries(cacheDir, legacyDir, setOf(1, -2), directories))
-        for (dir in listOf(cacheDir, savedDir, legacyDir)) {
-            assertEquals(setOf("g10_zh.png", "anonymous.png", "g1_notes.txt"), dir.list()!!.toSet())
-        }
-        assertEquals("source", original.readText())
-        assertTrue(TranslationResultStore.deleteGalleries(cacheDir, legacyDir, setOf(1, -2), directories))
+    @Test fun selectedDeletionRemovesNestedNamedOverlaysAndPreservesOriginalsAndUnrelatedFiles() {
+        store(true, "Chapter/001").write("g1_page", "overlay")
+        store().write("g1_page", "cache")
+        store(gid = 10).write("g10_page", "other gallery cache")
+        val original = File(galleryDir, "001.jpg").apply { writeText("original") }
+        val unrelated = File(savedDir, "notes.txt").apply { writeText("notes") }
+        assertTrue(TranslationResultStore.deleteGalleries(cacheDir, legacyDir, setOf(1), mapOf(1L to UniFile.fromFile(galleryDir)!!)))
+        assertFalse(File(savedDir, "Chapter/001_tl.png").exists())
+        assertEquals("other gallery cache", File(cacheDir, "g10_page_tl.png").readText())
+        assertEquals("original", original.readText())
+        assertEquals("notes", unrelated.readText())
     }
 
-    @Test fun retryInvalidatesBothCopiesAndSkippedMarkersOnlyForRequestedPage() {
-        cacheDir.mkdirs(); savedDir.mkdirs(); legacyDir.mkdirs()
-        for (dir in listOf(cacheDir, savedDir, legacyDir)) {
-            for (name in listOf("g1_one.png", "g1_one.skip", "g1_two.png")) File(dir, name).writeText("data")
-        }
+    @Test fun retryInvalidatesOnlyTheRequestedOriginalNameAndItsCache() {
+        store(true).write("g1_one", "first")
+        store(true, "002").write("g1_two", "second")
+        store().write("g1_one", "cached")
         store().invalidate("g1_one")
-        for (dir in listOf(cacheDir, savedDir, legacyDir)) assertEquals(listOf("g1_two.png"), dir.list()!!.toList())
+        assertNull(store().existingImage("g1_one"))
+        assertEquals("second", store(name = "002").existingImage("unused")?.readText())
     }
 
-    @Test fun legacyImagesAndMarkersMoveOnlyAfterSuccessfulPersistence() {
-        legacyDir.mkdirs()
-        val image = File(legacyDir, "g1_page.png").apply { writeText("old translated page") }
-        val marker = File(legacyDir, "g1_empty.skip").apply { writeText("skipped") }
-        val disabled = store()
-        assertEquals("old translated page", disabled.existingImage("g1_page")?.readText())
-        assertTrue(disabled.isSkipped("g1_empty"))
-        assertFalse(savedDir.exists())
-        assertTrue(image.exists())
-        assertTrue(marker.exists())
-
-        val enabled = store(TranslationOptions(persistDownloaded = true))
-        enabled.retain("g1_page", requireNotNull(enabled.existingImage("g1_page")))
-        assertTrue(enabled.isSkipped("g1_empty"))
-        assertFalse(image.exists())
-        assertFalse(marker.exists())
-        assertEquals("old translated page", File(savedDir, "g1_page.png").readText())
-        assertEquals("skipped", File(savedDir, "g1_empty.skip").readText())
-    }
-
-    @Test fun failedMigrationKeepsLegacyResultAndDoesNotPublishPartialFiles() {
-        legacyDir.mkdirs()
-        val image = File(legacyDir, "g1_page.png").apply { writeText("translated") }
-        // A file blocks creation of the required directory.
-        savedDir.writeText("unrelated file")
-        val enabled = store(TranslationOptions(persistDownloaded = true))
+    @Test fun interruptedWritePreservesPreviousOverlayAndRemovesTemporaryFile() {
+        val results = store(true)
+        results.write("g1_page", "complete")
         assertThrows(IllegalStateException::class.java) {
-            enabled.retain("g1_page", requireNotNull(enabled.existingImage("g1_page")))
+            results.writeImage("g1_page") { it.write(1); error("interrupted") }
         }
-        assertEquals("translated", image.readText())
-        assertEquals("unrelated file", savedDir.readText())
+        assertEquals("complete", store().existingImage("unused")?.readText())
+        assertEquals(listOf("001_tl.png"), savedDir.list()!!.toList())
     }
 
-    @Test fun interruptedWritePreservesPreviousResultAndRemovesPartialFile() {
-        val enabled = store(TranslationOptions(persistDownloaded = true))
-        enabled.write("g1_page", "completed")
-        assertThrows(IllegalStateException::class.java) {
-            enabled.writeImage("g1_page") {
-                it.write("partial".toByteArray())
-                error("cancelled")
-            }
-        }
-        assertEquals("completed", enabled.existingImage("g1_page")?.readText())
-        assertEquals(listOf("g1_page.png"), savedDir.list()!!.toList())
-    }
-
-    @Test fun missingGalleryDirectoryUsesCacheWithoutCreatingAnInternalPersistentStore() {
-        val results = TranslationResultStore(cacheDir, null,
-            TranslationOptions(persistDownloaded = true), 1, true, legacyDir)
-        val output = results.write("g1_page", "translated")
-        assertEquals(File(cacheDir, "g1_page.png").absolutePath, output.uri.path)
-        assertFalse(legacyDir.exists())
+    @Test fun sourceNamesCannotEscapeTheTranslatedDirectory() {
+        assertThrows(IllegalArgumentException::class.java) { store(true, "../001").write("g1_page", "overlay") }
+        assertFalse(File(galleryDir, "001_tl.png").exists())
     }
 }

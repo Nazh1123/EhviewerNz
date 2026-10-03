@@ -55,6 +55,10 @@ public abstract class GalleryProvider2 extends GalleryProvider {
     @NonNull
     public abstract String getImageFilename(int index);
 
+    /** Source name without extension; local sources may include a relative directory. */
+    @NonNull
+    public String getTranslationFilename(int index) { return getImageFilename(index); }
+
     public abstract boolean save(int index, @NonNull UniFile file);
 
     /**

@@ -48,6 +48,8 @@ class ImageView extends GLView implements ImageTexture.Callback {
     private static final long ALPHA_ANIMATION_DURING = 300L;
 
     private ImageTexture mImageTexture;
+    private ImageTexture mOverlayTexture;
+    private final RectF mOverlaySrc = new RectF();
     private int mTextureWidth;
     private int mTextureHeight;
 
@@ -165,6 +167,10 @@ class ImageView extends GLView implements ImageTexture.Callback {
             } else {
                 mImageTexture.stop();
             }
+            if (mOverlayTexture != null) {
+                if (!mValidRect.isEmpty()) mOverlayTexture.start();
+                else mOverlayTexture.stop();
+            }
         }
     }
 
@@ -231,6 +237,22 @@ class ImageView extends GLView implements ImageTexture.Callback {
 
     public ImageTexture getImageTexture() {
         return mImageTexture;
+    }
+
+    public ImageTexture getOverlayTexture() { return mOverlayTexture; }
+
+    public void setOverlayTexture(ImageTexture texture) {
+        if (mOverlayTexture != null) {
+            mOverlayTexture.setCallback(null);
+            mOverlayTexture.stop();
+        }
+        mOverlayTexture = texture;
+        if (texture != null) {
+            texture.setCallback(this);
+            getValidRect(mValidRect);
+            if (!mValidRect.isEmpty()) texture.start();
+        }
+        invalidate();
     }
 
     public boolean isLoaded() {
@@ -594,6 +616,13 @@ class ImageView extends GLView implements ImageTexture.Callback {
 
         if (!mSrcActual.isEmpty()) {
             texture.draw(canvas, mSrcActual, mDstActual);
+            if (mOverlayTexture != null) {
+                float sx = (float) mOverlayTexture.getWidth() / texture.getWidth();
+                float sy = (float) mOverlayTexture.getHeight() / texture.getHeight();
+                mOverlaySrc.set(mSrcActual.left * sx, mSrcActual.top * sy,
+                        mSrcActual.right * sx, mSrcActual.bottom * sy);
+                mOverlayTexture.draw(canvas, mOverlaySrc, mDstActual);
+            }
         }
     }
 

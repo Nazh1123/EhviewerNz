@@ -82,8 +82,7 @@ public abstract class GalleryProvider {
     public abstract int size();
 
     public final void request(int index) {
-        ImageWrapper imageWrapper = getVisibleTranslation(index);
-        if (imageWrapper == null) imageWrapper = mImageCache.get(index);
+        ImageWrapper imageWrapper = mImageCache.get(index);
         if (imageWrapper != null) {
             notifyPageSucceed(index, imageWrapper);
         } else {
@@ -151,27 +150,25 @@ public abstract class GalleryProvider {
     }
 
     public void notifyPageSucceed(int index, ImageWrapper image) {
-        ImageWrapper translated = getVisibleTranslation(index);
-        if (translated != null) image = translated;
         notify(NotifyTask.TYPE_SUCCEED, index, 0.0f, image, null);
     }
 
-    /** Translation owns a separate bounded cache; original save/share paths stay intact. */
-    public void setTranslatedPage(int index, Image image) {
+    /** Sparse PNG overlays have their own bounded cache; the source image stays visible. */
+    public void setTranslationOverlay(int index, Image image) {
         mTranslatedCache.add(index, new ImageWrapper(image));
-        if (mShowTranslations && !mOriginalPages.contains(index)) notifyDataChanged(index);
+        if (mShowTranslations && !mOriginalPages.contains(index)) notifyOverlayChanged(index);
     }
 
-    private ImageWrapper getVisibleTranslation(int index) {
+    public ImageWrapper getTranslationOverlay(int index) {
         return mShowTranslations && !mOriginalPages.contains(index)
                 ? mTranslatedCache.get(index) : null;
     }
 
-    /** Compare one page without disabling translation or changing neighboring pages. */
-    public void toggleTranslatedPage(int index) {
+    /** Hide/show only this page's overlay without replacing the source texture. */
+    public void toggleTranslationOverlay(int index) {
         if (!mShowTranslations || !hasTranslatedPage(index)) return;
         if (!mOriginalPages.add(index)) mOriginalPages.remove(index);
-        notifyDataChanged(index);
+        notifyOverlayChanged(index);
     }
 
     public boolean hasTranslatedPage(int index) {
@@ -181,20 +178,24 @@ public abstract class GalleryProvider {
     public void removeTranslatedPage(int index) {
         mTranslatedCache.remove(index);
         mOriginalPages.remove(index);
-        notifyDataChanged(index);
+        notifyOverlayChanged(index);
     }
 
     public void setShowTranslations(boolean show) {
         mShowTranslations = show;
         mOriginalPages.clear();
-        for (Integer index : mTranslatedCache.snapshot().keySet()) notifyDataChanged(index);
+        for (Integer index : mTranslatedCache.snapshot().keySet()) notifyOverlayChanged(index);
     }
 
     public void clearTranslatedPages() {
         java.util.Set<Integer> pages = mTranslatedCache.snapshot().keySet();
         mTranslatedCache.evictAll();
         mOriginalPages.clear();
-        for (Integer index : pages) notifyDataChanged(index);
+        for (Integer index : pages) notifyOverlayChanged(index);
+    }
+
+    private void notifyOverlayChanged(int index) {
+        notify(NotifyTask.TYPE_OVERLAY_CHANGED, index, 0.0f, null, null);
     }
 
     public void notifyPageFailed(int index, String error) {
@@ -222,7 +223,7 @@ public abstract class GalleryProvider {
 
     private static class NotifyTask implements GLRoot.OnGLIdleListener {
 
-        @IntDef({TYPE_DATA_CHANGED, NotifyTask.TYPE_WAIT, TYPE_PERCENT, TYPE_SUCCEED, TYPE_FAILED})
+        @IntDef({TYPE_DATA_CHANGED, NotifyTask.TYPE_WAIT, TYPE_PERCENT, TYPE_SUCCEED, TYPE_FAILED, TYPE_OVERLAY_CHANGED})
         @Retention(RetentionPolicy.SOURCE)
         public @interface Type {
         }
@@ -232,6 +233,7 @@ public abstract class GalleryProvider {
         public static final int TYPE_PERCENT = 2;
         public static final int TYPE_SUCCEED = 3;
         public static final int TYPE_FAILED = 4;
+        public static final int TYPE_OVERLAY_CHANGED = 5;
 
         private final Listener mListener;
         private final ConcurrentPool<NotifyTask> mPool;
@@ -277,6 +279,9 @@ public abstract class GalleryProvider {
                     break;
                 case TYPE_FAILED:
                     mListener.onPageFailed(mIndex, mError);
+                    break;
+                case TYPE_OVERLAY_CHANGED:
+                    mListener.onPageOverlayChanged(mIndex);
                     break;
             }
 
@@ -339,5 +344,7 @@ public abstract class GalleryProvider {
         void onPageFailed(int index, String error);
 
         void onDataChanged(int index);
+
+        default void onPageOverlayChanged(int index) { onDataChanged(index); }
     }
 }

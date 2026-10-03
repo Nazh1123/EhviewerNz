@@ -75,6 +75,12 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
         return String.format(Locale.US, "%d-%s-%08d", mGalleryInfo.gid, mGalleryInfo.token, index + 1);
     }
 
+    @NonNull
+    @Override
+    public String getTranslationFilename(int index) {
+        return com.hippo.ehviewer.spider.SpiderDen.generateImageFilename(index, "");
+    }
+
     @Override
     public boolean save(int index, @NonNull UniFile file) {
         if (null != mSpiderQueen) {

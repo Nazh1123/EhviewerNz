@@ -10,6 +10,7 @@ internal class TranslationPageRequest(val page: Int, val force: Boolean, val res
     AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<TranslationPageRequest>
     val progress = TranslationPageProgress()
+    var sourceName: String? = null
     @Volatile var isObsolete = false
         private set
     private var apiJob: Job? = null
