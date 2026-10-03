@@ -88,6 +88,7 @@ import com.hippo.ehviewer.AppConfig;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.ReaderKeyProfiles;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.event.GalleryActivityEvent;
@@ -107,6 +108,7 @@ import com.hippo.ehviewer.widget.TouchThroughSeekBar;
 import com.hippo.lib.glgallery.GalleryProvider;
 import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.glgallery.GalleryView;
+import com.hippo.lib.glgallery.ReaderKeyMap;
 import com.hippo.lib.glgallery.SimpleAdapter;
 import com.hippo.lib.glview.view.GLRootView;
 import com.hippo.lib.glview.image.ImageTexture;
@@ -283,6 +285,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private TextView mAnimatedWebpLongPressNotice;
     @Nullable
     private AnimatedWebpLongPressSpeed mAnimatedWebpLongPressSpeedSelection;
+    private volatile int mReaderOrientationSwipe = ReaderKeyProfiles.SWIPE_DOWN;
     // Guarded by this, including the callbacks made on the GL thread.
     private boolean mAnimatedWebpLongPressTouchDown;
     private boolean mAnimatedWebpLongPressCaptured;
@@ -1074,6 +1077,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onResume() {
         super.onResume();
+        applyReaderKeyProfile();
         if (mTranslationController != null) mTranslationController.resume();
         if (mOrientationEventListener != null && mOrientationEventListener.canDetectOrientation()) {
             mOrientationEventListener.enable();
@@ -1324,7 +1328,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 mOrientationSwipeActive = false;
-                mOrientationSwipeCandidate = isHorizontalReadingDirection()
+                mOrientationSwipeCandidate = mReaderOrientationSwipe != ReaderKeyProfiles.SWIPE_OFF
+                        && isHorizontalReadingDirection()
                         && isCurrentImageOrientationDifferent();
                 if (mOrientationSwipeCandidate) {
                     mOrientationSwipeDownX = event.getX();
@@ -1335,21 +1340,22 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 if (!mOrientationSwipeCandidate || event.getPointerCount() != 1) {
                     return mOrientationSwipeActive;
                 }
-                if (!isHorizontalReadingDirection()) {
+                if (mReaderOrientationSwipe == ReaderKeyProfiles.SWIPE_OFF || !isHorizontalReadingDirection()) {
                     mOrientationSwipeCandidate = false;
                     return false;
                 }
                 float dx = event.getX() - mOrientationSwipeDownX;
                 float dy = event.getY() - mOrientationSwipeDownY;
+                float directedY = mReaderOrientationSwipe == ReaderKeyProfiles.SWIPE_UP ? -dy : dy;
                 float minDistance = Math.max(mAnimatedWebpTouchSlop * 4.0f,
                         getWindow().getDecorView().getHeight()
                                 * ORIENTATION_SWIPE_MIN_SCREEN_FRACTION);
-                if (dy < -minDistance || (Math.abs(dx) > minDistance && Math.abs(dx) > dy)) {
+                if (directedY < -minDistance || (Math.abs(dx) > minDistance && Math.abs(dx) > directedY)) {
                     mOrientationSwipeCandidate = false;
                     return false;
                 }
-                if (dy < minDistance
-                        || dy < Math.abs(dx) * ORIENTATION_SWIPE_DIRECTION_RATIO) {
+                if (directedY < minDistance
+                        || directedY < Math.abs(dx) * ORIENTATION_SWIPE_DIRECTION_RATIO) {
                     return false;
                 }
 
@@ -1863,6 +1869,51 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         });
     }
 
+    private void applyReaderKeyProfile() {
+        if (mGalleryView == null) return;
+        ReaderKeyProfiles.Profile profile = ReaderKeyProfiles.load().active();
+        restoreAnimatedWebpLongPressPlayback();
+        synchronized (this) {
+            mAnimatedWebpLongPressSpeedSelection = null;
+        }
+        clearOrientationSwipeGesture();
+        mReaderOrientationSwipe = profile.orientationSwipe;
+        mGalleryView.setReaderKeyMap(profile.map());
+        mGalleryView.setPageAreaDoubleTapEnabled(!Settings.getQuickPageTurn());
+    }
+
+    private void chooseReaderKeyProfile() {
+        ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        String[] names = new String[profiles.profiles.size()];
+        for (int i = 0; i < names.length; i++) {
+            String name = profiles.profiles.get(i).name;
+            names[i] = name.isEmpty() ? getString(R.string.reader_keys_profile_number, i + 1) : name;
+        }
+        new AlertDialog.Builder(this).setTitle(R.string.reader_keys_select_profile)
+                .setSingleChoiceItems(names, profiles.selected, (dialog, which) -> {
+                    profiles.selected = which;
+                    profiles.save();
+                    applyReaderKeyProfile();
+                    dialog.dismiss();
+                    Toast.makeText(this, names[which], Toast.LENGTH_SHORT).show();
+                }).setNegativeButton(android.R.string.cancel, null).show();
+    }
+
+    @Override
+    public void onReaderKeyAction(int action, int index) {
+        int generation = mAnimatedWebpLifecycleGeneration;
+        SimpleHandler.getInstance().post(() -> {
+            if (!mAnimatedWebpLifecycleResumed || generation != mAnimatedWebpLifecycleGeneration
+                    || isFinishing() || isDestroyed() || index != mCurrentIndex
+                    || index < 0 || index >= mSize) return;
+            switch (action) {
+                case ReaderKeyMap.PAGE_MENU -> showPageDialog(index);
+                case ReaderKeyMap.SAVE -> saveImage(index, false, false, true);
+                case ReaderKeyMap.SAVE_NEXT -> saveImage(index, false, true, true, true);
+            }
+        });
+    }
+
     @Override
     public void onTapSliderArea() {
         NotifyTask task = mNotifyTaskPool.pop();
@@ -2106,9 +2157,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void saveImage(int page, boolean previousPageSave,
                            boolean turnPageAfterSave, boolean longPress) {
+        saveImage(page, previousPageSave, turnPageAfterSave, longPress, false);
+    }
+
+    private void saveImage(int page, boolean previousPageSave,
+                           boolean turnPageAfterSave, boolean longPress, boolean explicitTurn) {
         GalleryProvider2 provider = mGalleryProvider;
         if (provider == null || mImageFileOperationPending || mImageFileExecutor.isShutdown()) return;
-        boolean shouldTurn = turnPageAfterSave && Settings.getLongPressSaveTurnPage();
+        boolean shouldTurn = turnPageAfterSave && (explicitTurn || Settings.getLongPressSaveTurnPage());
         mImageFileOperationPending = true;
         mImageFileExecutor.execute(() -> {
             GalleryProvider2.SaveResult saved = null;
@@ -2146,7 +2202,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 // Do not turn an unrelated page if the reader moved or left during the copy.
                 if (shouldTurn && mAnimatedWebpLifecycleResumed
                         && mCurrentIndex == page && mGalleryView != null) {
-                    if (mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT) mGalleryView.pageLeft();
+                    if (explicitTurn) {
+                        if (page + 1 < mSize) mGalleryView.setCurrentPage(page + 1);
+                    } else if (mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT) mGalleryView.pageLeft();
                     else mGalleryView.pageRight();
                 }
             });
@@ -2513,6 +2571,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         @SuppressLint("InflateParams")
         public GalleryMenuHelper(Context context) {
             mView = LayoutInflater.from(context).inflate(R.layout.dialog_gallery_menu, null);
+            mView.findViewById(R.id.reader_key_profile).setOnClickListener(v -> chooseReaderKeyProfile());
+            mView.findViewById(R.id.reader_key_editor).setOnClickListener(v ->
+                    startActivity(new Intent(GalleryActivity.this, SettingsActivity.class)
+                            .putExtra(SettingsActivity.EXTRA_READER_KEYS, true)));
             mScreenRotation = mView.findViewById(R.id.screen_rotation);
             mReadingDirection = mView.findViewById(R.id.reading_direction);
             mScaleMode = mView.findViewById(R.id.page_scaling);

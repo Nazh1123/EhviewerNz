@@ -36,6 +36,7 @@ import com.hippo.util.DrawableManager;
 
 public final class SettingsActivity extends EhActivity implements PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
     public static final String EXTRA_TRANSLATION = "translation_settings";
+    public static final String EXTRA_READER_KEYS = "reader_keys_settings";
 
     @Override
     public boolean onPreferenceStartFragment(PreferenceFragmentCompat caller, Preference preference) {
@@ -94,7 +95,11 @@ public final class SettingsActivity extends EhActivity implements PreferenceFrag
                     .beginTransaction()
                     .replace(R.id.settings,new SettingsHeaders())
                     .commit();
-            if (getIntent().getBooleanExtra(EXTRA_TRANSLATION, false)) {
+            if (getIntent().getBooleanExtra(EXTRA_READER_KEYS, false)) {
+                getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.settings, new com.hippo.ehviewer.ui.fragment.ReaderKeysFragment())
+                        .addToBackStack(null).commit();
+            } else if (getIntent().getBooleanExtra(EXTRA_TRANSLATION, false)) {
                 getSupportFragmentManager().beginTransaction()
                         .replace(R.id.settings, new com.hippo.ehviewer.ui.fragment.TranslationFragment())
                         .addToBackStack(null).commit();

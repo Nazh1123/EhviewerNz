@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="reader_keys_canvas" type="id" />
+    <item name="reader_keys_bar" type="id" />
+    <item name="reader_keys_profile" type="id" />
+    <item name="reader_keys_add" type="id" />
+    <item name="reader_keys_manage" type="id" />
+    <item name="reader_keys_save" type="id" />
+    <item name="reader_keys_more" type="id" />
+    <item name="reader_keys_direction" type="id" />
+    <item name="reader_keys_back" type="id" />
+</resources>

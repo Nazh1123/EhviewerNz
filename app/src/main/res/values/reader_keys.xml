@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_keys_title">Keys</string>
+    <string name="reader_keys_profile_number">Profile %1$d</string>
+    <string name="reader_keys_current_profile">Active: %1$s</string>
+    <string name="reader_keys_select_profile">Select profile</string>
+    <string name="reader_keys_new">New profile</string>
+    <string name="reader_keys_manage">Manage profiles</string>
+    <string name="reader_keys_save">Save and use</string>
+    <string name="reader_keys_rename">Rename</string>
+    <string name="reader_keys_copy">Duplicate</string>
+    <string name="reader_keys_delete">Delete</string>
+    <string name="reader_keys_reset">Restore defaults</string>
+    <string name="reader_keys_keep_one">Keep at least one profile</string>
+    <string name="reader_keys_delete_question">Delete this profile and its unsaved edits?</string>
+    <string name="reader_keys_reset_question">Restore the actions and gesture options to their defaults? Save to apply.</string>
+    <string name="reader_keys_saved">Profile saved and active</string>
+    <string name="reader_keys_unsaved">Save changes before continuing?</string>
+    <string name="reader_keys_discard">Discard changes</string>
+    <string name="reader_keys_back">Back</string>
+    <string name="reader_keys_more">More</string>
+    <string name="reader_keys_edit_direction">Editing: %1$s. Switch reading direction</string>
+    <string name="reader_keys_default_action">%1$s (default)</string>
+    <string name="reader_keys_scroll_up">Scroll up</string>
+    <string name="reader_keys_scroll_down">Scroll down</string>
+    <string name="reader_keys_edit_actions">Set actions</string>
+    <string name="reader_keys_animated_area">Animation control area · bottom %1$d%%</string>
+    <string name="reader_keys_animated_area_title">Animation control area</string>
+    <string name="reader_keys_bottom_percent">Percentage from the bottom (0–100%)</string>
+    <string name="reader_keys_percent_error">Enter a value from 0 to 100</string>
+    <string name="reader_keys_orientation_swipe">Screen orientation gesture · %1$s</string>
+    <string name="reader_keys_orientation_title">Screen orientation gesture</string>
+    <string-array name="reader_keys_regions">
+        <item>Upper left</item>
+        <item>Lower left</item>
+        <item>Upper right</item>
+        <item>Lower right</item>
+        <item>Top center</item>
+        <item>Center</item>
+        <item>Bottom center</item>
+    </string-array>
+    <string-array name="reader_keys_gestures">
+        <item>Tap</item>
+        <item>Double-tap</item>
+        <item>Long press</item>
+    </string-array>
+    <string-array name="reader_keys_actions">
+        <item>Default</item>
+        <item>No action</item>
+        <item>Turn left</item>
+        <item>Turn right</item>
+        <item>Next page</item>
+        <item>Previous page</item>
+        <item>Reader settings menu</item>
+        <item>Show / hide controls</item>
+        <item>Zoom</item>
+        <item>Image menu</item>
+        <item>Save current image</item>
+        <item>Save then next page</item>
+    </string-array>
+    <string-array name="reader_keys_swipe_choices">
+        <item>Off</item>
+        <item>Swipe up</item>
+        <item>Swipe down</item>
+    </string-array>
+</resources>
