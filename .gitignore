@@ -30,3 +30,4 @@ _build.bat
 /translation-engine/build/
 /translation-engine/.cxx/
 /artifacts/
+/docs/

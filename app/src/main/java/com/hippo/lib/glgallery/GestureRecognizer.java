@@ -36,6 +36,7 @@ class GestureRecognizer {
         boolean onDoubleTap(float x, float y);
         boolean onDoubleTapConfirmed(float x, float y);
         boolean isDoubleTapRegion(float x, float y);
+        default boolean isSameTapRegion(float x1, float y1, float x2, float y2) { return true; }
         void onLongPress(float x, float y);
         boolean onScroll(float dx, float dy, float totalX, float totalY, float x, float y);
 
@@ -93,7 +94,9 @@ class GestureRecognizer {
         if (action == MotionEvent.ACTION_DOWN) {
             boolean useDoubleTap = mPageAreaDoubleTapEnabled
                     || mListener.isDoubleTapRegion(event.getX(), event.getY());
-            if (useDoubleTap && mDoubleTapChainBroken) {
+            boolean differentRegion = mPendingSingleTap && !mListener.isSameTapRegion(
+                    mPendingSingleTapX, mPendingSingleTapY, event.getX(), event.getY());
+            if (useDoubleTap && (mDoubleTapChainBroken || differentRegion)) {
                 finishPendingSingleTap();
                 cancelDoubleTapGesture();
                 mDoubleTapChainBroken = false;

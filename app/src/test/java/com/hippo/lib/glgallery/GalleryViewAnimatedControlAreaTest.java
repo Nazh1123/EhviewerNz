@@ -37,9 +37,9 @@ public class GalleryViewAnimatedControlAreaTest {
         assertFalse(view.isDoubleTapRegion(100, 800));
         assertFalse(view.isDoubleTapRegion(900, 800));
         view.setAnimatedPageControlAreasEnabled(true);
-        assertTrue(view.isDoubleTapRegion(100, 600));
+        assertTrue(view.isDoubleTapRegion(100, 630));
         assertTrue(view.isDoubleTapRegion(900, 800));
-        assertFalse(view.isDoubleTapRegion(100, 599));
+        assertFalse(view.isDoubleTapRegion(100, 629));
 
         GestureRecognizer recognizer = ReflectionHelpers.getField(view, "mGestureRecognizer");
         assertDoubleTapSelection(recognizer, 100, 800, true);

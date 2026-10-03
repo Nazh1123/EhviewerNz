@@ -157,6 +157,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private boolean mFirstScroll = false;
     private boolean mSliderLongPressHandled = false;
     private volatile boolean mAnimatedPageControlAreasEnabled;
+    private volatile ReaderKeyMap mReaderKeyMap;
+    private boolean mLegacyPageDoubleTapEnabled;
     private volatile boolean mPageSwipeInProgress;
 
     private final Rect mLeftArea = new Rect();
@@ -165,7 +167,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private final Rect mSliderTopArea = new Rect();
     private final Rect mSliderBottomArea = new Rect();
 
-    private int mLayoutMode = LAYOUT_RIGHT_TO_LEFT;
+    private volatile int mLayoutMode = LAYOUT_RIGHT_TO_LEFT;
     private int mScaleMode = ImageView.SCALE_FIT;
     private int mStartPosition = ImageView.START_POSITION_TOP_LEFT;
     private int mIndex;
@@ -588,7 +590,13 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     }
 
     public void setPageAreaDoubleTapEnabled(boolean enabled) {
-        mGestureRecognizer.setPageAreaDoubleTapEnabled(enabled);
+        mLegacyPageDoubleTapEnabled = enabled;
+        mGestureRecognizer.setPageAreaDoubleTapEnabled(mReaderKeyMap == null && enabled);
+    }
+
+    public void setReaderKeyMap(ReaderKeyMap mapping) {
+        mReaderKeyMap = mapping;
+        mGestureRecognizer.setPageAreaDoubleTapEnabled(mapping == null && mLegacyPageDoubleTapEnabled);
     }
 
     public void setAnimatedPageControlAreasEnabled(boolean enabled) {
@@ -625,9 +633,49 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
     @Override
     public boolean isDoubleTapRegion(float x, float y) {
+        if (isAnimatedPageControlArea(x, y)
+                || (mAnimatedPageControlAreasEnabled && isSliderArea(x, y))) return true;
+        int action = readerKeyAction(x, y, ReaderKeyMap.DOUBLE_TAP);
+        if (action != ReaderKeyMap.LEGACY) return action != ReaderKeyMap.NONE;
+        if (mReaderKeyMap != null && mLegacyPageDoubleTapEnabled) return true;
         return mMenuArea.contains((int) x, (int) y)
                 || isSliderArea(x, y)
                 || isAnimatedPageControlArea(x, y);
+    }
+
+    @Override
+    public boolean isSameTapRegion(float x1, float y1, float x2, float y2) {
+        return mReaderKeyMap == null || (ReaderKeyMap.region(x1, y1, getWidth(), getHeight())
+                == ReaderKeyMap.region(x2, y2, getWidth(), getHeight())
+                && isAnimatedPageControlArea(x1, y1) == isAnimatedPageControlArea(x2, y2));
+    }
+
+    private int readerKeyAction(float x, float y, int gesture) {
+        ReaderKeyMap mapping = mReaderKeyMap;
+        return mapping == null ? ReaderKeyMap.LEGACY : mapping.action(
+                ReaderKeyMap.region(x, y, getWidth(), getHeight()), gesture, mLayoutMode);
+    }
+
+    @RenderThread
+    private boolean dispatchReaderKey(int gesture, float x, float y) {
+        int action = readerKeyAction(x, y, gesture);
+        if (action == ReaderKeyMap.LEGACY) return false;
+        if (mLayoutManager == null || !mLayoutManager.isTapOrPressEnable()) return true;
+        int index = mLayoutManager.getInternalCurrentIndex();
+        switch (action) {
+            case ReaderKeyMap.NONE -> { }
+            case ReaderKeyMap.LEFT -> mLayoutManager.onPageLeft();
+            case ReaderKeyMap.RIGHT -> mLayoutManager.onPageRight();
+            case ReaderKeyMap.NEXT, ReaderKeyMap.PREVIOUS -> {
+                int target = index + (action == ReaderKeyMap.NEXT ? 1 : -1);
+                if (target >= 0 && target < mAdapter.size()) setCurrentPageInternal(target);
+            }
+            case ReaderKeyMap.MENU -> { if (mListener != null) mListener.onTapMenuArea(); }
+            case ReaderKeyMap.CONTROLS -> { if (mListener != null) mListener.onTapSliderArea(); }
+            case ReaderKeyMap.ZOOM -> mLayoutManager.onDoubleTapConfirmed(x, y);
+            default -> { if (mListener != null) mListener.onReaderKeyAction(action, index); }
+        }
+        return true;
     }
 
     @Override
@@ -726,12 +774,9 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     }
 
     private boolean isAnimatedPageControlArea(float x, float y) {
-        // Keep the existing page-turn rectangles; only the lower third gains animation
-        // gestures while a controllable animation is the current page.
-        return mAnimatedPageControlAreasEnabled
-                && y >= getHeight() * 0.7f
-                && (mLeftArea.contains((int) x, (int) y)
-                || mRightArea.contains((int) x, (int) y));
+        ReaderKeyMap mapping = mReaderKeyMap;
+        return mAnimatedPageControlAreasEnabled && ReaderKeyMap.isAnimatedControlArea(
+                x, y, getWidth(), getHeight(), mapping == null ? 30 : mapping.animatedControlPercent);
     }
 
     @RenderThread
@@ -773,6 +818,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             if (mListener != null) {
                 mListener.onTapErrorText(page.getIndex());
             }
+        } else if (dispatchReaderKey(ReaderKeyMap.TAP, x, y)) {
+            // Explicit mappings take priority after the image error retry target.
         } else if (isSliderArea(x, y)) {
             if (mListener != null) {
                 mListener.onTapSliderArea();
@@ -810,6 +857,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             }
         }
 
+        if (dispatchReaderKey(ReaderKeyMap.DOUBLE_TAP, x, y)) return;
+
         if (mLayoutManager != null) {
             mLayoutManager.onDoubleTapConfirmed(x, y);
         }
@@ -846,6 +895,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
                 return;
             }
         }
+
+        if (dispatchReaderKey(ReaderKeyMap.LONG_PRESS, x, y)) return;
 
         boolean nextPageArea = (mLayoutMode == LAYOUT_RIGHT_TO_LEFT
                 ? mLeftArea : mRightArea).contains((int) x, (int) y);
@@ -1394,6 +1445,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     }
 
     public interface Listener {
+        default void onReaderKeyAction(int action, int index) { }
 
         @RenderThread
         void onUpdateCurrentIndex(int index);
