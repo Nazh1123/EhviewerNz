@@ -125,6 +125,7 @@ public class GalleryPageView extends GLFrameLayout {
     }
 
     private void unbindImage() {
+        setOverlay(null);
         ImageTexture texture = mImage.getImageTexture();
         if (texture != null) {
             mImage.setImageTexture(null);
@@ -142,6 +143,12 @@ public class GalleryPageView extends GLFrameLayout {
     @Nullable
     public ImageTexture getImageTexture() {
         return mImage.getImageTexture();
+    }
+
+    public void setOverlay(ImageTexture overlay) {
+        ImageTexture previous = mImage.getOverlayTexture();
+        mImage.setOverlayTexture(overlay);
+        if (previous != null) previous.recycle();
     }
 
     public void setPage(int page) {

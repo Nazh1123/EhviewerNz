@@ -50,7 +50,7 @@ class ReaderTranslationController @JvmOverloads constructor(
             }
         }
         override fun hasTranslatedPage(page: Int) = provider.hasTranslatedPage(page)
-        override fun display(page: Int, image: Image) = provider.setTranslatedPage(page, image)
+        override fun display(page: Int, image: Image) = provider.setTranslationOverlay(page, image)
         override fun clearTranslations() = provider.clearTranslatedPages()
     }
 
@@ -61,7 +61,7 @@ class ReaderTranslationController @JvmOverloads constructor(
         button.setOnLongClickListener { showMenu(current); true }
         progressPanel?.let { panel ->
             panel.setOnClickListener {
-                if (enabled && !closed) provider.toggleTranslatedPage(current)
+                if (enabled && !closed) provider.toggleTranslationOverlay(current)
             }
             val margins = panel.layoutParams as FrameLayout.LayoutParams
             val left = margins.leftMargin

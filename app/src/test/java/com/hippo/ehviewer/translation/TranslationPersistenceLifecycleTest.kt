@@ -3,6 +3,7 @@ package com.hippo.ehviewer.translation
 import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Looper
 import com.hippo.ehviewer.EhApplication
@@ -83,10 +84,12 @@ class TranslationPersistenceLifecycleTest {
         TranslationSettings(context).save(selected)
         val nativeStore = NativeModelStore(context) { }
         nativeStore.file(selected.nativeModelId).apply { parentFile!!.mkdirs(); writeText("GGUF" + "0".repeat(28)) }
-        val results = store(selected)
         // Leave the middle page uncached: it must not block restoration of the following page.
-        for (page in listOf(0, 2)) results.writeImage(results.key(provider.sources[page])) { out ->
-            provider.sources[page].inputStream().use { it.copyTo(out) }
+        for (page in listOf(0, 2)) {
+            val results = store(selected, page.toString())
+            results.writeImage(results.key(provider.sources[page])) { out ->
+                provider.sources[page].inputStream().use { it.copyTo(out) }
+            }
         }
         nativeStore.delete(selected.nativeModelId)
         assertEquals("", TranslationSettings(context).read().nativeModelId)
@@ -112,13 +115,13 @@ class TranslationPersistenceLifecycleTest {
         withSession(selected) { session ->
             val image = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
             val job = jobs.launch {
-                assertTrue(session.finishTranslation(0, TranslationPageRequest(0, false), key, selected,
+                assertTrue(session.finishWithSource(0, TranslationPageRequest(0, false), key, selected,
                     resume = { checkpoint }) { PageResult.Translated(image, stats) })
             }
             await { job.isCompleted }
             assertTrue(image.isRecycled)
             assertEquals(R.string.translation_partial, session.states[0])
-            assertFalse(File(savedDir, "$key.png").exists())
+            assertFalse(File(savedDir, "0_tl.png").exists())
             assertEquals(checkpoint, store(selected).readResume(key))
         }
         TranslationRuntime.preparedPages.clear()
@@ -133,18 +136,18 @@ class TranslationPersistenceLifecycleTest {
             await { !reopened.working }
             assertEquals(R.string.translation_partial, reopened.states[0])
             assertEquals(checkpoint, store(selected).readResume(key))
-            assertTrue(File(savedDir, "$key.partial").isFile)
+            assertEquals("0_tl.partial", store(selected).existingImage(key)?.name)
             val epoch = ReflectionHelpers.getField<Int>(reopened, "generation")
             val complete = jobs.launch {
-                assertTrue(reopened.finishTranslation(epoch, TranslationPageRequest(0, true, retryMissing = true), key, selected) {
+                assertTrue(reopened.finishWithSource(epoch, TranslationPageRequest(0, true, retryMissing = true), key, selected) {
                     PageResult.Translated(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888), stats)
                 })
             }
             await { complete.isCompleted }
             assertEquals(R.string.translation_done, reopened.states[0])
             assertEquals(0, reopened.partial)
-            assertTrue(File(savedDir, "$key.png").isFile)
-            assertFalse(File(savedDir, "$key.partial").exists())
+            assertTrue(File(savedDir, "0_tl.png").isFile)
+            assertFalse(File(savedDir, "0_tl.partial").exists())
             assertNull(store(selected).readResume(key))
         }
     }
@@ -158,7 +161,8 @@ class TranslationPersistenceLifecycleTest {
             session.onPageChanged(0)
             await { !session.working && session.states.size == 3 }
             assertEquals(3, session.states.values.count { it == R.string.translation_done })
-            assertEquals(3, savedDir.listFiles()!!.size)
+            assertEquals(setOf("0_tl.png", "1_tl.png", "2_tl.png"),
+                savedDir.listFiles()!!.filter { it.isFile }.map { it.name }.toSet())
             assertFalse(TranslationModels(context).ready())
         }
         TranslationCache(TranslationStorage.cacheDir(context)).clear()
@@ -178,7 +182,7 @@ class TranslationPersistenceLifecycleTest {
         completeAfterCancellation(session, key, PageResult.Translated(bitmap, stats, PageAnalysis(mask, emptyList()))) {
             session.leaveReader()
         }
-        assertTrue(File(savedDir, "$key.png").isFile)
+        assertTrue(File(savedDir, "0_tl.png").isFile)
         assertTrue(bitmap.isRecycled)
         assertTrue(mask.isRecycled)
         assertNull(session.states[0])
@@ -191,13 +195,13 @@ class TranslationPersistenceLifecycleTest {
         val key = store().key(provider.sources[0])
         val request = TranslationPageRequest(0, false)
         val job = jobs.launch {
-            session.finishTranslation(0, request, key, options) {
+            session.finishWithSource(0, request, key, options) {
                 request.supersede()
                 PageResult.Translated(bitmap, stats)
             }
         }
         await { job.isCompleted }
-        assertTrue(File(savedDir, "$key.png").isFile)
+        assertTrue(File(savedDir, "0_tl.png").isFile)
         assertTrue(bitmap.isRecycled)
         assertNull(session.states[0])
     }
@@ -205,7 +209,7 @@ class TranslationPersistenceLifecycleTest {
     @Test fun readerExitAfterNoTextDetectionStillSavesTheSkipMarker() = withSession { session ->
         val key = store().key(provider.sources[0])
         completeAfterCancellation(session, key, PageResult.Skipped("No text", stats)) { session.leaveReader() }
-        assertTrue(File(savedDir, "$key.skip").isFile)
+        assertTrue(File(savedDir, "0_tl.skip").isFile)
         TranslationCache(TranslationStorage.cacheDir(context)).clear()
         assertTrue(store(options.copy(persistDownloaded = false)).isSkipped(key))
         assertNull(session.states[0])
@@ -215,13 +219,13 @@ class TranslationPersistenceLifecycleTest {
         download.state = DownloadInfo.STATE_DOWNLOAD
         val key = store().key(provider.sources[0])
         val job = jobs.launch {
-            session.finishTranslation(0, TranslationPageRequest(0, false), key, options) {
+            session.finishWithSource(0, TranslationPageRequest(0, false), key, options) {
                 download.state = DownloadInfo.STATE_FINISH
                 PageResult.Skipped("No text", stats)
             }
         }
         await { job.isCompleted }
-        assertTrue(File(savedDir, "$key.skip").isFile)
+        assertTrue(File(savedDir, "0_tl.skip").isFile)
     }
 
     @Test fun enablingPersistenceAdoptsAllSettledReaderResultsIncludingOutOfWindowAndSkippedPages() =
@@ -229,9 +233,9 @@ class TranslationPersistenceLifecycleTest {
             for (page in 0..2) {
                 val key = store().key(provider.sources[page])
                 val job = jobs.launch {
-                    session.finishTranslation(0, TranslationPageRequest(page, false), key, session.activeOptions) {
+                    session.finishWithSource(0, TranslationPageRequest(page, false), key, session.activeOptions) {
                         if (page == 0) PageResult.Skipped("No text", stats)
-                        else PageResult.Translated(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888), stats)
+                        else PageResult.Translated(Bitmap.createBitmap(8 + page, 8, Bitmap.Config.ARGB_8888), stats)
                     }
                 }
                 await { job.isCompleted }
@@ -243,15 +247,15 @@ class TranslationPersistenceLifecycleTest {
             await { savedDir.listFiles()?.size == 3 && ReflectionHelpers.getField<Job?>(session, "retentionJob") == null }
             assertNull(ReflectionHelpers.getField<Job?>(session, "worker"))
             TranslationCache(TranslationStorage.cacheDir(context)).clear()
-            assertNotNull(store().existingImage(store().key(provider.sources[1])))
-            assertNotNull(store().existingImage(store().key(provider.sources[2])))
+            assertNotNull(store(name = "1").existingImage(store().key(provider.sources[1])))
+            assertNotNull(store(name = "2").existingImage(store().key(provider.sources[2])))
             assertTrue(store().isSkipped(store().key(provider.sources[0])))
         }
 
     @Test fun failedTranslationDoesNotPublishAnImageOrSkipMarker() = withSession { session ->
         val key = store().key(provider.sources[0])
         val job = jobs.launch {
-            assertFalse(session.finishTranslation(0, TranslationPageRequest(0, false), key, options) {
+            assertFalse(session.finishWithSource(0, TranslationPageRequest(0, false), key, options) {
                 PageResult.Failed("incomplete")
             })
         }
@@ -266,7 +270,7 @@ class TranslationPersistenceLifecycleTest {
         val rendering = CountDownLatch(1)
         val finished = CountDownLatch(1)
         val job = jobs.launch {
-            session.finishTranslation(0, TranslationPageRequest(0, false), key, options) {
+            session.finishWithSource(0, TranslationPageRequest(0, false), key, options) {
                 rendering.countDown()
                 check(finished.await(5, TimeUnit.SECONDS))
                 result
@@ -281,9 +285,17 @@ class TranslationPersistenceLifecycleTest {
         assertTrue(job.isCancelled)
     }
 
-    private fun store(selected: TranslationOptions = options) = TranslationResultStore(
+    private suspend fun GalleryTranslationSession.finishWithSource(epoch: Int, request: TranslationPageRequest,
+            key: String, selected: TranslationOptions,
+            resume: () -> TranslationResume? = { null }, translate: suspend () -> PageResult): Boolean {
+        val original = requireNotNull(BitmapFactory.decodeFile(this@TranslationPersistenceLifecycleTest.provider.sources[request.page].absolutePath))
+        return try { finishTranslation(epoch, request, key, selected, original, resume, translate) }
+            finally { original.recycle() }
+    }
+
+    private fun store(selected: TranslationOptions = options, name: String = "0") = TranslationResultStore(
         TranslationStorage.cacheDir(context), UniFile.fromFile(gallery), selected, download.gid, true,
-        TranslationStorage.legacyPersistentDir(context))
+        name)
 
     private fun withSession(selected: TranslationOptions = options, test: (GalleryTranslationSession) -> Unit) {
         val session = TranslationTasks.acquire(context, provider, download)
@@ -311,7 +323,7 @@ class TranslationPersistenceLifecycleTest {
         override fun onRequest(index: Int) = Unit
         override fun onForceRequest(index: Int) = Unit
         override fun onCancelRequest(index: Int) = Unit
-        override fun getImageFilename(index: Int) = "$index.png"
+        override fun getImageFilename(index: Int) = "$index"
         override fun save(index: Int, file: UniFile): Boolean {
             file.openOutputStream().use { out -> sources[index].inputStream().use { it.copyTo(out) } }
             return true

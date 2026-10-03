@@ -50,7 +50,7 @@ class TranslationGallerySafTest {
         assertTrue(TranslationResultStore.isPartial(store().existingImage(key)!!))
         assertEquals(checkpoint, store().readResume(key))
         store().writeImage(key) { it.write("complete".toByteArray()) }
-        assertEquals(setOf("$key.png"), book.findFile("_translated")!!.listFiles()!!.map { it.name }.toSet())
+        assertEquals(setOf("001_tl.png"), book.findFile("_translated")!!.listFiles()!!.map { it.name }.toSet())
     }
 
     @get:Rule val temp = TemporaryFolder()
@@ -79,10 +79,26 @@ class TranslationGallerySafTest {
         source = LocalFolderGallerySource.create(tree, "Book A")
     }
 
-    private fun store(enabled: Boolean = true) = TranslationResultStore(cacheDir, book,
-        TranslationOptions(persistDownloaded = enabled), source.stableGalleryId(), true, legacyDir)
+    private fun store(enabled: Boolean = true, name: String = "001") = TranslationResultStore(cacheDir, book,
+        TranslationOptions(persistDownloaded = enabled), source.stableGalleryId(), true, name)
 
-    @Test fun resolvesImportedGalleryAndWritesReusableFullPngInItsTranslatedDirectory() {
+    @Test fun namedSafOverlaysAdoptCacheReopenAndDeleteWithOpaqueDocumentIds() {
+        val gid = source.stableGalleryId()
+        val key = "g${gid}_named"
+        store(false).writeImage(key) { it.write("cached".toByteArray()) }
+        val results = store(name = "Chapter/001")
+        val output = results.retain(key, results.existingImage(key)!!)
+        assertEquals("001_tl.png", output.name)
+        assertEquals("content", output.uri.scheme)
+        TranslationCache(cacheDir).clear()
+        assertEquals("cached", store(false, "Chapter/001").existingImage(key)!!.openInputStream()
+            .bufferedReader().use { it.readText() })
+        assertTrue(TranslationResultStore.deleteGalleries(cacheDir, legacyDir, setOf(gid), mapOf(gid to book)))
+        assertNull(store(false, "Chapter/001").existingImage(key))
+        assertNull(book.findFile("_translated")!!.findFile("Chapter")!!.findFile("001_tl.png"))
+    }
+
+    @Test fun resolvesImportedGalleryAndWritesReusableOverlayPngInItsTranslatedDirectory() {
         val info = DownloadInfo(source.stableGalleryId()).apply { archiveUri = source.encode() }
         assertEquals(book.uri, TranslationStorage.galleryDir(context, info)?.uri)
         val key = "g${info.gid}_page"
@@ -92,7 +108,7 @@ class TranslationGallerySafTest {
         } finally { bitmap.recycle() }
         assertEquals("content", output.uri.scheme)
         val translated = requireNotNull(book.findFile("_translated"))
-        assertEquals(listOf("$key.png"), translated.listFiles()!!.map { it.name })
+        assertEquals(listOf("001_tl.png"), translated.listFiles()!!.map { it.name })
         assertEquals(output.uri, store(false).existingImage(key)?.uri)
         val decoded = output.openInputStream().use { BitmapFactory.decodeStream(it) }
         assertNotNull(decoded)
@@ -103,18 +119,16 @@ class TranslationGallerySafTest {
         assertNotNull(store(false).existingImage(key))
     }
 
-    @Test fun cachedAndLegacyResultsAreMigratedToSafAndSelectedDeletionPreservesOriginals() {
+    @Test fun cachedOverlaysAreAdoptedToSafAndSelectedDeletionPreservesOriginals() {
         val gid = source.stableGalleryId()
         val key = "g${gid}_page"
         val original = requireNotNull(book.createFile("01.png"))
         original.openOutputStream().use { it.write("original".toByteArray()) }
         store(false).writeImage(key) { it.write("cached translation".toByteArray()) }
-        legacyDir.mkdirs()
-        File(legacyDir, "g${gid}_empty.skip").writeText("skipped")
+        store(false, "002").recordSkipped("g${gid}_empty")
         val persistent = store()
         persistent.retain(key, requireNotNull(persistent.existingImage(key)))
-        assertTrue(persistent.isSkipped("g${gid}_empty"))
-        assertFalse(File(legacyDir, "g${gid}_empty.skip").exists())
+        assertTrue(store(name = "002").isSkipped("g${gid}_empty"))
         val translated = requireNotNull(book.findFile("_translated"))
         requireNotNull(translated.createFile("notes.txt"))
         requireNotNull(translated.createFile("g10_page.png"))
@@ -153,9 +167,9 @@ class TranslationGallerySafTest {
             EhDB.putDownloadDirname(info.gid, gallery.name)
             val directory = requireNotNull(TranslationStorage.galleryDir(context, info))
             val results = TranslationResultStore(cacheDir, directory,
-                TranslationOptions(persistDownloaded = true), info.gid, true)
+                TranslationOptions(persistDownloaded = true), info.gid, true, "00000001")
             val output = results.writeImage("g71_page") { it.write(1) }
-            assertEquals(File(gallery, "_translated/g71_page.png").absolutePath, output.uri.path)
+            assertEquals(File(gallery, "_translated/00000001_tl.png").absolutePath, output.uri.path)
             assertEquals(listOf("Recorded folder"), root.list()!!.toList())
         }
     }

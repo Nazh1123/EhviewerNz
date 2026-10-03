@@ -158,7 +158,7 @@
     <string name="translation_target">目标语言</string>
     <string name="translation_inpaint">修复文字背景</string>
     <string name="translation_inpaint_help">使用 AI 去除原文并修复背景；关闭后使用更快的纯色填充。</string>
-    <string name="translation_explanation">针对日文漫画优化，文字识别、去字和排版均在手机上完成。导入本地模型或下载 ML Kit 语言包后可离线翻译；API 模式会将识别出的文字发送到所设服务，云端服务可能收费。\n\n轻触阅读器翻译图标开启，再次轻触显示原图并停止翻译。长按可重译当前页、翻译整本画廊或进入设置。切到后台后继续当前队列，完整画廊任务可通过通知停止。翻译速度和质量取决于设备与模型；内存不足时建议换用更小的量化模型或 ML Kit。</string>
+    <string name="translation_explanation">针对日文漫画优化，文字识别、去字和排版均在手机上完成。导入本地模型或下载 ML Kit 语言包后可离线翻译；API 模式会将识别出的文字发送到所设服务，云端服务可能收费。\n\n轻触阅读器翻译图标开启，再次轻触显示原图并停止翻译；轻触进度浮窗可显示或隐藏当前页的译文遮罩。长按可重译当前页、翻译整本画廊或进入设置。切到后台后继续当前队列，完整画廊任务可通过通知停止。翻译速度和质量取决于设备与模型；内存不足时建议换用更小的量化模型或 ML Kit。</string>
     <string name="translation_models_size">在“模型管理”中下载或导入文字检测、OCR 和去字模型，约 236 MiB。下载需要 Wi-Fi，卸载应用会删除模型。</string>
     <string name="translation_prepare">准备漫画模型（OCR / 去字）</string>
     <string name="translation_prepare_mlkit">准备 ML Kit 语言包</string>

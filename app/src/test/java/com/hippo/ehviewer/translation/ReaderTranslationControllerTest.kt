@@ -34,7 +34,7 @@ import org.robolectric.util.ReflectionHelpers
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class ReaderTranslationControllerTest {
-    @Test fun progressClickSwitchesCurrentPageBothWaysWithoutInterruptingTranslation() {
+    @Test fun progressClickTogglesOnlyCurrentOverlayWithoutInterruptingTranslationOrReplacingSource() {
         withReaderUi { reader, provider, button, panel ->
             val shown = observePages(provider)
             ReflectionHelpers.setField(reader.session, "enabled", true)
@@ -43,21 +43,25 @@ class ReaderTranslationControllerTest {
             reader.session.pageProgress.update(TranslationStage.DETECT, 0.5f)
             val progress = reader.session.pageProgress.value
             provider.notifyPageSucceed(0, Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))!!)
-            provider.setTranslatedPage(0, Image.create(Bitmap.createBitmap(16, 8, Bitmap.Config.ARGB_8888))!!)
-            provider.setTranslatedPage(1, Image.create(Bitmap.createBitmap(24, 8, Bitmap.Config.ARGB_8888))!!)
+            provider.setTranslationOverlay(0, Image.create(Bitmap.createBitmap(16, 8, Bitmap.Config.ARGB_8888))!!)
+            provider.setTranslationOverlay(1, Image.create(Bitmap.createBitmap(24, 8, Bitmap.Config.ARGB_8888))!!)
             provider.request(0)
-            assertEquals(16, shown[0])
+            assertEquals(8, shown[0])
+            assertEquals(16, provider.getTranslationOverlay(0)?.width)
 
             panel.performClick()
             assertEquals(8, shown[0])
+            assertNull(provider.getTranslationOverlay(0))
             provider.request(1)
-            assertEquals(24, shown[1])
+            assertNull(shown[1]) // An overlay cannot stand in for a source that has not loaded.
+            assertEquals(24, provider.getTranslationOverlay(1)?.width)
             reader.onPageReady(0)
             provider.request(0)
             assertEquals(8, shown[0])
 
             panel.performClick()
-            assertEquals(16, shown[0])
+            assertEquals(8, shown[0])
+            assertEquals(16, provider.getTranslationOverlay(0)?.width)
             assertTrue(reader.session.enabled)
             assertTrue(button.isSelected)
             assertFalse(active.isObsolete)
@@ -70,12 +74,14 @@ class ReaderTranslationControllerTest {
             panel.performClick()
             assertEquals(12, shown[1])
             provider.request(0)
-            assertEquals(16, shown[0])
+            assertEquals(8, shown[0])
+            assertEquals(16, provider.getTranslationOverlay(0)?.width)
             // A late source callback must respect the user's choice to view the original.
             provider.notifyPageSucceed(1, Image.create(Bitmap.createBitmap(10, 8, Bitmap.Config.ARGB_8888))!!)
             assertEquals(10, shown[1])
             panel.performClick()
-            assertEquals(24, shown[1])
+            assertEquals(10, shown[1])
+            assertEquals(24, provider.getTranslationOverlay(1)?.width)
         }
     }
 
@@ -91,9 +97,10 @@ class ReaderTranslationControllerTest {
             provider.request(0)
             assertEquals(8, shown[0])
             assertTrue(reader.session.enabled)
-            provider.setTranslatedPage(0, Image.create(Bitmap.createBitmap(16, 8, Bitmap.Config.ARGB_8888))!!)
+            provider.setTranslationOverlay(0, Image.create(Bitmap.createBitmap(16, 8, Bitmap.Config.ARGB_8888))!!)
             provider.request(0)
-            assertEquals(16, shown[0])
+            assertEquals(8, shown[0])
+            assertEquals(16, provider.getTranslationOverlay(0)?.width)
         }
     }
 
@@ -108,6 +115,7 @@ class ReaderTranslationControllerTest {
         provider.setListener(object : GalleryProvider.Listener {
             override fun onPageSucceed(index: Int, image: ImageWrapper) { shown[index] = image.width }
             override fun onDataChanged(index: Int) { provider.request(index) }
+            override fun onPageOverlayChanged(index: Int) = Unit
             override fun onDataChanged() = Unit
             override fun onPageWait(index: Int) = Unit
             override fun onPagePercent(index: Int, percent: Float) = Unit
@@ -120,7 +128,7 @@ class ReaderTranslationControllerTest {
         withReaderUi { reader, provider, _, panel ->
             ReflectionHelpers.setField(reader.session, "enabled", true)
             reader.onPageChanged(0)
-            provider.setTranslatedPage(0, Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))!!)
+            provider.setTranslationOverlay(0, Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))!!)
             ReflectionHelpers.getField<MutableMap<Int, UniFile>>(reader.session, "completedFiles")[0] =
                 UniFile.fromFile(java.io.File(panel.context.cacheDir, "preview.partial"))!!
             reader.session.states[0] = R.string.translation_partial
@@ -241,7 +249,7 @@ class ReaderTranslationControllerTest {
             val states = ReflectionHelpers.getField<MutableMap<Int, Int>>(reader.session, "states")
             fun complete(page: Int) {
                 states[page] = R.string.translation_done
-                provider.setTranslatedPage(page, requireNotNull(Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
+                provider.setTranslationOverlay(page, requireNotNull(Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
             }
             complete(first.page)
             val pages = mutableListOf(first.page + 1)
@@ -271,7 +279,7 @@ class ReaderTranslationControllerTest {
             val pages = (0..3).map {
                 val request = next()!!
                 states[request.page] = R.string.translation_done
-                provider.setTranslatedPage(request.page, requireNotNull(Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
+                provider.setTranslationOverlay(request.page, requireNotNull(Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
                 request.page + 1
             }
             assertEquals(listOf(4, 5, 6, 7), pages)
@@ -287,7 +295,7 @@ class ReaderTranslationControllerTest {
             val states = ReflectionHelpers.getField<MutableMap<Int, Int>>(reader.session, "states")
             fun next() = ReflectionHelpers.callInstanceMethod<TranslationPageRequest?>(reader.session, "nextRequest")
             fun complete(page: Int) {
-                provider.setTranslatedPage(page, requireNotNull(Image.create(
+                provider.setTranslationOverlay(page, requireNotNull(Image.create(
                     Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
                 states[page] = R.string.translation_done
             }
@@ -345,7 +353,7 @@ class ReaderTranslationControllerTest {
             ReflectionHelpers.callInstanceMethod<TranslationPageRequest>(reader.session, "nextRequest")
             val states = ReflectionHelpers.getField<MutableMap<Int, Int>>(reader.session, "states")
             states[0] = R.string.translation_done
-            provider.setTranslatedPage(0, requireNotNull(Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
+            provider.setTranslationOverlay(0, requireNotNull(Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
             val prefetch = ReflectionHelpers.callInstanceMethod<TranslationPageRequest>(reader.session, "nextRequest")
             assertEquals(1, prefetch.page)
             val weighted = ReflectionHelpers.getField<TranslationPageProgress>(reader.session, "pageProgress")
@@ -420,7 +428,7 @@ class ReaderTranslationControllerTest {
             val states = ReflectionHelpers.getField<MutableMap<Int, Int>>(reader.session, "states")
             for (page in 2..3) {
                 states[page] = R.string.translation_done
-                provider.setTranslatedPage(page, requireNotNull(Image.create(
+                provider.setTranslationOverlay(page, requireNotNull(Image.create(
                     Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
             }
             reader.onPageChanged(2)
@@ -453,7 +461,7 @@ class ReaderTranslationControllerTest {
             ReflectionHelpers.callInstanceMethod<Unit>(reader, "updateUi")
             browse(688)
             // An available reader image is not a completion signal for the running request.
-            provider.setTranslatedPage(4, requireNotNull(Image.create(
+            provider.setTranslationOverlay(4, requireNotNull(Image.create(
                 Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
             browse(688)
             reader.onPageChanged(7)
@@ -506,7 +514,7 @@ class ReaderTranslationControllerTest {
             val states = ReflectionHelpers.getField<MutableMap<Int, Int>>(reader.session, "states")
             fun complete(request: TranslationPageRequest) {
                 states[request.page] = R.string.translation_done
-                provider.setTranslatedPage(request.page, requireNotNull(Image.create(
+                provider.setTranslationOverlay(request.page, requireNotNull(Image.create(
                     Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
                 ReflectionHelpers.callInstanceMethod<Unit>(reader, "updateUi")
                 ReflectionHelpers.callInstanceMethod<Unit>(reader.session, "finishRequest",
@@ -578,7 +586,7 @@ class ReaderTranslationControllerTest {
             val states = ReflectionHelpers.getField<MutableMap<Int, Int>>(reader.session, "states")
             repeat(3) { page ->
                 states[page] = R.string.translation_done
-                provider.setTranslatedPage(page, requireNotNull(Image.create(
+                provider.setTranslationOverlay(page, requireNotNull(Image.create(
                     Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))))
             }
             ReflectionHelpers.callInstanceMethod<Unit>(reader, "updateUi")

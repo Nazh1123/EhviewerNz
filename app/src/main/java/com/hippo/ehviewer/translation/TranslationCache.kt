@@ -17,10 +17,10 @@ class TranslationCache(private val dir: File, private val limit: Long = 256L * 1
         }
         return digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
     }
-    fun image(key: String) = File(dir, "$key.png")
-    fun skipped(key: String) = File(dir, "$key.skip")
+    fun image(key: String) = File(dir, "${key}_tl.png")
+    fun skipped(key: String) = File(dir, "${key}_tl.skip")
     fun touch(file: File) { file.setLastModified(System.currentTimeMillis()) }
-    fun invalidate(key: String) { extensions.forEach { File(dir, "$key.$it").delete() } }
+    fun invalidate(key: String) { extensions.forEach { File(dir, "${key}_tl.$it").delete() } }
     fun prune() {
         val files = dir.listFiles()?.filter { it.extension in extensions } ?: return
         var size = files.sumOf { it.length() }

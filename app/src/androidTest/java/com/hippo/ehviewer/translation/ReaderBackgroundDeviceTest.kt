@@ -120,7 +120,7 @@ class ReaderBackgroundDeviceTest {
                     setField(selected, "working", true)
                     selected.onPageChanged(0)
                     val provider = field<com.hippo.ehviewer.gallery.GalleryProvider2>(selectedActivity, "mGalleryProvider")
-                    provider.setTranslatedPage(0, requireNotNull(Image.create(
+                    provider.setTranslationOverlay(0, requireNotNull(Image.create(
                         Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888))))
                     // Model the repeating uploader that previously starved the platform pause handshake.
                     root.addOnGLIdleListener { _, _ -> repeat.get() }

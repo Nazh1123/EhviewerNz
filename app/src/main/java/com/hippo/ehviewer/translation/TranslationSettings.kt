@@ -33,7 +33,7 @@ data class TranslationOptions(
             it.inpainter.toString()).joinToString("\n")
     }
 
-    fun cacheIdentity(): String = listOf("ehnz-offline-v1", "981ae85617bb3323949d57b7d6e3e10181435325",
+    fun cacheIdentity(): String = listOf("ehnz-overlay-v1", "981ae85617bb3323949d57b7d6e3e10181435325",
         when (backend) {
             TranslationBackend.NATIVE_LLM -> "llama-jni-v11-japanese-source-strict-regions-prefix-kv\n$nativeModelId"
             TranslationBackend.ML_KIT -> "mlkit-17.0.3-ja"

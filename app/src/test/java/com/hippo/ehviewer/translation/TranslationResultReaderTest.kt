@@ -197,7 +197,7 @@ class TranslationResultReaderTest {
         override fun hasTranslatedPage(page: Int) = provider.hasTranslatedPage(page)
         override fun display(page: Int, image: Image) {
             delivered.add(page)
-            provider.setTranslatedPage(page, image)
+            provider.setTranslationOverlay(page, image)
         }
         override fun clearTranslations() = provider.clearTranslatedPages()
     }

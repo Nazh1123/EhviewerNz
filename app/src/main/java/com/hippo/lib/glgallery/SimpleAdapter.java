@@ -119,6 +119,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
                 // Apply gallery playback/visibility before setImage starts decoding.
                 mGalleryView.notifyAnimatedPageVisibility(page, imageTexture);
                 page.setImage(imageTexture);
+                bindOverlay(page, index);
                 mGalleryView.notifyPageImageReady(index);
                 if (mShowIndex) {
                     page.setPage(index + 1);
@@ -157,6 +158,25 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
         if (page != null) {
             mProvider.request(index);
         }
+    }
+
+    @Override
+    public void onPageOverlayChanged(int index) {
+        GalleryPageView page = findPageByIndex(index);
+        if (page != null) {
+            if (page.getImageTexture() != null) bindOverlay(page, index);
+            else mProvider.request(index);
+        }
+    }
+
+    private void bindOverlay(GalleryPageView page, int index) {
+        ImageWrapper overlay = mProvider.getTranslationOverlay(index);
+        ImageTexture texture = null;
+        if (overlay != null && overlay.obtain()) {
+            texture = new ImageTexture(overlay);
+            mUploader.addTexture(texture);
+        }
+        page.setOverlay(texture);
     }
 
     private GalleryPageView findPageByIndex(int index) {
