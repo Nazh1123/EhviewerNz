@@ -101,6 +101,9 @@ internal class GalleryTranslationSession(
     private val activeRequests = linkedMapOf<Int, TranslationPageRequest>()
     private val resultLock = Mutex()
     private val sourceLock = Mutex()
+    private val imageReads = TranslationImageWork()
+    private val preparationWork = TranslationImageWork()
+    private val navigationSettler = TranslationNavigationSettler()
     private class NativeModels(
         val epoch: Int, val identity: String,
         val engine: ResumablePipeline, val translator: AutoCloseable,
@@ -128,7 +131,10 @@ internal class GalleryTranslationSession(
     val activePage: Int? get() = activeRequest?.takeUnless { it.isObsolete }?.page
 
     fun onPageChanged(page: Int) {
-        if (current >= 0 && page != current) readingDirection = if (page > current) 1 else -1
+        if (current >= 0 && page != current) {
+            readingDirection = if (page > current) 1 else -1
+            navigationSettler.pageChanged()
+        }
         current = page
         retainCompletedResults()
         if (states[page] in imageStates && reader?.hasTranslatedPage(page) == false)
@@ -512,7 +518,7 @@ internal class GalleryTranslationSession(
                                 }
                                 val activeEngine = checkNotNull(engine)
                                 request.ensureRelevant()
-                                val bitmap = decodeBounded(source, options.backend)
+                                val bitmap = imageReads.run { decodeBounded(source, options.backend) }
                                 // A new automatic task must classify fresh OCR from the current model.
                                 var prepared = if (options.source == TranslationLanguages.AUTO_SOURCE && sourceLanguage.language == null)
                                     null else TranslationRuntime.preparedPages.take(preparationKey)
@@ -529,9 +535,15 @@ internal class GalleryTranslationSession(
                                     }
                                     // Retain completed native outputs even if the reader is disabled mid-call.
                                     if (prepared == null) prepared = withContext(NonCancellable) {
-                                        activeEngine.prepare(bitmap, report) {
+                                        // Network requests can overlap; heavy image stages cannot multiply
+                                        // their native threads across all API slots during rapid navigation.
+                                        preparationWork.run {
                                             pageJob.ensureActive()
                                             request.ensureRelevant()
+                                            activeEngine.prepare(bitmap, report) {
+                                                pageJob.ensureActive()
+                                                request.ensureRelevant()
+                                            }
                                         }
                                     }
                                     ensureActive()
@@ -613,6 +625,9 @@ internal class GalleryTranslationSession(
                             engine != null && (options.source != TranslationLanguages.AUTO_SOURCE || sourceLanguage.language != null)
                         }, next = {
                             ensureActive()
+                            navigationSettler.await {
+                                withContext(Dispatchers.Main) { browsing && !fullGallery }
+                            }
                             if (yielded.get() || withContext(Dispatchers.Main) {
                                     TranslationTasks.scheduler.shouldYield(checkNotNull(turn))
                                 }) {
@@ -887,13 +902,17 @@ internal class GalleryTranslationSession(
             browsing && reader != null && (!fullGallery ||
                 kotlin.math.abs(page.toLong() - current) <= activeOptions.ahead)
         }
-        val bitmap = if (needsImage) file.openInputStream().use { BitmapFactory.decodeStream(it) } ?: return false else null
+        var bitmap: Bitmap? = null
         var transferred = false
         try {
+            if (needsImage) imageReads.run {
+                bitmap = file.openInputStream().use { BitmapFactory.decodeStream(it) }
+            }
+            if (needsImage && bitmap == null) return false
             return withContext(Dispatchers.Main) {
                 if (!enabled || generation != epoch || activeRequests[page]?.isObsolete == true) return@withContext false
                 if (bitmap != null && browsing) reader?.let {
-                    val image = Image.create(bitmap) ?: return@withContext false
+                    val image = Image.create(checkNotNull(bitmap)) ?: return@withContext false
                     it.display(page, image)
                     transferred = true
                 }
@@ -992,8 +1011,10 @@ internal class GalleryTranslationSession(
                         withContext(Dispatchers.IO) {
                             // Assign inside IO: cancellation must not discard an owned bitmap
                             // while returning from withContext before the finally can recycle it.
-                            bitmap = if (file.isFile) file.openInputStream().use { BitmapFactory.decodeStream(it) } else null
-                            if (bitmap != null) TranslationResultStore.touch(file)
+                            imageReads.run {
+                                bitmap = if (file.isFile) file.openInputStream().use { BitmapFactory.decodeStream(it) } else null
+                                if (bitmap != null) TranslationResultStore.touch(file)
+                            }
                         }
                         ensureActive()
                         if (generation != epoch || reader !== observer || !browsing ||

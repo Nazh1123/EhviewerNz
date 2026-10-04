@@ -10,12 +10,16 @@ object TranslationEngineFactory {
                retainNativeModels: () -> Boolean = { false },
                onRecognized: suspend (List<TextLine>) -> Unit = {},
                resolvedOptions: () -> TranslationOptions = { options }): ResumablePipeline {
-        val config = options.engineConfig()
+        val configured = options.engineConfig()
+        // API pages may overlap network requests, but OCR must leave CPU for the reader.
+        val config = configured.copy(ocr = configured.ocr.copy(concurrency = configured.ocr.concurrency.coerceIn(1, 4)))
         val alphabet = context.assets.open("models/alphabet-all-v5.txt").bufferedReader().use { it.readLines() }
         val batchSize = if (options.backend == TranslationBackend.ML_KIT) 1 else Int.MAX_VALUE
         val sourceSeparator = TranslationLanguages.lineSeparator(options.source)
         suspend fun recognize(ocr: Ocr, page: android.graphics.Bitmap, lines: List<TextLine>) {
-            ocr.recognize(page, lines)
+            recognizeTranslationBatches(lines, if (config.ocr.concurrent) config.ocr.concurrency else 1) {
+                ocr.recognize(page, it)
+            }
             lines.forEach { it.text = TranslationOcrText.clean(it.text) }
             onRecognized(lines)
         }

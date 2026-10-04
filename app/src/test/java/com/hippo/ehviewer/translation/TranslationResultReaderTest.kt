@@ -9,7 +9,7 @@ import com.hippo.lib.image.Image
 import com.hippo.unifile.UniFile
 import java.io.File
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.*
 import li.joye.yakuyomi.engine.TranslationStage
 import org.junit.Assert.*
 import org.junit.Rule
@@ -27,6 +27,31 @@ import org.robolectric.util.ReflectionHelpers
 @Config(application = Application::class, sdk = [26, 34])
 class TranslationResultReaderTest {
     @get:Rule val temp = TemporaryFolder()
+
+    @Test fun rapidNavigationDropsQueuedRestoresAndDisplaysTheLastPageWithoutInference() = withSession { session, provider, reader ->
+        for (page in 0 until 8) remember(session, page)
+        val gate = ReflectionHelpers.getField<TranslationImageWork>(session, "imageReads")
+        val blocked = CompletableDeferred<Unit>()
+        val finish = CompletableDeferred<Unit>()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val decode = scope.launch { gate.run { blocked.complete(Unit); finish.await() } }
+        try {
+            runBlocking { blocked.await() }
+            repeat(40) { session.onPageChanged((it * 3) % 8) }
+            session.onPageChanged(7)
+            shadowOf(Looper.getMainLooper()).idle()
+            assertTrue(reader.delivered.isEmpty())
+            finish.complete(Unit)
+            await { loader(session) == null && reader.hasTranslatedPage(7) }
+            assertEquals(listOf(7), reader.delivered)
+            assertEquals(0, provider.saves)
+            assertTrue(session.enabled)
+        } finally {
+            finish.complete(Unit)
+            runBlocking { decode.join() }
+            scope.cancel()
+        }
+    }
 
     @Test fun completedPageDisplaysWhileInferenceLockIsHeldWithoutResettingActiveProgress() = withSession { session, provider, reader ->
         session.onPageChanged(2)

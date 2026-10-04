@@ -25,6 +25,26 @@ import org.robolectric.util.ReflectionHelpers
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [26])
 class TranslationWorkerLifecycleTest {
+    @Test fun rapidPageChangesDrainTheOldCallAndResumeAtTheLatestPageWithoutRestartingTheWorker() {
+        val source = Source("rapid-navigation", CopyOnWriteArrayList(), blockFirst = true)
+        val session = acquire(source, ahead = 0)
+        try {
+            session.onPageChanged(0)
+            await { source.saves.get() == 1 }
+            val originalWorker = worker(session)
+            listOf(1, 2, 3, 4, 1, 6, 2, 7).forEach { page ->
+                session.onPageChanged(page)
+                assertSame(originalWorker, worker(session))
+            }
+            source.finish.countDown()
+            await { !session.working && worker(session) == null }
+            assertEquals(listOf("rapid-navigation:0", "rapid-navigation:7"), source.order.toList())
+            assertEquals(R.string.translation_animation, session.states[7])
+            assertEquals(1, source.starts.get())
+            assertEquals(1, source.stops.get())
+        } finally { source.finish.countDown(); release(session) }
+    }
+
     @Test fun modelMaintenanceWaitsForParkedModelsToCloseOffMain() {
         val first = acquire(Source("maintenance-a", CopyOnWriteArrayList()), 0)
         val second = acquire(Source("maintenance-b", CopyOnWriteArrayList()), 0)
