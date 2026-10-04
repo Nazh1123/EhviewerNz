@@ -5,17 +5,22 @@ import java.security.MessageDigest
 
 class TranslationCache(private val dir: File, private val limit: Long = 256L * 1024 * 1024) {
     init { check(dir.isDirectory || dir.mkdirs()) }
-    fun key(source: File, options: TranslationOptions): String = key(source, options.cacheIdentity())
+    @Suppress("UNUSED_PARAMETER")
+    fun key(source: File, options: TranslationOptions): String = key(source, "ehnz-overlay-content-v1")
     fun preparationKey(source: File, options: TranslationOptions): String = key(source, options.preparationIdentity())
-    private fun key(source: File, identity: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        digest.update(identity.toByteArray(Charsets.UTF_8))
-        digest.update(0.toByte())
+    internal fun key(source: File, identity: String): String = keys(source, listOf(identity)).single()
+    internal fun keys(source: File, identities: List<String>): List<String> {
+        val digests = identities.map { identity ->
+            MessageDigest.getInstance("SHA-256").apply {
+                update(identity.toByteArray(Charsets.UTF_8))
+                update(0.toByte())
+            }
+        }
         source.inputStream().use { input ->
             val buffer = ByteArray(65536)
-            while (true) { val n = input.read(buffer); if (n < 0) break; digest.update(buffer, 0, n) }
+            while (true) { val n = input.read(buffer); if (n < 0) break; digests.forEach { it.update(buffer, 0, n) } }
         }
-        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
+        return digests.map { digest -> digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) } }
     }
     fun image(key: String) = File(dir, "${key}_tl.png")
     fun skipped(key: String) = File(dir, "${key}_tl.skip")

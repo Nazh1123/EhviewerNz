@@ -59,6 +59,10 @@ public abstract class GalleryProvider2 extends GalleryProvider {
     @NonNull
     public String getTranslationFilename(int index) { return getImageFilename(index); }
 
+    /** Existing local source folder, also available when opened outside the download list. */
+    @Nullable
+    public UniFile getTranslationDirectory() { return null; }
+
     public abstract boolean save(int index, @NonNull UniFile file);
 
     /**

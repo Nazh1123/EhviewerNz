@@ -55,7 +55,8 @@ internal class GalleryTranslationSession(
         }
         if (detected != null) withContext(Dispatchers.Main) {
             android.widget.Toast.makeText(context, context.getString(R.string.translation_source_detected,
-                TranslationLanguages.displayName(detected, context.resources.configuration.locales[0])),
+                TranslationLanguages.displayName(detected, context.resources.configuration.locales[0]),
+                TranslationLanguages.displayName(options.target, context.resources.configuration.locales[0])),
                 android.widget.Toast.LENGTH_LONG).show()
         }
     }
@@ -179,14 +180,7 @@ internal class GalleryTranslationSession(
     fun enable(): Boolean {
         if (enabled) return true
         val options = settings.readForResults()
-        if (activeOptions.cacheIdentity() != options.cacheIdentity()) {
-            reader?.clearTranslations()
-            timings.clear()
-            completedFiles.clear()
-            completedKeys.clear()
-            completedNames.clear()
-            retainedKeys.clear()
-        }
+        // Changing a model or language affects future work; existing page results remain reusable.
         activeOptions = options
         enabled = true
         pendingStart = current
@@ -217,6 +211,7 @@ internal class GalleryTranslationSession(
     private fun resultStore(options: TranslationOptions, sourceName: String? = null): TranslationResultStore {
         val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
         val directory = download?.let { TranslationStorage.galleryDir(context, it) }
+            ?: provider.translationDirectory
         // An available source folder can retain each completed page while the rest
         // of the gallery is still downloading, paused, or failed.
         val downloaded = download != null && directory != null
@@ -226,7 +221,7 @@ internal class GalleryTranslationSession(
         }
         return TranslationResultStore(TranslationStorage.cacheDir(context),
             directory, options, galleryInfo?.gid, downloaded,
-            sourceName)
+            sourceName, TranslationStorage.legacyPersistentDir(context))
     }
 
     /** Settled reader pages bypass inference; still adopt them after persistence is enabled. */
@@ -335,6 +330,27 @@ internal class GalleryTranslationSession(
                             val source = File.createTempFile("translation-source-", ".img", context.cacheDir)
                             try {
                                 status(epoch, page, R.string.translation_working)
+                                request.sourceName = provider.getTranslationFilename(page)
+                                val savedResults = resultStore(resolvedOptions(options), request.sourceName)
+                                if (!request.force && resultLock.withLock {
+                                    val hit = savedResults.findSavedResult() ?: return@withLock false
+                                    withContext(Dispatchers.Main) {
+                                        if (generation == epoch) completedNames[page] = checkNotNull(request.sourceName)
+                                    }
+                                    if (hit.image != null) {
+                                        if (display(epoch, page, hit.image, hit.key, savedResults.persists)) return@withLock true
+                                        request.ensureRelevant()
+                                        savedResults.invalidate(hit.key)
+                                        false
+                                    } else {
+                                        withContext(Dispatchers.Main) {
+                                            completedKeys[page] = hit.key
+                                            if (savedResults.persists) retainedKeys.add(hit.key)
+                                        }
+                                        status(epoch, page, R.string.translation_no_text)
+                                        true
+                                    }
+                                }) return@withContext
                                 if (!sourceLock.withLock { provider.save(page, requireNotNull(UniFile.fromFile(source))) }) {
                                     withContext(Dispatchers.Main) {
                                         if (generation == epoch && !request.isObsolete) {
@@ -365,25 +381,68 @@ internal class GalleryTranslationSession(
                                 }
                                 var key = results.key(source)
                                 var preparationKey = results.preparationKey(source)
-                                val cached = resultLock.withLock {
+                                var lookupKeys = listOf(key)
+                                suspend fun reuseResult(): Boolean = resultLock.withLock {
                                     if (request.force) return@withLock false
-                                    val existing = results.existingImage(key)
-                                    if (existing != null) {
-                                        if (display(epoch, page, results.retain(key, existing), key, results.persists)) return@withLock true
-                                        request.ensureRelevant()
-                                        results.invalidate(key)
+                                    var hit = results.findResult(lookupKeys)
+                                    if (hit == null && lookupKeys.size == 1) {
+                                        lookupKeys = results.lookupKeys(source, key)
+                                        hit = results.findResult(lookupKeys)
                                     }
-                                    if (results.isSkipped(key)) {
-                                        withContext(Dispatchers.Main) {
-                                            completedKeys[page] = key
-                                            if (results.persists) retainedKeys.add(key)
+                                    while (hit != null) {
+                                        val result = hit
+                                        if (result.image != null) {
+                                            if (display(epoch, page, results.retain(key, result.image), key, results.persists)) {
+                                                results.discardCachedAliases(lookupKeys, key)
+                                                return@withLock true
+                                            }
+                                            request.ensureRelevant()
+                                            results.invalidate(result.key)
+                                        } else {
+                                            withContext(Dispatchers.Main) {
+                                                completedKeys[page] = key
+                                                if (results.persists) retainedKeys.add(key)
+                                            }
+                                            if (result.key != key) results.recordSkipped(key)
+                                            results.discardCachedAliases(lookupKeys, key)
+                                            status(epoch, page, R.string.translation_no_text)
+                                            return@withLock true
                                         }
+                                        hit = results.findResult(lookupKeys)
+                                    }
+                                    val legacy = results.findLegacyResult(source) ?: return@withLock false
+                                    if (legacy.image == null) {
+                                        results.recordSkipped(key)
+                                        results.invalidateLegacy(source)
+                                        withContext(Dispatchers.Main) { completedKeys[page] = key }
                                         status(epoch, page, R.string.translation_no_text)
-                                        true
-                                    } else false
+                                        return@withLock true
+                                    }
+                                    val rendered = legacy.image.openInputStream().use { BitmapFactory.decodeStream(it) }
+                                        ?: return@withLock false
+                                    try {
+                                        val original = decodeBounded(source, options.backend)
+                                        try {
+                                            if (original.width != rendered.width || original.height != rendered.height)
+                                                return@withLock false
+                                            TranslationOverlay.extract(original, rendered)
+                                        } finally { original.recycle() }
+                                        val writer: (java.io.OutputStream) -> Unit = {
+                                            check(rendered.compress(Bitmap.CompressFormat.PNG, 100, it))
+                                        }
+                                        val checkpoint = results.readResume(legacy.key, legacy.image)
+                                        // A partial without a valid checkpoint keeps its partial status.
+                                        val migrated = if (TranslationResultStore.isPartial(legacy.image)) {
+                                            if (checkpoint != null) results.writePartial(key, checkpoint, writer)
+                                            else results.writePartialPreview(key, writer)
+                                        } else results.writeImage(key, writer)
+                                        results.invalidateLegacy(source)
+                                        display(epoch, page, migrated, key, results.persists)
+                                    } finally { rendered.recycle() }
                                 }
-                                if (cached) return@withContext
-                                var resume = if (request.retryMissing) results.readResume(key) else null
+                                if (reuseResult()) return@withContext
+                                if (request.force) lookupKeys = results.lookupKeys(source, key)
+                                var resume = if (request.retryMissing) lookupKeys.firstNotNullOfOrNull { results.readResume(it) } else null
                                 if (modelsUnavailable || !models.ready() ||
                                     options.backend == TranslationBackend.NATIVE_LLM &&
                                     options.source != TranslationLanguages.AUTO_SOURCE && !NativeModelStore(context).ready(options)) {
@@ -447,7 +506,8 @@ internal class GalleryTranslationSession(
                                     if (options.backend == TranslationBackend.LLM_API) checkNotNull(engine).warmUp()
                                 }
                                 if (request.force && !request.retryMissing) resultLock.withLock {
-                                    results.invalidate(key)
+                                    lookupKeys.forEach { results.invalidate(it) }
+                                    results.invalidateLegacy(source)
                                     TranslationRuntime.preparedPages.invalidate(preparationKey)
                                 }
                                 val activeEngine = checkNotNull(engine)
@@ -484,8 +544,11 @@ internal class GalleryTranslationSession(
                                         results = resultStore(pageOptions, request.sourceName)
                                         key = results.key(source)
                                         preparationKey = results.preparationKey(source)
-                                        resume = if (request.retryMissing) results.readResume(key) else null
+                                        lookupKeys = results.lookupKeys(source, key)
+                                        resume = if (request.retryMissing) lookupKeys.firstNotNullOfOrNull { results.readResume(it) } else null
                                     }
+                                    // Concurrent OCR may resolve the language while this page is being prepared.
+                                    if (reuseResult()) return@withContext
                                     if (pageOptions.backend == TranslationBackend.NATIVE_LLM && prepared!!.regions.isNotEmpty() &&
                                         !NativeModelStore(context).ready(pageOptions)) {
                                         modelsUnavailable = true

@@ -98,7 +98,7 @@
     <string name="translation_cache_description">Supprime les images traduites temporaires et le cache des pages inachevées. Les traductions enregistrées, images originales et modèles sont conservés.</string>
     <string name="translation_cache_size">Taille du cache des images traduites temporaires</string>
     <string name="translation_persist_downloaded">Enregistrer les images traduites dans le dossier de la galerie</string>
-    <string name="translation_persist_downloaded_help">Enregistre chaque page dans le sous-dossier _translated de la galerie, sans limite de cache. Prend en charge les galeries téléchargées et les dossiers locaux importés. Les galeries sans dossier de téléchargement et les archives utilisent le cache temporaire. Les traductions existantes restent utilisables après désactivation. Sélectionnez des galeries dans la liste des téléchargements pour supprimer leurs traductions.</string>
+    <string name="translation_persist_downloaded_help">Enregistre chaque page dans le sous-dossier _translated de la galerie, sans limite de cache. Prend en charge les galeries téléchargées et les dossiers locaux importés. Les galeries sans dossier de téléchargement et les archives utilisent le cache temporaire. Les traductions existantes restent utilisables après désactivation. Sélectionnez des galeries dans la liste des téléchargements pour supprimer leurs traductions.\n\nChaque page conserve un résultat. Changer de modèle ou de langue le réutilise. Pour le mettre à jour, effacez le résultat correspondant ou retraduisez la page.</string>
     <string name="translation_delete_results">Supprimer les traductions</string>
     <string name="translation_delete_results_confirm">Supprimer toutes les images traduites enregistrées et les caches de traduction des %1$d galeries sélectionnées ? Les originaux, historiques de téléchargement et modèles sont conservés.</string>
     <string name="translation_results_deleted">Traductions des galeries sélectionnées supprimées</string>
@@ -203,7 +203,7 @@
     <string name="translation_mobile_download">Téléchargement via les données mobiles</string>
     <string name="translation_source_auto">Automatique</string>
     <string name="translation_source_auto_help">La langue est détectée à partir du texte OCR pour cette traduction uniquement. Un nouveau démarrage refait OCR et détection. Un texte court ou mixte est réévalué sur la page suivante. Le choix manuel est prioritaire.</string>
-    <string name="translation_source_detected">Langue source de la galerie détectée : %1$s</string>
+    <string name="translation_source_detected">Traduction en cours : %1$s → %2$s</string>
     <string name="translation_source_unknown">Impossible de déterminer la langue avec certitude. Sélectionnez-la manuellement avant ML Kit.</string>
     <string name="translation_source_auto_mlkit_help">Le mode automatique prépare le japonais, le coréen, le chinois et la langue cible. Aucun pack séparé pour l’anglais.</string>
 </resources>

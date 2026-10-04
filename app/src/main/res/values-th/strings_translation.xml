@@ -98,7 +98,7 @@
     <string name="translation_cache_description">ลบภาพแปลชั่วคราวและแคชหน้าที่ยังไม่เสร็จ โดยเก็บผลแปลที่บันทึก ภาพต้นฉบับ และโมเดลไว้</string>
     <string name="translation_cache_size">ขนาดแคชภาพแปลชั่วคราว</string>
     <string name="translation_persist_downloaded">บันทึกภาพแปลในโฟลเดอร์แกลเลอรี</string>
-    <string name="translation_persist_downloaded_help">บันทึกทีละหน้าในโฟลเดอร์ย่อย _translated ของแกลเลอรี โดยไม่จำกัดตามขนาดแคช รองรับแกลเลอรีที่ดาวน์โหลดและโฟลเดอร์ในเครื่องที่นำเข้า แกลเลอรีที่ไม่มีโฟลเดอร์ดาวน์โหลดและไฟล์บีบอัดใช้แคชชั่วคราว ภาพแปลเดิมยังใช้ได้หลังปิดตัวเลือกนี้ เลือกแกลเลอรีในรายการดาวน์โหลดเพื่อลบผลแปลได้</string>
+    <string name="translation_persist_downloaded_help">บันทึกทีละหน้าในโฟลเดอร์ย่อย _translated ของแกลเลอรี โดยไม่จำกัดตามขนาดแคช รองรับแกลเลอรีที่ดาวน์โหลดและโฟลเดอร์ในเครื่องที่นำเข้า แกลเลอรีที่ไม่มีโฟลเดอร์ดาวน์โหลดและไฟล์บีบอัดใช้แคชชั่วคราว ภาพแปลเดิมยังใช้ได้หลังปิดตัวเลือกนี้ เลือกแกลเลอรีในรายการดาวน์โหลดเพื่อลบผลแปลได้\n\nแต่ละหน้าจะเก็บผลการแปลเพียงชุดเดียว การเปลี่ยนโมเดลหรือภาษาจะใช้ผลเดิม หากต้องการอัปเดต ให้ลบผลที่เกี่ยวข้องหรือแปลหน้านี้ใหม่</string>
     <string name="translation_delete_results">ลบผลแปล</string>
     <string name="translation_delete_results_confirm">ลบภาพแปลที่บันทึกและแคชการแปลทั้งหมดของแกลเลอรีที่เลือก %1$d รายการหรือไม่? ภาพต้นฉบับ ประวัติดาวน์โหลด และโมเดลจะยังคงอยู่</string>
     <string name="translation_results_deleted">ลบผลแปลของแกลเลอรีที่เลือกแล้ว</string>
@@ -203,7 +203,7 @@
     <string name="translation_mobile_download">กำลังดาวน์โหลดผ่านเครือข่ายมือถือ</string>
     <string name="translation_source_auto">อัตโนมัติ</string>
     <string name="translation_source_auto_help">ตรวจจับภาษาจากข้อความ OCR ที่เพียงพอสำหรับการแปลครั้งนี้เท่านั้น เมื่อเริ่มใหม่จะทำ OCR และตรวจจับภาษาใหม่ ข้อความสั้นหรือหลายภาษาจะถูกประเมินในหน้าถัดไป การเลือกเองมีผลก่อน</string>
-    <string name="translation_source_detected">ตรวจพบภาษาต้นฉบับของแกลเลอรี: %1$s</string>
+    <string name="translation_source_detected">กำลังแปล: %1$s → %2$s</string>
     <string name="translation_source_unknown">ไม่สามารถระบุภาษาได้อย่างมั่นใจ โปรดเลือกภาษาเองก่อนใช้ ML Kit</string>
     <string name="translation_source_auto_mlkit_help">โหมดอัตโนมัติเตรียมชุดภาษาญี่ปุ่น เกาหลี จีน และภาษาเป้าหมาย ภาษาอังกฤษไม่ต้องใช้ชุดแยก</string>
 </resources>

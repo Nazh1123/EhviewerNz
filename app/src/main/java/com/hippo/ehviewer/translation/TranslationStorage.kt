@@ -23,15 +23,19 @@ object TranslationStorage {
         LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
 
     /** Resolve the actual source folder, including imported SAF galleries outside the download root. */
+    @JvmStatic fun sourceDir(context: Context, source: LocalFolderGallerySource): UniFile? {
+        val uri = source.getTreeUri()
+        var dir = if (UniFile.isTreeUri(uri)) UniFile.fromTreeUri(context, uri) else UniFile.fromUri(context, uri)
+        if (source.relativePath.isNotEmpty()) {
+            for (segment in source.relativePath.split('/')) dir = dir?.findFile(segment)
+        }
+        return dir?.takeIf { it.isDirectory }
+    }
+
     internal fun galleryDir(context: Context, info: DownloadInfo): UniFile? {
         val source = LocalFolderGallerySource.parse(info.archiveUri)
         val directory = if (source != null) {
-            val uri = source.getTreeUri()
-            var dir = if (UniFile.isTreeUri(uri)) UniFile.fromTreeUri(context, uri) else UniFile.fromUri(context, uri)
-            if (source.relativePath.isNotEmpty()) {
-                for (segment in source.relativePath.split('/')) dir = dir?.findFile(segment)
-            }
-            dir
+            sourceDir(context, source)
         } else if (!info.archiveUri.isNullOrEmpty()) null
         else {
             val existing = SpiderDen.getExistingGalleryDownloadDir(info)

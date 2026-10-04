@@ -98,7 +98,7 @@
     <string name="translation_cache_description">임시 번역 이미지와 미완료 페이지 캐시를 삭제합니다. 저장된 번역 결과, 원본 이미지 및 모델은 유지됩니다.</string>
     <string name="translation_cache_size">임시 번역 이미지 캐시 용량</string>
     <string name="translation_persist_downloaded">번역 이미지를 갤러리 폴더에 저장</string>
-    <string name="translation_persist_downloaded_help">갤러리의 _translated 하위 폴더에 페이지별로 저장하며 캐시 용량 제한을 받지 않습니다. 다운로드한 갤러리와 가져온 로컬 폴더를 지원합니다. 다운로드 폴더가 없는 갤러리와 압축 파일은 임시 캐시를 사용합니다. 이 옵션을 꺼도 기존 번역 이미지는 사용할 수 있습니다. 다운로드 목록에서 갤러리를 선택하여 번역 결과를 삭제할 수 있습니다.</string>
+    <string name="translation_persist_downloaded_help">갤러리의 _translated 하위 폴더에 페이지별로 저장하며 캐시 용량 제한을 받지 않습니다. 다운로드한 갤러리와 가져온 로컬 폴더를 지원합니다. 다운로드 폴더가 없는 갤러리와 압축 파일은 임시 캐시를 사용합니다. 이 옵션을 꺼도 기존 번역 이미지는 사용할 수 있습니다. 다운로드 목록에서 갤러리를 선택하여 번역 결과를 삭제할 수 있습니다.\n\n페이지마다 번역 결과 하나만 보관하며 모델이나 언어를 변경해도 기존 결과를 재사용합니다. 갱신하려면 해당 결과를 삭제하거나 이 페이지를 다시 번역하세요.</string>
     <string name="translation_delete_results">번역 결과 삭제</string>
     <string name="translation_delete_results_confirm">선택한 갤러리 %1$d개의 저장된 번역 이미지와 번역 캐시를 모두 삭제할까요? 원본 이미지, 다운로드 기록 및 모델은 유지됩니다.</string>
     <string name="translation_results_deleted">선택한 갤러리의 번역 결과가 삭제되었습니다</string>
@@ -203,7 +203,7 @@
     <string name="translation_mobile_download">모바일 데이터로 다운로드 중</string>
     <string name="translation_source_auto">자동</string>
     <string name="translation_source_auto_help">충분한 OCR 텍스트로 갤러리 언어를 판단하여 이번 번역에만 사용합니다. 다시 시작하면 OCR과 언어 판단을 새로 수행합니다. 짧거나 혼합된 텍스트는 다음 페이지에서 다시 판단합니다. 수동 선택이 우선됩니다.</string>
-    <string name="translation_source_detected">갤러리 원문 언어 감지: %1$s</string>
+    <string name="translation_source_detected">번역 중: %1$s → %2$s</string>
     <string name="translation_source_unknown">원문 언어를 확실하게 감지할 수 없습니다. ML Kit를 사용하기 전에 수동으로 선택하세요.</string>
     <string name="translation_source_auto_mlkit_help">자동 모드에서는 일본어, 한국어, 중국어 및 대상 언어 팩을 준비합니다. 영어는 별도 팩이 필요하지 않습니다.</string>
 </resources>

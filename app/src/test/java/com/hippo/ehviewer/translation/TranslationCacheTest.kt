@@ -26,15 +26,16 @@ class TranslationCacheTest {
         assertNotEquals(original, cache.preparationKey(source, options))
     }
 
-    @Test fun keysDependOnContentAndOutputSettingsRatherThanFilename() {
+    @Test fun resultsDependOnlyOnContentAndReuseAcrossModelAndLanguageChanges() {
         val cache = TranslationCache(temp.newFolder("cache"))
         val first = temp.newFile("page1").apply { writeText("same image") }
         val second = temp.newFile("page2").apply { writeText("same image") }
         val options = TranslationOptions()
         val key = cache.key(first, options)
         assertEquals(key, cache.key(second, options))
-        assertNotEquals(key, cache.key(first, options.copy(target = "en")))
-        assertNotEquals(key, cache.key(first, options.copy(inpaint = false)))
+        assertEquals(key, cache.key(first, options.copy(target = "en", source = "ko")))
+        assertEquals(key, cache.key(first, options.copy(inpaint = false, nativeModelId = "another")))
+        assertEquals(key, cache.key(first, options.copy(backend = TranslationBackend.LLM_API, apiModel = "another")))
         second.writeText("updated gallery page")
         assertNotEquals(key, cache.key(second, options))
     }

@@ -145,6 +145,93 @@ class TranslationResultReaderTest {
         } finally { output.delete() }
     }
 
+    @Test fun reopenedAutomaticReaderUsesResolvedCacheWithoutModelsOrLanguageIdentification() = withSession { session, provider, reader ->
+        val context = RuntimeEnvironment.getApplication()
+        session.activeOptions = session.activeOptions.copy(source = "auto")
+        val source = png()
+        provider.source = source
+        val results = TranslationResultStore(TranslationStorage.cacheDir(context), null,
+            session.activeOptions.copy(source = "en"), null, false)
+        val output = results.writeImage(results.key(source)) { out -> source.inputStream().use { it.copyTo(out) } }
+        try {
+            assertFalse(TranslationModels(context).ready())
+            ReflectionHelpers.setField(session, "activated", true)
+            session.onPageChanged(3)
+            await { reader.hasTranslatedPage(3) && !session.working }
+            assertEquals(R.string.translation_done, session.states[3])
+            assertEquals(1, provider.saves)
+            assertNull(ReflectionHelpers.getField<GallerySourceLanguage>(session, "sourceLanguage").language)
+        } finally { output.delete() }
+    }
+
+    @Test fun namedPersistentResultLoadsBeforeRequestingAnUnavailableOriginal() = withSession { session, provider, reader ->
+        val directory = temp.newFolder("gallery")
+        provider.directory = requireNotNull(UniFile.fromFile(directory))
+        val saved = File(directory, "_translated").apply { mkdirs() }
+        png().copyTo(File(saved, "3_tl.png"))
+        assertNull(provider.source)
+        assertFalse(TranslationModels(RuntimeEnvironment.getApplication()).ready())
+        ReflectionHelpers.setField(session, "activated", true)
+        session.onPageChanged(3)
+        await { reader.hasTranslatedPage(3) && !session.working }
+        assertEquals(R.string.translation_done, session.states[3])
+        assertEquals(0, provider.saves)
+    }
+
+    @Test fun oldFullPageCacheIsConvertedToOneSparseOverlayWithoutTranslationModels() = withSession { session, provider, reader ->
+        val context = RuntimeEnvironment.getApplication()
+        val original = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
+        val rendered = original.copy(Bitmap.Config.ARGB_8888, true).apply { setPixel(1, 1, android.graphics.Color.BLUE) }
+        val source = temp.newFile()
+        source.outputStream().use { original.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        provider.source = source
+        val cache = TranslationCache(TranslationStorage.cacheDir(context))
+        val identity = "ehnz-offline-v1\n981ae85617bb3323949d57b7d6e3e10181435325\n" +
+            "llama-jni-v11-japanese-source-strict-regions-prefix-kv\n\nja\nzh-CN\ntrue\noriginal-size"
+        val legacy = File(TranslationStorage.cacheDir(context), "${cache.key(source, identity)}.png")
+        legacy.outputStream().use { rendered.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val output = cache.image(cache.key(source, session.activeOptions))
+        try {
+            assertFalse(TranslationModels(context).ready())
+            ReflectionHelpers.setField(session, "activated", true)
+            session.onPageChanged(3)
+            await { reader.hasTranslatedPage(3) && !session.working }
+            assertFalse(legacy.exists())
+            assertTrue(output.isFile)
+            val overlay = android.graphics.BitmapFactory.decodeFile(output.absolutePath)!!
+            try {
+                assertEquals(android.graphics.Color.TRANSPARENT, overlay.getPixel(0, 0))
+                assertEquals(android.graphics.Color.BLUE, overlay.getPixel(1, 1))
+            } finally { overlay.recycle() }
+        } finally { original.recycle(); rendered.recycle(); legacy.delete(); output.delete() }
+    }
+
+    @Test fun namedPersistentNoTextMarkerLoadsWithoutRequestingOriginalOrModels() = withSession { session, provider, _ ->
+        val directory = temp.newFolder("gallery")
+        provider.directory = requireNotNull(UniFile.fromFile(directory))
+        File(File(directory, "_translated").apply { mkdirs() }, "3_tl.skip").writeText("skipped")
+        ReflectionHelpers.setField(session, "activated", true)
+        session.onPageChanged(3)
+        await { session.states[3] == R.string.translation_no_text && !session.working }
+        assertEquals(0, provider.saves)
+    }
+
+    @Test fun changingTheSelectedModelKeepsTheRememberedResultUntilExplicitRetranslation() = withSession { session, provider, reader ->
+        remember(session, 3)
+        session.onPageChanged(3)
+        await { reader.hasTranslatedPage(3) }
+        session.disable()
+        session.settings.save(session.activeOptions.copy(nativeModelId = "b".repeat(64), source = "en", target = "fr"))
+        assertTrue(session.enable())
+        await { !session.working }
+        assertTrue(reader.hasTranslatedPage(3))
+        assertEquals(R.string.translation_done, session.states[3])
+        assertEquals(0, provider.saves)
+        assertEquals("b".repeat(64), session.activeOptions.nativeModelId)
+        session.enqueue(3, true)
+        assertFalse(session.isPageSettled(3))
+    }
+
     private fun remember(session: GalleryTranslationSession, page: Int): File = png().also {
         ReflectionHelpers.getField<MutableMap<Int, UniFile>>(session, "completedFiles")[page] = requireNotNull(UniFile.fromFile(it))
         session.states[page] = R.string.translation_done
@@ -205,6 +292,8 @@ class TranslationResultReaderTest {
     private class Provider : GalleryProvider2() {
         @Volatile var saves = 0
         var source: File? = null
+        var directory: UniFile? = null
+        override fun getTranslationDirectory() = directory
         override fun getTranslationIdentity() = "result-reader-test"
         override fun size() = 8
         override fun getError(): String? = null
@@ -212,6 +301,7 @@ class TranslationResultReaderTest {
         override fun onForceRequest(index: Int) = Unit
         override fun onCancelRequest(index: Int) = Unit
         override fun getImageFilename(index: Int) = "$index.png"
+        override fun getTranslationFilename(index: Int) = "$index"
         override fun save(index: Int, file: UniFile): Boolean {
             saves++
             val input = source ?: return false

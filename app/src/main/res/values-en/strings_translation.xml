@@ -98,7 +98,7 @@
     <string name="translation_cache_description">Delete temporary translated images and unfinished page caches. Saved translations, original images and models are kept.</string>
     <string name="translation_cache_size">Temporary translated image cache size</string>
     <string name="translation_persist_downloaded">Save translated images to gallery folder</string>
-    <string name="translation_persist_downloaded_help">Save each page in the _translated subfolder of the gallery, without the cache size limit. Supports downloaded galleries and imported local folders. Galleries without a download folder and archives use temporary cache. Existing translations remain usable after disabling this option. Select galleries in the download list to delete their translations.</string>
+    <string name="translation_persist_downloaded_help">Save each page in the _translated subfolder of the gallery, without the cache size limit. Supports downloaded galleries and imported local folders. Galleries without a download folder and archives use temporary cache. Existing translations remain usable after disabling this option. Select galleries in the download list to delete their translations.\n\nEach page keeps one translation result. Changing models or languages reuses it. To update it, clear the corresponding result or retranslate the page.</string>
     <string name="translation_delete_results">Delete translations</string>
     <string name="translation_delete_results_confirm">Delete all saved translated images and translation caches for the %1$d selected galleries? Original images, download records and models are kept.</string>
     <string name="translation_results_deleted">Translations for the selected galleries deleted</string>
@@ -203,7 +203,7 @@
     <string name="translation_mobile_download">Downloading over mobile data</string>
     <string name="translation_source_auto">Auto</string>
     <string name="translation_source_auto_help">Auto identifies the gallery language from sufficient OCR text for this task only. Starting again runs fresh OCR and detection. Short or mixed text is retried on the next page; manual selection takes priority.</string>
-    <string name="translation_source_detected">Gallery source language identified: %1$s</string>
+    <string name="translation_source_detected">Translating: %1$s → %2$s</string>
     <string name="translation_source_unknown">Cannot reliably identify the source. Select a language manually before using ML Kit.</string>
     <string name="translation_source_auto_mlkit_help">Auto prepares Japanese, Korean, Chinese and the target language packs. English needs no separate pack.</string>
 </resources>

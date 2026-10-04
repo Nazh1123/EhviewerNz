@@ -48,7 +48,7 @@ class MultilingualTranslationTest {
             val english = japanese.copy(source = "en")
             assertNotEquals(japanese.cacheIdentity(), english.cacheIdentity())
             assertNotEquals(japanese.preparationIdentity(), english.preparationIdentity())
-            assertNotEquals(cache.key(file, japanese), cache.key(file, english))
+            assertEquals(cache.key(file, japanese), cache.key(file, english))
             assertNotEquals(cache.preparationKey(file, japanese), cache.preparationKey(file, english))
             assertEquals(english.preparationIdentity(), english.copy(target = "en").preparationIdentity())
             assertNotEquals(english.cacheIdentity(), english.copy(target = "en").cacheIdentity())

@@ -79,6 +79,9 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     public String getTranslationIdentity() { return "dir:" + mDir.getUri(); }
 
     @Override
+    public UniFile getTranslationDirectory() { return mDir; }
+
+    @Override
     public int getStartPage() {
         return mStartPage;
     }

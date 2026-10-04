@@ -43,6 +43,20 @@ data class TranslationOptions(
         "$source\n$target",
         inpaint.toString(), inputImageIdentity).joinToString("\n")
 
+    /** Only the previous sparse Japanese overlays are compatible; older full-page PNGs are not. */
+    internal fun legacyOverlayIdentity(): String? = if (source != "ja") null else
+        listOf("ehnz-overlay-v1", "981ae85617bb3323949d57b7d6e3e10181435325",
+            when (backend) {
+                TranslationBackend.NATIVE_LLM -> "llama-jni-v11-japanese-source-strict-regions-prefix-kv\n$nativeModelId"
+                TranslationBackend.ML_KIT -> "mlkit-17.0.3-ja"
+                TranslationBackend.LLM_API -> "llm-api-v3-segments-981ae856\n${apiUrl.trim()}\n${apiModel.trim()}"
+            },
+            if (backend == TranslationBackend.ML_KIT) target else "ja\n$target",
+            inpaint.toString(), inputImageIdentity).joinToString("\n")
+
+    internal fun legacyFullPageIdentity(): String? = legacyOverlayIdentity()
+        ?.replaceFirst("ehnz-overlay-v1", "ehnz-offline-v1")
+
     fun validApiUrl(): Boolean {
         val url = HttpUrl.parse(apiUrl.trim()) ?: return false
         return url.username().isEmpty() && url.password().isEmpty() && url.fragment() == null

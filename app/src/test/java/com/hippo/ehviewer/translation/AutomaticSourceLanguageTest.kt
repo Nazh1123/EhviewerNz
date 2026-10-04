@@ -205,7 +205,7 @@ class AutomaticSourceLanguageTest {
                             pipeline.prepare(original).use { prepared ->
                                 assertEquals(english, prepared.regions.single().sourceText)
                                 val effective = source.options(configured)
-                                assertNotEquals(before, cache.key(input, effective))
+                                assertEquals(before, cache.key(input, effective))
                                 val result = pipeline.translatePrepared(original, prepared, false) as PageResult.Translated
                                 result.page.recycle(); result.analysis?.mask?.recycle()
                                 assertEquals(0, prepared.translationResume(effective.cacheIdentity())!!.missingCount)

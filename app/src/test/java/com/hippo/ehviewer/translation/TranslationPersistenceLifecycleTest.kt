@@ -79,6 +79,25 @@ class TranslationPersistenceLifecycleTest {
         assertEquals(emptyList<Throwable>(), errors.toList())
     }
 
+    @Test fun oldHashNamedPersistentFullPageMigratesToNamedOverlayWithoutModels() {
+        val selected = options.copy(ahead = 0)
+        val source = provider.sources[0]
+        val key = "g71_" + TranslationCache(TranslationStorage.cacheDir(context))
+            .key(source, selected.legacyFullPageIdentity()!!)
+        savedDir.mkdirs()
+        val legacy = File(savedDir, "$key.png")
+        source.copyTo(legacy)
+        assertFalse(TranslationModels(context).ready())
+        withSession(selected) { session ->
+            ReflectionHelpers.setField(session, "activated", true)
+            session.onPageChanged(0)
+            await { !session.working && session.states[0] == R.string.translation_done }
+            assertFalse(legacy.exists())
+            assertEquals(setOf("0_tl.png"), savedDir.list()!!.toSet())
+            assertTrue(TranslationStorage.cacheDir(context).list()!!.isEmpty())
+        }
+    }
+
     @Test fun deletingSelectedModelStillAllowsRealEnableToRestoreImagesAndSettleMissingPages() {
         val selected = options.copy(nativeModelId = "a".repeat(64), nativeModelName = "deleted.gguf")
         TranslationSettings(context).save(selected)

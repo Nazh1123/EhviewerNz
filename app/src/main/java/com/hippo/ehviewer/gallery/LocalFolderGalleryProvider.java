@@ -79,6 +79,12 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
         return source != null ? source.encode() : null;
     }
 
+    @Nullable
+    @Override
+    public UniFile getTranslationDirectory() {
+        return source != null ? com.hippo.ehviewer.translation.TranslationStorage.sourceDir(context, source) : null;
+    }
+
     @Override
     public void start() {
         super.start();

@@ -98,7 +98,7 @@
     <string name="translation_cache_description">刪除暫存譯圖和未完成頁面快取，保留已儲存的翻譯結果、原圖及模型。</string>
     <string name="translation_cache_size">暫存譯圖快取容量</string>
     <string name="translation_persist_downloaded">儲存譯圖至畫廊資料夾</string>
-    <string name="translation_persist_downloaded_help">逐頁儲存至畫廊資料夾的 _translated 子資料夾，不受快取容量限制。支援已下載畫廊和匯入的本機資料夾；尚無下載資料夾的畫廊及壓縮檔使用暫存快取。關閉後已有譯圖仍可使用；可在下載清單中選擇畫廊刪除翻譯結果。</string>
+    <string name="translation_persist_downloaded_help">逐頁儲存至畫廊資料夾的 _translated 子資料夾，不受快取容量限制。支援已下載畫廊和匯入的本機資料夾；尚無下載資料夾的畫廊及壓縮檔使用暫存快取。關閉後已有譯圖仍可使用；可在下載清單中選擇畫廊刪除翻譯結果。\n\n每頁只保留一份翻譯結果，切換模型或語言仍重用已有譯圖；要更新結果，請清除對應結果或重新翻譯此頁。</string>
     <string name="translation_delete_results">刪除翻譯結果</string>
     <string name="translation_delete_results_confirm">刪除所選 %1$d 個畫廊的全部已儲存譯圖和譯圖快取？原圖、下載紀錄及模型會保留。</string>
     <string name="translation_results_deleted">所選畫廊的翻譯結果已刪除</string>
@@ -203,7 +203,7 @@
     <string name="translation_mobile_download">正在使用行動網路下載</string>
     <string name="translation_source_auto">自動</string>
     <string name="translation_source_auto_help">自動在首次取得足夠 OCR 文字後判斷目前畫廊語言，僅用於本次翻譯，退出後重新 OCR 和判斷。文字太少或混雜時下一頁再次判斷；手動選擇優先。</string>
-    <string name="translation_source_detected">已辨識畫廊來源語言：%1$s</string>
+    <string name="translation_source_detected">正在翻譯: %1$s → %2$s</string>
     <string name="translation_source_unknown">無法可靠辨識來源語言，請手動選擇後再使用 ML Kit。</string>
     <string name="translation_source_auto_mlkit_help">自動模式會準備日語、韓語、中文及目標語言包；英語無需獨立包。</string>
 </resources>

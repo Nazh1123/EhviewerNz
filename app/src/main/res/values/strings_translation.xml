@@ -110,7 +110,7 @@
     <string name="translation_cache_description">删除临时译图和未完成页缓存，保留已保存的翻译结果、原图及模型。</string>
     <string name="translation_cache_size">临时译图缓存容量</string>
     <string name="translation_persist_downloaded">保存译图到画廊目录</string>
-    <string name="translation_persist_downloaded_help">逐页保存到画廊目录的 _translated 文件夹，不受缓存容量限制。支持已下载画廊和导入的本地文件夹；尚无下载目录的画廊及压缩包使用临时缓存。关闭后已有译图仍可使用；可在下载列表中选中画廊删除翻译结果。</string>
+    <string name="translation_persist_downloaded_help">逐页保存到画廊目录的 _translated 文件夹，不受缓存容量限制。支持已下载画廊和导入的本地文件夹；尚无下载目录的画廊及压缩包使用临时缓存。关闭后已有译图仍可使用；可在下载列表中选中画廊删除翻译结果。\n\n每页只保留一份翻译结果，切换模型或语言仍复用已有译图；要更新结果，请清除对应结果或重新翻译此页。</string>
     <string name="translation_delete_results">删除翻译结果</string>
     <string name="translation_delete_results_confirm">删除所选 %1$d 个画廊的全部持久化译图和译图缓存？原图、下载记录及模型会保留。</string>
     <string name="translation_results_deleted">所选画廊的翻译结果已删除</string>
@@ -215,7 +215,7 @@
     <string name="translation_mobile_download">正在使用移动网络下载</string>
     <string name="translation_source_auto">自动</string>
     <string name="translation_source_auto_help">自动在首次取得足够 OCR 文字后判断当前画廊语言，仅用于本次翻译，退出后重新 OCR 和判断。文字太少或混杂时下一页再次判断；手动选择优先。</string>
-    <string name="translation_source_detected">已识别画廊源语言：%1$s</string>
+    <string name="translation_source_detected">正在翻译: %1$s → %2$s</string>
     <string name="translation_source_unknown">无法可靠识别源语言，请手动选择后再使用 ML Kit 翻译。</string>
     <string name="translation_source_auto_mlkit_help">自动模式会准备日语、韩语、中文及目标语言包，以供识别后使用；英语无需独立包。</string>
 </resources>

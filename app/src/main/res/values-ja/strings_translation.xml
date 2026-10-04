@@ -98,7 +98,7 @@
     <string name="translation_cache_description">一時的な翻訳画像と未完了ページのキャッシュを削除します。保存済みの翻訳結果、原画像、モデルは保持されます。</string>
     <string name="translation_cache_size">一時翻訳画像のキャッシュ容量</string>
     <string name="translation_persist_downloaded">翻訳画像をギャラリーフォルダーに保存</string>
-    <string name="translation_persist_downloaded_help">ギャラリー内の _translated フォルダーにページごとに保存し、キャッシュ容量制限は適用しません。ダウンロード済みギャラリーとインポートしたローカルフォルダーに対応します。ダウンロードフォルダーがないギャラリーや圧縮ファイルには一時キャッシュを使用します。無効にしても既存の翻訳画像は使用できます。ダウンロード一覧でギャラリーを選択して翻訳結果を削除できます。</string>
+    <string name="translation_persist_downloaded_help">ギャラリー内の _translated フォルダーにページごとに保存し、キャッシュ容量制限は適用しません。ダウンロード済みギャラリーとインポートしたローカルフォルダーに対応します。ダウンロードフォルダーがないギャラリーや圧縮ファイルには一時キャッシュを使用します。無効にしても既存の翻訳画像は使用できます。ダウンロード一覧でギャラリーを選択して翻訳結果を削除できます。\n\n各ページには翻訳結果を1つだけ保存します。モデルや言語を変更しても既存の結果を再利用します。更新するには、該当する結果を削除するか、このページを再翻訳してください。</string>
     <string name="translation_delete_results">翻訳結果を削除</string>
     <string name="translation_delete_results_confirm">選択した %1$d 件のギャラリーの保存済み翻訳画像と翻訳キャッシュをすべて削除しますか？原画像、ダウンロード履歴、モデルは保持されます。</string>
     <string name="translation_results_deleted">選択したギャラリーの翻訳結果を削除しました</string>
@@ -203,7 +203,7 @@
     <string name="translation_mobile_download">モバイルデータ通信でダウンロードしています</string>
     <string name="translation_source_auto">自動</string>
     <string name="translation_source_auto_help">十分な OCR テキストから作品の言語を判定し、今回の翻訳にのみ使用します。次回は OCR と判定をやり直します。短い文章や混在する言語は次のページで再判定します。手動設定が優先されます。</string>
-    <string name="translation_source_detected">作品の元の言語を判定しました：%1$s</string>
+    <string name="translation_source_detected">翻訳中: %1$s → %2$s</string>
     <string name="translation_source_unknown">元の言語を確実に判定できません。ML Kit を使用する前に手動で選択してください。</string>
     <string name="translation_source_auto_mlkit_help">自動モードでは日本語、韓国語、中国語と翻訳先の言語パックを準備します。英語の個別パックは不要です。</string>
 </resources>

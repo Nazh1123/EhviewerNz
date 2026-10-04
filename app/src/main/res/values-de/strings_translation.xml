@@ -98,7 +98,7 @@
     <string name="translation_cache_description">Temporäre übersetzte Bilder und Caches unfertiger Seiten löschen. Gespeicherte Übersetzungen, Originalbilder und Modelle bleiben erhalten.</string>
     <string name="translation_cache_size">Cachegröße für temporäre Übersetzungsbilder</string>
     <string name="translation_persist_downloaded">Übersetzte Bilder im Galerieordner speichern</string>
-    <string name="translation_persist_downloaded_help">Seiten im Unterordner _translated der Galerie speichern, ohne Cachegrößenlimit. Unterstützt heruntergeladene Galerien und importierte lokale Ordner. Galerien ohne Downloadordner und Archive verwenden temporären Cache. Vorhandene Übersetzungen bleiben nach dem Deaktivieren nutzbar. Zum Löschen der Übersetzungen Galerien in der Downloadliste auswählen.</string>
+    <string name="translation_persist_downloaded_help">Seiten im Unterordner _translated der Galerie speichern, ohne Cachegrößenlimit. Unterstützt heruntergeladene Galerien und importierte lokale Ordner. Galerien ohne Downloadordner und Archive verwenden temporären Cache. Vorhandene Übersetzungen bleiben nach dem Deaktivieren nutzbar. Zum Löschen der Übersetzungen Galerien in der Downloadliste auswählen.\n\nJede Seite behält ein Übersetzungsergebnis. Änderungen am Modell oder an der Sprache verwenden es weiter. Zum Aktualisieren das entsprechende Ergebnis löschen oder die Seite erneut übersetzen.</string>
     <string name="translation_delete_results">Übersetzungen löschen</string>
     <string name="translation_delete_results_confirm">Alle gespeicherten Übersetzungsbilder und Übersetzungscaches der %1$d ausgewählten Galerien löschen? Originalbilder, Downloadeinträge und Modelle bleiben erhalten.</string>
     <string name="translation_results_deleted">Übersetzungen der ausgewählten Galerien gelöscht</string>
@@ -203,7 +203,7 @@
     <string name="translation_mobile_download">Download über mobile Daten</string>
     <string name="translation_source_auto">Automatisch</string>
     <string name="translation_source_auto_help">Die Sprache wird aus genügend OCR-Text nur für diesen Übersetzungsauftrag erkannt. Beim Neustart erfolgen OCR und Erkennung erneut. Kurzer oder gemischter Text wird auf der nächsten Seite erneut geprüft. Die manuelle Auswahl hat Vorrang.</string>
-    <string name="translation_source_detected">Ausgangssprache der Galerie erkannt: %1$s</string>
+    <string name="translation_source_detected">Übersetzung: %1$s → %2$s</string>
     <string name="translation_source_unknown">Sprache nicht sicher erkannt. Vor ML Kit bitte manuell auswählen.</string>
     <string name="translation_source_auto_mlkit_help">Automatisch bereitet Japanisch, Koreanisch, Chinesisch und die Zielsprache vor. Englisch benötigt kein eigenes Paket.</string>
 </resources>
