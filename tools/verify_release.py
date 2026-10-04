@@ -61,7 +61,7 @@ def verify_apk(path):
         libraries = {n.rsplit("/", 1)[-1]: n for n in native_names}
         require(len(libraries) == len(native_names), "Duplicate native library entries")
         expected = {f"libggml-cpu-{v}.so" for v in CPU_VARIANTS} | {
-            "libehnz_llama.so", "libllama.so", "libggml.so", "libggml-base.so", "libyakuyomi_ncnn.so"}
+            "libehnz_llama.so", "libllama.so", "libggml.so", "libggml-base.so", "libehnz_image.so"}
         require(expected <= libraries.keys(), f"Missing native libraries: {sorted(expected - libraries.keys())}")
         for basename, name in libraries.items():
             require(name.startswith("lib/arm64-v8a/"), f"Unexpected ABI: {name}")
@@ -98,7 +98,12 @@ def verify_compilation(root):
     database = max(databases, key=lambda p: p.stat().st_mtime_ns)
     commands = json.loads(database.read_text(encoding="utf-8"))
     require(commands, "Empty compilation database")
+    ncnn_config = database.parent / "_deps/ncnn-build/src/platform.h"
+    config = ncnn_config.read_text(encoding="utf-8")
+    require("#define NCNN_RUNTIME_CPU 1" in config, "NCNN requires runtime CPU selection")
+    require("#define NCNN_VULKAN 0" in config, "Unexpected Vulkan image backend")
     found_variants = set()
+    found_image = False
     for entry in commands:
         command = entry.get("command") or " ".join(entry["arguments"])
         require("aarch64-none-linux-android26" in command, f"Wrong Android target: {entry['file']}")
@@ -106,11 +111,18 @@ def verify_compilation(root):
         variant = next((v for v in CPU_VARIANTS if f"ggml-cpu-{v}.dir" in command), None)
         if variant:
             found_variants.add(variant)
+        if Path(entry["file"]).name == "image_jni.cpp":
+            found_image = True
         # Only the optimized compute objects may require optional instructions.
         # Feature probes are called while scanning *all* variants on older CPUs.
         if variant is None or variant == "android_armv8.0_1":
             flags = re.findall(r"-m(?:arch|cpu)=([^\s\"]+)", command)
+            source = Path(entry["file"])
+            if source.name.endswith("_arm_asimdhp.cpp") and "ncnn-src" in source.parts:
+                require(flags == ["armv8.2-a+fp16"], f"Unexpected NCNN FP16 kernel ISA: {source}: {flags}")
+                continue
             require(all(f == "armv8-a" for f in flags), f"Nonportable baseline/probe: {entry['file']}: {flags}")
+    require(found_image, "Missing reader image JNI compilation")
     require(found_variants == CPU_VARIANTS, f"Missing compiled variants: {sorted(CPU_VARIANTS - found_variants)}")
     print("Native compilation: Android 26 baseline and portable CPU feature probes verified")
 

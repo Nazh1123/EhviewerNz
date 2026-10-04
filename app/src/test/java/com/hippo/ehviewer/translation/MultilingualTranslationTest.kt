@@ -3,7 +3,7 @@ package com.hippo.ehviewer.translation
 import android.app.Application
 import android.graphics.Bitmap
 import kotlinx.coroutines.runBlocking
-import li.joye.yakuyomi.engine.*
+import com.hippo.ehviewer.translation.engine.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -159,14 +159,14 @@ class MultilingualTranslationTest {
                     assertEquals("Hello world!", prepared.regions.single().sourceText)
                     val result = pipeline.translatePrepared(original, prepared, false) as PageResult.Translated
                     try {
-                        assertEquals("Hello world!", result.analysis!!.regions.single().sourceText)
-                        assertEquals("你好，世界！", result.analysis!!.regions.single().translatedText)
+                        assertEquals("Hello world!", prepared.regions.single().sourceText)
+                        assertEquals("你好，世界！", prepared.regions.single().translatedText)
                         assertEquals(0, prepared.translationResume("english")!!.missingCount)
                         val joined = TextRegion(prepared.regions.single().lines, "h")
                         PreparedPage(Bitmap.createBitmap(180, 100, Bitmap.Config.ARGB_8888), listOf(joined), 2, 0, 0).use {
                             assertFalse(it.restoreTranslations("english", prepared.translationResume("english")!!))
                         }
-                    } finally { result.page.recycle(); result.analysis?.mask?.recycle() }
+                    } finally { result.page.recycle() }
                 }
             }
         } finally { original.recycle() }

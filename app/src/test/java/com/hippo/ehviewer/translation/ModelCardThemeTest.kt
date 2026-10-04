@@ -53,7 +53,7 @@ class ModelCardThemeTest {
             val card = TranslationModelCard(context, ModelPalette.forTheme(Settings.THEME_BLACK), "fixture",
                 "漫画识别套件", "文字检测 · 日文 OCR · 背景修复", R.drawable.v_translate_x24,
                 "已安装", true, listOf("236 MB", "7 个文件"), listOf(
-                    ModelCardAction(R.string.translation_model_check_download, ModelButtonKind.PRIMARY) {},
+                    ModelCardAction(R.string.translation_model_download, ModelButtonKind.PRIMARY) {},
                     ModelCardAction(R.string.translation_model_import) {},
                     ModelCardAction(R.string.translation_model_delete, ModelButtonKind.DELETE) {}))
             fun buttons(group: ViewGroup): List<MaterialButton> = (0 until group.childCount).flatMap { index ->
@@ -68,8 +68,8 @@ class ModelCardThemeTest {
             assertEquals(3, actions.size)
             assertEquals(1, actions.map { it.top }.distinct().size)
             assertTrue(actions.maxOf { it.width } - actions.minOf { it.width } <= 1)
-            assertEquals("校验", actions.first().text.toString())
-            assertTrue(actions.first().contentDescription.contains("校验 / 补全"))
+            assertEquals("下载", actions.first().text.toString())
+            assertTrue(actions.first().contentDescription.contains("下载"))
             for (button in actions) {
                 assertTrue(button.measuredHeight >= context.modelDp(48))
                 assertTrue(button.measuredWidth >= context.modelDp(48))

@@ -3,7 +3,7 @@ package com.hippo.ehviewer.translation
 import android.app.Application
 import com.hippo.unifile.UniFile
 import java.io.File
-import li.joye.yakuyomi.engine.TranslationResume
+import com.hippo.ehviewer.translation.engine.TranslationResume
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

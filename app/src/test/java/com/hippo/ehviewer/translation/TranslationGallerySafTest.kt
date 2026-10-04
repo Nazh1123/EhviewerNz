@@ -42,7 +42,7 @@ import org.greenrobot.greendao.database.StandardDatabase
 class TranslationGallerySafTest {
     @Test fun partialCheckpointSurvivesOpaqueSafRenameAndCacheMigration() {
         val key = "g${source.stableGalleryId()}_partial"
-        val checkpoint = li.joye.yakuyomi.engine.TranslationResume(listOf("first", "second"), mapOf(0 to "译文"))
+        val checkpoint = com.hippo.ehviewer.translation.engine.TranslationResume(listOf("first", "second"), mapOf(0 to "译文"))
         store(false).writePartial(key, checkpoint) { it.write("preview".toByteArray()) }
         val retained = store().retain(key, store(false).existingImage(key)!!)
         assertEquals("content", retained.uri.scheme)

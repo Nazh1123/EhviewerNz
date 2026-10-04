@@ -12,7 +12,7 @@ import com.hippo.ehviewer.R
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.lib.image.Image
 import com.hippo.unifile.UniFile
-import li.joye.yakuyomi.engine.TranslationStage
+import com.hippo.ehviewer.translation.engine.TranslationStage
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith

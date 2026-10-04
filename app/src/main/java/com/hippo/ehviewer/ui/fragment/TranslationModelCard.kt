@@ -144,7 +144,7 @@ internal class TranslationModelCard(context: Context, private val palette: Model
         val buttons = LinearLayout(context).apply { tag = "$key/actions" }
         actions.forEachIndexed { index, action ->
             val actionIcon = when (action.label) {
-                R.string.translation_model_download, R.string.translation_model_check_download -> R.drawable.v_download_dark_x24
+                R.string.translation_model_download -> R.drawable.v_download_dark_x24
                 R.string.translation_model_import, R.string.translation_model_choose_file -> R.drawable.v_folders_import_dark_x24
                 R.string.translation_model_delete -> R.drawable.v_delete_dark_x24
                 R.string.translation_model_refresh -> R.drawable.v_refresh_dark_x24
@@ -152,7 +152,6 @@ internal class TranslationModelCard(context: Context, private val palette: Model
                 else -> R.drawable.v_arrow_down_x24
             }
             val compactLabel = when (action.label) {
-                R.string.translation_model_check_download -> R.string.translation_model_check_short
                 R.string.translation_model_choose_language -> R.string.translation_model_language_short
                 R.string.translation_model_refresh -> R.string.translation_model_refresh_short
                 R.string.translation_model_use -> R.string.translation_model_use_short

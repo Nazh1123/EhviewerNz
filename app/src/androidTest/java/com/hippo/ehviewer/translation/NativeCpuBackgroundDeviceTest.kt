@@ -10,8 +10,8 @@ import java.io.File
 import java.math.BigInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import li.joye.yakuyomi.engine.LlmTranslator
-import li.joye.yakuyomi.engine.NativeLlm
+import com.hippo.ehviewer.translation.engine.LlmTranslator
+import com.hippo.ehviewer.translation.engine.NativeLlm
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -94,7 +94,7 @@ class NativeCpuBackgroundDeviceTest {
                         }
                         if (phase != "restored") assertTrue(sawRestricted)
                         affinity(original)
-                        val result = LlmTranslator("", options.engineConfig().translator)
+                        val result = LlmTranslator(options.engineConfig().translator)
                             .parseResponse(source, output.toString("UTF-8"))
                         assertNull(result.error)
                         assertTrue(result.missingIndices.isEmpty())

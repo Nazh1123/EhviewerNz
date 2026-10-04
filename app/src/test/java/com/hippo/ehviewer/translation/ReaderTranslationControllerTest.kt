@@ -21,7 +21,7 @@ import com.hippo.lib.glgallery.GalleryProvider
 import com.hippo.lib.glview.image.ImageWrapper
 import com.hippo.lib.glview.view.GLRoot
 import com.hippo.unifile.UniFile
-import li.joye.yakuyomi.engine.TranslationStage
+import com.hippo.ehviewer.translation.engine.TranslationStage
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith

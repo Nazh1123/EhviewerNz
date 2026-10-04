@@ -5,7 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import li.joye.yakuyomi.engine.NativeLlm
+import com.hippo.ehviewer.translation.engine.NativeLlm
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption

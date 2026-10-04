@@ -15,11 +15,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import li.joye.yakuyomi.engine.PageResult
-import li.joye.yakuyomi.engine.PageStats
-import li.joye.yakuyomi.engine.ResumablePipeline
-import li.joye.yakuyomi.engine.TranslationStage
-import li.joye.yakuyomi.engine.TranslationResume
+import com.hippo.ehviewer.translation.engine.PageResult
+import com.hippo.ehviewer.translation.engine.PageStats
+import com.hippo.ehviewer.translation.engine.ResumablePipeline
+import com.hippo.ehviewer.translation.engine.TranslationStage
+import com.hippo.ehviewer.translation.engine.TranslationResume
 
 /** Application-owned work; the reader is a detachable observer. All scheduling state lives on Main. */
 internal class GalleryTranslationSession(
@@ -470,7 +470,7 @@ internal class GalleryTranslationSession(
                                         modelsRequired(epoch, request)
                                         return@withContext
                                     }
-                                    suspend fun createTranslator(selectedOptions: TranslationOptions): li.joye.yakuyomi.engine.Translator = when (selectedOptions.backend) {
+                                    suspend fun createTranslator(selectedOptions: TranslationOptions): com.hippo.ehviewer.translation.engine.Translator = when (selectedOptions.backend) {
                                         TranslationBackend.NATIVE_LLM -> NativeTranslator(context, selectedOptions,
                                             prefixCacheProvider = { TranslationRuntime.nativePrefixCache() }) {
                                             if (generation != epoch) throw SupersededTranslationPage()
@@ -483,13 +483,13 @@ internal class GalleryTranslationSession(
                                         GallerySourceTranslator({ resolvedOptions(options) }, ::createTranslator)
                                     else createTranslator(options)
                                     translator = selected as AutoCloseable
-                                    val guarded = object : li.joye.yakuyomi.engine.DetailedTranslator {
-                                        override suspend fun translateDetailed(queries: List<String>): li.joye.yakuyomi.engine.LlmTranslator.TranslateResult {
+                                    val guarded = object : com.hippo.ehviewer.translation.engine.DetailedTranslator {
+                                        override suspend fun translateDetailed(queries: List<String>): com.hippo.ehviewer.translation.engine.LlmTranslator.TranslateResult {
                                             val active = checkNotNull(currentCoroutineContext()[TranslationPageRequest])
                                             active.ensureRelevant()
-                                            suspend fun call() = if (selected is li.joye.yakuyomi.engine.DetailedTranslator)
+                                            suspend fun call() = if (selected is com.hippo.ehviewer.translation.engine.DetailedTranslator)
                                                 selected.translateDetailed(queries)
-                                            else li.joye.yakuyomi.engine.LlmTranslator.TranslateResult(selected.translate(queries))
+                                            else com.hippo.ehviewer.translation.engine.LlmTranslator.TranslateResult(selected.translate(queries))
                                             // The factory releases native models after both page branches
                                             // have joined; a background transition must not close active JNI.
                                             val result = if (options.backend == TranslationBackend.LLM_API) active.apiCall { call() }
@@ -891,7 +891,6 @@ internal class GalleryTranslationSession(
         } finally {
             if (result is PageResult.Translated) {
                 result.page.recycle()
-                result.analysis?.mask?.recycle()
             }
         }
     }
@@ -975,7 +974,6 @@ internal class GalleryTranslationSession(
     fun close() {
         disable()
         reader = null
-        models.cancel()
         scope.cancel()
         completedFiles.clear()
         completedKeys.clear()

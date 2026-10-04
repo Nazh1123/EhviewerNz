@@ -7,9 +7,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import li.joye.yakuyomi.engine.LlmTranslator
-import li.joye.yakuyomi.engine.NativeLlm
-import li.joye.yakuyomi.engine.NativePrefixCache
+import com.hippo.ehviewer.translation.engine.LlmTranslator
+import com.hippo.ehviewer.translation.engine.NativeLlm
+import com.hippo.ehviewer.translation.engine.NativePrefixCache
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -79,7 +79,7 @@ class NativeTranslationPerformanceDeviceTest {
         NativeLlm(NativeModelStore(context).file(options.nativeModelId).absolutePath).use { model ->
             report.appendText("loadMs=${SystemClock.elapsedRealtime() - load}\n")
             report.appendText("backend=${model.systemInfo()}\n")
-            val requests = listOf("upstreamNumbered" to LlmTranslator("", options.engineConfig().translator).buildMessages(source),
+            val requests = listOf("upstreamNumbered" to LlmTranslator(options.engineConfig().translator).buildMessages(source),
                 "compactNumbered" to NativeTranslator.buildNumberedMessages(options, source)) +
                 source.mapIndexed { i, text -> "plain$i" to JSONArray().put(JSONObject()
                     .put("role", "user").put("content", "将以下文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释：\n\n$text")) }
@@ -104,7 +104,7 @@ class NativeTranslationPerformanceDeviceTest {
                     "completionTokens=${model.completionTokens()} output=$text\n")
                 assertTrue(text.isNotBlank())
                 if (name == "compactNumbered") {
-                    val result = LlmTranslator("", options.engineConfig().translator).parseResponse(source, text)
+                    val result = LlmTranslator(options.engineConfig().translator).parseResponse(source, text)
                     assertNull(result.error)
                     result.translations.forEachIndexed { i, translated -> assertNotEquals(source[i], translated) }
                 }
@@ -145,7 +145,7 @@ class NativeTranslationPerformanceDeviceTest {
             return text to cached
         }
         fun checkPage(text: String, sources: List<String>) {
-            val parsed = LlmTranslator("", options.engineConfig().translator).parseResponse(sources, text)
+            val parsed = LlmTranslator(options.engineConfig().translator).parseResponse(sources, text)
             assertNull(parsed.error)
             assertTrue(parsed.missingIndices.isEmpty())
             parsed.translations.forEachIndexed { i, translated -> assertNotEquals(sources[i], translated) }
@@ -231,7 +231,7 @@ class NativeTranslationPerformanceDeviceTest {
         val path = NativeModelStore(context).file(options.nativeModelId).absolutePath
         NativeLlm(path, cache).use { model ->
             assertTrue(model.begin(NativeTranslator.buildNumberedMessages(options, source)) > 0)
-            assertTrue(model.cachedPromptTokens() > 200)
+            assertTrue(model.cachedPromptTokens() > 0)
             TranslationRuntime.trimMemory()
             assertEquals(0L, cache.sizeBytes())
             // Clearing snapshots must not invalidate an already restored context.

@@ -19,10 +19,9 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.*
-import li.joye.yakuyomi.engine.PageAnalysis
-import li.joye.yakuyomi.engine.PageResult
-import li.joye.yakuyomi.engine.PageStats
-import li.joye.yakuyomi.engine.TranslationResume
+import com.hippo.ehviewer.translation.engine.PageResult
+import com.hippo.ehviewer.translation.engine.PageStats
+import com.hippo.ehviewer.translation.engine.TranslationResume
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.After
@@ -196,14 +195,12 @@ class TranslationPersistenceLifecycleTest {
 
     @Test fun readerExitAfterRenderingStillSavesAndRecyclesTheResult() = withSession { session ->
         val bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
-        val mask = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
         val key = store().key(provider.sources[0])
-        completeAfterCancellation(session, key, PageResult.Translated(bitmap, stats, PageAnalysis(mask, emptyList()))) {
+        completeAfterCancellation(session, key, PageResult.Translated(bitmap, stats)) {
             session.leaveReader()
         }
         assertTrue(File(savedDir, "0_tl.png").isFile)
         assertTrue(bitmap.isRecycled)
-        assertTrue(mask.isRecycled)
         assertNull(session.states[0])
         TranslationCache(TranslationStorage.cacheDir(context)).clear()
         assertNotNull(store(options.copy(persistDownloaded = false)).existingImage(key))

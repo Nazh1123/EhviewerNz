@@ -1,10 +1,16 @@
 package com.hippo.ehviewer.translation
 
 import android.content.Context
-import li.joye.yakuyomi.engine.*
+import com.hippo.ehviewer.translation.engine.*
 
 /** Shared image stages with backend-specific request and model-memory policies. */
 object TranslationEngineFactory {
+    // Save each finished HY region immediately: page cancellation must not discard
+    // seconds of completed local inference. Numbered/API models still batch a page.
+    internal fun translationBatchSize(options: TranslationOptions): Int =
+        if (options.backend == TranslationBackend.ML_KIT || options.backend == TranslationBackend.NATIVE_LLM &&
+            NativeModelCatalog.usesPlainRequests(options.nativeModelId)) 1 else Int.MAX_VALUE
+
     fun create(context: Context, models: ModelSet, options: TranslationOptions,
                translator: Translator, beforeImageStage: () -> Unit = {},
                retainNativeModels: () -> Boolean = { false },
@@ -14,7 +20,7 @@ object TranslationEngineFactory {
         // API pages may overlap network requests, but OCR must leave CPU for the reader.
         val config = configured.copy(ocr = configured.ocr.copy(concurrency = configured.ocr.concurrency.coerceIn(1, 4)))
         val alphabet = context.assets.open("models/alphabet-all-v5.txt").bufferedReader().use { it.readLines() }
-        val batchSize = if (options.backend == TranslationBackend.ML_KIT) 1 else Int.MAX_VALUE
+        val batchSize = translationBatchSize(options)
         val sourceSeparator = TranslationLanguages.lineSeparator(options.source)
         suspend fun recognize(ocr: Ocr, page: android.graphics.Bitmap, lines: List<TextLine>) {
             recognizeTranslationBatches(lines, if (config.ocr.concurrent) config.ocr.concurrency else 1) {
@@ -24,9 +30,9 @@ object TranslationEngineFactory {
             onRecognized(lines)
         }
         if (options.backend == TranslationBackend.NATIVE_LLM) {
-            val detector = TranslationStageModel { Detector(requireNotNull(models.detectorNcnn), config.detector) }
+            val detector = TranslationStageModel { Detector(models.detectorNcnn, config.detector) }
             val ocr = TranslationStageModel { Ocr(models.ocr, alphabet, config.ocr) }
-            val inpainter = TranslationStageModel { Inpainter(requireNotNull(models.aotInpainterNcnn), config.inpainter) }
+            val inpainter = TranslationStageModel { Inpainter(models.aotInpainterNcnn, config.inpainter) }
             fun releaseImages() {
                 try { detector.close() } finally { try { ocr.close() } finally { inpainter.close() } }
             }
@@ -55,24 +61,24 @@ object TranslationEngineFactory {
                 },
                 translator = guarded, cfg = config, release = ::releaseImages, warm = {},
                 translationIdentity = options.cacheIdentity(),
-                translationBatchSize = batchSize, retainAnalysis = false,
+                translationBatchSize = batchSize,
                 selectInpaintingOverlap = policy::beginPage, afterPreparedPage = policy::endPage,
                 sourceSeparator = sourceSeparator,
                 sourceSeparatorProvider = { TranslationLanguages.lineSeparator(resolvedOptions().source) },
                 translationIdentityProvider = { resolvedOptions().cacheIdentity() },
             )
         }
-        val detector = Detector(requireNotNull(models.detectorNcnn), config.detector)
+        val detector = Detector(models.detectorNcnn, config.detector)
         var ocr: Ocr? = null
         try {
             ocr = Ocr(models.ocr, alphabet, config.ocr)
-            val inpainter = Inpainter(requireNotNull(models.aotInpainterNcnn), config.inpainter)
+            val inpainter = Inpainter(models.aotInpainterNcnn, config.inpainter)
             val recognizer = ocr
             return ResumablePipeline(detector::detect, { page, lines -> recognize(recognizer, page, lines) },
                 inpainter::inpaint, translator, config,
                 release = { runCatching { detector.close() }; runCatching { recognizer.close() }; runCatching { inpainter.close() } },
                 warm = { detector.warmUp(); recognizer.warmUp(); inpainter.warmUp() },
-                translationIdentity = options.cacheIdentity(), translationBatchSize = batchSize, retainAnalysis = false,
+                translationIdentity = options.cacheIdentity(), translationBatchSize = batchSize,
                 sourceSeparator = sourceSeparator,
                 sourceSeparatorProvider = { TranslationLanguages.lineSeparator(resolvedOptions().source) },
                 translationIdentityProvider = { resolvedOptions().cacheIdentity() })

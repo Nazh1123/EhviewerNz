@@ -2,7 +2,7 @@ package com.hippo.ehviewer.translation
 
 import android.app.Application
 import kotlinx.coroutines.*
-import li.joye.yakuyomi.engine.Usage
+import com.hippo.ehviewer.translation.engine.Usage
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
@@ -90,11 +90,11 @@ class ApiTranslatorTest {
                 assertFalse(body.has("model"))
                 assertFalse(body.getBoolean("stream"))
                 val messages = body.getJSONArray("messages")
-                assertEquals(li.joye.yakuyomi.engine.LlmTranslator("", options(server).engineConfig().translator)
+                assertEquals(com.hippo.ehviewer.translation.engine.LlmTranslator(options(server).engineConfig().translator)
                     .buildMessages(listOf("こんにちは", "", "おはよう")).toString(), messages.toString())
                 assertEquals("system", messages.getJSONObject(0).getString("role"))
-                assertTrue(messages.getJSONObject(0).getString("content").contains("character voice and terminology"))
-                assertTrue(messages.getJSONObject(0).getString("content").contains("ANALYSIS & DE-VERBALIZATION"))
+                assertTrue(messages.getJSONObject(0).getString("content").contains("terminology consistent"))
+                assertTrue(messages.getJSONObject(0).getString("content").contains("same marker"))
                 assertEquals("<|1|>こんにちは\n<|2|>\n<|3|>おはよう",
                     messages.getJSONObject(messages.length() - 1).getString("content"))
                 assertEquals(0.3, body.getDouble("temperature"), 0.0)

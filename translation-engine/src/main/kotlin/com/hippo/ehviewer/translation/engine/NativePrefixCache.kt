@@ -1,7 +1,6 @@
-package li.joye.yakuyomi.engine
+package com.hippo.ehviewer.translation.engine
 
-/** At most two fixed-instruction KV snapshots, 32 MiB total. No model, context, OCR or output text.
- * The owner can share it across translation turns; clear/close releases the snapshots. */
+
 class NativePrefixCache : AutoCloseable {
     private val handle = NativeCacheHandle(createCache(), ::retainCache, ::destroyCache)
 
@@ -11,7 +10,7 @@ class NativePrefixCache : AutoCloseable {
 
     fun sizeBytes(): Long = handle.withHandle(::sizeBytes)
 
-    /** Release host snapshots without invalidating active model handles. */
+
     fun clear() = handle.withHandle(::clearCache)
 
     override fun close() = handle.close()

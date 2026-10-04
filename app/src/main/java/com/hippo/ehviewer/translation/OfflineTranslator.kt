@@ -6,7 +6,7 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.TranslatorOptions
 import kotlinx.coroutines.tasks.await
-import li.joye.yakuyomi.engine.Translator
+import com.hippo.ehviewer.translation.engine.Translator
 
 /** Never downloads implicitly. Only model preparation may access the network. */
 class OfflineTranslator(private val target: String, private val source: String = TranslationLanguages.DEFAULT_SOURCE) : Translator, AutoCloseable {

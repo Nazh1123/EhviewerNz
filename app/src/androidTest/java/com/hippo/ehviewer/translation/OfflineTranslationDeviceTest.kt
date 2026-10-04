@@ -9,7 +9,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import li.joye.yakuyomi.engine.PageResult
+import com.hippo.ehviewer.translation.engine.PageResult
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -24,7 +24,7 @@ class OfflineTranslationDeviceTest {
     @Test fun prepareModels() = runBlocking(Dispatchers.IO) {
         assumeTrue(InstrumentationRegistry.getArguments().getString("prepareModels") == "true")
         val models = TranslationModels(context)
-        models.download { name, bytes, total -> Log.i("OfflineSmoke", "$name $bytes/$total") }
+        assertTrue("Import image models first", models.ready())
         models.verified()
         OfflineTranslator("zh").use { it.prepare() }
         assertTrue(OfflineTranslator.isReady("zh"))
@@ -63,7 +63,7 @@ class OfflineTranslationDeviceTest {
                         assertTrue("Original bitmap must stay intact", input.sameAs(baseline))
                         File(artifactDir, "translated.png").outputStream().use { page.page.compress(Bitmap.CompressFormat.PNG, 100, it) }
                         File(artifactDir, "report.txt").writeText("$source -> $result\n${page.stats}\nOriginal unchanged: true\n")
-                    } finally { page.page.recycle(); page.analysis?.mask?.recycle() }
+                    } finally { page.page.recycle() }
                 }
             }
         } finally { input.recycle(); baseline.recycle() }

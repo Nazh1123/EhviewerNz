@@ -46,6 +46,7 @@ class TranslationModelsFragment : Fragment() {
     private var work: Job? = null
     private var status: Job? = null
     private var downloader: NativeModelDownloader? = null
+    private var mangaDownloader: MangaModelDownloader? = null
     private var busy = false
     private val handler = Handler(Looper.getMainLooper())
     private val importNative = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -174,14 +175,19 @@ class TranslationModelsFragment : Fragment() {
 
     private fun renderManga() {
         val ready = mangaReady == true
+        val download = if (ready) emptyList() else listOf(action(R.string.translation_model_download, ModelButtonKind.PRIMARY) {
+            operate(getString(R.string.translation_model_manga_card_title)) {
+                notifyModelDownloadNetwork(requireContext().applicationContext)
+                MangaModelDownloader(models).use {
+                    mangaDownloader = it
+                    it.downloadAndImport(::reportProgress)
+                }
+            }
+        })
         card("translation_manga_bundle", getString(R.string.translation_model_manga_card_title), getString(R.string.translation_model_manga_card_description),
             R.drawable.v_translate_x24, getString(if (mangaReady == null) R.string.translation_checking_models else if (ready) R.string.translation_model_installed else R.string.translation_model_missing),
             ready, listOf("${size(models.storedBytes())} / ${size(models.totalBytes)}", getString(R.string.translation_model_file_count, models.requiredNames.size)),
-            listOf(action(if (ready) R.string.translation_model_check_download else R.string.translation_model_download, ModelButtonKind.PRIMARY) {
-                operate(getString(R.string.translation_model_manga_title)) {
-                    notifyModelDownloadNetwork(requireContext().applicationContext); locked { models.download(::reportProgress) }
-                }
-            }, action(R.string.translation_model_import) {
+            download + listOf(action(R.string.translation_model_import) {
                 showDialog(AlertDialog.Builder(requireContext()).setTitle(R.string.translation_model_import_manga)
                     .setMessage(getString(R.string.translation_model_import_manga_help, models.requiredNames.joinToString("\n")))
                     .setPositiveButton(R.string.translation_model_choose_files) { _, _ -> importManga.launch(arrayOf("*/*")) }
@@ -311,7 +317,7 @@ class TranslationModelsFragment : Fragment() {
     }
 
     private fun cancelOrDismiss() {
-        if (busy) { work?.cancel(); models.cancel(); downloader?.cancel() } else taskPanel.visibility = View.GONE
+        if (busy) { work?.cancel(); downloader?.cancel(); mangaDownloader?.cancel() } else taskPanel.visibility = View.GONE
     }
 
     private fun operate(title: String, cancellable: Boolean = true, block: suspend () -> Unit) {
@@ -330,7 +336,7 @@ class TranslationModelsFragment : Fragment() {
                 taskText.text = getString(R.string.translation_model_operation_failed, error.message.orEmpty())
             } catch (_: LinkageError) { taskText.setText(R.string.translation_native_unavailable) }
             finally {
-                downloader = null; busy = false
+                downloader = null; mangaDownloader = null; busy = false
                 if (isAdded && view != null) {
                     taskBar.visibility = View.GONE; taskAction.setText(android.R.string.ok); taskAction.visibility = View.VISIBLE
                     setActionsEnabled(cards, true); refresh()
@@ -354,7 +360,7 @@ class TranslationModelsFragment : Fragment() {
     }
     override fun onResume() { super.onResume(); (activity as? SettingsActivity)?.setSettingsTitle(R.string.translation_model_management) }
     override fun onDestroyView() {
-        models.cancel(); downloader?.cancel(); scope?.cancel(); scope = null; handler.removeCallbacksAndMessages(null)
+        downloader?.cancel(); mangaDownloader?.cancel(); scope?.cancel(); scope = null; handler.removeCallbacksAndMessages(null)
         super.onDestroyView()
     }
 }

@@ -1,10 +1,10 @@
 package com.hippo.ehviewer.translation
 
 import kotlinx.coroutines.runBlocking
-import li.joye.yakuyomi.engine.LlmBatching
-import li.joye.yakuyomi.engine.LlmTranslator
-import li.joye.yakuyomi.engine.TranslationOutputLimitException
-import li.joye.yakuyomi.engine.Usage
+import com.hippo.ehviewer.translation.engine.LlmBatching
+import com.hippo.ehviewer.translation.engine.LlmTranslator
+import com.hippo.ehviewer.translation.engine.TranslationOutputLimitException
+import com.hippo.ehviewer.translation.engine.Usage
 import org.junit.Assert.*
 import org.junit.Test
 

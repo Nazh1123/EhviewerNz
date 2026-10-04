@@ -2,7 +2,7 @@ package com.hippo.ehviewer.translation
 
 import android.app.Application
 import android.graphics.Bitmap
-import li.joye.yakuyomi.engine.PreparedPage
+import com.hippo.ehviewer.translation.engine.PreparedPage
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith

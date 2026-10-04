@@ -20,6 +20,9 @@ import java.net.Socket
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
+import java.security.KeyStore
 
 /** Opt-in comparison using the saved account and searches, without changing settings. */
 @RunWith(AndroidJUnit4::class)
@@ -29,6 +32,10 @@ class SearchConnectionDeviceTest {
             InstrumentationRegistry.getArguments().getString("testSearchNetwork") == "1")
         assumeTrue("The regression affects domain fronting", Settings.getDF())
         val base = EhApplication.getOkHttpClient(InstrumentationRegistry.getInstrumentation().targetContext)
+        val trustManagers = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply {
+            init(null as KeyStore?)
+        }.trustManagers
+        val trustManager = trustManagers.filterIsInstance<X509TrustManager>().single()
         val plans = BookmarkSubscriptionPlanner.plan(EhDB.getSubscribedQuickSearch()).take(3)
         assumeTrue("At least one subscribed search is needed", plans.isNotEmpty())
         val urls = plans.map { it.createBuilder().build() }
@@ -44,7 +51,7 @@ class SearchConnectionDeviceTest {
                 }
             }
             val client = base.newBuilder()
-                .sslSocketFactory(factory, base.x509TrustManager!!)
+                .sslSocketFactory(factory, trustManager)
                 .connectionPool(ConnectionPool(8, 1, TimeUnit.MINUTES))
                 .cache(null)
                 .callTimeout(20, TimeUnit.SECONDS)

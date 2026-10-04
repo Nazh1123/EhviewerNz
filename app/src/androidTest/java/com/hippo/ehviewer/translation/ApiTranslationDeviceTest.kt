@@ -12,8 +12,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import li.joye.yakuyomi.engine.PageResult
-import li.joye.yakuyomi.engine.EngineTrace
+import com.hippo.ehviewer.translation.engine.PageResult
+import com.hippo.ehviewer.translation.engine.EngineTrace
 import java.io.File
 
 /** Explicit opt-in: calls the phone's running llama server, without changing saved settings. */
@@ -55,7 +55,7 @@ class ApiTranslationDeviceTest {
                         assertFalse(input.sameAs(result.page))
                         File(output, "llm-translated.png").outputStream().use { result.page.compress(Bitmap.CompressFormat.PNG, 100, it) }
                         android.util.Log.i("ApiTranslationSmoke", result.stats.toString())
-                    } finally { result.page.recycle(); result.analysis?.mask?.recycle() }
+                    } finally { result.page.recycle() }
                 }
             }
         } finally { watchdog.interrupt(); EngineTrace.sink = null; input.recycle(); original.recycle() }

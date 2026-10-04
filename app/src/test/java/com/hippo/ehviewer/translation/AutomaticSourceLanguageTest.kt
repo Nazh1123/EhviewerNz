@@ -3,7 +3,7 @@ package com.hippo.ehviewer.translation
 import android.app.Application
 import android.graphics.Bitmap
 import kotlinx.coroutines.*
-import li.joye.yakuyomi.engine.*
+import com.hippo.ehviewer.translation.engine.*
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONObject
@@ -207,7 +207,7 @@ class AutomaticSourceLanguageTest {
                                 val effective = source.options(configured)
                                 assertEquals(before, cache.key(input, effective))
                                 val result = pipeline.translatePrepared(original, prepared, false) as PageResult.Translated
-                                result.page.recycle(); result.analysis?.mask?.recycle()
+                                result.page.recycle()
                                 assertEquals(0, prepared.translationResume(effective.cacheIdentity())!!.missingCount)
                                 assertNull(prepared.translationResume(configured.cacheIdentity()))
                             }

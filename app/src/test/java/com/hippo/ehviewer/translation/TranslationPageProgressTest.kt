@@ -1,6 +1,6 @@
 package com.hippo.ehviewer.translation
 
-import li.joye.yakuyomi.engine.TranslationStage
+import com.hippo.ehviewer.translation.engine.TranslationStage
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

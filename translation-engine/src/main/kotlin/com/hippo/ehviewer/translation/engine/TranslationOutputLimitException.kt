@@ -1,6 +1,6 @@
-package li.joye.yakuyomi.engine
+package com.hippo.ehviewer.translation.engine
 
-/** A generation budget was exhausted. Other inference/transport failures must not trigger splitting. */
+
 class TranslationOutputLimitException @JvmOverloads constructor(
     message: String = "Translation output limit reached",
     val usage: Usage? = null,

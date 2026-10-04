@@ -1,6 +1,6 @@
 package com.hippo.ehviewer.translation
 
-import li.joye.yakuyomi.engine.PreparedPage
+import com.hippo.ehviewer.translation.engine.PreparedPage
 
 /** Process-local LRU. take transfers ownership, so memory-pressure cleanup cannot recycle active work. */
 internal class PreparedPageCache(private val limit: Long = 64L * 1024 * 1024, private val maxPages: Int = 4) {

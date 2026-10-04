@@ -9,8 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -23,6 +21,8 @@ jobs:
           python-version: '3.x'
       - name: Build release and translation regression tests
         run: |
+          c++ -std=c++17 -O2 translation-engine/src/test/cpp/ctc_decode_test.cpp -o /tmp/ctc_decode_test
+          /tmp/ctc_decode_test
           chmod +x gradlew
           ./gradlew :app:assembleAppReleaseRelease :app:testAppReleaseDebugUnitTest --tests 'com.hippo.ehviewer.translation.*' --tests 'com.hippo.ehviewer.gallery.*' :translation-engine:testDebugUnitTest
           ./gradlew :app:testAppReleaseReleaseUnitTest --tests 'com.hippo.ehviewer.translation.ReaderTranslationControllerTest' --tests 'com.hippo.ehviewer.translation.TranslationNavigationTest'

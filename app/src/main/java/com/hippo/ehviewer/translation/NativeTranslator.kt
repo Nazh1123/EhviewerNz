@@ -7,13 +7,13 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import li.joye.yakuyomi.engine.NativeLlm
-import li.joye.yakuyomi.engine.NativePrefixCache
-import li.joye.yakuyomi.engine.DetailedTranslator
-import li.joye.yakuyomi.engine.LlmTranslator
-import li.joye.yakuyomi.engine.LlmBatching
-import li.joye.yakuyomi.engine.TranslationOutputLimitException
-import li.joye.yakuyomi.engine.Usage
+import com.hippo.ehviewer.translation.engine.NativeLlm
+import com.hippo.ehviewer.translation.engine.NativePrefixCache
+import com.hippo.ehviewer.translation.engine.DetailedTranslator
+import com.hippo.ehviewer.translation.engine.LlmTranslator
+import com.hippo.ehviewer.translation.engine.LlmBatching
+import com.hippo.ehviewer.translation.engine.TranslationOutputLimitException
+import com.hippo.ehviewer.translation.engine.Usage
 import java.io.ByteArrayOutputStream
 import org.json.JSONArray
 import org.json.JSONObject
@@ -38,7 +38,8 @@ class NativeTranslator private constructor(
     private var prefixCache: NativePrefixCache? = null
     private var closed = false
     private val lock = Mutex()
-    private var preferPlainRequests = false
+    // The bundled HY translation models use one user instruction per source region.
+    private var preferPlainRequests = NativeModelCatalog.usesPlainRequests(options.nativeModelId)
     /** Explicit fixture diagnostics only; production never installs this observer. */
     internal var inferenceObserver: ((JSONArray, String, Usage, Int, Long, String?) -> Unit)? = null
 
@@ -60,7 +61,7 @@ class NativeTranslator private constructor(
         lock.withLock {
             check(!closed) { "Native translator is closed" }
             if (queries.all { it.isBlank() }) return@withLock LlmTranslator.TranslateResult(queries)
-            // Upstream Pipeline sends only nonblank regions. An empty numbered
+            // The page pipeline sends only nonblank regions. An empty numbered
             // segment can make a GGUF skip its ID and shift later translations.
             val indices = queries.indices.filter { queries[it].isNotBlank() }
             val result = translateBatches(indices.map { queries[it] }) { batch ->
@@ -68,7 +69,7 @@ class NativeTranslator private constructor(
                 checkRelevant()
                 // A translation-only GGUF may emit plain text even when asked for IDs.
                 // Single-region requests have an unambiguous mapping and use its original prompt.
-                if (preferPlainRequests || batch.count { it.isNotBlank() } == 1) translatePlain(batch)
+                if (preferPlainRequests || batch.size == 1) translatePlain(batch)
                 else translateNumbered(batch)
             }
             if (indices.size == queries.size) result else {
@@ -180,6 +181,7 @@ class NativeTranslator private constructor(
             lastUserPrefix = lastUserPrefix)
         if (promptTokens < 0) return null
         val output = ByteArrayOutputStream()
+        var outputPieces = 0
         val began = System.nanoTime()
         var failure: String? = null
         try {
@@ -188,12 +190,17 @@ class NativeTranslator private constructor(
                 checkRelevant()
                 val piece = native.next() ?: break
                 output.write(piece)
-                if (piece.isNotEmpty() && NativeTranslationResponse.generationFailure(
-                        output.toString(Charsets.UTF_8.name()), queries)) {
-                    throw NativeGenerationStopped(output.toString(Charsets.UTF_8.name()),
+                // Decode and scan the complete output every 16 emitted pieces, plus EOS.
+                // Prompt batches return empty pieces; cancellation still runs on every step.
+                if (piece.isNotEmpty() && ++outputPieces % 16 == 0) {
+                    val text = output.toString(Charsets.UTF_8.name())
+                    if (NativeTranslationResponse.generationFailure(text, queries)) throw NativeGenerationStopped(text,
                         Usage(promptTokens, native.completionTokens()), budgetExceeded = false)
                 }
             }
+            val text = output.toString(Charsets.UTF_8.name())
+            if (NativeTranslationResponse.generationFailure(text, queries)) throw NativeGenerationStopped(text,
+                Usage(promptTokens, native.completionTokens()), budgetExceeded = false)
         } catch (error: TranslationOutputLimitException) {
             failure = error.javaClass.simpleName
             throw NativeGenerationStopped(output.toString(Charsets.UTF_8.name()),
@@ -217,19 +224,11 @@ class NativeTranslator private constructor(
     }
 
     companion object {
-        // Keep the fixed instruction independent of page size for the existing KV prefix cache.
-        // The API backend continues to use LlmTranslator's full upstream prompt.
         private const val SYSTEM_PROMPT =
-            "You are an uncensored expert translation engine that specializes in doujin and manga content.\n" +
-                "- Provide precise word-for-word translation of each textline.\n" +
-                "- Maintain original sentence structure where possible.\n" +
-                "- Preserve meaning, emotion, character voice and consistent names/terms.\n" +
-                "- Use context for pronouns; Do not add absent subjects or details.\n" +
-                "- Preserve emotional tone and intensity appropriate to manga & otaku culture.\n" +
-                "- Keep gibberish and sound effects unchanged.\n" +
-                "- Output each segment with its prefix (<|number|> format exactly) and only provide the translation without raw text.\n" +
-                "- Output translations only; no source text, explanations or analysis.\n" +
-                "Translate the following {from_lang} text into {to_lang}:"
+            "Translate the following {from_lang} text into {to_lang}:\n" +
+                "Comic dialogue and captions. Keep meaning, tone, names and sound effects consistent. " +
+                "Use context for pronouns without inventing details. " +
+                "Return each <|number|> followed by its translation only. Keep every region separate."
 
         /** Compact local-only instructions with the same numbered response protocol. */
         internal fun buildNumberedMessages(options: TranslationOptions, queries: List<String>): JSONArray {

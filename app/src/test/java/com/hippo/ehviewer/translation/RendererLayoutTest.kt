@@ -3,7 +3,7 @@ package com.hippo.ehviewer.translation
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Color
-import li.joye.yakuyomi.engine.*
+import com.hippo.ehviewer.translation.engine.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith

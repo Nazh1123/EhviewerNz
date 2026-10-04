@@ -1,4 +1,4 @@
-package li.joye.yakuyomi.engine
+package com.hippo.ehviewer.translation.engine
 
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch

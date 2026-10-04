@@ -1,6 +1,6 @@
-package li.joye.yakuyomi.engine
+package com.hippo.ehviewer.translation.engine
 
-/** Keep the upstream page request; reduce it only after an actual input/output budget rejection. */
+
 object LlmBatching {
     suspend fun translate(
         queries: List<String>,
@@ -14,8 +14,6 @@ object LlmBatching {
             exhausted = error
         }
         val result = if (queries.size == 1) {
-            // Like upstream missing IDs, an untranslatable block keeps its source.
-            // Its failure must not discard other blocks in a split page.
             LlmTranslator.TranslateResult(queries,
                 error = if (exhausted == null) "One region exceeds the model context" else "One region exceeds the output budget",
                 missingIndices = setOf(0))

@@ -10,7 +10,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
-import li.joye.yakuyomi.engine.NativePrefixCache
+import com.hippo.ehviewer.translation.engine.NativePrefixCache
 
 object TranslationRuntime {
     // The scheduler orders gallery workers only. This also excludes model imports,

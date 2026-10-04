@@ -4,7 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import li.joye.yakuyomi.engine.NativeLlm
+import com.hippo.ehviewer.translation.engine.NativeLlm
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -66,6 +66,8 @@ class NativeTranslationDeviceTest {
         assumeTrue(InstrumentationRegistry.getArguments().getString("testNativeLlm") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val options = TranslationSettings(context).read()
+        context.startActivity(android.content.Intent(context, com.hippo.ehviewer.ui.splash.SplashActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
         assertTrue("Import a GGUF model first", NativeModelStore(context).ready(options))
         NativeTranslator(context, options).use {
             val source = listOf("明日は学校へ行きます。", "", "こんにちは。")

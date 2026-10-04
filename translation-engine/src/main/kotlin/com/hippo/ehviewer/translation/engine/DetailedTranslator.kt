@@ -1,6 +1,6 @@
-package li.joye.yakuyomi.engine
+package com.hippo.ehviewer.translation.engine
 
-/** Per-call metadata, without relying on a translator's mutable last-result fields. */
+
 interface DetailedTranslator : Translator {
     suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult
 

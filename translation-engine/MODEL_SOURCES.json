@@ -1,0 +1,13 @@
+{
+  "bundle": "manga-models-v1",
+  "license": "GPL-3.0",
+  "upstream_weights": "https://github.com/zyddnys/manga-image-translator",
+  "conversion_source": "https://github.com/joyeli/yakuyomi-engine/tree/25cfe95bf94d66e545eab363b9abceff42cf845f/parity",
+  "conversion_documentation": "https://github.com/joyeli/yakuyomi-engine/blob/25cfe95bf94d66e545eab363b9abceff42cf845f/docs/BUILD_MODELS_zh.md",
+  "note": "Redistributed unchanged NCNN data, with attribution to manga-image-translator contributors and Yakuyomi's converters. This project packages only detection, OCR and inpainting. These provenance links are not used by the app or its build. The app embeds the alphabet separately. See MODEL_ASSETS.md and LICENSE.",
+  "original_releases": [
+    {"role": "detector", "url": "https://github.com/joyeli/yakuyomi-engine/releases/tag/models-v3"},
+    {"role": "ocr", "url": "https://github.com/joyeli/yakuyomi-engine/releases/tag/models-v4"},
+    {"role": "inpainter", "url": "https://github.com/joyeli/yakuyomi-engine/releases/tag/models-v2"}
+  ]
+}

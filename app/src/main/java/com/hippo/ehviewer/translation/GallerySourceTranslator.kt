@@ -2,9 +2,9 @@ package com.hippo.ehviewer.translation
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import li.joye.yakuyomi.engine.DetailedTranslator
-import li.joye.yakuyomi.engine.LlmTranslator
-import li.joye.yakuyomi.engine.Translator
+import com.hippo.ehviewer.translation.engine.DetailedTranslator
+import com.hippo.ehviewer.translation.engine.LlmTranslator
+import com.hippo.ehviewer.translation.engine.Translator
 
 /** Source selection happens after OCR. Keep backend creation lazy and close replaced delegates. */
 internal class GallerySourceTranslator(

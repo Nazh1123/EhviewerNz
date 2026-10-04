@@ -4,7 +4,7 @@ import com.hippo.lib.yorozuya.FileUtils
 import com.hippo.unifile.UniFile
 import java.io.File
 import java.io.OutputStream
-import li.joye.yakuyomi.engine.TranslationResume
+import com.hippo.ehviewer.translation.engine.TranslationResume
 import org.json.JSONArray
 import org.json.JSONObject
 

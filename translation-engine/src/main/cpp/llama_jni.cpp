@@ -45,6 +45,7 @@ struct Session {
     int active_threads = 0;
     int allowed_cpus = 0;
     std::vector<llama_token> prompt;
+    std::vector<char> output_piece = std::vector<char>(256);
     CacheHandle cache;
     std::string model_key;
     std::vector<llama_token> prefix, live_prefix;
@@ -66,10 +67,6 @@ struct Session {
     }
 };
 std::once_flag initialized;
-// Called at decode boundaries. The CPU backend keeps its own reference until
-// the next graph switches pools (and pauses the previous one), even after
-// llama_detach_threadpool. Retire old pools only after that decode succeeds.
-// Recreate on affinity changes so new workers inherit the current CPU set.
 void updateCpuPool(Session &s) {
     cpu_set_t affinity{};
     const bool known = sched_getaffinity(0, sizeof(affinity), &affinity) == 0;
@@ -123,8 +120,6 @@ std::vector<llama_token> tokenize(const llama_vocab *vocab, const std::vector<ch
         throw std::runtime_error("Tokenization failed");
     return tokens;
 }
-// Snapshot only at the fixed-prefix boundary, before decoding any OCR or output tokens.
-// A failed/oversized cache is an optimization miss, never a translation failure.
 void savePrefix(Session &s) noexcept {
     try {
         s.live_prefix = s.prefix;
@@ -145,7 +140,6 @@ void savePrefix(Session &s) noexcept {
 }
 size_t restorePrefix(Session &s) {
     auto mem = llama_get_memory(s.ctx);
-    // Same live context: keep its fixed prefix and remove previous source/output.
     if (!s.prefix.empty() && s.prefix == s.live_prefix &&
         llama_memory_seq_rm(mem, 0, static_cast<llama_pos>(s.prefix.size()), -1)) {
         std::lock_guard<std::mutex> guard(s.cache->mutex);
@@ -168,7 +162,6 @@ size_t restorePrefix(Session &s) {
         if (entry.model_key != s.model_key || entry.tokens != s.prefix) continue;
         if (llama_state_seq_set_data(s.ctx, entry.state.data(), entry.state.size(), 0) == entry.state.size()) {
             s.live_prefix = s.prefix;
-            // Moving the entry updates LRU without copying its KV buffer.
             std::rotate(entries.begin() + i, entries.begin() + i + 1, entries.end());
             return s.prefix.size();
         }
@@ -193,21 +186,21 @@ void initializeBackend() {
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_li_joye_yakuyomi_engine_NativePrefixCache_createCache(JNIEnv *env, jobject) {
+Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_createCache(JNIEnv *env, jobject) {
     try { return reinterpret_cast<jlong>(new CacheHandle(std::make_shared<PrefixCache>())); }
     catch (...) { fail(env, "Cannot allocate prefix cache"); }
     return 0;
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_li_joye_yakuyomi_engine_NativePrefixCache_retainCache(JNIEnv *env, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_retainCache(JNIEnv *env, jobject, jlong handle) {
     try { return reinterpret_cast<jlong>(new CacheHandle(prefixCache(handle))); }
     catch (...) { fail(env, "Cannot retain prefix cache"); }
     return 0;
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_li_joye_yakuyomi_engine_NativePrefixCache_sizeBytes(JNIEnv *env, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_sizeBytes(JNIEnv *env, jobject, jlong handle) {
     try {
         auto &cache = prefixCache(handle);
         std::lock_guard<std::mutex> guard(cache->mutex);
@@ -217,7 +210,7 @@ Java_li_joye_yakuyomi_engine_NativePrefixCache_sizeBytes(JNIEnv *env, jobject, j
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_li_joye_yakuyomi_engine_NativePrefixCache_clearCache(JNIEnv *env, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_clearCache(JNIEnv *env, jobject, jlong handle) {
     try {
         auto &cache = prefixCache(handle);
         std::lock_guard<std::mutex> guard(cache->mutex);
@@ -226,12 +219,12 @@ Java_li_joye_yakuyomi_engine_NativePrefixCache_clearCache(JNIEnv *env, jobject, 
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_li_joye_yakuyomi_engine_NativePrefixCache_destroyCache(JNIEnv *, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_destroyCache(JNIEnv *, jobject, jlong handle) {
     delete reinterpret_cast<CacheHandle *>(handle);
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_li_joye_yakuyomi_engine_NativePrefixCache_createModel(JNIEnv *env, jobject, jlong cacheHandle,
+Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_createModel(JNIEnv *env, jobject, jlong cacheHandle,
         jbyteArray path, jint threads) {
     try {
         std::call_once(initialized, initializeBackend);
@@ -258,14 +251,11 @@ Java_li_joye_yakuyomi_engine_NativePrefixCache_createModel(JNIEnv *env, jobject,
         if (!s->ctx) throw std::runtime_error("Cannot allocate translation context");
         struct stat info{};
         if (stat(model_path.c_str(), &info)) throw std::runtime_error("Cannot identify GGUF file");
-        // Snapshots never leave this process/binary. Bind them to file identity and
-        // context configuration; exact templated prefix tokens are checked on every hit.
         s->model_key = model_path + ":" + std::to_string(info.st_dev) + ":" + std::to_string(info.st_ino) +
             ":" + std::to_string(info.st_size) + ":" + std::to_string(info.st_mtim.tv_sec) +
             ":" + std::to_string(info.st_mtim.tv_nsec) + ":" + std::to_string(info.st_ctim.tv_sec) +
             ":" + std::to_string(info.st_ctim.tv_nsec) + ":" + std::to_string(llama_n_ctx(s->ctx)) +
             ":" + std::to_string(cp.n_threads);
-        // Reuse the selected backend's pool, adapting it to actual CPU availability.
         auto cpu = ggml_backend_dev_backend_reg(ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU));
         s->new_threadpool = reinterpret_cast<decltype(&ggml_threadpool_new)>(
             ggml_backend_reg_get_proc_address(cpu, "ggml_threadpool_new"));
@@ -282,7 +272,7 @@ Java_li_joye_yakuyomi_engine_NativePrefixCache_createModel(JNIEnv *env, jobject,
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_li_joye_yakuyomi_engine_NativeLlm_beginMessages(JNIEnv *env, jobject, jlong handle,
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_beginMessages(JNIEnv *env, jobject, jlong handle,
         jobjectArray roleBytes, jobjectArray contentBytes, jint maxOutput,
         jbyteArray lastUserPrefix, jboolean cacheEnabled) {
     try {
@@ -318,8 +308,6 @@ Java_li_joye_yakuyomi_engine_NativeLlm_beginMessages(JNIEnv *env, jobject, jlong
         const auto *vocab = llama_model_get_vocab(s.model);
         auto prompt = tokenize(vocab, formatted, length);
         const int count = prompt.size();
-        // Preserve the existing context-memory cap. Long pages split only when
-        // their actual template/token count cannot fit, never by a fixed region count.
         s.max_output = std::clamp(static_cast<int>(maxOutput), 1, static_cast<int>(llama_n_ctx(s.ctx)) / 2);
         if (count + s.max_output > static_cast<int>(llama_n_ctx(s.ctx))) return -1;
         s.cache_enabled = cacheEnabled;
@@ -338,7 +326,6 @@ Java_li_joye_yakuyomi_engine_NativeLlm_beginMessages(JNIEnv *env, jobject, jlong
                 if (fixed_length > 0 && fixed_length < static_cast<int>(fixed_text.size())) {
                     auto fixed_tokens = tokenize(vocab, fixed_text, fixed_length);
                     size_t common = 0;
-                    // Always decode a suffix to refresh logits, including identical requests.
                     while (common < fixed_tokens.size() && common + 1 < prompt.size() &&
                            fixed_tokens[common] == prompt[common]) ++common;
                     if (common <= MAX_PREFIX_TOKENS)
@@ -359,21 +346,21 @@ Java_li_joye_yakuyomi_engine_NativeLlm_beginMessages(JNIEnv *env, jobject, jlong
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_li_joye_yakuyomi_engine_NativeLlm_cachedPromptTokens(JNIEnv *env, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_cachedPromptTokens(JNIEnv *env, jobject, jlong handle) {
     try { return session(handle).cached_tokens; }
     catch (const std::exception &e) { fail(env, e.what()); }
     return 0;
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_li_joye_yakuyomi_engine_NativeLlm_completionTokens(JNIEnv *env, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_completionTokens(JNIEnv *env, jobject, jlong handle) {
     try { return session(handle).generated; }
     catch (const std::exception &e) { fail(env, e.what()); }
     return 0;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_li_joye_yakuyomi_engine_NativeLlm_systemInfo(JNIEnv *env, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_systemInfo(JNIEnv *env, jobject, jlong handle) {
     try {
         session(handle);
         return env->NewStringUTF(llama_print_system_info());
@@ -382,7 +369,7 @@ Java_li_joye_yakuyomi_engine_NativeLlm_systemInfo(JNIEnv *env, jobject, jlong ha
 }
 
 extern "C" JNIEXPORT jintArray JNICALL
-Java_li_joye_yakuyomi_engine_NativeLlm_cpuState(JNIEnv *env, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_cpuState(JNIEnv *env, jobject, jlong handle) {
     try {
         auto &s = session(handle);
         const jint state[] = {s.active_threads, s.allowed_cpus};
@@ -394,14 +381,13 @@ Java_li_joye_yakuyomi_engine_NativeLlm_cpuState(JNIEnv *env, jobject, jlong hand
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_li_joye_yakuyomi_engine_NativeLlm_next(JNIEnv *env, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_next(JNIEnv *env, jobject, jlong handle) {
     try {
         auto &s = session(handle);
         if (s.finished) return nullptr;
         updateCpuPool(s);
         if (s.consumed < s.prompt.size()) {
             const size_t boundary = s.consumed < s.prefix.size() ? s.prefix.size() : s.prompt.size();
-            // Keep cancellation and CPU-policy changes responsive on restricted cores.
             const int count = std::min<size_t>(s.active_threads == 1 ? 32 : 128, boundary - s.consumed);
             if (llama_decode(s.ctx, llama_batch_get_one(s.prompt.data() + s.consumed, count)) != 0) {
                 s.live_prefix.clear();
@@ -418,11 +404,11 @@ Java_li_joye_yakuyomi_engine_NativeLlm_next(JNIEnv *env, jobject, jlong handle) 
         if (llama_vocab_is_eog(vocab, token)) { s.finished = true; return nullptr; }
         if (s.generated >= s.max_output) {
             s.finished = true;
-            env->ThrowNew(env->FindClass("li/joye/yakuyomi/engine/TranslationOutputLimitException"),
+            env->ThrowNew(env->FindClass("com/hippo/ehviewer/translation/engine/TranslationOutputLimitException"),
                           "Translation was truncated");
             return nullptr;
         }
-        std::vector<char> piece(256);
+        auto &piece = s.output_piece;
         int length = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, false);
         if (length < 0) {
             piece.resize(-length);
@@ -445,6 +431,6 @@ Java_li_joye_yakuyomi_engine_NativeLlm_next(JNIEnv *env, jobject, jlong handle) 
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_li_joye_yakuyomi_engine_NativeLlm_destroy(JNIEnv *, jobject, jlong handle) {
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_destroy(JNIEnv *, jobject, jlong handle) {
     delete reinterpret_cast<Session *>(handle);
 }

@@ -2,10 +2,10 @@ package com.hippo.ehviewer.translation
 
 import android.content.Context
 import androidx.core.content.edit
-import li.joye.yakuyomi.engine.EngineConfig
-import li.joye.yakuyomi.engine.OcrConfig
-import li.joye.yakuyomi.engine.TranslatorConfig
-import li.joye.yakuyomi.engine.InpainterConfig
+import com.hippo.ehviewer.translation.engine.EngineConfig
+import com.hippo.ehviewer.translation.engine.OcrConfig
+import com.hippo.ehviewer.translation.engine.TranslatorConfig
+import com.hippo.ehviewer.translation.engine.InpainterConfig
 import okhttp3.HttpUrl
 
 enum class TranslationBackend { NATIVE_LLM, ML_KIT, LLM_API }
@@ -23,22 +23,22 @@ data class TranslationOptions(
     val inputImageIdentity: String get() =
         if (backend == TranslationBackend.ML_KIT) "max-edge-2048" else "original-size"
     val pageConcurrency: Int get() = if (backend == TranslationBackend.LLM_API)
-        engineConfig().translator.let { if (it.batchConcurrent) it.batchSize.coerceAtLeast(1) else 1 }
+        8
     else 1
 
     fun preparationIdentity(): String = engineConfig().let {
-        listOf("ehnz-preparation-v2-multilingual", "981ae85617bb3323949d57b7d6e3e10181435325", inputImageIdentity, source,
+        listOf("ehnz-preparation-v3", "reader-image-v1", inputImageIdentity, source,
             // Line concurrency changes scheduling, not recognized text or coordinates.
             // Keep preprocessing reusable when switching to the native memory policy.
             it.detector.toString(), it.ocr.copy(concurrency = OcrConfig().concurrency).toString(),
             it.inpainter.toString()).joinToString("\n")
     }
 
-    fun cacheIdentity(): String = listOf("ehnz-overlay-v2-multilingual", "981ae85617bb3323949d57b7d6e3e10181435325",
+    fun cacheIdentity(): String = listOf("ehnz-overlay-v3", "reader-image-v1",
         when (backend) {
-            TranslationBackend.NATIVE_LLM -> "llama-jni-v12-multilingual-strict-regions-prefix-kv\n$nativeModelId"
+            TranslationBackend.NATIVE_LLM -> "llama-jni-v13-reader-regions-prefix-kv\n$nativeModelId"
             TranslationBackend.ML_KIT -> "mlkit-17.0.3-multilingual"
-            TranslationBackend.LLM_API -> "llm-api-v4-multilingual-segments-981ae856\n${apiUrl.trim()}\n${apiModel.trim()}"
+            TranslationBackend.LLM_API -> "llm-api-v5-reader-regions\n${apiUrl.trim()}\n${apiModel.trim()}"
         },
         "$source\n$target",
         inpaint.toString(), inputImageIdentity).joinToString("\n")
@@ -88,10 +88,7 @@ data class TranslationOptions(
     fun engineConfig() = EngineConfig(
         ocr = OcrConfig(),
         inpainter = InpainterConfig(method = if (inpaint) "aot" else "boxfill"),
-        translator = TranslatorConfig(provider = "custom", apiBase = apiUrl.trim(), model = apiModel.trim(),
-            targetLang = target, fromLangName = sourceLanguageName(),
-            toLangName = targetLanguageName(),
-            sampleSource = "", sampleTarget = ""),
+        translator = TranslatorConfig(fromLangName = sourceLanguageName(), toLangName = targetLanguageName()),
     )
 }
 

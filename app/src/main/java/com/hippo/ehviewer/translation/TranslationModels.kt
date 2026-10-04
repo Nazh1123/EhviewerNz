@@ -3,40 +3,39 @@ package com.hippo.ehviewer.translation
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.hippo.ehviewer.translation.engine.ModelChecksum
+import com.hippo.ehviewer.translation.engine.ModelSet
 import java.io.File
-import java.io.IOException
-import java.util.concurrent.TimeUnit
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.attribute.FileTime
+import java.security.MessageDigest
+import java.util.zip.ZipInputStream
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.awaitCancellation
-import li.joye.yakuyomi.engine.ModelDownloader
-import li.joye.yakuyomi.engine.ModelSet
-import okhttp3.*
 import org.json.JSONObject
 
-/** Fixed manifest from the pinned engine, verified before any native model is loaded. */
+/** The embedded manifest is the authority for both imported and downloaded weights. */
 class TranslationModels internal constructor(private val context: Context, manifestOverride: String? = null) {
     private val dir = File(context.noBackupFilesDir, "translation-models").apply { mkdirs() }
-    private val manifest = manifestOverride ?: context.assets.open("translation-models.json").bufferedReader().use { it.readText() }
-    private val files = JSONObject(manifest).getJSONArray("models").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
-    private val client = OkHttpClient.Builder().connectTimeout(30, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
-    @Volatile private var call: Call? = null
+    private val manifest = JSONObject(manifestOverride ?: context.assets.open("translation-models.json")
+        .bufferedReader().use { it.readText() })
+    private data class Entry(val name: String, val size: Long, val sha256: String)
+    private val files = manifest.getJSONArray("models").let { a -> (0 until a.length()).map {
+        a.getJSONObject(it).let { item -> Entry(item.getString("name"), item.getLong("size"), item.getString("sha256")) }
+    } }
+    internal val downloadUrl: String get() = manifest.getJSONObject("bundle").getString("url")
+    private data class Stamp(val size: Long, val modified: FileTime, val key: Any?)
+    private var verifiedStamps: List<Stamp>? = null
 
-    fun ready(): Boolean = files.all { File(dir, it.getString("name")).length() == it.getLong("size") }
-
-    val requiredNames: List<String> get() = files.map { it.getString("name") }
-    val totalBytes: Long get() = files.sumOf { it.getLong("size") }
+    fun ready(): Boolean = files.all { File(dir, it.name).length() == it.size }
+    val requiredNames: List<String> = files.map { it.name }
+    val totalBytes: Long = files.sumOf { it.size }
     fun storedBytes(): Long = requiredNames.sumOf { File(dir, it).length() }
 
-    /** Caller holds TranslationRuntime.lock; verify the complete bundle before replacing any file. */
+    /** Caller holds TranslationRuntime.lock; verify the whole set before publication. */
     suspend fun import(uris: List<Uri>, progress: (String, Long, Long) -> Unit) {
         val resolver = context.contentResolver
         val sources = uris.associateBy { uri ->
@@ -50,38 +49,76 @@ class TranslationModels internal constructor(private val context: Context, manif
         val staged = mutableListOf<Pair<File, File>>()
         try {
             for (entry in files) {
-                currentCoroutineContext().ensureActive()
-                val name = entry.getString("name")
-                val size = entry.getLong("size")
-                val temp = File.createTempFile("import-", ".part", dir)
-                staged.add(temp to File(dir, name))
-                requireNotNull(resolver.openInputStream(sources.getValue(name))).use { input ->
-                    temp.outputStream().use { output ->
-                        val buffer = ByteArray(65536)
-                        var copied = 0L
-                        while (true) {
-                            currentCoroutineContext().ensureActive()
-                            val count = input.read(buffer)
-                            if (count < 0) break
-                            copied += count
-                            check(copied <= size) { "Model larger than manifest" }
-                            output.write(buffer, 0, count)
-                            progress(name, copied, size)
-                        }
-                    }
-                }
-                check(temp.length() == size && ModelDownloader.sha256(temp) == entry.getString("sha256")) {
-                    "Model checksum mismatch: $name"
+                requireNotNull(resolver.openInputStream(sources.getValue(entry.name))).use { input ->
+                    copyVerified(input, entry, staged) { copied -> progress(entry.name, copied, entry.size) }
                 }
             }
-            currentCoroutineContext().ensureActive()
-            // Each replacement has the exact same pinned checksum; partial publication is safe to retry.
-            for ((temp, target) in staged) Files.move(temp.toPath(), target.toPath(),
-                StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            publish(staged)
         } finally { staged.forEach { it.first.delete() } }
     }
 
+    /** Stream into verified staging files without retaining another full ZIP on disk.
+     * Network and decompression stay outside the inference lock. */
+    internal suspend fun installArchive(input: InputStream, progress: (String, Long, Long) -> Unit) {
+        val remaining = files.associateBy { it.name }.toMutableMap()
+        val staged = mutableListOf<Pair<File, File>>()
+        var completed = 0L
+        try {
+            ZipInputStream(input.buffered(65536)).use { zip ->
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val item = zip.nextEntry ?: break
+                    // Match an exact manifest name; never resolve a ZIP path on disk.
+                    val entry = requireNotNull(remaining.remove(item.name)) { "Unexpected or duplicate model: ${item.name}" }
+                    copyVerified(zip, entry, staged) { copied -> progress(entry.name, completed + copied, totalBytes) }
+                    zip.closeEntry()
+                    completed += entry.size
+                }
+            }
+            check(remaining.isEmpty()) { "Incomplete manga model bundle" }
+            TranslationRuntime.withModelMaintenance { publish(staged) }
+        } finally { staged.forEach { it.first.delete() } }
+    }
+
+    private suspend fun copyVerified(input: InputStream, entry: Entry, staged: MutableList<Pair<File, File>>,
+                                     progress: (Long) -> Unit) {
+        currentCoroutineContext().ensureActive()
+        val temp = File.createTempFile("import-", ".part", dir)
+        staged.add(temp to File(dir, entry.name))
+        val digest = MessageDigest.getInstance("SHA-256")
+        var copied = 0L
+        var reported = 0L
+        progress(0)
+        temp.outputStream().use { output ->
+            val buffer = ByteArray(65536)
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val count = input.read(buffer)
+                if (count < 0) break
+                copied += count
+                check(copied <= entry.size) { "Model larger than manifest: ${entry.name}" }
+                output.write(buffer, 0, count)
+                digest.update(buffer, 0, count)
+                if (copied - reported >= 1048576) { progress(copied); reported = copied }
+            }
+        }
+        check(copied == entry.size && digest.digest().joinToString("") { "%02x".format(it) } == entry.sha256) {
+            "Model checksum mismatch: ${entry.name}"
+        }
+        progress(copied)
+    }
+
+    private suspend fun publish(staged: List<Pair<File, File>>) {
+        currentCoroutineContext().ensureActive()
+        verifiedStamps = null
+        // Every replacement has the same pinned hash, so partial publication is retryable.
+        for ((temp, target) in staged) Files.move(temp.toPath(), target.toPath(),
+            StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        verifiedStamps = stamps()
+    }
+
     fun delete() {
+        verifiedStamps = null
         for (name in requiredNames) {
             val file = File(dir, name)
             check(!file.exists() || file.delete()) { "Cannot delete manga model: $name" }
@@ -90,82 +127,24 @@ class TranslationModels internal constructor(private val context: Context, manif
         }
     }
 
+    private fun stamps() = files.map { entry ->
+        val attrs = Files.readAttributes(File(dir, entry.name).toPath(), BasicFileAttributes::class.java)
+        check(attrs.isRegularFile && attrs.size() == entry.size) { "Model missing or wrong size: ${entry.name}" }
+        Stamp(attrs.size(), attrs.lastModifiedTime(), attrs.fileKey())
+    }
+
+    /** Private immutable files are hashed once per session, again if replaced or modified. */
     suspend fun verified(): ModelSet {
-        for (entry in files) {
-            currentCoroutineContext().ensureActive()
-            val file = File(dir, entry.getString("name"))
-            check(file.length() == entry.getLong("size") && ModelDownloader.sha256(file) == entry.getString("sha256"))
-                { "Model missing or checksum mismatch" }
-        }
-        return requireNotNull(ModelSet.resolve(files.map { it.getString("name").let { name -> name to File(dir, name).absolutePath } }))
-    }
-
-    suspend fun download(progress: (String, Long, Long) -> Unit) {
-        for (entry in files) {
-            currentCoroutineContext().ensureActive()
-            val name = entry.getString("name")
-            val size = entry.getLong("size")
-            val file = File(dir, name)
-            if (file.length() == size && ModelDownloader.sha256(file) == entry.getString("sha256")) continue
-            val tmp = File(dir, "$name.part")
-            try {
-                val requestCall = client.newCall(Request.Builder().url(entry.getString("url")).build())
-                call = requestCall
-                requestCall.withModelResponse { response ->
-                    check(response.isSuccessful) { "Model download HTTP ${response.code()}" }
-                    requireNotNull(response.body()).byteStream().use { input ->
-                        tmp.outputStream().use { out ->
-                            val buffer = ByteArray(65536)
-                            var total = 0L
-                            var reported = -1L
-                            progress(name, 0, size)
-                            while (true) {
-                                currentCoroutineContext().ensureActive()
-                                val n = input.read(buffer)
-                                if (n < 0) break
-                                total += n
-                                check(total <= size) { "Model larger than manifest" }
-                                out.write(buffer, 0, n)
-                                if (total / 1048576 != reported) {
-                                    reported = total / 1048576
-                                    progress(name, total, size)
-                                }
-                            }
-                        }
-                    }
-                }
+        currentCoroutineContext().ensureActive()
+        val current = stamps()
+        // Providers without file identities cannot distinguish same-size replacements.
+        if (current.any { it.key == null } || current != verifiedStamps) {
+            for (entry in files) {
                 currentCoroutineContext().ensureActive()
-                check(tmp.length() == size && ModelDownloader.sha256(tmp) == entry.getString("sha256")) { "Model checksum mismatch" }
-                currentCoroutineContext().ensureActive()
-                check(tmp.renameTo(file)) { "Cannot publish model" }
-            } catch (error: Exception) {
-                currentCoroutineContext().ensureActive()
-                throw error
-            } finally {
-                call = null
-                tmp.delete()
+                check(ModelChecksum.sha256(File(dir, entry.name)) == entry.sha256) { "Model checksum mismatch: ${entry.name}" }
             }
+            verifiedStamps = current
         }
+        return requireNotNull(ModelSet.resolve(files.map { it.name to File(dir, it.name).absolutePath }))
     }
-
-    fun cancel() { call?.cancel() }
-}
-
-/** Keep cancellation attached until the blocking response body has also been consumed. */
-internal suspend fun <T> Call.withModelResponse(block: suspend (Response) -> T): T = coroutineScope {
-    val cancellation = launch(start = CoroutineStart.UNDISPATCHED) {
-        try { awaitCancellation() } finally { this@withModelResponse.cancel() }
-    }
-    try { awaitModelResponse().use { block(it) } }
-    finally { cancellation.cancel() }
-}
-
-internal suspend fun Call.awaitModelResponse(): Response = suspendCancellableCoroutine { continuation ->
-    continuation.invokeOnCancellation { cancel() }
-    enqueue(object : Callback {
-        override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWithException(e) }
-        override fun onResponse(call: Call, response: Response) {
-            continuation.resume(response, onCancellation = { _, value, _ -> value.close() })
-        }
-    })
 }

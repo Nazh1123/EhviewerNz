@@ -1,6 +1,6 @@
-package li.joye.yakuyomi.engine
+package com.hippo.ehviewer.translation.engine
 
-/** Owns one cache reference; model creation borrows an independent native reference. */
+
 internal class NativeCacheHandle(
     private var handle: Long,
     private val retain: (Long) -> Long,
@@ -12,8 +12,6 @@ internal class NativeCacheHandle(
     }
 
     fun <T> withLease(block: (Long) -> T): T {
-        // Retaining is brief. Model IO runs without the owner's monitor so Main
-        // can clear snapshots, and closing the owner cannot invalidate this lease.
         val borrowed = withHandle(retain)
         return try { block(borrowed) } finally { destroy(borrowed) }
     }

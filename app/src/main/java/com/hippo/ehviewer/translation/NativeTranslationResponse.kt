@@ -1,7 +1,7 @@
 package com.hippo.ehviewer.translation
 
-import li.joye.yakuyomi.engine.LlmTranslator
-import li.joye.yakuyomi.engine.Usage
+import com.hippo.ehviewer.translation.engine.LlmTranslator
+import com.hippo.ehviewer.translation.engine.Usage
 
 /** Strict local protocol. Never assign an ambiguous segment to a bubble. */
 internal object NativeTranslationResponse {

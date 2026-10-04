@@ -10,7 +10,7 @@ import com.hippo.unifile.UniFile
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
-import li.joye.yakuyomi.engine.TranslationStage
+import com.hippo.ehviewer.translation.engine.TranslationStage
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

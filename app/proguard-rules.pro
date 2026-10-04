@@ -17,6 +17,7 @@
 #}
 
 # JNI exports use the class and native method names.
--keep class li.joye.yakuyomi.engine.NativeLlm { *; }
--keep class li.joye.yakuyomi.engine.NativePrefixCache { *; }
--keep class li.joye.yakuyomi.engine.TranslationOutputLimitException { *; }
+-keep class com.hippo.ehviewer.translation.engine.NativeLlm { *; }
+-keep class com.hippo.ehviewer.translation.engine.ImageInference { *; }
+-keep class com.hippo.ehviewer.translation.engine.NativePrefixCache { *; }
+-keep class com.hippo.ehviewer.translation.engine.TranslationOutputLimitException { *; }

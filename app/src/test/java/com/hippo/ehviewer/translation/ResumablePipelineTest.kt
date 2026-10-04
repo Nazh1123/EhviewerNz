@@ -4,7 +4,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Color
 import kotlinx.coroutines.*
-import li.joye.yakuyomi.engine.*
+import com.hippo.ehviewer.translation.engine.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -17,6 +17,38 @@ import org.robolectric.shadows.ShadowLegacyBitmap
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], manifest = Config.NONE)
 class ResumablePipelineTest {
+    @Test fun catalogNativeRegionsSurviveCancellationWithoutRepeatingCompletedInference() = runBlocking<Unit> {
+        val options = TranslationOptions(backend = TranslationBackend.NATIVE_LLM,
+            nativeModelId = NativeModelCatalog.models.first().sha256)
+        val page = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+        val calls = mutableListOf<String>()
+        try {
+            NativeTranslator(options) { messages ->
+                val source = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
+                calls.add(source)
+                (if (source == "こんにちは") "你好" else "谢谢") to Usage(20, 4)
+            }.use { translator ->
+                Stages().engine(options.cacheIdentity(), batchSize = TranslationEngineFactory.translationBatchSize(options),
+                    detailed = translator) { error("Detailed translator required") }.use { engine ->
+                    twoRegions(page).use { prepared ->
+                        try {
+                            engine.translatePrepared(page, prepared, false, { stage, fraction ->
+                                if (stage == TranslationStage.TRANSLATE && fraction == 0.5f) throw CancellationException("Page changed")
+                            })
+                            fail("Cancellation boundary was skipped")
+                        } catch (_: CancellationException) { }
+                        assertEquals(listOf("こんにちは"), calls)
+                        assertEquals(1, prepared.translationResume(options.cacheIdentity())!!.missingCount)
+                        val result = engine.translatePrepared(page, prepared, true) as PageResult.Translated
+                        result.page.recycle()
+                        assertEquals(listOf("こんにちは", "ありがとう"), calls)
+                        assertEquals(listOf("你好", "谢谢"), prepared.regions.map { it.translatedText })
+                    }
+                }
+            }
+        } finally { page.recycle() }
+    }
+
     @Test fun persistedPartialCheckpointRetriesOnlyMissingRegionsAfterPreparationIsRecreated() = runBlocking {
         val source = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
         var calls = 0
@@ -95,7 +127,8 @@ class ResumablePipelineTest {
         var lastMask: Bitmap? = null
         var beforeInpaint: suspend () -> Unit = {}
         fun engine(identity: String? = null, overlap: Boolean = true, batchSize: Int = 1,
-                   detailed: DetailedTranslator? = null, analysis: Boolean = false, overlapLayout: Boolean = false,
+                   detailed: DetailedTranslator? = null, overlapLayout: Boolean = false,
+                   cleanup: () -> Unit = {},
                    translate: suspend (List<String>) -> List<String>) = ResumablePipeline(
             detect = { page ->
                 detects++
@@ -107,8 +140,27 @@ class ResumablePipelineTest {
             translator = detailed ?: object : Translator { override suspend fun translate(queries: List<String>) = translate.invoke(queries) },
             cfg = EngineConfig(), release = {}, warm = {},
             translationIdentity = identity, overlapInpainting = overlap,
-            translationBatchSize = batchSize, retainAnalysis = analysis, overlapLayout = overlapLayout,
+            translationBatchSize = batchSize, overlapLayout = overlapLayout,
+            afterPreparedPage = cleanup,
         )
+    }
+
+    @Test @Config(shadows = [TrackingBitmap::class])
+    fun cleanupFailureRunsOnceAndRecyclesTheUndeliveredOutput() = runBlocking<Unit> {
+        TrackingBitmap.copies.clear()
+        val source = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+        var cleanups = 0
+        try {
+            Stages().engine(cleanup = { cleanups++; error("Cleanup failed") }) { listOf("你好") }.use { engine ->
+                engine.prepare(source).use { prepared ->
+                    assertTrue(engine.translatePrepared(source, prepared, false) is PageResult.Failed)
+                    assertEquals(1, cleanups)
+                    assertEquals(2, TrackingBitmap.copies.size)
+                    assertFalse(prepared.cleaned!!.isRecycled)
+                    assertTrue(TrackingBitmap.copies.last().isRecycled)
+                }
+            }
+        } finally { source.recycle() }
     }
 
     @Test fun localLayoutFinishesWhileInpaintingWaitsAndCompositionWaitsForBoth() = runBlocking<Unit> {
@@ -315,7 +367,7 @@ class ResumablePipelineTest {
         prepared.close(); source.recycle()
     }
 
-    @Test fun partialLlmResponseRepaintsMissingSourceAndReturnsIndependentAnalysis() = runBlocking<Unit> {
+    @Test fun partialLlmResponseRepaintsMissingSourceAndTransfersOnlyFinalBitmap() = runBlocking<Unit> {
         val source = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
         val stages = Stages()
         val prepared = twoRegions(source)
@@ -323,18 +375,16 @@ class ResumablePipelineTest {
             override suspend fun translateDetailed(queries: List<String>) =
                 LlmTranslator.TranslateResult(listOf("你好", queries[1]), Usage(90, 10), "Parsed 1/2 regions")
         }
-        stages.engine("page-llm", batchSize = Int.MAX_VALUE, detailed = detailed, analysis = true) { error("Detailed interface lost") }.use { engine ->
+        stages.engine("page-llm", batchSize = Int.MAX_VALUE, detailed = detailed) { error("Detailed interface lost") }.use { engine ->
             val result = engine.translatePrepared(source, prepared, false) as PageResult.Translated
             assertEquals(1, result.stats.kept)
-            assertEquals(listOf("你好", "ありがとう"), result.analysis!!.regions.map { it.translatedText })
-            assertNotSame(prepared.mask, result.analysis!!.mask)
+            assertEquals(listOf("你好", "ありがとう"), prepared.regions.map { it.translatedText })
             prepared.regions[0].translatedText = "changed"
             prepared.regions[0].lines[0].text = "changed source"
             prepared.close()
-            assertFalse(result.analysis!!.mask.isRecycled)
-            assertEquals("你好", result.analysis!!.regions[0].translatedText)
-            assertEquals("こんにちは", result.analysis!!.regions[0].sourceText)
-            result.analysis!!.mask.recycle(); result.page.recycle()
+            assertTrue(prepared.mask.isRecycled)
+            assertFalse(result.page.isRecycled)
+            result.page.recycle()
         }
         source.recycle()
     }
@@ -349,19 +399,19 @@ class ResumablePipelineTest {
             calls++
             (if (messages.length() > 1) "<|2|>谢谢" else if (allowPlain) "你好" else "") to Usage(20, 5)
         }.use { translator ->
-            stages.engine("native-partial", batchSize = Int.MAX_VALUE, detailed = translator, analysis = true) {
+            stages.engine("native-partial", batchSize = Int.MAX_VALUE, detailed = translator) {
                 error("Native adapter not called")
             }.use { engine ->
                 val result = engine.translatePrepared(source, prepared, false) as PageResult.Translated
                 assertEquals(1, result.stats.kept)
-                assertEquals(listOf("こんにちは", "谢谢"), result.analysis!!.regions.map { it.translatedText })
+                assertEquals(listOf("こんにちは", "谢谢"), prepared.regions.map { it.translatedText })
                 assertEquals(2, calls)
-                result.analysis!!.mask.recycle(); result.page.recycle()
+                result.page.recycle()
                 allowPlain = true
                 val retried = engine.translatePrepared(source, prepared, true) as PageResult.Translated
                 assertEquals(3, calls)
-                assertEquals(listOf("你好", "谢谢"), retried.analysis!!.regions.map { it.translatedText })
-                retried.analysis!!.mask.recycle(); retried.page.recycle()
+                assertEquals(listOf("你好", "谢谢"), prepared.regions.map { it.translatedText })
+                retried.page.recycle()
             }
         }
         prepared.close(); source.recycle()

@@ -3,8 +3,8 @@ package com.hippo.ehviewer.translation
 import org.junit.Assert.*
 import org.junit.Test
 import kotlinx.coroutines.runBlocking
-import li.joye.yakuyomi.engine.LlmTranslator
-import li.joye.yakuyomi.engine.Usage
+import com.hippo.ehviewer.translation.engine.LlmTranslator
+import com.hippo.ehviewer.translation.engine.Usage
 
 class NativeTranslatorTest {
     @Test fun nativePageUsesOneBatchWhenItsTokenBudgetFits() = runBlocking<Unit> {

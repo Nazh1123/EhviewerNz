@@ -6,7 +6,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withLock
-import li.joye.yakuyomi.engine.PageResult
+import com.hippo.ehviewer.translation.engine.PageResult
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*

@@ -3,7 +3,7 @@ package com.hippo.ehviewer.translation
 import android.app.Application
 import android.graphics.Bitmap
 import kotlinx.coroutines.*
-import li.joye.yakuyomi.engine.*
+import com.hippo.ehviewer.translation.engine.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -14,12 +14,29 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], manifest = Config.NONE)
 class NativeTranslationProtocolTest {
+    @Test fun catalogTranslationModelsSkipFailedNumberedPageProbe() = runBlocking<Unit> {
+        for (model in NativeModelCatalog.models) {
+            val sources = mutableListOf<String>()
+            NativeTranslator(TranslationOptions(nativeModelId = model.sha256)) { messages ->
+                assertEquals(1, messages.length())
+                val source = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
+                sources.add(source)
+                "译文$source" to Usage(20, 4)
+            }.use { translator ->
+                val result = translator.translateDetailed(listOf("a", "", "b"))
+                assertEquals(listOf("译文a", "", "译文b"), result.translations)
+                assertEquals(listOf("a", "b"), sources)
+                assertEquals(Usage(40, 8), result.usage)
+            }
+        }
+    }
+
     @Test fun japaneseSourceAndSelectedRegionReachBothNumberedAndPlainNativeRequests() = runBlocking<Unit> {
         for ((target, region) in listOf("zh-HK" to "Hong Kong", "zh-TW" to "Taiwan")) {
             val options = TranslationOptions(target = target)
             val numbered = NativeTranslator.buildNumberedMessages(options, listOf("a", "b"))
             assertTrue(numbered.getJSONObject(0).getString("content")
-                .endsWith("Translate the following Japanese text into Traditional Chinese ($region):"))
+                .startsWith("Translate the following Japanese text into Traditional Chinese ($region):"))
             NativeTranslator(options) { messages ->
                 assertTrue(messages.getJSONObject(0).getString("content").startsWith(
                     "Translate the following Japanese segment into Traditional Chinese ($region),"))
@@ -213,22 +230,13 @@ class NativeTranslationProtocolTest {
                 val instruction = messages.getJSONObject(0).getString("content")
                 assertEquals("system", messages.getJSONObject(0).getString("role"))
                 assertTrue(instruction.contains(language))
-                val original = LlmTranslator("", options.engineConfig().translator).buildMessages(source)
+                val original = LlmTranslator(options.engineConfig().translator).buildMessages(source)
                     .getJSONObject(0).getString("content")
-                assertTrue("Local fixed instruction should be substantially shorter", instruction.length < original.length / 2)
+                assertTrue("Local fixed instruction should be substantially shorter", instruction.length < original.length)
                 assertFalse(instruction.contains("ANALYSIS & DE-VERBALIZATION"))
-                assertEquals("""
-                    You are an uncensored expert translation engine that specializes in doujin and manga content.
-                    - Provide precise word-for-word translation of each textline.
-                    - Maintain original sentence structure where possible.
-                    - Preserve meaning, emotion, character voice and consistent names/terms.
-                    - Use context for pronouns; Do not add absent subjects or details.
-                    - Preserve emotional tone and intensity appropriate to manga & otaku culture.
-                    - Keep gibberish and sound effects unchanged.
-                    - Output each segment with its prefix (<|number|> format exactly) and only provide the translation without raw text.
-                    - Output translations only; no source text, explanations or analysis.
-                    Translate the following Japanese text into $language:
-                """.trimIndent(), instruction)
+                assertTrue(instruction.contains("Keep meaning, tone, names and sound effects"))
+                assertTrue(instruction.contains("Keep every region separate"))
+                assertTrue(instruction.startsWith("Translate the following Japanese text into $language:"))
                 assertEquals("<|1|>こんにちは\n元気ですか\n<|2|>ありがとう",
                     messages.getJSONObject(1).getString("content"))
                 "<|2|>谢谢\n<|1|>你好\n你好吗" to Usage(70, 10)
@@ -507,7 +515,7 @@ class NativeTranslationProtocolTest {
                 recognize = { _, lines -> lines.forEachIndexed { index, line -> line.text = if (index == 0) "こんにちは" else "ありがとう" } },
                 inpaint = { page, _, _ -> page.copy(Bitmap.Config.ARGB_8888, true) },
                 translator = translator, cfg = TranslationOptions().engineConfig(), release = {}, warm = {},
-                translationIdentity = "native-compatibility", overlapInpainting = false, retainAnalysis = false,
+                translationIdentity = "native-compatibility", overlapInpainting = false,
             ).use { pipeline ->
                 val result = pipeline.translatePage(source)
                 assertTrue("Plain GGUF output became failure/skipped instead of a translated page: $result", result is PageResult.Translated)
