@@ -129,8 +129,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
                 page.setProgress(GalleryPageView.PROGRESS_GONE);
                 page.setError(null, null);
             } else {
-                // The image is recycled, request again.
-                // TODO request loop ?
+                // request() discards a recycled cache entry before loading the source.
                 mProvider.request(index);
             }
         }

@@ -82,7 +82,7 @@ public abstract class GalleryProvider {
     public abstract int size();
 
     public final void request(int index) {
-        ImageWrapper imageWrapper = mImageCache.get(index);
+        ImageWrapper imageWrapper = mImageCache.getLive(index);
         if (imageWrapper != null) {
             notifyPageSucceed(index, imageWrapper);
         } else {
@@ -150,6 +150,11 @@ public abstract class GalleryProvider {
     }
 
     public void notifyPageSucceed(int index, ImageWrapper image) {
+        // A queued GL callback owns a lease even if its cache entry is evicted first.
+        if (!image.obtain()) {
+            request(index);
+            return;
+        }
         notify(NotifyTask.TYPE_SUCCEED, index, 0.0f, image, null);
     }
 
@@ -161,7 +166,7 @@ public abstract class GalleryProvider {
 
     public ImageWrapper getTranslationOverlay(int index) {
         return mShowTranslations && !mOriginalPages.contains(index)
-                ? mTranslatedCache.get(index) : null;
+                ? mTranslatedCache.getLive(index) : null;
     }
 
     /** Hide/show only this page's overlay without replacing the source texture. */
@@ -172,7 +177,7 @@ public abstract class GalleryProvider {
     }
 
     public boolean hasTranslatedPage(int index) {
-        return mTranslatedCache.get(index) != null;
+        return mTranslatedCache.getLive(index) != null;
     }
 
     public void removeTranslatedPage(int index) {
@@ -205,11 +210,13 @@ public abstract class GalleryProvider {
     private void notify(@NotifyTask.Type int type, int index, float percent, ImageWrapper image, String error) {
         Listener listener = mListener;
         if (listener == null) {
+            if (image != null) image.release();
             return;
         }
 
         GLRoot glRoot = mGLRoot;
         if (glRoot == null) {
+            if (image != null) image.release();
             return;
         }
 
@@ -260,38 +267,38 @@ public abstract class GalleryProvider {
 
         @Override
         public boolean onGLIdle(GLCanvas canvas, boolean renderRequested) {
-            switch (mType) {
-                case TYPE_DATA_CHANGED:
-                    if (mIndex < 0) {
-                        mListener.onDataChanged();
-                    } else {
-                        mListener.onDataChanged(mIndex);
-                    }
-                    break;
-                case TYPE_WAIT:
-                    mListener.onPageWait(mIndex);
-                    break;
-                case TYPE_PERCENT:
-                    mListener.onPagePercent(mIndex, mPercent);
-                    break;
-                case TYPE_SUCCEED:
-                    mListener.onPageSucceed(mIndex, mImage);
-                    break;
-                case TYPE_FAILED:
-                    mListener.onPageFailed(mIndex, mError);
-                    break;
-                case TYPE_OVERLAY_CHANGED:
-                    mListener.onPageOverlayChanged(mIndex);
-                    break;
+            try {
+                switch (mType) {
+                    case TYPE_DATA_CHANGED:
+                        if (mIndex < 0) {
+                            mListener.onDataChanged();
+                        } else {
+                            mListener.onDataChanged(mIndex);
+                        }
+                        break;
+                    case TYPE_WAIT:
+                        mListener.onPageWait(mIndex);
+                        break;
+                    case TYPE_PERCENT:
+                        mListener.onPagePercent(mIndex, mPercent);
+                        break;
+                    case TYPE_SUCCEED:
+                        mListener.onPageSucceed(mIndex, mImage);
+                        break;
+                    case TYPE_FAILED:
+                        mListener.onPageFailed(mIndex, mError);
+                        break;
+                    case TYPE_OVERLAY_CHANGED:
+                        mListener.onPageOverlayChanged(mIndex);
+                        break;
+                }
+                return false;
+            } finally {
+                if (mImage != null) mImage.release();
+                mImage = null;
+                mError = null;
+                mPool.push(this);
             }
-
-            // Clean data
-            mImage = null;
-            mError = null;
-            // Push back
-            mPool.push(this);
-
-            return false;
         }
     }
 
@@ -302,6 +309,16 @@ public abstract class GalleryProvider {
 
         public ImageCache() {
             super((int) MathUtils.clamp(OSUtils.getTotalMemory() / 16, MIN_CACHE_SIZE, MAX_CACHE_SIZE));
+        }
+
+        public synchronized ImageWrapper getLive(Integer key) {
+            ImageWrapper image = get(key);
+            if (image != null && image.isImageRecycled()) {
+                // Never feed a recycled cache entry back into the GL success callback.
+                remove(key);
+                return null;
+            }
+            return image;
         }
 
         public void add(Integer key, ImageWrapper value) {

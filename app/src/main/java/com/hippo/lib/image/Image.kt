@@ -183,7 +183,7 @@ class Image private constructor(
         mNativeImage?.let {
             if (!it.isRecycled) it.recycle()
             mNativeImage = null
-            release()
+            release.invoke()
             return
         }
         if (mObtainedDrawable == null) return
@@ -199,7 +199,7 @@ class Image private constructor(
         mObtainedDrawable = null
         mBitmap?.recycle()
         mBitmap = null
-        release()
+        release.invoke()
     }
 
     private fun prepareBitmap() {
@@ -224,8 +224,9 @@ class Image private constructor(
 
     @Synchronized
     fun release() {
+        if (mReferences <= 0) return
         --mReferences
-        if (mReferences <= 0 && isRecycled) {
+        if (mReferences == 0 && !isRecycled) {
             recycle()
         }
     }

@@ -400,10 +400,20 @@ public final class SpiderQueen implements Runnable {
     }
 
     private void notifyGetImageSuccess(int index, Image image) {
-        synchronized (mSpiderListeners) {
-            for (OnSpiderListener listener : mSpiderListeners) {
-                listener.onGetImageSuccess(index, image);
+        // Keep the decoded image alive across all providers, including one which
+        // has detached its reader and immediately releases the notification.
+        if (!image.obtain()) {
+            notifyGetImageFailure(index, GetText.getString(R.string.error_decoding_failed));
+            return;
+        }
+        try {
+            synchronized (mSpiderListeners) {
+                for (OnSpiderListener listener : mSpiderListeners) {
+                    listener.onGetImageSuccess(index, image);
+                }
             }
+        } finally {
+            image.release();
         }
     }
 

@@ -262,7 +262,9 @@ public class ImageWrapper {
      * @return false for the image is recycled and obtain failed
      */
     public synchronized boolean obtain() {
-        if (mImage.isRecycled()) {
+        // Reader and translation providers can wrap the same SpiderQueen image.
+        // Every owner must also retain the shared image, not just this wrapper.
+        if (!mImage.obtain()) {
             return false;
         } else {
             ++mReferences;
@@ -274,10 +276,9 @@ public class ImageWrapper {
      * Release the image
      */
     public synchronized void release() {
+        if (mReferences <= 0) return;
         --mReferences;
-        if (mReferences <= 0 && !mImage.isRecycled()) {
-            mImage.recycle();
-        }
+        mImage.release();
     }
 
     public boolean isImageRecycled() {

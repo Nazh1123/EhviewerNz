@@ -13,6 +13,11 @@ import com.hippo.ehviewer.R
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.ehviewer.ui.GalleryActivity
 import com.hippo.lib.glgallery.GalleryView
+import com.hippo.lib.glgallery.GalleryProvider
+import com.hippo.lib.glview.image.ImageWrapper
+import com.hippo.lib.glview.view.GLRootView
+import com.hippo.lib.image.Image
+import android.util.LruCache
 import java.io.File
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
@@ -104,7 +109,35 @@ class TranslationNavigationDeviceTest {
             }
             onMain { view.setCurrentPage(7) }
             await(30000) { onMain { selected.current == 7 && provider.hasTranslatedPage(7) && !selected.working } }
+            // SpiderQueen broadcasts one decoded Image to both reader and translation providers.
+            // Repeatedly stop the second provider while the real GL reader still needs that image.
+            var shared: Image? = null
+            repeat(20) {
+                onMain {
+                    shared = requireNotNull(Image.create(Bitmap.createBitmap(768, 1024, Bitmap.Config.ARGB_8888)))
+                    val background = SharedImageProvider()
+                    background.start()
+                    try {
+                        provider.notifyPageSucceed(7, shared)
+                        background.notifyPageSucceed(7, shared)
+                    } finally { background.stop() }
+                    assertFalse("Stopping translation recycled the reader's shared source", shared!!.isRecycled)
+                }
+                SystemClock.sleep(35)
+            }
+            // Also recover an explicitly invalidated cache entry without a GL success/retry loop.
+            onMain {
+                val root = reader.findViewById<GLRootView>(R.id.gl_root_view)
+                root.lockRenderThread()
+                try { shared!!.recycle(); provider.request(7) } finally { root.unlockRenderThread() }
+            }
+            await(10000) { onMain {
+                val cache = field<LruCache<Int, ImageWrapper>>(provider, "mImageCache")
+                cache.get(7)?.isImageRecycled == false &&
+                    !field<Boolean>(reader.findViewById<GLRootView>(R.id.gl_root_view), "mRenderRequested")
+            } }
             report.appendText("PASS: 80 rapid changes; last page translated and restored; " +
+                "20 shared-provider stop cycles and invalid-cache recovery; " +
                 "elapsed=${SystemClock.elapsedRealtime() - began}ms; longest main dispatch=${longestMainDispatch}ms\n")
             File(report.parentFile, "navigation-gfxinfo.txt").writeText(shell("dumpsys gfxinfo ${context.packageName} framestats"))
         } finally {
@@ -135,9 +168,23 @@ class TranslationNavigationDeviceTest {
         @Suppress("UNCHECKED_CAST") return result as T
     }
 
-    @Suppress("UNCHECKED_CAST") private fun <T> field(target: Any, name: String): T =
-        target.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(target) as T
+    @Suppress("UNCHECKED_CAST") private fun <T> field(target: Any, name: String): T {
+        var type: Class<*>? = target.javaClass
+        while (type != null) {
+            try { return type.getDeclaredField(name).apply { isAccessible = true }.get(target) as T }
+            catch (_: NoSuchFieldException) { type = type.superclass }
+        }
+        error("Missing field $name")
+    }
 
     private fun setField(target: Any, name: String, value: Any) =
         target.javaClass.getDeclaredField(name).apply { isAccessible = true }.set(target, value)
+
+    private class SharedImageProvider : GalleryProvider() {
+        override fun size() = 8
+        override fun getError() = ""
+        override fun onRequest(index: Int) = Unit
+        override fun onForceRequest(index: Int) = Unit
+        override fun onCancelRequest(index: Int) = Unit
+    }
 }
