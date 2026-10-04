@@ -93,7 +93,7 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                             TranslationRuntime.withModelMaintenance {
                                 val selected = settings.read()
                                 NativeTranslator(context.applicationContext, selected).use {
-                                    val translated = it.translateDetailed(listOf(selected.sampleText()))
+                                    val translated = it.translateSample(selected.sampleText())
                                     check(translated.error == null) { translated.error ?: "Invalid translation" }
                                     "${selected.sampleText()}\n\n${translated.translations.single()}"
                                 }

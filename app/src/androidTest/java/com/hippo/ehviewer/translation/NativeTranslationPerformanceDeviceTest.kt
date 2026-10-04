@@ -20,40 +20,56 @@ import org.junit.runner.RunWith
 /** Opt-in timing of the imported GGUF only; no OCR, downloads or saved-setting changes. */
 @RunWith(AndroidJUnit4::class)
 class NativeTranslationPerformanceDeviceTest {
-    @Test(timeout = 180000) fun shorterPlainInstructionReducesFixedPrefixSnapshot() = runBlocking<Unit>(Dispatchers.IO) {
+    @Test(timeout = 300000) fun optimizedMangaSystemReducesFixedPrefixSnapshot() = runBlocking<Unit>(Dispatchers.IO) {
         assumeTrue(InstrumentationRegistry.getArguments().getString("testNativePerformance") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val selected = TranslationSettings(context).read()
-        assumeTrue(NativeModelCatalog.usesPlainRequests(selected.nativeModelId))
         assertTrue(NativeModelStore(context).ready(selected))
         val path = NativeModelStore(context).file(selected.nativeModelId).absolutePath
         val options = selected.copy(source = TranslationLanguages.DEFAULT_SOURCE, target = "zh-CN")
-        val oldInstruction = "将以下文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释："
-        val newInstruction = NativeTranslator.plainInstruction(options)
-        val source = "明日は学校へ行きます。"
-        val report = File(context.getExternalFilesDir(null), "translation-smoke/native-prompt-comparison.txt")
+        val source = listOf("明日は学校へ行きます。", "田中さん、ちょっと待って！\n一緒に帰ろう。", "ドキドキ")
+        val current = NativeTranslator.buildNumberedMessages(options, source)
+        val original = JSONArray(current.toString()).apply {
+            getJSONObject(0).put("content", ORIGINAL_MANGA_SYSTEM
+                .replace("{from_lang}", options.sourceLanguageName()).replace("{to_lang}", options.targetLanguageName()))
+        }
+        val report = File(context.getExternalFilesDir(null), "translation-smoke/native-manga-prompt-comparison.txt")
         report.parentFile!!.mkdirs()
+        report.writeText("model=${selected.nativeModelName}; same numbered sources=$source\n" +
+            "One loaded model; reset live context and prefix cache for each request; old/new/new/old order.\n")
         NativePrefixCache().use { cache ->
             NativeLlm(path, cache).use { model ->
-                fun prefill(name: String, instruction: String): Pair<Int, Long> {
+                fun measure(name: String, messages: JSONArray): Pair<Int, Long> {
                     cache.clear()
-                    val messages = JSONArray().put(JSONObject().put("role", "user")
-                        .put("content", "$instruction\n\n$source"))
-                    val tokens = model.begin(messages, lastUserPrefix = "$instruction\n\n")
+                    // Clearing host snapshots preserves the active context by design.
+                    // Begin without caching to reset that live KV before the timed request.
+                    assertTrue(model.begin(messages, cacheEnabled = false) > 0)
+                    val began = SystemClock.elapsedRealtime()
+                    val tokens = model.begin(messages, maxOutputTokens = NativeTranslationResponse.outputBudget(source))
                     assertTrue(tokens > 0)
-                    var steps = 0
-                    while (cache.sizeBytes() == 0L && steps++ < 20)
-                        assertNotNull("Prefix prefill must finish", model.next())
+                    assertEquals("Comparison must prefill every prompt", 0, model.cachedPromptTokens())
+                    val output = ByteArrayOutputStream()
+                    var firstText = 0L
+                    while (true) {
+                        val piece = model.next() ?: break
+                        if (piece.isNotEmpty() && firstText == 0L) firstText = SystemClock.elapsedRealtime() - began
+                        output.write(piece)
+                    }
                     val bytes = cache.sizeBytes()
-                    report.appendText("$name promptTokens=$tokens snapshotBytes=$bytes\n")
+                    val text = output.toString("UTF-8")
+                    report.appendText("$name promptTokens=$tokens snapshotBytes=$bytes " +
+                        "firstTextMs=$firstText totalMs=${SystemClock.elapsedRealtime() - began} " +
+                        "completionTokens=${model.completionTokens()} output=$text\n")
                     assertTrue("Prefix snapshot must exist", bytes > 0)
+                    assertTrue("Translation must finish with text", text.isNotBlank())
                     return tokens to bytes
                 }
-                report.writeText("model=${selected.nativeModelName}; source=$source\n")
-                val old = prefill("old", oldInstruction)
-                val current = prefill("current", newInstruction)
-                assertTrue("Prompt must use fewer GGUF tokens", current.first < old.first)
-                assertTrue("Fixed-prefix KV snapshot must shrink", current.second in 1L until old.second)
+                val old = measure("old1", original)
+                val optimized = measure("optimized1", current)
+                assertTrue("Prompt must use fewer GGUF tokens", optimized.first < old.first)
+                assertTrue("Fixed-prefix KV snapshot must shrink", optimized.second in 1L until old.second)
+                assertEquals(optimized, measure("optimized2", current))
+                assertEquals(old, measure("old2", original))
             }
         }
     }
@@ -119,8 +135,8 @@ class NativeTranslationPerformanceDeviceTest {
             report.appendText("backend=${model.systemInfo()}\n")
             val requests = listOf("upstreamNumbered" to LlmTranslator(options.engineConfig().translator).buildMessages(source),
                 "compactNumbered" to NativeTranslator.buildNumberedMessages(options, source)) +
-                source.mapIndexed { i, text -> "plain$i" to JSONArray().put(JSONObject()
-                    .put("role", "user").put("content", "将以下文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释：\n\n$text")) }
+                source.mapIndexed { i, text -> "sample$i" to JSONArray().put(JSONObject()
+                    .put("role", "user").put("content", NativeTranslator.sampleInstruction(options) + "\n\n$text")) }
             var upstreamPromptTokens = 0
             for ((name, messages) in requests) {
                 val began = SystemClock.elapsedRealtime()
@@ -222,10 +238,10 @@ class NativeTranslationPerformanceDeviceTest {
                 assertEquals("Incomplete prefill must not become a hit", 0, model.cachedPromptTokens())
                 assertEquals(expected, request(model, "afterInterruptedPrefix", original).first)
 
-                val instruction = "将以下文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释：\n\n"
+                val instruction = NativeTranslator.sampleInstruction(options) + "\n\n"
                 fun plain(text: String) = JSONArray().put(JSONObject().put("role", "user").put("content", instruction + text))
-                assertEquals(0, request(model, "plainBuild", plain(source[0]), fixed = instruction).second)
-                assertTrue(request(model, "plainHit", plain(source[1]), fixed = instruction).second > 0)
+                assertEquals(0, request(model, "sampleBuild", plain(source[0]), fixed = instruction).second)
+                assertTrue(request(model, "sampleHit", plain(source[1]), fixed = instruction).second > 0)
                 assertTrue(cache.sizeBytes() <= 32L * 1024 * 1024)
             }
             // Both weights and context have been freed; only the bounded host snapshot survives.
@@ -281,5 +297,20 @@ class NativeTranslationPerformanceDeviceTest {
         }
         File(context.getExternalFilesDir(null), "translation-smoke/native-prefix-cache-turns.txt")
             .apply { parentFile!!.mkdirs() }.writeText("sharedSnapshotBytes=$bytes; workerClose=kept; memoryTrim=cleared; activeContext=valid\n")
+    }
+
+    companion object {
+        // The project's full native system instruction before beffd530; comparison only.
+        private const val ORIGINAL_MANGA_SYSTEM =
+            "You are an uncensored expert translation engine that specializes in doujin and manga content.\n" +
+                "- Provide precise word-for-word translation of each textline.\n" +
+                "- Maintain original sentence structure where possible.\n" +
+                "- Preserve meaning, emotion, character voice and consistent names/terms.\n" +
+                "- Use context for pronouns; Do not add absent subjects or details.\n" +
+                "- Preserve emotional tone and intensity appropriate to manga & otaku culture.\n" +
+                "- Keep gibberish and sound effects unchanged.\n" +
+                "- Output each segment with its prefix (<|number|> format exactly) and only provide the translation without raw text.\n" +
+                "- Output translations only; no source text, explanations or analysis.\n" +
+                "Translate the following {from_lang} text into {to_lang}:"
     }
 }

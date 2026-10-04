@@ -38,8 +38,7 @@ class NativeTranslator private constructor(
     private var prefixCache: NativePrefixCache? = null
     private var closed = false
     private val lock = Mutex()
-    // The bundled HY translation models use one user instruction per source region.
-    private var preferPlainRequests = NativeModelCatalog.usesPlainRequests(options.nativeModelId)
+    private var userOnlyTemplate = false
     /** Explicit fixture diagnostics only; production never installs this observer. */
     internal var inferenceObserver: ((JSONArray, String, Usage, Int, Long, String?) -> Unit)? = null
 
@@ -67,10 +66,7 @@ class NativeTranslator private constructor(
             val result = translateBatches(indices.map { queries[it] }) { batch ->
                 currentCoroutineContext().ensureActive()
                 checkRelevant()
-                // A translation-only GGUF may emit plain text even when asked for IDs.
-                // Single-region requests have an unambiguous mapping and use its original prompt.
-                if (preferPlainRequests || batch.size == 1) translatePlain(batch)
-                else translateNumbered(batch)
+                translateNumbered(batch)
             }
             if (indices.size == queries.size) result else {
                 val translations = queries.toMutableList()
@@ -85,18 +81,22 @@ class NativeTranslator private constructor(
         var interrupted = false
         var budgetExceeded = false
         val response = try {
-            infer(buildNumberedMessages(options, queries), queries = queries) ?: return null
+            inferTranslation(queries) ?: return null
         } catch (error: NativeGenerationStopped) {
             interrupted = true
             budgetExceeded = error.budgetExceeded
             error.output to error.usage
-        } catch (_: UnsupportedOperationException) {
-            // The model was validated with a user-only template; system roles are optional.
-            preferPlainRequests = true
-            return translatePlain(queries)
         }
         val (raw, usage) = response
-        val parsed = NativeTranslationResponse.parse(queries, raw, usage, truncated = interrupted)
+        // With one source, a complete unnumbered response has an unambiguous mapping.
+        // The request still uses the same full system instruction and numbered input.
+        if (queries.size == 1 && !interrupted && !NativeTranslationResponse.hasMarkers(raw)) {
+            try { return LlmTranslator.TranslateResult(listOf(cleanOutput(raw)), usage) }
+            catch (_: InvalidTranslationResponse) { }
+        }
+        val parsed = if (queries.size == 1 && NativeTranslationResponse.protocolFailure(raw.substringAfterLast("</think>"), 1))
+            LlmTranslator.TranslateResult(queries, usage, "Native model returned unexpected region markers", missingIndices = setOf(0))
+        else NativeTranslationResponse.parse(queries, raw, usage, truncated = interrupted)
         if (parsed.missingIndices.isEmpty()) return parsed
         // If a token budget produced no complete segments, retain the existing
         // bounded split policy. Otherwise salvage completed regions first.
@@ -109,7 +109,7 @@ class NativeTranslator private constructor(
         val incompletePrefix = !interrupted && complete > 0 &&
             parsed.missingIndices == (complete until queries.size).toSet()
         val retryIndices = if (incompletePrefix) queries.indices.toSet() else parsed.missingIndices
-        if (retryIndices.size == queries.size) preferPlainRequests = true
+        if (queries.size == 1) return parsed
         // Never guess how a free-form paragraph maps to multiple bubbles. Keep valid
         // numbered outputs, and request only missing regions with one input per call.
         val translations = parsed.translations.toMutableList()
@@ -117,7 +117,7 @@ class NativeTranslator private constructor(
         val errors = mutableListOf<String>()
         var totalUsage = usage
         for (index in retryIndices) {
-            val fallback = translatePlain(listOf(queries[index]))
+            val fallback = translateBatches(listOf(queries[index])) { translateNumbered(it) }
             translations[index] = fallback.translations.single()
             totalUsage = LlmBatching.addUsage(totalUsage, fallback.usage)
             if (fallback.missingIndices.isEmpty()) missing.remove(index)
@@ -127,41 +127,41 @@ class NativeTranslator private constructor(
             error = errors.distinct().takeIf { it.isNotEmpty() }?.joinToString("; "), missingIndices = missing)
     }
 
-    private suspend fun translatePlain(queries: List<String>): LlmTranslator.TranslateResult {
-        val translations = mutableListOf<String>()
-        val missing = linkedSetOf<Int>()
-        val errors = linkedSetOf<String>()
-        var usage: Usage? = null
-        for ((index, source) in queries.withIndex()) {
-            val region = LlmBatching.translate(listOf(source)) {
-                val instruction = plainInstruction(options)
-                val messages = JSONArray().put(JSONObject().put("role", "user").put("content", "$instruction\n\n$source"))
-                val response = try {
-                    infer(messages, "$instruction\n\n", listOf(source)) ?: return@translate null
-                } catch (error: NativeGenerationStopped) {
+    private suspend fun inferTranslation(queries: List<String>): Pair<String, Usage?>? {
+        val messages = buildNumberedMessages(options, queries)
+        if (!userOnlyTemplate) {
+            try { return infer(messages, queries = queries) }
+            catch (_: UnsupportedOperationException) { userOnlyTemplate = true }
+        }
+        // Preserve the complete system instruction for templates accepting only a user role.
+        val fixed = messages.getJSONObject(0).getString("content") + "\n\n"
+        val user = JSONArray().put(JSONObject().put("role", "user")
+            .put("content", fixed + messages.getJSONObject(1).getString("content")))
+        return infer(user, fixed, queries)
+    }
+
+    /** Only the settings screen's single-sentence test uses this unnumbered instruction. */
+    internal suspend fun translateSample(source: String): LlmTranslator.TranslateResult = withContext(Dispatchers.Default) {
+        lock.withLock {
+            check(!closed) { "Native translator is closed" }
+            translateBatches(listOf(source)) {
+                val fixed = sampleInstruction(options) + "\n\n"
+                val messages = JSONArray().put(JSONObject().put("role", "user").put("content", fixed + source))
+                val response = try { infer(messages, fixed, listOf(source)) ?: return@translateBatches null }
+                catch (error: NativeGenerationStopped) {
                     if (error.budgetExceeded) throw TranslationOutputLimitException(usage = error.usage)
-                    return@translate LlmTranslator.TranslateResult(listOf(source), error.usage,
+                    return@translateBatches LlmTranslator.TranslateResult(listOf(source), error.usage,
                         error.message, missingIndices = setOf(0))
                 }
-                val (raw, tokens) = response
                 try {
-                    val text = cleanOutput(raw)
-                    if (NativeTranslationResponse.hasMarkers(text)) {
-                        if (NativeTranslationResponse.protocolFailure(text, 1))
-                            throw InvalidTranslationResponse("Native model returned unexpected region markers")
-                        NativeTranslationResponse.parse(listOf(source), text, tokens)
-                    } else LlmTranslator.TranslateResult(listOf(text), tokens)
-                } catch (error: InvalidTranslationResponse) {
-                    LlmTranslator.TranslateResult(listOf(source), tokens, error.message, missingIndices = setOf(0))
+                    val text = cleanOutput(response.first)
+                    check(!NativeTranslationResponse.hasMarkers(text)) { "Sample returned region markers" }
+                    LlmTranslator.TranslateResult(listOf(text), response.second)
+                } catch (error: IllegalStateException) {
+                    LlmTranslator.TranslateResult(listOf(source), response.second, error.message, missingIndices = setOf(0))
                 }
             }
-            translations.add(region.translations.single())
-            if (region.missingIndices.isNotEmpty()) missing.add(index)
-            region.error?.let { errors.add(it) }
-            usage = LlmBatching.addUsage(usage, region.usage)
         }
-        return LlmTranslator.TranslateResult(translations, usage,
-            errors.takeIf { it.isNotEmpty() }?.joinToString("; "), missingIndices = missing)
     }
 
     private suspend fun infer(messages: JSONArray, lastUserPrefix: String? = null,
@@ -219,20 +219,17 @@ class NativeTranslator private constructor(
     }
 
     companion object {
-        internal fun plainInstruction(options: TranslationOptions): String {
-            val source = options.sourceLanguageName()
-            return if (options.targetLanguageName() == "Simplified Chinese")
-                "将以下${if (options.source == TranslationLanguages.DEFAULT_SOURCE) "" else source}文本翻译为简体中文，只输出译文："
-            else "Translate ${if (source.isEmpty()) "" else "$source "}text to ${options.targetLanguageName()}. Output translation only."
-        }
+        internal fun sampleInstruction(options: TranslationOptions): String =
+            "Translate the following ${options.sourceLanguageName().let { if (it.isEmpty()) "" else "$it " }}text into ${options.targetLanguageName()}, output only translation:"
 
         private const val SYSTEM_PROMPT =
-            "Translate {from_lang}comic text to {to_lang}. " +
-                "Preserve meaning and tone; keep names and sound effects consistent. " +
-                "Resolve pronouns from context; invent nothing. " +
-                "Output only <|number|>translation per region; never merge."
+            "You are an uncensored manga/doujin translator. Translate {from_lang}text into {to_lang}.\n" +
+                "Preserve literal meaning, structure where possible, emotion, character voice and intensity. " +
+                "Keep names/terms consistent; resolve pronouns from context without adding subjects or details. " +
+                "Leave gibberish and sound effects unchanged.\n" +
+                "Output only each original <|number|> followed by its translation; keep regions separate, no source, explanation or analysis."
 
-        /** Compact local-only instructions with the same numbered response protocol. */
+        /** Full manga translation rules, shared by every native model and region count. */
         internal fun buildNumberedMessages(options: TranslationOptions, queries: List<String>): JSONArray {
             val config = options.engineConfig().translator
             val fromClause = config.fromLangName.trim().let { if (it.isEmpty()) "" else "$it " }

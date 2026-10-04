@@ -10,9 +10,6 @@ import java.util.concurrent.TimeUnit
 data class NativeDownloadModel(val name: String, val url: String, val size: Long, val sha256: String)
 
 object NativeModelCatalog {
-    /** These pinned HY models use their translation-only, single-user prompt. */
-    fun usesPlainRequests(id: String): Boolean = models.any { it.sha256 == id }
-
     // Pin revisions and LFS hashes so the downloaded file always matches the reviewed artifact.
     val models = listOf(
         NativeDownloadModel("HY-MT1.5-1.8B-Q4_K_M.gguf",

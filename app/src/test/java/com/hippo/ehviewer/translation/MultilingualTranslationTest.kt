@@ -79,18 +79,19 @@ class MultilingualTranslationTest {
         assertEquals("今日はHappyな日です。", TranslationOcrText.clean("今日はHappyな日です。"))
     }
 
-    @Test fun nativeBothNumberedAndPlainRequestsUseTheChosenSource() = runBlocking<Unit> {
+    @Test fun nativePageAndSingleRegionRequestsUseTheChosenSource() = runBlocking<Unit> {
         for ((source, name) in listOf("en" to "English", "ko" to "Korean", "zh-TW" to "Traditional Chinese (Taiwan)")) {
             val options = TranslationOptions(source = source, target = "fr")
             val numbered = NativeTranslator.buildNumberedMessages(options, listOf(options.sampleText(), "second"))
-            assertTrue(numbered.getJSONObject(0).getString("content").contains("$name comic text to French"))
+            assertTrue(numbered.getJSONObject(0).getString("content").contains("$name text into French"))
             NativeTranslator(options) { messages ->
-                assertTrue(messages.getJSONObject(0).getString("content").startsWith("Translate $name text to French. Output translation only."))
+                assertEquals(2, messages.length())
+                assertTrue(messages.getJSONObject(0).getString("content").contains("Translate $name text into French."))
                 "Bonjour" to null
             }.use { assertEquals(listOf("Bonjour"), it.translate(listOf(options.sampleText()))) }
         }
         NativeTranslator(TranslationOptions(source = "en")) { messages ->
-            assertTrue(messages.getJSONObject(0).getString("content").startsWith("将以下English文本翻译为简体中文"))
+            assertTrue(messages.getJSONObject(0).getString("content").contains("Translate English text into Simplified Chinese."))
             "明天去学校" to null
         }.use { assertEquals(listOf("明天去学校"), it.translate(listOf("I will go to school tomorrow."))) }
     }

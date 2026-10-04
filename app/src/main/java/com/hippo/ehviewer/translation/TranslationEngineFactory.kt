@@ -5,11 +5,9 @@ import com.hippo.ehviewer.translation.engine.*
 
 /** Shared image stages with backend-specific request and model-memory policies. */
 object TranslationEngineFactory {
-    // Save each finished HY region immediately: page cancellation must not discard
-    // seconds of completed local inference. Numbered/API models still batch a page.
+    // Every local AI model receives the same numbered page request and system instruction.
     internal fun translationBatchSize(options: TranslationOptions): Int =
-        if (options.backend == TranslationBackend.ML_KIT || options.backend == TranslationBackend.NATIVE_LLM &&
-            NativeModelCatalog.usesPlainRequests(options.nativeModelId)) 1 else Int.MAX_VALUE
+        if (options.backend == TranslationBackend.ML_KIT) 1 else Int.MAX_VALUE
 
     fun create(context: Context, models: ModelSet, options: TranslationOptions,
                translator: Translator, beforeImageStage: () -> Unit = {},

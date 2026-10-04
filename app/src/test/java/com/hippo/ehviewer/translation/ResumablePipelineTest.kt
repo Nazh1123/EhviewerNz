@@ -17,31 +17,32 @@ import org.robolectric.shadows.ShadowLegacyBitmap
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], manifest = Config.NONE)
 class ResumablePipelineTest {
-    @Test fun catalogNativeRegionsSurviveCancellationWithoutRepeatingCompletedInference() = runBlocking<Unit> {
+    @Test fun catalogNativePageSurvivesCancellationWithoutRepeatingCompletedInference() = runBlocking<Unit> {
         val options = TranslationOptions(backend = TranslationBackend.NATIVE_LLM,
             nativeModelId = NativeModelCatalog.models.first().sha256)
         val page = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
-        val calls = mutableListOf<String>()
+        var calls = 0
         try {
             NativeTranslator(options) { messages ->
-                val source = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
-                calls.add(source)
-                (if (source == "こんにちは") "你好" else "谢谢") to Usage(20, 4)
+                calls++
+                assertEquals(2, messages.length())
+                assertEquals("<|1|>こんにちは\n<|2|>ありがとう", messages.getJSONObject(1).getString("content"))
+                "<|1|>你好\n<|2|>谢谢" to Usage(20, 4)
             }.use { translator ->
                 Stages().engine(options.cacheIdentity(), batchSize = TranslationEngineFactory.translationBatchSize(options),
                     detailed = translator) { error("Detailed translator required") }.use { engine ->
                     twoRegions(page).use { prepared ->
                         try {
                             engine.translatePrepared(page, prepared, false, { stage, fraction ->
-                                if (stage == TranslationStage.TRANSLATE && fraction == 0.5f) throw CancellationException("Page changed")
+                                if (stage == TranslationStage.TRANSLATE && fraction == 1f) throw CancellationException("Page changed")
                             })
                             fail("Cancellation boundary was skipped")
                         } catch (_: CancellationException) { }
-                        assertEquals(listOf("こんにちは"), calls)
-                        assertEquals(1, prepared.translationResume(options.cacheIdentity())!!.missingCount)
+                        assertEquals(1, calls)
+                        assertEquals(0, prepared.translationResume(options.cacheIdentity())!!.missingCount)
                         val result = engine.translatePrepared(page, prepared, true) as PageResult.Translated
                         result.page.recycle()
-                        assertEquals(listOf("こんにちは", "ありがとう"), calls)
+                        assertEquals(1, calls)
                         assertEquals(listOf("你好", "谢谢"), prepared.regions.map { it.translatedText })
                     }
                 }
@@ -397,7 +398,7 @@ class ResumablePipelineTest {
         var calls = 0
         NativeTranslator(TranslationOptions()) { messages ->
             calls++
-            (if (messages.length() > 1) "<|2|>谢谢" else if (allowPlain) "你好" else "") to Usage(20, 5)
+            (if (messages.getJSONObject(1).getString("content").contains("<|2|>")) "<|2|>谢谢" else if (allowPlain) "你好" else "") to Usage(20, 5)
         }.use { translator ->
             stages.engine("native-partial", batchSize = Int.MAX_VALUE, detailed = translator) {
                 error("Native adapter not called")

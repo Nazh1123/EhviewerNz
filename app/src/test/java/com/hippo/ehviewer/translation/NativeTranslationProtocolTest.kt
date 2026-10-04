@@ -14,32 +14,41 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], manifest = Config.NONE)
 class NativeTranslationProtocolTest {
-    @Test fun catalogTranslationModelsSkipFailedNumberedPageProbe() = runBlocking<Unit> {
-        for (model in NativeModelCatalog.models) {
-            val sources = mutableListOf<String>()
-            NativeTranslator(TranslationOptions(nativeModelId = model.sha256)) { messages ->
-                assertEquals(1, messages.length())
-                val source = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
-                sources.add(source)
-                "译文$source" to Usage(20, 4)
+    private fun requestSources(messages: org.json.JSONArray): List<String> {
+        val content = messages.getJSONObject(messages.length() - 1).getString("content")
+        val markers = Regex("<\\|\\d+\\|>").findAll(content).toList()
+        return markers.mapIndexed { i, marker ->
+            content.substring(marker.range.last + 1, markers.getOrNull(i + 1)?.range?.first ?: content.length).trimEnd()
+        }
+    }
+
+    @Test fun catalogAndImportedModelsUseTheSameSystemPromptAndPageProtocol() = runBlocking<Unit> {
+        val expected = NativeTranslator.buildNumberedMessages(TranslationOptions(), listOf("a", "b"))
+        for (id in NativeModelCatalog.models.map { it.sha256 } + "imported-model") {
+            var calls = 0
+            NativeTranslator(TranslationOptions(nativeModelId = id)) { messages ->
+                calls++
+                assertEquals(expected.toString(), messages.toString())
+                "<|1|>译文a\n<|2|>译文b" to Usage(20, 4)
             }.use { translator ->
                 val result = translator.translateDetailed(listOf("a", "", "b"))
                 assertEquals(listOf("译文a", "", "译文b"), result.translations)
-                assertEquals(listOf("a", "b"), sources)
-                assertEquals(Usage(40, 8), result.usage)
+                assertEquals(1, calls)
+                assertEquals(Usage(20, 4), result.usage)
             }
         }
     }
 
-    @Test fun japaneseSourceAndSelectedRegionReachBothNumberedAndPlainNativeRequests() = runBlocking<Unit> {
+    @Test fun japaneseSourceAndSelectedRegionReachPageAndSingleRegionRequests() = runBlocking<Unit> {
         for ((target, region) in listOf("zh-HK" to "Hong Kong", "zh-TW" to "Taiwan")) {
             val options = TranslationOptions(target = target)
             val numbered = NativeTranslator.buildNumberedMessages(options, listOf("a", "b"))
             assertTrue(numbered.getJSONObject(0).getString("content")
-                .startsWith("Translate Japanese comic text to Traditional Chinese ($region)."))
+                .contains("Translate Japanese text into Traditional Chinese ($region)."))
             NativeTranslator(options) { messages ->
-                assertTrue(messages.getJSONObject(0).getString("content").startsWith(
-                    "Translate Japanese text to Traditional Chinese ($region). Output translation only."))
+                assertEquals(2, messages.length())
+                assertTrue(messages.getJSONObject(0).getString("content").contains(
+                    "Translate Japanese text into Traditional Chinese ($region)."))
                 "譯文" to null
             }.use { assertEquals(listOf("譯文"), it.translate(listOf("こんにちは"))) }
         }
@@ -58,9 +67,9 @@ class NativeTranslationProtocolTest {
     @Test fun brokenSlashMarkersDoNotEnterASingleBubble() = runBlocking<Unit> {
         val retries = mutableListOf<String>()
         NativeTranslator(TranslationOptions()) { messages ->
-            if (messages.length() > 1) "<|1|>译文a♥／7>译文b／8>译文c" to null
+            if (requestSources(messages).size > 1) "<|1|>译文a♥／7>译文b／8>译文c" to null
             else {
-                val source = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
+                val source = requestSources(messages).single()
                 retries.add(source)
                 "译文$source" to null
             }
@@ -73,9 +82,9 @@ class NativeTranslationProtocolTest {
     @Test fun prematurelyEndedIdPrefixDoesNotCommitPotentiallyMergedAndShiftedTranslations() = runBlocking<Unit> {
         val retries = mutableListOf<String>()
         NativeTranslator(TranslationOptions()) { messages ->
-            if (messages.length() > 1) "<|1|>a和b混在一起<|2|>c错位" to Usage(60, 12)
+            if (requestSources(messages).size > 1) "<|1|>a和b混在一起<|2|>c错位" to Usage(60, 12)
             else {
-                val source = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
+                val source = requestSources(messages).single()
                 retries.add(source)
                 "译文$source" to Usage(20, 4)
             }
@@ -91,9 +100,9 @@ class NativeTranslationProtocolTest {
     @Test fun interruptedPageKeepsCompletedRegionsAndRetriesOnlyTheUnfinishedTail() = runBlocking<Unit> {
         val retries = mutableListOf<String>()
         NativeTranslator(TranslationOptions()) { messages ->
-            if (messages.length() > 1) throw NativeGenerationStopped(
+            if (requestSources(messages).size > 1) throw NativeGenerationStopped(
                 "<|1|>译文a<|2|>译文b<|3|>未完成", Usage(80, 192), budgetExceeded = true)
-            val source = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
+            val source = requestSources(messages).single()
             retries.add(source)
             "译文$source" to Usage(20, 4)
         }.use { translator ->
@@ -109,9 +118,9 @@ class NativeTranslationProtocolTest {
         var calls = 0
         NativeTranslator(TranslationOptions()) { messages ->
             calls++
-            if (messages.length() > 1) throw NativeGenerationStopped(
+            if (requestSources(messages).size > 1) throw NativeGenerationStopped(
                 "<|1|>未完成", Usage(60, 192), budgetExceeded = true)
-            "译文" + messages.getJSONObject(0).getString("content").substringAfter("\n\n") to Usage(20, 4)
+            "译文" + requestSources(messages).single() to Usage(20, 4)
         }.use { translator ->
             val result = translator.translateDetailed(listOf("a", "b"))
             assertEquals(listOf("译文a", "译文b"), result.translations)
@@ -124,9 +133,9 @@ class NativeTranslationProtocolTest {
         var calls = 0
         NativeTranslator(TranslationOptions()) { messages ->
             calls++
-            if (messages.length() > 1) throw NativeGenerationStopped(
+            if (requestSources(messages).size > 1) throw NativeGenerationStopped(
                 "<|1|>译文a<|2|>错误<|number|>", Usage(60, 12), budgetExceeded = false)
-            "译文" + messages.getJSONObject(0).getString("content").substringAfter("\n\n") to Usage(20, 4)
+            "译文" + requestSources(messages).single() to Usage(20, 4)
         }.use { translator ->
             val result = translator.translateDetailed(listOf("a", "b"))
             assertEquals(listOf("译文a", "译文b"), result.translations)
@@ -166,9 +175,9 @@ class NativeTranslationProtocolTest {
     @Test fun literalPlaceholderRetriesOnlyItsContaminatedRegion() = runBlocking<Unit> {
         val retries = mutableListOf<String>()
         NativeTranslator(TranslationOptions()) { messages ->
-            if (messages.length() > 1) "<|1|>你好<|number|>别的气泡\n<|2|>谢谢" to Usage(80, 20)
+            if (requestSources(messages).size > 1) "<|1|>你好<|number|>别的气泡\n<|2|>谢谢" to Usage(80, 20)
             else {
-                retries.add(messages.getJSONObject(0).getString("content").substringAfter("\n\n"))
+                retries.add(requestSources(messages).single())
                 "你好" to Usage(20, 4)
             }
         }.use { translator ->
@@ -184,8 +193,8 @@ class NativeTranslationProtocolTest {
             var calls = 0
             NativeTranslator(TranslationOptions()) { messages ->
                 calls++
-                (if (messages.length() > 1) raw
-                else "译文" + messages.getJSONObject(0).getString("content").substringAfter("\n\n")) to Usage(20, 4)
+                (if (requestSources(messages).size > 1) raw
+                else "译文" + requestSources(messages).single()) to Usage(20, 4)
             }.use { translator ->
                 val result = translator.translateDetailed(listOf("a", "b"))
                 assertEquals(listOf("译文a", "译文b"), result.translations)
@@ -199,9 +208,9 @@ class NativeTranslationProtocolTest {
     @Test fun duplicateIdsDoNotOverwriteValidRegions() = runBlocking<Unit> {
         val retries = mutableListOf<String>()
         NativeTranslator(TranslationOptions()) { messages ->
-            if (messages.length() > 1) "<|1|>错译<|2|>谢谢<|1|>另一气泡" to null
+            if (requestSources(messages).size > 1) "<|1|>错译<|2|>谢谢<|1|>另一气泡" to null
             else {
-                retries.add(messages.getJSONObject(0).getString("content").substringAfter("\n\n"))
+                retries.add(requestSources(messages).single())
                 "你好" to null
             }
         }.use { translator ->
@@ -230,15 +239,14 @@ class NativeTranslationProtocolTest {
                 val instruction = messages.getJSONObject(0).getString("content")
                 assertEquals("system", messages.getJSONObject(0).getString("role"))
                 assertTrue(instruction.contains(language))
-                val original = LlmTranslator(options.engineConfig().translator).buildMessages(source)
-                    .getJSONObject(0).getString("content")
-                assertTrue("Local fixed instruction should be substantially shorter", instruction.length < original.length)
+                assertTrue("Local fixed instruction should be substantially shorter", instruction.length < 500)
                 assertFalse(instruction.contains("ANALYSIS & DE-VERBALIZATION"))
-                assertTrue(instruction.contains("Preserve meaning and tone"))
-                assertTrue(instruction.contains("keep names and sound effects consistent"))
-                assertTrue(instruction.contains("Resolve pronouns from context; invent nothing"))
-                assertTrue(instruction.contains("<|number|>translation per region; never merge"))
-                assertTrue(instruction.startsWith("Translate Japanese comic text to $language."))
+                assertTrue(instruction.contains("Preserve literal meaning"))
+                assertTrue(instruction.contains("Keep names/terms consistent"))
+                assertTrue(instruction.contains("resolve pronouns from context without adding subjects or details"))
+                assertTrue(instruction.contains("Leave gibberish and sound effects unchanged"))
+                assertTrue(instruction.contains("keep regions separate, no source, explanation or analysis"))
+                assertTrue(instruction.contains("Translate Japanese text into $language."))
                 assertEquals("<|1|>こんにちは\n元気ですか\n<|2|>ありがとう",
                     messages.getJSONObject(1).getString("content"))
                 "<|2|>谢谢\n<|1|>你好\n你好吗" to Usage(70, 10)
@@ -252,7 +260,7 @@ class NativeTranslationProtocolTest {
 
     @Test fun missingNonblankRegionMapsBackAcrossBlankInputPositions() = runBlocking<Unit> {
         NativeTranslator(TranslationOptions()) { messages ->
-            if (messages.length() > 1) {
+            if (requestSources(messages).size > 1) {
                 assertEquals("<|1|>a\n<|2|>b", messages.getJSONObject(1).getString("content"))
                 "<|2|>译文b" to Usage(100, 5)
             } else "" to Usage(20, 0)
@@ -270,7 +278,7 @@ class NativeTranslationProtocolTest {
         val small = NativeTranslator.buildNumberedMessages(options, listOf("a", "b"))
         val large = NativeTranslator.buildNumberedMessages(options, List(12) { "長い文章\n".repeat(it + 1) })
         assertEquals(small.getJSONObject(0).toString(), large.getJSONObject(0).toString())
-        assertTrue(small.getJSONObject(0).getString("content").length < 230)
+        assertTrue(small.getJSONObject(0).getString("content").length < 500)
         assertEquals(2, large.length()) // Project language settings still disable upstream Traditional Chinese examples.
         assertTrue(large.getJSONObject(1).getString("content").contains("<|12|>"))
     }
@@ -281,7 +289,7 @@ class NativeTranslationProtocolTest {
             calls++
             "明天我要去学校。" to Usage(20, 8)
         }.use { translator ->
-            val result = translator.translateDetailed(listOf("明日は学校へ行きます。"))
+            val result = translator.translateSample("明日は学校へ行きます。")
             assertNull("Test local translation must not fail on a valid unnumbered result", result.error)
             assertEquals(listOf("明天我要去学校。"), result.translations)
             assertEquals(Usage(20, 8), result.usage)
@@ -289,21 +297,33 @@ class NativeTranslationProtocolTest {
         }
     }
 
-    @Test fun plainRequestUsesOnlyTheUserRoleAndRetainsTheFullMultilineOutput() = runBlocking<Unit> {
+    @Test fun sampleUsesTheExplicitInstructionForEveryModelAndRetainsMultilineOutput() = runBlocking<Unit> {
         val output = "明天我要去学校。\n".repeat(60).trim()
-        NativeTranslator(TranslationOptions()) { messages ->
-            assertEquals(1, messages.length())
-            val message = messages.getJSONObject(0)
-            assertEquals("user", message.getString("role"))
-            assertTrue(message.getString("content").startsWith("将以下文本翻译为简体中文"))
-            assertTrue(message.getString("content").endsWith("\n\n明日は学校へ行きます。"))
-            output to null
-        }.use { translator ->
-            val result = translator.translateDetailed(listOf("明日は学校へ行きます。"))
-            assertNull(result.error)
-            assertEquals(output, result.translations.single())
-            assertTrue(result.translations.single().length > 220)
+        for (id in NativeModelCatalog.models.map { it.sha256 } + "imported-model") {
+            NativeTranslator(TranslationOptions(nativeModelId = id)) { messages ->
+                assertEquals(1, messages.length())
+                val message = messages.getJSONObject(0)
+                assertEquals("user", message.getString("role"))
+                assertEquals("Translate the following Japanese text into Simplified Chinese, output only translation:\n\n明日は学校へ行きます。",
+                    message.getString("content"))
+                output to null
+            }.use { translator ->
+                val result = translator.translateSample("明日は学校へ行きます。")
+                assertNull(result.error)
+                assertEquals(output, result.translations.single())
+                assertTrue(result.translations.single().length > 220)
+            }
         }
+    }
+
+    @Test fun actualSingleRegionIncludingTheSampleSentenceStillUsesTheFullSystemPrompt() = runBlocking<Unit> {
+        NativeTranslator(TranslationOptions()) { messages ->
+            assertEquals(2, messages.length())
+            assertEquals("system", messages.getJSONObject(0).getString("role"))
+            assertTrue(messages.getJSONObject(0).getString("content").contains("Leave gibberish and sound effects unchanged"))
+            assertEquals(listOf("明日は学校へ行きます。"), requestSources(messages))
+            "<|1|>明天去学校。" to null
+        }.use { assertEquals(listOf("明天去学校。"), it.translate(listOf("明日は学校へ行きます。"))) }
     }
 
     @Test fun numberedPageStillUsesOneRequestAndMapsByIds() = runBlocking<Unit> {
@@ -321,15 +341,19 @@ class NativeTranslationProtocolTest {
         }
     }
 
-    @Test fun unnumberedPageRetriesEachRegionAndRemembersTheModelProtocol() = runBlocking<Unit> {
+    @Test fun unnumberedPageRetriesKeepTheSameSystemPromptAcrossPages() = runBlocking<Unit> {
         var numberedCalls = 0
         val plainInputs = mutableListOf<String>()
+        val expectedSystem = NativeTranslator.buildNumberedMessages(TranslationOptions(), emptyList())
+            .getJSONObject(0).getString("content")
         NativeTranslator(TranslationOptions()) { messages ->
-            if (messages.length() > 1) {
+            assertEquals(2, messages.length())
+            assertEquals(expectedSystem, messages.getJSONObject(0).getString("content"))
+            if (requestSources(messages).size > 1) {
                 numberedCalls++
                 "你好，谢谢。" to Usage(80, 10)
             } else {
-                val source = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
+                val source = requestSources(messages).single()
                 plainInputs.add(source)
                 (if (source == "こんにちは") "你好" else "谢谢") to Usage(20, 5)
             }
@@ -339,12 +363,12 @@ class NativeTranslationProtocolTest {
             assertEquals(listOf("你好", "", "谢谢"), result.translations)
             assertNull(result.error)
             assertEquals(Usage(120, 20), result.usage)
-            // Unloading model memory between pages must not forget the learned request mode.
+            // Unloading never switches subsequent pages to a shorter instruction.
             translator.unloadModel()
             val next = translator.translateDetailed(source)
             assertEquals(result.translations, next.translations)
-            assertEquals(Usage(40, 10), next.usage)
-            assertEquals(1, numberedCalls)
+            assertEquals(Usage(120, 20), next.usage)
+            assertEquals(2, numberedCalls)
             assertEquals(listOf("こんにちは", "ありがとう", "こんにちは", "ありがとう"), plainInputs)
         }
     }
@@ -353,9 +377,9 @@ class NativeTranslationProtocolTest {
         var calls = 0
         NativeTranslator(TranslationOptions()) { messages ->
             calls++
-            if (messages.length() > 1) "<|2|>谢谢" to Usage(60, 5)
+            if (requestSources(messages).size > 1) "<|2|>谢谢" to Usage(60, 5)
             else {
-                assertTrue(messages.getJSONObject(0).getString("content").endsWith("\n\nこんにちは"))
+                assertEquals(listOf("こんにちは"), requestSources(messages))
                 "你好" to Usage(20, 4)
             }
         }.use { translator ->
@@ -388,7 +412,7 @@ class NativeTranslationProtocolTest {
 
     @Test fun oneInvalidMissingRegionDoesNotDiscardTheValidNumberedTranslation() = runBlocking<Unit> {
         NativeTranslator(TranslationOptions()) { messages ->
-            (if (messages.length() > 1) "<|2|>谢谢" else "") to Usage(20, 5)
+            (if (requestSources(messages).size > 1) "<|2|>谢谢" else "") to Usage(20, 5)
         }.use { translator ->
             val result = translator.translateDetailed(listOf("こんにちは", "ありがとう"))
             assertEquals(listOf("こんにちは", "谢谢"), result.translations)
@@ -403,13 +427,14 @@ class NativeTranslationProtocolTest {
         NativeTranslator(TranslationOptions(target = "en")) { messages ->
             attempts++
             if (messages.length() > 1) throw UnsupportedOperationException("unsupported roles")
-            assertTrue(messages.getJSONObject(0).getString("content").startsWith("Translate Japanese text to English. Output translation only."))
+            assertTrue(messages.getJSONObject(0).getString("content").contains("Translate Japanese text into English."))
+            assertTrue(messages.getJSONObject(0).getString("content").contains("Leave gibberish and sound effects unchanged"))
             "Hello" to null
         }.use { translator ->
             val result = translator.translateDetailed(listOf("こんにちは", "やあ"))
             assertEquals(listOf("Hello", "Hello"), result.translations)
             assertNull(result.error)
-            assertEquals(3, attempts)
+            assertEquals(4, attempts)
         }
     }
 
@@ -417,8 +442,8 @@ class NativeTranslationProtocolTest {
         var attempts = 0
         NativeTranslator(TranslationOptions()) { messages ->
             attempts++
-            if (messages.length() > 1) null
-            else messages.getJSONObject(0).getString("content").substringAfter("\n\n").let {
+            if (requestSources(messages).size > 1) null
+            else requestSources(messages).single().let {
                 "译文$it" to Usage(20, 4)
             }
         }.use { translator ->
@@ -452,8 +477,8 @@ class NativeTranslationProtocolTest {
         var calls = 0
         NativeTranslator(TranslationOptions()) { messages ->
             calls++
-            if (messages.length() > 1) null else {
-                val source = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
+            if (requestSources(messages).size > 1) null else {
+                val source = requestSources(messages).single()
                 if (source == "very long OCR block") throw TranslationOutputLimitException(usage = Usage(20, 1024))
                 "译文$source" to Usage(20, 4)
             }
@@ -488,7 +513,7 @@ class NativeTranslationProtocolTest {
         var calls = 0
         NativeTranslator(TranslationOptions()) { messages ->
             calls++
-            if (messages.length() > 1) "unstructured page translation" to null
+            if (requestSources(messages).size > 1) "unstructured page translation" to null
             else { started.complete(Unit); awaitCancellation() }
         }.use { translator ->
             val worker = launch { translator.translate(listOf("a", "b", "c")) }
@@ -503,9 +528,9 @@ class NativeTranslationProtocolTest {
         var calls = 0
         NativeTranslator(TranslationOptions()) { messages ->
             calls++
-            if (messages.length() > 1) "你好，谢谢。" to Usage(80, 8)
+            if (requestSources(messages).size > 1) "你好，谢谢。" to Usage(80, 8)
             else {
-                val text = messages.getJSONObject(0).getString("content").substringAfter("\n\n")
+                val text = requestSources(messages).single()
                 (if (text == "こんにちは") "你好" else "谢谢") to Usage(20, 4)
             }
         }.use { translator ->
