@@ -56,19 +56,26 @@ class NativeTranslator private constructor(
         native = null
     }
 
-    override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult = withContext(Dispatchers.Default) {
+    override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult =
+        translateDetailed(queries) { }
+
+    override suspend fun translateDetailed(queries: List<String>, onCompleted: suspend (Map<Int, String>) -> Unit):
+        LlmTranslator.TranslateResult = withContext(Dispatchers.Default) {
         lock.withLock {
             check(!closed) { "Native translator is closed" }
             if (queries.all { it.isBlank() }) return@withLock LlmTranslator.TranslateResult(queries)
             // The page pipeline sends only nonblank regions. An empty numbered
             // segment can make a GGUF skip its ID and shift later translations.
             val preserved = TranslationOcrText.nativePreservedCandidates(options.source, queries)
+            if (preserved.isNotEmpty()) onCompleted(preserved.associateWith { queries[it] })
             val indices = queries.indices.filter { queries[it].isNotBlank() && it !in preserved }
             if (indices.isEmpty()) return@withLock LlmTranslator.TranslateResult(queries)
-            val result = translateBatches(indices.map { queries[it] }) { batch ->
+            val result = LlmBatching.translateIndexed(indices.map { queries[it] }) { batch, offset ->
                 currentCoroutineContext().ensureActive()
                 checkRelevant()
-                translateNumbered(batch)
+                translateNumbered(batch) { completed ->
+                    onCompleted(completed.mapKeys { (index, _) -> indices[offset + index] })
+                }
             }
             if (indices.size == queries.size) result else {
                 val translations = queries.toMutableList()
@@ -79,7 +86,7 @@ class NativeTranslator private constructor(
         }
     }
 
-    private suspend fun translateNumbered(queries: List<String>): LlmTranslator.TranslateResult? {
+    private suspend fun translateNumbered(queries: List<String>, onCompleted: suspend (Map<Int, String>) -> Unit): LlmTranslator.TranslateResult? {
         var interrupted = false
         var budgetExceeded = false
         val response = try {
@@ -92,14 +99,14 @@ class NativeTranslator private constructor(
         val (raw, usage) = response
         // With one source, a complete unnumbered response has an unambiguous mapping.
         // The request still uses the same full system instruction and numbered input.
-        if (queries.size == 1 && !interrupted && !NativeTranslationResponse.hasMarkers(raw)) {
-            try { return LlmTranslator.TranslateResult(listOf(cleanOutput(raw)), usage) }
-            catch (_: InvalidTranslationResponse) { }
+        val answer = NativeTranslationResponse.answerText(raw)
+        if (queries.size == 1 && !interrupted && !answer.isNullOrBlank() && !NativeTranslationResponse.hasMarkers(answer)) {
+            onCompleted(mapOf(0 to answer))
+            return LlmTranslator.TranslateResult(listOf(answer), usage)
         }
-        val parsed = if (queries.size == 1 && NativeTranslationResponse.protocolFailure(raw.substringAfterLast("</think>"), 1))
+        val parsed = if (queries.size == 1 && NativeTranslationResponse.protocolFailure(raw, 1))
             LlmTranslator.TranslateResult(queries, usage, "Native model returned unexpected region markers", missingIndices = setOf(0))
         else NativeTranslationResponse.parse(queries, raw, usage, truncated = interrupted)
-        if (parsed.missingIndices.isEmpty()) return parsed
         // If a token budget produced no complete segments, retain the existing
         // bounded split policy. Otherwise salvage completed regions first.
         if (budgetExceeded && parsed.missingIndices.size == queries.size)
@@ -108,9 +115,12 @@ class NativeTranslator private constructor(
         // and shifted every later ID. The real fixture did exactly this. Do not
         // commit that prefix; a one-source request provides a reliable mapping.
         val complete = queries.size - parsed.missingIndices.size
-        val incompletePrefix = !interrupted && complete > 0 &&
+        val incompletePrefix = !interrupted && complete > 0 && parsed.missingIndices.isNotEmpty() &&
             parsed.missingIndices == (complete until queries.size).toSet()
         val retryIndices = if (incompletePrefix) queries.indices.toSet() else parsed.missingIndices
+        val completed = queries.indices.filter { it !in retryIndices }.associateWith { parsed.translations[it] }
+        if (completed.isNotEmpty()) onCompleted(completed)
+        if (parsed.missingIndices.isEmpty()) return parsed
         if (queries.size == 1) return parsed
         // Never guess how a free-form paragraph maps to multiple bubbles. Keep valid
         // numbered outputs, and request only missing regions with one input per call.
@@ -119,7 +129,11 @@ class NativeTranslator private constructor(
         val errors = mutableListOf<String>()
         var totalUsage = usage
         for (index in retryIndices) {
-            val fallback = translateBatches(listOf(queries[index])) { translateNumbered(it) }
+            val fallback = translateBatches(listOf(queries[index])) { batch ->
+                translateNumbered(batch) { completedRegion ->
+                    onCompleted(completedRegion.mapKeys { index })
+                }
+            }
             translations[index] = fallback.translations.single()
             totalUsage = LlmBatching.addUsage(totalUsage, fallback.usage)
             if (fallback.missingIndices.isEmpty()) missing.remove(index)
@@ -234,11 +248,10 @@ class NativeTranslator private constructor(
 
         /** Full manga translation rules, shared by every native model and region count. */
         internal fun buildNumberedMessages(options: TranslationOptions, queries: List<String>): JSONArray {
-            val config = options.engineConfig().translator
-            val fromClause = config.fromLangName.trim().let { if (it.isEmpty()) "" else "$it " }
+            val fromClause = options.sourceLanguageName().trim().let { if (it.isEmpty()) "" else "$it " }
             // Consume the placeholder's space too when the source is automatic/unnamed.
             val system = SYSTEM_PROMPT.replace("{from_lang} ", fromClause)
-                .replace("{to_lang}", config.toLangName)
+                .replace("{to_lang}", options.targetLanguageName())
             val source = queries.mapIndexed { i, text -> "<|${i + 1}|>$text" }.joinToString("\n")
             return JSONArray()
                 .put(JSONObject().put("role", "system").put("content", system))
@@ -253,9 +266,8 @@ class NativeTranslator private constructor(
 
         internal fun cleanOutput(output: String): String {
             // Some templates prefill <think>, so the generated text may only contain the closing tag.
-            val text = output.substringAfterLast("</think>")
-                .trim()
-            if (text.isEmpty() || "<think>" in text)
+            val text = NativeTranslationResponse.answerText(output)
+            if (text.isNullOrEmpty())
                 throw InvalidTranslationResponse("Model returned no complete translation")
             return text
         }

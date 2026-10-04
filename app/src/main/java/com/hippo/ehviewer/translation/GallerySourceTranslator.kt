@@ -16,7 +16,11 @@ internal class GallerySourceTranslator(
     private var selectedIdentity: String? = null
     private var closed = false
 
-    override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult {
+    override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult =
+        translateDetailed(queries) { }
+
+    override suspend fun translateDetailed(queries: List<String>, onCompleted: suspend (Map<Int, String>) -> Unit):
+        LlmTranslator.TranslateResult {
         val backend = lock.withLock {
             check(!closed) { "Translator is closed" }
             val current = options()
@@ -33,7 +37,7 @@ internal class GallerySourceTranslator(
         // The worker admits parallel API pages only after source selection is frozen.
         // Delegate selection is synchronized; requests retain their ordinary concurrency.
         return when (backend) {
-            is DetailedTranslator -> backend.translateDetailed(queries)
+            is DetailedTranslator -> backend.translateDetailed(queries, onCompleted)
             else -> LlmTranslator.TranslateResult(backend.translate(queries))
         }
     }

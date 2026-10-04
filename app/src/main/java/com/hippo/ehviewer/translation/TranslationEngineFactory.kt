@@ -37,9 +37,12 @@ object TranslationEngineFactory {
             val policy = NativePageModelPolicy(retainNativeModels, ::releaseImages, beforeImageStage)
             val guarded = object : DetailedTranslator {
                 override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult {
+                    return translateDetailed(queries) { }
+                }
+                override suspend fun translateDetailed(queries: List<String>, onCompleted: suspend (Map<Int, String>) -> Unit): LlmTranslator.TranslateResult {
                     policy.languageBoundary()
                     return try {
-                        if (translator is DetailedTranslator) translator.translateDetailed(queries)
+                        if (translator is DetailedTranslator) translator.translateDetailed(queries, onCompleted)
                         else LlmTranslator.TranslateResult(translator.translate(queries))
                     } finally { policy.languageBoundary() }
                 }

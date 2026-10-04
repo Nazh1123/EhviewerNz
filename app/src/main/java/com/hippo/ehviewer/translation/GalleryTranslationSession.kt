@@ -485,10 +485,13 @@ internal class GalleryTranslationSession(
                                     translator = selected as AutoCloseable
                                     val guarded = object : com.hippo.ehviewer.translation.engine.DetailedTranslator {
                                         override suspend fun translateDetailed(queries: List<String>): com.hippo.ehviewer.translation.engine.LlmTranslator.TranslateResult {
+                                            return translateDetailed(queries) { }
+                                        }
+                                        override suspend fun translateDetailed(queries: List<String>, onCompleted: suspend (Map<Int, String>) -> Unit): com.hippo.ehviewer.translation.engine.LlmTranslator.TranslateResult {
                                             val active = checkNotNull(currentCoroutineContext()[TranslationPageRequest])
                                             active.ensureRelevant()
                                             suspend fun call() = if (selected is com.hippo.ehviewer.translation.engine.DetailedTranslator)
-                                                selected.translateDetailed(queries)
+                                                selected.translateDetailed(queries, onCompleted)
                                             else com.hippo.ehviewer.translation.engine.LlmTranslator.TranslateResult(selected.translate(queries))
                                             // The factory releases native models after both page branches
                                             // have joined; a background transition must not close active JNI.

@@ -122,18 +122,19 @@ class ResumablePipeline(
             onProgress(TranslationStage.TRANSLATE, 1f)
             if (!parallelLayout) image.await().getOrThrow()
             if (!isRelevant()) return@coroutineScope PageResult.Failed("Page superseded")
-            val count = prepared.regions.indices.count { index ->
+            val preservedRegions = ArrayList<TextRegion>()
+            val translatedRegions = ArrayList<TextRegion>()
+            for ((index, region) in prepared.regions.withIndex()) {
                 val target = texts[index].trim()
-                target.isNotEmpty() && !target.all(Char::isDigit) && !target.equals(prepared.regions[index].sourceText.trim(), true)
+                if (target.isEmpty() || target.all(Char::isDigit) || target.equals(region.sourceText.trim(), true))
+                    preservedRegions.add(region)
+                else translatedRegions.add(region)
             }
+            val count = translatedRegions.size
             if (count == 0) return@coroutineScope if (metrics.error == null)
                 PageResult.Skipped("No translated text", metrics.result()) else PageResult.Failed("translate: ${metrics.error}")
             for (index in prepared.regions.indices) prepared.regions[index].translatedText =
                 texts[index].takeIf(String::isNotBlank) ?: prepared.regions[index].sourceText
-            val preservedRegions = prepared.regions.filter { region ->
-                region.translatedText.trim().equals(region.sourceText.trim(), true) || region.translatedText.trim().all(Char::isDigit)
-            }
-            val translatedRegions = prepared.regions - preservedRegions.toSet()
             var layoutTime = 0L
             val layout = if (parallelLayout) {
                 image.start()
@@ -191,7 +192,17 @@ class ResumablePipeline(
         for (indices in missing.chunked(minOf(translationBatchSize, missing.size.coerceAtLeast(1)))) {
             check(relevant()) { "Page superseded" }
             val input = indices.map { prepared.regions[it].sourceText }
-            val result = if (translator is DetailedTranslator) translator.translateDetailed(input)
+            val checkpointed = hashSetOf<Int>()
+            val result = if (translator is DetailedTranslator) translator.translateDetailed(input) { checkpoint ->
+                require(checkpoint.all { (offset, text) -> offset in input.indices && text.isNotBlank() })
+                for ((offset, text) in checkpoint) {
+                    val index = indices[offset]
+                    targets[index] = text
+                    if (identity != null) prepared.completed[index] = text
+                }
+                if (checkpointed.addAll(checkpoint.keys))
+                    report(TranslationStage.TRANSLATE, (completed + checkpointed.size).toFloat() / targets.size)
+            }
                 else LlmTranslator.TranslateResult(translator.translate(input))
             require(result.translations.size == input.size) { "Incomplete translation" }
             metrics.usage = LlmBatching.addUsage(metrics.usage, result.usage)

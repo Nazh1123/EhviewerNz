@@ -11,13 +11,17 @@ internal object NativeTranslationResponse {
 
     fun hasMarkers(text: String) = marker.containsMatchIn(text) || "<|" in text
 
+    /** Null means the explicit thinking block is still open. Templates may prefill
+     * its opening tag, so a lone closing tag must also be accepted. */
+    fun answerText(raw: String): String? = raw.substringAfterLast("</think>").trim()
+        .takeUnless { "<think>" in it }
+
     fun protocolFailure(text: String, count: Int): Boolean {
-        val output = text.substringAfterLast("</think>").trim()
-        val matches = marker.findAll(output).toList()
-        // Numbered output must start at its first ID. A translated system preamble is not dialogue.
-        if (matches.isNotEmpty() && output.substring(0, matches.first().range.first).isNotBlank()) return true
+        val output = answerText(text) ?: return false
         val seen = hashSetOf<Int>()
-        return matches.any {
+        // Stream the matches: invalid output can stop at the first bad delimiter.
+        return marker.findAll(output).any {
+            if (seen.isEmpty() && output.substring(0, it.range.first).isNotBlank()) return@any true
             val id = numeric.matchEntire(it.value)?.groupValues?.get(1)?.toIntOrNull()
             id == null || id !in 1..count || !seen.add(id)
         }
@@ -29,8 +33,8 @@ internal object NativeTranslationResponse {
         }
 
     fun parse(queries: List<String>, raw: String, usage: Usage?, truncated: Boolean = false): LlmTranslator.TranslateResult {
-        val text = raw.substringAfterLast("</think>").trim()
-        val matches = if ("<think>" in text) emptyList() else marker.findAll(text).toList()
+        val text = answerText(raw).orEmpty()
+        val matches = marker.findAll(text).toList()
         if (matches.isNotEmpty() && text.substring(0, matches.first().range.first).isNotBlank())
             return LlmTranslator.TranslateResult(queries, usage, "Native model returned text before region IDs",
                 missingIndices = queries.indices.filterTo(linkedSetOf()) { queries[it].isNotBlank() })
