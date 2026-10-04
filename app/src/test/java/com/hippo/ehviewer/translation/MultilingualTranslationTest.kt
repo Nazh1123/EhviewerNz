@@ -83,9 +83,9 @@ class MultilingualTranslationTest {
         for ((source, name) in listOf("en" to "English", "ko" to "Korean", "zh-TW" to "Traditional Chinese (Taiwan)")) {
             val options = TranslationOptions(source = source, target = "fr")
             val numbered = NativeTranslator.buildNumberedMessages(options, listOf(options.sampleText(), "second"))
-            assertTrue(numbered.getJSONObject(0).getString("content").contains("$name text into French"))
+            assertTrue(numbered.getJSONObject(0).getString("content").contains("$name comic text to French"))
             NativeTranslator(options) { messages ->
-                assertTrue(messages.getJSONObject(0).getString("content").startsWith("Translate the following $name segment into French"))
+                assertTrue(messages.getJSONObject(0).getString("content").startsWith("Translate $name text to French. Output translation only."))
                 "Bonjour" to null
             }.use { assertEquals(listOf("Bonjour"), it.translate(listOf(options.sampleText()))) }
         }

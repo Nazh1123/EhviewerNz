@@ -134,12 +134,7 @@ class NativeTranslator private constructor(
         var usage: Usage? = null
         for ((index, source) in queries.withIndex()) {
             val region = LlmBatching.translate(listOf(source)) {
-                val fromClause = options.sourceLanguageName().let { if (it.isEmpty()) "" else "$it " }
-                val instruction = if (options.targetLanguageName() == "Simplified Chinese")
-                    if (options.source == TranslationLanguages.DEFAULT_SOURCE)
-                        "将以下文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释："
-                    else "将以下${options.sourceLanguageName()}文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释："
-                else "Translate the following ${fromClause}segment into ${options.targetLanguageName()}, without additional explanation."
+                val instruction = plainInstruction(options)
                 val messages = JSONArray().put(JSONObject().put("role", "user").put("content", "$instruction\n\n$source"))
                 val response = try {
                     infer(messages, "$instruction\n\n", listOf(source)) ?: return@translate null
@@ -224,17 +219,24 @@ class NativeTranslator private constructor(
     }
 
     companion object {
+        internal fun plainInstruction(options: TranslationOptions): String {
+            val source = options.sourceLanguageName()
+            return if (options.targetLanguageName() == "Simplified Chinese")
+                "将以下${if (options.source == TranslationLanguages.DEFAULT_SOURCE) "" else source}文本翻译为简体中文，只输出译文："
+            else "Translate ${if (source.isEmpty()) "" else "$source "}text to ${options.targetLanguageName()}. Output translation only."
+        }
+
         private const val SYSTEM_PROMPT =
-            "Translate the following {from_lang} text into {to_lang}:\n" +
-                "Comic dialogue and captions. Keep meaning, tone, names and sound effects consistent. " +
-                "Use context for pronouns without inventing details. " +
-                "Return each <|number|> followed by its translation only. Keep every region separate."
+            "Translate {from_lang}comic text to {to_lang}. " +
+                "Preserve meaning and tone; keep names and sound effects consistent. " +
+                "Resolve pronouns from context; invent nothing. " +
+                "Output only <|number|>translation per region; never merge."
 
         /** Compact local-only instructions with the same numbered response protocol. */
         internal fun buildNumberedMessages(options: TranslationOptions, queries: List<String>): JSONArray {
             val config = options.engineConfig().translator
             val fromClause = config.fromLangName.trim().let { if (it.isEmpty()) "" else "$it " }
-            val system = SYSTEM_PROMPT.replace("{from_lang} ", fromClause)
+            val system = SYSTEM_PROMPT.replace("{from_lang}", fromClause)
                 .replace("{to_lang}", config.toLangName)
             val source = queries.mapIndexed { i, text -> "<|${i + 1}|>$text" }.joinToString("\n")
             return JSONArray()

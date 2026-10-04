@@ -20,6 +20,44 @@ import org.junit.runner.RunWith
 /** Opt-in timing of the imported GGUF only; no OCR, downloads or saved-setting changes. */
 @RunWith(AndroidJUnit4::class)
 class NativeTranslationPerformanceDeviceTest {
+    @Test(timeout = 180000) fun shorterPlainInstructionReducesFixedPrefixSnapshot() = runBlocking<Unit>(Dispatchers.IO) {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("testNativePerformance") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val selected = TranslationSettings(context).read()
+        assumeTrue(NativeModelCatalog.usesPlainRequests(selected.nativeModelId))
+        assertTrue(NativeModelStore(context).ready(selected))
+        val path = NativeModelStore(context).file(selected.nativeModelId).absolutePath
+        val options = selected.copy(source = TranslationLanguages.DEFAULT_SOURCE, target = "zh-CN")
+        val oldInstruction = "将以下文本翻译为简体中文，注意只需要输出翻译后的结果，不要额外解释："
+        val newInstruction = NativeTranslator.plainInstruction(options)
+        val source = "明日は学校へ行きます。"
+        val report = File(context.getExternalFilesDir(null), "translation-smoke/native-prompt-comparison.txt")
+        report.parentFile!!.mkdirs()
+        NativePrefixCache().use { cache ->
+            NativeLlm(path, cache).use { model ->
+                fun prefill(name: String, instruction: String): Pair<Int, Long> {
+                    cache.clear()
+                    val messages = JSONArray().put(JSONObject().put("role", "user")
+                        .put("content", "$instruction\n\n$source"))
+                    val tokens = model.begin(messages, lastUserPrefix = "$instruction\n\n")
+                    assertTrue(tokens > 0)
+                    var steps = 0
+                    while (cache.sizeBytes() == 0L && steps++ < 20)
+                        assertNotNull("Prefix prefill must finish", model.next())
+                    val bytes = cache.sizeBytes()
+                    report.appendText("$name promptTokens=$tokens snapshotBytes=$bytes\n")
+                    assertTrue("Prefix snapshot must exist", bytes > 0)
+                    return tokens to bytes
+                }
+                report.writeText("model=${selected.nativeModelName}; source=$source\n")
+                val old = prefill("old", oldInstruction)
+                val current = prefill("current", newInstruction)
+                assertTrue("Prompt must use fewer GGUF tokens", current.first < old.first)
+                assertTrue("Fixed-prefix KV snapshot must shrink", current.second in 1L until old.second)
+            }
+        }
+    }
+
     @Test(timeout = 180000) fun compactPromptTranslatesAMultilinePageWithEightRegions() = runBlocking<Unit>(Dispatchers.IO) {
         assumeTrue(InstrumentationRegistry.getArguments().getString("testNativePerformance") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -162,7 +200,7 @@ class NativeTranslationPerformanceDeviceTest {
                 val fixedBytes = cache.sizeBytes()
                 assertTrue(fixedBytes in 1..(32L * 1024 * 1024))
                 val hit = request(model, "liveHit", original)
-                assertTrue(hit.second > 200)
+                assertTrue(hit.second > 0)
                 assertEquals(expected, hit.first)
                 val changedResult = request(model, "differentPageAndIdCount", otherPage)
                 assertEquals(hit.second, changedResult.second)
@@ -171,7 +209,7 @@ class NativeTranslationPerformanceDeviceTest {
 
                 // Abandon a request after decoding its new source, without completing its output.
                 assertTrue(model.begin(otherPage) > 0)
-                assertTrue(model.cachedPromptTokens() > 200)
+                assertTrue(model.cachedPromptTokens() > 0)
                 assertNotNull(model.next())
                 assertEquals(expected, request(model, "afterInterruptedSource", original).first)
 
@@ -196,7 +234,7 @@ class NativeTranslationPerformanceDeviceTest {
             NativeLlm(path, cache).use { model ->
                 report.appendText("reloadMs=${SystemClock.elapsedRealtime() - loaded}\n")
                 val restored = request(model, "restoredAfterUnload", original)
-                assertTrue(restored.second > 200)
+                assertTrue(restored.second > 0)
                 assertEquals(expected, restored.first)
                 checkPage(restored.first, source)
                 // Rejected input cannot replace the valid prefix or cause a later stale-output hit.

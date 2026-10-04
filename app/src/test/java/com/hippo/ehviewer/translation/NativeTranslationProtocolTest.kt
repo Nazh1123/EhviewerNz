@@ -36,10 +36,10 @@ class NativeTranslationProtocolTest {
             val options = TranslationOptions(target = target)
             val numbered = NativeTranslator.buildNumberedMessages(options, listOf("a", "b"))
             assertTrue(numbered.getJSONObject(0).getString("content")
-                .startsWith("Translate the following Japanese text into Traditional Chinese ($region):"))
+                .startsWith("Translate Japanese comic text to Traditional Chinese ($region)."))
             NativeTranslator(options) { messages ->
                 assertTrue(messages.getJSONObject(0).getString("content").startsWith(
-                    "Translate the following Japanese segment into Traditional Chinese ($region),"))
+                    "Translate Japanese text to Traditional Chinese ($region). Output translation only."))
                 "譯文" to null
             }.use { assertEquals(listOf("譯文"), it.translate(listOf("こんにちは"))) }
         }
@@ -234,9 +234,11 @@ class NativeTranslationProtocolTest {
                     .getJSONObject(0).getString("content")
                 assertTrue("Local fixed instruction should be substantially shorter", instruction.length < original.length)
                 assertFalse(instruction.contains("ANALYSIS & DE-VERBALIZATION"))
-                assertTrue(instruction.contains("Keep meaning, tone, names and sound effects"))
-                assertTrue(instruction.contains("Keep every region separate"))
-                assertTrue(instruction.startsWith("Translate the following Japanese text into $language:"))
+                assertTrue(instruction.contains("Preserve meaning and tone"))
+                assertTrue(instruction.contains("keep names and sound effects consistent"))
+                assertTrue(instruction.contains("Resolve pronouns from context; invent nothing"))
+                assertTrue(instruction.contains("<|number|>translation per region; never merge"))
+                assertTrue(instruction.startsWith("Translate Japanese comic text to $language."))
                 assertEquals("<|1|>こんにちは\n元気ですか\n<|2|>ありがとう",
                     messages.getJSONObject(1).getString("content"))
                 "<|2|>谢谢\n<|1|>你好\n你好吗" to Usage(70, 10)
@@ -268,6 +270,7 @@ class NativeTranslationProtocolTest {
         val small = NativeTranslator.buildNumberedMessages(options, listOf("a", "b"))
         val large = NativeTranslator.buildNumberedMessages(options, List(12) { "長い文章\n".repeat(it + 1) })
         assertEquals(small.getJSONObject(0).toString(), large.getJSONObject(0).toString())
+        assertTrue(small.getJSONObject(0).getString("content").length < 230)
         assertEquals(2, large.length()) // Project language settings still disable upstream Traditional Chinese examples.
         assertTrue(large.getJSONObject(1).getString("content").contains("<|12|>"))
     }
@@ -400,7 +403,7 @@ class NativeTranslationProtocolTest {
         NativeTranslator(TranslationOptions(target = "en")) { messages ->
             attempts++
             if (messages.length() > 1) throw UnsupportedOperationException("unsupported roles")
-            assertTrue(messages.getJSONObject(0).getString("content").startsWith("Translate the following Japanese segment into English"))
+            assertTrue(messages.getJSONObject(0).getString("content").startsWith("Translate Japanese text to English. Output translation only."))
             "Hello" to null
         }.use { translator ->
             val result = translator.translateDetailed(listOf("こんにちは", "やあ"))
