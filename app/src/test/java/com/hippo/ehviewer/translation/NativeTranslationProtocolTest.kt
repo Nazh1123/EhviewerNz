@@ -44,11 +44,11 @@ class NativeTranslationProtocolTest {
             val options = TranslationOptions(target = target)
             val numbered = NativeTranslator.buildNumberedMessages(options, listOf("a", "b"))
             assertTrue(numbered.getJSONObject(0).getString("content")
-                .contains("Translate Japanese text into Traditional Chinese ($region)."))
+                .contains("Translate the following Japanese text into Traditional Chinese ($region):"))
             NativeTranslator(options) { messages ->
                 assertEquals(2, messages.length())
                 assertTrue(messages.getJSONObject(0).getString("content").contains(
-                    "Translate Japanese text into Traditional Chinese ($region)."))
+                    "Translate the following Japanese text into Traditional Chinese ($region):"))
                 "譯文" to null
             }.use { assertEquals(listOf("譯文"), it.translate(listOf("こんにちは"))) }
         }
@@ -246,7 +246,7 @@ class NativeTranslationProtocolTest {
                 assertTrue(instruction.contains("resolve pronouns from context without adding subjects or details"))
                 assertTrue(instruction.contains("Leave gibberish and sound effects unchanged"))
                 assertTrue(instruction.contains("keep regions separate, no source, explanation or analysis"))
-                assertTrue(instruction.contains("Translate Japanese text into $language."))
+                assertTrue(instruction.contains("Translate the following Japanese text into $language:"))
                 assertEquals("<|1|>こんにちは\n元気ですか\n<|2|>ありがとう",
                     messages.getJSONObject(1).getString("content"))
                 "<|2|>谢谢\n<|1|>你好\n你好吗" to Usage(70, 10)
@@ -314,6 +314,74 @@ class NativeTranslationProtocolTest {
                 assertTrue(result.translations.single().length > 220)
             }
         }
+    }
+
+    @Test fun languageDirectionIsTheFinalVariableInstructionForEveryNativeModel() {
+        for (id in NativeModelCatalog.models.map { it.sha256 } + "imported-model") {
+            for ((source, target, direction) in listOf(
+                Triple("ja", "zh-CN", "Japanese text into Simplified Chinese"),
+                Triple("en", "ko", "English text into Korean"),
+                Triple("ko", "zh-TW", "Korean text into Traditional Chinese (Taiwan)"),
+                Triple("auto", "fr", "text into French"),
+            )) {
+                val system = NativeTranslator.buildNumberedMessages(TranslationOptions(nativeModelId = id,
+                    source = source, target = target), listOf("source")).getJSONObject(0).getString("content")
+                assertTrue(system.endsWith("\nTranslate the following $direction:"))
+                assertFalse(system.contains("{from_lang}"))
+                assertFalse(system.contains("{to_lang}"))
+            }
+        }
+    }
+
+    @Test fun malfoidInstructionPreambleCannotBeCommittedAsBubbleTranslations() = runBlocking<Unit> {
+        val inputs = listOf("I can choose my own friends", "Huh..")
+        var calls = 0
+        NativeTranslator(TranslationOptions(source = "en")) { messages ->
+            calls++
+            assertTrue(messages.getJSONObject(0).getString("content").endsWith(
+                "Translate the following English text into Simplified Chinese:"))
+            if (requestSources(messages).size > 1)
+                "保留原文的含义、结构、情感。仅输出每个原始<|1|>我可以选择自己的朋友</|1>及其翻译；保持地区信息的分离。<|2|>哼..</|2>" to null
+            else (if (requestSources(messages).single() == inputs[0]) "我可以选择自己的朋友" else "哼..") to null
+        }.use { translator ->
+            val result = translator.translateDetailed(inputs)
+            assertNull(result.error)
+            assertEquals(listOf("我可以选择自己的朋友", "哼.."), result.translations)
+            assertEquals(3, calls)
+        }
+    }
+
+    @Test fun isolatedAndResolvedEnglishPagesPreserveLoneForeignOcrGlyphsWithoutInference() = runBlocking<Unit> {
+        for (source in listOf("auto", "en")) for (id in NativeModelCatalog.models.map { it.sha256 } + "imported-model") {
+            NativeTranslator(TranslationOptions(source = source, nativeModelId = id)) { messages ->
+                assertEquals(listOf("She's really pretty."), requestSources(messages))
+                assertTrue(messages.getJSONObject(0).getString("content").contains("Leave gibberish and sound effects unchanged"))
+                "<|1|>她真的很漂亮。" to Usage(100, 7)
+            }.use { translator ->
+                val result = translator.translateDetailed(listOf("She's really pretty.", "ん。"))
+                assertEquals(listOf("她真的很漂亮。", "ん。"), result.translations)
+                assertTrue(result.missingIndices.isEmpty())
+                assertEquals(Usage(100, 7), result.usage)
+            }
+        }
+        assertEquals(setOf(0), TranslationOcrText.nativePreservedCandidates("en", listOf("ん。")))
+        assertTrue(TranslationOcrText.nativePreservedCandidates("auto", listOf("ん。", "Hello")).isEmpty())
+        for (source in listOf("ja", "ko", "zh-CN"))
+            assertTrue(TranslationOcrText.nativePreservedCandidates(source, listOf("ん。", "Hello world again")).isEmpty())
+        assertTrue(TranslationOcrText.nativePreservedCandidates("en", listOf("Hi!", "ああ！", "A", "x2")).isEmpty())
+        NativeTranslator(TranslationOptions(source = "en")) { error("No native request for preserved artwork") }.use {
+            assertEquals(listOf("ん。"), it.translate(listOf("ん。")))
+        }
+    }
+
+    @Test fun malformedClosingIdsAndPreamblesAreProtocolErrorsRatherThanValidDialogue() {
+        for (raw in listOf("<|1|>译文</|1>", "<|1|>译文</1>", "保留含义。<|1|>译文", "Only translations: <|1|>译文")) {
+            assertTrue(raw, NativeTranslationResponse.protocolFailure(raw, 1))
+            val parsed = NativeTranslationResponse.parse(listOf("source"), raw, null)
+            assertEquals(setOf(0), parsed.missingIndices)
+            assertEquals(listOf("source"), parsed.translations)
+        }
+        assertFalse(NativeTranslationResponse.protocolFailure("<think>internal reasoning</think>\n<|1|>译文", 1))
     }
 
     @Test fun actualSingleRegionIncludingTheSampleSentenceStillUsesTheFullSystemPrompt() = runBlocking<Unit> {
@@ -427,7 +495,7 @@ class NativeTranslationProtocolTest {
         NativeTranslator(TranslationOptions(target = "en")) { messages ->
             attempts++
             if (messages.length() > 1) throw UnsupportedOperationException("unsupported roles")
-            assertTrue(messages.getJSONObject(0).getString("content").contains("Translate Japanese text into English."))
+            assertTrue(messages.getJSONObject(0).getString("content").contains("Translate the following Japanese text into English:"))
             assertTrue(messages.getJSONObject(0).getString("content").contains("Leave gibberish and sound effects unchanged"))
             "Hello" to null
         }.use { translator ->

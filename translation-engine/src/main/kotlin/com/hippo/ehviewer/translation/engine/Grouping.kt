@@ -29,7 +29,10 @@ object Grouping {
                     val secondLength = if (direction == "v") second.height else second.width
                     val flowOffset = if (direction == "v") abs(first.cy - second.cy) else abs(first.cx - second.cx)
                     val overlap = (firstLength + secondLength) / 2 - flowOffset
-                    if (separation <= (thickness + otherThickness) / 2 + thickness * 0.45f &&
+                    // Spaced horizontal text can cross the old gap cutoff by less than a pixel.
+                    // Keep the stricter CJK/vertical rule while joining adjacent English/Korean lines.
+                    val gapRatio = if (direction == "h" && sourceSeparator == " ") 0.5f else 0.45f
+                    if (separation <= (thickness + otherThickness) / 2 + thickness * gapRatio &&
                         overlap >= min(firstLength, secondLength) * 0.5f) parent[root(j)] = root(i)
                 }
             }

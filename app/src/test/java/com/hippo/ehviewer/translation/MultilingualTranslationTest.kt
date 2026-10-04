@@ -86,12 +86,12 @@ class MultilingualTranslationTest {
             assertTrue(numbered.getJSONObject(0).getString("content").contains("$name text into French"))
             NativeTranslator(options) { messages ->
                 assertEquals(2, messages.length())
-                assertTrue(messages.getJSONObject(0).getString("content").contains("Translate $name text into French."))
+                assertTrue(messages.getJSONObject(0).getString("content").contains("Translate the following $name text into French:"))
                 "Bonjour" to null
             }.use { assertEquals(listOf("Bonjour"), it.translate(listOf(options.sampleText()))) }
         }
         NativeTranslator(TranslationOptions(source = "en")) { messages ->
-            assertTrue(messages.getJSONObject(0).getString("content").contains("Translate English text into Simplified Chinese."))
+            assertTrue(messages.getJSONObject(0).getString("content").contains("Translate the following English text into Simplified Chinese:"))
             "明天去学校" to null
         }.use { assertEquals(listOf("明天去学校"), it.translate(listOf("I will go to school tomorrow."))) }
     }
@@ -112,6 +112,22 @@ class MultilingualTranslationTest {
             assertEquals(1, regions.size)
             assertEquals(expected, regions.single().sourceText)
         }
+    }
+
+    @Test fun malfoidAdjacentEnglishLinesStayTogetherWithoutJoiningTheNearbyThoughtBubble() {
+        fun box(text: String, x0: Float, y0: Float, x1: Float, y1: Float) =
+            TextLine(listOf(Pt(x0, y0), Pt(x1, y0), Pt(x1, y1), Pt(x0, y1)), 1f).apply { this.text = text }
+        val lines = listOf(
+            box("First years aren't", 1022.3f, 121.5f, 1256.2f, 150.8f),
+            box("allowed their own", 1024.1f, 161.7f, 1252.5f, 191f),
+            box("What's she", 188.2f, 164.4f, 338f, 203.7f),
+            box("brooms, apparently", 1013.2f, 203.6f, 1265.2f, 239.7f),
+            box("talking about...", 169.1f, 209.3f, 359f, 243.9f),
+            box("But", 972.3f, 259.7f, 1028.5f, 294f),
+        )
+        val regions = Grouping.group(lines, " ")
+        assertEquals(listOf("First years aren't allowed their own brooms, apparently",
+            "What's she talking about...", "But"), regions.map { it.sourceText })
     }
 
     @Test fun incompleteOcrBubbleKeepsItsOriginalTextWithoutTranslationOrInpainting() = runBlocking<Unit> {

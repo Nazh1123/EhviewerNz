@@ -135,7 +135,7 @@ class AutomaticSourceLanguageTest {
     @Test fun unknownPromptsRemainUnspecifiedAndChinesePromptsDoNotInventAScript() {
         val message = NativeTranslator.buildNumberedMessages(auto, listOf("unknown text"))
             .getJSONObject(0).getString("content")
-        assertTrue(message.contains("Translate text into French"))
+        assertTrue(message.contains("Translate the following text into French"))
         assertFalse(message.contains("Japanese"))
         assertFalse(message.contains("auto text"))
         val chinese = auto.copy(source = "zh")

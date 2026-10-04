@@ -5,15 +5,19 @@ import com.hippo.ehviewer.translation.engine.Usage
 
 /** Strict local protocol. Never assign an ambiguous segment to a bubble. */
 internal object NativeTranslationResponse {
-    private val marker = Regex("""<\|[^>\r\n]*>|<\d+\s*[|>]+|[/／]\s*\d+\s*[>＞]|＜[|｜][^＞>\r\n]*[＞>]""")
+    private val marker = Regex("""<\|[^>\r\n]*>|<\d+\s*[|>]+|[/／]\s*\d+\s*[>＞]|＜[|｜][^＞>\r\n]*[＞>]|</[|｜]?\d+[^>\r\n]*>""")
     private val numeric = Regex("""<\|?(\d+)\s*[|>]+""")
     private val repetition = Regex("""(\S)\1{23,}|(\S{2,32}?)\2{11,}""")
 
     fun hasMarkers(text: String) = marker.containsMatchIn(text) || "<|" in text
 
     fun protocolFailure(text: String, count: Int): Boolean {
+        val output = text.substringAfterLast("</think>").trim()
+        val matches = marker.findAll(output).toList()
+        // Numbered output must start at its first ID. A translated system preamble is not dialogue.
+        if (matches.isNotEmpty() && output.substring(0, matches.first().range.first).isNotBlank()) return true
         val seen = hashSetOf<Int>()
-        return marker.findAll(text).any {
+        return matches.any {
             val id = numeric.matchEntire(it.value)?.groupValues?.get(1)?.toIntOrNull()
             id == null || id !in 1..count || !seen.add(id)
         }
@@ -27,6 +31,9 @@ internal object NativeTranslationResponse {
     fun parse(queries: List<String>, raw: String, usage: Usage?, truncated: Boolean = false): LlmTranslator.TranslateResult {
         val text = raw.substringAfterLast("</think>").trim()
         val matches = if ("<think>" in text) emptyList() else marker.findAll(text).toList()
+        if (matches.isNotEmpty() && text.substring(0, matches.first().range.first).isNotBlank())
+            return LlmTranslator.TranslateResult(queries, usage, "Native model returned text before region IDs",
+                missingIndices = queries.indices.filterTo(linkedSetOf()) { queries[it].isNotBlank() })
         val valid = mutableMapOf<Int, String>()
         val seen = hashSetOf<Int>()
         val ambiguous = hashSetOf<Int>()

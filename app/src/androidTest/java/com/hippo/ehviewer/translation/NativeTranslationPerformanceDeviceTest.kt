@@ -77,7 +77,8 @@ class NativeTranslationPerformanceDeviceTest {
     @Test(timeout = 180000) fun compactPromptTranslatesAMultilinePageWithEightRegions() = runBlocking<Unit>(Dispatchers.IO) {
         assumeTrue(InstrumentationRegistry.getArguments().getString("testNativePerformance") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val options = TranslationSettings(context).read().copy(backend = TranslationBackend.NATIVE_LLM)
+        val options = TranslationSettings(context).read().copy(backend = TranslationBackend.NATIVE_LLM,
+            source = TranslationLanguages.DEFAULT_SOURCE, target = "zh-CN")
         assertTrue(NativeModelStore(context).ready(options))
         val source = listOf("明日は学校へ行きます。", "この本を読んでください。", "", "今日はいい天気ですね。",
             "おはようございます。\nよく眠れましたか？", "ありがとうございます。", "少し待ってください。",

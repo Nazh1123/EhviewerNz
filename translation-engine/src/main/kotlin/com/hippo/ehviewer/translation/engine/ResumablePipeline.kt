@@ -130,13 +130,17 @@ class ResumablePipeline(
                 PageResult.Skipped("No translated text", metrics.result()) else PageResult.Failed("translate: ${metrics.error}")
             for (index in prepared.regions.indices) prepared.regions[index].translatedText =
                 texts[index].takeIf(String::isNotBlank) ?: prepared.regions[index].sourceText
+            val preservedRegions = prepared.regions.filter { region ->
+                region.translatedText.trim().equals(region.sourceText.trim(), true) || region.translatedText.trim().all(Char::isDigit)
+            }
+            val translatedRegions = prepared.regions - preservedRegions.toSet()
             var layoutTime = 0L
             val layout = if (parallelLayout) {
                 image.start()
                 val textLayout = async(Dispatchers.Default) {
                     runCatching {
                         val start = System.nanoTime()
-                        Renderer.prepareLayout(prepared.regions, cfg.render).also {
+                        Renderer.prepareLayout(translatedRegions, cfg.render).also {
                             layoutTime = elapsed(start)
                             EngineTrace.log("resume.layout.exit")
                         }
@@ -148,8 +152,10 @@ class ResumablePipeline(
                 ready
             } else null
             val renderAt = System.nanoTime()
-            val rendered = if (layout == null) Renderer.render(checkNotNull(prepared.cleaned), prepared.regions, cfg.render)
-                else Renderer.compose(checkNotNull(prepared.cleaned), layout)
+            val preservationPadding = cfg.inpainter.regionPad + cfg.inpainter.maskRadius
+            val rendered = if (layout == null) Renderer.render(checkNotNull(prepared.cleaned), translatedRegions, cfg.render,
+                original = page, preservedRegions = preservedRegions, padding = preservationPadding)
+                else Renderer.compose(checkNotNull(prepared.cleaned), layout, page, preservedRegions, preservationPadding)
             output = rendered
             val renderMs = elapsed(renderAt) + layoutTime
             onProgress(TranslationStage.RENDER, 1f)

@@ -59,13 +59,41 @@ object Renderer {
         return Layout(blocks, cfg)
     }
 
-    fun render(page: Bitmap, regions: List<TextRegion>, cfg: RenderConfig = RenderConfig(), tf: Typeface? = null): Bitmap =
-        compose(page, prepareLayout(regions, cfg, tf))
+    fun render(page: Bitmap, regions: List<TextRegion>, cfg: RenderConfig = RenderConfig(), tf: Typeface? = null,
+               original: Bitmap? = null, preservedRegions: List<TextRegion> = emptyList(), padding: Int = 0): Bitmap =
+        compose(page, prepareLayout(regions, cfg, tf), original, preservedRegions, padding)
 
-    fun compose(page: Bitmap, layout: Layout): Bitmap {
+    fun compose(page: Bitmap, layout: Layout, original: Bitmap? = null,
+                preservedRegions: List<TextRegion> = emptyList(), padding: Int = 0): Bitmap {
         val output = page.copy(Bitmap.Config.ARGB_8888, true)
         try {
             val canvas = Canvas(output)
+            // Inpainting may finish before translation. Restore unchanged/failed regions
+            // from the original before drawing the translated regions, without another bitmap.
+            if (original != null && preservedRegions.isNotEmpty()) {
+                val saved = canvas.save()
+                val translatedLines = Path()
+                for (block in layout.blocks) for (line in block.region.lines) {
+                    // OCR boxes can omit the last few pixels of a glyph's descender.
+                    val box = Geometry.bounds(line.quad)
+                    val points = box?.corners(max(1f, min(box.width, box.height) * 0.1f)) ?: line.quad
+                    if (points.size < 3) continue
+                    translatedLines.moveTo(points.first().x, points.first().y)
+                    points.drop(1).forEach { translatedLines.lineTo(it.x, it.y) }
+                    translatedLines.close()
+                }
+                // An OCR candidate can overlap the edge of a real dialogue line.
+                // Restore its artwork without bringing translated source glyphs back.
+                canvas.clipOutPath(translatedLines)
+                for (region in preservedRegions) {
+                    val bounds = Rect(floor(region.x0 - padding).toInt().coerceAtLeast(0),
+                        floor(region.y0 - padding).toInt().coerceAtLeast(0),
+                        ceil(region.x1 + padding).toInt().coerceAtMost(page.width),
+                        ceil(region.y1 + padding).toInt().coerceAtMost(page.height))
+                    if (!bounds.isEmpty) canvas.drawBitmap(original, bounds, bounds, null)
+                }
+                canvas.restoreToCount(saved)
+            }
             for (block in layout.blocks) {
                 val dark = layout.config.colorMode == "auto" && backgroundBrightness(page, block.region) < 110
                 val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {

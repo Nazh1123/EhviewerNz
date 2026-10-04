@@ -3,7 +3,10 @@ package com.hippo.ehviewer.translation
 import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Canvas
+import android.graphics.Paint
 import com.hippo.ehviewer.translation.engine.*
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -15,6 +18,47 @@ import org.robolectric.annotation.GraphicsMode
 @Config(application = Application::class, sdk = [28], manifest = Config.NONE)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RendererLayoutTest {
+    @Test fun unchangedOcrCandidatesAndFailedRegionsPreserveOriginalArtInBothRenderPaths() = runBlocking<Unit> {
+        for (overlapLayout in listOf(false, true)) for (failed in listOf(false, true)) {
+            val original = Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.WHITE) }
+            Canvas(original).apply {
+                val ink = Paint().apply { color = Color.BLACK }
+                drawCircle(120f, 40f, 5f, ink)
+                drawRect(96f, 35f, 100f, 52f, ink)
+            }
+            fun bubble(text: String, x0: Float, x1: Float) = TextRegion(listOf(
+                TextLine(listOf(Pt(x0, 30f), Pt(x1, 30f), Pt(x1, 50f), Pt(x0, 50f)), 1f).apply { this.text = text }
+            ), "h")
+            val regions = listOf(bubble("Hello", 20f, 100f), bubble("ん。", 110f, 130f))
+            val translator = object : DetailedTranslator {
+                override suspend fun translateDetailed(queries: List<String>) = LlmTranslator.TranslateResult(
+                    listOf("你好", queries[1]), error = if (failed) "Missing region" else null,
+                    missingIndices = if (failed) setOf(1) else emptySet())
+            }
+            try {
+                ResumablePipeline(detect = { error("Already prepared") }, recognize = { _, _ -> error("Already prepared") },
+                    inpaint = { _, _, _ -> Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.WHITE) } },
+                    translator = translator, cfg = EngineConfig(), release = {}, warm = {},
+                    overlapInpainting = false, overlapLayout = overlapLayout).use { pipeline ->
+                    PreparedPage(Bitmap.createBitmap(200, 100, Bitmap.Config.ARGB_8888), regions, 2, 0, 0).use { prepared ->
+                        val result = pipeline.translatePrepared(original, prepared, false) as PageResult.Translated
+                        try {
+                            assertEquals(1, result.stats.kept)
+                            assertEquals(Color.BLACK, result.page.getPixel(120, 40))
+                            assertEquals("Overlapping preservation must not restore translated source glyphs",
+                                Color.WHITE, result.page.getPixel(98, 40))
+                            assertEquals("A tight OCR box must also exclude the original glyph's descender",
+                                Color.WHITE, result.page.getPixel(98, 51))
+                            for (y in 30..50) for (x in 110..130)
+                                assertEquals("Preserve artwork instead of drawing an OCR guess", original.getPixel(x, y), result.page.getPixel(x, y))
+                            assertFalse("The valid dialogue must still be translated", original.sameAs(result.page))
+                        } finally { result.page.recycle() }
+                    }
+                }
+            } finally { original.recycle() }
+        }
+    }
+
     private fun region(x: Float, direction: String, angle: Float, text: String) = TextRegion(
         listOf(TextLine(listOf(Pt(x, 30f), Pt(x + 90f, 30f), Pt(x + 90f, 200f), Pt(x, 200f)), 1f)
             .apply { this.text = "source" }), direction, angle, x + 45f, 115f, 90f, 170f,

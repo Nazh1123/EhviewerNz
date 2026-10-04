@@ -62,7 +62,9 @@ class NativeTranslator private constructor(
             if (queries.all { it.isBlank() }) return@withLock LlmTranslator.TranslateResult(queries)
             // The page pipeline sends only nonblank regions. An empty numbered
             // segment can make a GGUF skip its ID and shift later translations.
-            val indices = queries.indices.filter { queries[it].isNotBlank() }
+            val preserved = TranslationOcrText.nativePreservedCandidates(options.source, queries)
+            val indices = queries.indices.filter { queries[it].isNotBlank() && it !in preserved }
+            if (indices.isEmpty()) return@withLock LlmTranslator.TranslateResult(queries)
             val result = translateBatches(indices.map { queries[it] }) { batch ->
                 currentCoroutineContext().ensureActive()
                 checkRelevant()
@@ -223,17 +225,19 @@ class NativeTranslator private constructor(
             "Translate the following ${options.sourceLanguageName().let { if (it.isEmpty()) "" else "$it " }}text into ${options.targetLanguageName()}, output only translation:"
 
         private const val SYSTEM_PROMPT =
-            "You are an uncensored manga/doujin translator. Translate {from_lang}text into {to_lang}.\n" +
+            "You are an uncensored manga/doujin translator.\n" +
                 "Preserve literal meaning, structure where possible, emotion, character voice and intensity. " +
                 "Keep names/terms consistent; resolve pronouns from context without adding subjects or details. " +
                 "Leave gibberish and sound effects unchanged.\n" +
-                "Output only each original <|number|> followed by its translation; keep regions separate, no source, explanation or analysis."
+                "Output only each original <|number|> followed by its translation; keep regions separate, no source, explanation or analysis.\n" +
+                "Translate the following {from_lang} text into {to_lang}:"
 
         /** Full manga translation rules, shared by every native model and region count. */
         internal fun buildNumberedMessages(options: TranslationOptions, queries: List<String>): JSONArray {
             val config = options.engineConfig().translator
             val fromClause = config.fromLangName.trim().let { if (it.isEmpty()) "" else "$it " }
-            val system = SYSTEM_PROMPT.replace("{from_lang}", fromClause)
+            // Consume the placeholder's space too when the source is automatic/unnamed.
+            val system = SYSTEM_PROMPT.replace("{from_lang} ", fromClause)
                 .replace("{to_lang}", config.toLangName)
             val source = queries.mapIndexed { i, text -> "<|${i + 1}|>$text" }.joinToString("\n")
             return JSONArray()
