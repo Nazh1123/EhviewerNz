@@ -21,10 +21,21 @@ public final class GalleryUpdateRecord {
     public final int[] addedPages;
     public final int[] deletedPages;
     public final int readingPage;
+    public final String sourceTitle;
+    public final String errorReason;
+    public final long[] retainedParentGids;
 
     GalleryUpdateRecord(long targetGid, long sourceGid, long completedAt,
                         int oldPages, int newPages, boolean complete,
                         int[] addedPages, int[] deletedPages, int readingPage) {
+        this(targetGid, sourceGid, completedAt, oldPages, newPages, complete,
+                addedPages, deletedPages, readingPage, "", "", new long[0]);
+    }
+
+    private GalleryUpdateRecord(long targetGid, long sourceGid, long completedAt,
+                                int oldPages, int newPages, boolean complete,
+                                int[] addedPages, int[] deletedPages, int readingPage,
+                                String sourceTitle, String errorReason, long[] retainedParentGids) {
         this.targetGid = targetGid;
         this.sourceGid = sourceGid;
         this.completedAt = completedAt;
@@ -34,6 +45,18 @@ public final class GalleryUpdateRecord {
         this.addedPages = addedPages.clone();
         this.deletedPages = deletedPages.clone();
         this.readingPage = Math.max(0, Math.min(readingPage, addedPages.length - 1));
+        this.sourceTitle = sourceTitle != null ? sourceTitle : "";
+        this.errorReason = errorReason;
+        this.retainedParentGids = retainedParentGids.clone();
+    }
+
+    public boolean isFailure() { return !errorReason.isEmpty(); }
+
+    public static GalleryUpdateRecord failure(long targetGid, long sourceGid, long failedAt,
+                                               String sourceTitle, String reason, long[] retained) {
+        if (reason == null || reason.isBlank()) throw new IllegalArgumentException("Missing failure reason");
+        return new GalleryUpdateRecord(targetGid, sourceGid, failedAt, 0, 0, false,
+                new int[0], new int[0], 0, sourceTitle, reason, retained);
     }
 
     static GalleryUpdateRecord compare(long targetGid, long sourceGid,
@@ -84,6 +107,11 @@ public final class GalleryUpdateRecord {
         json.put("complete", complete);
         json.put("added", array(addedPages));
         json.put("deleted", array(deletedPages));
+        json.put("source_title", sourceTitle);
+        json.put("error_reason", errorReason);
+        JSONArray retained = new JSONArray();
+        for (long gid : retainedParentGids) retained.put(gid);
+        json.put("retained_parents", retained);
         return json.toString();
     }
 
@@ -92,9 +120,13 @@ public final class GalleryUpdateRecord {
         JSONObject json = new JSONObject(raw);
         int oldPages = json.getInt("old_pages"), newPages = json.getInt("new_pages");
         if (oldPages < 0 || newPages < 0) throw new JSONException("Invalid page count");
+        JSONArray retained = json.optJSONArray("retained_parents");
+        long[] retainedGids = new long[retained != null ? retained.length() : 0];
+        for (int i = 0; i < retainedGids.length; i++) retainedGids[i] = retained.getLong(i);
         return new GalleryUpdateRecord(targetGid, sourceGid, completedAt, oldPages, newPages,
                 json.getBoolean("complete"), indexes(json.getJSONArray("added"), newPages),
-                indexes(json.getJSONArray("deleted"), oldPages), readingPage);
+                indexes(json.getJSONArray("deleted"), oldPages), readingPage,
+                json.optString("source_title", ""), json.optString("error_reason", ""), retainedGids);
     }
 
     private static JSONArray array(int[] pages) {

@@ -21,4 +21,36 @@
     <string-array name="gallery_update_record_limit_values">
         <item>100</item><item>200</item><item>500</item><item>1000</item><item>2000</item>
     </string-array>
+    <string name="gallery_update_error_log">Error log</string>
+    <string name="gallery_update_error_source">Old gallery selected for update</string>
+    <string name="gallery_update_error_source_info">GID: %1$d\nTitle: %2$s</string>
+    <string name="gallery_update_error_source_unknown">No downloaded old gallery could be identified.</string>
+    <string name="gallery_update_error_title_unknown">Title unavailable</string>
+    <string name="gallery_update_error_reason">Failure reason</string>
+    <string name="gallery_update_error_parents_retained">The following old galleries have been retained, or their deletion could not be confirmed (GID): %1$s. You can retry from the gallery detail page.</string>
+    <string name="gallery_update_error_directory">Download directory is missing or inaccessible.</string>
+    <string name="gallery_update_error_metadata_missing">The .ehviewer file is missing.</string>
+    <string name="gallery_update_error_metadata_invalid">The .ehviewer file is unreadable, corrupt, or belongs to another gallery.</string>
+    <string name="gallery_update_error_source_metadata">Old gallery (GID: %1$d): %2$s Reading progress cannot be migrated.</string>
+    <string name="gallery_update_error_target_metadata">New gallery (GID: %1$d): %2$s Download integrity cannot be verified.</string>
+    <string name="gallery_update_error_target_incomplete">The new gallery download is incomplete or its state changed before finalization.</string>
+    <string name="gallery_update_error_target_removed">The new gallery download was removed or is no longer available; the update was cancelled.</string>
+    <string name="gallery_update_error_image">New gallery page p%1$d is missing, empty, or unreadable.</string>
+    <string name="gallery_update_error_record_stage">Unable to save the update comparison before removing old galleries.</string>
+    <string name="gallery_update_error_record_publish">Old gallery cleanup finished, but the update log could not be saved.</string>
+    <string name="gallery_update_error_progress_checkpoint">Reading progress was processed, but its completion checkpoint could not be saved.</string>
+    <string name="gallery_update_error_validation">Unable to validate or prepare the update: %1$s</string>
+    <string name="gallery_update_error_delete_parent">Unable to delete the old gallery directory (GID: %1$d).</string>
+    <string name="gallery_update_error_cleanup">Old gallery cleanup failed: %1$s</string>
+    <string name="gallery_update_error_509">Image quota exceeded (509).</string>
+    <string name="gallery_update_error_unknown">No detailed error was returned.</string>
+    <string name="gallery_update_error_download_metadata">Unable to load the new gallery page information; the download could not start.</string>
+    <string name="gallery_update_error_download">The new gallery download failed; %1$d pages are incomplete.</string>
+    <string name="gallery_update_error_page">p%1$d: %2$s</string>
+    <string name="gallery_update_error_more_pages">Errors also occurred on %1$d additional pages.</string>
+    <string name="gallery_update_error_version_lookup">Unable to resolve the gallery version information: %1$s</string>
+    <string name="gallery_update_error_cancelled">The update was stopped or cancelled.</string>
+    <string name="gallery_update_error_interrupted">The previous update was interrupted before the download finished. Retry to continue.</string>
+    <string name="gallery_update_error_tokens">Page tokens for gallery GID %1$d are incomplete; no reliable reading-progress anchor can be found.</string>
+    <string name="gallery_update_error_progress_save">Unable to save and verify the migrated reading position on disk and in the local cache.</string>
 </resources>

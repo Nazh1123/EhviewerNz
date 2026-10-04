@@ -27,7 +27,23 @@ final class GalleryUpdateLogDialog {
         section(context, content, context.getString(R.string.gallery_update_log_time),
                 new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                         .format(new Date(record.completedAt)), padding);
-        if (record.complete) {
+        if (record.isFailure()) {
+            section(context, content, context.getString(R.string.gallery_update_error_source),
+                    record.sourceGid > 0 ? context.getString(R.string.gallery_update_error_source_info,
+                            record.sourceGid, record.sourceTitle.isEmpty()
+                                    ? context.getString(R.string.gallery_update_error_title_unknown) : record.sourceTitle)
+                            : context.getString(R.string.gallery_update_error_source_unknown), padding);
+            String reason = record.errorReason;
+            if (record.retainedParentGids.length > 0) {
+                StringBuilder gids = new StringBuilder();
+                for (long gid : record.retainedParentGids) {
+                    if (gids.length() > 0) gids.append(", ");
+                    gids.append(gid);
+                }
+                reason += "\n\n" + context.getString(R.string.gallery_update_error_parents_retained, gids);
+            }
+            section(context, content, context.getString(R.string.gallery_update_error_reason), reason, padding);
+        } else if (record.complete) {
             section(context, content, context.getString(R.string.gallery_update_log_added,
                             record.addedPages.length), pages(context, record.addedPages), padding);
             section(context, content, context.getString(R.string.gallery_update_log_deleted,
@@ -40,7 +56,7 @@ final class GalleryUpdateLogDialog {
         ScrollView scroll = new ScrollView(context);
         scroll.addView(content);
         AlertDialog dialog = new AlertDialog.Builder(context)
-                .setTitle(R.string.gallery_update_log)
+                .setTitle(record.isFailure() ? R.string.gallery_update_error_log : R.string.gallery_update_log)
                 .setView(scroll)
                 .setNeutralButton(R.string.gallery_update_log_versions,
                         (ignored, which) -> showVersions.run())

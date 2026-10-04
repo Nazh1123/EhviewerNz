@@ -49,6 +49,7 @@ import com.hippo.ehviewer.util.MiuiOptimizationHelper
 import com.hippo.scene.StageActivity
 import com.hippo.util.ReadableTime
 import com.hippo.util.ExceptionUtils
+import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser
 import com.hippo.lib.yorozuya.FileUtils
 import com.hippo.lib.yorozuya.SimpleHandler
 import com.hippo.lib.yorozuya.collect.LongList
@@ -70,6 +71,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
     private var mUpdatingDelay: NotificationDelay? = null
     private var mGalleryUpdatedDelay: NotificationDelay? = null
     private val mGalleryUpdateTasks = mutableMapOf<Long, GalleryVersionMetadataTask>()
+    private val mGalleryUpdateTargets = mutableMapOf<Long, GalleryDetail>()
     private val mActiveGalleryUpdateGids = mutableSetOf<Long>()
 
     // WakeLock 用于防止CPU被限制（针对后台下载优化）
@@ -131,6 +133,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
 
         mGalleryUpdateTasks.values.forEach { it.cancel() }
         mGalleryUpdateTasks.clear()
+        mGalleryUpdateTargets.clear()
         mActiveGalleryUpdateGids.clear()
         
         // 释放 WakeLock
@@ -530,6 +533,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
                         return
                     }
                     mGalleryUpdateTasks.remove(target.gid)
+                    mGalleryUpdateTargets.remove(target.gid)
                     beginWithFirstGid(firstGid)
                 }
 
@@ -538,30 +542,43 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
                         return
                     }
                     mGalleryUpdateTasks.remove(target.gid)
-                    showGalleryUpdateFailure(target, ExceptionUtils.getReadableString(error))
+                    mGalleryUpdateTargets.remove(target.gid)
+                    showGalleryUpdateFailure(target, getString(R.string.gallery_update_error_version_lookup,
+                        ExceptionUtils.getReadableString(error)))
                     refreshGalleryUpdateNotification()
                     checkStopSelf()
                 }
             })
         mGalleryUpdateTasks[target.gid] = task
+        mGalleryUpdateTargets[target.gid] = target
         task.start()
     }
 
     private fun cancelGalleryUpdateTasks() {
-        mGalleryUpdateTasks.keys.forEach {
-            GalleryUpdateManager.notifyUpdateStateChanged(
-                it, GalleryUpdateManager.UPDATE_STATE_FAILED
-            )
+        mGalleryUpdateTargets.values.forEach { target ->
+            GalleryUpdateManager.reportUnplannedFailure(applicationContext, target.gid,
+                findGalleryUpdateSource(target), getString(R.string.gallery_update_error_cancelled))
         }
         mGalleryUpdateTasks.values.forEach { it.cancel() }
         mGalleryUpdateTasks.clear()
+        mGalleryUpdateTargets.clear()
         mUpdatingDelay?.cancel()
     }
 
-    private fun showGalleryUpdateFailure(target: GalleryDetail, error: String) {
-        GalleryUpdateManager.notifyUpdateStateChanged(
-            target.gid, GalleryUpdateManager.UPDATE_STATE_FAILED
-        )
+    private fun findGalleryUpdateSource(target: GalleryDetail): DownloadInfo? {
+        val manager = mDownloadManager ?: return null
+        val plan = GalleryUpdateManager.getPlan(target.gid)
+        if (plan != null) return manager.getDownloadInfo(plan.sourceGid)
+        target.firstGid?.takeIf { it > 0 }?.let {
+            manager.findClosestOlderGalleryVersion(it, target.gid)?.let { source -> return source }
+        }
+        val parent = target.parent?.let { GalleryDetailUrlParser.parse(it, false) }
+        return parent?.let { manager.getDownloadInfo(it.gid) }
+    }
+
+    private fun showGalleryUpdateFailure(target: GalleryDetail, error: String, recordFailure: Boolean = true) {
+        if (recordFailure) GalleryUpdateManager.reportUnplannedFailure(applicationContext,
+            target.gid, findGalleryUpdateSource(target), error)
         val text = getString(
             R.string.gallery_update_notification_failed,
             EhUtils.getSuitableTitle(target), error
@@ -878,7 +895,8 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
                         title = info.title
                         titleJpn = info.titleJpn
                     }
-                    showGalleryUpdateFailure(target, getString(R.string.gallery_update_finalization_failed))
+                    // DownloadManager has already published the detailed failure record.
+                    showGalleryUpdateFailure(target, getString(R.string.gallery_update_finalization_failed), false)
                     checkStopSelf()
                 }
             }

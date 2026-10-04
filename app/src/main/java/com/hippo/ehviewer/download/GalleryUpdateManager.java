@@ -20,6 +20,8 @@ import androidx.annotation.Nullable;
 
 import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.R;
+import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.spider.SpiderDen;
@@ -27,6 +29,8 @@ import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.spider.SpiderQueen;
 import com.hippo.streampipe.InputStreamPipe;
 import com.hippo.unifile.UniFile;
+import com.hippo.lib.yorozuya.SimpleHandler;
+import com.hippo.util.IoThreadPoolExecutor;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -63,6 +67,7 @@ public final class GalleryUpdateManager {
     private static final Map<Long, UpdatePlan> PLAN_CACHE = new ConcurrentHashMap<>();
     private static final Map<Long, SourcePages> SOURCE_CACHE = new ConcurrentHashMap<>();
     private static final Map<Long, Integer> UPDATE_STATE_CACHE = new ConcurrentHashMap<>();
+    private static final Map<Long, Object> FAILURE_REQUESTS = new ConcurrentHashMap<>();
     private static final Set<Long> CLEANUP_IN_PROGRESS =
             Collections.synchronizedSet(new HashSet<>());
     private static final CopyOnWriteArrayList<UpdateStateListener> UPDATE_STATE_LISTENERS =
@@ -95,6 +100,7 @@ public final class GalleryUpdateManager {
     }
 
     public static void notifyUpdateStateChanged(long targetGid, int state) {
+        if (state != UPDATE_STATE_FAILED) FAILURE_REQUESTS.remove(targetGid);
         UPDATE_STATE_CACHE.put(targetGid, state);
         for (UpdateStateListener listener : UPDATE_STATE_LISTENERS) {
             listener.onGalleryUpdateStateChanged(targetGid, state);
@@ -145,11 +151,18 @@ public final class GalleryUpdateManager {
         @NonNull
         public final List<Long> parentGids;
         public volatile boolean progressMigrated;
+        @NonNull
+        public volatile String sourceTitle;
 
         UpdatePlan(long targetGid, long sourceGid, @NonNull List<Long> parentGids) {
+            this(targetGid, sourceGid, parentGids, "");
+        }
+
+        UpdatePlan(long targetGid, long sourceGid, @NonNull List<Long> parentGids, String sourceTitle) {
             this.targetGid = targetGid;
             this.sourceGid = sourceGid;
             this.parentGids = Collections.unmodifiableList(parentGids);
+            this.sourceTitle = sourceTitle != null ? sourceTitle : "";
         }
     }
 
@@ -171,6 +184,11 @@ public final class GalleryUpdateManager {
 
     public static synchronized void register(long targetGid, long sourceGid,
                                              @NonNull List<Long> parentGids) {
+        register(targetGid, sourceGid, parentGids, "");
+    }
+
+    public static synchronized void register(long targetGid, long sourceGid,
+                                             @NonNull List<Long> parentGids, String sourceTitle) {
         SharedPreferences preferences = preferences();
         if (preferences == null || targetGid <= 0L || sourceGid <= 0L) {
             return;
@@ -194,8 +212,10 @@ public final class GalleryUpdateManager {
             JSONObject json = new JSONObject();
             json.put(JSON_SOURCE_GID, sourceGid);
             json.put(JSON_PARENT_GIDS, parents);
+            json.put("source_title", sourceTitle != null ? sourceTitle : "");
             preferences.edit().putString(KEY_PREFIX + targetGid, json.toString()).apply();
-            PLAN_CACHE.put(targetGid, new UpdatePlan(targetGid, sourceGid, normalizedParents));
+            UpdatePlan plan = new UpdatePlan(targetGid, sourceGid, normalizedParents, sourceTitle);
+            PLAN_CACHE.put(targetGid, plan);
             CLEANUP_IN_PROGRESS.remove(targetGid);
             SOURCE_CACHE.remove(targetGid);
             notifyUpdateStateChanged(targetGid, UPDATE_STATE_UPDATING);
@@ -235,7 +255,8 @@ public final class GalleryUpdateManager {
                 cancel(targetGid);
                 return null;
             }
-            UpdatePlan plan = new UpdatePlan(targetGid, sourceGid, parentGids);
+            UpdatePlan plan = new UpdatePlan(targetGid, sourceGid, parentGids,
+                    json.optString("source_title", ""));
             plan.progressMigrated = json.optBoolean(JSON_PROGRESS_MIGRATED, false);
             PLAN_CACHE.put(targetGid, plan);
             return plan;
@@ -347,6 +368,11 @@ public final class GalleryUpdateManager {
     /** Transfers reading progress without creating a persistent update plan. */
     public static boolean migrateReadingProgress(@NonNull Context context, long sourceGid,
                                                  @NonNull GalleryInfo targetInfo) {
+        return readingProgressFailure(context, sourceGid, targetInfo) == null;
+    }
+
+    @Nullable
+    static String readingProgressFailure(Context context, long sourceGid, GalleryInfo targetInfo) {
 
         SpiderInfo source = readDownloadedSpiderInfo(sourceGid);
         SpiderInfo target = readDownloadedSpiderInfo(targetInfo.gid);
@@ -355,7 +381,8 @@ public final class GalleryUpdateManager {
             Log.w(TAG, "Missing update metadata for reading progress: source=" + sourceGid
                     + " available=" + (source != null) + ", target=" + targetInfo.gid
                     + " available=" + (target != null));
-            return false;
+            return metadataFailure(context, source == null || source.pTokenMap == null
+                    ? sourceGid : targetInfo.gid, source == null || source.pTokenMap == null);
         }
 
         // Reading progress is also kept in the spider-info cache. Merge only startPage here:
@@ -368,7 +395,7 @@ public final class GalleryUpdateManager {
         // A non-zero target page means the user has already read the new gallery. Never replace
         // that newer, gallery-specific choice with progress inherited from its parent.
         if (target.startPage > 0 || source.startPage <= 0) {
-            return true;
+            return null;
         }
 
         int mappedPage = findMappedStartPage(source, target);
@@ -377,19 +404,21 @@ public final class GalleryUpdateManager {
             // the plan intact so a later continuation can retry the migration.
             // A fully replaced gallery has no surviving anchor. There is nothing to
             // migrate once both token tables are complete; partial tables must retry.
-            return hasCompletePTokenMap(source) && hasCompletePTokenMap(target);
+            return hasCompletePTokenMap(source) && hasCompletePTokenMap(target) ? null
+                    : context.getString(R.string.gallery_update_error_tokens,
+                            !hasCompletePTokenMap(source) ? sourceGid : targetInfo.gid);
         }
 
         // Re-read before writing to narrow the race with a reader opened while the background
         // update was finishing. Any progress made on the target since the first read wins.
         SpiderInfo latestTarget = readDownloadedSpiderInfo(targetInfo.gid);
         if (latestTarget == null || latestTarget.pTokenMap == null) {
-            return false;
+            return metadataFailure(context, targetInfo.gid, false);
         }
         latestTarget.startPage = Math.max(latestTarget.startPage,
                 readCachedStartPage(context, targetInfo.gid));
         if (latestTarget.startPage > 0) {
-            return true;
+            return null;
         }
 
         latestTarget.startPage = mappedPage;
@@ -406,11 +435,11 @@ public final class GalleryUpdateManager {
                     + ": expected=" + mappedPage + ", disk="
                     + (persisted == null ? -1 : persisted.startPage)
                     + ", cache=" + readCachedStartPage(context, targetInfo.gid));
-            return false;
+            return context.getString(R.string.gallery_update_error_progress_save);
         }
         Log.i(TAG, "Migrated reading progress from " + sourceGid + " page "
                 + source.startPage + " to " + targetInfo.gid + " page " + mappedPage);
-        return true;
+        return null;
     }
 
     private static boolean hasCompletePTokenMap(@NonNull SpiderInfo info) {
@@ -577,6 +606,114 @@ public final class GalleryUpdateManager {
         return getPlan(targetGid) != null && CLEANUP_IN_PROGRESS.add(targetGid);
     }
 
+    /** Worker-thread failure publication. A replaced/cancelled plan must not overwrite its retry. */
+    public static void reportFailure(Context context, UpdatePlan plan, String reason) {
+        if (plan == null || getPlan(plan.targetGid) != plan) return;
+        Object request = new Object();
+        FAILURE_REQUESTS.put(plan.targetGid, request);
+        publishPlannedFailure(context, plan, reason, System.currentTimeMillis(), request);
+    }
+
+    private static void publishPlannedFailure(Context context, UpdatePlan plan, String reason,
+                                              long failedAt, Object request) {
+        if (getPlan(plan.targetGid) != plan || FAILURE_REQUESTS.get(plan.targetGid) != request) return;
+        GalleryUpdateRecord record = failureSnapshot(plan, reason, failedAt);
+        synchronized (GalleryUpdateManager.class) {
+            if (getPlan(plan.targetGid) != plan || FAILURE_REQUESTS.get(plan.targetGid) != request) return;
+            saveFailure(context, record);
+        }
+        SimpleHandler.getInstance().post(() -> {
+            if (getPlan(plan.targetGid) == plan && FAILURE_REQUESTS.get(plan.targetGid) == request)
+                notifyUpdateStateChanged(plan.targetGid, UPDATE_STATE_FAILED);
+        });
+    }
+
+    public static void reportFailureAsync(Context context, UpdatePlan plan, String reason) {
+        if (plan == null || getPlan(plan.targetGid) != plan) return;
+        Object request = new Object();
+        long failedAt = System.currentTimeMillis();
+        FAILURE_REQUESTS.put(plan.targetGid, request);
+        IoThreadPoolExecutor.Companion.getInstance().execute(() ->
+                publishPlannedFailure(context, plan, reason, failedAt, request));
+    }
+
+    /** Also record failures before a plan exists, or after an explicit cancellation. */
+    public static void reportUnplannedFailure(Context context, long targetGid,
+                                              @Nullable DownloadInfo source, String reason) {
+        UpdatePlan snapshot = new UpdatePlan(targetGid, source != null ? source.gid : 0,
+                source != null ? List.of(source.gid) : List.of(),
+                source != null ? EhUtils.getSuitableTitle(source) : "");
+        reportUnplannedFailure(context, snapshot, reason);
+    }
+
+    public static void reportUnplannedFailure(Context context, UpdatePlan snapshot, String reason) {
+        long failedAt = System.currentTimeMillis();
+        Object request = new Object();
+        FAILURE_REQUESTS.put(snapshot.targetGid, request);
+        IoThreadPoolExecutor.Companion.getInstance().execute(() -> {
+            GalleryUpdateRecord record = failureSnapshot(snapshot, reason, failedAt);
+            synchronized (GalleryUpdateManager.class) {
+                if (getPlan(snapshot.targetGid) != null
+                        || FAILURE_REQUESTS.get(snapshot.targetGid) != request) return;
+                saveFailure(context, record);
+            }
+            SimpleHandler.getInstance().post(() -> {
+                if (getPlan(snapshot.targetGid) == null
+                        && FAILURE_REQUESTS.get(snapshot.targetGid) == request)
+                    notifyUpdateStateChanged(snapshot.targetGid, UPDATE_STATE_FAILED);
+            });
+        });
+    }
+
+    private static GalleryUpdateRecord failureSnapshot(UpdatePlan plan, String reason, long failedAt) {
+        ArrayList<Long> retained = new ArrayList<>();
+        for (Long gid : plan.parentGids) {
+            GalleryInfo placeholder = new GalleryInfo();
+            placeholder.gid = gid;
+            try {
+                UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
+                if (dir != null && dir.exists()) retained.add(gid);
+            } catch (RuntimeException e) {
+                // Storage access failed, so removal cannot be confirmed.
+                retained.add(gid);
+            }
+        }
+        String title = plan.sourceTitle;
+        if (title.isEmpty() && plan.sourceGid > 0) {
+            DownloadInfo source = EhApplication.getDownloadManager().getDownloadInfo(plan.sourceGid);
+            if (source != null) title = EhUtils.getSuitableTitle(source);
+        }
+        return GalleryUpdateRecord.failure(plan.targetGid, plan.sourceGid, failedAt, title, reason,
+                retained.stream().mapToLong(Long::longValue).toArray());
+    }
+
+    private static void saveFailure(Context context, GalleryUpdateRecord record) {
+        try {
+            if (!GalleryUpdateRecordStore.get(context).saveFailure(record))
+                Log.e(TAG, "Unable to persist update failure for " + record.targetGid);
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Unable to persist update failure for " + record.targetGid, e);
+        }
+    }
+
+    /** Explain disk metadata failures without substituting a potentially stale cache. */
+    static String metadataFailure(Context context, long gid, boolean source) {
+        GalleryInfo placeholder = new GalleryInfo();
+        placeholder.gid = gid;
+        UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
+        String problem;
+        if (dir == null || !dir.isDirectory()) {
+            problem = context.getString(R.string.gallery_update_error_directory);
+        } else {
+            UniFile file = dir.findFile(SpiderQueen.SPIDER_INFO_FILENAME);
+            problem = context.getString(file == null || !file.exists()
+                    ? R.string.gallery_update_error_metadata_missing
+                    : R.string.gallery_update_error_metadata_invalid);
+        }
+        return context.getString(source ? R.string.gallery_update_error_source_metadata
+                : R.string.gallery_update_error_target_metadata, gid, problem);
+    }
+
     /** Worker-thread checkpoint; source metadata must survive retries after partial cleanup. */
     public static boolean stageUpdateRecord(Context context, UpdatePlan plan) {
         if (getPlan(plan.targetGid) != plan) return false;
@@ -584,8 +721,24 @@ public final class GalleryUpdateManager {
                 plan.targetGid, plan.sourceGid, readDownloadedSpiderInfo(plan.sourceGid),
                 readDownloadedSpiderInfo(plan.targetGid));
         synchronized (GalleryUpdateManager.class) {
-            return getPlan(plan.targetGid) == plan
-                    && GalleryUpdateRecordStore.get(context).stage(plan, () -> snapshot);
+            if (getPlan(plan.targetGid) != plan) return false;
+            // Older app versions did not save titles in plans. Snapshot one before cleanup
+            // removes its download entry, including when progress was already migrated.
+            if (plan.sourceTitle.isEmpty()) {
+                DownloadInfo source = EhApplication.getDownloadManager().getDownloadInfo(plan.sourceGid);
+                String title = source != null ? EhUtils.getSuitableTitle(source) : null;
+                if (!TextUtils.isEmpty(title)) {
+                    SharedPreferences prefs = preferences();
+                    if (prefs == null) return false;
+                    try {
+                        JSONObject json = new JSONObject(prefs.getString(KEY_PREFIX + plan.targetGid, "{}"));
+                        json.put("source_title", title);
+                        if (!prefs.edit().putString(KEY_PREFIX + plan.targetGid, json.toString()).commit()) return false;
+                        plan.sourceTitle = title;
+                    } catch (JSONException e) { return false; }
+                }
+            }
+            return GalleryUpdateRecordStore.get(context).stage(plan, () -> snapshot);
         }
     }
 

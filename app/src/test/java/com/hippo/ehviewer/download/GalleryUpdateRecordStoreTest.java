@@ -110,4 +110,34 @@ public class GalleryUpdateRecordStoreTest {
         Settings.putIntToStr(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT, -1);
         assertEquals(500, Settings.getGalleryUpdateRecordLimit());
     }
+
+    @Test public void failedAttemptIsVisibleAfterReopenAndSuccessfulRetryUsesOriginalDraft() {
+        stage(200, 100);
+        assertTrue(store.saveFailure(GalleryUpdateRecord.failure(200, 100, 123,
+                "Original title", "Cleanup failed", new long[]{100})));
+        store.close();
+        store = new GalleryUpdateRecordStore(context);
+        GalleryUpdateRecord failure = store.find(200);
+        assertTrue(failure.isFailure());
+        assertEquals(123, failure.completedAt);
+        assertEquals("Original title", failure.sourceTitle);
+        GalleryUpdateManager.UpdatePlan plan = new GalleryUpdateManager.UpdatePlan(200, 100, List.of(100L));
+        assertTrue(store.stage(plan, () -> { throw new AssertionError("Must keep original comparison"); }));
+        assertTrue(store.complete(200, 100));
+        assertFalse(store.find(200).isFailure());
+        assertArrayEquals(new int[]{1, 3, 4}, store.find(200).addedPages);
+    }
+
+    @Test public void failureReplacesPreviousAttemptAndSharesRecordLimit() {
+        stage(200, 100); assertTrue(store.complete(200, 100));
+        assertTrue(store.saveFailure(GalleryUpdateRecord.failure(200, 50, 999,
+                "Another source", "Download failed", new long[]{50})));
+        assertTrue(store.find(200).isFailure());
+        assertEquals(50, store.find(200).sourceGid);
+        assertTrue(store.saveFailure(GalleryUpdateRecord.failure(300, 200, 1000,
+                "", "Preparation failed", new long[0])));
+        store.trim(1);
+        assertNull(store.find(200));
+        assertNotNull(store.find(300));
+    }
 }

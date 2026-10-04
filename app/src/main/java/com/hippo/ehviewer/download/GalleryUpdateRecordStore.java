@@ -62,7 +62,8 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
     public synchronized boolean stage(GalleryUpdateManager.UpdatePlan plan,
                                       java.util.function.Supplier<GalleryUpdateRecord> snapshot) {
         GalleryUpdateRecord existing = read("pending", plan.targetGid);
-        if (existing != null && existing.sourceGid == plan.sourceGid) return true;
+        if (existing != null && existing.sourceGid == plan.sourceGid
+                && (existing.complete || plan.progressMigrated)) return true;
         GalleryUpdateRecord record = snapshot.get();
         try {
             ContentValues values = new ContentValues();
@@ -113,6 +114,30 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
 
     public synchronized void discardPending(long gid) {
         getWritableDatabase().delete("pending", "gid=?", new String[]{Long.toString(gid)});
+    }
+
+    /** A failed attempt is visible immediately; keep the draft and plan for a successful retry. */
+    public synchronized boolean saveFailure(GalleryUpdateRecord record) {
+        if (!record.isFailure()) throw new IllegalArgumentException("Expected failure record");
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            ContentValues values = new ContentValues();
+            values.put("gid", record.targetGid);
+            values.put("source_gid", record.sourceGid);
+            values.put("completed_at", record.completedAt);
+            values.put("reading_page", 0);
+            values.put("payload", record.toJson());
+            if (db.insertWithOnConflict("records", null, values,
+                    SQLiteDatabase.CONFLICT_REPLACE) == -1) return false;
+            trim(db, Settings.getGalleryUpdateRecordLimit());
+            db.setTransactionSuccessful();
+            return true;
+        } catch (JSONException e) {
+            return false;
+        } finally {
+            db.endTransaction();
+        }
     }
 
     public synchronized void trim(int limit) {

@@ -67,6 +67,41 @@ public class GalleryUpdateLogDialogTest {
         dialog.dismiss(); activity.finish();
     }
 
+    @Test public void failureUsesSameDialogWithTimeSourceReasonAndRetainedParents() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setTheme(R.style.AppTheme);
+        GalleryUpdateRecord record = GalleryUpdateRecord.failure(200, 12341255, 1791076310000L,
+                "qweifoaeofj", "Missing .ehviewer", new long[]{12341255, 100});
+        AtomicInteger historyLoads = new AtomicInteger();
+        AlertDialog dialog = GalleryUpdateLogDialog.show(activity, record, historyLoads::incrementAndGet);
+        String text = text(dialog.getWindow().getDecorView());
+        assertTrue(text.contains(activity.getString(R.string.gallery_update_error_log)));
+        assertTrue(text.contains(activity.getString(R.string.gallery_update_log_time)));
+        assertTrue(text.contains("GID: 12341255"));
+        assertTrue(text.contains("qweifoaeofj"));
+        assertTrue(text.contains("Missing .ehviewer"));
+        assertTrue(text.contains(activity.getString(R.string.gallery_update_error_parents_retained,
+                "12341255, 100")));
+        assertFalse(text.contains(activity.getString(R.string.gallery_update_log_incomplete)));
+        assertEquals(0, historyLoads.get());
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+        ShadowLooper.idleMainLooper();
+        assertEquals(1, historyLoads.get());
+        dialog.dismiss(); activity.finish();
+    }
+
+    @Test public void failureBeforeSourceSelectionAndAfterCleanupDoesNotClaimParentsRetained() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setTheme(R.style.AppTheme);
+        AlertDialog dialog = GalleryUpdateLogDialog.show(activity,
+                GalleryUpdateRecord.failure(200, 0, 123, "", "Version lookup failed", new long[0]), () -> {});
+        String text = text(dialog.getWindow().getDecorView());
+        assertTrue(text.contains(activity.getString(R.string.gallery_update_error_source_unknown)));
+        assertFalse(text.contains("GID: 0"));
+        assertFalse(text.contains(activity.getString(R.string.gallery_update_error_parents_retained, "")));
+        dialog.dismiss(); activity.finish();
+    }
+
     private String text(View view) {
         StringBuilder text = new StringBuilder();
         if (view instanceof TextView label) text.append(label.getText()).append('\n');

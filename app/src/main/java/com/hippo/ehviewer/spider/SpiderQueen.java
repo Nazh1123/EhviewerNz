@@ -135,6 +135,10 @@ public final class SpiderQueen implements Runnable {
     private final Object mWorkerLock = new Object();
     private final Object mPTokenLock = new Object();
     private final AtomicReference<SpiderInfo> mSpiderInfo = new AtomicReference<>();
+    private volatile String mPreparationError;
+
+    @Nullable
+    public String getPreparationError() { return mPreparationError; }
     private final Queue<Integer> mRequestPTokenQueue = new ConcurrentLinkedQueue<>();
     private final Object mPageStateLock = new Object();
     // Store request page. The index may be invalid
@@ -924,6 +928,7 @@ public final class SpiderQueen implements Runnable {
     }
 
     private SpiderInfo readSpiderInfoFromInternet() {
+        mPreparationError = null;
         try {
             SpiderInfo spiderInfo = new SpiderInfo();
             spiderInfo.gid = mGalleryInfo.gid;
@@ -941,6 +946,7 @@ public final class SpiderQueen implements Runnable {
         } catch (Throwable e) {
             ExceptionUtils.throwIfFatal(e);
             Analytics.recordException(e);
+            mPreparationError = ExceptionUtils.getReadableString(e);
             return null;
         }
     }

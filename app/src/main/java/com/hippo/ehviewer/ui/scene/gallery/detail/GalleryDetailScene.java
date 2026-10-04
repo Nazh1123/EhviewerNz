@@ -1906,6 +1906,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         } else if (mUpdateGallery == v) {
             if (mGalleryUpdateRecord != null && mGalleryDetail != null
                     && mGalleryUpdateRecord.targetGid == mGalleryDetail.gid
+                    && !mGalleryUpdateRecord.isFailure()
                     && GalleryUpdateManager.getPlan(mGalleryDetail.gid) == null) {
                 readGalleryUpdates();
                 return;
@@ -1923,7 +1924,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         } else if (mGalleryHistory == v) {
             if (mGalleryUpdateRecord != null && mGalleryDetail != null
                     && mGalleryUpdateRecord.targetGid == mGalleryDetail.gid
-                    && GalleryUpdateManager.getPlan(mGalleryDetail.gid) == null) {
+                    && (mGalleryUpdateRecord.isFailure()
+                        || GalleryUpdateManager.getPlan(mGalleryDetail.gid) == null)) {
                 showGalleryUpdateLog();
                 return;
             }
@@ -2571,6 +2573,21 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
         if (mGalleryUpdateRecord != null && mGalleryUpdateRecord.targetGid == detail.gid
+                && mGalleryUpdateRecord.isFailure()) {
+            mVersionProgressTargetGid = -1L;
+            mVersionProgressSourceGid = -1L;
+            mVersionProgressGeneration++;
+            mGalleryUpdateSessionGid = detail.gid;
+            Integer reported = GalleryUpdateManager.getUpdateState(detail.gid);
+            updateGalleryUpdateButtonState(downloadManager.isDownloadActive(detail.gid)
+                    ? GalleryUpdateManager.UPDATE_STATE_UPDATING
+                    : reported != null ? reported : GalleryUpdateManager.UPDATE_STATE_FAILED);
+            bindGalleryUpdateButtonState();
+            mGalleryHistory.setText(R.string.gallery_update_error_log);
+            setGalleryVersionActionVisibility(hasParent, true);
+            return;
+        }
+        if (mGalleryUpdateRecord != null && mGalleryUpdateRecord.targetGid == detail.gid
                 && updatePlan == null && !downloadManager.isDownloadActive(detail.gid)) {
             mVersionProgressTargetGid = -1L;
             mVersionProgressSourceGid = -1L;
@@ -2851,7 +2868,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             if (mGalleryUpdateSessionGid != targetGid) {
                 if (mGalleryDetail == null || mGalleryDetail.gid != targetGid) return;
             }
-            if (state == GalleryUpdateManager.UPDATE_STATE_UPDATED) invalidateUpdateRecord();
+            if (state == GalleryUpdateManager.UPDATE_STATE_UPDATED
+                    || state == GalleryUpdateManager.UPDATE_STATE_FAILED) invalidateUpdateRecord();
             updateGalleryUpdateButtonState(state);
             updateGalleryVersionActionsVisibility();
         });

@@ -74,7 +74,7 @@ public class GalleryUpdateCleanupTest {
         ReflectionHelpers.setStaticField(Settings.class, "sContext", context);
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 context.getSharedPreferences("cleanup-tests", Context.MODE_PRIVATE));
-        for (String field : List.of("PLAN_CACHE", "SOURCE_CACHE", "UPDATE_STATE_CACHE")) {
+        for (String field : List.of("PLAN_CACHE", "SOURCE_CACHE", "UPDATE_STATE_CACHE", "FAILURE_REQUESTS")) {
             ((Map<?, ?>) ReflectionHelpers.getStaticField(GalleryUpdateManager.class, field)).clear();
         }
         ((Set<?>) ReflectionHelpers.getStaticField(GalleryUpdateManager.class, "CLEANUP_IN_PROGRESS")).clear();
@@ -183,7 +183,7 @@ public class GalleryUpdateCleanupTest {
         awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
         assertNotNull(manager.getDownloadInfo(100)); assertTrue(sourceDir.exists());
         assertNotNull(GalleryUpdateManager.getPlan(200));
-        assertNull(GalleryUpdateRecordStore.get(context).find(200));
+        assertFailureLog(context.getString(com.hippo.ehviewer.R.string.gallery_update_error_image, 3));
         assertEquals(GalleryUpdateManager.UPDATE_STATE_FAILED, GalleryUpdateState.resolve(
                 GalleryUpdateManager.getUpdateState(200), manager.getDownloadInfo(200), true));
         image(targetDir, 2);
@@ -200,7 +200,7 @@ public class GalleryUpdateCleanupTest {
         assertTrue(manager.retryGalleryUpdateCleanup(200));
         awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
         assertTrue(sourceDir.exists()); assertNotNull(manager.getDownloadInfo(100));
-        assertNull(GalleryUpdateRecordStore.get(context).find(200));
+        assertFailureLog(".ehviewer");
         assertFalse(new File(targetDir, ".ehviewer").exists());
     }
 
@@ -213,7 +213,7 @@ public class GalleryUpdateCleanupTest {
         awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
         assertTrue(sourceDir.exists()); assertNotNull(manager.getDownloadInfo(100));
         assertNotNull(GalleryUpdateManager.getPlan(200));
-        assertNull(GalleryUpdateRecordStore.get(context).find(200));
+        assertFailureLog(".ehviewer");
         assertFalse(new File(sourceDir, ".ehviewer").exists());
     }
 
@@ -231,6 +231,166 @@ public class GalleryUpdateCleanupTest {
         info.set(metadata(200, 0, "1111111111", "2222222222", "3333333333"));
         ReflectionHelpers.callInstanceMethod(queen, "notifyFinish");
         assertTrue(manager.isCompleteUsableGallery(manager.getDownloadInfo(200)));
+    }
+
+    private GalleryUpdateRecord assertFailureLog(String reason) {
+        GalleryUpdateRecord record = GalleryUpdateRecordStore.get(context).find(200);
+        assertNotNull(record);
+        assertTrue(record.isFailure());
+        assertTrue(record.completedAt > 0);
+        assertEquals(100, record.sourceGid);
+        assertEquals("test", record.sourceTitle);
+        assertTrue(record.errorReason, record.errorReason.contains(reason));
+        assertArrayEquals(new long[]{100}, record.retainedParentGids);
+        return record;
+    }
+
+    @Test public void failureIsSavedBeforeStateListenerAndRetrySuccessReplacesIt() throws Exception {
+        disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
+        GalleryUpdateManager.register(200, 100, List.of(100L), "Saved old title");
+        AtomicReference<GalleryUpdateRecord> seen = new AtomicReference<>();
+        GalleryUpdateManager.UpdateStateListener listener = (gid, state) -> {
+            if (gid == 200 && state == GalleryUpdateManager.UPDATE_STATE_FAILED)
+                seen.set(GalleryUpdateRecordStore.get(context).find(gid));
+        };
+        GalleryUpdateManager.addUpdateStateListener(listener);
+        try {
+            assertTrue(manager.retryGalleryUpdateCleanup(200));
+            awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
+            assertNotNull(seen.get());
+            assertEquals("Saved old title", seen.get().sourceTitle);
+            assertTrue(seen.get().errorReason.contains(".ehviewer"));
+            assertNotNull(GalleryUpdateManager.getPlan(200));
+            disk(sourceDir, metadata(100, 0, "1111111111", "2222222222"));
+            assertTrue(manager.retryGalleryUpdateCleanup(200));
+            awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
+            assertFalse(GalleryUpdateRecordStore.get(context).find(200).isFailure());
+            assertArrayEquals(new int[]{1}, GalleryUpdateRecordStore.get(context).find(200).addedPages);
+        } finally { GalleryUpdateManager.removeUpdateStateListener(listener); }
+    }
+
+    @Test public void replacedPlanCannotPublishStaleFailure() {
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        GalleryUpdateManager.UpdatePlan old = GalleryUpdateManager.getPlan(200);
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        GalleryUpdateManager.reportFailure(context, old, "Stale error");
+        assertNull(GalleryUpdateRecordStore.get(context).find(200));
+        assertEquals(Integer.valueOf(GalleryUpdateManager.UPDATE_STATE_UPDATING),
+                GalleryUpdateManager.getUpdateState(200));
+    }
+
+    @Test public void downloadFailureKeepsUnderlyingPageErrorAndOldGallery() throws Exception {
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        okhttp3.OkHttpClient client = new okhttp3.OkHttpClient();
+        ReflectionHelpers.setField(context, "mOkHttpClient", client);
+        ReflectionHelpers.setField(context, "mImageOkHttpClient", client);
+        DownloadInfo target = manager.getDownloadInfo(200);
+        target.state = DownloadInfo.STATE_DOWNLOAD;
+        SpiderQueen queen = ReflectionHelpers.callConstructor(SpiderQueen.class,
+                ReflectionHelpers.ClassParameter.from(EhApplication.class, (EhApplication) context),
+                ReflectionHelpers.ClassParameter.from(com.hippo.ehviewer.client.data.GalleryInfo.class, target));
+        ReflectionHelpers.setField(queen, "mDownloadReference", 1);
+        ReflectionHelpers.setField(manager, "mCurrentTask", target);
+        ReflectionHelpers.setField(manager, "mCurrentSpider", queen);
+        manager.onPageFailure(2, "HTTP 403", 2, 2, 3);
+        manager.onFinish(2, 2, 3);
+        awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
+        GalleryUpdateRecord record = assertFailureLog("HTTP 403");
+        assertTrue(record.errorReason.contains("p3"));
+        assertEquals(DownloadInfo.STATE_FAILED, target.state);
+        assertTrue(sourceDir.exists());
+    }
+
+    @Test public void preparationFailureIsPublishedEvenWithoutADownloadOrPlan() throws Exception {
+        var controller = Robolectric.buildService(DownloadService.class).create();
+        DownloadService service = controller.get();
+        try {
+            com.hippo.ehviewer.client.data.GalleryDetail target = new com.hippo.ehviewer.client.data.GalleryDetail();
+            target.gid = 300; target.title = "new"; target.firstGid = 0L;
+            ReflectionHelpers.callInstanceMethod(service, "startGalleryUpdate",
+                    ReflectionHelpers.ClassParameter.from(com.hippo.ehviewer.client.data.GalleryDetail.class, target));
+            long deadline = System.nanoTime() + 10_000_000_000L;
+            while (!Integer.valueOf(GalleryUpdateManager.UPDATE_STATE_FAILED).equals(
+                    GalleryUpdateManager.getUpdateState(300)) && System.nanoTime() < deadline) {
+                ShadowLooper.idleMainLooper(); Thread.sleep(10);
+            }
+            GalleryUpdateRecord record = GalleryUpdateRecordStore.get(context).find(300);
+            assertNotNull(record); assertTrue(record.isFailure());
+            assertEquals(0, record.sourceGid);
+            assertEquals(context.getString(com.hippo.ehviewer.R.string.gallery_update_no_downloaded_parent),
+                    record.errorReason);
+            assertNull(GalleryUpdateManager.getPlan(300));
+            assertNull(manager.getDownloadInfo(300));
+        } finally { controller.destroy(); }
+    }
+
+    @Test public void partialCleanupRetainsSourceTitleAndOnlyListsSurvivingDirectories() throws Exception {
+        File earlier = new File(sourceDir.getParentFile(), "50-earlier");
+        assertTrue(earlier.mkdir()); EhDB.putDownloadDirname(50, earlier.getName());
+        GalleryUpdateManager.register(200, 100, List.of(100L, 50L), "Saved source title");
+        GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(200);
+        ((Map<?, ?>) ReflectionHelpers.getStaticField(GalleryUpdateManager.class, "PLAN_CACHE")).clear();
+        plan = GalleryUpdateManager.getPlan(200);
+        assertEquals("Saved source title", plan.sourceTitle);
+        assertTrue(UniFile.fromFile(sourceDir).delete()); EhDB.removeDownloadDirname(100);
+        GalleryUpdateManager.reportFailure(context, plan, "Unable to delete GID 50");
+        awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
+        GalleryUpdateRecord record = GalleryUpdateRecordStore.get(context).find(200);
+        assertEquals("Saved source title", record.sourceTitle);
+        assertArrayEquals(new long[]{50}, record.retainedParentGids);
+    }
+
+    @Test public void publicationFailureAfterCleanupKeepsLegacySourceTitleWithoutClaimingRetention() throws Exception {
+        GalleryUpdateRecordStore failingStore = GalleryUpdateRecordStore.get(context);
+        failingStore.getWritableDatabase().execSQL("CREATE TRIGGER fail_success_publication "
+                + "BEFORE INSERT ON records WHEN NEW.payload LIKE '%\"error_reason\":\"\"%' "
+                + "BEGIN SELECT RAISE(ABORT, 'Injected publication failure'); END");
+        disk(sourceDir, metadata(100, 0, "1111111111", "2222222222"));
+        disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
+        assertFalse(sourceDir.exists());
+        assertNull(manager.getDownloadInfo(100));
+        GalleryUpdateRecord record = failingStore.find(200);
+        assertTrue(record.isFailure());
+        assertEquals("test", record.sourceTitle);
+        assertTrue(record.errorReason.startsWith(context.getString(
+                com.hippo.ehviewer.R.string.gallery_update_error_record_publish)));
+        assertEquals(0, record.retainedParentGids.length);
+        ((Map<?, ?>) ReflectionHelpers.getStaticField(GalleryUpdateManager.class, "PLAN_CACHE")).clear();
+        assertEquals("test", GalleryUpdateManager.getPlan(200).sourceTitle);
+    }
+
+    @Test public void failureLogEntryIsVisibleWithPendingPlanAndRetryButtonStaysEnabled() throws Exception {
+        disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
+        android.app.Activity activity = Robolectric.buildActivity(android.app.Activity.class).setup().get();
+        activity.setTheme(com.hippo.ehviewer.R.style.AppTheme);
+        var scene = new com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene() {
+            @Override public Context getEHContext() { return activity; }
+        };
+        com.hippo.ehviewer.client.data.GalleryDetail detail = new com.hippo.ehviewer.client.data.GalleryDetail();
+        detail.gid = 200; detail.parent = "https://e-hentai.org/g/100/0123456789/";
+        android.widget.TextView retry = new android.widget.TextView(activity);
+        android.widget.TextView log = new android.widget.TextView(activity);
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", new android.view.View(activity));
+        ReflectionHelpers.setField(scene, "mUpdateGallery", retry);
+        ReflectionHelpers.setField(scene, "mGalleryHistory", log);
+        ReflectionHelpers.setField(scene, "mGalleryDetail", detail);
+        ReflectionHelpers.setField(scene, "mUpdateRecordLookupGid", 200L);
+        ReflectionHelpers.setField(scene, "mGalleryUpdateRecord", GalleryUpdateRecordStore.get(context).find(200));
+        ReflectionHelpers.callInstanceMethod(scene, "updateGalleryVersionActionsVisibility");
+        assertEquals(activity.getString(com.hippo.ehviewer.R.string.gallery_update_error_log), log.getText());
+        assertEquals(android.view.View.VISIBLE, log.getVisibility());
+        assertTrue(retry.isEnabled());
+        assertEquals(activity.getString(com.hippo.ehviewer.R.string.download_state_failed), retry.getText());
+        ReflectionHelpers.callInstanceMethod(scene, "showGalleryUpdateLog");
+        androidx.appcompat.app.AlertDialog dialog = ReflectionHelpers.getField(scene, "mUpdateLogDialog");
+        assertNotNull(dialog); assertTrue(dialog.isShowing());
+        dialog.dismiss(); activity.finish();
     }
 
     @Test public void serviceDefersSuccessNotificationAndRetriesFinishedDownloadCleanup() throws Exception {

@@ -32,6 +32,8 @@ import androidx.annotation.Nullable;
 import com.hippo.ehviewer.Analytics;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.R;
+import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
@@ -45,6 +47,7 @@ import com.hippo.lib.image.Image;
 //import com.hippo.lib.image.Image1;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.IoThreadPoolExecutor;
+import com.hippo.util.ExceptionUtils;
 import com.hippo.lib.yorozuya.ConcurrentPool;
 import com.hippo.lib.yorozuya.MathUtils;
 import com.hippo.lib.yorozuya.ObjectUtils;
@@ -101,6 +104,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     private DownloadInfo mCurrentTask;
     @Nullable
     private SpiderQueen mCurrentSpider;
+    private final Map<Integer, String> mGalleryUpdatePageErrors = new java.util.TreeMap<>();
 
     private final ConcurrentPool<NotifyTask> mNotifyTaskPool = new ConcurrentPool<>(5);
 
@@ -312,27 +316,32 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     public boolean isCompleteUsableGallery(@Nullable DownloadInfo info) {
+        return completeGalleryFailure(info) == null;
+    }
+
+    @Nullable
+    private String completeGalleryFailure(@Nullable DownloadInfo info) {
         if (info == null || isImportedGallery(info) || info.state != DownloadInfo.STATE_FINISH
                 || info.legacy != 0) {
-            return false;
+            return mContext.getString(R.string.gallery_update_error_target_incomplete);
         }
         UniFile dir = SpiderDen.getExistingGalleryDownloadDir(info);
         if (dir == null || !dir.isDirectory()) {
-            return false;
+            return GalleryUpdateManager.metadataFailure(mContext, info.gid, false);
         }
         SpiderInfo spiderInfo = SpiderInfo.read(
                 dir.findFile(SpiderQueen.SPIDER_INFO_FILENAME));
         if (spiderInfo == null || spiderInfo.gid != info.gid || spiderInfo.pages <= 0) {
-            return false;
+            return GalleryUpdateManager.metadataFailure(mContext, info.gid, false);
         }
         for (int index = 0; index < spiderInfo.pages; index++) {
             UniFile image = SpiderDen.findImageFile(dir, index);
             if (image == null || !image.exists() || image.length() <= 0L
                     || !SpiderDen.isReadableImage(image)) {
-                return false;
+                return mContext.getString(R.string.gallery_update_error_image, index + 1);
             }
         }
-        return true;
+        return null;
     }
 
     /** Call after a background metadata pass has updated DownloadInfo objects in place. */
@@ -540,6 +549,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             SpiderQueen spider = SpiderQueen.obtainSpiderQueen(mContext, info, SpiderQueen.MODE_DOWNLOAD);
             mCurrentTask = info;
             mCurrentSpider = spider;
+            mGalleryUpdatePageErrors.clear();
+            if (GalleryUpdateManager.getPlan(info.gid) != null)
+                GalleryUpdateManager.notifyUpdateStateChanged(info.gid, GalleryUpdateManager.UPDATE_STATE_UPDATING);
             spider.addOnSpiderListener(this);
             info.state = DownloadInfo.STATE_DOWNLOAD;
             info.speed = -1;
@@ -929,6 +941,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             info.state = DownloadInfo.STATE_NONE;
             // Update in DB
             EhDB.putDownloadInfo(info);
+            recordStoppedUpdate(info.gid);
         }
         mWaitList.clear();
 
@@ -942,11 +955,11 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     public void deleteDownload(long gid) {
-        boolean galleryUpdate = GalleryUpdateManager.getPlan(gid) != null;
+        GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(gid);
         GalleryUpdateManager.cancel(gid);
-        if (galleryUpdate) {
-            GalleryUpdateManager.notifyUpdateStateChanged(
-                    gid, GalleryUpdateManager.UPDATE_STATE_FAILED);
+        if (plan != null) {
+            GalleryUpdateManager.reportUnplannedFailure(mContext, plan,
+                    mContext.getString(R.string.gallery_update_error_target_removed));
         }
         stopDownloadInternal(gid);
         // Imported metadata is app-private and keyed only by gid, so cleanup is safe and
@@ -982,11 +995,11 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     public void deleteRangeDownload(LongList gidList) {
         for (int i = 0, n = gidList.size(); i < n; i++) {
             long gid = gidList.get(i);
-            boolean galleryUpdate = GalleryUpdateManager.getPlan(gid) != null;
+            GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(gid);
             GalleryUpdateManager.cancel(gid);
-            if (galleryUpdate) {
-                GalleryUpdateManager.notifyUpdateStateChanged(
-                        gid, GalleryUpdateManager.UPDATE_STATE_FAILED);
+            if (plan != null) {
+                GalleryUpdateManager.reportUnplannedFailure(mContext, plan,
+                        mContext.getString(R.string.gallery_update_error_target_removed));
             }
         }
         stopRangeDownloadInternal(gidList);
@@ -1103,6 +1116,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 info.state = DownloadInfo.STATE_NONE;
                 // Update in DB
                 EhDB.putDownloadInfo(info);
+                recordStoppedUpdate(gid);
                 return info;
             }
         }
@@ -1131,6 +1145,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         info.state = DownloadInfo.STATE_NONE;
         // Update in DB
         EhDB.putDownloadInfo(info);
+        recordStoppedUpdate(info.gid);
         // Listener
         if (mDownloadListener != null) {
             mDownloadListener.onCancel(info);
@@ -1163,9 +1178,16 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     info.state = DownloadInfo.STATE_NONE;
                     // Update in DB
                     EhDB.putDownloadInfo(info);
+                    recordStoppedUpdate(info.gid);
                 }
             }
         }
+    }
+
+    private void recordStoppedUpdate(long gid) {
+        GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(gid);
+        if (plan != null) GalleryUpdateManager.reportFailureAsync(mContext, plan,
+                mContext.getString(R.string.gallery_update_error_cancelled));
     }
 
     /**
@@ -1531,7 +1553,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 && !target.firstGid.equals(existingTarget.firstGid)) {
             updateGalleryVersionInfo(existingTarget, target.firstGid);
         }
-        GalleryUpdateManager.register(target.gid, sourceGid, parentGids);
+        GalleryUpdateManager.register(target.gid, sourceGid, parentGids,
+                source != null ? EhUtils.getSuitableTitle(source) : "");
         startDownload(target, label);
 
         DownloadInfo targetInfo = getDownloadInfo(target.gid);
@@ -1544,9 +1567,20 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         for (Long targetGid : GalleryUpdateManager.getPlannedTargetGids()) {
             DownloadInfo target = getDownloadInfo(targetGid);
             if (target == null) {
+                GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(targetGid);
                 GalleryUpdateManager.cancel(targetGid);
+                if (plan != null) GalleryUpdateManager.reportUnplannedFailure(mContext, plan,
+                        mContext.getString(R.string.gallery_update_error_target_removed));
             } else if (target.state == DownloadInfo.STATE_FINISH) {
                 completeGalleryUpdate(targetGid);
+            } else if (!isDownloadActive(targetGid)) {
+                GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(targetGid);
+                IoThreadPoolExecutor.Companion.getInstance().execute(() -> {
+                    GalleryUpdateRecord record = GalleryUpdateRecordStore.get(mContext).find(targetGid);
+                    if (!isDownloadActive(targetGid) && (record == null || !record.isFailure()))
+                        GalleryUpdateManager.reportFailure(mContext,
+                            plan, mContext.getString(R.string.gallery_update_error_interrupted));
+                });
             }
         }
     }
@@ -1568,6 +1602,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         DownloadInfo targetInfo = mAllInfoMap.get(targetGid);
         if (targetInfo == null) {
             GalleryUpdateManager.finishCleanup(targetGid, false);
+            GalleryUpdateManager.reportFailureAsync(mContext, plan,
+                    mContext.getString(R.string.gallery_update_error_target_removed));
             return;
         }
 
@@ -1575,30 +1611,39 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 targetGid, GalleryUpdateManager.UPDATE_STATE_UPDATING);
         IoThreadPoolExecutor.Companion.getInstance().execute(() -> {
             boolean prepared = false;
+            String[] failure = {mContext.getString(R.string.gallery_update_finalization_failed)};
             try {
                 // FINISH only counts files; interrupted downloads can leave empty or
                 // unreadable images. Never remove a parent based on that state alone.
                 prepared = GalleryUpdatePreparation.prepare(plan.progressMigrated,
                         () -> {
-                            if (!isCompleteUsableGallery(targetInfo)) {
+                            String validation = completeGalleryFailure(targetInfo);
+                            if (validation != null) {
+                                failure[0] = validation;
                                 Log.w(TAG, "Gallery update " + targetGid + ": target validation failed; retaining parents");
                                 return false;
                             }
                             boolean staged = GalleryUpdateManager.stageUpdateRecord(mContext, plan);
+                            if (!staged) failure[0] = mContext.getString(R.string.gallery_update_error_record_stage);
                             if (!staged) Log.w(TAG, "Gallery update " + targetGid + ": record checkpoint failed");
                             return staged;
                         },
                         () -> {
-                            boolean migrated = GalleryUpdateManager.migrateReadingProgress(mContext, targetInfo);
+                            String error = GalleryUpdateManager.readingProgressFailure(mContext, plan.sourceGid, targetInfo);
+                            boolean migrated = error == null;
+                            if (!migrated) failure[0] = error;
                             if (!migrated) Log.w(TAG, "Gallery update " + targetGid + ": reading progress migration failed");
                             return migrated;
                         },
                         () -> {
                             boolean saved = GalleryUpdateManager.markProgressMigrated(plan);
+                            if (!saved) failure[0] = mContext.getString(R.string.gallery_update_error_progress_checkpoint);
                             if (!saved) Log.w(TAG, "Gallery update " + targetGid + ": progress checkpoint failed");
                             return saved;
                         });
             } catch (RuntimeException e) {
+                failure[0] = mContext.getString(R.string.gallery_update_error_validation,
+                        ExceptionUtils.getReadableString(e));
                 Log.w(TAG, "Unable to validate gallery update " + targetGid, e);
             }
             boolean ready = prepared;
@@ -1608,8 +1653,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 if (!ready || mAllInfoMap.get(targetGid) != targetInfo
                         || targetInfo.state != DownloadInfo.STATE_FINISH) {
                     GalleryUpdateManager.finishCleanup(targetGid, false);
-                    GalleryUpdateManager.notifyUpdateStateChanged(
-                            targetGid, GalleryUpdateManager.UPDATE_STATE_FAILED);
+                    GalleryUpdateManager.reportFailureAsync(mContext, plan, !ready ? failure[0]
+                            : mContext.getString(R.string.gallery_update_error_target_incomplete));
                     return;
                 }
                 deleteUpdatedGalleryParents(targetInfo, plan);
@@ -1627,11 +1672,20 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             }
         }
         if (gids.size() > 0) {
-            deleteRangeDownload(gids);
+            try {
+                deleteRangeDownload(gids);
+            } catch (RuntimeException e) {
+                GalleryUpdateManager.finishCleanup(targetGid, false);
+                GalleryUpdateManager.reportFailureAsync(mContext, plan,
+                        mContext.getString(R.string.gallery_update_error_cleanup,
+                                ExceptionUtils.getReadableString(e)));
+                return;
+            }
         }
 
         IoThreadPoolExecutor.Companion.getInstance().execute(() -> {
             boolean success = true;
+            String failure = "";
             try {
                 for (Long gid : plan.parentGids) {
                     if (GalleryUpdateManager.getPlan(targetGid) != plan) return;
@@ -1643,27 +1697,35 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                         EhDB.removeDownloadDirname(gid);
                     } else {
                         success = false;
+                        if (!failure.isEmpty()) failure += "\n";
+                        failure += mContext.getString(R.string.gallery_update_error_delete_parent, gid);
                     }
                 }
             } catch (RuntimeException e) {
                 success = false;
+                failure = mContext.getString(R.string.gallery_update_error_cleanup,
+                        ExceptionUtils.getReadableString(e));
                 Log.w(TAG, "Unable to remove gallery update parents " + targetGid, e);
             }
             if (success) {
                 try {
                     success = GalleryUpdateManager.completeUpdateRecord(mContext, plan);
+                    if (!success) failure = mContext.getString(R.string.gallery_update_error_record_publish);
                 } catch (RuntimeException e) {
                     success = false;
+                    failure = mContext.getString(R.string.gallery_update_error_record_publish)
+                            + "\n" + ExceptionUtils.getReadableString(e);
                     Log.w(TAG, "Unable to save gallery update record " + targetGid, e);
                 }
             }
             boolean completed = success;
+            String reason = failure;
             SimpleHandler.getInstance().post(() -> {
                 if (GalleryUpdateManager.getPlan(targetGid) != plan) return;
                 GalleryUpdateManager.finishCleanup(targetGid, completed);
-                GalleryUpdateManager.notifyUpdateStateChanged(targetGid, completed
-                        ? GalleryUpdateManager.UPDATE_STATE_UPDATED
-                        : GalleryUpdateManager.UPDATE_STATE_FAILED);
+                if (completed) GalleryUpdateManager.notifyUpdateStateChanged(targetGid,
+                        GalleryUpdateManager.UPDATE_STATE_UPDATED);
+                else GalleryUpdateManager.reportFailureAsync(mContext, plan, reason);
             });
         });
     }
@@ -1824,6 +1886,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     break;
                 }
                 case TYPE_ON_GET_509: {
+                    if (mCurrentTask != null) mGalleryUpdatePageErrors.put(mIndex,
+                            mContext.getString(R.string.gallery_update_error_509));
                     if (mDownloadListener != null) {
                         mDownloadListener.onGet509();
                     }
@@ -1834,6 +1898,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     break;
                 }
                 case TYPE_ON_PAGE_SUCCESS: {
+                    mGalleryUpdatePageErrors.remove(mIndex);
                     mSpeedReminder.onDone(mIndex);
                     DownloadInfo info = mCurrentTask;
                     if (info == null) {
@@ -1855,6 +1920,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     break;
                 }
                 case TYPE_ON_PAGE_FAILURE: {
+                    mGalleryUpdatePageErrors.put(mIndex, mError != null && !mError.isBlank()
+                            ? mError : mContext.getString(R.string.gallery_update_error_unknown));
                     mSpeedReminder.onDone(mIndex);
                     DownloadInfo info = mCurrentTask;
                     if (info == null) {
@@ -1911,12 +1978,26 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                         // pass may now be sufficient to migrate progress; retry on every continuation.
                         IoThreadPoolExecutor.Companion.getInstance().execute(() ->
                                 GalleryUpdateManager.migrateReadingProgress(mContext, info));
+                        StringBuilder reason = new StringBuilder(mContext.getString(
+                                mTotal <= 0 ? R.string.gallery_update_error_download_metadata
+                                        : R.string.gallery_update_error_download, Math.max(0, info.legacy)));
+                        if (mTotal <= 0 && spider.getPreparationError() != null)
+                            reason.append('\n').append(spider.getPreparationError());
+                        int shown = 0;
+                        for (Map.Entry<Integer, String> error : mGalleryUpdatePageErrors.entrySet()) {
+                            if (shown++ == 20) break;
+                            reason.append('\n').append(mContext.getString(
+                                    R.string.gallery_update_error_page, error.getKey() + 1, error.getValue()));
+                        }
+                        if (mGalleryUpdatePageErrors.size() > 20) reason.append('\n').append(
+                                mContext.getString(R.string.gallery_update_error_more_pages,
+                                        mGalleryUpdatePageErrors.size() - 20));
+                        GalleryUpdateManager.reportFailureAsync(mContext,
+                                GalleryUpdateManager.getPlan(info.gid), reason.toString());
                     }
-                    if (galleryUpdate) {
+                    if (galleryUpdate && info.state == DownloadInfo.STATE_FINISH) {
                         GalleryUpdateManager.notifyUpdateStateChanged(info.gid,
-                                info.state == DownloadInfo.STATE_FINISH
-                                        ? GalleryUpdateManager.UPDATE_STATE_UPDATING
-                                        : GalleryUpdateManager.UPDATE_STATE_FAILED);
+                                GalleryUpdateManager.UPDATE_STATE_UPDATING);
                     }
                     // Notify
                     if (mDownloadListener != null) {

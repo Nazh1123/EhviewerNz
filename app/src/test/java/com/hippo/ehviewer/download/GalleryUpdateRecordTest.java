@@ -78,4 +78,19 @@ public class GalleryUpdateRecordTest {
             }
         }
     }
+
+    @Test public void failureRoundTripsWithoutInventingPageChangesAndOldRecordsRemainSuccessful() throws Exception {
+        GalleryUpdateRecord failure = GalleryUpdateRecord.failure(200, 100, 123,
+                "Old gallery", "Missing .ehviewer", new long[]{100, 50});
+        GalleryUpdateRecord decoded = GalleryUpdateRecord.fromJson(200, 100, 123, 0, failure.toJson());
+        assertTrue(decoded.isFailure());
+        assertFalse(decoded.complete);
+        assertEquals("Old gallery", decoded.sourceTitle);
+        assertEquals("Missing .ehviewer", decoded.errorReason);
+        assertArrayEquals(new long[]{100, 50}, decoded.retainedParentGids);
+        assertEquals(0, decoded.addedPages.length);
+        GalleryUpdateRecord legacy = GalleryUpdateRecord.fromJson(200, 100, 123, 0,
+                "{\"old_pages\":2,\"new_pages\":3,\"complete\":false,\"added\":[],\"deleted\":[]}");
+        assertFalse(legacy.isFailure());
+    }
 }
