@@ -1551,6 +1551,15 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
     }
 
+    /** Resume a completed download whose update cleanup/log publication has not finished. */
+    public boolean retryGalleryUpdateCleanup(long targetGid) {
+        DownloadInfo info = getDownloadInfo(targetGid);
+        if (info == null || info.state != DownloadInfo.STATE_FINISH
+                || GalleryUpdateManager.getPlan(targetGid) == null) return false;
+        completeGalleryUpdate(targetGid);
+        return true;
+    }
+
     private void completeGalleryUpdate(long targetGid) {
         GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(targetGid);
         if (plan == null || !GalleryUpdateManager.beginCleanup(targetGid)) {
@@ -1570,9 +1579,25 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 // FINISH only counts files; interrupted downloads can leave empty or
                 // unreadable images. Never remove a parent based on that state alone.
                 prepared = GalleryUpdatePreparation.prepare(plan.progressMigrated,
-                        () -> isCompleteUsableGallery(targetInfo),
-                        () -> GalleryUpdateManager.migrateReadingProgress(mContext, targetInfo),
-                        () -> GalleryUpdateManager.markProgressMigrated(plan));
+                        () -> {
+                            if (!isCompleteUsableGallery(targetInfo)) {
+                                Log.w(TAG, "Gallery update " + targetGid + ": target validation failed; retaining parents");
+                                return false;
+                            }
+                            boolean staged = GalleryUpdateManager.stageUpdateRecord(mContext, plan);
+                            if (!staged) Log.w(TAG, "Gallery update " + targetGid + ": record checkpoint failed");
+                            return staged;
+                        },
+                        () -> {
+                            boolean migrated = GalleryUpdateManager.migrateReadingProgress(mContext, targetInfo);
+                            if (!migrated) Log.w(TAG, "Gallery update " + targetGid + ": reading progress migration failed");
+                            return migrated;
+                        },
+                        () -> {
+                            boolean saved = GalleryUpdateManager.markProgressMigrated(plan);
+                            if (!saved) Log.w(TAG, "Gallery update " + targetGid + ": progress checkpoint failed");
+                            return saved;
+                        });
             } catch (RuntimeException e) {
                 Log.w(TAG, "Unable to validate gallery update " + targetGid, e);
             }
@@ -1623,6 +1648,14 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             } catch (RuntimeException e) {
                 success = false;
                 Log.w(TAG, "Unable to remove gallery update parents " + targetGid, e);
+            }
+            if (success) {
+                try {
+                    success = GalleryUpdateManager.completeUpdateRecord(mContext, plan);
+                } catch (RuntimeException e) {
+                    success = false;
+                    Log.w(TAG, "Unable to save gallery update record " + targetGid, e);
+                }
             }
             boolean completed = success;
             SimpleHandler.getInstance().post(() -> {

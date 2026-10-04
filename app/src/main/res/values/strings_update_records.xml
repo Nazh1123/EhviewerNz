@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_gallery_update_record_limit">Update record count</string>
+    <string name="settings_fork_category_saving">Saving</string>
+    <string name="gallery_read_updates">Read updates only</string>
+    <string name="gallery_update_log">Update log</string>
+    <string name="gallery_update_log_time">Updated at</string>
+    <string name="gallery_update_log_added">Added %1$d pages (new version)</string>
+    <string name="gallery_update_log_deleted">Deleted %1$d pages (old version)</string>
+    <string name="gallery_update_log_none">None</string>
+    <string name="gallery_update_log_incomplete">Page information is incomplete; additions and deletions cannot be determined reliably.</string>
+    <string name="gallery_update_log_versions">View version history</string>
+    <string name="gallery_update_log_loading">Loading update record…</string>
+    <string name="gallery_update_log_unavailable">Update record is no longer available</string>
+    <string name="gallery_update_reader_progress">Updates %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_finalizing">Finishing gallery update</string>
+    <string name="gallery_update_finalization_failed">Download completed, but update finalization failed. Retry from the gallery detail page.</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>100</item><item>200</item><item>500</item><item>1000</item><item>2000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>100</item><item>200</item><item>500</item><item>1000</item><item>2000</item>
+    </string-array>
+</resources>

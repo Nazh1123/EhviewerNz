@@ -305,7 +305,7 @@ public final class GalleryUpdateManager {
         if (sourceDir == null || !sourceDir.isDirectory()) {
             return null;
         }
-        SpiderInfo spiderInfo = SpiderInfo.read(sourceDir.findFile(SpiderQueen.SPIDER_INFO_FILENAME));
+        SpiderInfo spiderInfo = readDownloadedSpiderInfo(sourceGid);
         if (spiderInfo == null || spiderInfo.gid != sourceGid || spiderInfo.pTokenMap == null) {
             return null;
         }
@@ -352,6 +352,9 @@ public final class GalleryUpdateManager {
         SpiderInfo target = readDownloadedSpiderInfo(targetInfo.gid);
         if (source == null || target == null || source.pTokenMap == null
                 || target.pTokenMap == null) {
+            Log.w(TAG, "Missing update metadata for reading progress: source=" + sourceGid
+                    + " available=" + (source != null) + ", target=" + targetInfo.gid
+                    + " available=" + (target != null));
             return false;
         }
 
@@ -399,6 +402,10 @@ public final class GalleryUpdateManager {
                 || persisted.pTokenMap == null
                 || persisted.pTokenMap.size() != latestTarget.pTokenMap.size()
                 || readCachedStartPage(context, targetInfo.gid) != mappedPage) {
+            Log.w(TAG, "Reading progress checkpoint failed for " + targetInfo.gid
+                    + ": expected=" + mappedPage + ", disk="
+                    + (persisted == null ? -1 : persisted.startPage)
+                    + ", cache=" + readCachedStartPage(context, targetInfo.gid));
             return false;
         }
         Log.i(TAG, "Migrated reading progress from " + sourceGid + " page "
@@ -518,7 +525,7 @@ public final class GalleryUpdateManager {
     }
 
     @Nullable
-    private static SpiderInfo readDownloadedSpiderInfo(long gid) {
+    static SpiderInfo readDownloadedSpiderInfo(long gid) {
         GalleryInfo placeholder = new GalleryInfo();
         placeholder.gid = gid;
         UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
@@ -570,6 +577,23 @@ public final class GalleryUpdateManager {
         return getPlan(targetGid) != null && CLEANUP_IN_PROGRESS.add(targetGid);
     }
 
+    /** Worker-thread checkpoint; source metadata must survive retries after partial cleanup. */
+    public static boolean stageUpdateRecord(Context context, UpdatePlan plan) {
+        if (getPlan(plan.targetGid) != plan) return false;
+        GalleryUpdateRecord snapshot = GalleryUpdateRecord.compare(
+                plan.targetGid, plan.sourceGid, readDownloadedSpiderInfo(plan.sourceGid),
+                readDownloadedSpiderInfo(plan.targetGid));
+        synchronized (GalleryUpdateManager.class) {
+            return getPlan(plan.targetGid) == plan
+                    && GalleryUpdateRecordStore.get(context).stage(plan, () -> snapshot);
+        }
+    }
+
+    public static synchronized boolean completeUpdateRecord(Context context, UpdatePlan plan) {
+        return getPlan(plan.targetGid) == plan
+                && GalleryUpdateRecordStore.get(context).complete(plan.targetGid, plan.sourceGid);
+    }
+
     public static void finishCleanup(long targetGid, boolean success) {
         CLEANUP_IN_PROGRESS.remove(targetGid);
         if (success) {
@@ -585,5 +609,15 @@ public final class GalleryUpdateManager {
         PLAN_CACHE.remove(targetGid);
         SOURCE_CACHE.remove(targetGid);
         CLEANUP_IN_PROGRESS.remove(targetGid);
+        EhApplication application = EhApplication.getInstance();
+        if (application != null) {
+            EhApplication.getExecutorService(application).execute(() -> {
+                synchronized (GalleryUpdateManager.class) {
+                    if (getPlan(targetGid) == null) {
+                        GalleryUpdateRecordStore.get(application).discardPending(targetGid);
+                    }
+                }
+            });
+        }
     }
 }

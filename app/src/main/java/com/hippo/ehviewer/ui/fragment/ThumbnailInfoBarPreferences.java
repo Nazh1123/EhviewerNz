@@ -14,12 +14,16 @@ final class ThumbnailInfoBarPreferences {
         TwoStatePreference title = fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_TITLE);
         TwoStatePreference details = fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS);
         TwoStatePreference highlight = fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT);
+        TwoStatePreference badge = fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
         if (bar == null || title == null || details == null) {
             return;
         }
 
+        if (badge != null) badge.setVisible(!bar.isChecked());
+
         bar.setOnPreferenceChangeListener((preference, newValue) -> {
             boolean enabled = Boolean.TRUE.equals(newValue);
+            if (badge != null) badge.setVisible(!enabled);
             if (enabled && !title.isChecked() && !details.isChecked()) {
                 details.setChecked(true);
             } else if (!enabled) {
@@ -31,12 +35,16 @@ final class ThumbnailInfoBarPreferences {
         });
 
         title.setOnPreferenceChangeListener((preference, newValue) -> {
-            bar.setChecked(Boolean.TRUE.equals(newValue) || details.isChecked());
+            boolean enabled = Boolean.TRUE.equals(newValue) || details.isChecked();
+            bar.setChecked(enabled);
+            if (badge != null) badge.setVisible(!enabled);
             onChanged.run();
             return true;
         });
         details.setOnPreferenceChangeListener((preference, newValue) -> {
-            bar.setChecked(Boolean.TRUE.equals(newValue) || title.isChecked());
+            boolean enabled = Boolean.TRUE.equals(newValue) || title.isChecked();
+            bar.setChecked(enabled);
+            if (badge != null) badge.setVisible(!enabled);
             onChanged.run();
             return true;
         });

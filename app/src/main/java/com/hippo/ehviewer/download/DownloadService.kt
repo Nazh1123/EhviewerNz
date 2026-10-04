@@ -55,7 +55,8 @@ import com.hippo.lib.yorozuya.collect.LongList
 import com.hippo.lib.yorozuya.collect.SparseJBArray
 import com.hippo.lib.yorozuya.collect.SparseJLArray
 
-class DownloadService : Service(), DownloadManager.DownloadListener {
+class DownloadService : Service(), DownloadManager.DownloadListener,
+    GalleryUpdateManager.UpdateStateListener {
     private var mNotifyManager: NotificationManager? = null
     private var mDownloadManager: DownloadManager? = null
     private var mDownloadingBuilder: NotificationCompat.Builder? = null
@@ -119,11 +120,13 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         
         mDownloadManager = EhApplication.getDownloadManager(applicationContext)
         mDownloadManager!!.setDownloadListener(this)
+        GalleryUpdateManager.addUpdateStateListener(this)
 
         ensureEnteredForeground()
     }
 
     override fun onDestroy() {
+        GalleryUpdateManager.removeUpdateStateListener(this)
         super.onDestroy()
 
         mGalleryUpdateTasks.values.forEach { it.cancel() }
@@ -430,6 +433,12 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
             val info = downloadManager.getDownloadInfo(target.gid)
             val plan = GalleryUpdateManager.getPlan(target.gid)
             if (info?.state == DownloadInfo.STATE_FINISH) {
+                if (plan != null) {
+                    mActiveGalleryUpdateGids.add(target.gid)
+                    showGalleryUpdateFinalizing(info)
+                    downloadManager.retryGalleryUpdateCleanup(target.gid)
+                    return
+                }
                 GalleryUpdateManager.notifyUpdateStateChanged(
                     target.gid, GalleryUpdateManager.UPDATE_STATE_UPDATED
                 )
@@ -713,10 +722,16 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
 
         val finish = info.state == DownloadInfo.STATE_FINISH
         val gid = info.gid
-        val isGalleryUpdate = mActiveGalleryUpdateGids.remove(gid)
+        val isGalleryUpdate = mActiveGalleryUpdateGids.contains(gid)
                 || GalleryUpdateManager.getPlan(gid) != null
         if (isGalleryUpdate) {
-            showGalleryUpdateDownloadResult(info, finish)
+            if (finish && GalleryUpdateManager.getPlan(gid) != null) {
+                mActiveGalleryUpdateGids.add(gid)
+                showGalleryUpdateFinalizing(info)
+            } else {
+                mActiveGalleryUpdateGids.remove(gid)
+                showGalleryUpdateDownloadResult(info, finish)
+            }
             checkStopSelf()
             return
         }
@@ -833,6 +848,43 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
         checkStopSelf()
     }
 
+    private fun showGalleryUpdateFinalizing(info: DownloadInfo) {
+        acquireWakeLock()
+        ensureUpdatingBuilder()
+        mUpdatingBuilder!!
+            .setContentTitle(getString(R.string.gallery_update_finalizing))
+            .setContentText(EhUtils.getSuitableTitle(info))
+            .setProgress(0, 0, true)
+        mUpdatingDelay!!.startForeground()
+    }
+
+    override fun onGalleryUpdateStateChanged(targetGid: Long, state: Int) {
+        SimpleHandler.getInstance().post {
+            if (mNotifyManager == null || !mActiveGalleryUpdateGids.contains(targetGid)) return@post
+            val info = mDownloadManager?.getDownloadInfo(targetGid) ?: return@post
+            if (info.state != DownloadInfo.STATE_FINISH) return@post
+            when (state) {
+                GalleryUpdateManager.UPDATE_STATE_UPDATED -> {
+                    mActiveGalleryUpdateGids.remove(targetGid)
+                    mUpdatingDelay?.cancel()
+                    showGalleryUpdateDownloadResult(info, true)
+                    checkStopSelf()
+                }
+                GalleryUpdateManager.UPDATE_STATE_FAILED -> {
+                    mActiveGalleryUpdateGids.remove(targetGid)
+                    mUpdatingDelay?.cancel()
+                    val target = GalleryDetail().apply {
+                        gid = info.gid
+                        title = info.title
+                        titleJpn = info.titleJpn
+                    }
+                    showGalleryUpdateFailure(target, getString(R.string.gallery_update_finalization_failed))
+                    checkStopSelf()
+                }
+            }
+        }
+    }
+
     private fun showGalleryUpdateDownloadResult(info: DownloadInfo, finish: Boolean) {
         ensureGalleryUpdatedBuilder()
         val title = EhUtils.getSuitableTitle(info)
@@ -863,7 +915,11 @@ class DownloadService : Service(), DownloadManager.DownloadListener {
 
     private fun checkStopSelf() {
         if ((mDownloadManager == null || mDownloadManager!!.isIdle)
-            && mGalleryUpdateTasks.isEmpty()) {
+            && mGalleryUpdateTasks.isEmpty()
+            && mActiveGalleryUpdateGids.none { gid ->
+                mDownloadManager?.getDownloadInfo(gid)?.state == DownloadInfo.STATE_FINISH
+                    && GalleryUpdateManager.getPlan(gid) != null
+            }) {
             mDownloadingDelay?.cancel()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 stopForeground(STOP_FOREGROUND_REMOVE)

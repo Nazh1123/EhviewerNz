@@ -46,7 +46,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
         view.showInfo();
         view.setImage(null);
         if (mShowIndex) {
-            view.setPage(index + 1);
+            view.setPage(mProvider.getSourcePage(index) + 1);
         } else {
             view.hidePage();
         }
@@ -83,7 +83,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
             page.showInfo();
             page.setImage(null);
             if (mShowIndex) {
-                page.setPage(index + 1);
+                page.setPage(mProvider.getSourcePage(index) + 1);
             } else {
                 page.hidePage();
             }
@@ -99,7 +99,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
             page.showInfo();
             page.setImage(null);
             if (mShowIndex) {
-                page.setPage(index + 1);
+                page.setPage(mProvider.getSourcePage(index) + 1);
             } else {
                 page.hidePage();
             }
@@ -122,7 +122,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
                 bindOverlay(page, index);
                 mGalleryView.notifyPageImageReady(index);
                 if (mShowIndex) {
-                    page.setPage(index + 1);
+                    page.setPage(mProvider.getSourcePage(index) + 1);
                 } else {
                     page.hidePage();
                 }
@@ -142,7 +142,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
             page.showInfo();
             page.setImage(null);
             if (mShowIndex) {
-                page.setPage(index + 1);
+                page.setPage(mProvider.getSourcePage(index) + 1);
             } else {
                 page.hidePage();
             }

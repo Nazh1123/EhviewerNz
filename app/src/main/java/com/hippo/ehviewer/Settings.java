@@ -607,6 +607,17 @@ public class Settings {
         return getBoolean(KEY_SHOW_GALLERY_PAGES, DEFAULT_SHOW_GALLERY_PAGES);
     }
 
+    public static final String KEY_GALLERY_UPDATE_RECORD_LIMIT = "gallery_update_record_limit";
+    public static final int DEFAULT_GALLERY_UPDATE_RECORD_LIMIT = 500;
+
+    public static int getGalleryUpdateRecordLimit() {
+        int value = getIntFromStr(KEY_GALLERY_UPDATE_RECORD_LIMIT, DEFAULT_GALLERY_UPDATE_RECORD_LIMIT);
+        return switch (value) {
+            case 100, 200, 500, 1000, 2000 -> value;
+            default -> DEFAULT_GALLERY_UPDATE_RECORD_LIMIT;
+        };
+    }
+
     public static final String KEY_SHOW_TAG_TRANSLATIONS = "show_tag_translations";
     private static final boolean DEFAULT_SHOW_TAG_TRANSLATIONS = true;
 

@@ -20,6 +20,10 @@ import android.content.Context;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.hippo.ehviewer.client.data.GalleryInfo;
+import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.R;
+import com.hippo.ehviewer.download.GalleryUpdateRecord;
+import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.spider.SpiderQueen;
 import com.hippo.lib.glgallery.GalleryProvider;
 import com.hippo.lib.image.Image;
@@ -27,6 +31,7 @@ import com.hippo.lib.image.Image;
 import com.hippo.unifile.UniFile;
 import com.hippo.lib.yorozuya.SimpleHandler;
 import java.util.Locale;
+import java.util.Arrays;
 
 public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.OnSpiderListener {
 
@@ -34,10 +39,21 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     private final GalleryInfo mGalleryInfo;
     @Nullable
     private SpiderQueen mSpiderQueen;
+    private final long mUpdateRecordTime;
+    private volatile int[] mUpdatePages;
+    private volatile int mInitialUpdateReadingPage;
+    private long mUpdateProgressSequence;
+    private volatile String mUpdateError;
+    private volatile boolean mStopped;
 
     public EhGalleryProvider(Context context, GalleryInfo galleryInfo) {
+        this(context, galleryInfo, 0L);
+    }
+
+    public EhGalleryProvider(Context context, GalleryInfo galleryInfo, long updateRecordTime) {
         mContext = context;
         mGalleryInfo = galleryInfo;
+        mUpdateRecordTime = updateRecordTime;
     }
 
     @Override
@@ -46,10 +62,30 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
 
         mSpiderQueen = SpiderQueen.obtainSpiderQueen(mContext, mGalleryInfo, SpiderQueen.MODE_READ);
         mSpiderQueen.addOnSpiderListener(this);
+        if (mUpdateRecordTime > 0 && mUpdatePages == null) {
+            Context application = mContext.getApplicationContext();
+            EhApplication.getExecutorService(application).execute(() -> {
+                try {
+                    GalleryUpdateRecord record = GalleryUpdateRecordStore.get(application)
+                            .find(mGalleryInfo.gid);
+                    if (record == null || record.completedAt != mUpdateRecordTime
+                            || !record.complete || record.addedPages.length == 0) {
+                        mUpdateError = application.getString(R.string.gallery_update_log_unavailable);
+                    } else {
+                        mInitialUpdateReadingPage = record.readingPage;
+                        mUpdatePages = record.addedPages.clone();
+                    }
+                } catch (RuntimeException e) {
+                    mUpdateError = application.getString(R.string.gallery_update_log_unavailable);
+                }
+                if (!mStopped) notifyDataChanged();
+            });
+        }
     }
 
     @Override
     public void stop() {
+        mStopped = true;
         super.stop();
 
         if (mSpiderQueen != null) {
@@ -62,6 +98,7 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
 
     @Override
     public int getStartPage() {
+        if (mUpdateRecordTime > 0) return mInitialUpdateReadingPage;
         if (mSpiderQueen != null) {
             return mSpiderQueen.getStartPage();
         } else {
@@ -72,19 +109,20 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     @NonNull
     @Override
     public String getImageFilename(int index) {
-        return String.format(Locale.US, "%d-%s-%08d", mGalleryInfo.gid, mGalleryInfo.token, index + 1);
+        return String.format(Locale.US, "%d-%s-%08d", mGalleryInfo.gid, mGalleryInfo.token,
+                getSourcePage(index) + 1);
     }
 
     @NonNull
     @Override
     public String getTranslationFilename(int index) {
-        return com.hippo.ehviewer.spider.SpiderDen.generateImageFilename(index, "");
+        return com.hippo.ehviewer.spider.SpiderDen.generateImageFilename(getSourcePage(index), "");
     }
 
     @Override
     public boolean save(int index, @NonNull UniFile file) {
         if (null != mSpiderQueen) {
-            return mSpiderQueen.save(index, file);
+            return mSpiderQueen.save(getSourcePage(index), file);
         } else {
             return false;
         }
@@ -94,7 +132,7 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     @Override
     public UniFile save(int index, @NonNull UniFile dir, @NonNull String filename) {
         if (null != mSpiderQueen) {
-            return mSpiderQueen.save(index, dir, filename);
+            return mSpiderQueen.save(getSourcePage(index), dir, filename);
         } else {
             return null;
         }
@@ -104,11 +142,26 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     @Override
     public SaveResult saveWithResult(int index, @NonNull UniFile dir,
                                      @NonNull String filename) {
-        return mSpiderQueen != null ? mSpiderQueen.saveWithResult(index, dir, filename) : null;
+        return mSpiderQueen != null
+                ? mSpiderQueen.saveWithResult(getSourcePage(index), dir, filename) : null;
     }
 
     @Override
-    public void putStartPage(int page) {
+    public synchronized void putStartPage(int page) {
+        if (mUpdateRecordTime > 0) {
+            int[] pages = mUpdatePages;
+            if (pages == null || page < 0 || page >= pages.length) return;
+            long sequence = ++mUpdateProgressSequence;
+            Context application = mContext.getApplicationContext();
+            EhApplication.getExecutorService(application).execute(() -> {
+                synchronized (EhGalleryProvider.this) {
+                    if (sequence != mUpdateProgressSequence) return;
+                    GalleryUpdateRecordStore.get(application).saveReadingPage(
+                            mGalleryInfo.gid, mUpdateRecordTime, page);
+                }
+            });
+            return;
+        }
         if (mSpiderQueen != null) {
             mSpiderQueen.putStartPage(page);
         }
@@ -116,19 +169,45 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
 
     @Override
     public GalleryProvider2 createTranslationProvider(Context context) {
-        return new EhGalleryProvider(context.getApplicationContext(), mGalleryInfo);
+        EhGalleryProvider provider = new EhGalleryProvider(context.getApplicationContext(),
+                mGalleryInfo, mUpdateRecordTime);
+        int[] pages = mUpdatePages;
+        if (pages != null) provider.mUpdatePages = pages.clone();
+        provider.mInitialUpdateReadingPage = mInitialUpdateReadingPage;
+        return provider;
     }
 
     @Override
-    public String getTranslationIdentity() { return "eh:" + mGalleryInfo.gid; }
+    public String getTranslationIdentity() {
+        return "eh:" + mGalleryInfo.gid
+                + (mUpdateRecordTime > 0 ? ":update:" + mUpdateRecordTime : "");
+    }
+
+    @Override
+    public int getSourcePage(int index) {
+        int[] pages = mUpdatePages;
+        return pages != null && index >= 0 && index < pages.length ? pages[index] : index;
+    }
+
+    private int readerIndex(int sourcePage) {
+        if (mUpdateRecordTime <= 0) return sourcePage;
+        int[] pages = mUpdatePages;
+        return pages != null ? Arrays.binarySearch(pages, sourcePage) : -1;
+    }
 
     @Override
     public void prepareTranslationSource(int index) {
-        if (mSpiderQueen != null) mSpiderQueen.prepareTranslationSource(index);
+        if (mSpiderQueen != null) mSpiderQueen.prepareTranslationSource(getSourcePage(index));
     }
 
     @Override
     public int size() {
+        if (mUpdateRecordTime > 0) {
+            if (mUpdateError != null) return GalleryProvider.STATE_ERROR;
+            if (mUpdatePages == null) return GalleryProvider.STATE_WAIT;
+            int sourceSize = mSpiderQueen != null ? mSpiderQueen.size() : GalleryProvider.STATE_ERROR;
+            return sourceSize < 0 ? sourceSize : mUpdatePages.length;
+        }
         if (mSpiderQueen != null) {
             return mSpiderQueen.size();
         } else {
@@ -139,7 +218,7 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     @Override
     protected void onRequest(int index) {
         if (mSpiderQueen != null) {
-            Object object = mSpiderQueen.request(index);
+            Object object = mSpiderQueen.request(getSourcePage(index));
             if (object instanceof Float) {
                 notifyPagePercent(index, (Float) object);
             } else if (object instanceof String) {
@@ -153,7 +232,7 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     @Override
     protected void onForceRequest(int index) {
         if (mSpiderQueen != null) {
-            Object object = mSpiderQueen.forceRequest(index);
+            Object object = mSpiderQueen.forceRequest(getSourcePage(index));
             if (object instanceof Float) {
                 notifyPagePercent(index, (Float) object);
             } else if (object instanceof String) {
@@ -167,7 +246,7 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     @Override
     protected void onCancelRequest(int index) {
         if (mSpiderQueen != null) {
-            mSpiderQueen.cancelRequest(index);
+            mSpiderQueen.cancelRequest(getSourcePage(index));
         }
     }
 
@@ -175,12 +254,13 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
     public void setAnimatedWebpDecodeMode(int index, int mode) {
         super.setAnimatedWebpDecodeMode(index, mode);
         if (mSpiderQueen != null) {
-            mSpiderQueen.setAnimatedWebpDecodeMode(index, mode);
+            mSpiderQueen.setAnimatedWebpDecodeMode(getSourcePage(index), mode);
         }
     }
 
     @Override
     public String getError() {
+        if (mUpdateError != null) return mUpdateError;
         if (mSpiderQueen != null) {
             return mSpiderQueen.getError();
         } else {
@@ -200,6 +280,8 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
 
     @Override
     public void onPageDownload(int index, long contentLength, long receivedSize, int bytesRead) {
+        index = readerIndex(index);
+        if (index < 0) return;
         if (contentLength > 0) {
             notifyPagePercent(index, (float) receivedSize / contentLength);
         }
@@ -207,11 +289,15 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
 
     @Override
     public void onPageSuccess(int index, int finished, int downloaded, int total) {
+        index = readerIndex(index);
+        if (index < 0) return;
         notifyDataChanged(index);
     }
 
     @Override
     public void onPageFailure(int index, String error, int finished, int downloaded, int total) {
+        index = readerIndex(index);
+        if (index < 0) return;
         notifyPageFailed(index, error);
     }
 
@@ -221,11 +307,15 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
 
     @Override
     public void onGetImageSuccess(int index, Image image) {
+        index = readerIndex(index);
+        if (index < 0) return;
         notifyPageSucceed(index, image);
     }
 
     @Override
     public void onGetImageFailure(int index, String error) {
+        index = readerIndex(index);
+        if (index < 0) return;
         notifyPageFailed(index, error);
     }
 

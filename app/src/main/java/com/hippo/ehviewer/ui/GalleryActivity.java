@@ -165,6 +165,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public static final String DATA_IN_EVENT = "data_in_event";
     public static final String KEY_PAGE = "page";
     public static final String KEY_CURRENT_INDEX = "current_index";
+    public static final String KEY_UPDATE_RECORD_TIME = "update_record_time";
+    private long mUpdateRecordTime;
+    private boolean mPendingUpdateStart;
     private static final String KEY_ANIMATED_WEBP_GALLERY_PLAYING =
             "animated_webp_gallery_playing";
     private static final String KEY_ANIMATED_WEBP_GALLERY_SPEED =
@@ -458,7 +461,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         } else if (ACTION_EH.equals(mAction)) {
             if (mGalleryInfo != null) {
-                mGalleryProvider = new EhGalleryProvider(this, mGalleryInfo);
+                mGalleryProvider = new EhGalleryProvider(this, mGalleryInfo, mUpdateRecordTime);
             }
         } else if (Intent.ACTION_VIEW.equals(mAction)) {
             if (mUri != null) {
@@ -612,6 +615,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             canFinish = true;
         }
         mPage = intent.getIntExtra(KEY_PAGE, -1);
+        mUpdateRecordTime = intent.getLongExtra(KEY_UPDATE_RECORD_TIME, 0L);
+        mPendingUpdateStart = mUpdateRecordTime > 0;
         buildProvider();
     }
 
@@ -622,6 +627,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mGalleryInfo = savedInstanceState.getParcelable(KEY_GALLERY_INFO);
         mPage = savedInstanceState.getInt(KEY_PAGE, -1);
         mCurrentIndex = savedInstanceState.getInt(KEY_CURRENT_INDEX);
+        mUpdateRecordTime = savedInstanceState.getLong(KEY_UPDATE_RECORD_TIME, 0L);
+        mPendingUpdateStart = false;
         mAnimatedWebpGalleryPlaying = savedInstanceState.getBoolean(
                 KEY_ANIMATED_WEBP_GALLERY_PLAYING, true);
         mAnimatedWebpGallerySpeed = savedInstanceState.getFloat(
@@ -640,6 +647,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         outState.putInt(KEY_PAGE, mPage);
         outState.putInt(KEY_CURRENT_INDEX, mCurrentIndex);
+        outState.putLong(KEY_UPDATE_RECORD_TIME, mUpdateRecordTime);
         outState.putBoolean(KEY_ANIMATED_WEBP_GALLERY_PLAYING,
                 mAnimatedWebpGalleryPlaying);
         outState.putFloat(KEY_ANIMATED_WEBP_GALLERY_SPEED,
@@ -1661,7 +1669,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mSize <= 0 || mCurrentIndex < 0) {
             mProgress.setText(null);
         } else {
-            mProgress.setText((mCurrentIndex + 1) + "/" + mSize);
+            if (mUpdateRecordTime > 0 && mGalleryProvider != null) {
+                mProgress.setText(getString(R.string.gallery_update_reader_progress,
+                        mCurrentIndex + 1, mSize,
+                        mGalleryProvider.getSourcePage(mCurrentIndex) + 1));
+            } else {
+                mProgress.setText((mCurrentIndex + 1) + "/" + mSize);
+            }
         }
     }
 
@@ -3607,6 +3621,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case KEY_SIZE:
                     GalleryActivity.this.mSize = mValue;
+                    if (mPendingUpdateStart && mValue > 0 && mGalleryProvider != null) {
+                        mPendingUpdateStart = false;
+                        mCurrentIndex = Math.min(mValue - 1, mGalleryProvider.getStartPage());
+                        if (mGalleryView != null) mGalleryView.setCurrentPage(mCurrentIndex);
+                    }
                     updateImportedGalleryPageCount(mValue);
                     if (isImportedGallery() && mValue > 0 && mCurrentIndex >= mValue) {
                         mCurrentIndex = mValue - 1;

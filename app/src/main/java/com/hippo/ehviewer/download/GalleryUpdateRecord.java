@@ -1,0 +1,128 @@
+package com.hippo.ehviewer.download;
+
+import com.hippo.ehviewer.spider.SpiderInfo;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
+
+/** A single update of a target gid. Page indexes are zero based, including deleted old pages. */
+public final class GalleryUpdateRecord {
+    public final long targetGid;
+    public final long sourceGid;
+    public final long completedAt;
+    public final int oldPages;
+    public final int newPages;
+    public final boolean complete;
+    public final int[] addedPages;
+    public final int[] deletedPages;
+    public final int readingPage;
+
+    GalleryUpdateRecord(long targetGid, long sourceGid, long completedAt,
+                        int oldPages, int newPages, boolean complete,
+                        int[] addedPages, int[] deletedPages, int readingPage) {
+        this.targetGid = targetGid;
+        this.sourceGid = sourceGid;
+        this.completedAt = completedAt;
+        this.oldPages = oldPages;
+        this.newPages = newPages;
+        this.complete = complete;
+        this.addedPages = addedPages.clone();
+        this.deletedPages = deletedPages.clone();
+        this.readingPage = Math.max(0, Math.min(readingPage, addedPages.length - 1));
+    }
+
+    static GalleryUpdateRecord compare(long targetGid, long sourceGid,
+                                       SpiderInfo source, SpiderInfo target) {
+        int oldPages = source != null ? Math.max(0, source.pages) : 0;
+        int newPages = target != null ? Math.max(0, target.pages) : 0;
+        boolean complete = hasAllTokens(source) && hasAllTokens(target);
+        if (!complete) {
+            return new GalleryUpdateRecord(targetGid, sourceGid, 0, oldPages, newPages,
+                    false, new int[0], new int[0], 0);
+        }
+        HashMap<String, ArrayDeque<Integer>> oldIndexes = new HashMap<>();
+        for (int page = 0; page < oldPages; page++) {
+            oldIndexes.computeIfAbsent(source.pTokenMap.get(page), key -> new ArrayDeque<>())
+                    .add(page);
+        }
+        boolean[] matched = new boolean[oldPages];
+        ArrayList<Integer> added = new ArrayList<>();
+        for (int page = 0; page < newPages; page++) {
+            ArrayDeque<Integer> matches = oldIndexes.get(target.pTokenMap.get(page));
+            if (matches == null || matches.isEmpty()) added.add(page);
+            else matched[matches.removeFirst()] = true;
+        }
+        ArrayList<Integer> deleted = new ArrayList<>();
+        for (int page = 0; page < oldPages; page++) {
+            if (!matched[page]) deleted.add(page);
+        }
+        return new GalleryUpdateRecord(targetGid, sourceGid, 0, oldPages, newPages, true,
+                added.stream().mapToInt(Integer::intValue).toArray(),
+                deleted.stream().mapToInt(Integer::intValue).toArray(), 0);
+    }
+
+    private static boolean hasAllTokens(SpiderInfo info) {
+        if (info == null || info.pages <= 0 || info.pTokenMap == null) return false;
+        for (int page = 0; page < info.pages; page++) {
+            String token = info.pTokenMap.get(page);
+            if (token == null || token.isEmpty() || "failed".equals(token)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    String toJson() throws JSONException {
+        JSONObject json = new JSONObject();
+        json.put("old_pages", oldPages);
+        json.put("new_pages", newPages);
+        json.put("complete", complete);
+        json.put("added", array(addedPages));
+        json.put("deleted", array(deletedPages));
+        return json.toString();
+    }
+
+    static GalleryUpdateRecord fromJson(long targetGid, long sourceGid, long completedAt,
+                                        int readingPage, String raw) throws JSONException {
+        JSONObject json = new JSONObject(raw);
+        int oldPages = json.getInt("old_pages"), newPages = json.getInt("new_pages");
+        if (oldPages < 0 || newPages < 0) throw new JSONException("Invalid page count");
+        return new GalleryUpdateRecord(targetGid, sourceGid, completedAt, oldPages, newPages,
+                json.getBoolean("complete"), indexes(json.getJSONArray("added"), newPages),
+                indexes(json.getJSONArray("deleted"), oldPages), readingPage);
+    }
+
+    private static JSONArray array(int[] pages) {
+        JSONArray array = new JSONArray();
+        for (int page : pages) array.put(page);
+        return array;
+    }
+
+    private static int[] indexes(JSONArray array, int total) throws JSONException {
+        int[] pages = new int[array.length()];
+        for (int i = 0; i < pages.length; i++) {
+            pages[i] = array.getInt(i);
+            if (pages[i] < 0 || pages[i] >= total || (i > 0 && pages[i] <= pages[i - 1])) {
+                throw new JSONException("Invalid page index");
+            }
+        }
+        return pages;
+    }
+
+    public static String formatPages(int[] pages) {
+        StringBuilder text = new StringBuilder();
+        for (int i = 0; i < pages.length; i++) {
+            int start = pages[i], end = start;
+            while (i + 1 < pages.length && pages[i + 1] == end + 1) end = pages[++i];
+            if (text.length() > 0) text.append(", ");
+            text.append('p').append(start + 1);
+            if (end != start) text.append('–').append(end + 1);
+        }
+        return text.toString();
+    }
+}

@@ -81,6 +81,9 @@ public abstract class GalleryProvider {
      */
     public abstract int size();
 
+    /** Display/source page identity may differ from the position in a filtered reader. */
+    public int getSourcePage(int index) { return index; }
+
     public final void request(int index) {
         ImageWrapper imageWrapper = mImageCache.getLive(index);
         if (imageWrapper != null) {

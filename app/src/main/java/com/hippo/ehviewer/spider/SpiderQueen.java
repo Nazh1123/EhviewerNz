@@ -387,6 +387,12 @@ public final class SpiderQueen implements Runnable {
     }
 
     private void notifyFinish() {
+        // The initial metadata write can precede creation of the download folder.
+        // Flush again before listeners start validating or cleaning up an update.
+        SpiderInfo info = mSpiderInfo.get();
+        if (info != null && mSpiderDen.isDownloadMode()) {
+            writeSpiderInfoToLocal(info);
+        }
         int size = -1;
         int[] temp = mPageStateArray;
         if (temp != null) {

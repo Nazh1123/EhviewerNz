@@ -71,6 +71,7 @@ public class EhFragment extends BasePreferenceFragmentCompat
         detailSize.setOnPreferenceChangeListener(this);
         thumbSize.setOnPreferenceChangeListener(this);
         historyInfoSize.setOnPreferenceChangeListener(this);
+        GalleryUpdateRecordPreferences.bind(this);
         showTagTranslations.setOnPreferenceChangeListener(this);
         showGalleryComment.setOnPreferenceChangeListener(this);
 
