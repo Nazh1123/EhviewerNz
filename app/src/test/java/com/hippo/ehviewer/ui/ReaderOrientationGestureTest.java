@@ -19,7 +19,9 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.ConscryptMode;
+import org.robolectric.shadows.ShadowSystemClock;
 import org.robolectric.util.ReflectionHelpers;
+import java.time.Duration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 import static org.junit.Assert.*;
@@ -87,6 +89,85 @@ public class ReaderOrientationGestureTest {
         event(MotionEvent.ACTION_DOWN, 400);
         assertFalse(event(MotionEvent.ACTION_MOVE, 600));
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, activity.getRequestedOrientation());
+    }
+
+    @Test public void matchingSquareAndUnknownImagesCannotStartUndoWindow() {
+        use(ReaderKeyProfiles.SWIPE_DOWN);
+        for (int[] size : new int[][] {{800, 1600}, {800, 800}, {0, 0}}) {
+            setImageSize(size[0], size[1]);
+            assertFalse(swipeDown());
+        }
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, activity.getRequestedOrientation());
+    }
+
+    @Test public void downwardGestureCanUndoAt2999MillisWithMatchingImage() {
+        switchToLandscape();
+        ShadowSystemClock.advanceBy(Duration.ofMillis(2999));
+        assertTrue(swipeDown());
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT, activity.getRequestedOrientation());
+        assertEquals(1, Settings.getScreenRotation());
+    }
+
+    @Test public void undoWindowAlsoAllowsSquareAndUnknownImages() {
+        switchToLandscape();
+        setImageSize(800, 800);
+        assertTrue(swipeDown());
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT, activity.getRequestedOrientation());
+        activity.getWindow().getDecorView().layout(0, 0, 360, 800);
+        setImageSize(0, 0);
+        assertTrue(swipeDown());
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE, activity.getRequestedOrientation());
+    }
+
+    @Test public void matchingImageIsRestrictedAgainAt3000Millis() {
+        switchToLandscape();
+        ShadowSystemClock.advanceBy(Duration.ofMillis(3000));
+        assertFalse(swipeDown());
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE, activity.getRequestedOrientation());
+        setImageSize(800, 1600);
+        assertTrue(swipeDown());
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT, activity.getRequestedOrientation());
+    }
+
+    @Test public void eachSuccessfulSwipeRefreshesUndoWindow() {
+        switchToLandscape();
+        ShadowSystemClock.advanceBy(Duration.ofMillis(2000));
+        assertTrue(swipeDown());
+        activity.getWindow().getDecorView().layout(0, 0, 360, 800);
+        setImageSize(800, 1600);
+        ShadowSystemClock.advanceBy(Duration.ofMillis(2000));
+        assertTrue(swipeDown());
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE, activity.getRequestedOrientation());
+    }
+
+    @Test public void undoWindowStillRespectsDisabledAndOppositeGestures() {
+        switchToLandscape();
+        use(ReaderKeyProfiles.SWIPE_OFF);
+        assertFalse(swipeDown());
+        use(ReaderKeyProfiles.SWIPE_UP);
+        assertFalse(swipeDown());
+        assertFalse(event(MotionEvent.ACTION_DOWN, 400));
+        assertTrue(event(MotionEvent.ACTION_MOVE, 200));
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT, activity.getRequestedOrientation());
+    }
+
+    private void switchToLandscape() {
+        use(ReaderKeyProfiles.SWIPE_DOWN);
+        assertTrue(swipeDown());
+        activity.getWindow().getDecorView().layout(0, 0, 800, 360);
+    }
+
+    private void setImageSize(int width, int height) {
+        GalleryView gallery = ReflectionHelpers.getField(activity, "mGalleryView");
+        AtomicLong imageSize = ReflectionHelpers.getField(gallery, "mCurrentImageSize");
+        imageSize.set(((long) width << 32) | height);
+    }
+
+    private boolean swipeDown() {
+        assertFalse(event(MotionEvent.ACTION_DOWN, 400));
+        boolean handled = event(MotionEvent.ACTION_MOVE, 600);
+        event(MotionEvent.ACTION_UP, 600);
+        return handled;
     }
 
     @Test public void switchingProfileAppliesItsGestureAndCancelsPendingSwipe() {

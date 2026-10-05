@@ -182,6 +182,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private static final long SAVE_NOTICE_EXIT_DURATION_MS = 200L;
     private static final float ORIENTATION_SWIPE_MIN_SCREEN_FRACTION = 0.08f;
     private static final float ORIENTATION_SWIPE_DIRECTION_RATIO = 1.25f;
+    private static final long ORIENTATION_SWIPE_UNDO_WINDOW_MS = 3_000L;
     private static final double ANIMATED_WEBP_RELATIVE_SEEK_GAIN = 2.0;
     private static final int WRITE_REQUEST_CODE = 43;
 
@@ -315,6 +316,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private int mAnimatedWebpTouchSlop;
     private boolean mOrientationSwipeCandidate;
     private boolean mOrientationSwipeActive;
+    private long mOrientationSwipeUndoUntil;
     private float mOrientationSwipeDownX;
     private float mOrientationSwipeDownY;
     @Nullable
@@ -1342,8 +1344,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             case MotionEvent.ACTION_DOWN:
                 mOrientationSwipeActive = false;
                 mOrientationSwipeCandidate = mReaderOrientationSwipe != ReaderKeyProfiles.SWIPE_OFF
-                        && isHorizontalReadingDirection()
-                        && isCurrentImageOrientationDifferent();
+                        && canSwitchOrientationForCurrentImage();
                 if (mOrientationSwipeCandidate) {
                     mOrientationSwipeDownX = event.getX();
                     mOrientationSwipeDownY = event.getY();
@@ -1424,8 +1425,15 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 || layoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT;
     }
 
+    private boolean canSwitchOrientationForCurrentImage() {
+        // Allow a quick undo even after rotation or a page change removes the image mismatch.
+        return isHorizontalReadingDirection()
+                && (SystemClock.elapsedRealtime() < mOrientationSwipeUndoUntil
+                        || isCurrentImageOrientationDifferent());
+    }
+
     private void switchOrientationForCurrentImage() {
-        if (!isHorizontalReadingDirection() || !isCurrentImageOrientationDifferent()) {
+        if (!canSwitchOrientationForCurrentImage()) {
             return;
         }
         if (isViewportLandscape()) {
@@ -1433,6 +1441,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         } else {
             setLandscapeOrientationForReadingDirection();
         }
+        mOrientationSwipeUndoUntil = SystemClock.elapsedRealtime() + ORIENTATION_SWIPE_UNDO_WINDOW_MS;
     }
 
     private void setLandscapeOrientationForReadingDirection() {
