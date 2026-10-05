@@ -1,7 +1,6 @@
 package com.hippo.lib.glgallery;
 
 import android.app.Application;
-import android.graphics.Rect;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.view.MotionEvent;
@@ -38,8 +37,6 @@ public class ReaderKeyGestureTest {
             @Override public int size() { return 5; }
         }).build();
         view.bounds().set(0, 0, 1000, 1000);
-        ((Rect) ReflectionHelpers.getField(view, "mLeftArea")).set(0, 0, 360, 1000);
-        ((Rect) ReflectionHelpers.getField(view, "mRightArea")).set(640, 0, 1000, 1000);
         normal = new int[21];
         Arrays.fill(normal, ReaderKeyMap.LEGACY);
     }
@@ -47,7 +44,6 @@ public class ReaderKeyGestureTest {
     @Test public void animationTakesOverDoubleTapOnlyInsideItsPercentage() {
         normal[ReaderKeyMap.RIGHT_BOTTOM * 3 + 1] = ReaderKeyMap.NONE;
         view.setReaderKeyMap(new ReaderKeyMap(normal, 30));
-        view.setPageAreaDoubleTapEnabled(true);
         view.setAnimatedPageControlAreasEnabled(true);
         assertTrue(view.isDoubleTapRegion(900, 900));
         assertFalse(view.isDoubleTapRegion(900, 699));
@@ -60,12 +56,11 @@ public class ReaderKeyGestureTest {
     @Test public void changingAnimationPercentageUpdatesItsExactBoundary() {
         normal[ReaderKeyMap.RIGHT_BOTTOM * 3 + 1] = ReaderKeyMap.NONE;
         view.setReaderKeyMap(new ReaderKeyMap(normal, 40));
-        view.setPageAreaDoubleTapEnabled(false);
         assertFalse(view.isDoubleTapRegion(900, 600));
         view.setAnimatedPageControlAreasEnabled(true);
         assertTrue(view.isDoubleTapRegion(900, 600));
         assertFalse(view.isDoubleTapRegion(900, 599));
-        assertFalse(view.isDoubleTapRegion(900, 499));
+        assertTrue(view.isDoubleTapRegion(900, 499)); // Default upper-area action is zoom.
         view.setAnimatedPageControlAreasEnabled(false);
         assertFalse(view.isDoubleTapRegion(900, 600));
         view.setReaderKeyMap(new ReaderKeyMap(normal, 0));
@@ -96,25 +91,23 @@ public class ReaderKeyGestureTest {
     }
 
     @Test public void splitAreasDispatchIndependentActionsAndClampPageLimits() {
-        TestLayout layout = new TestLayout(view);
-        ReflectionHelpers.setField(view, "mLayoutManager", layout);
+        GalleryView.LayoutManager layout = attachLayout();
         normal[ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.NEXT;
         normal[ReaderKeyMap.RIGHT_BOTTOM * 3] = ReaderKeyMap.PREVIOUS;
         view.setReaderKeyMap(new ReaderKeyMap(normal, 30));
         single(900, 100);
-        assertEquals(1, layout.index);
+        assertEquals(1, layout.getInternalCurrentIndex());
         single(900, 700);
-        assertEquals(0, layout.index);
+        assertEquals(0, layout.getInternalCurrentIndex());
         single(900, 700);
-        assertEquals(0, layout.index);
-        layout.index = 4;
+        assertEquals(0, layout.getInternalCurrentIndex());
+        layout.setCurrentIndex(4);
         single(900, 100);
-        assertEquals(4, layout.index);
+        assertEquals(4, layout.getInternalCurrentIndex());
     }
 
     @Test public void currentReadingDirectionSelectsKeysWithoutReloadingTheProfile() {
-        TestLayout layout = new TestLayout(view);
-        ReflectionHelpers.setField(view, "mLayoutManager", layout);
+        GalleryView.LayoutManager layout = attachLayout();
         int[][] directions = new int[3][21];
         for (int[] keys : directions) Arrays.fill(keys, ReaderKeyMap.LEGACY);
         directions[GalleryView.LAYOUT_LEFT_TO_RIGHT][ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.NEXT;
@@ -122,50 +115,111 @@ public class ReaderKeyGestureTest {
         directions[GalleryView.LAYOUT_TOP_TO_BOTTOM][ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.NONE;
         directions[GalleryView.LAYOUT_LEFT_TO_RIGHT][ReaderKeyMap.RIGHT_TOP * 3 + 1] = ReaderKeyMap.NONE;
         view.setReaderKeyMap(new ReaderKeyMap(directions, 30));
-        view.setPageAreaDoubleTapEnabled(true);
-        ReflectionHelpers.setField(view, "mLayoutMode", GalleryView.LAYOUT_LEFT_TO_RIGHT);
+        layout = setDirection(GalleryView.LAYOUT_LEFT_TO_RIGHT);
         single(900, 100);
-        assertEquals(1, layout.index);
+        assertEquals(1, layout.getInternalCurrentIndex());
         assertFalse(view.isDoubleTapRegion(900, 100));
-        ReflectionHelpers.setField(view, "mLayoutMode", GalleryView.LAYOUT_RIGHT_TO_LEFT);
+        layout = setDirection(GalleryView.LAYOUT_RIGHT_TO_LEFT);
         single(900, 100);
-        assertEquals(0, layout.index);
+        assertEquals(0, layout.getInternalCurrentIndex());
         assertTrue(view.isDoubleTapRegion(900, 100));
-        ReflectionHelpers.setField(view, "mLayoutMode", GalleryView.LAYOUT_TOP_TO_BOTTOM);
+        layout = setDirection(GalleryView.LAYOUT_TOP_TO_BOTTOM);
         single(900, 100);
-        assertEquals(0, layout.index);
+        assertEquals(0, layout.getInternalCurrentIndex());
+    }
+
+    @Test public void defaultActionsAndGestureEligibilityFollowResizedAreas() {
+        attachLayout();
+        List<String> callbacks = new ArrayList<>();
+        GalleryView.Listener listener = (GalleryView.Listener) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class[]{GalleryView.Listener.class}, (proxy, method, args) -> {
+                    callbacks.add(method.getName());
+                    return method.getReturnType() == boolean.class ? false : null;
+                });
+        ReflectionHelpers.setField(view, "mListener", listener);
+        ReaderTouchAreas areas = ReaderTouchAreas.defaults().withPosition(0, .2f).withPosition(1, .8f)
+                .withPosition(4, .25f).withPosition(5, .65f);
+        normal[ReaderKeyMap.LEFT_TOP * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
+        view.setReaderKeyMap(new ReaderKeyMap(new int[][]{normal, normal, normal}, new ReaderTouchAreas[]{areas, areas, areas}, 30));
+        single(250, 300);
+        assertEquals(Arrays.asList("onTapMenuArea"), callbacks);
+        callbacks.clear(); single(500, 200);
+        assertEquals(Arrays.asList("onTapSliderArea"), callbacks);
+        callbacks.clear(); single(500, 600);
+        assertEquals(Arrays.asList("onTapMenuArea"), callbacks);
+        assertFalse(view.isDoubleTapRegion(150, 200));
+        assertTrue(view.isDoubleTapRegion(250, 200));
+        assertFalse(view.isSameTapRegion(199, 200, 200, 200));
+        assertFalse(view.isSameTapRegion(500, 649, 500, 650));
+        assertTrue(view.isSameTapRegion(500, 500, 500, 600));
+        view.bounds().set(0, 0, 2000, 500);
+        callbacks.clear(); single(500, 150);
+        assertEquals(Arrays.asList("onTapMenuArea"), callbacks);
+    }
+
+    @Test public void customPageActionsWorkInEveryRegionGestureAndReadingDirection() {
+        attachLayout();
+        for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
+            GalleryView.LayoutManager layout = setDirection(direction);
+            for (int region = 0; region < ReaderKeyMap.REGION_COUNT; region++) {
+                float[] bounds = ReaderKeyMap.bounds(region);
+                float x = (bounds[0] + bounds[2]) * 500;
+                float y = (bounds[1] + bounds[3]) * 500;
+                for (int gesture = 0; gesture < ReaderKeyMap.GESTURE_COUNT; gesture++) {
+                    String context = "direction=" + direction + ", region=" + region + ", gesture=" + gesture;
+                    Arrays.fill(normal, ReaderKeyMap.LEGACY);
+                    int key = region * ReaderKeyMap.GESTURE_COUNT + gesture;
+                    normal[key] = ReaderKeyMap.PREVIOUS;
+                    view.setReaderKeyMap(new ReaderKeyMap(normal, 30));
+                    layout.setCurrentIndex(2);
+                    gesture(gesture, x, y);
+                    assertEquals(context, 1, layout.getInternalCurrentIndex());
+                    layout.setCurrentIndex(0);
+                    gesture(gesture, x, y);
+                    assertEquals(context, 0, layout.getInternalCurrentIndex());
+
+                    normal[key] = ReaderKeyMap.NEXT;
+                    view.setReaderKeyMap(new ReaderKeyMap(normal, 30));
+                    layout.setCurrentIndex(2);
+                    gesture(gesture, x, y);
+                    assertEquals(context, 3, layout.getInternalCurrentIndex());
+                    layout.setCurrentIndex(4);
+                    gesture(gesture, x, y);
+                    assertEquals(context, 4, layout.getInternalCurrentIndex());
+                }
+            }
+        }
+    }
+
+    private GalleryView.LayoutManager attachLayout() {
+        ReflectionHelpers.callInstanceMethod(view, "attachLayoutManager");
+        // The real attach path transfers the adapter to the layout manager.
+        assertNull(ReflectionHelpers.getField(view, "mAdapter"));
+        return ReflectionHelpers.getField(view, "mLayoutManager");
+    }
+
+    private GalleryView.LayoutManager setDirection(int direction) {
+        ReflectionHelpers.callInstanceMethod(view, "setLayoutModeInternal",
+                ReflectionHelpers.ClassParameter.from(int.class, direction));
+        return ReflectionHelpers.getField(view, "mLayoutManager");
+    }
+
+    private void gesture(int gesture, float x, float y) {
+        String method = switch (gesture) {
+            case ReaderKeyMap.TAP -> "onSingleTapConfirmedInternal";
+            case ReaderKeyMap.DOUBLE_TAP -> "onDoubleTapConfirmedInternal";
+            case ReaderKeyMap.LONG_PRESS -> "onLongPressInternal";
+            default -> throw new IllegalArgumentException("Invalid gesture");
+        };
+        ReflectionHelpers.callInstanceMethod(view, method,
+                ReflectionHelpers.ClassParameter.from(float.class, x),
+                ReflectionHelpers.ClassParameter.from(float.class, y));
     }
 
     private void single(float x, float y) {
         ReflectionHelpers.callInstanceMethod(view, "onSingleTapConfirmedInternal",
                 ReflectionHelpers.ClassParameter.from(float.class, x),
                 ReflectionHelpers.ClassParameter.from(float.class, y));
-    }
-
-    private static final class TestLayout extends GalleryView.LayoutManager {
-        int index;
-        TestLayout(GalleryView view) { super(view); }
-        @Override public void onAttach(GalleryView.Adapter adapter) { }
-        @Override public GalleryView.Adapter onDetach() { return null; }
-        @Override public void onFill() { }
-        @Override public void onDown() { }
-        @Override public void onUp() { }
-        @Override public void onDoubleTapConfirmed(float x, float y) { }
-        @Override public void onLongPress(float x, float y) { }
-        @Override public void onScroll(float dx, float dy, float tx, float ty, float x, float y) { }
-        @Override public void onFling(float vx, float vy) { }
-        @Override public boolean canScale() { return true; }
-        @Override public void onScale(float x, float y, float scale) { }
-        @Override public boolean onUpdateAnimation(long time) { return false; }
-        @Override public void onDataChanged() { }
-        @Override public void onPageLeft() { index--; }
-        @Override public void onPageRight() { index++; }
-        @Override public boolean isTapOrPressEnable() { return true; }
-        @Override public GalleryPageView findPageByIndex(int index) { return null; }
-        @Override public int getCurrentIndex() { return index; }
-        @Override public void setCurrentIndex(int value) { index = value; }
-        @Override public int getIndexUnder(float x, float y) { return index; }
-        @Override int getInternalCurrentIndex() { return index; }
     }
 
     private void tap(GestureRecognizer recognizer, float x, float y) {

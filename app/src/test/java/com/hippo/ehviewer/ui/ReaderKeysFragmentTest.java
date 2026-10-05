@@ -19,6 +19,7 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.ui.fragment.ReaderKeysFragment;
 import com.hippo.lib.glgallery.GalleryView;
 import com.hippo.lib.glgallery.ReaderKeyMap;
+import com.hippo.lib.glgallery.ReaderTouchAreas;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -67,6 +68,127 @@ public class ReaderKeysFragmentTest {
         controller.get().getSupportFragmentManager().beginTransaction()
                 .replace(android.R.id.content, fragment).commitNow();
         root = fragment.requireView();
+    }
+
+    @Test public void boundaryTapEntersDecimalSizesAndSyncsOnlyDimensions() {
+        androidx.appcompat.widget.SwitchCompat unified = root.findViewById(R.id.reader_keys_unified_areas);
+        assertTrue(unified.isChecked());
+        assertEquals("触摸区域统一", unified.getText().toString());
+        View zones = root.findViewById(R.id.reader_keys_canvas);
+        sendTouch(zones, MotionEvent.ACTION_DOWN, zones.getWidth() / 3f, zones.getHeight() * .3f);
+        sendTouch(zones, MotionEvent.ACTION_UP, zones.getWidth() / 3f, zones.getHeight() * .3f);
+        AlertDialog inputDialog = latest();
+        EditText input = inputDialog.findViewById(R.id.reader_keys_boundary_input);
+        assertNotNull(input);
+        input.setText("40.5");
+        inputDialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        for (int direction = 0; direction < 3; direction++) assertEquals(.405f, draft.areas(direction).position(0), .000001f);
+        assertEquals(1f / 3f, ReaderKeyProfiles.load().active().areas(0).position(0), 0f);
+        unified.performClick();
+        root.findViewById(R.id.reader_keys_direction).performClick();
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseBoundary", ReflectionHelpers.ClassParameter.from(int.class, ReaderTouchAreas.LEFT_EDGE));
+        AlertDialog independent = latest();
+        ((EditText) independent.findViewById(R.id.reader_keys_boundary_input)).setText("25");
+        independent.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertEquals(.405f, draft.areas(0).position(0), .000001f);
+        assertEquals(.25f, draft.areas(1).position(0), 0f);
+        assertEquals(.405f, draft.areas(2).position(0), .000001f);
+        root.findViewById(R.id.reader_keys_save).performClick();
+        ReaderKeyProfiles.Profile saved = ReaderKeyProfiles.load().active();
+        assertFalse(saved.unifiedTouchAreas);
+        assertEquals(.25f, saved.areas(1).position(0), 0f);
+        unified.performClick();
+        for (int direction = 0; direction < 3; direction++) assertEquals(.25f, draft.areas(direction).position(0), 0f);
+        assertEquals(ReaderKeyMap.LEGACY, draft.keys(0)[0]);
+        assertEquals(ReaderKeyMap.LEGACY, draft.keys(1)[0]);
+    }
+
+    @Test public void initialPresetsAndDuplicatesKeepTheirNamesAndDimensions() {
+        root.findViewById(R.id.reader_keys_profile).performClick();
+        AlertDialog choices = latest();
+        assertEquals("1. 默认", choices.getListView().getAdapter().getItem(0));
+        assertEquals("2. 推荐", choices.getListView().getAdapter().getItem(1));
+        choices.getListView().performItemClick(null, 1, 1);
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        assertEquals(.36f, draft.areas(0).position(0), 0f);
+        assertEquals(ReaderKeyMap.NONE, draft.keys(0)[1]);
+        ReflectionHelpers.callInstanceMethod(fragment, "addProfile", ReflectionHelpers.ClassParameter.from(boolean.class, true));
+        ReaderKeyProfiles store = ReaderKeyProfiles.load();
+        assertEquals(3, store.profiles.size());
+        assertEquals("配置 3", store.active().displayName(controller.get(), 2));
+        assertEquals(.36f, store.active().areas(0).position(0), 0f);
+        assertArrayEquals(store.profiles.get(1).keys(0), store.active().keys(0));
+        root.findViewById(R.id.reader_keys_manage).performClick();
+        latest().getListView().performItemClick(null, 4, 4);
+        latest().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        root.findViewById(R.id.reader_keys_save).performClick();
+        store = ReaderKeyProfiles.load();
+        assertEquals("默认", store.active().displayName(controller.get(), 2));
+        assertEquals(1f / 3f, store.active().areas(0).position(0), 0f);
+        assertEquals(ReaderKeyMap.ZOOM, store.active().map().resolvedAction(0, 1, 0));
+    }
+
+    @Test public void dragChangesBoundaryAndCancellationRestoresPreviousSizes() {
+        View zones = root.findViewById(R.id.reader_keys_canvas);
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        float x = zones.getWidth() / 6f;
+        sendTouch(zones, MotionEvent.ACTION_DOWN, x, zones.getHeight() * .5f);
+        sendTouch(zones, MotionEvent.ACTION_MOVE, x, zones.getHeight() * .65f);
+        sendTouch(zones, MotionEvent.ACTION_UP, x, zones.getHeight() * .65f);
+        for (int direction = 0; direction < 3; direction++) assertEquals(.65f, draft.areas(direction).position(2), .000001f);
+        assertEquals(.5f, draft.areas(0).position(3), 0f);
+        assertEquals(-1, (int) ReflectionHelpers.getField(zones, "pressedLine"));
+        sendTouch(zones, MotionEvent.ACTION_DOWN, x, zones.getHeight() * .65f);
+        sendTouch(zones, MotionEvent.ACTION_MOVE, x, zones.getHeight() * .8f);
+        assertEquals(.8f, draft.areas(0).position(2), .000001f);
+        sendTouch(zones, MotionEvent.ACTION_CANCEL, x, zones.getHeight() * .8f);
+        assertEquals(.65f, draft.areas(0).position(2), .000001f);
+        root.findViewById(R.id.reader_keys_save).performClick();
+        assertEquals(.65f, ReaderKeyProfiles.load().active().areas(0).position(2), .000001f);
+    }
+
+    @Test public void inputRejectsCrossingBoundariesAndAnimationLineCannotBeDragged() {
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseBoundary", ReflectionHelpers.ClassParameter.from(int.class, ReaderTouchAreas.LEFT_EDGE));
+        AlertDialog dialog = latest();
+        EditText input = dialog.findViewById(R.id.reader_keys_boundary_input);
+        input.setText("80");
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertTrue(dialog.isShowing()); assertNotNull(input.getError());
+        dialog.dismiss();
+        View zones = root.findViewById(R.id.reader_keys_canvas);
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        float x = zones.getWidth() / 6f;
+        sendTouch(zones, MotionEvent.ACTION_DOWN, x, zones.getHeight() * .7f);
+        assertEquals(-1, (int) ReflectionHelpers.getField(zones, "pressedLine"));
+        sendTouch(zones, MotionEvent.ACTION_MOVE, x, zones.getHeight() * .85f);
+        sendTouch(zones, MotionEvent.ACTION_UP, x, zones.getHeight() * .85f);
+        assertEquals(30, draft.animatedControlPercent);
+        assertEquals(.5f, draft.areas(0).position(2), 0f);
+    }
+
+    @Test public void editedDimensionsAndUnifiedSwitchSurviveRecreation() {
+        androidx.appcompat.widget.SwitchCompat unified = root.findViewById(R.id.reader_keys_unified_areas);
+        unified.performClick();
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        draft.setAreas(0, draft.areas(0).withPosition(ReaderTouchAreas.CENTER_TOP_SPLIT, .25f));
+        androidx.fragment.app.Fragment.SavedState state = controller.get().getSupportFragmentManager().saveFragmentInstanceState(fragment);
+        controller.get().getSupportFragmentManager().beginTransaction().remove(fragment).commitNow();
+        fragment = new ReaderKeysFragment(); fragment.setInitialSavedState(state);
+        controller.get().getSupportFragmentManager().beginTransaction().replace(android.R.id.content, fragment).commitNow();
+        root = fragment.requireView(); layout(360, 800);
+        unified = root.findViewById(R.id.reader_keys_unified_areas);
+        assertFalse(unified.isChecked());
+        draft = ReflectionHelpers.getField(fragment, "draft");
+        assertEquals(.25f, draft.areas(0).position(4), 0f);
+        assertEquals(.15f, draft.areas(1).position(4), 0f);
+    }
+
+    private void sendTouch(View view, int action, float x, float y) {
+        long now = SystemClock.uptimeMillis();
+        MotionEvent event = MotionEvent.obtain(now, now, action, x, y, 0);
+        try { view.dispatchTouchEvent(event); } finally { event.recycle(); }
     }
 
     @After public void cleanup() {
@@ -144,21 +266,26 @@ public class ReaderKeysFragmentTest {
 
     @Test public void renderPortraitLandscapeAndDarkWithoutShrinkingTouchViewport() throws Exception {
         render("portrait-light", 360, 800);
+        renderDragging("drag-bubble-light", 360, 800);
         root.findViewById(R.id.reader_keys_direction).performClick();
         render("portrait-rtl", 360, 800);
         root.findViewById(R.id.reader_keys_direction).performClick();
         render("portrait-vertical", 360, 800);
         root.findViewById(R.id.reader_keys_direction).performClick();
         render("landscape-light", 800, 360);
+        renderDragging("drag-bubble-landscape", 800, 360);
         controller.get().getSupportFragmentManager().beginTransaction().remove(fragment).commitNow();
+        Settings.putTheme(Settings.THEME_DARK);
         controller.get().setTheme(R.style.AppTheme_Settings_Dark);
         openEditor();
         render("portrait-dark", 360, 800);
+        renderDragging("drag-bubble-dark", 360, 800);
         controller.get().getSupportFragmentManager().beginTransaction().remove(fragment).commitNow();
         Settings.putTheme(Settings.THEME_BLACK);
         controller.get().setTheme(R.style.AppTheme_Settings_Black);
         openEditor();
         render("portrait-black", 360, 800);
+        renderDragging("drag-bubble-black", 360, 800);
     }
 
     @Test public void directionButtonEditsIndependentMappingsAndKeepsDraftsAcrossRecreation() {
@@ -245,6 +372,7 @@ public class ReaderKeysFragmentTest {
 
     @Test public void profileOrdinalIsDisplayedButNeverAddedToTheSavedName() {
         ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        profiles.profiles.remove(1);
         profiles.active().name = "配置3";
         profiles.profiles.add(new ReaderKeyProfiles.Profile("夜间"));
         profiles.save();
@@ -267,6 +395,7 @@ public class ReaderKeysFragmentTest {
 
     @Test public void recommendedMenuPreservesNameAndOtherProfilesAndSavesAllDirections() {
         ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        profiles.profiles.remove(1);
         profiles.active().name = "夜间";
         profiles.active().animatedControlPercent = 77;
         profiles.active().orientationSwipe = ReaderKeyProfiles.SWIPE_OFF;
@@ -305,6 +434,7 @@ public class ReaderKeysFragmentTest {
 
     @Test public void readerProfileSelectorUpdatesNumberedQuickIconAndSelection() throws Exception {
         ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        profiles.profiles.remove(1);
         profiles.active().name = "配置3";
         profiles.profiles.add(new ReaderKeyProfiles.Profile("夜间"));
         profiles.save();
@@ -336,7 +466,7 @@ public class ReaderKeysFragmentTest {
             profiles.save();
             quick.performClick();
             assertEquals(0, ReaderKeyProfiles.load().selected);
-            assertEquals("已切换至 配置 1", org.robolectric.shadows.ShadowToast.getTextOfLatestToast());
+            assertEquals("已切换至配置 默认", org.robolectric.shadows.ShadowToast.getTextOfLatestToast());
             Bitmap image = Bitmap.createBitmap(240, 96, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(image);
             canvas.drawColor(gallery.getColor(R.color.grey_850));
@@ -386,6 +516,16 @@ public class ReaderKeysFragmentTest {
             assertTrue(image.compress(Bitmap.CompressFormat.PNG, 100, output));
         }
         image.recycle();
+    }
+
+    private void renderDragging(String name, int widthDp, int heightDp) throws Exception {
+        layout(widthDp, heightDp);
+        View zones = root.findViewById(R.id.reader_keys_canvas);
+        float x = zones.getWidth() / 6f;
+        sendTouch(zones, MotionEvent.ACTION_DOWN, x, zones.getHeight() * .5f);
+        sendTouch(zones, MotionEvent.ACTION_MOVE, x, zones.getHeight() * .654321f);
+        render(name, widthDp, heightDp);
+        sendTouch(zones, MotionEvent.ACTION_CANCEL, x, zones.getHeight() * .654321f);
     }
 
     private void layout(int widthDp, int heightDp) {

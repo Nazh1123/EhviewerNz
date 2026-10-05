@@ -1,6 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="reader_keys_title">Key bindings</string>
+    <string name="reader_keys_default_profile">Default</string>
+    <string name="reader_keys_recommended_profile">Recommended</string>
+    <string name="reader_keys_unified_areas">Unify touch areas</string>
+    <string name="reader_keys_unified_areas_hint">Sync area sizes across reading directions. Enabling uses the current direction’s sizes.</string>
+    <string name="reader_keys_boundary_horizontal_percent">Position from the left edge (%). Drag a line to resize, or tap it to enter a value.</string>
+    <string name="reader_keys_boundary_vertical_percent">Position from the top edge (%). Drag a line to resize, or tap it to enter a value.</string>
+    <string name="reader_keys_boundary_error">Enter a percentage from %1$s to %2$s</string>
+    <string name="reader_keys_reset_sizes">Restore default area sizes</string>
+    <string-array name="reader_keys_lines">
+        <item>Left / center boundary</item>
+        <item>Center / right boundary</item>
+        <item>Left upper / lower boundary</item>
+        <item>Right upper / lower boundary</item>
+        <item>Top center / menu boundary</item>
+        <item>Menu / bottom center boundary</item>
+    </string-array>
     <string name="reader_keys_double_tap_none">No action (allows rapid single taps)</string>
     <string name="reader_keys_profile_number">Profile %1$d</string>
     <string name="reader_keys_profile_label">%1$d. %2$s</string>
@@ -20,7 +36,7 @@
     <string name="reader_keys_reset">Restore defaults</string>
     <string name="reader_keys_keep_one">Keep at least one profile</string>
     <string name="reader_keys_delete_question">Delete this profile and its unsaved edits?</string>
-    <string name="reader_keys_reset_question">Restore the actions and gesture options to their defaults? Save to apply.</string>
+    <string name="reader_keys_reset_question">Restore actions, area sizes and gesture options to their defaults? Save to apply.</string>
     <string name="reader_keys_saved">Profile saved and active</string>
     <string name="reader_keys_unsaved">Save changes before continuing?</string>
     <string name="reader_keys_discard">Discard changes</string>

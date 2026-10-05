@@ -4,6 +4,7 @@ import android.app.Application;
 import android.content.Context;
 import com.hippo.lib.glgallery.ReaderKeyMap;
 import com.hippo.lib.glgallery.GalleryView;
+import com.hippo.lib.glgallery.ReaderTouchAreas;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import org.json.JSONObject;
@@ -31,6 +32,81 @@ public class ReaderKeyProfilesTest {
 
     @After public void cleanup() { ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre", null); }
 
+    @Test public void freshInstallCreatesDefaultAndRecommendedProfilesOnce() {
+        ReaderKeyProfiles store = ReaderKeyProfiles.load();
+        assertEquals(2, store.profiles.size());
+        assertEquals("Default", store.active().displayName(RuntimeEnvironment.getApplication(), 0));
+        assertEquals("Recommended", store.profiles.get(1).displayName(RuntimeEnvironment.getApplication(), 1));
+        for (int direction = 0; direction < 3; direction++) {
+            assertArrayEquals(ReaderTouchAreas.defaults().positions(), store.active().areas(direction).positions(), 0f);
+            assertArrayEquals(ReaderTouchAreas.recommended().positions(), store.profiles.get(1).areas(direction).positions(), 0f);
+            assertArrayEquals(ReaderKeyProfiles.recommended("").keys(direction), store.profiles.get(1).keys(direction));
+        }
+        Settings.putVersionCode(111);
+        Settings.putBoolean("gallery_quick_page_turn", true);
+        Settings.putBoolean("gallery_direct_save", true);
+        ReaderKeyProfiles restored = ReaderKeyProfiles.load();
+        assertEquals(2, restored.profiles.size());
+        assertEquals(ReaderKeyMap.LEGACY, restored.active().keys(0)[1]);
+        assertEquals(ReaderKeyMap.LEGACY, restored.active().keys(0)[8]);
+        assertEquals(ReaderKeyMap.ZOOM, restored.active().map().resolvedAction(0, 1, 0));
+    }
+
+    @Test public void oldInstallWithoutProfilesUsesPreferencesAndRecommendedSizesOnce() {
+        Settings.putVersionCode(110);
+        Settings.putBoolean("gallery_quick_page_turn", true);
+        Settings.putBoolean("gallery_direct_save", true);
+        Settings.putBoolean("gallery_quick_save_turn_page", true);
+        ReaderKeyProfiles store = ReaderKeyProfiles.load();
+        assertEquals(2, store.profiles.size());
+        assertEquals(ReaderKeyMap.NONE, store.active().keys(0)[1]);
+        assertEquals(ReaderKeyMap.SAVE_NEXT, store.active().keys(0)[8]);
+        assertEquals(ReaderKeyMap.SAVE_NEXT, store.active().keys(1)[2]);
+        assertArrayEquals(ReaderTouchAreas.recommended().positions(), store.active().areas(0).positions(), 0f);
+        store.active().keys(0)[8] = ReaderKeyMap.LEGACY;
+        store.save();
+        assertEquals(ReaderKeyMap.LEGACY, ReaderKeyProfiles.load().active().keys(0)[8]);
+    }
+
+    @Test public void existingKeyProfilesKeepSelectionAndActionsWithoutReadingRetiredSwitches() {
+        Settings.putBoolean("gallery_quick_page_turn", true);
+        Settings.putBoolean("gallery_direct_save", true);
+        Settings.putString("reader_key_profiles_v1", "{\"version\":4,\"selected\":1,\"profiles\":[{\"name\":\"A\"},{\"name\":\"B\",\"directions\":[[-1,-1,8]]}]}");
+        ReaderKeyProfiles store = ReaderKeyProfiles.load();
+        assertEquals(3, store.profiles.size());
+        assertEquals(1, store.selected);
+        assertEquals("B", store.active().name);
+        assertEquals(ReaderKeyMap.LEGACY, store.active().keys(0)[1]);
+        assertEquals(ReaderKeyMap.LEGACY, store.active().keys(0)[8]);
+        assertArrayEquals(ReaderTouchAreas.recommended().positions(), store.active().areas(0).positions(), 0f);
+        assertEquals(3, ReaderKeyProfiles.load().profiles.size());
+    }
+
+    @Test public void areaSyncOnlyChangesSizesAndSurvivesCopiesAndSnapshots() {
+        ReaderKeyProfiles store = ReaderKeyProfiles.load();
+        ReaderKeyProfiles.Profile profile = store.active();
+        profile.keys(1)[0] = ReaderKeyMap.NEXT;
+        ReaderTouchAreas leftWide = profile.areas(0).withPosition(ReaderTouchAreas.LEFT_EDGE, .4f);
+        profile.setAreas(0, leftWide);
+        for (int direction = 0; direction < 3; direction++) assertEquals(.4f, profile.areas(direction).position(0), 0f);
+        assertEquals(ReaderKeyMap.LEGACY, profile.keys(0)[0]);
+        assertEquals(ReaderKeyMap.NEXT, profile.keys(1)[0]);
+        profile.setUnifiedTouchAreas(false, 0);
+        profile.setAreas(1, leftWide.withPosition(ReaderTouchAreas.LEFT_SPLIT, .65f));
+        ReaderKeyMap snapshot = profile.map();
+        store.save();
+        profile = ReaderKeyProfiles.load().active();
+        assertFalse(profile.unifiedTouchAreas);
+        assertEquals(.5f, profile.areas(0).position(2), 0f);
+        assertEquals(.65f, profile.areas(1).position(2), 0f);
+        ReaderKeyProfiles.Profile copy = profile.copy();
+        copy.setUnifiedTouchAreas(true, 1);
+        for (int direction = 0; direction < 3; direction++) assertEquals(.65f, copy.areas(direction).position(2), 0f);
+        copy.setAreas(0, leftWide);
+        assertEquals(.65f, snapshot.areas(1).position(2), 0f);
+        assertEquals(.65f, profile.areas(1).position(2), 0f);
+    }
+
     @Test public void recommendedProfileMatchesCapturedDeviceSnapshotAndIsIndependent() throws Exception {
         try (InputStream snapshot = getClass().getResourceAsStream("/reader-keys-device-profile-1.json")) {
             assertNotNull(snapshot);
@@ -56,6 +132,7 @@ public class ReaderKeyProfilesTest {
         second.keys(0)[ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.PREVIOUS;
         second.animatedControlPercent = 47;
         second.orientationSwipe = ReaderKeyProfiles.SWIPE_UP;
+        store.profiles.remove(1);
         store.profiles.add(second); store.selected = 1; store.save();
 
         ReaderKeyProfiles restored = ReaderKeyProfiles.load();
@@ -71,7 +148,7 @@ public class ReaderKeyProfilesTest {
 
     @Test public void malformedStorageAndOutOfRangeActionsRestoreDefaults() {
         Settings.putString("reader_key_profiles_v1", "invalid json");
-        assertEquals(1, ReaderKeyProfiles.load().profiles.size());
+        assertEquals(2, ReaderKeyProfiles.load().profiles.size());
         Settings.putString("reader_key_profiles_v1",
                 "{\"selected\":99,\"profiles\":[{\"normal\":[999,-2],\"animatedControlPercent\":999,\"orientationSwipe\":99}]}");
         ReaderKeyProfiles restored = ReaderKeyProfiles.load();

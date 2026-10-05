@@ -61,7 +61,6 @@ class GestureRecognizer {
     private final Listener mListener;
     private final MyGestureListener mGestureListener;
     private final DoubleTapGestureListener mDoubleTapGestureListener;
-    private boolean mPageAreaDoubleTapEnabled;
     private boolean mCurrentGestureUsesDoubleTap;
     private boolean mDoubleTapChainBroken;
     private boolean mPendingSingleTap;
@@ -85,15 +84,10 @@ class GestureRecognizer {
         mDownUpDetector = new DownUpDetector(new MyDownUpListener());
     }
 
-    public void setPageAreaDoubleTapEnabled(boolean enabled) {
-        mPageAreaDoubleTapEnabled = enabled;
-    }
-
     public void onTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
-            boolean useDoubleTap = mPageAreaDoubleTapEnabled
-                    || mListener.isDoubleTapRegion(event.getX(), event.getY());
+            boolean useDoubleTap = mListener.isDoubleTapRegion(event.getX(), event.getY());
             boolean differentRegion = mPendingSingleTap && !mListener.isSameTapRegion(
                     mPendingSingleTapX, mPendingSingleTapY, event.getX(), event.getY());
             if (useDoubleTap && (mDoubleTapChainBroken || differentRegion)) {

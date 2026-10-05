@@ -14,6 +14,7 @@ public final class ReaderKeyMap {
     public static final int LEFT_TOP = 0, LEFT_BOTTOM = 1, RIGHT_TOP = 2,
             RIGHT_BOTTOM = 3, CENTER_TOP = 4, CENTER_MENU = 5, CENTER_BOTTOM = 6;
     private final int[][] directions;
+    private final ReaderTouchAreas[] areas;
     public final int animatedControlPercent;
 
     public ReaderKeyMap(int[] normal, int animatedControlPercent) {
@@ -21,11 +22,18 @@ public final class ReaderKeyMap {
     }
 
     public ReaderKeyMap(int[][] directions, int animatedControlPercent) {
+        this(directions, null, animatedControlPercent);
+    }
+
+    public ReaderKeyMap(int[][] directions, ReaderTouchAreas[] areas, int animatedControlPercent) {
         int count = REGION_COUNT * GESTURE_COUNT;
         this.directions = new int[DIRECTION_COUNT][count];
+        this.areas = new ReaderTouchAreas[DIRECTION_COUNT];
         this.animatedControlPercent = animatedControlPercent >= 0 && animatedControlPercent <= 100
                 ? animatedControlPercent : 30;
         for (int direction = 0; direction < DIRECTION_COUNT; direction++) {
+            this.areas[direction] = areas != null && direction < areas.length && areas[direction] != null
+                    ? areas[direction] : ReaderTouchAreas.defaults();
             int[] target = this.directions[direction];
             Arrays.fill(target, LEGACY);
             int[] source = directions != null && direction < directions.length ? directions[direction] : null;
@@ -48,31 +56,33 @@ public final class ReaderKeyMap {
     }
 
     public static boolean isAnimatedControlArea(float x, float y, float width, float height, int percent) {
-        int area = region(x, y, width, height);
-        return percent > 0 && area >= 0 && area <= RIGHT_BOTTOM
-                && y >= height * ((100 - percent) / 100f);
+        return ReaderTouchAreas.defaults().isAnimatedControlArea(x, y, width, height, percent);
     }
 
     /** Coordinates are relative to the reader viewport, not the image bounds. */
     public static int region(float x, float y, float width, float height) {
-        if (width <= 0 || height <= 0 || x < 0 || y < 0 || x >= width || y >= height) return -1;
-        float nx = x / width, ny = y / height;
-        if (nx < 9f / 25f) return ny < .5f ? LEFT_TOP : LEFT_BOTTOM;
-        if (nx >= 16f / 25f) return ny < .5f ? RIGHT_TOP : RIGHT_BOTTOM;
-        if (ny < .15f) return CENTER_TOP;
-        return ny < .5f ? CENTER_MENU : CENTER_BOTTOM;
+        return ReaderTouchAreas.defaults().region(x, y, width, height);
     }
 
     public static float[] bounds(int region) {
-        return switch (region) {
-            case LEFT_TOP -> new float[]{0, 0, .36f, .5f};
-            case LEFT_BOTTOM -> new float[]{0, .5f, .36f, 1};
-            case RIGHT_TOP -> new float[]{.64f, 0, 1, .5f};
-            case RIGHT_BOTTOM -> new float[]{.64f, .5f, 1, 1};
-            case CENTER_TOP -> new float[]{.36f, 0, .64f, .15f};
-            case CENTER_MENU -> new float[]{.36f, .15f, .64f, .5f};
-            case CENTER_BOTTOM -> new float[]{.36f, .5f, .64f, 1};
-            default -> throw new IllegalArgumentException("Invalid region");
-        };
+        return ReaderTouchAreas.defaults().bounds(region);
+    }
+
+    public ReaderTouchAreas areas(int direction) {
+        return areas[GalleryView.sanitizeLayoutMode(direction)];
+    }
+
+    public int resolvedAction(int region, int gesture, int direction) {
+        int action = action(region, gesture, direction);
+        return action == LEGACY ? defaultAction(region, gesture) : action;
+    }
+
+    public static int defaultAction(int region, int gesture) {
+        if (region < 0 || region >= REGION_COUNT || gesture < 0 || gesture >= GESTURE_COUNT) return NONE;
+        if (gesture == TAP) {
+            if (region <= RIGHT_BOTTOM) return region <= LEFT_BOTTOM ? LEFT : RIGHT;
+            return region == CENTER_MENU ? MENU : CONTROLS;
+        }
+        return gesture == DOUBLE_TAP ? ZOOM : PAGE_MENU;
     }
 }

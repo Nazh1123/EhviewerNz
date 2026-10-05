@@ -69,6 +69,7 @@ public class Settings {
         sContext = context.getApplicationContext();
         sSettingsPre = PreferenceManager.getDefaultSharedPreferences(sContext);
         sArchiverPre = context.getSharedPreferences("archiver_cache",Context.MODE_PRIVATE);
+        ReaderKeyProfiles.load();
         sEhConfig = loadEhConfig();
         if (getDarkModeStatus(context) && isThemeAutoSwitchAvailable()) {
             putTheme(THEME_DARK);
@@ -96,6 +97,13 @@ public class Settings {
         // migrateQuickPageTurnSetting(); // Legacy switches migrate into ReaderKeyProfiles instead.
         migrateThumbnailInfoBarSetting();
         getStartTransferTime();
+    }
+
+    static boolean hasExistingReaderPreferences() {
+        return getVersionCode() > 0 || sSettingsPre.contains("gallery_quick_page_turn")
+                || sSettingsPre.contains("gallery_double_tap_zoom")
+                || sSettingsPre.contains("gallery_direct_save")
+                || sSettingsPre.contains("gallery_quick_save_turn_page");
     }
 
     private static void migrateThumbnailInfoBarSetting() {

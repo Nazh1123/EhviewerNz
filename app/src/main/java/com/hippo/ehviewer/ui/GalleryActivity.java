@@ -734,8 +734,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();
         mGalleryView = new GalleryView.Builder(this, mGalleryAdapter).setListener(this).setLayoutMode(Settings.getReadingDirection()).setScaleMode(Settings.getPageScaling()).setStartPosition(Settings.getStartPosition()).setStartPage(startPage).setBackgroundColor(AttrResources.getAttrColor(this, android.R.attr.colorBackground)).setEdgeColor(AttrResources.getAttrColor(this, R.attr.colorEdgeEffect) & 0xffffff | 0x33000000).setPagerInterval(Settings.getShowPageInterval() ? resources.getDimensionPixelOffset(R.dimen.gallery_pager_interval) : 0).setScrollInterval(Settings.getShowPageInterval() ? resources.getDimensionPixelOffset(R.dimen.gallery_scroll_interval) : 0).setPageMinHeight(resources.getDimensionPixelOffset(R.dimen.gallery_page_min_height)).setPageInfoInterval(resources.getDimensionPixelOffset(R.dimen.gallery_page_info_interval)).setProgressColor(ResourcesUtils.getAttrColor(this, androidx.appcompat.R.attr.colorPrimary)).setProgressSize(resources.getDimensionPixelOffset(R.dimen.gallery_progress_size)).setPageTextColor(AttrResources.getAttrColor(this, android.R.attr.textColorSecondary)).setPageTextSize(resources.getDimensionPixelOffset(R.dimen.gallery_page_text_size)).setPageTextTypeface(Typeface.DEFAULT).setErrorTextColor(resources.getColor(R.color.red_500, null)).setErrorTextSize(resources.getDimensionPixelOffset(R.dimen.gallery_error_text_size)).setDefaultErrorString(resources.getString(R.string.error_unknown)).setEmptyString(resources.getString(R.string.error_empty)).build();
-        // mGalleryView.setPageAreaDoubleTapEnabled(!Settings.getQuickPageTurn());
-        mGalleryView.setPageAreaDoubleTapEnabled(true);
         mGLRootView.setContentPane(mGalleryView);
         mGLRootView.setOnGenericMotionListener(this::onGenericMotion);
         mAnimatedWebpTouchSlop = ViewConfiguration.get(this).getScaledTouchSlop();
@@ -1795,7 +1793,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         boolean enabled = !Settings.getQuickPageTurn();
         Settings.putQuickPageTurn(enabled);
         if (mGalleryView != null) {
-            mGalleryView.setPageAreaDoubleTapEnabled(!enabled);
         }
         updateQuickSettingsButtons();
         keepQuickSettingsVisible();
@@ -1910,8 +1907,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private void updateQuickReaderKeyProfile() {
         if (mQuickReaderKeyProfile == null) return;
         ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
-        String name = profiles.active().name;
-        if (name.isEmpty()) name = getString(R.string.reader_keys_profile_number, profiles.selected + 1);
+        String name = profiles.active().displayName(this, profiles.selected);
         String label = getString(R.string.reader_keys_profile_label, profiles.selected + 1, name);
         mQuickReaderKeyProfile.setImageDrawable(new ReaderKeyProfileDrawable(this, profiles.selected + 1));
         String description = getString(R.string.reader_keys_quick_profile, label);
@@ -1930,16 +1926,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         clearOrientationSwipeGesture();
         mReaderOrientationSwipe = profile.orientationSwipe;
         mGalleryView.setReaderKeyMap(profile.map());
-        // mGalleryView.setPageAreaDoubleTapEnabled(!Settings.getQuickPageTurn());
-        mGalleryView.setPageAreaDoubleTapEnabled(true);
     }
 
     private void chooseReaderKeyProfile() {
         ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
         String[] names = new String[profiles.profiles.size()];
         for (int i = 0; i < names.length; i++) {
-            String name = profiles.profiles.get(i).name;
-            if (name.isEmpty()) name = getString(R.string.reader_keys_profile_number, i + 1);
+            String name = profiles.profiles.get(i).displayName(this, i);
             names[i] = getString(R.string.reader_keys_profile_label, i + 1, name);
         }
         new AlertDialog.Builder(this).setTitle(R.string.reader_keys_select_profile)
@@ -1953,8 +1946,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         profiles.selected = selected;
         profiles.save();
         applyReaderKeyProfile();
-        String name = profiles.active().name;
-        if (name.isEmpty()) name = getString(R.string.reader_keys_profile_number, selected + 1);
+        String name = profiles.active().displayName(this, selected);
         int message = name.contains(getString(R.string.reader_keys_profile_keyword))
                 ? R.string.reader_keys_switched_named : R.string.reader_keys_switched_custom;
         Toast.makeText(this, getString(message, name), Toast.LENGTH_SHORT).show();
@@ -2006,25 +1998,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     @Override
-    public void onLongPressPage(int index, boolean nextPageArea,
-                                boolean previousPageArea) {
-        if (previousPageArea) {
-            GalleryPageView page = mGalleryView != null
-                    ? mGalleryView.findPageByIndex(index) : null;
-            ImageTexture texture = page != null ? page.getImageTexture() : null;
-            // Saving the previous page is only available while viewing an animation.
-            previousPageArea = texture != null && texture.isControllableAnimation();
-        }
+    public void onLongPressPage(int index) {
         NotifyTask task = mNotifyTaskPool.pop();
-        if (task == null) {
-            task = new NotifyTask();
-        }
-        int key = nextPageArea
-                ? NotifyTask.KEY_LONG_PRESS_NEXT_PAGE_AREA
-                : previousPageArea
-                        ? NotifyTask.KEY_LONG_PRESS_PREVIOUS_PAGE_AREA
-                        : NotifyTask.KEY_LONG_PRESS_PAGE;
-        task.setData(key, index);
+        if (task == null) task = new NotifyTask();
+        task.setData(NotifyTask.KEY_LONG_PRESS_PAGE, index);
         SimpleHandler.getInstance().post(task);
     }
 
@@ -2926,8 +2903,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mGalleryView.setLayoutMode(layoutMode);
             mGalleryView.setScaleMode(scaleMode);
             mGalleryView.setStartPosition(startPosition);
-            // mGalleryView.setPageAreaDoubleTapEnabled(!quickPageTurn);
-            mGalleryView.setPageAreaDoubleTapEnabled(true);
             if (keepScreenOn) {
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             } else {
@@ -3514,8 +3489,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         public static final int KEY_TAP_MENU_AREA = 4;
         public static final int KEY_TAP_ERROR_TEXT = 5;
         public static final int KEY_LONG_PRESS_PAGE = 6;
-        public static final int KEY_LONG_PRESS_NEXT_PAGE_AREA = 7;
-        public static final int KEY_LONG_PRESS_PREVIOUS_PAGE_AREA = 8;
 
         private int mKey;
         private int mValue;
@@ -3559,53 +3532,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         }
 
-        /* Retired switch-driven save handling.
-        private void performLongPressSave(int index, boolean turnPageAfterSave,
-                                          boolean previousPageSave) {
-            if (mGalleryProvider == null || index < 0 || index >= mSize) {
-                return;
-            }
-
-            long now = SystemClock.elapsedRealtime();
-            if (index == mLastLongPressSaveIndex
-                    && mLastLongPressSaveAt != 0L
-                    && now - mLastLongPressSaveAt < LONG_PRESS_SAVE_DEBOUNCE_MS) {
-                return;
-            }
-
-            saveImage(index, previousPageSave, turnPageAfterSave, true);
-        }
-
-        */
-
         private void onLongPressPage(final int index) {
-            showPageDialog(index);
-        }
-
-        private void onLongPressNextPageArea(final int index) {
-            /*
-            if (Settings.getDirectSave()) {
-                performLongPressSave(index, true, false);
-            } else {
-                showPageDialog(index);
-            }
-            */
-            showPageDialog(index);
-        }
-
-        private void onLongPressPreviousPageArea(final int index) {
-            /*
-            int previousIndex = index - 1;
-            if (Settings.getDirectSave()
-                    && Settings.getExperimentalAnimatedWebpEnabled()
-                    && Settings.getAnimatedWebpAutoAdvance()
-                    && mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM
-                    && previousIndex >= 0) {
-                performLongPressSave(previousIndex, false, true);
-            } else {
-                showPageDialog(index);
-            }
-            */
             showPageDialog(index);
         }
 
@@ -3667,12 +3594,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case KEY_LONG_PRESS_PAGE:
                     onLongPressPage(mValue);
-                    break;
-                case KEY_LONG_PRESS_NEXT_PAGE_AREA:
-                    onLongPressNextPageArea(mValue);
-                    break;
-                case KEY_LONG_PRESS_PREVIOUS_PAGE_AREA:
-                    onLongPressPreviousPageArea(mValue);
                     break;
             }
             mNotifyTaskPool.push(this);

@@ -1,7 +1,6 @@
 package com.hippo.lib.glgallery;
 
 import android.app.Application;
-import android.graphics.Rect;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 
@@ -30,9 +29,12 @@ public class GalleryViewAnimatedControlAreaTest {
                     @Override public int size() { return 0; }
                 }).build();
         view.bounds().set(0, 0, 1000, 900);
-        ((Rect) ReflectionHelpers.getField(view, "mLeftArea")).set(0, 0, 360, 900);
-        ((Rect) ReflectionHelpers.getField(view, "mRightArea")).set(640, 0, 1000, 900);
-        view.setPageAreaDoubleTapEnabled(false); // Quick page turning is on.
+        int[] keys = new int[ReaderKeyMap.REGION_COUNT * ReaderKeyMap.GESTURE_COUNT];
+        java.util.Arrays.fill(keys, ReaderKeyMap.LEGACY);
+        for (int area = 0; area <= ReaderKeyMap.RIGHT_BOTTOM; area++) {
+            keys[area * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
+        }
+        view.setReaderKeyMap(new ReaderKeyMap(keys, 30));
 
         assertFalse(view.isDoubleTapRegion(100, 800));
         assertFalse(view.isDoubleTapRegion(900, 800));
