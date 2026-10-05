@@ -27,7 +27,9 @@ build_*.bat
 _build.bat
 *.lnk
 *.log
-/translation-engine/build/
-/translation-engine/.cxx/
 /artifacts/
 /docs/
+/tools/
+/translation-engine/build/
+/translation-engine/.cxx/
+/translation-engine/*.md
