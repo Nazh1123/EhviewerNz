@@ -67,7 +67,7 @@
             app:iconSpaceReserved="false" />
 
         <com.hippo.preference.ListPreference
-            android:defaultValue="500"
+            android:defaultValue="200"
             android:key="gallery_update_record_limit"
             android:summary="%s"
             android:title="@string/settings_gallery_update_record_limit"

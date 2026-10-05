@@ -616,12 +616,12 @@ public class Settings {
     }
 
     public static final String KEY_GALLERY_UPDATE_RECORD_LIMIT = "gallery_update_record_limit";
-    public static final int DEFAULT_GALLERY_UPDATE_RECORD_LIMIT = 500;
+    public static final int DEFAULT_GALLERY_UPDATE_RECORD_LIMIT = 200;
 
     public static int getGalleryUpdateRecordLimit() {
         int value = getIntFromStr(KEY_GALLERY_UPDATE_RECORD_LIMIT, DEFAULT_GALLERY_UPDATE_RECORD_LIMIT);
         return switch (value) {
-            case 100, 200, 500, 1000, 2000 -> value;
+            case 50, 100, 200, 500, 1000 -> value;
             default -> DEFAULT_GALLERY_UPDATE_RECORD_LIMIT;
         };
     }

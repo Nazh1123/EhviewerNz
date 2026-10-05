@@ -170,7 +170,7 @@
         app:entryValues="@array/history_info_size_entry_values" />
 
     <com.hippo.preference.ListPreference
-        android:defaultValue="500"
+        android:defaultValue="200"
         android:key="gallery_update_record_limit"
         android:summary="%s"
         android:title="@string/settings_gallery_update_record_limit"

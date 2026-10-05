@@ -102,13 +102,17 @@ public class GalleryUpdateRecordStoreTest {
     }
 
     @Test public void configuredLimitsHaveDefaultAndRejectInvalidValues() {
-        assertEquals(500, Settings.getGalleryUpdateRecordLimit());
-        for (int limit : new int[]{100, 200, 500, 1000, 2000}) {
+        context.getSharedPreferences("update-record-tests", Context.MODE_PRIVATE)
+                .edit().remove(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT).commit();
+        assertEquals(200, Settings.getGalleryUpdateRecordLimit());
+        for (int limit : new int[]{50, 100, 200, 500, 1000}) {
             Settings.putIntToStr(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT, limit);
             assertEquals(limit, Settings.getGalleryUpdateRecordLimit());
         }
-        Settings.putIntToStr(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT, -1);
-        assertEquals(500, Settings.getGalleryUpdateRecordLimit());
+        for (int limit : new int[]{-1, 2000}) {
+            Settings.putIntToStr(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT, limit);
+            assertEquals(200, Settings.getGalleryUpdateRecordLimit());
+        }
     }
 
     @Test public void failedAttemptIsVisibleAfterReopenAndSuccessfulRetryUsesOriginalDraft() {

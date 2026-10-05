@@ -63,7 +63,7 @@ public class ThumbnailInfoBarPreferencesTest {
                 fork.indexOf(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));
         assertFalse(fork.contains("launch_page"));
         assertFalse(fork.contains("start_transfer_time"));
-        assertArrayEquals(new String[]{"100", "200", "500", "1000", "2000"},
+        assertArrayEquals(new String[]{"50", "100", "200", "500", "1000"},
                 RuntimeEnvironment.getApplication().getResources()
                         .getStringArray(R.array.gallery_update_record_limit_values));
     }

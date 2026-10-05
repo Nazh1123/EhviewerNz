@@ -16,10 +16,10 @@
     <string name="gallery_update_finalizing">Finishing gallery update</string>
     <string name="gallery_update_finalization_failed">Download completed, but update finalization failed. Retry from the gallery detail page.</string>
     <string-array name="gallery_update_record_limit_entries">
-        <item>100</item><item>200</item><item>500</item><item>1000</item><item>2000</item>
+        <item>50</item><item>100</item><item>200</item><item>500</item><item>1000</item>
     </string-array>
     <string-array name="gallery_update_record_limit_values">
-        <item>100</item><item>200</item><item>500</item><item>1000</item><item>2000</item>
+        <item>50</item><item>100</item><item>200</item><item>500</item><item>1000</item>
     </string-array>
     <string name="gallery_update_error_log">Error log</string>
     <string name="gallery_update_error_source">Old gallery selected for update</string>
