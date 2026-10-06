@@ -1056,7 +1056,11 @@
     <string name="settings_eh_system_theme">システムテーマ</string>
     <string name="settings_fork_auto_subscription_updates">サブスクリプションの更新を自動的に取得する</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH 登録</string>
-    <string name="settings_fork_auto_subscription_updates_summary">購読コンテンツを少なくとも 1 時間ごとに取得するために更新されるギャラリーの数</string>
+    <string name="settings_fork_auto_subscription_updates_summary">設定した間隔で購読コンテンツの更新ギャラリー数を取得</string>
+    <string name="settings_fork_auto_subscription_update_interval">自動取得間隔</string>
+    <string name="settings_fork_auto_subscription_update_interval_summary">%1$d 分</string>
+    <string name="settings_fork_auto_subscription_update_interval_invalid">有効な正の整数で分数を入力してください</string>
+    <string name="settings_fork_subscription_update_minutes">分</string>
     <string name="settings_fork_bookmark_subscription_summary">これをクリックするか、ブックマーク バーの設定でブックマークに購読を追加します。サイドバーの「ブックマーク購読」をクリックすると、ブックマーク条件を満たすすべてのギャラリーを時間順に表示できます。</string>
     <string name="settings_fork_delete_empty_galleries">空のギャラリーを削除する</string>
     <string name="settings_fork_download_label_continuous_browse">「ダウンロード」タブの継続的な閲覧</string>

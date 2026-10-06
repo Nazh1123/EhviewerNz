@@ -536,6 +536,9 @@ public class Settings {
             "auto_subscription_updates_eh";
     public static final String KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK =
             "auto_subscription_updates_bookmark";
+    public static final String KEY_AUTO_SUBSCRIPTION_UPDATE_INTERVAL =
+            "auto_subscription_update_interval";
+    public static final int DEFAULT_AUTO_SUBSCRIPTION_UPDATE_INTERVAL = 60;
 
     public static boolean getAutoSubscriptionUpdates() {
         return getBoolean(KEY_AUTO_SUBSCRIPTION_UPDATES, false);
@@ -547,6 +550,34 @@ public class Settings {
 
     public static boolean getAutoSubscriptionUpdatesBookmark() {
         return getBoolean(KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, true);
+    }
+
+    @Nullable
+    public static String normalizeAutoSubscriptionUpdateInterval(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (!trimmed.matches("[0-9]+")) {
+            return null;
+        }
+        try {
+            int minutes = Integer.parseInt(trimmed);
+            return minutes > 0 ? Integer.toString(minutes) : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    public static int getAutoSubscriptionUpdateIntervalMinutes() {
+        String value = normalizeAutoSubscriptionUpdateInterval(
+                getString(KEY_AUTO_SUBSCRIPTION_UPDATE_INTERVAL, null));
+        return value != null ? Integer.parseInt(value)
+                : DEFAULT_AUTO_SUBSCRIPTION_UPDATE_INTERVAL;
+    }
+
+    public static long getAutoSubscriptionUpdateIntervalMillis() {
+        return getAutoSubscriptionUpdateIntervalMinutes() * 60L * 1000L;
     }
 
     public static final String KEY_DETAIL_SIZE = "detail_size";

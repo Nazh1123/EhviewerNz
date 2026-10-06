@@ -1038,7 +1038,11 @@
     <string name="settings_eh_system_theme">Thème système</string>
     <string name="settings_fork_auto_subscription_updates">Obtenez automatiquement les mises à jour de votre abonnement</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH Abonnez-vous</string>
-    <string name="settings_fork_auto_subscription_updates_summary">Nombre de galeries mises à jour pour obtenir du contenu abonné au moins toutes les heures</string>
+    <string name="settings_fork_auto_subscription_updates_summary">Récupérer le nombre de galeries mises à jour dans les abonnements selon l’intervalle configuré</string>
+    <string name="settings_fork_auto_subscription_update_interval">Intervalle de récupération automatique</string>
+    <string name="settings_fork_auto_subscription_update_interval_summary">%1$d minutes</string>
+    <string name="settings_fork_auto_subscription_update_interval_invalid">Saisissez un nombre entier positif valide de minutes</string>
+    <string name="settings_fork_subscription_update_minutes">minutes</string>
     <string name="settings_fork_bookmark_subscription_summary">Cliquez dessus ou ajoutez un abonnement au signet dans les paramètres de la barre de favoris. Vous pouvez ensuite cliquer sur « Abonnement aux favoris » dans la barre latérale pour afficher toutes les galeries qui répondent aux conditions de favoris, triées par heure.</string>
     <string name="settings_fork_delete_empty_galleries">Supprimer la galerie vide</string>
     <string name="settings_fork_download_label_continuous_browse">Onglet de téléchargement navigation continue</string>

@@ -1043,7 +1043,11 @@
     <string name="settings_eh_system_theme">Systemthema</string>
     <string name="settings_fork_auto_subscription_updates">Erhalten Sie automatisch Abonnementaktualisierungen</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH Abonnieren</string>
-    <string name="settings_fork_auto_subscription_updates_summary">Anzahl der aktualisierten Galerien, um mindestens stündlich abonnierte Inhalte zu erhalten</string>
+    <string name="settings_fork_auto_subscription_updates_summary">Anzahl aktualisierter abonnierter Galerien im festgelegten Intervall abrufen</string>
+    <string name="settings_fork_auto_subscription_update_interval">Automatisches Abrufintervall</string>
+    <string name="settings_fork_auto_subscription_update_interval_summary">%1$d Minuten</string>
+    <string name="settings_fork_auto_subscription_update_interval_invalid">Eine gültige positive ganze Zahl von Minuten eingeben</string>
+    <string name="settings_fork_subscription_update_minutes">Minuten</string>
     <string name="settings_fork_bookmark_subscription_summary">Klicken Sie hier oder fügen Sie dem Lesezeichen in den Einstellungen der Lesezeichenleiste ein Abonnement hinzu. Anschließend können Sie in der Seitenleiste auf „Lesezeichen-Abonnement“ klicken, um alle Galerien, die die Lesezeichenbedingungen erfüllen, nach Zeit sortiert anzuzeigen.</string>
     <string name="settings_fork_delete_empty_galleries">Leere Galerie löschen</string>
     <string name="settings_fork_download_label_continuous_browse">Kontinuierliches Surfen auf der Registerkarte „Download“.</string>

@@ -172,6 +172,12 @@
             android:key="auto_subscription_updates_bookmark"
             android:title="@string/bookmark_subscription" />
 
+        <EditTextPreference
+            android:defaultValue="60"
+            android:dependency="auto_subscription_updates"
+            android:key="auto_subscription_update_interval"
+            android:title="@string/settings_fork_auto_subscription_update_interval" />
+
     </PreferenceCategory>
 
     <PreferenceCategory

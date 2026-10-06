@@ -1104,7 +1104,11 @@
     <string name="settings_eh_system_theme">시스템 테마</string>
     <string name="settings_fork_auto_subscription_updates">자동으로 구독 업데이트 받기</string>
     <string name="settings_fork_auto_subscription_updates_eh">에에 구독</string>
-    <string name="settings_fork_auto_subscription_updates_summary">적어도 매 시간마다 구독 콘텐츠를 얻기 위해 업데이트된 갤러리 수</string>
+    <string name="settings_fork_auto_subscription_updates_summary">설정한 간격으로 구독 콘텐츠의 업데이트된 갤러리 수 가져오기</string>
+    <string name="settings_fork_auto_subscription_update_interval">자동 가져오기 간격</string>
+    <string name="settings_fork_auto_subscription_update_interval_summary">%1$d분</string>
+    <string name="settings_fork_auto_subscription_update_interval_invalid">분 단위로 유효한 양의 정수를 입력하세요</string>
+    <string name="settings_fork_subscription_update_minutes">분</string>
     <string name="settings_fork_bookmark_subscription_summary">이것을 클릭하거나 북마크바 설정에서 북마크에 구독을 추가하세요. 그런 다음 사이드바에서 "북마크 구독"을 클릭하면 북마크 조건을 충족하는 모든 갤러리를 시간별로 정렬하여 볼 수 있습니다.</string>
     <string name="settings_fork_delete_empty_galleries">빈 갤러리 삭제</string>
     <string name="settings_fork_download_label_continuous_browse">다운로드 탭 연속 탐색</string>

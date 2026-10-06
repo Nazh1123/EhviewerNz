@@ -82,6 +82,7 @@ import com.hippo.ehviewer.client.SearchLanguageQuery;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.ui.fragment.GalleryVersionMaintenance;
+import com.hippo.ehviewer.ui.fragment.SubscriptionUpdatePreferences;
 import com.hippo.ehviewer.ui.main.UserImageChange;
 import com.hippo.ehviewer.ui.scene.AnalyticsScene;
 import com.hippo.ehviewer.ui.scene.BaseScene;
@@ -114,6 +115,7 @@ import com.hippo.ehviewer.widget.EhDrawerLayout;
 import com.hippo.ehviewer.widget.LimitsCountView;
 import com.hippo.io.UniFileInputStreamPipe;
 import com.hippo.network.Network;
+import com.hippo.preference.ListPreference;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.SceneFragment;
 import com.hippo.scene.StageActivity;
@@ -178,6 +180,10 @@ public final class MainActivity extends StageActivity
     private TextView mSubscriptionUpdateCountdown;
     @Nullable
     private AlertDialog mGalleryVersionUpdatePrompt;
+    @Nullable
+    private ListPreference mSearchLanguagePreference;
+    @Nullable
+    private AlertDialog mSubscriptionUpdateSettingsDialog;
     private boolean mSubscriptionUpdatesStarted;
     private boolean mSubscriptionCountdownRunning;
 
@@ -463,6 +469,7 @@ public final class MainActivity extends StageActivity
         mRightDrawer = (FrameLayout) ViewUtils.$$(this, R.id.right_drawer);
         View headerLayout = mNavView.getHeaderView(0);
         configureOneHandedNavigation(headerLayout);
+        configureNavigationLongPress();
         mAvatar = (AvatarImageView) ViewUtils.$$(headerLayout, R.id.avatar);
         mAvatar.setOnClickListener(l -> onAvatarChange());
         mHeaderBackground = (ImageView) ViewUtils.$$(headerLayout, R.id.header_background);
@@ -559,6 +566,93 @@ public final class MainActivity extends StageActivity
             }
         }
         return null;
+    }
+
+    private void configureNavigationLongPress() {
+        RecyclerView menuView = findRecyclerView(mNavView);
+        if (menuView == null) {
+            return;
+        }
+        menuView.addOnChildAttachStateChangeListener(
+                new RecyclerView.OnChildAttachStateChangeListener() {
+                    @Override
+                    public void onChildViewAttachedToWindow(@NonNull View view) {
+                        bindNavigationLongPress(view);
+                    }
+
+                    @Override
+                    public void onChildViewDetachedFromWindow(@NonNull View view) {
+                    }
+                });
+        for (int i = 0; i < menuView.getChildCount(); i++) {
+            bindNavigationLongPress(menuView.getChildAt(i));
+        }
+    }
+
+    private void bindNavigationLongPress(View view) {
+        // Read the current ID on each gesture because menu rows are recycled.
+        view.setOnLongClickListener(v -> onNavigationItemLongClick(v.getId()));
+    }
+
+    private boolean onNavigationItemLongClick(@IdRes int itemId) {
+        switch (itemId) {
+            case R.id.nav_bookmark_subscription:
+                startScene(new Announcer(QuickSearchScene.class));
+                if (mDrawerLayout != null) {
+                    mDrawerLayout.closeDrawers();
+                }
+                return true;
+            case R.id.nav_update_subscription:
+                showSubscriptionUpdateSettings();
+                return true;
+            case R.id.nav_search_language:
+                showSearchLanguageSettings();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void showSubscriptionUpdateSettings() {
+        if (mSubscriptionUpdateSettingsDialog != null) {
+            return;
+        }
+        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(this, () -> {
+            renderSubscriptionUpdateState();
+            scheduleSubscriptionUpdateCheck();
+        });
+        mSubscriptionUpdateSettingsDialog = dialog;
+        dialog.setOnDismissListener(ignored -> mSubscriptionUpdateSettingsDialog = null);
+    }
+
+    private void showSearchLanguageSettings() {
+        if (mSearchLanguagePreference == null) {
+            // Use the same preference dialog and resources as the settings screen.
+            ListPreference preference = new ListPreference(this);
+            preference.setKey(Settings.KEY_SEARCH_LANGUAGE);
+            preference.setPersistent(false);
+            preference.setTitle(R.string.settings_search_language);
+            preference.setDialogTitle(R.string.settings_search_language);
+            preference.setEntries(R.array.search_language_entries);
+            preference.setEntryValues(R.array.search_language_entry_values);
+            preference.setOnPreferenceChangeListener((ignored, newValue) -> {
+                Settings.putString(Settings.KEY_SEARCH_LANGUAGE, (String) newValue);
+                updateSearchLanguageNavigationItem();
+                return true;
+            });
+            mSearchLanguagePreference = preference;
+        }
+        mSearchLanguagePreference.setValue(Settings.getSearchLanguage());
+        mSearchLanguagePreference.performClick();
+    }
+
+    private void updateSearchLanguageNavigationItem() {
+        if (mNavView != null) {
+            MenuItem item = mNavView.getMenu().findItem(R.id.nav_search_language);
+            if (item != null) {
+                item.setVisible(Settings.isSearchLanguageEnabled());
+            }
+        }
     }
 
     @Override
@@ -732,6 +826,14 @@ public final class MainActivity extends StageActivity
 
     @Override
     protected void onDestroy() {
+        if (mSubscriptionUpdateSettingsDialog != null) {
+            mSubscriptionUpdateSettingsDialog.dismiss();
+            mSubscriptionUpdateSettingsDialog = null;
+        }
+        if (mSearchLanguagePreference != null) {
+            mSearchLanguagePreference.onDetached();
+            mSearchLanguagePreference = null;
+        }
         if (mGalleryVersionUpdatePrompt != null) {
             mGalleryVersionUpdatePrompt.dismiss();
             mGalleryVersionUpdatePrompt = null;
@@ -759,12 +861,7 @@ public final class MainActivity extends StageActivity
         super.onResume();
 
         setNavCheckedItem(mNavCheckedItem);
-        if (mNavView != null) {
-            MenuItem searchLanguageItem = mNavView.getMenu().findItem(R.id.nav_search_language);
-            if (searchLanguageItem != null) {
-                searchLanguageItem.setVisible(Settings.isSearchLanguageEnabled());
-            }
-        }
+        updateSearchLanguageNavigationItem();
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
 
@@ -1206,7 +1303,7 @@ public final class MainActivity extends StageActivity
                 && Settings.getAutoSubscriptionUpdates()) {
             mSubscriptionUpdateHandler.postDelayed(
                     mSubscriptionUpdateRunnable,
-                    SubscriptionUpdateManager.CHECK_INTERVAL_MS);
+                    Settings.getAutoSubscriptionUpdateIntervalMillis());
         }
     }
 

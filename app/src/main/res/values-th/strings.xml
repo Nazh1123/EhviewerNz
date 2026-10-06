@@ -1115,7 +1115,11 @@
     <string name="settings_eh_system_theme">ธีมของระบบ</string>
     <string name="settings_fork_auto_subscription_updates">รับการอัปเดตการสมัครรับข้อมูลโดยอัตโนมัติ</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH สมัครสมาชิก</string>
-    <string name="settings_fork_auto_subscription_updates_summary">จำนวนแกลเลอรีที่อัปเดตเพื่อรับเนื้อหาที่สมัครรับข้อมูลอย่างน้อยทุกชั่วโมง</string>
+    <string name="settings_fork_auto_subscription_updates_summary">รับจำนวนแกลเลอรีที่อัปเดตในการสมัครรับข้อมูลตามช่วงเวลาที่กำหนด</string>
+    <string name="settings_fork_auto_subscription_update_interval">ช่วงเวลารับข้อมูลอัตโนมัติ</string>
+    <string name="settings_fork_auto_subscription_update_interval_summary">%1$d นาที</string>
+    <string name="settings_fork_auto_subscription_update_interval_invalid">ป้อนจำนวนนาทีเป็นจำนวนเต็มบวกที่ถูกต้อง</string>
+    <string name="settings_fork_subscription_update_minutes">นาที</string>
     <string name="settings_fork_bookmark_subscription_summary">คลิกที่นี่หรือเพิ่มการสมัครสมาชิกบุ๊กมาร์กในการตั้งค่าแถบบุ๊กมาร์ก จากนั้นคุณสามารถคลิก "การสมัครสมาชิกบุ๊กมาร์ก" ในแถบด้านข้างเพื่อดูแกลเลอรีทั้งหมดที่ตรงตามเงื่อนไขของบุ๊กมาร์กโดยจัดเรียงตามเวลา</string>
     <string name="settings_fork_delete_empty_galleries">ลบแกลเลอรีที่ว่างเปล่า</string>
     <string name="settings_fork_download_label_continuous_browse">ดาวน์โหลดแท็บเรียกดูอย่างต่อเนื่อง</string>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="?attr/dialogPreferredPadding"
+        android:paddingEnd="?attr/dialogPreferredPadding"
+        android:paddingBottom="16dp">
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/auto_subscription_updates"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:text="@string/settings_fork_auto_subscription_updates"
+            app:switchPadding="16dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/preference_child_indent"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/auto_subscription_updates_eh"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="@string/settings_fork_auto_subscription_updates_eh"
+                app:switchPadding="16dp" />
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/auto_subscription_updates_bookmark"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:text="@string/bookmark_subscription"
+                app:switchPadding="16dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/auto_subscription_update_interval_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/settings_fork_auto_subscription_update_interval"
+                app:suffixText="@string/settings_fork_subscription_update_minutes">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/auto_subscription_update_interval"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:imeOptions="actionDone"
+                    android:inputType="number"
+                    android:maxLength="10"
+                    android:selectAllOnFocus="true"
+                    android:singleLine="true" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

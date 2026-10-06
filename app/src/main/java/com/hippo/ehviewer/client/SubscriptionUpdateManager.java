@@ -45,7 +45,6 @@ import java.util.concurrent.ExecutorService;
  */
 public final class SubscriptionUpdateManager {
 
-    public static final long CHECK_INTERVAL_MS = 60L * 60L * 1000L;
     public static final long CANCEL_RETRY_DELAY_MS = 3L * 60L * 1000L;
     public static final long CHECK_REUSE_WINDOW_MS = 30L * 1000L;
 
@@ -873,7 +872,7 @@ public final class SubscriptionUpdateManager {
     static long calculateNextAutomaticCheckTime(long lastCheckTime,
                                                  long cancelRetryNotBeforeTime) {
         long intervalCheckTime = lastCheckTime > 0L
-                ? lastCheckTime + CHECK_INTERVAL_MS : 0L;
+                ? lastCheckTime + Settings.getAutoSubscriptionUpdateIntervalMillis() : 0L;
         return Math.max(intervalCheckTime, cancelRetryNotBeforeTime);
     }
 

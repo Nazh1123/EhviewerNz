@@ -32,6 +32,7 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
     public void onCreatePreferences(@Nullable Bundle savedInstanceState,
                                     @Nullable String rootKey) {
         addPreferencesFromResource(R.xml.fork_features_settings);
+        SubscriptionUpdatePreferences.bind(this);
         GalleryUpdateRecordPreferences.bind(this);
         mManualImageSaveLocation = findPreference(KEY_MANUAL_IMAGE_SAVE_LOCATION);
         Preference showThumbnailDownloadBadge =

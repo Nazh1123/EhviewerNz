@@ -1112,7 +1112,11 @@
     <string name="settings_eh_system_theme">Tema del sistema</string>
     <string name="settings_fork_auto_subscription_updates">Obtenga actualizaciones de suscripción automáticamente</string>
     <string name="settings_fork_auto_subscription_updates_eh">Suscríbete</string>
-    <string name="settings_fork_auto_subscription_updates_summary">Número de galerías actualizadas para obtener contenido suscrito al menos cada hora</string>
+    <string name="settings_fork_auto_subscription_updates_summary">Obtener el número de galerías actualizadas de las suscripciones con el intervalo configurado</string>
+    <string name="settings_fork_auto_subscription_update_interval">Intervalo de consulta automática</string>
+    <string name="settings_fork_auto_subscription_update_interval_summary">%1$d minutos</string>
+    <string name="settings_fork_auto_subscription_update_interval_invalid">Introduce un número entero positivo válido de minutos</string>
+    <string name="settings_fork_subscription_update_minutes">minutos</string>
     <string name="settings_fork_bookmark_subscription_summary">Haga clic aquí o agregue una suscripción al marcador en la configuración de la barra de marcadores. Luego puede hacer clic en "Suscripción a marcadores" en la barra lateral para ver todas las galerías que cumplen con las condiciones de marcadores ordenadas por tiempo.</string>
     <string name="settings_fork_delete_empty_galleries">Eliminar galería vacía</string>
     <string name="settings_fork_download_label_continuous_browse">Descargar pestaña navegación continua</string>

@@ -1203,7 +1203,11 @@
     <string name="settings_eh_system_theme">系統主題</string>
     <string name="settings_fork_auto_subscription_updates">自動獲取訂閱更新</string>
     <string name="settings_fork_auto_subscription_updates_eh">EH 訂閱</string>
-    <string name="settings_fork_auto_subscription_updates_summary">至少每一小時獲取訂閱內容的更新畫廊數量</string>
+    <string name="settings_fork_auto_subscription_updates_summary">按設定間隔獲取訂閱內容的更新畫廊數量</string>
+    <string name="settings_fork_auto_subscription_update_interval">自動獲取間隔</string>
+    <string name="settings_fork_auto_subscription_update_interval_summary">%1$d 分鐘</string>
+    <string name="settings_fork_auto_subscription_update_interval_invalid">請輸入有效的正整數分鐘數</string>
+    <string name="settings_fork_subscription_update_minutes">分鐘</string>
     <string name="settings_fork_bookmark_subscription_summary">點擊此項目或在書籤欄設定中為書籤新增訂閱。後可在側邊欄中點選「書籤訂閱」以查看依據時間排序的符合書籤條件的所有畫廊</string>
     <string name="settings_fork_features">Fork額外功能</string>
     <string name="settings_fork_category_gallery">畫廊與搜尋</string>
