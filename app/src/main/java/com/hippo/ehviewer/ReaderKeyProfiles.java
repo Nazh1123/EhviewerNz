@@ -14,7 +14,7 @@ import java.util.List;
 /** Stores all profiles and the active selection together to avoid partial updates. */
 public final class ReaderKeyProfiles {
     private static final String KEY = "reader_key_profiles_v1";
-    private static final int VERSION = 5;
+    private static final int VERSION = 7;
     public final List<Profile> profiles = new ArrayList<>();
     public int selected;
     public static final int SWIPE_OFF = 0, SWIPE_UP = 1, SWIPE_DOWN = 2;
@@ -22,19 +22,28 @@ public final class ReaderKeyProfiles {
     public static final class Profile {
         public String name;
         private final int[][] directions = new int[ReaderKeyMap.DIRECTION_COUNT][ReaderKeyMap.REGION_COUNT * ReaderKeyMap.GESTURE_COUNT];
+        private final int[][] animatedDirections = new int[ReaderKeyMap.DIRECTION_COUNT][ReaderKeyMap.REGION_COUNT * ReaderKeyMap.GESTURE_COUNT];
         private final ReaderTouchAreas[] areas = new ReaderTouchAreas[ReaderKeyMap.DIRECTION_COUNT];
         public boolean unifiedTouchAreas = true;
         private int builtInName;
-        public int animatedControlPercent = 30;
         public int orientationSwipe = SWIPE_DOWN;
 
         public Profile(String name) {
             this.name = name;
             for (int[] keys : directions) Arrays.fill(keys, ReaderKeyMap.LEGACY);
+            for (int[] keys : animatedDirections) Arrays.fill(keys, ReaderKeyMap.LEGACY);
             Arrays.fill(areas, ReaderTouchAreas.defaults());
         }
 
         public int[] keys(int direction) { return directions[GalleryView.sanitizeLayoutMode(direction)]; }
+        public int[] keys(int direction, boolean animated) {
+            return animated ? animatedDirections[GalleryView.sanitizeLayoutMode(direction)] : keys(direction);
+        }
+        private void copyNormalToAnimated() {
+            for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
+                System.arraycopy(directions[direction], 0, animatedDirections[direction], 0, directions[direction].length);
+            }
+        }
         public ReaderTouchAreas areas(int direction) { return areas[GalleryView.sanitizeLayoutMode(direction)]; }
         public void setAreas(int direction, ReaderTouchAreas value) {
             if (unifiedTouchAreas) Arrays.fill(areas, value);
@@ -51,7 +60,7 @@ public final class ReaderKeyProfiles {
             if (builtInName == 2) return context.getString(R.string.reader_keys_recommended_profile);
             return context.getString(R.string.reader_keys_profile_number, index + 1);
         }
-        public ReaderKeyMap map() { return new ReaderKeyMap(directions, areas, animatedControlPercent); }
+        public ReaderKeyMap map() { return new ReaderKeyMap(directions, animatedDirections, areas); }
         public Profile copy() { return fromJson(toJson()); }
         public Profile duplicate() {
             Profile copy = copy();
@@ -66,6 +75,9 @@ public final class ReaderKeyProfiles {
                 JSONArray mappings = new JSONArray();
                 for (int[] keys : directions) mappings.put(array(keys));
                 value.put("directions", mappings);
+                JSONArray animatedMappings = new JSONArray();
+                for (int[] keys : animatedDirections) animatedMappings.put(array(keys));
+                value.put("animatedDirections", animatedMappings);
                 JSONArray sizes = new JSONArray();
                 for (ReaderTouchAreas area : areas) {
                     JSONArray lines = new JSONArray();
@@ -75,7 +87,6 @@ public final class ReaderKeyProfiles {
                 value.put("touchAreas", sizes);
                 value.put("unifiedTouchAreas", unifiedTouchAreas);
                 value.put("builtInName", builtInName);
-                value.put("animatedControlPercent", animatedControlPercent);
                 value.put("orientationSwipe", orientationSwipe);
             } catch (JSONException e) { throw new IllegalStateException(e); }
             return value;
@@ -87,20 +98,33 @@ public final class ReaderKeyProfiles {
             JSONArray legacy = value.optJSONArray("normal");
             JSONArray mappings = value.optJSONArray("directions");
             JSONArray sizes = value.optJSONArray("touchAreas");
+            // Convert the retired bottom percentage to the same top-relative line position as other boundaries.
+            double legacyPercent = value.optDouble("animatedControlPercent", 30);
+            float animatedPosition = Double.isFinite(legacyPercent) && legacyPercent >= 0 && legacyPercent <= 100
+                    ? (float) (1 - legacyPercent / 100) : .7f;
             for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
                 readArray(legacy, profile.directions[direction]);
                 if (mappings != null) readArray(mappings.optJSONArray(direction), profile.directions[direction]);
                 ReaderTouchAreas fallback = sizes == null ? ReaderTouchAreas.recommended() : ReaderTouchAreas.defaults();
+                fallback = fallback.withPosition(ReaderTouchAreas.ANIMATED_SPLIT, animatedPosition);
                 JSONArray lines = sizes == null ? null : sizes.optJSONArray(direction);
                 float[] positions = new float[ReaderTouchAreas.LINE_COUNT];
-                for (int i = 0; i < positions.length; i++) positions[i] = lines == null ? Float.NaN : (float) lines.optDouble(i, Double.NaN);
+                for (int i = 0; i < positions.length; i++) {
+                    positions[i] = lines == null ? Float.NaN : (float) lines.optDouble(i,
+                            i == ReaderTouchAreas.ANIMATED_SPLIT ? animatedPosition : Double.NaN);
+                }
                 profile.areas[direction] = ReaderTouchAreas.from(positions, fallback);
             }
             profile.unifiedTouchAreas = value.optBoolean("unifiedTouchAreas", true);
             if (profile.unifiedTouchAreas) Arrays.fill(profile.areas, profile.areas[0]);
             profile.builtInName = Math.max(0, Math.min(2, value.optInt("builtInName", 0)));
-            int percent = value.optInt("animatedControlPercent", 30);
-            profile.animatedControlPercent = percent >= 0 && percent <= 100 ? percent : 30;
+            profile.copyNormalToAnimated();
+            JSONArray animatedMappings = value.optJSONArray("animatedDirections");
+            if (animatedMappings != null) {
+                for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
+                    readArray(animatedMappings.optJSONArray(direction), profile.animatedDirections[direction]);
+                }
+            } else if (profile.builtInName == 2) profile.recommendAnimatedPreviousSave();
             int swipe = value.optInt("orientationSwipe", SWIPE_DOWN);
             profile.orientationSwipe = swipe >= SWIPE_OFF && swipe <= SWIPE_DOWN ? swipe : SWIPE_DOWN;
             return profile;
@@ -110,6 +134,18 @@ public final class ReaderKeyProfiles {
             JSONArray result = new JSONArray();
             for (int value : values) result.put(value);
             return result;
+        }
+
+        private void recommendAnimatedPreviousSave() {
+            for (int direction : new int[]{GalleryView.LAYOUT_LEFT_TO_RIGHT, GalleryView.LAYOUT_RIGHT_TO_LEFT}) {
+                int first = direction == GalleryView.LAYOUT_LEFT_TO_RIGHT ? ReaderKeyMap.LEFT_TOP : ReaderKeyMap.RIGHT_TOP;
+                for (int region = first; region <= first + 1; region++) {
+                    int index = region * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.LONG_PRESS;
+                    if (animatedDirections[direction][index] == ReaderKeyMap.LEGACY) {
+                        animatedDirections[direction][index] = ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL;
+                    }
+                }
+            }
         }
 
         private static void readArray(JSONArray values, int[] target) {
@@ -144,11 +180,19 @@ public final class ReaderKeyProfiles {
             if (existing) {
                 first.setAreas(0, ReaderTouchAreas.recommended());
                 migrateLegacySwitches(first);
+                first.copyNormalToAnimated();
             } else first.builtInName = 1;
             result.profiles.add(first);
             result.profiles.add(recommended(""));
         } else if (version < VERSION) {
-            if (version < 4) for (Profile profile : result.profiles) migrateLegacySwitches(profile);
+            if (version < 4) for (Profile profile : result.profiles) {
+                migrateLegacySwitches(profile);
+                profile.copyNormalToAnimated();
+                if (profile.builtInName == 2) profile.recommendAnimatedPreviousSave();
+            }
+            for (Profile profile : result.profiles) {
+                if (profile.builtInName == 2) profile.recommendAnimatedPreviousSave();
+            }
             boolean hasRecommendation = false;
             for (Profile profile : result.profiles) if (profile.builtInName == 2) hasRecommendation = true;
             if (!hasRecommendation) result.profiles.add(recommended(""));
@@ -172,7 +216,6 @@ public final class ReaderKeyProfiles {
         Profile profile = new Profile(name);
         profile.builtInName = 2;
         profile.setAreas(0, ReaderTouchAreas.recommended());
-        profile.animatedControlPercent = 30;
         profile.orientationSwipe = SWIPE_DOWN;
         for (int direction : new int[]{GalleryView.LAYOUT_LEFT_TO_RIGHT, GalleryView.LAYOUT_RIGHT_TO_LEFT}) {
             int[] keys = profile.keys(direction);
@@ -186,6 +229,8 @@ public final class ReaderKeyProfiles {
         int[] vertical = profile.keys(GalleryView.LAYOUT_TOP_TO_BOTTOM);
         vertical[ReaderKeyMap.RIGHT_TOP * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.SAVE;
         vertical[ReaderKeyMap.RIGHT_BOTTOM * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.SAVE;
+        profile.copyNormalToAnimated();
+        profile.recommendAnimatedPreviousSave();
         return profile;
     }
 

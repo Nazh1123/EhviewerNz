@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_keys_animated_control">動圖控制</string>
+    <string name="reader_keys_edit_animated">設定動圖模式按鍵</string>
+    <string name="reader_keys_edit_normal">離開動圖模式按鍵設定</string>
+    <string name="reader_keys_animated_hint">"雙擊: 播放/暫停      長按: 倍速播放      滑動: 拖動進度條"</string>
+    <string-array name="reader_keys_actions">
+        <item>預設</item>
+        <item>無操作</item>
+        <item>向左翻頁</item>
+        <item>向右翻頁</item>
+        <item>下一頁</item>
+        <item>上一頁</item>
+        <item>閱讀設定選單</item>
+        <item>顯示／隱藏控制列</item>
+        <item>縮放圖片</item>
+        <item>圖片選單</item>
+        <item>儲存目前圖片</item>
+        <item>儲存目前並下一頁</item>
+        <item>儲存上一頁</item>
+        <item>儲存上一頁 (僅順序播放時)</item>
+    </string-array>
+</resources>

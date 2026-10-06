@@ -62,6 +62,7 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
+import android.widget.ArrayAdapter;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -1612,17 +1613,21 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private boolean canStartAnimatedWebpScrub(MotionEvent event) {
-        if (mAnimatedWebpTexture == null || !Settings.getAnimatedWebpAllowSeek()) {
+        if (mAnimatedWebpTexture == null || !Settings.getAnimatedWebpAllowSeek()
+                || mGalleryView == null || mGLRootView == null) {
             return false;
         }
-        View decor = getWindow().getDecorView();
-        if (event.getY() < decor.getHeight() * 0.75f) return false;
+        int[] location = new int[2];
+        mGLRootView.getLocationOnScreen(location);
+        android.graphics.Rect viewport = mGalleryView.bounds();
+        if (!mGalleryView.isAnimatedPageControlArea(event.getRawX() - location[0] - viewport.left,
+                event.getRawY() - location[1] - viewport.top)) return false;
         if (mSeekBarPanel != null && mSeekBarPanel.getVisibility() == View.VISIBLE &&
                 isPointInsideView(event.getRawX(), event.getRawY(), mSeekBarPanel)) {
             return false;
         }
         // The visible seek bar distinguishes taps from relative drags itself.
-        // The rest of the lower quarter is the larger, invisible target.
+        // The takeover region uses the same viewport coordinates as double taps and long presses.
         return mAnimatedWebpSeek == null || !isPointInsideView(
                 event.getRawX(), event.getRawY(), mAnimatedWebpSeek);
     }
@@ -1935,6 +1940,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         clearOrientationSwipeGesture();
         mReaderOrientationSwipe = profile.orientationSwipe;
         mGalleryView.setReaderKeyMap(profile.map());
+        mGalleryView.setAnimatedReaderKeysEnabled(Settings.getExperimentalAnimatedWebpEnabled());
     }
 
     private void chooseReaderKeyProfile() {
@@ -1972,6 +1978,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 case ReaderKeyMap.PAGE_MENU -> showPageDialog(index);
                 case ReaderKeyMap.SAVE -> saveImage(index, false, false, true);
                 case ReaderKeyMap.SAVE_NEXT -> saveImage(index, false, true, true, true);
+                case ReaderKeyMap.SAVE_PREVIOUS -> performPreviousPageSave(index);
+                case ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL -> {
+                    if (Settings.getExperimentalAnimatedWebpEnabled() && Settings.getAnimatedWebpAutoAdvance()
+                            && mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM && index > 0) {
+                        performPreviousPageSave(index);
+                    } else showPageDialog(index);
+                }
             }
         });
     }
@@ -2200,6 +2213,15 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void saveImage(int page) {
         saveImage(page, false, false, false);
+    }
+
+    private void performPreviousPageSave(int index) {
+        int previousIndex = index - 1;
+        if (previousIndex < 0 || previousIndex >= mSize) return;
+        long now = SystemClock.elapsedRealtime();
+        if (previousIndex == mLastLongPressSaveIndex && mLastLongPressSaveAt != 0L
+                && now - mLastLongPressSaveAt < LONG_PRESS_SAVE_DEBOUNCE_MS) return;
+        saveImage(previousIndex, true, false, true);
     }
 
     private void saveImage(int page, boolean previousPageSave,
@@ -2589,6 +2611,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private class GalleryMenuHelper implements DialogInterface.OnClickListener {
 
         private final View mView;
+        private final ReaderKeyProfiles mReaderKeyProfiles;
+        private final Spinner mReaderKeyProfile;
         private final Spinner mScreenRotation;
         private final Spinner mReadingDirection;
         private final Spinner mScaleMode;
@@ -2619,10 +2643,19 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         @SuppressLint("InflateParams")
         public GalleryMenuHelper(Context context) {
             mView = LayoutInflater.from(context).inflate(R.layout.dialog_gallery_menu, null);
-            mView.findViewById(R.id.reader_key_profile).setOnClickListener(v -> chooseReaderKeyProfile());
-            mView.findViewById(R.id.reader_key_editor).setOnClickListener(v ->
-                    startActivity(new Intent(GalleryActivity.this, SettingsActivity.class)
-                            .putExtra(SettingsActivity.EXTRA_READER_KEYS, true)));
+            mReaderKeyProfiles = ReaderKeyProfiles.load();
+            mReaderKeyProfile = mView.findViewById(R.id.reader_key_profile);
+            String[] profileNames = new String[mReaderKeyProfiles.profiles.size()];
+            for (int i = 0; i < profileNames.length; i++) {
+                String name = mReaderKeyProfiles.profiles.get(i).displayName(context, i);
+                profileNames[i] = context.getString(R.string.reader_keys_profile_label, i + 1, name);
+            }
+            ArrayAdapter<String> profileAdapter = new ArrayAdapter<>(context,
+                    R.layout.item_cute_spinner_item, profileNames);
+            profileAdapter.setDropDownViewResource(
+                    androidx.appcompat.R.layout.support_simple_spinner_dropdown_item);
+            mReaderKeyProfile.setAdapter(profileAdapter);
+            mReaderKeyProfile.setSelection(mReaderKeyProfiles.selected);
             mScreenRotation = mView.findViewById(R.id.screen_rotation);
             mReadingDirection = mView.findViewById(R.id.reading_direction);
             mScaleMode = mView.findViewById(R.id.page_scaling);
@@ -2831,6 +2864,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 return;
             }
 
+            int readerKeyProfile = mReaderKeyProfile.getSelectedItemPosition();
             int screenRotation = mScreenRotation.getSelectedItemPosition();
             int layoutMode = GalleryView.sanitizeLayoutMode(mReadingDirection.getSelectedItemPosition());
             int scaleMode = GalleryView.sanitizeScaleMode(mScaleMode.getSelectedItemPosition());
@@ -2890,6 +2924,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mReverseVolumePage.setVisibility(View.GONE);
             } else {
                 mReverseVolumePage.setVisibility(View.VISIBLE);
+            }
+
+            if (readerKeyProfile != mReaderKeyProfiles.selected) {
+                switchReaderKeyProfile(mReaderKeyProfiles, readerKeyProfile);
             }
 
             int orientation;
@@ -3143,6 +3181,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void updateAnimatedWebpUi() {
+        if (mGalleryView != null) {
+            mGalleryView.setAnimatedReaderKeysEnabled(Settings.getExperimentalAnimatedWebpEnabled());
+        }
         if (reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) return;
 
         ImageTexture candidate = null;

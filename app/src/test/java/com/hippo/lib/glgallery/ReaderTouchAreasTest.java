@@ -47,13 +47,30 @@ public class ReaderTouchAreasTest {
         assertEquals(1f / 3f, areas.position(0), 0f);
     }
 
-    @Test public void animationHeightStaysFixedWhileSideWidthsFollowTouchAreas() {
+    @Test public void animationTakeoverIsTheUnionOfLowerBandAndResizedCenterBottom() {
         ReaderTouchAreas areas = ReaderTouchAreas.defaults().withPosition(0, .2f).withPosition(1, .75f);
-        assertTrue(areas.isAnimatedControlArea(100, 700, 1000, 1000, 30));
-        assertFalse(areas.isAnimatedControlArea(100, 699, 1000, 1000, 30));
-        assertFalse(areas.isAnimatedControlArea(250, 800, 1000, 1000, 30));
-        assertFalse(areas.isAnimatedControlArea(700, 800, 1000, 1000, 30));
-        assertTrue(areas.isAnimatedControlArea(750, 800, 1000, 1000, 30));
-        assertFalse(areas.isAnimatedControlArea(100, 999, 1000, 1000, 0));
+        assertTrue(areas.isAnimatedControlArea(100, 700, 1000, 1000));
+        assertFalse(areas.isAnimatedControlArea(100, 699, 1000, 1000));
+        assertTrue(areas.isAnimatedControlArea(250, 800, 1000, 1000));
+        assertTrue(areas.isAnimatedControlArea(700, 800, 1000, 1000));
+        assertTrue(areas.isAnimatedControlArea(750, 800, 1000, 1000));
+        assertFalse(areas.withPosition(ReaderTouchAreas.ANIMATED_SPLIT, 1f).isAnimatedControlArea(100, 999, 1000, 1000));
+        assertTrue(areas.withPosition(ReaderTouchAreas.ANIMATED_SPLIT, 1f).isAnimatedControlArea(500, 500, 1000, 1000));
+        assertFalse(areas.withPosition(ReaderTouchAreas.ANIMATED_SPLIT, 1f).isAnimatedControlArea(500, 499, 1000, 1000));
+        assertFalse(areas.isAnimatedControlArea(500, 100, 1000, 1000));
+        ReaderTouchAreas lowerCenter = areas.withPosition(ReaderTouchAreas.CENTER_BOTTOM_SPLIT, .85f);
+        assertTrue(lowerCenter.isAnimatedControlArea(500, 700, 1000, 1000));
+        assertFalse(lowerCenter.isAnimatedControlArea(500, 699, 1000, 1000));
+        assertTrue(lowerCenter.withPosition(ReaderTouchAreas.ANIMATED_SPLIT, 1f).isAnimatedControlArea(500, 850, 1000, 1000));
+        for (int direction = 0; direction < 3; direction++) {
+            float width = direction == 2 ? 2000 : 1000, height = direction == 2 ? 500 : 1000;
+            for (int x = 0; x < 100; x++) for (int y = 0; y < 100; y++) {
+                float px = (x + .5f) / 100 * width, py = (y + .5f) / 100 * height;
+                boolean expected = lowerCenter.region(px, py, width, height) == ReaderKeyMap.CENTER_BOTTOM
+                        || py >= height * .7f;
+                assertEquals(expected, lowerCenter.isAnimatedControlArea(px, py, width, height));
+            }
+        }
+        assertFalse(areas.isAnimatedControlArea(1000, 999, 1000, 1000));
     }
 }

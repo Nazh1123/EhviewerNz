@@ -47,10 +47,7 @@
     <string name="reader_keys_scroll_up">向上滚动</string>
     <string name="reader_keys_scroll_down">向下滚动</string>
     <string name="reader_keys_edit_actions">设置动作</string>
-    <string name="reader_keys_animated_area">动图接管范围 · 底部 %1$d%%</string>
     <string name="reader_keys_animated_area_title">动图接管范围</string>
-    <string name="reader_keys_bottom_percent">屏幕底部占比（0–100%）</string>
-    <string name="reader_keys_percent_error">请输入 0 到 100 的整数</string>
     <string name="reader_keys_orientation_swipe">屏幕切换手势 · %1$s</string>
     <string name="reader_keys_orientation_title">屏幕切换手势</string>
     <string-array name="reader_keys_regions">
@@ -79,11 +76,17 @@
         <item>缩放图片</item>
         <item>图片菜单</item>
         <item>保存当前图片</item>
-        <item>保存成功后下一页</item>
+        <item>保存当前并下一页</item>
+        <item>保存上一页</item>
+        <item>保存上一页 (仅顺序播放时)</item>
     </string-array>
     <string-array name="reader_keys_swipe_choices">
         <item>关闭</item>
         <item>上滑</item>
         <item>下滑</item>
     </string-array>
+    <string name="reader_keys_animated_control">动图控制</string>
+    <string name="reader_keys_edit_animated">设置动图模式键位</string>
+    <string name="reader_keys_edit_normal">退出动图模式键位设置</string>
+    <string name="reader_keys_animated_hint">"双击: 播放/暂停      长按: 倍速播放      滑动: 拖动进度条"</string>
 </resources>

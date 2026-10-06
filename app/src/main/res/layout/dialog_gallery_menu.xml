@@ -27,19 +27,28 @@
         android:padding="@dimen/keyline_margin"
         android:showDividers="middle">
 
-        <Button
-            android:id="@+id/reader_key_profile"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/reader_keys_select_profile"
-            android:textAllCaps="false" />
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/reader_key_editor"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/reader_keys_title"
-            android:textAllCaps="false" />
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_weight="1"
+                android:text="@string/reader_keys_profile_keyword"
+                android:textColor="?android:attr/textColorPrimary" />
+
+            <com.hippo.widget.CuteSpinner
+                android:id="@+id/reader_key_profile"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_weight="2"
+                android:contentDescription="@string/reader_keys_profile_keyword" />
+
+        </LinearLayout>
 
         <LinearLayout
             android:layout_width="match_parent"

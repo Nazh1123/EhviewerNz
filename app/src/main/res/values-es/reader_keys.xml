@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_keys_animated_control">Controles de animación</string>
+    <string name="reader_keys_edit_animated">Configurar teclas del modo de animación</string>
+    <string name="reader_keys_edit_normal">Salir de las teclas del modo de animación</string>
+    <string name="reader_keys_animated_hint">"Doble toque: Reproducir/pausar      Mantener pulsado: Acelerar      Deslizar: Buscar posición"</string>
+    <string-array name="reader_keys_actions">
+        <item>Predeterminado</item>
+        <item>Sin acción</item>
+        <item>Pasar a la izquierda</item>
+        <item>Pasar a la derecha</item>
+        <item>Página siguiente</item>
+        <item>Página anterior</item>
+        <item>Menú de lectura</item>
+        <item>Mostrar / ocultar controles</item>
+        <item>Zoom</item>
+        <item>Menú de imagen</item>
+        <item>Guardar imagen actual</item>
+        <item>Guardar actual y pasar a la siguiente página</item>
+        <item>Guardar página anterior</item>
+        <item>Guardar página anterior (solo en reproducción secuencial)</item>
+    </string-array>
+</resources>

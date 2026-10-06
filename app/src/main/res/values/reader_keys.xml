@@ -47,10 +47,7 @@
     <string name="reader_keys_scroll_up">Scroll up</string>
     <string name="reader_keys_scroll_down">Scroll down</string>
     <string name="reader_keys_edit_actions">Set actions</string>
-    <string name="reader_keys_animated_area">Animation control area · bottom %1$d%%</string>
     <string name="reader_keys_animated_area_title">Animation control area</string>
-    <string name="reader_keys_bottom_percent">Percentage from the bottom (0–100%)</string>
-    <string name="reader_keys_percent_error">Enter a value from 0 to 100</string>
     <string name="reader_keys_orientation_swipe">Screen orientation gesture · %1$s</string>
     <string name="reader_keys_orientation_title">Screen orientation gesture</string>
     <string-array name="reader_keys_regions">
@@ -79,11 +76,17 @@
         <item>Zoom</item>
         <item>Image menu</item>
         <item>Save current image</item>
-        <item>Save then next page</item>
+        <item>Save current and go to next page</item>
+        <item>Save previous page</item>
+        <item>Save previous page (sequential playback only)</item>
     </string-array>
     <string-array name="reader_keys_swipe_choices">
         <item>Off</item>
         <item>Swipe up</item>
         <item>Swipe down</item>
     </string-array>
+    <string name="reader_keys_animated_control">Animation controls</string>
+    <string name="reader_keys_edit_animated">Edit animation key bindings</string>
+    <string name="reader_keys_edit_normal">Exit animation key bindings</string>
+    <string name="reader_keys_animated_hint">"Double-tap: Play/pause      Long press: Speed up      Swipe: Seek"</string>
 </resources>

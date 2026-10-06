@@ -149,7 +149,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private boolean mFirstScroll = false;
     private boolean mSliderLongPressHandled = false;
     private volatile boolean mAnimatedPageControlAreasEnabled;
-    private volatile ReaderKeyMap mReaderKeyMap = new ReaderKeyMap((int[][]) null, 30);
+    private volatile boolean mAnimatedReaderKeysEnabled;
+    private volatile ReaderKeyMap mReaderKeyMap = new ReaderKeyMap((int[][]) null);
     private volatile boolean mPageSwipeInProgress;
 
     private volatile int mLayoutMode = LAYOUT_RIGHT_TO_LEFT;
@@ -575,11 +576,15 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     }
 
     public void setReaderKeyMap(ReaderKeyMap mapping) {
-        mReaderKeyMap = mapping == null ? new ReaderKeyMap((int[][]) null, 30) : mapping;
+        mReaderKeyMap = mapping == null ? new ReaderKeyMap((int[][]) null) : mapping;
     }
 
     public void setAnimatedPageControlAreasEnabled(boolean enabled) {
         mAnimatedPageControlAreasEnabled = enabled;
+    }
+
+    public void setAnimatedReaderKeysEnabled(boolean enabled) {
+        mAnimatedReaderKeysEnabled = enabled;
     }
 
     public boolean isPageSwipeInProgress() {
@@ -612,8 +617,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
     @Override
     public boolean isDoubleTapRegion(float x, float y) {
-        if (isAnimatedPageControlArea(x, y)
-                || (mAnimatedPageControlAreasEnabled && isSliderArea(x, y))) return true;
+        if (isAnimatedPageControlArea(x, y)) return true;
         return readerKeyAction(x, y, ReaderKeyMap.DOUBLE_TAP) != ReaderKeyMap.NONE;
     }
 
@@ -623,18 +627,14 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         ReaderTouchAreas areas = mapping.areas(mLayoutMode);
         return areas.region(x1, y1, getWidth(), getHeight()) == areas.region(x2, y2, getWidth(), getHeight())
                 && (!mAnimatedPageControlAreasEnabled
-                || areas.isAnimatedControlArea(x1, y1, getWidth(), getHeight(), mapping.animatedControlPercent)
-                == areas.isAnimatedControlArea(x2, y2, getWidth(), getHeight(), mapping.animatedControlPercent));
-    }
-
-    private int readerRegion(float x, float y) {
-        return mReaderKeyMap.areas(mLayoutMode).region(x, y, getWidth(), getHeight());
+                || areas.isAnimatedControlArea(x1, y1, getWidth(), getHeight())
+                == areas.isAnimatedControlArea(x2, y2, getWidth(), getHeight()));
     }
 
     private int readerKeyAction(float x, float y, int gesture) {
         ReaderKeyMap mapping = mReaderKeyMap;
         int region = mapping.areas(mLayoutMode).region(x, y, getWidth(), getHeight());
-        return mapping.resolvedAction(region, gesture, mLayoutMode);
+        return mapping.resolvedAction(region, gesture, mLayoutMode, mAnimatedReaderKeysEnabled);
     }
 
     @RenderThread
@@ -643,7 +643,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         ReaderKeyMap mapping = mReaderKeyMap;
         int direction = mLayoutMode;
         int region = mapping.areas(direction).region(x, y, getWidth(), getHeight());
-        int action = mapping.resolvedAction(region, gesture, direction);
+        int action = mapping.resolvedAction(region, gesture, direction, mAnimatedReaderKeysEnabled);
         int index = mLayoutManager.getInternalCurrentIndex();
         switch (action) {
             case ReaderKeyMap.NONE -> { }
@@ -659,7 +659,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             case ReaderKeyMap.ZOOM -> mLayoutManager.onDoubleTapConfirmed(x, y);
             case ReaderKeyMap.PAGE_MENU -> {
                 if (gesture == ReaderKeyMap.LONG_PRESS
-                        && mapping.action(region, gesture, direction) == ReaderKeyMap.LEGACY) {
+                        && mapping.action(region, gesture, direction, mAnimatedReaderKeysEnabled) == ReaderKeyMap.LEGACY) {
                     if (region > ReaderKeyMap.RIGHT_BOTTOM) index = mLayoutManager.getIndexUnder(x, y);
                     if (index != GalleryPageView.INVALID_INDEX && mListener != null) mListener.onLongPressPage(index);
                 } else if (mListener != null) mListener.onReaderKeyAction(action, index);
@@ -740,15 +740,10 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
     }
 
-    private boolean isSliderArea(float x, float y) {
-        int region = readerRegion(x, y);
-        return region == ReaderKeyMap.CENTER_TOP || region == ReaderKeyMap.CENTER_BOTTOM;
-    }
-
-    private boolean isAnimatedPageControlArea(float x, float y) {
+    public boolean isAnimatedPageControlArea(float x, float y) {
         ReaderKeyMap mapping = mReaderKeyMap;
         return mAnimatedPageControlAreasEnabled && mapping.areas(mLayoutMode).isAnimatedControlArea(
-                x, y, getWidth(), getHeight(), mapping.animatedControlPercent);
+                x, y, getWidth(), getHeight());
     }
 
     @RenderThread
@@ -808,15 +803,6 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             return;
         }
 
-        if (isSliderArea(x, y)) {
-            GalleryPageView page = findPageUnder(x, y);
-            if (page != null && page.getImageTexture() != null &&
-                    page.getImageTexture().isControllableAnimation()) {
-                if (mListener != null) mListener.onDoubleTapSliderArea();
-                return;
-            }
-        }
-
         dispatchReaderKey(ReaderKeyMap.DOUBLE_TAP, x, y);
     }
 
@@ -837,17 +823,6 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
                 if (mListener != null && mListener.onLongPressSliderArea(texture)) {
                     mSliderLongPressHandled = true;
                 }
-                return;
-            }
-        }
-
-        if (isSliderArea(x, y)) {
-            GalleryPageView page = findPageUnder(x, y);
-            ImageTexture texture = page != null ? page.getImageTexture() : null;
-            if (texture != null && texture.isControllableAnimation()
-                    && mListener != null
-                    && mListener.onLongPressSliderArea(texture)) {
-                mSliderLongPressHandled = true;
                 return;
             }
         }

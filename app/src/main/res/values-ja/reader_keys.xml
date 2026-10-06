@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_keys_animated_control">アニメーション操作</string>
+    <string name="reader_keys_edit_animated">アニメーションモードのキーを設定</string>
+    <string name="reader_keys_edit_normal">アニメーションモードのキー設定を終了</string>
+    <string name="reader_keys_animated_hint">"ダブルタップ: 再生/一時停止      長押し: 倍速再生      スワイプ: シーク"</string>
+    <string-array name="reader_keys_actions">
+        <item>デフォルト</item>
+        <item>操作なし</item>
+        <item>左にページ送り</item>
+        <item>右にページ送り</item>
+        <item>次のページ</item>
+        <item>前のページ</item>
+        <item>閲覧設定メニュー</item>
+        <item>操作パネルを表示／非表示</item>
+        <item>ズーム</item>
+        <item>画像メニュー</item>
+        <item>現在の画像を保存</item>
+        <item>現在の画像を保存して次のページへ</item>
+        <item>前のページを保存</item>
+        <item>前のページを保存 (順次再生中のみ)</item>
+    </string-array>
+</resources>

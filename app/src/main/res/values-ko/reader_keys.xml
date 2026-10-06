@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_keys_animated_control">애니메이션 제어</string>
+    <string name="reader_keys_edit_animated">애니메이션 모드 키 설정</string>
+    <string name="reader_keys_edit_normal">애니메이션 모드 키 설정 종료</string>
+    <string name="reader_keys_animated_hint">"두 번 탭: 재생/일시 정지      길게 누르기: 배속 재생      스와이프: 재생 위치 이동"</string>
+    <string-array name="reader_keys_actions">
+        <item>기본값</item>
+        <item>동작 없음</item>
+        <item>왼쪽으로 넘기기</item>
+        <item>오른쪽으로 넘기기</item>
+        <item>다음 페이지</item>
+        <item>이전 페이지</item>
+        <item>읽기 설정 메뉴</item>
+        <item>컨트롤 표시 / 숨기기</item>
+        <item>확대 / 축소</item>
+        <item>이미지 메뉴</item>
+        <item>현재 이미지 저장</item>
+        <item>현재 이미지 저장 후 다음 페이지</item>
+        <item>이전 페이지 저장</item>
+        <item>이전 페이지 저장 (순차 재생 중에만)</item>
+    </string-array>
+</resources>

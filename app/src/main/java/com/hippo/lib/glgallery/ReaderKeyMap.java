@@ -7,30 +7,32 @@ public final class ReaderKeyMap {
     public static final int LEGACY = -1, NONE = 0;
     public static final int LEFT = 1, RIGHT = 2, NEXT = 3, PREVIOUS = 4;
     public static final int MENU = 5, CONTROLS = 6, ZOOM = 7, PAGE_MENU = 8;
-    public static final int SAVE = 9, SAVE_NEXT = 10;
+    public static final int SAVE = 9, SAVE_NEXT = 10, SAVE_PREVIOUS = 11, SAVE_PREVIOUS_SEQUENTIAL = 12;
     public static final int TAP = 0, DOUBLE_TAP = 1, LONG_PRESS = 2;
     public static final int REGION_COUNT = 7, GESTURE_COUNT = 3;
     public static final int DIRECTION_COUNT = 3;
     public static final int LEFT_TOP = 0, LEFT_BOTTOM = 1, RIGHT_TOP = 2,
             RIGHT_BOTTOM = 3, CENTER_TOP = 4, CENTER_MENU = 5, CENTER_BOTTOM = 6;
     private final int[][] directions;
+    private final int[][] animatedDirections;
     private final ReaderTouchAreas[] areas;
-    public final int animatedControlPercent;
-
-    public ReaderKeyMap(int[] normal, int animatedControlPercent) {
-        this(new int[][]{normal, normal, normal}, animatedControlPercent);
+    public ReaderKeyMap(int[] normal) {
+        this(new int[][]{normal, normal, normal});
     }
 
-    public ReaderKeyMap(int[][] directions, int animatedControlPercent) {
-        this(directions, null, animatedControlPercent);
+    public ReaderKeyMap(int[][] directions) {
+        this(directions, (ReaderTouchAreas[]) null);
     }
 
-    public ReaderKeyMap(int[][] directions, ReaderTouchAreas[] areas, int animatedControlPercent) {
+    public ReaderKeyMap(int[][] directions, ReaderTouchAreas[] areas) {
+        this(directions, directions, areas);
+    }
+
+    public ReaderKeyMap(int[][] directions, int[][] animatedDirections, ReaderTouchAreas[] areas) {
         int count = REGION_COUNT * GESTURE_COUNT;
         this.directions = new int[DIRECTION_COUNT][count];
+        this.animatedDirections = new int[DIRECTION_COUNT][count];
         this.areas = new ReaderTouchAreas[DIRECTION_COUNT];
-        this.animatedControlPercent = animatedControlPercent >= 0 && animatedControlPercent <= 100
-                ? animatedControlPercent : 30;
         for (int direction = 0; direction < DIRECTION_COUNT; direction++) {
             this.areas[direction] = areas != null && direction < areas.length && areas[direction] != null
                     ? areas[direction] : ReaderTouchAreas.defaults();
@@ -40,23 +42,29 @@ public final class ReaderKeyMap {
             for (int i = 0; i < count; i++) {
                 if (source != null && i < source.length && valid(source[i])) target[i] = source[i];
             }
+            int[] animated = animatedDirections != null && direction < animatedDirections.length
+                    ? animatedDirections[direction] : null;
+            this.animatedDirections[direction] = target.clone();
+            for (int i = 0; i < count; i++) {
+                if (animated != null && i < animated.length && valid(animated[i])) this.animatedDirections[direction][i] = animated[i];
+            }
         }
     }
 
     public static boolean valid(int action) {
-        return action >= LEGACY && action <= SAVE_NEXT;
+        return action >= LEGACY && action <= SAVE_PREVIOUS_SEQUENTIAL;
     }
 
     public int action(int region, int gesture, int direction) {
+        return action(region, gesture, direction, false);
+    }
+
+    public int action(int region, int gesture, int direction, boolean animated) {
         if (region < 0 || region >= REGION_COUNT || gesture < 0 || gesture >= GESTURE_COUNT) {
             return NONE;
         }
         int index = region * GESTURE_COUNT + gesture;
-        return directions[GalleryView.sanitizeLayoutMode(direction)][index];
-    }
-
-    public static boolean isAnimatedControlArea(float x, float y, float width, float height, int percent) {
-        return ReaderTouchAreas.defaults().isAnimatedControlArea(x, y, width, height, percent);
+        return (animated ? animatedDirections : directions)[GalleryView.sanitizeLayoutMode(direction)][index];
     }
 
     /** Coordinates are relative to the reader viewport, not the image bounds. */
@@ -73,7 +81,11 @@ public final class ReaderKeyMap {
     }
 
     public int resolvedAction(int region, int gesture, int direction) {
-        int action = action(region, gesture, direction);
+        return resolvedAction(region, gesture, direction, false);
+    }
+
+    public int resolvedAction(int region, int gesture, int direction, boolean animated) {
+        int action = action(region, gesture, direction, animated);
         return action == LEGACY ? defaultAction(region, gesture) : action;
     }
 

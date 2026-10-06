@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_keys_animated_control">ควบคุมภาพเคลื่อนไหว</string>
+    <string name="reader_keys_edit_animated">ตั้งค่าปุ่มในโหมดภาพเคลื่อนไหว</string>
+    <string name="reader_keys_edit_normal">ออกจากการตั้งค่าปุ่มในโหมดภาพเคลื่อนไหว</string>
+    <string name="reader_keys_animated_hint">"แตะสองครั้ง: เล่น/หยุดชั่วคราว      กดค้าง: เล่นเร็วขึ้น      ปัด: เลื่อนตำแหน่งการเล่น"</string>
+    <string-array name="reader_keys_actions">
+        <item>ค่าเริ่มต้น</item>
+        <item>ไม่ดำเนินการ</item>
+        <item>เปลี่ยนหน้าไปทางซ้าย</item>
+        <item>เปลี่ยนหน้าไปทางขวา</item>
+        <item>หน้าถัดไป</item>
+        <item>หน้าก่อนหน้า</item>
+        <item>เมนูการอ่าน</item>
+        <item>แสดง / ซ่อนตัวควบคุม</item>
+        <item>ซูม</item>
+        <item>เมนูรูปภาพ</item>
+        <item>บันทึกภาพปัจจุบัน</item>
+        <item>บันทึกภาพปัจจุบันแล้วไปหน้าถัดไป</item>
+        <item>บันทึกหน้าก่อนหน้า</item>
+        <item>บันทึกหน้าก่อนหน้า (เฉพาะขณะเล่นตามลำดับ)</item>
+    </string-array>
+</resources>

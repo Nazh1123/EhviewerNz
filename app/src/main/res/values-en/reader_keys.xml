@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_keys_animated_control">Animation controls</string>
+    <string name="reader_keys_edit_animated">Edit animation key bindings</string>
+    <string name="reader_keys_edit_normal">Exit animation key bindings</string>
+    <string name="reader_keys_animated_hint">"Double-tap: Play/pause      Long press: Speed up      Swipe: Seek"</string>
+    <string-array name="reader_keys_actions">
+        <item>Default</item>
+        <item>No action</item>
+        <item>Turn left</item>
+        <item>Turn right</item>
+        <item>Next page</item>
+        <item>Previous page</item>
+        <item>Reader settings menu</item>
+        <item>Show / hide controls</item>
+        <item>Zoom</item>
+        <item>Image menu</item>
+        <item>Save current image</item>
+        <item>Save current and go to next page</item>
+        <item>Save previous page</item>
+        <item>Save previous page (sequential playback only)</item>
+    </string-array>
+</resources>

@@ -48,12 +48,13 @@ public final class ReaderKeysFragment extends Fragment {
     private int region, direction;
     private String[] regions, gestures, actions;
     private TextView profileButton;
-    private AppCompatImageButton saveButton, directionButton;
-    private androidx.appcompat.widget.SwitchCompat unifiedAreasButton;
+    private AppCompatImageButton saveButton, directionButton, animatedButton;
+    private boolean animatedMode;
+    private static final int ANIMATED_LINE = ReaderTouchAreas.ANIMATED_SPLIT;
     private View bottomBar, backButton, moreButton;
     private ZoneView zones;
     private OnBackPressedCallback back;
-    private int accent, foreground, secondary, surface;
+    private int accent, foreground, secondary, surface, background;
     private int originalWindowFlags, originalSystemUi;
     private boolean actionBarWasShown;
     private SystemUiHelper systemUi;
@@ -64,6 +65,7 @@ public final class ReaderKeysFragment extends Fragment {
         draft = profiles.active().copy();
         direction = Settings.getReadingDirection();
         if (state != null) {
+            animatedMode = state.getBoolean("animatedMode", false);
             direction = GalleryView.sanitizeLayoutMode(state.getInt("direction", direction));
             region = Math.max(0, Math.min(ReaderKeyMap.REGION_COUNT - 1, state.getInt("region", 0)));
             try {
@@ -77,11 +79,12 @@ public final class ReaderKeysFragment extends Fragment {
         accent = color(androidx.appcompat.R.attr.colorPrimary);
         foreground = color(android.R.attr.textColorPrimary);
         secondary = color(android.R.attr.textColorSecondary);
+        background = color(android.R.attr.colorBackground);
         surface = Settings.getTheme() == Settings.THEME_BLACK
                 ? requireContext().getColor(R.color.grey_850)
                 : color(androidx.appcompat.R.attr.colorBackgroundFloating);
         FrameLayout root = new FrameLayout(requireContext());
-        root.setBackgroundColor(color(android.R.attr.colorBackground));
+        root.setBackgroundColor(background);
         zones = new ZoneView(requireContext());
         zones.setId(R.id.reader_keys_canvas);
         root.addView(zones, new FrameLayout.LayoutParams(-1, -1));
@@ -89,37 +92,18 @@ public final class ReaderKeysFragment extends Fragment {
         backButton = icon(R.drawable.v_arrow_left_dark_x24, R.string.reader_keys_back,
                 () -> requireActivity().getOnBackPressedDispatcher().onBackPressed());
         backButton.setId(R.id.reader_keys_back);
-        moreButton = icon(R.drawable.v_dots_vertical_secondary_dark_x24, R.string.reader_keys_more, this::showMore);
-        ((AppCompatImageButton) moreButton).setImageTintList(ColorStateList.valueOf(foreground));
+        moreButton = icon(R.drawable.v_dots_vertical_x24, R.string.reader_keys_more, this::showMore);
         moreButton.setId(R.id.reader_keys_more);
         directionButton = icon(R.drawable.v_arrow_right_x24, R.string.settings_read_reading_direction, this::cycleDirection);
         directionButton.setId(R.id.reader_keys_direction);
         directionButton.setImageTintList(ColorStateList.valueOf(foreground));
         floatingButton(root, backButton, Gravity.TOP | Gravity.LEFT);
         floatingButton(root, directionButton, Gravity.TOP | Gravity.RIGHT);
-
-        unifiedAreasButton = new androidx.appcompat.widget.SwitchCompat(requireContext());
-        unifiedAreasButton.setId(R.id.reader_keys_unified_areas);
-        unifiedAreasButton.setText(R.string.reader_keys_unified_areas);
-        unifiedAreasButton.setTextSize(12);
-        unifiedAreasButton.setTextColor(foreground);
-        unifiedAreasButton.setSwitchPadding(dp(6));
-        int[][] switchStates = {new int[]{android.R.attr.state_checked}, new int[]{}};
-        unifiedAreasButton.setThumbTintList(new ColorStateList(switchStates, new int[]{accent, secondary}));
-        unifiedAreasButton.setTrackTintList(new ColorStateList(switchStates,
-                new int[]{ColorUtils.setAlphaComponent(accent, 100), ColorUtils.setAlphaComponent(secondary, 100)}));
-        unifiedAreasButton.setPadding(dp(6), 0, dp(6), 0);
-        unifiedAreasButton.setBackground(ripple(16));
-        unifiedAreasButton.setOnCheckedChangeListener((button, checked) -> {
-            if (checked != draft.unifiedTouchAreas) {
-                draft.setUnifiedTouchAreas(checked, direction);
-                refresh();
-            }
-        });
-        ViewCompat.setTooltipText(unifiedAreasButton, getString(R.string.reader_keys_unified_areas_hint));
-        FrameLayout.LayoutParams unifyParams = new FrameLayout.LayoutParams(-2, dp(48), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        unifyParams.setMargins(dp(76), dp(12), dp(76), 0);
-        root.addView(unifiedAreasButton, unifyParams);
+        animatedButton = icon(R.drawable.v_animated_webp_x24, R.string.reader_keys_animated_control,
+                () -> { animatedMode = !animatedMode; refresh(); });
+        animatedButton.setId(R.id.reader_keys_animated_control);
+        floatingButton(root, animatedButton, Gravity.TOP | Gravity.RIGHT);
+        ((FrameLayout.LayoutParams) animatedButton.getLayoutParams()).rightMargin = dp(68);
 
         MaterialCardView card = new MaterialCardView(requireContext());
         card.setId(R.id.reader_keys_bar);
@@ -168,10 +152,9 @@ public final class ReaderKeysFragment extends Fragment {
             FrameLayout.LayoutParams right = (FrameLayout.LayoutParams) directionButton.getLayoutParams();
             right.rightMargin = dp(12) + safe.right; right.topMargin = dp(12) + safe.top;
             directionButton.setLayoutParams(right);
-            FrameLayout.LayoutParams unify = (FrameLayout.LayoutParams) unifiedAreasButton.getLayoutParams();
-            unify.topMargin = dp(12) + safe.top;
-            unify.leftMargin = dp(76) + safe.left; unify.rightMargin = dp(76) + safe.right;
-            unifiedAreasButton.setLayoutParams(unify);
+            FrameLayout.LayoutParams animated = (FrameLayout.LayoutParams) animatedButton.getLayoutParams();
+            animated.rightMargin = dp(68) + safe.right; animated.topMargin = dp(12) + safe.top;
+            animatedButton.setLayoutParams(animated);
             FrameLayout.LayoutParams bottom = (FrameLayout.LayoutParams) bottomBar.getLayoutParams();
             bottom.setMargins(dp(16) + safe.left, 0, dp(16) + safe.right, dp(16) + safe.bottom);
             bottomBar.setLayoutParams(bottom);
@@ -224,7 +207,7 @@ public final class ReaderKeysFragment extends Fragment {
             activity.getSupportActionBar().setShowHideAnimationEnabled(true);
         }
         zones = null; profileButton = null; saveButton = null; directionButton = null;
-        unifiedAreasButton = null;
+        animatedButton = null;
         bottomBar = null; backButton = null; moreButton = null; back = null;
         super.onDestroyView();
     }
@@ -234,6 +217,7 @@ public final class ReaderKeysFragment extends Fragment {
         if (draft != null) state.putString("draft", draft.toJson().toString());
         state.putInt("region", region);
         state.putInt("direction", direction);
+        state.putBoolean("animatedMode", animatedMode);
     }
 
     private boolean dirty() { return !draft.toJson().toString().equals(profiles.active().toJson().toString()); }
@@ -249,7 +233,11 @@ public final class ReaderKeysFragment extends Fragment {
         profileButton.setText(profileName(profiles.selected) + (changed ? " *" : "") + " ▾");
         profileButton.setContentDescription(getString(R.string.reader_keys_current_profile, profileName(profiles.selected)));
         saveButton.setImageTintList(ColorStateList.valueOf(changed ? accent : secondary));
-        unifiedAreasButton.setChecked(draft.unifiedTouchAreas);
+        animatedButton.setSelected(animatedMode);
+        animatedButton.setImageTintList(ColorStateList.valueOf(animatedMode ? accent : foreground));
+        String modeDescription = getString(animatedMode ? R.string.reader_keys_edit_normal : R.string.reader_keys_edit_animated);
+        animatedButton.setContentDescription(modeDescription);
+        ViewCompat.setTooltipText(animatedButton, modeDescription);
         int icon, label;
         switch (direction) {
             case GalleryView.LAYOUT_RIGHT_TO_LEFT -> {
@@ -294,7 +282,7 @@ public final class ReaderKeysFragment extends Fragment {
         return getString(R.string.reader_keys_default_action, label);
     }
     private String actionLabel(int area, int gesture) {
-        int value = draft.keys(direction)[area * ReaderKeyMap.GESTURE_COUNT + gesture];
+        int value = draft.keys(direction, animatedMode)[area * ReaderKeyMap.GESTURE_COUNT + gesture];
         return value == ReaderKeyMap.LEGACY ? defaultLabel(area, gesture) : actionCaption(value, gesture);
     }
     private String actionCaption(int value, int gesture) {
@@ -306,14 +294,13 @@ public final class ReaderKeysFragment extends Fragment {
         }
         return actions[value + 1];
     }
-    private String regionText(int area, boolean preview) {
+    private String regionText(int area) {
         StringBuilder text = new StringBuilder();
-        int count = preview && area == ReaderKeyMap.CENTER_TOP ? 1 : ReaderKeyMap.GESTURE_COUNT;
+        int count = ReaderKeyMap.GESTURE_COUNT;
         for (int gesture = 0; gesture < count; gesture++) {
             if (gesture > 0) text.append('\n');
             text.append(gestures[gesture]).append(": ").append(actionLabel(area, gesture));
         }
-        if (preview && area == ReaderKeyMap.CENTER_TOP) text.append("\n...");
         return text.toString();
     }
     private void chooseGesture() {
@@ -323,82 +310,40 @@ public final class ReaderKeysFragment extends Fragment {
                 .setItems(rows, (dialog, which) -> chooseAction(which)).show();
     }
     private void chooseAction(int gesture) {
-        int count = ReaderKeyMap.SAVE_NEXT + 2;
+        int count = (animatedMode ? ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL : ReaderKeyMap.SAVE_PREVIOUS) + 2;
         String[] labels = new String[count];
         labels[0] = defaultLabel(region, gesture);
         for (int i = 1; i < count; i++) labels[i] = actionCaption(i - 1, gesture);
         int index = region * ReaderKeyMap.GESTURE_COUNT + gesture;
-        int[] keys = draft.keys(direction);
+        int[] keys = draft.keys(direction, animatedMode);
         int selected = keys[index] + 1;
         new AlertDialog.Builder(requireContext()).setTitle(gestures[gesture])
                 .setSingleChoiceItems(labels, selected, (dialog, which) -> {
                     keys[index] = which - 1; dialog.dismiss(); refresh();
                 }).setNegativeButton(android.R.string.cancel, null).show();
     }
-    private void showMore() {
+    private PopupMenu showMore() {
         PopupMenu menu = new PopupMenu(requireContext(), moreButton);
-        menu.getMenu().add(0, 0, 0, getString(R.string.reader_keys_animated_area, draft.animatedControlPercent));
+        menu.getMenu().add(0, R.id.reader_keys_unified_areas, 0, R.string.reader_keys_unified_areas)
+                .setCheckable(true).setChecked(draft.unifiedTouchAreas);
         menu.getMenu().add(0, 1, 1, getString(R.string.reader_keys_orientation_swipe,
                 getResources().getStringArray(R.array.reader_keys_swipe_choices)[draft.orientationSwipe]));
         menu.getMenu().add(0, 2, 2, R.string.reader_keys_reset_sizes);
         menu.setOnMenuItemClickListener(item -> {
             switch (item.getItemId()) {
-                case 0 -> chooseAnimatedArea();
+                case R.id.reader_keys_unified_areas -> {
+                    draft.setUnifiedTouchAreas(!draft.unifiedTouchAreas, direction); refresh();
+                }
                 case 1 -> chooseOrientationSwipe();
                 case 2 -> { draft.setAreas(direction, ReaderTouchAreas.defaults()); refresh(); }
             }
             return true;
         });
         menu.show();
+        return menu;
     }
-    private void chooseAnimatedArea() {
-        LinearLayout content = new LinearLayout(requireContext());
-        content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(24), dp(12), dp(24), dp(8));
-        TextView label = new AppCompatTextView(requireContext());
-        label.setText(R.string.reader_keys_bottom_percent);
-        content.addView(label);
-        EditText input = new androidx.appcompat.widget.AppCompatEditText(requireContext());
-        input.setInputType(InputType.TYPE_CLASS_NUMBER);
-        input.setSingleLine(true); input.setSelectAllOnFocus(true);
-        input.setContentDescription(getString(R.string.reader_keys_animated_area_title));
-        input.setText(String.valueOf(draft.animatedControlPercent));
-        content.addView(input, new LinearLayout.LayoutParams(-1, -2));
-        SeekBar seek = new androidx.appcompat.widget.AppCompatSeekBar(requireContext());
-        seek.setMax(100); seek.setProgress(draft.animatedControlPercent);
-        seek.setContentDescription(getString(R.string.reader_keys_animated_area_title));
-        content.addView(seek, new LinearLayout.LayoutParams(-1, dp(48)));
-        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar bar, int value, boolean user) {
-                if (user) { input.setText(String.valueOf(value)); input.setSelection(input.length()); }
-            }
-            @Override public void onStartTrackingTouch(SeekBar bar) { }
-            @Override public void onStopTrackingTouch(SeekBar bar) { }
-        });
-        input.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) { }
-            @Override public void onTextChanged(CharSequence text, int start, int before, int count) {
-                try {
-                    int value = Integer.parseInt(text.toString());
-                    if (value >= 0 && value <= 100) seek.setProgress(value);
-                } catch (NumberFormatException ignored) { }
-            }
-            @Override public void afterTextChanged(Editable text) { }
-        });
-        AlertDialog dialog = new AlertDialog.Builder(requireContext()).setTitle(R.string.reader_keys_animated_area_title)
-                .setView(content).setPositiveButton(android.R.string.ok, null)
-                .setNegativeButton(android.R.string.cancel, null).create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            try {
-                int value = Integer.parseInt(input.getText().toString());
-                if (value < 0 || value > 100) throw new NumberFormatException();
-                draft.animatedControlPercent = value; refresh(); dialog.dismiss();
-            } catch (NumberFormatException invalid) { input.setError(getString(R.string.reader_keys_percent_error)); }
-        }));
-        dialog.show();
-    }
-
     private String lineName(int line) {
+        if (line == ANIMATED_LINE) return getString(R.string.reader_keys_animated_area_title);
         return getResources().getStringArray(R.array.reader_keys_lines)[line];
     }
 
@@ -541,6 +486,7 @@ public final class ReaderKeysFragment extends Fragment {
         shape.setStroke(dp(1), ColorUtils.setAlphaComponent(foreground, 20));
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(ColorUtils.setAlphaComponent(accent, 35)), shape, null));
         button.setElevation(dp(3));
+        button.setAlpha(.5f);
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(dp(48), dp(48), gravity);
         params.setMargins(dp(12), dp(12), dp(12), 0); root.addView(button, params);
     }
@@ -566,7 +512,8 @@ public final class ReaderKeysFragment extends Fragment {
                 }
                 @Override protected void getVisibleVirtualViews(List<Integer> areas) {
                     for (int area = 0; area < ReaderKeyMap.REGION_COUNT; area++) areas.add(area);
-                    for (int line = 0; line < ReaderTouchAreas.LINE_COUNT; line++) areas.add(ReaderKeyMap.REGION_COUNT + line);
+                    for (int line = 0; line < ReaderTouchAreas.ANIMATED_SPLIT; line++) areas.add(ReaderKeyMap.REGION_COUNT + line);
+                    if (animatedMode) areas.add(ReaderKeyMap.REGION_COUNT + ANIMATED_LINE);
                 }
                 @Override protected void onPopulateNodeForVirtualView(int area, AccessibilityNodeInfoCompat node) {
                     if (area >= ReaderKeyMap.REGION_COUNT) {
@@ -575,14 +522,15 @@ public final class ReaderKeysFragment extends Fragment {
                         int inset = dp(12);
                         node.setBoundsInParent(new Rect(Math.max(0, (int) segment[0] - inset), Math.max(0, (int) segment[1] - inset),
                                 Math.min(getWidth(), (int) segment[2] + inset), Math.min(getHeight(), (int) segment[3] + inset)));
-                        node.setContentDescription(lineName(line) + ", " + percent(draft.areas(direction).position(line)) + "%");
+                        node.setContentDescription(lineName(line) + ", " + percent(draft.areas(direction).position(line)) + "%"
+                                + (line == ANIMATED_LINE ? ", " + getString(R.string.reader_keys_animated_hint) : ""));
                         node.setClassName("android.widget.Button"); node.setClickable(true);
                         node.addAction(AccessibilityNodeInfoCompat.ACTION_CLICK);
                         return;
                     }
                     RectF bounds = areaBounds(area);
                     node.setBoundsInParent(new Rect((int) bounds.left, (int) bounds.top, (int) bounds.right, (int) bounds.bottom));
-                    node.setContentDescription(regions[area] + ", " + regionText(area, false));
+                    node.setContentDescription(regions[area] + ", " + regionText(area));
                     node.setClassName("android.widget.Button"); node.setClickable(true);
                     node.addAction(AccessibilityNodeInfoCompat.ACTION_CLICK);
                 }
@@ -607,23 +555,43 @@ public final class ReaderKeysFragment extends Fragment {
                 border.setColor(ColorUtils.setAlphaComponent(area == region ? accent : foreground, area == region ? 14 : 4));
                 canvas.drawRect(rect, border);
             }
-            border.setColor(ColorUtils.setAlphaComponent(foreground, 65)); border.setStrokeWidth(dp(1));
-            for (int line = 0; line < ReaderTouchAreas.LINE_COUNT; line++) {
+            if (animatedMode) {
+                Path takeover = new Path();
+                takeover.addRect(0, animatedY(), getWidth(), getHeight(), Path.Direction.CW);
+                RectF centerBottom = areaBounds(ReaderKeyMap.CENTER_BOTTOM);
+                takeover.addRect(centerBottom, Path.Direction.CW);
+                border.setColor(ColorUtils.setAlphaComponent(accent, 14));
+                canvas.drawPath(takeover, border);
+            }
+            border.setColor(ColorUtils.setAlphaComponent(animatedMode ? accent : foreground, animatedMode ? 100 : 65));
+            border.setStrokeWidth(dp(1));
+            if (animatedMode) border.setPathEffect(new DashPathEffect(new float[]{dp(6), dp(4)}, 0));
+            for (int line = 0; line < ReaderTouchAreas.ANIMATED_SPLIT; line++) {
                 float[] segment = lineSegment(line);
                 canvas.drawLine(segment[0], segment[1], segment[2], segment[3], border);
             }
-            drawAnimatedBoundary(canvas);
+            border.setPathEffect(null);
+            if (!animatedMode) drawAnimatedBoundary(canvas);
             for (int area = 0; area < ReaderKeyMap.REGION_COUNT; area++) drawActions(canvas, area, areaBounds(area));
-            for (int line = 0; line < ReaderTouchAreas.LINE_COUNT; line++) drawHandle(canvas, line);
+            if (animatedMode) {
+                drawAnimatedHint(canvas);
+                drawAnimatedBoundary(canvas);
+                drawHandleAt(canvas, ANIMATED_LINE, getWidth() / 3f, animatedY());
+                drawHandleAt(canvas, ANIMATED_LINE, getWidth() * 2 / 3f, animatedY());
+            } else {
+                for (int line = 0; line < ReaderTouchAreas.ANIMATED_SPLIT; line++) drawHandle(canvas, line);
+            }
         }
 
         private void drawActions(Canvas canvas, int area, RectF rect) {
-            float top = rect.top + dp(12), bottom = rect.bottom - dp(12);
-            if (rect.top == 0 && directionButton.getHeight() > 0) {
-                top = Math.max(top, directionButton.getBottom() + dp(12));
-            }
+            float verticalInset = Math.min(dp(12), rect.height() / 12f);
+            float top = rect.top + verticalInset, bottom = rect.bottom - verticalInset;
             if (rect.bottom == getHeight() && bottomBar.getHeight() > 0) bottom = Math.min(bottom, bottomBar.getTop() - dp(12));
-            SpannableStringBuilder text = new SpannableStringBuilder(regionText(area, true));
+            if (animatedMode && rect.bottom > animatedY()) {
+                if (animatedY() - top >= dp(60)) bottom = Math.min(bottom, animatedY() - dp(12));
+                else top = Math.max(top, animatedHintBottom() + dp(12));
+            }
+            SpannableStringBuilder text = new SpannableStringBuilder(regionText(area));
             int start = 0;
             while (start < text.length()) {
                 int end = TextUtils.indexOf(text, '\n', start);
@@ -660,11 +628,13 @@ public final class ReaderKeysFragment extends Fragment {
         private int lineAt(float x, float y) {
             int nearest = -1;
             float best = dp(12), bestHandleDistance = Float.MAX_VALUE;
-            for (int line = 0; line < ReaderTouchAreas.LINE_COUNT; line++) {
+            for (int line = 0; line < (animatedMode ? ReaderTouchAreas.LINE_COUNT : ANIMATED_LINE); line++) {
                 float[] s = lineSegment(line);
                 float px = Math.max(s[0], Math.min(s[2], x)), py = Math.max(s[1], Math.min(s[3], y));
                 float distance = (float) Math.hypot(x - px, y - py);
                 float handleDistance = (float) Math.hypot(x - (s[0] + s[2]) / 2, y - (s[1] + s[3]) / 2);
+                if (line == ANIMATED_LINE) handleDistance = (float) Math.min(
+                        Math.hypot(x - getWidth() / 3f, y - s[1]), Math.hypot(x - getWidth() * 2 / 3f, y - s[1]));
                 if (distance < best || (distance == best && handleDistance < bestHandleDistance)) {
                     nearest = line; best = distance; bestHandleDistance = handleDistance;
                 }
@@ -675,6 +645,10 @@ public final class ReaderKeysFragment extends Fragment {
         private void drawHandle(Canvas canvas, int line) {
             float[] segment = lineSegment(line);
             float x = (segment[0] + segment[2]) / 2, y = (segment[1] + segment[3]) / 2;
+            drawHandleAt(canvas, line, x, y);
+        }
+
+        private void drawHandleAt(Canvas canvas, int line, float x, float y) {
             boolean vertical = line < ReaderTouchAreas.LEFT_SPLIT;
             border.setColor(surface);
             canvas.drawRoundRect(x - dp(vertical ? 4 : 12), y - dp(vertical ? 12 : 4),
@@ -703,15 +677,54 @@ public final class ReaderKeysFragment extends Fragment {
         }
 
         private void drawAnimatedBoundary(Canvas canvas) {
-            if (draft.animatedControlPercent == 0) return;
-            float y = getHeight() * ((100 - draft.animatedControlPercent) / 100f);
-            ReaderTouchAreas areas = draft.areas(direction);
+            float y = animatedY();
+            if (animatedMode) {
+                border.setColor(background);
+                border.setStrokeWidth(dp(5));
+                canvas.drawLine(0, y, getWidth(), y, border);
+                border.setColor(accent);
+                border.setStrokeWidth(dp(1));
+                canvas.drawLine(0, y, getWidth(), y, border);
+                return;
+            }
             border.setColor(ColorUtils.setAlphaComponent(accent, 100));
             border.setStrokeWidth(dp(1));
-            border.setPathEffect(new DashPathEffect(new float[]{dp(6), dp(4)}, 0));
-            canvas.drawLine(0, y, getWidth() * areas.position(ReaderTouchAreas.LEFT_EDGE), y, border);
-            canvas.drawLine(getWidth() * areas.position(ReaderTouchAreas.RIGHT_EDGE), y, getWidth(), y, border);
+            if (!animatedMode) border.setPathEffect(new DashPathEffect(new float[]{dp(6), dp(4)}, 0));
+            canvas.drawLine(0, y, getWidth(), y, border);
             border.setPathEffect(null);
+        }
+
+        private float animatedY() {
+            return getHeight() * draft.areas(direction).position(ANIMATED_LINE);
+        }
+
+        private void drawAnimatedHint(Canvas canvas) {
+            boolean grayTheme = Settings.getTheme() == Settings.THEME_DARK;
+            StaticLayout layout = animatedHintLayout(grayTheme);
+            int paddingX = dp(4), paddingY = dp(2), width = layout.getWidth();
+            float height = layout.getHeight() + paddingY * 2;
+            float left = (getWidth() - width - paddingX * 2) / 2f;
+            float top = animatedHintBottom() - height;
+            border.setColor(ColorUtils.setAlphaComponent(grayTheme ? Color.WHITE : Color.GRAY, 196));
+            canvas.drawRoundRect(left, top, left + width + paddingX * 2, top + height, dp(4), dp(4), border);
+            canvas.save(); canvas.translate(left + paddingX, top + paddingY);
+            layout.draw(canvas); canvas.restore();
+        }
+
+        private StaticLayout animatedHintLayout(boolean grayTheme) {
+            textPaint.setTextSize(12 * getResources().getDisplayMetrics().scaledDensity);
+            textPaint.setColor(grayTheme ? Color.DKGRAY : Color.WHITE);
+            String hint = getString(R.string.reader_keys_animated_hint);
+            int width = Math.max(1, Math.min(getWidth() - dp(24), (int) Math.ceil(textPaint.measureText(hint))));
+            return StaticLayout.Builder.obtain(hint, 0, hint.length(), textPaint, width)
+                    .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false).build();
+        }
+
+        private float animatedHintBottom() {
+            float height = animatedHintLayout(Settings.getTheme() == Settings.THEME_DARK).getHeight() + dp(4);
+            float bottom = bottomBar.getHeight() > 0 ? bottomBar.getTop() - dp(4) : getHeight() - dp(4);
+            float top = Math.max(dp(4), Math.min(animatedY() + dp(14), bottom - height));
+            return top + height;
         }
 
         @Override public boolean onTouchEvent(MotionEvent event) {
@@ -733,12 +746,16 @@ public final class ReaderKeysFragment extends Fragment {
                         dragging = true;
                         float delta = pressedLine < ReaderTouchAreas.LEFT_SPLIT ? (x - downX) / getWidth() : (y - downY) / getHeight();
                         float position = downAreas.position(pressedLine) + delta;
-                        draft.setAreas(direction, downAreas.withPosition(pressedLine, position)); refresh();
+                        draft.setAreas(direction, downAreas.withPosition(pressedLine, position));
+                        refresh();
                     }
                     if (event.getActionMasked() == MotionEvent.ACTION_UP) {
                         if (!moved) {
-                            int selected = draft.areas(direction).region(x, y, getWidth(), getHeight());
-                            if (selected >= 0) { region = selected; refresh(); performClick(); }
+                            if (pressedLine >= 0) performClick();
+                            else {
+                                int selected = draft.areas(direction).region(x, y, getWidth(), getHeight());
+                                if (selected >= 0) { region = selected; refresh(); performClick(); }
+                            }
                         }
                         finishTouch();
                     }
@@ -752,7 +769,10 @@ public final class ReaderKeysFragment extends Fragment {
         }
 
         private void cancelDrag() {
-            if (dragging && downAreas != null) { draft.setAreas(direction, downAreas); refresh(); }
+            if (dragging && downAreas != null) {
+                draft.setAreas(direction, downAreas);
+                refresh();
+            }
             finishTouch();
         }
         private void finishTouch() {

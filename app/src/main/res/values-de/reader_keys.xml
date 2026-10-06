@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_keys_animated_control">Animationssteuerung</string>
+    <string name="reader_keys_edit_animated">Tasten im Animationsmodus einstellen</string>
+    <string name="reader_keys_edit_normal">Tasteneinstellungen des Animationsmodus verlassen</string>
+    <string name="reader_keys_animated_hint">"Doppeltippen: Wiedergabe/Pause      Gedrückt halten: Schneller abspielen      Wischen: Spulen"</string>
+    <string-array name="reader_keys_actions">
+        <item>Standard</item>
+        <item>Keine Aktion</item>
+        <item>Nach links blättern</item>
+        <item>Nach rechts blättern</item>
+        <item>Nächste Seite</item>
+        <item>Vorherige Seite</item>
+        <item>Lesemenü</item>
+        <item>Steuerung anzeigen / ausblenden</item>
+        <item>Zoom</item>
+        <item>Bildmenü</item>
+        <item>Aktuelles Bild speichern</item>
+        <item>Aktuelles Bild speichern und nächste Seite</item>
+        <item>Vorherige Seite speichern</item>
+        <item>Vorherige Seite speichern (nur bei sequenzieller Wiedergabe)</item>
+    </string-array>
+</resources>

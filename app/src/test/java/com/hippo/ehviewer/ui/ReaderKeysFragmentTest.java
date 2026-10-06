@@ -71,9 +71,10 @@ public class ReaderKeysFragmentTest {
     }
 
     @Test public void boundaryTapEntersDecimalSizesAndSyncsOnlyDimensions() {
-        androidx.appcompat.widget.SwitchCompat unified = root.findViewById(R.id.reader_keys_unified_areas);
+        android.view.MenuItem unified = unifiedItem();
         assertTrue(unified.isChecked());
-        assertEquals("触摸区域统一", unified.getText().toString());
+        assertEquals("触摸区域统一", unified.getTitle().toString());
+        assertNull(root.findViewById(R.id.reader_keys_unified_areas));
         View zones = root.findViewById(R.id.reader_keys_canvas);
         sendTouch(zones, MotionEvent.ACTION_DOWN, zones.getWidth() / 3f, zones.getHeight() * .3f);
         sendTouch(zones, MotionEvent.ACTION_UP, zones.getWidth() / 3f, zones.getHeight() * .3f);
@@ -85,7 +86,7 @@ public class ReaderKeysFragmentTest {
         ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
         for (int direction = 0; direction < 3; direction++) assertEquals(.405f, draft.areas(direction).position(0), .000001f);
         assertEquals(1f / 3f, ReaderKeyProfiles.load().active().areas(0).position(0), 0f);
-        unified.performClick();
+        toggleUnified();
         root.findViewById(R.id.reader_keys_direction).performClick();
         ReflectionHelpers.callInstanceMethod(fragment, "chooseBoundary", ReflectionHelpers.ClassParameter.from(int.class, ReaderTouchAreas.LEFT_EDGE));
         AlertDialog independent = latest();
@@ -98,7 +99,7 @@ public class ReaderKeysFragmentTest {
         ReaderKeyProfiles.Profile saved = ReaderKeyProfiles.load().active();
         assertFalse(saved.unifiedTouchAreas);
         assertEquals(.25f, saved.areas(1).position(0), 0f);
-        unified.performClick();
+        toggleUnified();
         for (int direction = 0; direction < 3; direction++) assertEquals(.25f, draft.areas(direction).position(0), 0f);
         assertEquals(ReaderKeyMap.LEGACY, draft.keys(0)[0]);
         assertEquals(ReaderKeyMap.LEGACY, draft.keys(1)[0]);
@@ -164,13 +165,13 @@ public class ReaderKeysFragmentTest {
         assertEquals(-1, (int) ReflectionHelpers.getField(zones, "pressedLine"));
         sendTouch(zones, MotionEvent.ACTION_MOVE, x, zones.getHeight() * .85f);
         sendTouch(zones, MotionEvent.ACTION_UP, x, zones.getHeight() * .85f);
-        assertEquals(30, draft.animatedControlPercent);
+        assertEquals(0.7f, draft.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(.5f, draft.areas(0).position(2), 0f);
     }
 
     @Test public void editedDimensionsAndUnifiedSwitchSurviveRecreation() {
-        androidx.appcompat.widget.SwitchCompat unified = root.findViewById(R.id.reader_keys_unified_areas);
-        unified.performClick();
+        android.view.MenuItem unified = unifiedItem();
+        toggleUnified();
         ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
         draft.setAreas(0, draft.areas(0).withPosition(ReaderTouchAreas.CENTER_TOP_SPLIT, .25f));
         androidx.fragment.app.Fragment.SavedState state = controller.get().getSupportFragmentManager().saveFragmentInstanceState(fragment);
@@ -178,11 +179,26 @@ public class ReaderKeysFragmentTest {
         fragment = new ReaderKeysFragment(); fragment.setInitialSavedState(state);
         controller.get().getSupportFragmentManager().beginTransaction().replace(android.R.id.content, fragment).commitNow();
         root = fragment.requireView(); layout(360, 800);
-        unified = root.findViewById(R.id.reader_keys_unified_areas);
+        unified = unifiedItem();
         assertFalse(unified.isChecked());
         draft = ReflectionHelpers.getField(fragment, "draft");
         assertEquals(.25f, draft.areas(0).position(4), 0f);
         assertEquals(.15f, draft.areas(1).position(4), 0f);
+    }
+
+    private android.view.MenuItem unifiedItem() {
+        androidx.appcompat.widget.PopupMenu menu = ReflectionHelpers.callInstanceMethod(fragment, "showMore");
+        android.view.MenuItem item = menu.getMenu().findItem(R.id.reader_keys_unified_areas);
+        assertEquals(3, menu.getMenu().size());
+        assertNotNull(item);
+        menu.dismiss();
+        return item;
+    }
+
+    private void toggleUnified() {
+        androidx.appcompat.widget.PopupMenu menu = ReflectionHelpers.callInstanceMethod(fragment, "showMore");
+        assertTrue(menu.getMenu().performIdentifierAction(R.id.reader_keys_unified_areas, 0));
+        menu.dismiss();
     }
 
     private void sendTouch(View view, int action, float x, float y) {
@@ -216,13 +232,14 @@ public class ReaderKeysFragmentTest {
         assertEquals(ReaderKeyMap.NEXT, ReaderKeyProfiles.load().active().keys(0)[0]);
     }
 
-    @Test public void labelsShowConcreteDefaultsAndTopCenterShowsOnlyTap() {
+    @Test public void labelsShowAllGesturesIncludingTopCenter() {
         String left = text(ReaderKeyMap.LEFT_TOP);
         assertTrue(left.startsWith("单击: 上一页 (默认)"));
         assertFalse(left.contains("左上"));
         assertTrue(left.contains("双击: 缩放图片 (默认)"));
-        assertTrue(text(ReaderKeyMap.CENTER_TOP).endsWith("\n..."));
-        assertFalse(text(ReaderKeyMap.CENTER_TOP).contains("双击"));
+        assertFalse(text(ReaderKeyMap.CENTER_TOP).contains("..."));
+        assertTrue(text(ReaderKeyMap.CENTER_TOP).contains("双击"));
+        assertTrue(text(ReaderKeyMap.CENTER_TOP).contains("长按"));
         root.findViewById(R.id.reader_keys_direction).performClick();
         assertTrue(text(ReaderKeyMap.LEFT_TOP).startsWith("单击: 下一页 (默认)"));
         root.findViewById(R.id.reader_keys_direction).performClick();
@@ -232,36 +249,137 @@ public class ReaderKeysFragmentTest {
     @Test public void moreOptionsSaveWithProfileAndNewProfileHasIndependentDefaults() {
         ReflectionHelpers.callInstanceMethod(fragment, "chooseOrientationSwipe");
         latest().getListView().performItemClick(null, ReaderKeyProfiles.SWIPE_UP, ReaderKeyProfiles.SWIPE_UP);
-        ReflectionHelpers.callInstanceMethod(fragment, "chooseAnimatedArea");
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseBoundary", ReflectionHelpers.ClassParameter.from(int.class, ReaderTouchAreas.ANIMATED_SPLIT));
         AlertDialog percent = latest();
         EditText input = find(percent.getWindow().getDecorView(), EditText.class);
         SeekBar slider = find(percent.getWindow().getDecorView(), SeekBar.class);
-        assertNotNull(input); assertNotNull(slider);
-        input.setText("42");
-        assertEquals(42, slider.getProgress());
+        assertNotNull(input); assertNull(slider);
+        input.setText("58.125");
         percent.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-        assertEquals(30, ReaderKeyProfiles.load().active().animatedControlPercent);
+        assertEquals(0.7f, ReaderKeyProfiles.load().active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         root.findViewById(R.id.reader_keys_save).performClick();
-        assertEquals(42, ReaderKeyProfiles.load().active().animatedControlPercent);
+        assertEquals(.58125f, ReaderKeyProfiles.load().active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(ReaderKeyProfiles.SWIPE_UP, ReaderKeyProfiles.load().active().orientationSwipe);
         root.findViewById(R.id.reader_keys_add).performClick();
-        assertEquals(30, ReaderKeyProfiles.load().active().animatedControlPercent);
+        assertEquals(0.7f, ReaderKeyProfiles.load().active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(ReaderKeyProfiles.SWIPE_DOWN, ReaderKeyProfiles.load().active().orientationSwipe);
         root.findViewById(R.id.reader_keys_profile).performClick();
         latest().getListView().performItemClick(null, 0, 0);
-        assertEquals(42, ReaderKeyProfiles.load().active().animatedControlPercent);
+        assertEquals(.58125f, ReaderKeyProfiles.load().active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(ReaderKeyProfiles.SWIPE_UP, ReaderKeyProfiles.load().active().orientationSwipe);
     }
 
     @Test public void invalidPercentageKeepsDialogOpenWithoutChangingProfile() {
-        ReflectionHelpers.callInstanceMethod(fragment, "chooseAnimatedArea");
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseBoundary", ReflectionHelpers.ClassParameter.from(int.class, ReaderTouchAreas.ANIMATED_SPLIT));
         AlertDialog percent = latest();
         EditText input = find(percent.getWindow().getDecorView(), EditText.class);
         input.setText("101");
         percent.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
         assertTrue(percent.isShowing());
         assertNotNull(input.getError());
-        assertEquals(30, ReaderKeyProfiles.load().active().animatedControlPercent);
+        assertEquals(0.7f, ReaderKeyProfiles.load().active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+    }
+
+    @Test public void animatedBoundaryDragsCancelsAndAcceptsExactInput() {
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        View zones = root.findViewById(R.id.reader_keys_canvas);
+        float x = zones.getWidth() / 6f;
+        sendTouch(zones, MotionEvent.ACTION_DOWN, x, zones.getHeight() * .7f);
+        assertEquals(ReaderTouchAreas.ANIMATED_SPLIT, (int) ReflectionHelpers.getField(zones, "pressedLine"));
+        sendTouch(zones, MotionEvent.ACTION_MOVE, x, zones.getHeight() * .6f);
+        assertEquals(0.6f, draft.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+        sendTouch(zones, MotionEvent.ACTION_CANCEL, x, zones.getHeight() * .6f);
+        assertEquals(0.7f, draft.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+        sendTouch(zones, MotionEvent.ACTION_DOWN, x, zones.getHeight() * .7f);
+        sendTouch(zones, MotionEvent.ACTION_UP, x, zones.getHeight() * .7f);
+        AlertDialog dialog = latest();
+        ((EditText) dialog.findViewById(R.id.reader_keys_boundary_input)).setText("45.625");
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertEquals(.45625f, draft.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+        sendTouch(zones, MotionEvent.ACTION_DOWN, x, zones.getHeight() * .45625f);
+        sendTouch(zones, MotionEvent.ACTION_MOVE, x, zones.getHeight() * .81234f);
+        sendTouch(zones, MotionEvent.ACTION_UP, x, zones.getHeight() * .81234f);
+        assertEquals(.81234f, draft.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+        assertEquals(.5f, draft.areas(0).position(ReaderTouchAreas.LEFT_SPLIT), 0f);
+        root.findViewById(R.id.reader_keys_save).performClick();
+        assertEquals(.81234f, ReaderKeyProfiles.load().active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+        // A zero-percent line remains reachable at the bottom edge.
+        draft.setAreas(0, draft.areas(0).withPosition(ReaderTouchAreas.ANIMATED_SPLIT, 1f));
+        sendTouch(zones, MotionEvent.ACTION_DOWN, x, zones.getHeight() - 1);
+        sendTouch(zones, MotionEvent.ACTION_UP, x, zones.getHeight() - 1);
+        assertNotNull(latest().findViewById(R.id.reader_keys_boundary_input));
+    }
+
+    @Test public void animationEditingKeepsNormalKeysAndModeAcrossRecreation() {
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.LONG_PRESS));
+        assertEquals(ReaderKeyMap.SAVE_PREVIOUS + 2, latest().getListView().getCount());
+        assertEquals("保存当前并下一页", latest().getListView().getAdapter().getItem(ReaderKeyMap.SAVE_NEXT + 1));
+        assertEquals("保存上一页", latest().getListView().getAdapter().getItem(ReaderKeyMap.SAVE_PREVIOUS + 1));
+        latest().dismiss();
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.LONG_PRESS));
+        assertEquals("保存上一页 (仅顺序播放时)", latest().getListView().getAdapter().getItem(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL + 1));
+        latest().getListView().performItemClick(null, ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL + 1, 0);
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        assertEquals(ReaderKeyMap.LEGACY, draft.keys(0)[2]);
+        assertEquals(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL, draft.keys(0, true)[2]);
+        root.findViewById(R.id.reader_keys_direction).performClick();
+        assertEquals(ReaderKeyMap.LEGACY, draft.keys(1, true)[2]);
+        androidx.fragment.app.Fragment.SavedState state = controller.get().getSupportFragmentManager().saveFragmentInstanceState(fragment);
+        controller.get().getSupportFragmentManager().beginTransaction().remove(fragment).commitNow();
+        fragment = new ReaderKeysFragment(); fragment.setInitialSavedState(state);
+        controller.get().getSupportFragmentManager().beginTransaction().replace(android.R.id.content, fragment).commitNow();
+        root = fragment.requireView(); layout(360, 800);
+        assertTrue(root.findViewById(R.id.reader_keys_animated_control).isSelected());
+        root.findViewById(R.id.reader_keys_save).performClick();
+        ReaderKeyProfiles.Profile saved = ReaderKeyProfiles.load().active();
+        assertEquals(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL, saved.keys(0, true)[2]);
+        assertEquals(ReaderKeyMap.LEGACY, saved.keys(0)[2]);
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        assertFalse(root.findViewById(R.id.reader_keys_animated_control).isSelected());
+    }
+
+    @Test public void rtlRecommendedPreviousSideShowsConditionalSaveOnBothRightRegions() throws Exception {
+        root.findViewById(R.id.reader_keys_manage).performClick();
+        latest().getListView().performItemClick(null, 3, 3);
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        root.findViewById(R.id.reader_keys_direction).performClick();
+        for (int area : new int[]{ReaderKeyMap.RIGHT_TOP, ReaderKeyMap.RIGHT_BOTTOM}) {
+            assertTrue(text(area).contains("单击: 上一页 (默认)"));
+            assertTrue(text(area).contains("长按: 保存上一页 (仅顺序播放时)"));
+        }
+        render("animation-recommended-rtl", 360, 800);
+        root.findViewById(R.id.reader_keys_save).performClick();
+        openEditor(); layout(360, 800);
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        root.findViewById(R.id.reader_keys_direction).performClick();
+        assertTrue(text(ReaderKeyMap.RIGHT_BOTTOM).contains("长按: 保存上一页 (仅顺序播放时)"));
+    }
+
+    @Test public void floatingControlsAndMoreUseRequestedAppearance() {
+        for (int id : new int[]{R.id.reader_keys_back, R.id.reader_keys_direction, R.id.reader_keys_animated_control}) {
+            assertEquals(.5f, root.findViewById(id).getAlpha(), 0f);
+        }
+        androidx.appcompat.widget.AppCompatImageButton more = root.findViewById(R.id.reader_keys_more);
+        androidx.appcompat.widget.AppCompatImageButton add = root.findViewById(R.id.reader_keys_add);
+        assertEquals(add.getImageTintList().getDefaultColor(), more.getImageTintList().getDefaultColor());
+        assertEquals(iconOpacity(add), iconOpacity(more));
+        assertTrue(root.findViewById(R.id.reader_keys_animated_control).getRight() <= root.findViewById(R.id.reader_keys_direction).getLeft());
+    }
+
+    private int iconOpacity(androidx.appcompat.widget.AppCompatImageButton button) {
+        Bitmap bitmap = Bitmap.createBitmap(48, 48, Bitmap.Config.ARGB_8888);
+        android.graphics.drawable.Drawable drawable = button.getDrawable();
+        android.graphics.Rect previous = new android.graphics.Rect(drawable.getBounds());
+        drawable.setBounds(0, 0, 48, 48);
+        drawable.draw(new Canvas(bitmap));
+        drawable.setBounds(previous);
+        int alpha = 0;
+        for (int x = 0; x < 48; x++) for (int y = 0; y < 48; y++) alpha = Math.max(alpha, android.graphics.Color.alpha(bitmap.getPixel(x, y)));
+        bitmap.recycle();
+        assertTrue(alpha > 0);
+        return alpha;
     }
 
     @Test public void renderPortraitLandscapeAndDarkWithoutShrinkingTouchViewport() throws Exception {
@@ -274,18 +392,25 @@ public class ReaderKeysFragmentTest {
         root.findViewById(R.id.reader_keys_direction).performClick();
         render("landscape-light", 800, 360);
         renderDragging("drag-bubble-landscape", 800, 360);
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        render("animation-landscape-light", 800, 360);
+        render("animation-portrait-light", 360, 800);
         controller.get().getSupportFragmentManager().beginTransaction().remove(fragment).commitNow();
         Settings.putTheme(Settings.THEME_DARK);
         controller.get().setTheme(R.style.AppTheme_Settings_Dark);
         openEditor();
         render("portrait-dark", 360, 800);
         renderDragging("drag-bubble-dark", 360, 800);
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        render("animation-portrait-dark", 360, 800);
         controller.get().getSupportFragmentManager().beginTransaction().remove(fragment).commitNow();
         Settings.putTheme(Settings.THEME_BLACK);
         controller.get().setTheme(R.style.AppTheme_Settings_Black);
         openEditor();
         render("portrait-black", 360, 800);
         renderDragging("drag-bubble-black", 360, 800);
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        render("animation-portrait-black", 360, 800);
     }
 
     @Test public void directionButtonEditsIndependentMappingsAndKeepsDraftsAcrossRecreation() {
@@ -344,6 +469,10 @@ public class ReaderKeysFragmentTest {
             assertNull(screen.findPreference("gallery_quick_page_turn"));
             assertNull(screen.findPreference("gallery_quick_save_turn_page"));
         }
+        ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        profiles.profiles.add(new ReaderKeyProfiles.Profile("夜间"));
+        profiles.selected = profiles.profiles.size() - 1;
+        profiles.save();
         GalleryActivity gallery = Robolectric.buildActivity(GalleryActivity.class).get();
         gallery.setTheme(R.style.AppTheme_Settings);
         try {
@@ -352,9 +481,21 @@ public class ReaderKeysFragmentTest {
             constructor.setAccessible(true);
             Object menu = constructor.newInstance(gallery, gallery);
             View view = ReflectionHelpers.callInstanceMethod(menu, "getView");
-            assertNotNull(view.findViewById(R.id.reader_key_editor));
+            android.widget.Spinner profile = view.findViewById(R.id.reader_key_profile);
+            assertTrue(profile instanceof com.hippo.widget.CuteSpinner);
+            assertEquals(profiles.profiles.size(), profile.getCount());
+            assertEquals(profiles.selected, profile.getSelectedItemPosition());
+            for (int i = 0; i < profile.getCount(); i++) {
+                assertEquals(context.getString(R.string.reader_keys_profile_label, i + 1,
+                        profiles.profiles.get(i).displayName(context, i)), profile.getItemAtPosition(i));
+            }
+            assertTrue(hasText(view, context.getString(R.string.reader_keys_profile_keyword)));
+            assertFalse(hasText(view, context.getString(R.string.reader_keys_select_profile)));
+            assertFalse(hasText(view, context.getString(R.string.reader_keys_title)));
             assertFalse(hasText(view, context.getString(R.string.settings_read_direct_save)));
             assertFalse(hasText(view, context.getString(R.string.settings_read_quick_page_turn)));
+            profile.setSelection(0);
+            assertEquals(profiles.selected, ReaderKeyProfiles.load().selected);
         } finally {
             ((java.util.concurrent.ExecutorService) ReflectionHelpers.getField(gallery, "mImageFileExecutor")).shutdownNow();
             ((java.util.concurrent.ExecutorService) ReflectionHelpers.getField(gallery, "transferService")).shutdownNow();
@@ -397,7 +538,7 @@ public class ReaderKeysFragmentTest {
         ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
         profiles.profiles.remove(1);
         profiles.active().name = "夜间";
-        profiles.active().animatedControlPercent = 77;
+        profiles.active().setAreas(0, profiles.active().areas(0).withPosition(ReaderTouchAreas.ANIMATED_SPLIT, 0.23f));
         profiles.active().orientationSwipe = ReaderKeyProfiles.SWIPE_OFF;
         profiles.active().keys(0)[0] = ReaderKeyMap.NONE;
         ReaderKeyProfiles.Profile other = new ReaderKeyProfiles.Profile("另外一份");
@@ -411,7 +552,7 @@ public class ReaderKeysFragmentTest {
         assertEquals("恢复默认配置", menu.getListView().getAdapter().getItem(4));
         menu.getListView().performItemClick(null, 3, 3);
         assertTrue(text(ReaderKeyMap.LEFT_TOP).contains("双击: 无操作 (允许快速单击)"));
-        assertEquals(77, ReaderKeyProfiles.load().active().animatedControlPercent);
+        assertEquals(0.23f, ReaderKeyProfiles.load().active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertTrue(((android.widget.TextView) root.findViewById(R.id.reader_keys_profile)).getText().toString().contains("*"));
         root.findViewById(R.id.reader_keys_save).performClick();
         ReaderKeyProfiles saved = ReaderKeyProfiles.load();
@@ -421,7 +562,7 @@ public class ReaderKeysFragmentTest {
         for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
             assertArrayEquals(recommendation.keys(direction), saved.active().keys(direction));
         }
-        assertEquals(30, saved.active().animatedControlPercent);
+        assertEquals(0.7f, saved.active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(ReaderKeyProfiles.SWIPE_DOWN, saved.active().orientationSwipe);
         assertEquals(ReaderKeyMap.NEXT, saved.profiles.get(1).keys(1)[0]);
         root.findViewById(R.id.reader_keys_manage).performClick();
@@ -537,8 +678,7 @@ public class ReaderKeysFragmentTest {
     }
     private String text(int area) {
         return ReflectionHelpers.callInstanceMethod(fragment, "regionText",
-                ReflectionHelpers.ClassParameter.from(int.class, area),
-                ReflectionHelpers.ClassParameter.from(boolean.class, true));
+                ReflectionHelpers.ClassParameter.from(int.class, area));
     }
     private AlertDialog latest() {
         shadowOf(Looper.getMainLooper()).idle();

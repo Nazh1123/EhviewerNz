@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_keys_animated_control">Commandes d’animation</string>
+    <string name="reader_keys_edit_animated">Configurer les touches du mode animation</string>
+    <string name="reader_keys_edit_normal">Quitter les touches du mode animation</string>
+    <string name="reader_keys_animated_hint">"Double appui: Lecture/pause      Appui long: Accélérer      Glisser: Déplacer la lecture"</string>
+    <string-array name="reader_keys_actions">
+        <item>Par défaut</item>
+        <item>Aucune action</item>
+        <item>Tourner à gauche</item>
+        <item>Tourner à droite</item>
+        <item>Page suivante</item>
+        <item>Page précédente</item>
+        <item>Menu de lecture</item>
+        <item>Afficher / masquer les commandes</item>
+        <item>Zoom</item>
+        <item>Menu de l’image</item>
+        <item>Enregistrer l’image actuelle</item>
+        <item>Enregistrer l’image actuelle puis page suivante</item>
+        <item>Enregistrer la page précédente</item>
+        <item>Enregistrer la page précédente (lecture séquentielle uniquement)</item>
+    </string-array>
+</resources>

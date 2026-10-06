@@ -43,7 +43,7 @@ public class ReaderKeyGestureTest {
 
     @Test public void animationTakesOverDoubleTapOnlyInsideItsPercentage() {
         normal[ReaderKeyMap.RIGHT_BOTTOM * 3 + 1] = ReaderKeyMap.NONE;
-        view.setReaderKeyMap(new ReaderKeyMap(normal, 30));
+        view.setReaderKeyMap(new ReaderKeyMap(normal));
         view.setAnimatedPageControlAreasEnabled(true);
         assertTrue(view.isDoubleTapRegion(900, 900));
         assertFalse(view.isDoubleTapRegion(900, 699));
@@ -55,7 +55,7 @@ public class ReaderKeyGestureTest {
 
     @Test public void changingAnimationPercentageUpdatesItsExactBoundary() {
         normal[ReaderKeyMap.RIGHT_BOTTOM * 3 + 1] = ReaderKeyMap.NONE;
-        view.setReaderKeyMap(new ReaderKeyMap(normal, 40));
+        view.setReaderKeyMap(mapWithBoundary(normal, .6f));
         assertFalse(view.isDoubleTapRegion(900, 600));
         view.setAnimatedPageControlAreasEnabled(true);
         assertTrue(view.isDoubleTapRegion(900, 600));
@@ -63,9 +63,37 @@ public class ReaderKeyGestureTest {
         assertTrue(view.isDoubleTapRegion(900, 499)); // Default upper-area action is zoom.
         view.setAnimatedPageControlAreasEnabled(false);
         assertFalse(view.isDoubleTapRegion(900, 600));
-        view.setReaderKeyMap(new ReaderKeyMap(normal, 0));
+        view.setReaderKeyMap(mapWithBoundary(normal, 1f));
         view.setAnimatedPageControlAreasEnabled(true);
         assertFalse(view.isDoubleTapRegion(900, 999));
+    }
+
+    @Test public void takeoverIncludesCenterBottomAndFullLowerBandButExcludesCenterTop() {
+        normal[ReaderKeyMap.CENTER_TOP * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
+        normal[ReaderKeyMap.CENTER_BOTTOM * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
+        normal[ReaderKeyMap.CENTER_MENU * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
+        view.setReaderKeyMap(new ReaderKeyMap(normal));
+        view.setAnimatedPageControlAreasEnabled(true);
+        assertFalse(view.isDoubleTapRegion(500, 100));
+        assertTrue(view.isDoubleTapRegion(500, 500));
+        assertTrue(view.isDoubleTapRegion(500, 700));
+        ReaderTouchAreas areas = ReaderTouchAreas.defaults().withPosition(ReaderTouchAreas.CENTER_BOTTOM_SPLIT, .85f);
+        view.setReaderKeyMap(new ReaderKeyMap(new int[][]{normal, normal, normal}, new ReaderTouchAreas[]{areas, areas, areas}));
+        assertFalse(view.isDoubleTapRegion(500, 699));
+        assertTrue(view.isDoubleTapRegion(500, 700));
+        assertFalse(view.isSameTapRegion(500, 699, 500, 700));
+        view.setReaderKeyMap(mapWithBoundary(normal, 1f));
+        assertTrue(view.isDoubleTapRegion(500, 500));
+        assertFalse(view.isAnimatedPageControlArea(900, 999));
+        List<String> callbacks = new ArrayList<>();
+        GalleryView.Listener listener = (GalleryView.Listener) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class[]{GalleryView.Listener.class}, (proxy, method, args) -> {
+                    callbacks.add(method.getName());
+                    return method.getReturnType() == boolean.class ? false : null;
+                });
+        ReflectionHelpers.setField(view, "mListener", listener);
+        gesture(ReaderKeyMap.DOUBLE_TAP, 500, 500);
+        assertEquals(Arrays.asList("onDoubleTapSliderArea"), callbacks);
     }
 
     @Test public void nearbyTapsAcrossMidlineRemainTwoSingles() {
@@ -94,7 +122,7 @@ public class ReaderKeyGestureTest {
         GalleryView.LayoutManager layout = attachLayout();
         normal[ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.NEXT;
         normal[ReaderKeyMap.RIGHT_BOTTOM * 3] = ReaderKeyMap.PREVIOUS;
-        view.setReaderKeyMap(new ReaderKeyMap(normal, 30));
+        view.setReaderKeyMap(new ReaderKeyMap(normal));
         single(900, 100);
         assertEquals(1, layout.getInternalCurrentIndex());
         single(900, 700);
@@ -114,7 +142,7 @@ public class ReaderKeyGestureTest {
         directions[GalleryView.LAYOUT_RIGHT_TO_LEFT][ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.PREVIOUS;
         directions[GalleryView.LAYOUT_TOP_TO_BOTTOM][ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.NONE;
         directions[GalleryView.LAYOUT_LEFT_TO_RIGHT][ReaderKeyMap.RIGHT_TOP * 3 + 1] = ReaderKeyMap.NONE;
-        view.setReaderKeyMap(new ReaderKeyMap(directions, 30));
+        view.setReaderKeyMap(new ReaderKeyMap(directions));
         layout = setDirection(GalleryView.LAYOUT_LEFT_TO_RIGHT);
         single(900, 100);
         assertEquals(1, layout.getInternalCurrentIndex());
@@ -126,6 +154,31 @@ public class ReaderKeyGestureTest {
         layout = setDirection(GalleryView.LAYOUT_TOP_TO_BOTTOM);
         single(900, 100);
         assertEquals(0, layout.getInternalCurrentIndex());
+    }
+
+    @Test public void animationModeSelectsIndependentKeysOutsideTakeoverAndOnStaticPages() {
+        GalleryView.LayoutManager layout = attachLayout();
+        int[] animated = normal.clone();
+        normal[ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.NEXT;
+        animated[ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.PREVIOUS;
+        animated[ReaderKeyMap.RIGHT_TOP * 3 + 1] = ReaderKeyMap.NONE;
+        view.setReaderKeyMap(new ReaderKeyMap(new int[][]{normal, normal, normal},
+                new int[][]{animated, animated, animated}, null));
+        layout.setCurrentIndex(2);
+        single(900, 100);
+        assertEquals(3, layout.getInternalCurrentIndex());
+        view.setAnimatedReaderKeysEnabled(true);
+        single(900, 100);
+        assertEquals(2, layout.getInternalCurrentIndex());
+        assertFalse(view.isDoubleTapRegion(900, 100));
+        view.setAnimatedPageControlAreasEnabled(true);
+        assertFalse(view.isDoubleTapRegion(900, 100));
+        assertTrue(view.isDoubleTapRegion(900, 900));
+        view.setAnimatedPageControlAreasEnabled(false);
+        view.setAnimatedReaderKeysEnabled(false);
+        single(900, 100);
+        assertEquals(3, layout.getInternalCurrentIndex());
+        assertTrue(view.isDoubleTapRegion(900, 100));
     }
 
     @Test public void defaultActionsAndGestureEligibilityFollowResizedAreas() {
@@ -140,7 +193,7 @@ public class ReaderKeyGestureTest {
         ReaderTouchAreas areas = ReaderTouchAreas.defaults().withPosition(0, .2f).withPosition(1, .8f)
                 .withPosition(4, .25f).withPosition(5, .65f);
         normal[ReaderKeyMap.LEFT_TOP * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
-        view.setReaderKeyMap(new ReaderKeyMap(new int[][]{normal, normal, normal}, new ReaderTouchAreas[]{areas, areas, areas}, 30));
+        view.setReaderKeyMap(new ReaderKeyMap(new int[][]{normal, normal, normal}, new ReaderTouchAreas[]{areas, areas, areas}));
         single(250, 300);
         assertEquals(Arrays.asList("onTapMenuArea"), callbacks);
         callbacks.clear(); single(500, 200);
@@ -170,7 +223,7 @@ public class ReaderKeyGestureTest {
                     Arrays.fill(normal, ReaderKeyMap.LEGACY);
                     int key = region * ReaderKeyMap.GESTURE_COUNT + gesture;
                     normal[key] = ReaderKeyMap.PREVIOUS;
-                    view.setReaderKeyMap(new ReaderKeyMap(normal, 30));
+                    view.setReaderKeyMap(new ReaderKeyMap(normal));
                     layout.setCurrentIndex(2);
                     gesture(gesture, x, y);
                     assertEquals(context, 1, layout.getInternalCurrentIndex());
@@ -179,7 +232,7 @@ public class ReaderKeyGestureTest {
                     assertEquals(context, 0, layout.getInternalCurrentIndex());
 
                     normal[key] = ReaderKeyMap.NEXT;
-                    view.setReaderKeyMap(new ReaderKeyMap(normal, 30));
+                    view.setReaderKeyMap(new ReaderKeyMap(normal));
                     layout.setCurrentIndex(2);
                     gesture(gesture, x, y);
                     assertEquals(context, 3, layout.getInternalCurrentIndex());
@@ -189,6 +242,11 @@ public class ReaderKeyGestureTest {
                 }
             }
         }
+    }
+
+    private ReaderKeyMap mapWithBoundary(int[] keys, float position) {
+        ReaderTouchAreas areas = ReaderTouchAreas.defaults().withPosition(ReaderTouchAreas.ANIMATED_SPLIT, position);
+        return new ReaderKeyMap(new int[][]{keys, keys, keys}, new ReaderTouchAreas[]{areas, areas, areas});
     }
 
     private GalleryView.LayoutManager attachLayout() {

@@ -34,7 +34,7 @@ public class GalleryViewAnimatedControlAreaTest {
         for (int area = 0; area <= ReaderKeyMap.RIGHT_BOTTOM; area++) {
             keys[area * ReaderKeyMap.GESTURE_COUNT + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
         }
-        view.setReaderKeyMap(new ReaderKeyMap(keys, 30));
+        view.setReaderKeyMap(new ReaderKeyMap(keys));
 
         assertFalse(view.isDoubleTapRegion(100, 800));
         assertFalse(view.isDoubleTapRegion(900, 800));

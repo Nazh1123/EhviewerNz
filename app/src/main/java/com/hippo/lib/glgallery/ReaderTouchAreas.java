@@ -3,19 +3,19 @@ package com.hippo.lib.glgallery;
 /** Immutable, normalized boundaries shared by the editor and all reader gestures. */
 public final class ReaderTouchAreas {
     public static final int LEFT_EDGE = 0, RIGHT_EDGE = 1, LEFT_SPLIT = 2,
-            RIGHT_SPLIT = 3, CENTER_TOP_SPLIT = 4, CENTER_BOTTOM_SPLIT = 5;
-    public static final int LINE_COUNT = 6;
+            RIGHT_SPLIT = 3, CENTER_TOP_SPLIT = 4, CENTER_BOTTOM_SPLIT = 5, ANIMATED_SPLIT = 6;
+    public static final int LINE_COUNT = 7;
     public static final float MIN_GAP = .05f;
     private final float[] lines;
 
     private ReaderTouchAreas(float[] lines) { this.lines = lines.clone(); }
 
     public static ReaderTouchAreas defaults() {
-        return new ReaderTouchAreas(new float[]{1f / 3f, 2f / 3f, .5f, .5f, .15f, .5f});
+        return new ReaderTouchAreas(new float[]{1f / 3f, 2f / 3f, .5f, .5f, .15f, .5f, .7f});
     }
 
     public static ReaderTouchAreas recommended() {
-        return new ReaderTouchAreas(new float[]{.36f, .64f, .5f, .5f, .15f, .5f});
+        return new ReaderTouchAreas(new float[]{.36f, .64f, .5f, .5f, .15f, .5f, .7f});
     }
 
     public static ReaderTouchAreas from(float[] values, ReaderTouchAreas fallback) {
@@ -33,6 +33,7 @@ public final class ReaderTouchAreas {
     public float[] positions() { return lines.clone(); }
     public float min(int line) {
         return switch (line) {
+            case ANIMATED_SPLIT -> 0;
             case RIGHT_EDGE -> lines[LEFT_EDGE] + MIN_GAP;
             case CENTER_BOTTOM_SPLIT -> lines[CENTER_TOP_SPLIT] + MIN_GAP;
             default -> MIN_GAP;
@@ -40,6 +41,7 @@ public final class ReaderTouchAreas {
     }
     public float max(int line) {
         return switch (line) {
+            case ANIMATED_SPLIT -> 1;
             case LEFT_EDGE -> lines[RIGHT_EDGE] - MIN_GAP;
             case CENTER_TOP_SPLIT -> lines[CENTER_BOTTOM_SPLIT] - MIN_GAP;
             default -> 1f - MIN_GAP;
@@ -83,13 +85,15 @@ public final class ReaderTouchAreas {
             case LEFT_SPLIT -> new float[]{0, lines[line], lines[LEFT_EDGE], lines[line]};
             case RIGHT_SPLIT -> new float[]{lines[RIGHT_EDGE], lines[line], 1, lines[line]};
             case CENTER_TOP_SPLIT, CENTER_BOTTOM_SPLIT -> new float[]{lines[LEFT_EDGE], lines[line], lines[RIGHT_EDGE], lines[line]};
+            case ANIMATED_SPLIT -> new float[]{0, lines[line], 1, lines[line]};
             default -> throw new IllegalArgumentException("Invalid line");
         };
     }
 
-    public boolean isAnimatedControlArea(float x, float y, float width, float height, int percent) {
+    public boolean isAnimatedControlArea(float x, float y, float width, float height) {
         int area = region(x, y, width, height);
-        return percent > 0 && area >= 0 && area <= ReaderKeyMap.RIGHT_BOTTOM
-                && y >= height * ((100 - percent) / 100f);
+        // Animation owns the union of the full-width lower band and the lower center region.
+        return area >= 0 && (area == ReaderKeyMap.CENTER_BOTTOM
+                || y >= height * lines[ANIMATED_SPLIT]);
     }
 }

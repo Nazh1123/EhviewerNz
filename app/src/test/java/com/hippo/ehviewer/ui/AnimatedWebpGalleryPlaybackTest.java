@@ -9,6 +9,10 @@ import android.os.Looper;
 import com.hippo.ehviewer.Settings;
 import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.glgallery.GalleryView;
+import com.hippo.lib.glgallery.ReaderKeyMap;
+import com.hippo.lib.glgallery.ReaderTouchAreas;
+import com.hippo.lib.glview.view.GLRootView;
+import android.view.MotionEvent;
 import com.hippo.lib.glview.image.ImageTexture;
 import com.hippo.lib.glview.image.ImageWrapper;
 import com.hippo.lib.image.Image;
@@ -220,5 +224,50 @@ public class AnimatedWebpGalleryPlaybackTest {
         ReflectionHelpers.setField(texture, "mControllableAnimation", true);
         textures.add(texture);
         return texture;
+    }
+
+    @Test public void scrubbingUsesTakeoverUnionAndCurrentProfileInsteadOfLowerQuarter() {
+        GalleryView view = new GalleryView.Builder(RuntimeEnvironment.getApplication(), new GalleryView.Adapter() {
+            @Override public void onBind(GalleryPageView page, int index) { }
+            @Override public void onUnbind(GalleryPageView page, int index) { }
+            @Override public String getError() { return null; }
+            @Override public int size() { return 2; }
+        }).build();
+        view.bounds().set(0, 0, 1000, 1000);
+        GLRootView root = new GLRootView(activity);
+        root.layout(0, 0, 1000, 1000);
+        ReflectionHelpers.setField(activity, "mGLRootView", root);
+        ReflectionHelpers.setField(activity, "mGalleryView", view);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture());
+        Settings.putAnimatedWebpAllowSeek(true);
+        view.setAnimatedPageControlAreasEnabled(true);
+        view.setReaderKeyMap(new ReaderKeyMap((int[][]) null, boundaryAreas(.6f)));
+        assertTrue(canScrub(900, 600));
+        assertFalse(canScrub(900, 599));
+        assertTrue(canScrub(500, 500));
+        assertFalse(canScrub(500, 100));
+        ReaderTouchAreas areas = ReaderTouchAreas.defaults().withPosition(ReaderTouchAreas.CENTER_BOTTOM_SPLIT, .85f)
+                .withPosition(ReaderTouchAreas.ANIMATED_SPLIT, .9f);
+        view.setReaderKeyMap(new ReaderKeyMap(null, new ReaderTouchAreas[]{areas, areas, areas}));
+        assertFalse(canScrub(500, 849));
+        assertTrue(canScrub(500, 850));
+        assertFalse(canScrub(900, 899));
+        assertTrue(canScrub(900, 900));
+        Settings.putAnimatedWebpAllowSeek(false);
+        assertFalse(canScrub(500, 950));
+        root.onPause();
+    }
+
+    private ReaderTouchAreas[] boundaryAreas(float position) {
+        ReaderTouchAreas areas = ReaderTouchAreas.defaults().withPosition(ReaderTouchAreas.ANIMATED_SPLIT, position);
+        return new ReaderTouchAreas[]{areas, areas, areas};
+    }
+
+    private boolean canScrub(float x, float y) {
+        MotionEvent event = MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, x, y, 0);
+        try {
+            return ReflectionHelpers.callInstanceMethod(activity, "canStartAnimatedWebpScrub",
+                    ClassParameter.from(MotionEvent.class, event));
+        } finally { event.recycle(); }
     }
 }

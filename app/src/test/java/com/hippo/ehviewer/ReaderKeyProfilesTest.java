@@ -116,7 +116,7 @@ public class ReaderKeyProfilesTest {
             for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
                 assertArrayEquals(captured.keys(direction), recommended.keys(direction));
             }
-            assertEquals(captured.animatedControlPercent, recommended.animatedControlPercent);
+            assertEquals(captured.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), recommended.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), 0f);
             assertEquals(captured.orientationSwipe, recommended.orientationSwipe);
             assertEquals("夜间", recommended.name);
             recommended.keys(0)[0] = ReaderKeyMap.NONE;
@@ -130,7 +130,7 @@ public class ReaderKeyProfilesTest {
         ReaderKeyProfiles.Profile second = store.active().copy();
         second.name = "Animation";
         second.keys(0)[ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.PREVIOUS;
-        second.animatedControlPercent = 47;
+        second.setAreas(0, second.areas(0).withPosition(ReaderTouchAreas.ANIMATED_SPLIT, 0.53f));
         second.orientationSwipe = ReaderKeyProfiles.SWIPE_UP;
         store.profiles.remove(1);
         store.profiles.add(second); store.selected = 1; store.save();
@@ -140,10 +140,92 @@ public class ReaderKeyProfilesTest {
         assertEquals("Animation", restored.active().name);
         assertEquals(ReaderKeyMap.NEXT, restored.profiles.get(0).map().action(ReaderKeyMap.RIGHT_TOP, 0, 0));
         assertEquals(ReaderKeyMap.PREVIOUS, restored.active().map().action(ReaderKeyMap.RIGHT_TOP, 0, 0));
-        assertEquals(47, restored.active().animatedControlPercent);
+        assertEquals(0.53f, restored.active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(ReaderKeyProfiles.SWIPE_UP, restored.active().orientationSwipe);
-        assertEquals(30, restored.profiles.get(0).animatedControlPercent);
+        assertEquals(0.7f, restored.profiles.get(0).areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(ReaderKeyProfiles.SWIPE_DOWN, restored.profiles.get(0).orientationSwipe);
+    }
+
+    @Test public void animationMappingsMigratePersistAndRemainIndependent() {
+        Settings.putString("reader_key_profiles_v1", "{\"version\":5,\"profiles\":[{\"name\":\"Old\",\"directions\":[[3],[4],[6]]}]}");
+        ReaderKeyProfiles store = ReaderKeyProfiles.load();
+        for (int direction = 0; direction < 3; direction++) {
+            assertArrayEquals(store.active().keys(direction), store.active().keys(direction, true));
+            store.active().keys(direction, true)[0] = ReaderKeyMap.SAVE_PREVIOUS;
+        }
+        ReaderKeyMap snapshot = store.active().map();
+        store.save();
+        ReaderKeyProfiles.Profile restored = ReaderKeyProfiles.load().active();
+        for (int direction = 0; direction < 3; direction++) {
+            assertEquals(ReaderKeyMap.SAVE_PREVIOUS, restored.map().action(0, 0, direction, true));
+            assertNotEquals(ReaderKeyMap.SAVE_PREVIOUS, restored.map().action(0, 0, direction));
+        }
+        ReaderKeyProfiles.Profile duplicate = restored.duplicate();
+        duplicate.keys(0, true)[0] = ReaderKeyMap.NONE;
+        assertEquals(ReaderKeyMap.SAVE_PREVIOUS, restored.keys(0, true)[0]);
+        assertEquals(ReaderKeyMap.SAVE_PREVIOUS, snapshot.action(0, 0, 0, true));
+    }
+
+    @Test public void recommendedAnimationLongPressSavesPreviousOnlyOnPreviousSide() {
+        ReaderKeyProfiles.Profile profile = ReaderKeyProfiles.recommended("");
+        for (int direction = 0; direction < 2; direction++) {
+            for (int region = 0; region <= ReaderKeyMap.RIGHT_BOTTOM; region++) {
+                boolean previous = (region <= ReaderKeyMap.LEFT_BOTTOM) == (direction == GalleryView.LAYOUT_LEFT_TO_RIGHT);
+                int index = region * 3 + ReaderKeyMap.LONG_PRESS;
+                assertEquals(previous ? ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL : ReaderKeyMap.SAVE_NEXT,
+                        profile.keys(direction, true)[index]);
+                assertEquals(previous ? ReaderKeyMap.LEGACY : ReaderKeyMap.SAVE_NEXT, profile.keys(direction)[index]);
+            }
+        }
+        assertArrayEquals(profile.keys(2), profile.keys(2, true));
+        JSONObject old = profile.toJson();
+        old.remove("animatedDirections");
+        ReaderKeyProfiles.Profile migrated = ReaderKeyProfiles.Profile.fromJson(old);
+        assertArrayEquals(profile.keys(0, true), migrated.keys(0, true));
+        assertArrayEquals(profile.keys(1, true), migrated.keys(1, true));
+    }
+
+    @Test public void legacyAnimationPercentMigratesToSharedLineAndRepairsRecommendedRtlDefaults() throws Exception {
+        ReaderKeyProfiles.Profile previous = ReaderKeyProfiles.recommended("");
+        previous.unifiedTouchAreas = false;
+        previous.setAreas(1, previous.areas(1).withPosition(ReaderTouchAreas.LEFT_EDGE, .28f));
+        previous.keys(1, true)[ReaderKeyMap.RIGHT_TOP * 3 + ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.LEGACY;
+        previous.keys(1, true)[ReaderKeyMap.RIGHT_BOTTOM * 3 + ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.LEGACY;
+        JSONObject old = previous.toJson();
+        for (int direction = 0; direction < 3; direction++) old.getJSONArray("touchAreas").getJSONArray(direction).remove(ReaderTouchAreas.ANIMATED_SPLIT);
+        old.put("animatedControlPercent", 42.125);
+        JSONObject storage = new JSONObject().put("version", 6).put("profiles", new org.json.JSONArray().put(old));
+        Settings.putString("reader_key_profiles_v1", storage.toString());
+        ReaderKeyProfiles.Profile restored = ReaderKeyProfiles.load().active();
+        for (int direction = 0; direction < 3; direction++) assertEquals(.57875f,
+                restored.areas(direction).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+        assertEquals(.28f, restored.areas(1).position(ReaderTouchAreas.LEFT_EDGE), 0f);
+        assertEquals(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL, restored.keys(1, true)[ReaderKeyMap.RIGHT_TOP * 3 + ReaderKeyMap.LONG_PRESS]);
+        assertEquals(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL, restored.keys(1, true)[ReaderKeyMap.RIGHT_BOTTOM * 3 + ReaderKeyMap.LONG_PRESS]);
+        assertFalse(restored.toJson().has("animatedControlPercent"));
+        assertEquals(ReaderTouchAreas.LINE_COUNT, restored.toJson().getJSONArray("touchAreas").getJSONArray(1).length());
+    }
+
+    @Test public void fractionalAnimatedLineUsesDirectionSyncCopyAndSnapshotLikeEveryBoundary() {
+        ReaderKeyProfiles store = ReaderKeyProfiles.load();
+        ReaderKeyProfiles.Profile profile = store.active();
+        profile.setUnifiedTouchAreas(false, 0);
+        float[] positions = {.712345f, .623456f, .834567f};
+        for (int direction = 0; direction < 3; direction++) profile.setAreas(direction,
+                profile.areas(direction).withPosition(ReaderTouchAreas.ANIMATED_SPLIT, positions[direction]));
+        store.save();
+        profile = ReaderKeyProfiles.load().active();
+        ReaderKeyMap snapshot = profile.map();
+        ReaderKeyProfiles.Profile copy = profile.copy();
+        for (int direction = 0; direction < 3; direction++) assertEquals(positions[direction],
+                copy.areas(direction).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+        copy.setUnifiedTouchAreas(true, 1);
+        for (int direction = 0; direction < 3; direction++) assertEquals(positions[1],
+                copy.areas(direction).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+        copy.setAreas(0, copy.areas(0).withPosition(ReaderTouchAreas.ANIMATED_SPLIT, .123456f));
+        assertEquals(positions[0], snapshot.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
+        assertTrue(snapshot.areas(0).isAnimatedControlArea(900, 713, 1000, 1000));
+        assertFalse(snapshot.areas(0).isAnimatedControlArea(900, 712, 1000, 1000));
     }
 
     @Test public void malformedStorageAndOutOfRangeActionsRestoreDefaults() {
@@ -155,7 +237,7 @@ public class ReaderKeyProfilesTest {
         assertEquals(0, restored.selected);
         assertEquals(ReaderKeyMap.LEGACY, restored.active().keys(0)[0]);
         assertEquals(ReaderKeyMap.LEGACY, restored.active().keys(0)[1]);
-        assertEquals(30, restored.active().animatedControlPercent);
+        assertEquals(0.7f, restored.active().areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(ReaderKeyProfiles.SWIPE_DOWN, restored.active().orientationSwipe);
     }
 
@@ -188,7 +270,7 @@ public class ReaderKeyProfilesTest {
         ReaderKeyProfiles.Profile profile = ReaderKeyProfiles.load().active();
         assertEquals("Old", profile.name);
         for (int direction = 0; direction < 3; direction++) assertEquals(ReaderKeyMap.NEXT, profile.keys(direction)[0]);
-        assertEquals(30, profile.animatedControlPercent);
+        assertEquals(0.7f, profile.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(ReaderKeyProfiles.SWIPE_DOWN, profile.orientationSwipe);
         assertFalse(profile.toJson().has("animated"));
         assertFalse(profile.toJson().has("holdSpeed"));
@@ -232,7 +314,7 @@ public class ReaderKeyProfilesTest {
             assertEquals(ReaderKeyMap.NONE, profile.keys(direction)[1]);
             assertEquals(ReaderKeyMap.PAGE_MENU, profile.keys(direction)[2]);
         }
-        assertEquals(42, profile.animatedControlPercent);
+        assertEquals(0.58f, profile.areas(0).position(ReaderTouchAreas.ANIMATED_SPLIT), .000001f);
         assertEquals(ReaderKeyProfiles.SWIPE_UP, profile.orientationSwipe);
         assertFalse(profile.toJson().has("normal"));
     }
