@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_copy_apply">복사하여 다른 모드에 적용</string>
+    <string name="reader_keys_copy_applied">키 설정을 복사했습니다. 저장하면 적용됩니다.</string>
+    <string name="reader_keys_copy_skipped">이전 페이지 저장은 일반 모드에 복사되지 않습니다.</string>
+    <string name="reader_keys_edit_direction">읽기 방향 전환: %1$s</string>
+    <string name="reader_keys_direction_left_to_right">왼쪽에서 오른쪽</string>
+    <string name="reader_keys_direction_right_to_left">오른쪽에서 왼쪽</string>
+    <string name="reader_keys_direction_top_to_bottom">위에서 아래</string>
+    <string name="reader_keys_help">도움말</string>
+    <string name="reader_keys_close_help">도움말 닫기</string>
+    <string name="reader_keys_help_resize">드래그하거나 탭하여 영역 변경</string>
+    <string name="reader_keys_help_quick_tap">두 번 탭을 \"동작 없음\"으로 설정하면 빠른 단일 탭이 가능합니다</string>
     <string name="reader_keys_unified_areas">터치 영역 동일하게</string>
     <string name="reader_keys_animated_control">애니메이션 제어</string>
     <string name="reader_keys_edit_animated">애니메이션 모드 키 설정</string>

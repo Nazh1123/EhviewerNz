@@ -10,6 +10,9 @@
     <item name="reader_keys_direction" type="id" />
     <item name="reader_keys_animated_control" type="id" />
     <item name="reader_keys_back" type="id" />
+    <item name="reader_keys_help" type="id" />
+    <item name="reader_keys_help_overlay" type="id" />
+    <item name="reader_keys_copy_apply" type="id" />
     <item name="reader_keys_unified_areas" type="id" />
     <item name="reader_keys_boundary_input" type="id" />
 </resources>

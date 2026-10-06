@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_copy_apply">コピーして他のモードに適用</string>
+    <string name="reader_keys_copy_applied">キー設定をコピーしました。保存すると反映されます。</string>
+    <string name="reader_keys_copy_skipped">前のページを保存する操作は通常モードにコピーされません。</string>
+    <string name="reader_keys_edit_direction">読書方向を切り替え: %1$s</string>
+    <string name="reader_keys_direction_left_to_right">左から右</string>
+    <string name="reader_keys_direction_right_to_left">右から左</string>
+    <string name="reader_keys_direction_top_to_bottom">上から下</string>
+    <string name="reader_keys_help">ヘルプ</string>
+    <string name="reader_keys_close_help">ヘルプを閉じる</string>
+    <string name="reader_keys_help_resize">ドラッグまたはタップで領域を変更</string>
+    <string name="reader_keys_help_quick_tap">ダブルタップを「何もしない」にすると、すばやいシングルタップができます</string>
     <string name="reader_keys_unified_areas">タッチ領域を同じにする</string>
     <string name="reader_keys_animated_control">アニメーション操作</string>
     <string name="reader_keys_edit_animated">アニメーションモードのキーを設定</string>

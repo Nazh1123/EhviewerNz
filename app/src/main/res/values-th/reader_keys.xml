@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_copy_apply">คัดลอกและใช้กับโหมดอื่น</string>
+    <string name="reader_keys_copy_applied">คัดลอกปุ่มแล้ว บันทึกเพื่อใช้งาน</string>
+    <string name="reader_keys_copy_skipped">การบันทึกหน้าก่อนไม่ถูกคัดลอกไปยังโหมดปกติ</string>
+    <string name="reader_keys_edit_direction">เปลี่ยนทิศทางการอ่าน: %1$s</string>
+    <string name="reader_keys_direction_left_to_right">จากซ้ายไปขวา</string>
+    <string name="reader_keys_direction_right_to_left">จากขวาไปซ้าย</string>
+    <string name="reader_keys_direction_top_to_bottom">จากบนลงล่าง</string>
+    <string name="reader_keys_help">ช่วยเหลือ</string>
+    <string name="reader_keys_close_help">ปิดความช่วยเหลือ</string>
+    <string name="reader_keys_help_resize">ลากหรือแตะเพื่อเปลี่ยนพื้นที่</string>
+    <string name="reader_keys_help_quick_tap">ตั้งค่าการแตะสองครั้งเป็น \"ไม่ทำอะไร\" เพื่อให้แตะครั้งเดียวอย่างรวดเร็วได้</string>
     <string name="reader_keys_unified_areas">พื้นที่สัมผัสเหมือนกัน</string>
     <string name="reader_keys_animated_control">ควบคุมภาพเคลื่อนไหว</string>
     <string name="reader_keys_edit_animated">ตั้งค่าปุ่มในโหมดภาพเคลื่อนไหว</string>

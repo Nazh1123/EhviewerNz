@@ -39,6 +39,42 @@ public final class ReaderKeyProfiles {
         public int[] keys(int direction, boolean animated) {
             return animated ? animatedDirections[GalleryView.sanitizeLayoutMode(direction)] : keys(direction);
         }
+
+        public boolean hasKeyChanges(Profile baseline, int direction, boolean animated) {
+            return !Arrays.equals(keys(direction, animated), baseline.keys(direction, animated));
+        }
+
+        /** Copies only pending edits and advances the editor's baseline, without persisting either profile. */
+        public int copyKeyChangesToOtherModes(Profile baseline, int direction, boolean animated) {
+            direction = GalleryView.sanitizeLayoutMode(direction);
+            int[] source = keys(direction, animated), previous = baseline.keys(direction, animated);
+            int copied = 0;
+            for (int index = 0; index < source.length; index++) {
+                if (source[index] == previous[index]) continue;
+                int area = index / ReaderKeyMap.GESTURE_COUNT, gesture = index % ReaderKeyMap.GESTURE_COUNT;
+                for (int targetDirection = 0; targetDirection < ReaderKeyMap.DIRECTION_COUNT; targetDirection++) {
+                    if ((direction == GalleryView.LAYOUT_TOP_TO_BOTTOM) !=
+                            (targetDirection == GalleryView.LAYOUT_TOP_TO_BOTTOM)) continue;
+                    boolean mirror = direction != targetDirection;
+                    int targetArea = mirror && area <= ReaderKeyMap.RIGHT_BOTTOM ? (area + 2) % 4 : area;
+                    int targetIndex = targetArea * ReaderKeyMap.GESTURE_COUNT + gesture;
+                    int action = source[index];
+                    if (mirror && action == ReaderKeyMap.LEFT) action = ReaderKeyMap.RIGHT;
+                    else if (mirror && action == ReaderKeyMap.RIGHT) action = ReaderKeyMap.LEFT;
+                    for (boolean targetAnimated : new boolean[]{false, true}) {
+                        if (targetDirection == direction && targetAnimated == animated) continue;
+                        if (!targetAnimated && (action == ReaderKeyMap.SAVE_PREVIOUS
+                                || action == ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL)) continue;
+                        keys(targetDirection, targetAnimated)[targetIndex] = action;
+                        // Derived edits should not be offered as new source edits on another page.
+                        baseline.keys(targetDirection, targetAnimated)[targetIndex] = action;
+                        copied++;
+                    }
+                }
+                previous[index] = source[index];
+            }
+            return copied;
+        }
         private void copyNormalToAnimated() {
             for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
                 System.arraycopy(directions[direction], 0, animatedDirections[direction], 0, directions[direction].length);

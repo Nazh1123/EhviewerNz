@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_copy_apply">Copy and apply to other modes</string>
+    <string name="reader_keys_copy_applied">Bindings copied. Save to apply.</string>
+    <string name="reader_keys_copy_skipped">Save previous page is not copied to normal mode.</string>
+    <string name="reader_keys_edit_direction">Switch reading direction: %1$s</string>
+    <string name="reader_keys_direction_left_to_right">Left to right</string>
+    <string name="reader_keys_direction_right_to_left">Right to left</string>
+    <string name="reader_keys_direction_top_to_bottom">Top to bottom</string>
+    <string name="reader_keys_help">Help</string>
+    <string name="reader_keys_close_help">Close help</string>
+    <string name="reader_keys_help_resize">Drag or tap to change the area</string>
+    <string name="reader_keys_help_quick_tap">Set double-tap to \"No action\" to allow rapid single taps</string>
     <string name="reader_keys_unified_areas">Consistent touch areas</string>
     <string name="reader_keys_animated_control">Animation controls</string>
     <string name="reader_keys_edit_animated">Edit animation key bindings</string>

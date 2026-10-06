@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_copy_apply">複製並套用至其餘模式</string>
+    <string name="reader_keys_copy_applied">已同步修改的鍵位，儲存後生效</string>
+    <string name="reader_keys_copy_skipped">儲存上一頁不會複製到普通模式</string>
+    <string name="reader_keys_edit_direction">切換閱讀方向: %1$s</string>
+    <string name="reader_keys_direction_left_to_right">從左到右</string>
+    <string name="reader_keys_direction_right_to_left">從右到左</string>
+    <string name="reader_keys_direction_top_to_bottom">從上到下</string>
+    <string name="reader_keys_help">幫助</string>
+    <string name="reader_keys_close_help">關閉幫助</string>
+    <string name="reader_keys_help_resize">拖曳 或 點擊以更改區域</string>
+    <string name="reader_keys_help_quick_tap">將雙擊設為\"無操作\" 可允許快速單擊</string>
     <string name="reader_keys_unified_areas">觸控區域一致</string>
     <string name="reader_keys_animated_control">動圖控制</string>
     <string name="reader_keys_edit_animated">設定動圖模式按鍵</string>

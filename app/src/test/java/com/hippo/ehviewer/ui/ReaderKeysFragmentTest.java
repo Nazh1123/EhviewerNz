@@ -435,6 +435,152 @@ public class ReaderKeysFragmentTest {
         assertTrue(root.findViewById(R.id.reader_keys_animated_control).getRight() <= root.findViewById(R.id.reader_keys_direction).getLeft());
     }
 
+    @Test public void helpShowsEveryControlAndBoundaryHintsAndClosesWithoutEditing() throws Exception {
+        View help = root.findViewById(R.id.reader_keys_help);
+        assertEquals("帮助", help.getContentDescription());
+        assertTrue(root.findViewById(R.id.reader_keys_back).getRight() <= help.getLeft());
+        assertTrue(help.getRight() <= root.findViewById(R.id.reader_keys_animated_control).getLeft());
+        assertEquals("切换阅读方向: 从左到右", root.findViewById(R.id.reader_keys_direction).getContentDescription());
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        String original = draft.toJson().toString();
+        help.performClick();
+        View overlay = root.findViewById(R.id.reader_keys_help_overlay);
+        assertNotNull(overlay);
+        for (int id : new int[]{R.id.reader_keys_back, R.id.reader_keys_direction, R.id.reader_keys_animated_control,
+                R.id.reader_keys_more, R.id.reader_keys_add, R.id.reader_keys_manage, R.id.reader_keys_save}) {
+            assertTrue(hasText(overlay, root.findViewById(id).getContentDescription().toString()));
+        }
+        assertTrue(hasText(overlay, controller.get().getString(R.string.reader_keys_select_profile)));
+        assertTrue(hasText(overlay, "拖动 或 点击以更改区域"));
+        assertTrue(hasText(overlay, "将双击设为\"无操作\" 可允许快速单击"));
+        render("help-portrait-light", 360, 800);
+        assertHelpBubblesFit();
+        android.view.ViewGroup labels = (android.view.ViewGroup) overlay;
+        for (int i = 0; i < labels.getChildCount(); i++) {
+            android.widget.TextView label = (android.widget.TextView) labels.getChildAt(i);
+            if (label.getText().toString().equals(controller.get().getString(R.string.reader_keys_help_resize)))
+                assertTrue("Resize hint must stay below its line", label.getTop() > root.getHeight() / 2);
+        }
+        View zones = root.findViewById(R.id.reader_keys_canvas);
+        android.graphics.RectF textBounds = ReflectionHelpers.callInstanceMethod(zones, "actionTextBounds",
+                ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.LEFT_TOP));
+        java.util.List<?> hints = ReflectionHelpers.getField(overlay, "hints");
+        for (Object hint : hints) {
+            android.widget.TextView label = ReflectionHelpers.getField(hint, "label");
+            if (label.getText().toString().equals(controller.get().getString(R.string.reader_keys_help_quick_tap))) {
+                assertEquals(textBounds.right, (float) ReflectionHelpers.getField(hint, "x"), 0f);
+                assertEquals(textBounds.centerY(), (float) ReflectionHelpers.getField(hint, "y"), 0f);
+            }
+        }
+        render("help-landscape-light", 800, 360);
+        assertHelpBubblesFit();
+        overlay.performClick();
+        assertNull(root.findViewById(R.id.reader_keys_help_overlay));
+        assertEquals("帮助", help.getContentDescription());
+        assertEquals(.5f, help.getAlpha(), 0f);
+        help.performClick();
+        controller.get().getOnBackPressedDispatcher().onBackPressed();
+        assertNull(root.findViewById(R.id.reader_keys_help_overlay));
+        help.performClick();
+        help.performClick();
+        assertNull(root.findViewById(R.id.reader_keys_help_overlay));
+        assertEquals(original, draft.toJson().toString());
+    }
+
+    private void assertHelpBubblesFit() {
+        android.view.ViewGroup overlay = root.findViewById(R.id.reader_keys_help_overlay);
+        for (int i = 0; i < overlay.getChildCount(); i++) {
+            View label = overlay.getChildAt(i);
+            assertTrue(label.getLeft() >= 0 && label.getRight() <= root.getWidth());
+            assertTrue(label.getTop() >= 0 && label.getBottom() <= root.getHeight());
+            android.graphics.Rect bounds = new android.graphics.Rect(label.getLeft(), label.getTop(), label.getRight(), label.getBottom());
+            for (int j = 0; j < i; j++) {
+                View other = overlay.getChildAt(j);
+                assertFalse("Help bubbles overlap", android.graphics.Rect.intersects(bounds,
+                        new android.graphics.Rect(other.getLeft(), other.getTop(), other.getRight(), other.getBottom())));
+            }
+        }
+    }
+
+    @Test public void copyButtonTracksOnlyCurrentPageEditsAndPersistsItsBaselineAcrossRecreation() throws Exception {
+        View copy = root.findViewById(R.id.reader_keys_copy_apply);
+        assertEquals(View.GONE, copy.getVisibility());
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        draft.setAreas(0, ReaderTouchAreas.recommended());
+        ReflectionHelpers.callInstanceMethod(fragment, "refresh");
+        assertEquals(View.GONE, copy.getVisibility());
+        chooseLeftTap(ReaderKeyMap.NEXT);
+        layout(360, 800);
+        assertEquals(View.VISIBLE, copy.getVisibility());
+        assertTrue(root.findViewById(R.id.reader_keys_help).getRight() <= copy.getLeft());
+        assertTrue(copy.getRight() <= root.findViewById(R.id.reader_keys_animated_control).getLeft());
+        root.findViewById(R.id.reader_keys_help).performClick();
+        assertTrue(hasText(root.findViewById(R.id.reader_keys_help_overlay), "复制并应用到其余模式"));
+        render("help-copy-pending", 360, 800);
+        assertHelpBubblesFit();
+        root.findViewById(R.id.reader_keys_help).performClick();
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        assertEquals(View.GONE, copy.getVisibility());
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        assertEquals(View.VISIBLE, copy.getVisibility());
+        copy.performClick();
+        assertEquals(View.GONE, copy.getVisibility());
+        assertEquals(ReaderKeyMap.NEXT, draft.keys(0, true)[0]);
+        assertEquals(ReaderKeyMap.NEXT, draft.keys(1, true)[ReaderKeyMap.RIGHT_TOP * 3]);
+        assertEquals(ReaderKeyMap.NEXT, draft.keys(1, false)[ReaderKeyMap.RIGHT_TOP * 3]);
+        assertEquals(ReaderKeyMap.LEGACY, ReaderKeyProfiles.load().active().keys(0)[0]);
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        assertEquals(View.GONE, copy.getVisibility());
+        chooseLeftTap(ReaderKeyMap.SAVE);
+        assertEquals(View.VISIBLE, copy.getVisibility());
+        androidx.fragment.app.Fragment.SavedState state = controller.get().getSupportFragmentManager()
+                .saveFragmentInstanceState(fragment);
+        controller.get().getSupportFragmentManager().beginTransaction().remove(fragment).commitNow();
+        fragment = new ReaderKeysFragment(); fragment.setInitialSavedState(state);
+        controller.get().getSupportFragmentManager().beginTransaction()
+                .replace(android.R.id.content, fragment).commitNow();
+        root = fragment.requireView(); layout(360, 800);
+        copy = root.findViewById(R.id.reader_keys_copy_apply);
+        assertEquals(View.VISIBLE, copy.getVisibility());
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        assertEquals(View.GONE, copy.getVisibility());
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        copy.performClick();
+        root.findViewById(R.id.reader_keys_save).performClick();
+        assertEquals(View.GONE, copy.getVisibility());
+        ReaderKeyProfiles.Profile saved = ReaderKeyProfiles.load().active();
+        assertEquals(ReaderKeyMap.SAVE, saved.keys(0, true)[0]);
+        assertEquals(ReaderKeyMap.SAVE, saved.keys(0, false)[0]);
+        assertEquals(ReaderKeyMap.SAVE, saved.keys(1, true)[ReaderKeyMap.RIGHT_TOP * 3]);
+    }
+
+    @Test public void helpFitsNearTopBoundariesAndRestoresWithUnsavedDraft() throws Exception {
+        chooseLeftTap(ReaderKeyMap.NEXT);
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        draft.setAreas(0, draft.areas(0).withPosition(ReaderTouchAreas.LEFT_SPLIT, .05f)
+                .withPosition(ReaderTouchAreas.CENTER_BOTTOM_SPLIT, .2f));
+        root.findViewById(R.id.reader_keys_help).performClick();
+        render("help-small-near-top", 320, 480);
+        assertHelpBubblesFit();
+        androidx.fragment.app.Fragment.SavedState state = controller.get().getSupportFragmentManager()
+                .saveFragmentInstanceState(fragment);
+        controller.get().getSupportFragmentManager().beginTransaction().remove(fragment).commitNow();
+        fragment = new ReaderKeysFragment();
+        fragment.setInitialSavedState(state);
+        controller.get().getSupportFragmentManager().beginTransaction()
+                .replace(android.R.id.content, fragment).commitNow();
+        root = fragment.requireView();
+        layout(360, 800);
+        assertNotNull(root.findViewById(R.id.reader_keys_help_overlay));
+        assertTrue(text(ReaderKeyMap.LEFT_TOP).startsWith("单击: 下一页\n"));
+        controller.get().getOnBackPressedDispatcher().onBackPressed();
+        assertNull(root.findViewById(R.id.reader_keys_help_overlay));
+        assertFalse(latest().isShowing());
+        controller.get().getOnBackPressedDispatcher().onBackPressed();
+        assertTrue(latest().isShowing());
+        assertEquals(ReaderKeyMap.LEGACY, ReaderKeyProfiles.load().active().keys(0)[0]);
+    }
+
     private int iconOpacity(androidx.appcompat.widget.AppCompatImageButton button) {
         Bitmap bitmap = Bitmap.createBitmap(48, 48, Bitmap.Config.ARGB_8888);
         android.graphics.drawable.Drawable drawable = button.getDrawable();
@@ -467,6 +613,10 @@ public class ReaderKeysFragmentTest {
         controller.get().setTheme(R.style.AppTheme_Settings_Dark);
         openEditor();
         render("portrait-dark", 360, 800);
+        root.findViewById(R.id.reader_keys_help).performClick();
+        render("help-portrait-dark", 360, 800);
+        assertHelpBubblesFit();
+        root.findViewById(R.id.reader_keys_help).performClick();
         renderDragging("drag-bubble-dark", 360, 800);
         root.findViewById(R.id.reader_keys_animated_control).performClick();
         render("animation-portrait-dark", 360, 800);
@@ -478,6 +628,9 @@ public class ReaderKeysFragmentTest {
         renderDragging("drag-bubble-black", 360, 800);
         root.findViewById(R.id.reader_keys_animated_control).performClick();
         render("animation-portrait-black", 360, 800);
+        root.findViewById(R.id.reader_keys_help).performClick();
+        render("help-animation-black", 360, 800);
+        assertHelpBubblesFit();
     }
 
     @Test public void directionButtonEditsIndependentMappingsAndKeepsDraftsAcrossRecreation() {
@@ -497,7 +650,7 @@ public class ReaderKeysFragmentTest {
         root = fragment.requireView(); layout(360, 800);
         assertTrue(text(0).startsWith("单击: 无操作"));
         assertTrue(root.findViewById(R.id.reader_keys_direction).getContentDescription().toString()
-                .contains(controller.get().getString(R.string.settings_read_reading_direction_top_to_bottom)));
+                .contains(controller.get().getString(R.string.reader_keys_direction_top_to_bottom)));
         root.findViewById(R.id.reader_keys_direction).performClick();
         assertTrue(text(0).startsWith("单击: 下一页\n"));
         root.findViewById(R.id.reader_keys_save).performClick();

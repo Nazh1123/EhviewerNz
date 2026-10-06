@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_copy_apply">复制并应用到其余模式</string>
+    <string name="reader_keys_copy_applied">已同步修改的键位，保存后生效</string>
+    <string name="reader_keys_copy_skipped">保存上一页不会复制到普通模式</string>
+    <string name="reader_keys_direction_left_to_right">从左到右</string>
+    <string name="reader_keys_direction_right_to_left">从右到左</string>
+    <string name="reader_keys_direction_top_to_bottom">从上到下</string>
+    <string name="reader_keys_help">帮助</string>
+    <string name="reader_keys_close_help">关闭帮助</string>
+    <string name="reader_keys_help_resize">拖动 或 点击以更改区域</string>
+    <string name="reader_keys_help_quick_tap">将双击设为\"无操作\" 可允许快速单击</string>
     <string name="reader_keys_title">键位</string>
     <string name="reader_keys_default_profile">默认</string>
     <string name="reader_keys_recommended_profile">推荐</string>
@@ -42,7 +52,7 @@
     <string name="reader_keys_discard">放弃修改</string>
     <string name="reader_keys_back">返回</string>
     <string name="reader_keys_more">更多</string>
-    <string name="reader_keys_edit_direction">正在编辑：%1$s。切换阅读方向</string>
+    <string name="reader_keys_edit_direction">切换阅读方向: %1$s</string>
     <string name="reader_keys_default_action">%1$s (默认)</string>
     <string name="reader_keys_scroll_up">向上滚动</string>
     <string name="reader_keys_scroll_down">向下滚动</string>

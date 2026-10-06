@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_copy_apply">Copy and apply to other modes</string>
+    <string name="reader_keys_copy_applied">Bindings copied. Save to apply.</string>
+    <string name="reader_keys_copy_skipped">Save previous page is not copied to normal mode.</string>
+    <string name="reader_keys_direction_left_to_right">Left to right</string>
+    <string name="reader_keys_direction_right_to_left">Right to left</string>
+    <string name="reader_keys_direction_top_to_bottom">Top to bottom</string>
+    <string name="reader_keys_help">Help</string>
+    <string name="reader_keys_close_help">Close help</string>
+    <string name="reader_keys_help_resize">Drag or tap to change the area</string>
+    <string name="reader_keys_help_quick_tap">Set double-tap to \"No action\" to allow rapid single taps</string>
     <string name="reader_keys_title">Key bindings</string>
     <string name="reader_keys_default_profile">Default</string>
     <string name="reader_keys_recommended_profile">Recommended</string>
@@ -42,7 +52,7 @@
     <string name="reader_keys_discard">Discard changes</string>
     <string name="reader_keys_back">Back</string>
     <string name="reader_keys_more">More</string>
-    <string name="reader_keys_edit_direction">Editing: %1$s. Switch reading direction</string>
+    <string name="reader_keys_edit_direction">Switch reading direction: %1$s</string>
     <string name="reader_keys_default_action">%1$s (default)</string>
     <string name="reader_keys_scroll_up">Scroll up</string>
     <string name="reader_keys_scroll_down">Scroll down</string>

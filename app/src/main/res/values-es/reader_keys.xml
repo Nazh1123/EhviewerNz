@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_copy_apply">Copiar y aplicar a los demás modos</string>
+    <string name="reader_keys_copy_applied">Asignaciones copiadas. Guarda para aplicar.</string>
+    <string name="reader_keys_copy_skipped">Guardar página anterior no se copia al modo normal.</string>
+    <string name="reader_keys_edit_direction">Cambiar dirección de lectura: %1$s</string>
+    <string name="reader_keys_direction_left_to_right">De izquierda a derecha</string>
+    <string name="reader_keys_direction_right_to_left">De derecha a izquierda</string>
+    <string name="reader_keys_direction_top_to_bottom">De arriba abajo</string>
+    <string name="reader_keys_help">Ayuda</string>
+    <string name="reader_keys_close_help">Cerrar ayuda</string>
+    <string name="reader_keys_help_resize">Arrastra o toca para cambiar el área</string>
+    <string name="reader_keys_help_quick_tap">Configura el doble toque en \"Sin acción\" para permitir toques rápidos</string>
     <string name="reader_keys_unified_areas">Áreas táctiles iguales</string>
     <string name="reader_keys_animated_control">Controles de animación</string>
     <string name="reader_keys_edit_animated">Configurar teclas del modo de animación</string>

@@ -38,19 +38,23 @@ import com.hippo.lib.glgallery.ReaderTouchAreas;
 import com.hippo.util.SystemUiHelper;
 import org.json.JSONException;
 import org.json.JSONObject;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 /** Full-size touch-area editor with floating controls over the reading viewport. */
 public final class ReaderKeysFragment extends Fragment {
     private ReaderKeyProfiles profiles;
-    private ReaderKeyProfiles.Profile draft;
+    private ReaderKeyProfiles.Profile draft, copyBaseline;
     private int region, direction;
     private String[] regions, gestures, actions;
     private TextView profileButton;
-    private AppCompatImageButton saveButton, directionButton, animatedButton;
+    private AppCompatImageButton saveButton, directionButton, animatedButton, helpButton, copyButton;
+    private HelpOverlay helpOverlay;
+    private final Rect helpInsets = new Rect();
     private boolean animatedMode;
     private static final int ANIMATED_LINE = ReaderTouchAreas.ANIMATED_SPLIT;
+    private static final int ACTION_TEXT_ANCHOR = -2;
     private View bottomBar, backButton, moreButton;
     private ZoneView zones;
     private OnBackPressedCallback back;
@@ -63,6 +67,7 @@ public final class ReaderKeysFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle state) {
         profiles = ReaderKeyProfiles.load();
         draft = profiles.active().copy();
+        copyBaseline = profiles.active().copy();
         direction = Settings.getReadingDirection();
         if (state != null) {
             animatedMode = state.getBoolean("animatedMode", false);
@@ -71,6 +76,8 @@ public final class ReaderKeysFragment extends Fragment {
             try {
                 if (state.containsKey("draft")) draft = ReaderKeyProfiles.Profile.fromJson(
                         new JSONObject(state.getString("draft", "{}")));
+                if (state.containsKey("copyBaseline")) copyBaseline = ReaderKeyProfiles.Profile.fromJson(
+                        new JSONObject(state.getString("copyBaseline", "{}")));
             } catch (JSONException ignored) { }
         }
         regions = getResources().getStringArray(R.array.reader_keys_regions);
@@ -98,12 +105,22 @@ public final class ReaderKeysFragment extends Fragment {
         directionButton.setId(R.id.reader_keys_direction);
         directionButton.setImageTintList(ColorStateList.valueOf(foreground));
         floatingButton(root, backButton, Gravity.TOP | Gravity.LEFT);
+        helpButton = icon(R.drawable.v_help_circle_x24, R.string.reader_keys_help, this::toggleHelp);
+        helpButton.setId(R.id.reader_keys_help);
+        floatingButton(root, helpButton, Gravity.TOP | Gravity.LEFT);
+        ((FrameLayout.LayoutParams) helpButton.getLayoutParams()).leftMargin = dp(68);
         floatingButton(root, directionButton, Gravity.TOP | Gravity.RIGHT);
         animatedButton = icon(R.drawable.v_animated_webp_x24, R.string.reader_keys_animated_control,
                 () -> { animatedMode = !animatedMode; refresh(); });
         animatedButton.setId(R.id.reader_keys_animated_control);
         floatingButton(root, animatedButton, Gravity.TOP | Gravity.RIGHT);
         ((FrameLayout.LayoutParams) animatedButton.getLayoutParams()).rightMargin = dp(68);
+        copyButton = icon(R.drawable.v_copy_x24, R.string.reader_keys_copy_apply, this::copyChanges);
+        copyButton.setId(R.id.reader_keys_copy_apply);
+        floatingButton(root, copyButton, Gravity.TOP | Gravity.RIGHT);
+        ((FrameLayout.LayoutParams) copyButton.getLayoutParams()).rightMargin = dp(124);
+        copyButton.setImageTintList(ColorStateList.valueOf(accent));
+        copyButton.setVisibility(View.GONE);
 
         MaterialCardView card = new MaterialCardView(requireContext());
         card.setId(R.id.reader_keys_bar);
@@ -149,12 +166,20 @@ public final class ReaderKeysFragment extends Fragment {
             FrameLayout.LayoutParams left = (FrameLayout.LayoutParams) backButton.getLayoutParams();
             left.leftMargin = dp(12) + safe.left; left.topMargin = dp(12) + safe.top;
             backButton.setLayoutParams(left);
+            FrameLayout.LayoutParams help = (FrameLayout.LayoutParams) helpButton.getLayoutParams();
+            help.leftMargin = dp(68) + safe.left; help.topMargin = dp(12) + safe.top;
+            helpButton.setLayoutParams(help);
+            helpInsets.set(safe.left, safe.top, safe.right, safe.bottom);
+            if (helpOverlay != null) helpOverlay.requestLayout();
             FrameLayout.LayoutParams right = (FrameLayout.LayoutParams) directionButton.getLayoutParams();
             right.rightMargin = dp(12) + safe.right; right.topMargin = dp(12) + safe.top;
             directionButton.setLayoutParams(right);
             FrameLayout.LayoutParams animated = (FrameLayout.LayoutParams) animatedButton.getLayoutParams();
             animated.rightMargin = dp(68) + safe.right; animated.topMargin = dp(12) + safe.top;
             animatedButton.setLayoutParams(animated);
+            FrameLayout.LayoutParams copy = (FrameLayout.LayoutParams) copyButton.getLayoutParams();
+            copy.rightMargin = dp(124) + safe.right; copy.topMargin = dp(12) + safe.top;
+            copyButton.setLayoutParams(copy);
             FrameLayout.LayoutParams bottom = (FrameLayout.LayoutParams) bottomBar.getLayoutParams();
             bottom.setMargins(dp(16) + safe.left, 0, dp(16) + safe.right, dp(16) + safe.bottom);
             bottomBar.setLayoutParams(bottom);
@@ -184,15 +209,18 @@ public final class ReaderKeysFragment extends Fragment {
         }
         back = new OnBackPressedCallback(false) {
             @Override public void handleOnBackPressed() {
+                if (helpOverlay != null) { hideHelp(); return; }
                 guard(() -> { setEnabled(false); requireActivity().getOnBackPressedDispatcher().onBackPressed(); });
             }
         };
         requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(), back);
         ViewCompat.requestApplyInsets(view);
         refresh();
+        if (state != null && state.getBoolean("helpVisible")) toggleHelp();
     }
 
     @Override public void onDestroyView() {
+        hideHelp();
         ViewCompat.setOnApplyWindowInsetsListener(requireView(), null);
         Window window = requireActivity().getWindow();
         if (systemUi != null) {
@@ -207,7 +235,7 @@ public final class ReaderKeysFragment extends Fragment {
             activity.getSupportActionBar().setShowHideAnimationEnabled(true);
         }
         zones = null; profileButton = null; saveButton = null; directionButton = null;
-        animatedButton = null;
+        animatedButton = null; helpButton = null; copyButton = null;
         bottomBar = null; backButton = null; moreButton = null; back = null;
         super.onDestroyView();
     }
@@ -215,9 +243,11 @@ public final class ReaderKeysFragment extends Fragment {
     @Override public void onSaveInstanceState(@NonNull Bundle state) {
         super.onSaveInstanceState(state);
         if (draft != null) state.putString("draft", draft.toJson().toString());
+        if (copyBaseline != null) state.putString("copyBaseline", copyBaseline.toJson().toString());
         state.putInt("region", region);
         state.putInt("direction", direction);
         state.putBoolean("animatedMode", animatedMode);
+        state.putBoolean("helpVisible", helpOverlay != null);
     }
 
     private boolean dirty() { return !draft.toJson().toString().equals(profiles.active().toJson().toString()); }
@@ -233,6 +263,7 @@ public final class ReaderKeysFragment extends Fragment {
         profileButton.setText(profileName(profiles.selected) + (changed ? " *" : "") + " ▾");
         profileButton.setContentDescription(getString(R.string.reader_keys_current_profile, profileName(profiles.selected)));
         saveButton.setImageTintList(ColorStateList.valueOf(changed ? accent : secondary));
+        copyButton.setVisibility(draft.hasKeyChanges(copyBaseline, direction, animatedMode) ? View.VISIBLE : View.GONE);
         animatedButton.setSelected(animatedMode);
         animatedButton.setImageTintList(ColorStateList.valueOf(animatedMode ? accent : foreground));
         String modeDescription = getString(animatedMode ? R.string.reader_keys_edit_normal : R.string.reader_keys_edit_animated);
@@ -242,22 +273,22 @@ public final class ReaderKeysFragment extends Fragment {
         switch (direction) {
             case GalleryView.LAYOUT_RIGHT_TO_LEFT -> {
                 icon = R.drawable.v_arrow_left_x24;
-                label = R.string.settings_read_reading_direction_right_to_Left;
+                label = R.string.reader_keys_direction_right_to_left;
             }
             case GalleryView.LAYOUT_TOP_TO_BOTTOM -> {
                 icon = R.drawable.v_arrow_down_x24;
-                label = R.string.settings_read_reading_direction_top_to_bottom;
+                label = R.string.reader_keys_direction_top_to_bottom;
             }
             default -> {
                 icon = R.drawable.v_arrow_right_x24;
-                label = R.string.settings_read_reading_direction_left_to_right;
+                label = R.string.reader_keys_direction_left_to_right;
             }
         }
         directionButton.setImageResource(icon);
         String description = getString(R.string.reader_keys_edit_direction, getString(label));
         directionButton.setContentDescription(description);
         ViewCompat.setTooltipText(directionButton, description);
-        if (back != null) back.setEnabled(changed);
+        if (back != null) back.setEnabled(changed || helpOverlay != null);
         zones.accessibility.invalidateRoot();
         zones.invalidate();
     }
@@ -265,6 +296,49 @@ public final class ReaderKeysFragment extends Fragment {
     private void cycleDirection() {
         direction = (direction + 1) % ReaderKeyMap.DIRECTION_COUNT;
         refresh();
+    }
+
+    private void copyChanges() {
+        int copied = draft.copyKeyChangesToOtherModes(copyBaseline, direction, animatedMode);
+        refresh();
+        Toast.makeText(requireContext(), copied > 0 ? R.string.reader_keys_copy_applied
+                : R.string.reader_keys_copy_skipped, Toast.LENGTH_SHORT).show();
+    }
+
+    private void toggleHelp() {
+        if (helpOverlay != null) { hideHelp(); return; }
+        FrameLayout root = (FrameLayout) requireView();
+        helpOverlay = new HelpOverlay(requireContext());
+        helpOverlay.setId(R.id.reader_keys_help_overlay);
+        root.addView(helpOverlay, new FrameLayout.LayoutParams(-1, -1));
+        // Keep the question mark available to toggle the modal help layer.
+        helpButton.setElevation(dp(10));
+        helpButton.setAlpha(1f);
+        helpButton.setSelected(true);
+        helpButton.setImageTintList(ColorStateList.valueOf(accent));
+        helpButton.setContentDescription(getString(R.string.reader_keys_close_help));
+        ViewCompat.setTooltipText(helpButton, getString(R.string.reader_keys_close_help));
+        zones.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        bottomBar.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        for (View button : new View[]{backButton, directionButton, animatedButton, copyButton})
+            button.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        back.setEnabled(true);
+    }
+
+    private void hideHelp() {
+        if (helpOverlay == null) return;
+        ((FrameLayout) helpOverlay.getParent()).removeView(helpOverlay);
+        helpOverlay = null;
+        helpButton.setElevation(dp(3));
+        helpButton.setAlpha(.5f);
+        helpButton.setSelected(false);
+        helpButton.setImageTintList(ColorStateList.valueOf(secondary));
+        helpButton.setContentDescription(getString(R.string.reader_keys_help));
+        ViewCompat.setTooltipText(helpButton, getString(R.string.reader_keys_help));
+        for (View view : new View[]{zones, bottomBar, backButton, directionButton, animatedButton, copyButton})
+            view.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_AUTO);
+        zones.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        if (back != null) back.setEnabled(dirty());
     }
 
     private String defaultLabel(int area, int gesture) {
@@ -405,6 +479,7 @@ public final class ReaderKeysFragment extends Fragment {
         new AlertDialog.Builder(requireContext()).setTitle(R.string.reader_keys_select_profile)
                 .setSingleChoiceItems(names, profiles.selected, (dialog, which) -> {
                     profiles.selected = which; profiles.save(); draft = profiles.active().copy();
+                    copyBaseline = draft.copy();
                     dialog.dismiss(); refresh();
                 }).setNegativeButton(android.R.string.cancel, null).show();
     }
@@ -413,7 +488,7 @@ public final class ReaderKeysFragment extends Fragment {
         ReaderKeyProfiles.Profile profile = copy ? draft.duplicate() : new ReaderKeyProfiles.Profile("");
         profiles.profiles.add(profile);
         profiles.selected = profiles.profiles.size() - 1;
-        profiles.save(); draft = profile.copy(); refresh();
+        profiles.save(); draft = profile.copy(); copyBaseline = draft.copy(); refresh();
     }
 
     private void manageProfile() {
@@ -432,7 +507,7 @@ public final class ReaderKeysFragment extends Fragment {
                                     .setPositiveButton(android.R.string.ok, (d, w) -> {
                                         profiles.profiles.remove(profiles.selected);
                                         profiles.selected = Math.min(profiles.selected, profiles.profiles.size() - 1);
-                                        profiles.save(); draft = profiles.active().copy(); refresh();
+                                        profiles.save(); draft = profiles.active().copy(); copyBaseline = draft.copy(); refresh();
                                     }).setNegativeButton(android.R.string.cancel, null).show();
                         }
                         case 3 -> { draft = ReaderKeyProfiles.recommended(draft.name); refresh(); }
@@ -456,7 +531,7 @@ public final class ReaderKeysFragment extends Fragment {
 
     private void saveDraft() {
         profiles.profiles.set(profiles.selected, draft.copy());
-        profiles.save(); refresh();
+        profiles.save(); copyBaseline = draft.copy(); refresh();
         Toast.makeText(requireContext(), R.string.reader_keys_saved, Toast.LENGTH_SHORT).show();
     }
 
@@ -465,7 +540,7 @@ public final class ReaderKeysFragment extends Fragment {
         new AlertDialog.Builder(requireContext()).setMessage(R.string.reader_keys_unsaved)
                 .setPositiveButton(R.string.reader_keys_save, (dialog, which) -> { saveDraft(); next.run(); })
                 .setNeutralButton(R.string.reader_keys_discard, (dialog, which) -> {
-                    draft = profiles.active().copy(); refresh(); next.run();
+                    draft = profiles.active().copy(); copyBaseline = draft.copy(); refresh(); next.run();
                 }).setNegativeButton(android.R.string.cancel, null).show();
     }
 
@@ -497,6 +572,142 @@ public final class ReaderKeysFragment extends Fragment {
         button.setAlpha(.5f);
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(dp(48), dp(48), gravity);
         params.setMargins(dp(12), dp(12), dp(12), 0); root.addView(button, params);
+    }
+
+    /** One modal layer allows every tooltip to stay visible without PopupWindow focus conflicts. */
+    private final class HelpOverlay extends FrameLayout {
+        private final List<HelpHint> hints = new ArrayList<>();
+        private final Paint connector = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        HelpOverlay(Context context) {
+            super(context);
+            setElevation(dp(8));
+            setBackgroundColor(ColorUtils.setAlphaComponent(background, 150));
+            setOnClickListener(v -> hideHelp());
+            setContentDescription(getString(R.string.reader_keys_close_help));
+            addButtonHint(backButton);
+            addButtonHint(helpButton);
+            addButtonHint(directionButton);
+            addButtonHint(animatedButton);
+            if (copyButton.getVisibility() == View.VISIBLE) addButtonHint(copyButton);
+            addHint(null, ACTION_TEXT_ANCHOR, getString(R.string.reader_keys_help_quick_tap));
+            addHint(null, ReaderTouchAreas.CENTER_BOTTOM_SPLIT, getString(R.string.reader_keys_help_resize));
+            addHint(profileButton, -1, getString(R.string.reader_keys_select_profile));
+            for (int id : new int[]{R.id.reader_keys_more, R.id.reader_keys_add, R.id.reader_keys_manage, R.id.reader_keys_save})
+                addButtonHint(requireView().findViewById(id));
+        }
+
+        private void addButtonHint(View button) { addHint(button, -1, button.getContentDescription()); }
+
+        private void addHint(@Nullable View anchor, int line, CharSequence text) {
+            TextView label = new AppCompatTextView(getContext());
+            label.setText(text);
+            label.setTextColor(foreground);
+            label.setTextSize(12);
+            label.setGravity(Gravity.CENTER);
+            label.setPadding(dp(8), dp(5), dp(8), dp(5));
+            label.setElevation(dp(2));
+            GradientDrawable bubble = new GradientDrawable();
+            bubble.setColor(surface);
+            bubble.setCornerRadius(dp(8));
+            bubble.setStroke(dp(1), ColorUtils.setAlphaComponent(foreground, 40));
+            label.setBackground(bubble);
+            label.setOnClickListener(v -> hideHelp());
+            label.setContentDescription(text + ". " + getString(R.string.reader_keys_close_help));
+            addView(label, new FrameLayout.LayoutParams(-2, -2));
+            hints.add(new HelpHint(label, anchor, line));
+        }
+
+        @Override protected void onMeasure(int widthSpec, int heightSpec) {
+            setMeasuredDimension(MeasureSpec.getSize(widthSpec), MeasureSpec.getSize(heightSpec));
+            int available = Math.max(1, getMeasuredWidth() - helpInsets.left - helpInsets.right - dp(16));
+            for (HelpHint hint : hints) hint.label.measure(
+                    MeasureSpec.makeMeasureSpec(Math.min(available, dp(hint.anchor == null ? 180 : 160)), MeasureSpec.AT_MOST),
+                    MeasureSpec.makeMeasureSpec(getMeasuredHeight(), MeasureSpec.AT_MOST));
+        }
+
+        @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
+            List<Rect> occupied = new ArrayList<>();
+            int minX = helpInsets.left + dp(8), maxX = getWidth() - helpInsets.right - dp(8);
+            int minY = backButton.getBottom() + dp(8), maxY = bottomBar.getTop() - dp(8);
+            for (HelpHint hint : hints) {
+                boolean below = hint.line == ReaderTouchAreas.CENTER_BOTTOM_SPLIT
+                        || (hint.anchor != null && hint.anchor.getParent() == getParent());
+                if (hint.line == ACTION_TEXT_ANCHOR) {
+                    RectF text = zones.actionTextBounds(ReaderKeyMap.LEFT_TOP);
+                    hint.x = text.right; hint.y = text.centerY();
+                } else if (hint.line >= 0) {
+                    float[] segment = zones.lineSegment(hint.line);
+                    hint.x = (segment[0] + segment[2]) / 2;
+                    hint.y = segment[1];
+                } else {
+                    Rect anchor = new Rect();
+                    hint.anchor.getDrawingRect(anchor);
+                    ((FrameLayout) getParent()).offsetDescendantRectToMyCoords(hint.anchor, anchor);
+                    hint.x = anchor.exactCenterX();
+                    hint.y = below ? anchor.bottom : anchor.top;
+                }
+                int width = hint.label.getMeasuredWidth(), height = hint.label.getMeasuredHeight();
+                int left = Math.max(minX, Math.min(maxX - width, Math.round(hint.x - width / 2f)));
+                int top = Math.max(minY, Math.min(maxY - height,
+                        Math.round(hint.y + (below ? dp(8) : -dp(8) - height))));
+                if (hint.line == ACTION_TEXT_ANCHOR) {
+                    left = Math.max(minX, Math.min(maxX - width, Math.round(hint.x + dp(12))));
+                    top = Math.max(minY, Math.min(maxY - height, Math.round(hint.y - height / 2f)));
+                }
+                Rect bounds = new Rect(left, top, left + width, top + height);
+                // Try the closest free row on either side, including when a line is near an edge.
+                List<Integer> rows = new ArrayList<>();
+                rows.add(top);
+                for (Rect previous : occupied) {
+                    rows.add(previous.top - height - dp(4));
+                    rows.add(previous.bottom + dp(4));
+                }
+                int bestDistance = Integer.MAX_VALUE;
+                for (int row : rows) {
+                    if (row < minY || row + height > maxY) continue;
+                    Rect candidate = new Rect(left, row, left + width, row + height);
+                    boolean overlaps = false;
+                    for (Rect previous : occupied) {
+                        Rect padded = new Rect(previous);
+                        padded.inset(-dp(3), -dp(3));
+                        if (Rect.intersects(candidate, padded)) { overlaps = true; break; }
+                    }
+                    int distance = Math.abs(row - top);
+                    // Keep each boundary explanation on its intended side whenever space permits.
+                    if (hint.line >= 0 && (below ? row < hint.y : row + height > hint.y)) distance += getHeight();
+                    if (!overlaps && distance < bestDistance) {
+                        bounds.set(candidate);
+                        bestDistance = distance;
+                    }
+                }
+                hint.label.layout(bounds.left, bounds.top, bounds.right, bounds.bottom);
+                occupied.add(bounds);
+            }
+        }
+
+        @Override protected void dispatchDraw(@NonNull Canvas canvas) {
+            connector.setColor(ColorUtils.setAlphaComponent(accent, 180));
+            connector.setStrokeWidth(dp(1));
+            for (HelpHint hint : hints) {
+                TextView label = hint.label;
+                float endX = Math.max(label.getLeft(), Math.min(label.getRight(), hint.x));
+                float endY = Math.max(label.getTop(), Math.min(label.getBottom(), hint.y));
+                canvas.drawLine(hint.x, hint.y, endX, endY, connector);
+                canvas.drawCircle(hint.x, hint.y, dp(2), connector);
+            }
+            super.dispatchDraw(canvas);
+        }
+
+        private final class HelpHint {
+            final TextView label;
+            final View anchor;
+            final int line;
+            float x, y;
+            HelpHint(TextView label, View anchor, int line) {
+                this.label = label; this.anchor = anchor; this.line = line;
+            }
+        }
     }
 
     private final class ZoneView extends View {
@@ -592,6 +803,23 @@ public final class ReaderKeysFragment extends Fragment {
         }
 
         private void drawActions(Canvas canvas, int area, RectF rect) {
+            ActionTextBlock block = actionTextBlock(area, rect);
+            canvas.save(); canvas.clipRect(rect);
+            canvas.translate(block.x, block.y);
+            block.layout.draw(canvas); canvas.restore();
+        }
+
+        private RectF actionTextBounds(int area) {
+            RectF rect = areaBounds(area);
+            ActionTextBlock block = actionTextBlock(area, rect);
+            float right = 0;
+            for (int line = 0; line < block.layout.getLineCount(); line++)
+                right = Math.max(right, block.layout.getLineRight(line));
+            return new RectF(block.x, Math.min(rect.bottom, block.y), Math.min(rect.right, block.x + right),
+                    Math.min(rect.bottom, block.y + block.layout.getHeight()));
+        }
+
+        private ActionTextBlock actionTextBlock(int area, RectF rect) {
             float verticalInset = Math.min(dp(12), rect.height() / 12f);
             float top = rect.top + verticalInset, bottom = rect.bottom - verticalInset;
             if (rect.bottom == getHeight() && bottomBar.getHeight() > 0) bottom = Math.min(bottom, bottomBar.getTop() - dp(12));
@@ -623,10 +851,11 @@ public final class ReaderKeysFragment extends Fragment {
                         .setLineSpacing(dp(4), 1).build();
                 if (layout.getHeight() <= bottom - top) break;
             }
-            canvas.save(); canvas.clipRect(rect);
-            canvas.translate(rect.left + inset, Math.max(top, top + (bottom - top - layout.getHeight()) / 2));
-            layout.draw(canvas); canvas.restore();
+            return new ActionTextBlock(layout, rect.left + inset,
+                    Math.max(top, top + (bottom - top - layout.getHeight()) / 2));
         }
+
+        private record ActionTextBlock(StaticLayout layout, float x, float y) { }
 
         private float[] lineSegment(int line) {
             float[] segment = draft.areas(direction).segment(line);

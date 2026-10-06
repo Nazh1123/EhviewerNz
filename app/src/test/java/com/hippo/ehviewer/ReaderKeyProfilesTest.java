@@ -32,6 +32,69 @@ public class ReaderKeyProfilesTest {
 
     @After public void cleanup() { ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre", null); }
 
+    @Test public void copiesOnlyChangedHorizontalKeysWithMirroredRegionsAndActions() {
+        for (int sourceDirection : new int[]{GalleryView.LAYOUT_LEFT_TO_RIGHT, GalleryView.LAYOUT_RIGHT_TO_LEFT}) {
+            for (boolean animated : new boolean[]{false, true}) {
+                ReaderKeyProfiles.Profile draft = new ReaderKeyProfiles.Profile("test");
+                draft.unifiedTouchAreas = false;
+                draft.setAreas(1, ReaderTouchAreas.recommended());
+                ReaderKeyProfiles.Profile baseline = draft.copy();
+                int[] source = draft.keys(sourceDirection, animated);
+                source[ReaderKeyMap.LEFT_TOP * 3 + ReaderKeyMap.TAP] = ReaderKeyMap.LEFT;
+                source[ReaderKeyMap.RIGHT_BOTTOM * 3 + ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.SAVE_NEXT;
+                source[ReaderKeyMap.CENTER_MENU * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
+                int opposite = 1 - sourceDirection;
+                draft.keys(opposite, false)[ReaderKeyMap.LEFT_BOTTOM * 3] = ReaderKeyMap.SAVE;
+                assertTrue(draft.hasKeyChanges(baseline, sourceDirection, animated));
+                assertEquals(9, draft.copyKeyChangesToOtherModes(baseline, sourceDirection, animated));
+                assertEquals(ReaderKeyMap.LEFT, draft.keys(sourceDirection, !animated)[0]);
+                for (boolean targetAnimated : new boolean[]{false, true}) {
+                    int[] target = draft.keys(opposite, targetAnimated);
+                    assertEquals(ReaderKeyMap.RIGHT, target[ReaderKeyMap.RIGHT_TOP * 3]);
+                    assertEquals(ReaderKeyMap.SAVE_NEXT, target[ReaderKeyMap.LEFT_BOTTOM * 3 + ReaderKeyMap.LONG_PRESS]);
+                    assertEquals(ReaderKeyMap.NONE, target[ReaderKeyMap.CENTER_MENU * 3 + ReaderKeyMap.DOUBLE_TAP]);
+                    assertEquals(ReaderKeyMap.LEGACY, target[ReaderKeyMap.LEFT_TOP * 3 + ReaderKeyMap.DOUBLE_TAP]);
+                    assertArrayEquals(new ReaderKeyProfiles.Profile("").keys(2), draft.keys(2, targetAnimated));
+                }
+                assertEquals(ReaderKeyMap.SAVE, draft.keys(opposite, false)[ReaderKeyMap.LEFT_BOTTOM * 3]);
+                assertArrayEquals(ReaderTouchAreas.recommended().positions(), draft.areas(1).positions(), 0f);
+                assertFalse(draft.hasKeyChanges(baseline, sourceDirection, animated));
+                assertFalse(draft.hasKeyChanges(baseline, sourceDirection, !animated));
+                // A subsequent edit copies just that key; untouched target customizations survive.
+                draft.keys(opposite, true)[ReaderKeyMap.CENTER_MENU * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.MENU;
+                source[0] = ReaderKeyMap.RIGHT;
+                assertEquals(3, draft.copyKeyChangesToOtherModes(baseline, sourceDirection, animated));
+                assertEquals(ReaderKeyMap.LEFT, draft.keys(opposite, true)[ReaderKeyMap.RIGHT_TOP * 3]);
+                assertEquals(ReaderKeyMap.MENU, draft.keys(opposite, true)[ReaderKeyMap.CENTER_MENU * 3 + ReaderKeyMap.DOUBLE_TAP]);
+            }
+        }
+    }
+
+    @Test public void previousPageSaveSkipsNormalTargetsAndVerticalCopyStaysVertical() {
+        for (int action : new int[]{ReaderKeyMap.SAVE_PREVIOUS, ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL}) {
+            ReaderKeyProfiles.Profile draft = new ReaderKeyProfiles.Profile("");
+            ReaderKeyProfiles.Profile baseline = draft.copy();
+            draft.keys(0, true)[ReaderKeyMap.LONG_PRESS] = action;
+            draft.keys(0, false)[ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.SAVE;
+            draft.keys(1, false)[ReaderKeyMap.RIGHT_TOP * 3 + ReaderKeyMap.LONG_PRESS] = ReaderKeyMap.SAVE_NEXT;
+            assertEquals(1, draft.copyKeyChangesToOtherModes(baseline, 0, true));
+            assertEquals(action, draft.keys(1, true)[ReaderKeyMap.RIGHT_TOP * 3 + ReaderKeyMap.LONG_PRESS]);
+            assertEquals(ReaderKeyMap.SAVE, draft.keys(0, false)[ReaderKeyMap.LONG_PRESS]);
+            assertEquals(ReaderKeyMap.SAVE_NEXT, draft.keys(1, false)[ReaderKeyMap.RIGHT_TOP * 3 + ReaderKeyMap.LONG_PRESS]);
+        }
+        for (boolean animated : new boolean[]{false, true}) {
+            ReaderKeyProfiles.Profile draft = new ReaderKeyProfiles.Profile("");
+            ReaderKeyProfiles.Profile baseline = draft.copy();
+            draft.keys(2, animated)[0] = ReaderKeyMap.RIGHT;
+            draft.keys(2, animated)[2] = ReaderKeyMap.SAVE_PREVIOUS;
+            assertEquals(animated ? 1 : 2, draft.copyKeyChangesToOtherModes(baseline, 2, animated));
+            assertEquals(ReaderKeyMap.RIGHT, draft.keys(2, !animated)[0]);
+            assertEquals(animated ? ReaderKeyMap.LEGACY : ReaderKeyMap.SAVE_PREVIOUS, draft.keys(2, !animated)[2]);
+            for (int direction : new int[]{0, 1}) for (boolean mode : new boolean[]{false, true})
+                assertArrayEquals(baseline.keys(direction, mode), draft.keys(direction, mode));
+        }
+    }
+
     @Test public void freshInstallCreatesDefaultAndRecommendedProfilesOnce() {
         ReaderKeyProfiles store = ReaderKeyProfiles.load();
         assertEquals(2, store.profiles.size());
