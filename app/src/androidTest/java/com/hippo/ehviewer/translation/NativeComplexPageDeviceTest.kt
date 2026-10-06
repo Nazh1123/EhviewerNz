@@ -93,7 +93,7 @@ class NativeComplexPageDeviceTest {
             }.use { translator ->
                 TranslationEngineFactory.create(context, models, options, translator,
                     retainNativeModels = { true }, resolvedOptions = { resolved() }, onRecognized = { lines ->
-                        if (options.source == TranslationLanguages.AUTO_SOURCE) sourceLanguage.observe(lines.map { it.text })
+                        if (options.source == TranslationLanguages.AUTO_SOURCE) sourceLanguage.observe(options, lines.map { it.text })
                         activePage?.put("ocrLines", JSONArray(lines.map { line ->
                             JSONObject().put("text", line.text).put("direction", line.direction)
                                 .put("quad", JSONArray(line.quad.map { JSONArray(listOf(it.x, it.y)) }))

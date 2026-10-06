@@ -12,12 +12,13 @@
         <item>Nächste Seite</item>
         <item>Vorherige Seite</item>
         <item>Lesemenü</item>
-        <item>Steuerung anzeigen / ausblenden</item>
+        <item>Steuerung anzeigen</item>
         <item>Zoom</item>
         <item>Bildmenü</item>
         <item>Aktuelles Bild speichern</item>
         <item>Aktuelles Bild speichern und nächste Seite</item>
         <item>Vorherige Seite speichern</item>
         <item>Vorherige Seite speichern (nur bei sequenzieller Wiedergabe)</item>
+        <item>Übersetzung ein-/ausschalten</item>
     </string-array>
 </resources>

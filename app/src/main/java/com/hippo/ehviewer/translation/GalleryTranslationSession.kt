@@ -49,11 +49,13 @@ internal class GalleryTranslationSession(
     private suspend fun identifySourceLanguage(options: TranslationOptions, texts: List<String>,
                                               request: TranslationPageRequest, epoch: Int) {
         if (options.source != TranslationLanguages.AUTO_SOURCE) return
-        val detected = sourceLanguage.observe(texts) {
+        val detected = sourceLanguage.observe(options, texts) {
             if (generation != epoch) throw SupersededTranslationPage()
             request.ensureRelevant()
         }
         if (detected != null) withContext(Dispatchers.Main) {
+            if (generation != epoch) throw SupersededTranslationPage()
+            request.ensureRelevant()
             android.widget.Toast.makeText(context, context.getString(R.string.translation_source_detected,
                 TranslationLanguages.displayName(detected, context.resources.configuration.locales[0]),
                 TranslationLanguages.displayName(options.target, context.resources.configuration.locales[0])),
@@ -508,10 +510,10 @@ internal class GalleryTranslationSession(
                                         },
                                         retainNativeModels = ::retainNativeModels,
                                         resolvedOptions = { resolvedOptions(options) },
-                                        onRecognized = { lines ->
+                                        onRecognized = if (options.source == TranslationLanguages.AUTO_SOURCE) { lines ->
                                             identifySourceLanguage(options, lines.map { it.text },
                                                 checkNotNull(currentCoroutineContext()[TranslationPageRequest]), epoch)
-                                        })
+                                        } else { _ -> })
                                     if (options.backend == TranslationBackend.LLM_API) checkNotNull(engine).warmUp()
                                 }
                                 if (request.force && !request.retryMissing) resultLock.withLock {

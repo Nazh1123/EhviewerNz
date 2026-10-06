@@ -171,13 +171,55 @@ class ReaderTranslationControllerTest {
             reader.showMenu(0)
             val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
             val items = dialog.listView.adapter
-            assertEquals(if (BuildConfig.DEBUG) 4 else 3, items.count)
+            assertEquals(if (BuildConfig.DEBUG) 5 else 4, items.count)
             val app = org.robolectric.RuntimeEnvironment.getApplication()
             assertEquals(app.getString(R.string.translation_show), items.getItem(0).toString())
             assertEquals(app.getString(R.string.translation_retry), items.getItem(1).toString())
             assertEquals(app.getString(R.string.translation_full_gallery), items.getItem(2).toString())
-            if (BuildConfig.DEBUG) assertEquals(app.getString(R.string.translation_timings), items.getItem(3).toString())
+            assertEquals(app.getString(R.string.translation_source), items.getItem(3).toString())
+            if (BuildConfig.DEBUG) assertEquals(app.getString(R.string.translation_timings), items.getItem(4).toString())
             dialog.dismiss()
+        }
+    }
+    @Test fun sourceMenuSavesSelectionAndRestartsActiveFullGalleryTranslation() {
+        withReaderUi { reader, _, button, panel ->
+            reader.session.settings.save(reader.session.settings.read().copy(source = "auto"))
+            reader.onPageChanged(0)
+            reader.toggle()
+            reader.session.translateFullGallery()
+            val previous = ReflectionHelpers.callInstanceMethod<TranslationPageRequest>(reader.session, "nextRequest")
+            reader.showMenu(0)
+            val menu = org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+            menu.listView.performItemClick(null, 3, 3)
+            val languages = org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+            assertEquals(TranslationLanguages.sources.size, languages.listView.count)
+            assertEquals(panel.context.getString(R.string.translation_source_auto), languages.listView.adapter.getItem(0))
+            assertEquals(0, languages.listView.checkedItemPosition)
+            val english = TranslationLanguages.sources.indexOf("en")
+            languages.listView.performItemClick(null, english, english.toLong())
+            assertTrue(previous.isObsolete)
+            assertEquals("en", reader.session.settings.read().source)
+            assertEquals("en", reader.session.activeOptions.source)
+            assertTrue(reader.session.fullGallery)
+            assertTrue(reader.session.enabled)
+            assertTrue(button.isSelected)
+            reader.toggle()
+            assertFalse(reader.session.enabled)
+            assertFalse(button.isSelected)
+            assertEquals(View.GONE, panel.visibility)
+        }
+    }
+
+    @Test fun selectingSourceWhileDisabledDoesNotStartTranslation() {
+        withReader { reader, _ ->
+            reader.showMenu(0)
+            val menu = org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+            menu.listView.performItemClick(null, 3, 3)
+            val languages = org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+            val korean = TranslationLanguages.sources.indexOf("ko")
+            languages.listView.performItemClick(null, korean, korean.toLong())
+            assertEquals("ko", reader.session.settings.read().source)
+            assertFalse(reader.session.enabled)
         }
     }
     @Test fun apiConcurrentPagesHaveIndependentProgressAndOutOfOrderCompletion() {

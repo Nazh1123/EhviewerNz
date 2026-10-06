@@ -12,12 +12,13 @@
         <item>次のページ</item>
         <item>前のページ</item>
         <item>閲覧設定メニュー</item>
-        <item>操作パネルを表示／非表示</item>
+        <item>操作パネルを表示</item>
         <item>ズーム</item>
         <item>画像メニュー</item>
         <item>現在の画像を保存</item>
         <item>現在の画像を保存して次のページへ</item>
         <item>前のページを保存</item>
         <item>前のページを保存 (順次再生中のみ)</item>
+        <item>翻訳をオン／オフ</item>
     </string-array>
 </resources>

@@ -12,12 +12,13 @@
         <item>Next page</item>
         <item>Previous page</item>
         <item>Reader settings menu</item>
-        <item>Show / hide controls</item>
+        <item>Show controls</item>
         <item>Zoom</item>
         <item>Image menu</item>
         <item>Save current image</item>
         <item>Save current and go to next page</item>
         <item>Save previous page</item>
         <item>Save previous page (sequential playback only)</item>
+        <item>Enable / disable translation</item>
     </string-array>
 </resources>

@@ -1975,6 +1975,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     || isFinishing() || isDestroyed() || index != mCurrentIndex
                     || index < 0 || index >= mSize) return;
             switch (action) {
+                case ReaderKeyMap.TOGGLE_TRANSLATION -> {
+                    if (mTranslationController != null) mTranslationController.toggle();
+                }
                 case ReaderKeyMap.PAGE_MENU -> showPageDialog(index);
                 case ReaderKeyMap.SAVE -> saveImage(index, false, false, true);
                 case ReaderKeyMap.SAVE_NEXT -> saveImage(index, false, true, true, true);

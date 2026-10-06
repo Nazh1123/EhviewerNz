@@ -12,12 +12,13 @@
         <item>Página siguiente</item>
         <item>Página anterior</item>
         <item>Menú de lectura</item>
-        <item>Mostrar / ocultar controles</item>
+        <item>Mostrar controles</item>
         <item>Zoom</item>
         <item>Menú de imagen</item>
         <item>Guardar imagen actual</item>
         <item>Guardar actual y pasar a la siguiente página</item>
         <item>Guardar página anterior</item>
         <item>Guardar página anterior (solo en reproducción secuencial)</item>
+        <item>Activar / desactivar traducción</item>
     </string-array>
 </resources>

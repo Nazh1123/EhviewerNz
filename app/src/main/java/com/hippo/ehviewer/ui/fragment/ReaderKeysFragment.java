@@ -310,16 +310,24 @@ public final class ReaderKeysFragment extends Fragment {
                 .setItems(rows, (dialog, which) -> chooseAction(which)).show();
     }
     private void chooseAction(int gesture) {
-        int count = (animatedMode ? ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL : ReaderKeyMap.SAVE_PREVIOUS) + 2;
+        int count = ReaderKeyMap.TOGGLE_TRANSLATION + (animatedMode ? 2 : 1);
+        int[] values = new int[count];
         String[] labels = new String[count];
         labels[0] = defaultLabel(region, gesture);
-        for (int i = 1; i < count; i++) labels[i] = actionCaption(i - 1, gesture);
+        int row = 0;
+        for (int value = ReaderKeyMap.LEGACY; value <= ReaderKeyMap.TOGGLE_TRANSLATION; value++) {
+            if (!animatedMode && value == ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL) continue;
+            values[row] = value;
+            if (row > 0) labels[row] = actionCaption(value, gesture);
+            row++;
+        }
         int index = region * ReaderKeyMap.GESTURE_COUNT + gesture;
         int[] keys = draft.keys(direction, animatedMode);
-        int selected = keys[index] + 1;
+        int selected = -1;
+        for (int i = 0; i < count; i++) if (values[i] == keys[index]) selected = i;
         new AlertDialog.Builder(requireContext()).setTitle(gestures[gesture])
                 .setSingleChoiceItems(labels, selected, (dialog, which) -> {
-                    keys[index] = which - 1; dialog.dismiss(); refresh();
+                    keys[index] = values[which]; dialog.dismiss(); refresh();
                 }).setNegativeButton(android.R.string.cancel, null).show();
     }
     private PopupMenu showMore() {

@@ -78,6 +78,25 @@ public class ReaderKeySaveTest {
         ReflectionHelpers.setStaticField(Settings.class, "sContext", originalContext);
     }
 
+    @Test public void translationKeyTogglesTheReaderAndIgnoresAnObsoletePage() throws Exception {
+        android.widget.ImageButton button = new android.widget.ImageButton(activity);
+        com.hippo.ehviewer.translation.ReaderTranslationController translation =
+                new com.hippo.ehviewer.translation.ReaderTranslationController(activity, provider, button);
+        ReflectionHelpers.setField(activity, "mTranslationController", translation);
+        try {
+            translation.onPageChanged(2);
+            dispatch(ReaderKeyMap.TOGGLE_TRANSLATION, 2);
+            assertTrue(button.isSelected());
+            dispatch(ReaderKeyMap.TOGGLE_TRANSLATION, 1);
+            assertTrue(button.isSelected());
+            dispatch(ReaderKeyMap.TOGGLE_TRANSLATION, 2);
+            assertFalse(button.isSelected());
+        } finally {
+            translation.close();
+            com.hippo.ehviewer.translation.TranslationTasks.INSTANCE.stopAll();
+        }
+    }
+
     @Test public void savePreviousUsesExistingDestinationNoticeUndoAndDebounce() throws Exception {
         dispatch(ReaderKeyMap.SAVE_PREVIOUS, 2);
         assertEquals(1, provider.savedPage);

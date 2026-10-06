@@ -8,6 +8,7 @@ public final class ReaderKeyMap {
     public static final int LEFT = 1, RIGHT = 2, NEXT = 3, PREVIOUS = 4;
     public static final int MENU = 5, CONTROLS = 6, ZOOM = 7, PAGE_MENU = 8;
     public static final int SAVE = 9, SAVE_NEXT = 10, SAVE_PREVIOUS = 11, SAVE_PREVIOUS_SEQUENTIAL = 12;
+    public static final int TOGGLE_TRANSLATION = 13;
     public static final int TAP = 0, DOUBLE_TAP = 1, LONG_PRESS = 2;
     public static final int REGION_COUNT = 7, GESTURE_COUNT = 3;
     public static final int DIRECTION_COUNT = 3;
@@ -52,7 +53,7 @@ public final class ReaderKeyMap {
     }
 
     public static boolean valid(int action) {
-        return action >= LEGACY && action <= SAVE_PREVIOUS_SEQUENTIAL;
+        return action >= LEGACY && action <= TOGGLE_TRANSLATION;
     }
 
     public int action(int region, int gesture, int direction) {

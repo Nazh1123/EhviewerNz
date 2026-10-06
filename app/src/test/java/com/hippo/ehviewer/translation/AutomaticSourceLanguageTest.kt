@@ -24,6 +24,41 @@ class AutomaticSourceLanguageTest {
     private val auto = TranslationOptions(source = "auto", target = "fr")
     private val english = "I will go to school tomorrow and meet my friends."
 
+    @Test fun manualSourcesSkipIdentificationAndKeepTheConfiguredPromptLanguage() = runBlocking<Unit> {
+        val source = GallerySourceLanguage { fail("Manual sources must not identify OCR text"); null }
+        MockWebServer().use { server ->
+            for (language in TranslationLanguages.manualSources) {
+                val configured = auto.copy(source = language, backend = TranslationBackend.LLM_API,
+                    apiUrl = server.url("/v1/chat/completions").toString())
+                assertNull(source.observe(configured, listOf(english)) {
+                    fail("Manual sources must skip the detection step")
+                })
+                assertNull(source.language)
+                assertEquals(configured, source.options(configured))
+                val expected = "${TranslationLanguages.promptName(language)} text into French"
+                assertTrue(NativeTranslator.buildNumberedMessages(source.options(configured), listOf(english))
+                    .getJSONObject(0).getString("content").contains(expected))
+                server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"<|1|>Bonjour"}}]}"""))
+                ApiTranslator(source.options(configured)).use { it.translate(listOf(english)) }
+                val messages = JSONObject(server.takeRequest(1, TimeUnit.SECONDS)!!.body.readUtf8()).getJSONArray("messages")
+                assertTrue(messages.getJSONObject(0).getString("content").contains(expected))
+            }
+        }
+    }
+
+    @Test fun automaticDecisionCannotOverrideAManuallySelectedSource() = runBlocking<Unit> {
+        var calls = 0
+        val source = GallerySourceLanguage { calls++; SourceLanguageGuess("en", .95f) }
+        assertEquals("en", source.observe(auto, listOf(english)))
+        for (language in TranslationLanguages.manualSources) {
+            val configured = auto.copy(source = language)
+            assertNull(source.observe(configured, listOf(english)))
+            assertEquals(configured, source.options(configured))
+        }
+        assertEquals(1, calls)
+        assertEquals("en", source.options(auto).source)
+    }
+
     @Test fun confidenceAndScriptChecksRejectShortUnsupportedAndMixedText() {
         fun select(text: String, vararg guesses: Pair<String, Float>) = OcrSourceLanguageIdentifier.select(text,
             guesses.map { SourceLanguageGuess(it.first, it.second) })?.language
@@ -48,13 +83,13 @@ class AutomaticSourceLanguageTest {
             calls.incrementAndGet(); SourceLanguageGuess("en", .95f)
         }
         assertEquals("auto", first.options(auto).source)
-        assertEquals("en", first.observe(listOf(english)))
+        assertEquals("en", first.observe(auto, listOf(english)))
         assertEquals("en", first.options(auto).source)
-        assertNull(first.observe(listOf("다른 언어가 있어도 표시는 유지됩니다.")))
+        assertNull(first.observe(auto, listOf("다른 언어가 있어도 표시는 유지됩니다.")))
         assertEquals(1, calls.get())
         val reopened = GallerySourceLanguage { SourceLanguageGuess("ko", .95f) }
         assertNull(reopened.language)
-        assertEquals("ko", reopened.observe(listOf("새 모델로 다시 인식한 한국어 문장입니다.")))
+        assertEquals("ko", reopened.observe(auto, listOf("새 모델로 다시 인식한 한국어 문장입니다.")))
         assertEquals("ko", reopened.language)
         assertEquals("en", first.language)
         assertNull(GallerySourceLanguage().language)
@@ -76,12 +111,12 @@ class AutomaticSourceLanguageTest {
                 }
             }
         }
-        assertNull(source.observe(listOf("", "<UNK>")))
+        assertNull(source.observe(auto, listOf("", "<UNK>")))
         assertEquals(0, calls)
-        assertNull(source.observe(listOf("Hello")))
-        assertNull(source.observe(listOf("There")))
+        assertNull(source.observe(auto, listOf("Hello")))
+        assertNull(source.observe(auto, listOf("There")))
         assertEquals("", source.options(auto).sourceLanguageName())
-        assertEquals("en", source.observe(listOf(english)))
+        assertEquals("en", source.observe(auto, listOf(english)))
         assertEquals("English", source.options(auto).sourceLanguageName())
     }
 
@@ -89,7 +124,7 @@ class AutomaticSourceLanguageTest {
         val source = GallerySourceLanguage { SourceLanguageGuess("en", .99f) }
         var relevanceChecks = 0
         try {
-            source.observe(listOf(english)) {
+            source.observe(auto, listOf(english)) {
                 if (++relevanceChecks == 2) throw CancellationException("Page superseded")
             }
             fail("Obsolete OCR must stop")
@@ -103,7 +138,7 @@ class AutomaticSourceLanguageTest {
         val source = GallerySourceLanguage {
             calls.incrementAndGet(); delay(10); SourceLanguageGuess("ko", .9f)
         }
-        val decisions = List(3) { async { source.observe(listOf("오늘 친구들과 함께 학교에서 공부할 거예요.")) } }.awaitAll()
+        val decisions = List(3) { async { source.observe(auto, listOf("오늘 친구들과 함께 학교에서 공부할 거예요.")) } }.awaitAll()
         assertEquals(1, decisions.count { it != null })
         assertEquals(1, calls.get())
         assertEquals("ko", source.options(auto).source)
@@ -111,7 +146,7 @@ class AutomaticSourceLanguageTest {
 
     @Test fun resolvedApiPagesCanRunConcurrentlyWithoutRecreatingTheirBackend() = runBlocking<Unit> {
         val source = GallerySourceLanguage { SourceLanguageGuess("en", .99f) }
-        source.observe(listOf(english))
+        source.observe(auto, listOf(english))
         val entered = AtomicInteger()
         var created = 0
         val bothEntered = CompletableDeferred<Unit>()
@@ -162,7 +197,7 @@ class AutomaticSourceLanguageTest {
         translator.use {
             it.translate(listOf("短文"))
             assertEquals(listOf("auto"), created)
-            source.observe(listOf(english))
+            source.observe(auto, listOf(english))
             it.translate(listOf(english))
             it.translate(listOf(english))
             assertEquals(listOf("auto", "en"), created)
@@ -193,7 +228,7 @@ class AutomaticSourceLanguageTest {
                         recognize = { _, lines ->
                             lines[0].text = "I will go to school tomorrow"
                             lines[1].text = "and meet my friends."
-                            source.observe(lines.map { it.text })
+                            source.observe(configured, lines.map { it.text })
                         },
                         inpaint = { page, _, _ -> page.copy(Bitmap.Config.ARGB_8888, true) },
                         translator = it, cfg = configured.engineConfig(), release = {}, warm = {},

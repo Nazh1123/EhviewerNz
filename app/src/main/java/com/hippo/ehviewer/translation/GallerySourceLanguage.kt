@@ -58,19 +58,23 @@ internal class GallerySourceLanguage(
         if (configured.source == TranslationLanguages.AUTO_SOURCE && language != null) configured.copy(source = language!!)
         else configured
 
-    suspend fun observe(texts: List<String>, checkRelevant: () -> Unit = {}): String? = lock.withLock {
-        if (language != null) return@withLock null
-        val text = texts.map(TranslationOcrText::clean).filter(String::isNotBlank).joinToString("\n").take(2048)
-        if (text.isBlank()) return@withLock null
-        checkRelevant()
-        val guess = try { identify(text) }
-            catch (cancel: CancellationException) { throw cancel }
-            catch (_: Exception) { null }
-        checkRelevant()
-        if (guess == null || guess.language !in TranslationLanguages.detectedSources || !guess.confidence.isFinite() ||
-            guess.confidence !in .8f..1f)
-            return@withLock null
-        language = guess.language
-        guess.language
+    suspend fun observe(configured: TranslationOptions, texts: List<String>, checkRelevant: () -> Unit = {}): String? {
+        // Manual selection is authoritative: do not classify OCR or emit a detection decision.
+        if (configured.source != TranslationLanguages.AUTO_SOURCE) return null
+        return lock.withLock {
+            if (language != null) return@withLock null
+            val text = texts.map(TranslationOcrText::clean).filter(String::isNotBlank).joinToString("\n").take(2048)
+            if (text.isBlank()) return@withLock null
+            checkRelevant()
+            val guess = try { identify(text) }
+                catch (cancel: CancellationException) { throw cancel }
+                catch (_: Exception) { null }
+            checkRelevant()
+            if (guess == null || guess.language !in TranslationLanguages.detectedSources || !guess.confidence.isFinite() ||
+                guess.confidence !in .8f..1f)
+                return@withLock null
+            language = guess.language
+            guess.language
+        }
     }
 }

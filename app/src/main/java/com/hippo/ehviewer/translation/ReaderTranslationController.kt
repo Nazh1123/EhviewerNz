@@ -57,7 +57,7 @@ class ReaderTranslationController @JvmOverloads constructor(
     init {
         session.attach(observer)
         button.setImageResource(R.drawable.v_translate_x24)
-        button.setOnClickListener { if (enabled) disable() else enable() }
+        button.setOnClickListener { toggle() }
         button.setOnLongClickListener { showMenu(current); true }
         progressPanel?.let { panel ->
             panel.setOnClickListener {
@@ -130,6 +130,11 @@ class ReaderTranslationController @JvmOverloads constructor(
 
     fun resume() {
         if (!closed) session.setBrowsing(true)
+    }
+
+    fun toggle() {
+        if (closed) return
+        if (enabled) disable() else enable()
     }
 
     private fun enable() {
@@ -221,15 +226,16 @@ class ReaderTranslationController @JvmOverloads constructor(
                 activity.getString(if (enabled) R.string.translation_hide else R.string.translation_show),
                 activity.getString(if (partial) R.string.translation_retry_missing else R.string.translation_retry),
                 activity.getString(if (session.fullGallery) R.string.translation_stop_full else R.string.translation_full_gallery),
+                activity.getString(R.string.translation_source),
             ) + (if (BuildConfig.DEBUG) listOf(activity.getString(R.string.translation_timings)) else emptyList()) +
                 (if (needsModels) listOf(activity.getString(R.string.translation_settings)) else emptyList()))
                 .toTypedArray()) { _, which ->
-                if (needsModels && which == (if (BuildConfig.DEBUG) 4 else 3)) {
+                if (needsModels && which == (if (BuildConfig.DEBUG) 5 else 4)) {
                     showSettings()
                     return@setItems
                 }
                 when (which) {
-                    0 -> if (enabled) disable() else enable()
+                    0 -> toggle()
                     1 -> {
                         if (partial) {
                             enable()
@@ -242,7 +248,8 @@ class ReaderTranslationController @JvmOverloads constructor(
                             session.enqueue(page, true)
                         }
                     }
-                    3 -> {
+                    3 -> showSourceLanguage()
+                    4 -> {
                         val stats = timings[page]
                         val message = if (stats == null) activity.getString(R.string.translation_timings_unavailable)
                         else activity.getString(R.string.translation_timings_report,
@@ -260,6 +267,32 @@ class ReaderTranslationController @JvmOverloads constructor(
                     }
                 }
             }.show()
+    }
+
+    private fun showSourceLanguage() {
+        val configured = session.settings.read()
+        val languages = TranslationLanguages.sources
+        val locale = activity.resources.configuration.locales[0]
+        val labels = languages.map {
+            if (it == TranslationLanguages.AUTO_SOURCE) activity.getString(R.string.translation_source_auto)
+            else TranslationLanguages.displayName(it, locale)
+        }.toTypedArray()
+        AlertDialog.Builder(activity).setTitle(R.string.translation_source)
+            .setSingleChoiceItems(labels, languages.indexOf(configured.source)) { dialog, which ->
+                val source = languages[which]
+                val currentOptions = session.settings.read()
+                if (source != currentOptions.source) {
+                    val wasEnabled = enabled
+                    val wasFullGallery = session.fullGallery
+                    disable()
+                    session.settings.save(currentOptions.copy(source = source))
+                    if (wasEnabled) {
+                        enable()
+                        if (wasFullGallery && enabled) session.translateFullGallery()
+                    }
+                }
+                dialog.dismiss()
+            }.setNegativeButton(android.R.string.cancel, null).show()
     }
 
     private fun showSettings() {

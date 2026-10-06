@@ -12,12 +12,13 @@
         <item>下一頁</item>
         <item>上一頁</item>
         <item>閱讀設定選單</item>
-        <item>顯示／隱藏控制列</item>
+        <item>顯示控制列</item>
         <item>縮放圖片</item>
         <item>圖片選單</item>
         <item>儲存目前圖片</item>
         <item>儲存目前並下一頁</item>
         <item>儲存上一頁</item>
         <item>儲存上一頁 (僅順序播放時)</item>
+        <item>開啟/關閉翻譯</item>
     </string-array>
 </resources>

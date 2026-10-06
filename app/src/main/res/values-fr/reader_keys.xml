@@ -12,12 +12,13 @@
         <item>Page suivante</item>
         <item>Page précédente</item>
         <item>Menu de lecture</item>
-        <item>Afficher / masquer les commandes</item>
+        <item>Afficher les commandes</item>
         <item>Zoom</item>
         <item>Menu de l’image</item>
         <item>Enregistrer l’image actuelle</item>
         <item>Enregistrer l’image actuelle puis page suivante</item>
         <item>Enregistrer la page précédente</item>
         <item>Enregistrer la page précédente (lecture séquentielle uniquement)</item>
+        <item>Activer / désactiver la traduction</item>
     </string-array>
 </resources>

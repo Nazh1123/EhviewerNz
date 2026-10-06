@@ -12,12 +12,13 @@
         <item>다음 페이지</item>
         <item>이전 페이지</item>
         <item>읽기 설정 메뉴</item>
-        <item>컨트롤 표시 / 숨기기</item>
+        <item>컨트롤 표시</item>
         <item>확대 / 축소</item>
         <item>이미지 메뉴</item>
         <item>현재 이미지 저장</item>
         <item>현재 이미지 저장 후 다음 페이지</item>
         <item>이전 페이지 저장</item>
         <item>이전 페이지 저장 (순차 재생 중에만)</item>
+        <item>번역 켜기 / 끄기</item>
     </string-array>
 </resources>
