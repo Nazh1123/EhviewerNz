@@ -9,7 +9,7 @@ EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_C
 | :--- | :---: | :---: |
 | 发布分支:|[BiLi_PC_Gamer](https://github.com/Nazh1123/EhviewerNz)|<img align="center" src="https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fapi.github.com%2Frepos%2FNazh1123%2FEhviewerNz%2Fcommits%2FBiLi_PC_Gamer&amp;search=%22committer%22%5Cs*%3A%5Cs*%5C%7B%5B%5E%7D%5D*%22date%22%5Cs*%3A%5Cs*%22(%5B0-9%5D%7B4%7D-%5B0-9%5D%7B2%7D-%5B0-9%5D%7B2%7D)&amp;replace=%241&amp;label=last%20commit" alt="最近提交日期"> |
 | 开发分支:|[Dev_Test](https://github.com/Nazh1123/EhviewerNz/tree/Dev_Test)|<img align="center" src="https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fapi.github.com%2Frepos%2FNazh1123%2FEhviewerNz%2Fcommits%2FDev_Test&amp;search=%22committer%22%5Cs*%3A%5Cs*%5C%7B%5B%5E%7D%5D*%22date%22%5Cs*%3A%5Cs*%22(%5B0-9%5D%7B4%7D-%5B0-9%5D%7B2%7D-%5B0-9%5D%7B2%7D)&amp;replace=%241&amp;label=last%20commit" alt="最近提交日期"> |
-| 最新发布:|2026-09-28|<a href="https://github.com/Nazh1123/EhviewerNz/releases/latest"><img align="center" src="https://img.shields.io/github/release/Nazh1123/EhviewerNz?label=latest%20release" alt="Latest release"></a> |
+| 最新发布:|2026-10-05|<a href="https://github.com/Nazh1123/EhviewerNz/releases/latest"><img align="center" src="https://img.shields.io/github/release/Nazh1123/EhviewerNz?label=latest%20release" alt="Latest release"></a> |
 ||||
 
 ## 主要功能
