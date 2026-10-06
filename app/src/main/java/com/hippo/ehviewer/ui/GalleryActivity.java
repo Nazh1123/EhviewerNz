@@ -1940,7 +1940,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         clearOrientationSwipeGesture();
         mReaderOrientationSwipe = profile.orientationSwipe;
         mGalleryView.setReaderKeyMap(profile.map());
-        mGalleryView.setAnimatedReaderKeysEnabled(Settings.getExperimentalAnimatedWebpEnabled());
     }
 
     private void chooseReaderKeyProfile() {
@@ -3172,6 +3171,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpSeeking = false;
         mAnimatedWebpSeekAwaitingFrame = false;
         clearAnimatedWebpTouchGesture();
+        mGalleryView.setAnimatedPageControlAreasEnabled(false);
         if (mAnimatedWebpPanel != null) mAnimatedWebpPanel.setVisibility(View.GONE);
 
         // Animated pages are normally excluded from GalleryProvider's LRU cache.
@@ -3184,9 +3184,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void updateAnimatedWebpUi() {
-        if (mGalleryView != null) {
-            mGalleryView.setAnimatedReaderKeysEnabled(Settings.getExperimentalAnimatedWebpEnabled());
-        }
         if (reloadCurrentAnimatedWebpForDecoderModeIfNeeded()) return;
 
         ImageTexture candidate = null;
@@ -3231,6 +3228,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         boolean visible = candidate != null;
         updatePageSliderTint(visible);
         if (mGalleryView != null) {
+            // Both mappings and playback gestures belong to the current controllable page.
             mGalleryView.setAnimatedPageControlAreasEnabled(visible);
         }
         if (mAnimatedWebpPanel != null) {
@@ -3381,6 +3379,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpSeeking = false;
         mAnimatedWebpSeekAwaitingFrame = false;
         clearAnimatedWebpTouchGesture();
+        if (mGalleryView != null) mGalleryView.setAnimatedPageControlAreasEnabled(false);
         if (mAnimatedWebpPanel != null) mAnimatedWebpPanel.setVisibility(View.GONE);
         mGalleryProvider.removeCache(mCurrentIndex);
         mGalleryProvider.notifyDataChanged(mCurrentIndex);

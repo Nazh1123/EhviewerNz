@@ -149,7 +149,6 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private boolean mFirstScroll = false;
     private boolean mSliderLongPressHandled = false;
     private volatile boolean mAnimatedPageControlAreasEnabled;
-    private volatile boolean mAnimatedReaderKeysEnabled;
     private volatile ReaderKeyMap mReaderKeyMap = new ReaderKeyMap((int[][]) null);
     private volatile boolean mPageSwipeInProgress;
 
@@ -579,12 +578,9 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         mReaderKeyMap = mapping == null ? new ReaderKeyMap((int[][]) null) : mapping;
     }
 
+    /** Selects animated bindings and playback gestures only for a controllable current page. */
     public void setAnimatedPageControlAreasEnabled(boolean enabled) {
         mAnimatedPageControlAreasEnabled = enabled;
-    }
-
-    public void setAnimatedReaderKeysEnabled(boolean enabled) {
-        mAnimatedReaderKeysEnabled = enabled;
     }
 
     public boolean isPageSwipeInProgress() {
@@ -634,7 +630,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private int readerKeyAction(float x, float y, int gesture) {
         ReaderKeyMap mapping = mReaderKeyMap;
         int region = mapping.areas(mLayoutMode).region(x, y, getWidth(), getHeight());
-        return mapping.resolvedAction(region, gesture, mLayoutMode, mAnimatedReaderKeysEnabled);
+        return mapping.resolvedAction(region, gesture, mLayoutMode, mAnimatedPageControlAreasEnabled);
     }
 
     @RenderThread
@@ -643,7 +639,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         ReaderKeyMap mapping = mReaderKeyMap;
         int direction = mLayoutMode;
         int region = mapping.areas(direction).region(x, y, getWidth(), getHeight());
-        int action = mapping.resolvedAction(region, gesture, direction, mAnimatedReaderKeysEnabled);
+        int action = mapping.resolvedAction(region, gesture, direction, mAnimatedPageControlAreasEnabled);
         int index = mLayoutManager.getInternalCurrentIndex();
         switch (action) {
             case ReaderKeyMap.NONE -> { }
@@ -659,7 +655,7 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             case ReaderKeyMap.ZOOM -> mLayoutManager.onDoubleTapConfirmed(x, y);
             case ReaderKeyMap.PAGE_MENU -> {
                 if (gesture == ReaderKeyMap.LONG_PRESS
-                        && mapping.action(region, gesture, direction, mAnimatedReaderKeysEnabled) == ReaderKeyMap.LEGACY) {
+                        && mapping.action(region, gesture, direction, mAnimatedPageControlAreasEnabled) == ReaderKeyMap.LEGACY) {
                     if (region > ReaderKeyMap.RIGHT_BOTTOM) index = mLayoutManager.getIndexUnder(x, y);
                     if (index != GalleryPageView.INVALID_INDEX && mListener != null) mListener.onLongPressPage(index);
                 } else if (mListener != null) mListener.onReaderKeyAction(action, index);

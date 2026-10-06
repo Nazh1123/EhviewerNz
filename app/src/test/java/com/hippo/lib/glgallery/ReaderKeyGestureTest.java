@@ -156,7 +156,7 @@ public class ReaderKeyGestureTest {
         assertEquals(0, layout.getInternalCurrentIndex());
     }
 
-    @Test public void animationModeSelectsIndependentKeysOutsideTakeoverAndOnStaticPages() {
+    @Test public void controllablePageSelectsAnimatedKeysAndLeavingItRestoresNormalKeys() {
         GalleryView.LayoutManager layout = attachLayout();
         int[] animated = normal.clone();
         normal[ReaderKeyMap.RIGHT_TOP * 3] = ReaderKeyMap.NEXT;
@@ -167,18 +167,51 @@ public class ReaderKeyGestureTest {
         layout.setCurrentIndex(2);
         single(900, 100);
         assertEquals(3, layout.getInternalCurrentIndex());
-        view.setAnimatedReaderKeysEnabled(true);
+        view.setAnimatedPageControlAreasEnabled(true);
         single(900, 100);
         assertEquals(2, layout.getInternalCurrentIndex());
         assertFalse(view.isDoubleTapRegion(900, 100));
-        view.setAnimatedPageControlAreasEnabled(true);
-        assertFalse(view.isDoubleTapRegion(900, 100));
         assertTrue(view.isDoubleTapRegion(900, 900));
         view.setAnimatedPageControlAreasEnabled(false);
-        view.setAnimatedReaderKeysEnabled(false);
         single(900, 100);
         assertEquals(3, layout.getInternalCurrentIndex());
         assertTrue(view.isDoubleTapRegion(900, 100));
+    }
+
+    @Test public void centerBindingsRestoreForEveryGestureAfterLeavingAnimatedPage() {
+        attachLayout();
+        List<String> callbacks = new ArrayList<>();
+        GalleryView.Listener listener = (GalleryView.Listener) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class[]{GalleryView.Listener.class}, (proxy, method, args) -> {
+                    callbacks.add(method.getName());
+                    return method.getReturnType() == boolean.class ? false : null;
+                });
+        ReflectionHelpers.setField(view, "mListener", listener);
+        int[] animated = normal.clone();
+        for (int region = ReaderKeyMap.CENTER_TOP; region <= ReaderKeyMap.CENTER_BOTTOM; region++) {
+            for (int gesture = 0; gesture < ReaderKeyMap.GESTURE_COUNT; gesture++) {
+                normal[region * 3 + gesture] = ReaderKeyMap.MENU;
+                animated[region * 3 + gesture] = ReaderKeyMap.CONTROLS;
+            }
+        }
+        view.setReaderKeyMap(new ReaderKeyMap(new int[][]{normal, normal, normal},
+                new int[][]{animated, animated, animated}, null));
+        for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
+            setDirection(direction);
+            view.setAnimatedPageControlAreasEnabled(true);
+            single(500, 100);
+            assertEquals(Arrays.asList("onTapSliderArea"), callbacks);
+            callbacks.clear();
+            view.setAnimatedPageControlAreasEnabled(false);
+            for (int region = ReaderKeyMap.CENTER_TOP; region <= ReaderKeyMap.CENTER_BOTTOM; region++) {
+                float[] bounds = ReaderKeyMap.bounds(region);
+                for (int gesture = 0; gesture < ReaderKeyMap.GESTURE_COUNT; gesture++) {
+                    gesture(gesture, 500, (bounds[1] + bounds[3]) * 500);
+                    assertEquals(Arrays.asList("onTapMenuArea"), callbacks);
+                    callbacks.clear();
+                }
+            }
+        }
     }
 
     @Test public void defaultActionsAndGestureEligibilityFollowResizedAreas() {

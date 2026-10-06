@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.os.Looper;
 
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.ReaderKeyProfiles;
 import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.glgallery.GalleryView;
 import com.hippo.lib.glgallery.ReaderKeyMap;
@@ -224,6 +225,87 @@ public class AnimatedWebpGalleryPlaybackTest {
         ReflectionHelpers.setField(texture, "mControllableAnimation", true);
         textures.add(texture);
         return texture;
+    }
+
+    @Test
+    public void readerKeysFollowCurrentControllablePageInsteadOfGlobalAnimationSetting() {
+        Settings.putExperimentalAnimatedWebpEnabled(true);
+        ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
+            for (int region = ReaderKeyMap.CENTER_TOP; region <= ReaderKeyMap.CENTER_BOTTOM; region++) {
+                for (int gesture = 0; gesture < ReaderKeyMap.GESTURE_COUNT; gesture++) {
+                    profiles.active().keys(direction)[region * 3 + gesture] = ReaderKeyMap.NONE;
+                    profiles.active().keys(direction, true)[region * 3 + gesture] = ReaderKeyMap.MENU;
+                }
+            }
+        }
+        profiles.save();
+        GalleryView view = new GalleryView.Builder(RuntimeEnvironment.getApplication(), new GalleryView.Adapter() {
+            @Override public void onBind(GalleryPageView page, int index) { }
+            @Override public void onUnbind(GalleryPageView page, int index) { }
+            @Override public String getError() { return null; }
+            @Override public int size() { return 2; }
+        }).build();
+        view.bounds().set(0, 0, 1000, 1000);
+        ReflectionHelpers.callInstanceMethod(view, "attachLayoutManager");
+        Object layout = ReflectionHelpers.getField(view, "mLayoutManager");
+        GalleryPageView page = new GalleryPageView(null, 0, 0, 0, 0, 0);
+        ReflectionHelpers.setField(page, "mIndex", 0);
+        ReflectionHelpers.setField(layout, "mCurrent", page);
+        ReflectionHelpers.setField(activity, "mGalleryView", view);
+        ReflectionHelpers.setField(activity, "mLayoutMode", GalleryView.LAYOUT_LEFT_TO_RIGHT);
+        ReflectionHelpers.setField(activity, "mCurrentIndex", 0);
+
+        // Loading and static pages keep normal bindings even with animation enabled.
+        ReflectionHelpers.callInstanceMethod(activity, "applyReaderKeyProfile");
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpUi");
+        assertCenterKeys(view, false);
+        ImageTexture animated = texture();
+        page.setImage(animated);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpUi");
+        assertCenterKeys(view, true);
+        ReflectionHelpers.callInstanceMethod(activity, "applyReaderKeyProfile");
+        assertCenterKeys(view, true);
+
+        // A missing next page must clear the previous page's animation state.
+        ReflectionHelpers.setField(activity, "mCurrentIndex", 1);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpUi");
+        assertCenterKeys(view, false);
+        ReflectionHelpers.setField(activity, "mCurrentIndex", 0);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpUi");
+        assertCenterKeys(view, true);
+        ReflectionHelpers.setField(animated, "mControllableAnimation", false);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpUi");
+        assertCenterKeys(view, false);
+        ReflectionHelpers.setField(animated, "mControllableAnimation", true);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpUi");
+        assertCenterKeys(view, true);
+
+        ReflectionHelpers.setField(activity, "mLayoutMode", GalleryView.LAYOUT_TOP_TO_BOTTOM);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpUi");
+        assertCenterKeys(view, false);
+        ReflectionHelpers.setField(activity, "mLayoutMode", GalleryView.LAYOUT_LEFT_TO_RIGHT);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpUi");
+        assertCenterKeys(view, true);
+        Settings.putExperimentalAnimatedWebpEnabled(false);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpUi");
+        assertCenterKeys(view, false);
+    }
+
+    private void assertCenterKeys(GalleryView view, boolean animated) {
+        for (int region = ReaderKeyMap.CENTER_TOP; region <= ReaderKeyMap.CENTER_BOTTOM; region++) {
+            float[] bounds = ReaderKeyMap.bounds(region);
+            float y = (bounds[1] + bounds[3]) * 500;
+            assertEquals(animated, view.isDoubleTapRegion(500, y));
+            assertEquals(animated && region == ReaderKeyMap.CENTER_BOTTOM,
+                    view.isAnimatedPageControlArea(500, y));
+            for (int gesture = 0; gesture < ReaderKeyMap.GESTURE_COUNT; gesture++) {
+                int action = ReflectionHelpers.callInstanceMethod(view, "readerKeyAction",
+                        ClassParameter.from(float.class, 500f), ClassParameter.from(float.class, y),
+                        ClassParameter.from(int.class, gesture));
+                assertEquals(animated ? ReaderKeyMap.MENU : ReaderKeyMap.NONE, action);
+            }
+        }
     }
 
     @Test public void scrubbingUsesTakeoverUnionAndCurrentProfileInsteadOfLowerQuarter() {

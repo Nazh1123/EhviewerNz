@@ -329,6 +329,35 @@ public class ReaderKeysFragmentTest {
         assertEquals(ReaderKeyMap.TOGGLE_TRANSLATION, saved.map().action(0, ReaderKeyMap.LONG_PRESS, 0, true));
     }
 
+    @Test public void centerBindingsSaveIndependentlyInNormalAndAnimatedModes() {
+        for (int area = ReaderKeyMap.CENTER_TOP; area <= ReaderKeyMap.CENTER_BOTTOM; area++) {
+            ReflectionHelpers.setField(fragment, "region", area);
+            for (int gesture = 0; gesture < ReaderKeyMap.GESTURE_COUNT; gesture++) {
+                ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, gesture));
+                latest().getListView().performItemClick(null, ReaderKeyMap.MENU + 1, 0);
+            }
+        }
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        for (int area = ReaderKeyMap.CENTER_TOP; area <= ReaderKeyMap.CENTER_BOTTOM; area++) {
+            ReflectionHelpers.setField(fragment, "region", area);
+            for (int gesture = 0; gesture < ReaderKeyMap.GESTURE_COUNT; gesture++) {
+                ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, gesture));
+                latest().getListView().performItemClick(null, ReaderKeyMap.CONTROLS + 1, 0);
+            }
+        }
+        root.findViewById(R.id.reader_keys_save).performClick();
+        openEditor(); layout(360, 800);
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        for (int area = ReaderKeyMap.CENTER_TOP; area <= ReaderKeyMap.CENTER_BOTTOM; area++) {
+            for (int gesture = 0; gesture < ReaderKeyMap.GESTURE_COUNT; gesture++) {
+                assertEquals(ReaderKeyMap.MENU, draft.map().action(area, gesture, 0));
+                assertEquals(ReaderKeyMap.CONTROLS, draft.map().action(area, gesture, 0, true));
+                assertEquals(ReaderKeyMap.LEGACY, draft.map().action(area, gesture, 1));
+                assertEquals(ReaderKeyMap.LEGACY, draft.map().action(area, gesture, 1, true));
+            }
+        }
+    }
+
     @Test public void animationEditingKeepsNormalKeysAndModeAcrossRecreation() {
         ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.LONG_PRESS));
         assertEquals(ReaderKeyMap.TOGGLE_TRANSLATION + 1, latest().getListView().getCount());
