@@ -73,7 +73,7 @@ public class ReaderKeysFragmentTest {
     @Test public void boundaryTapEntersDecimalSizesAndSyncsOnlyDimensions() {
         android.view.MenuItem unified = unifiedItem();
         assertTrue(unified.isChecked());
-        assertEquals("触摸区域统一", unified.getTitle().toString());
+        assertEquals("触摸区域一致", unified.getTitle().toString());
         assertNull(root.findViewById(R.id.reader_keys_unified_areas));
         View zones = root.findViewById(R.id.reader_keys_canvas);
         sendTouch(zones, MotionEvent.ACTION_DOWN, zones.getWidth() / 3f, zones.getHeight() * .3f);
@@ -311,16 +311,36 @@ public class ReaderKeysFragmentTest {
         assertNotNull(latest().findViewById(R.id.reader_keys_boundary_input));
     }
 
+    @Test public void profileSwitchCanBeSavedInNormalAndAnimatedBindings() {
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.TAP));
+        int row = latest().getListView().getCount() - 1;
+        assertEquals("切换配置", latest().getListView().getAdapter().getItem(row));
+        latest().getListView().performItemClick(null, row, 0);
+        root.findViewById(R.id.reader_keys_animated_control).performClick();
+        ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.LONG_PRESS));
+        row = latest().getListView().getCount() - 1;
+        assertEquals("切换配置", latest().getListView().getAdapter().getItem(row));
+        latest().getListView().performItemClick(null, row, 0);
+        root.findViewById(R.id.reader_keys_save).performClick();
+        openEditor();
+        ReaderKeyProfiles.Profile saved = ReaderKeyProfiles.load().active();
+        assertEquals(ReaderKeyMap.SWITCH_PROFILE, saved.map().action(0, ReaderKeyMap.TAP, 0));
+        assertEquals(ReaderKeyMap.SWITCH_PROFILE, saved.map().action(0, ReaderKeyMap.LONG_PRESS, 0, true));
+        ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
+        assertEquals(ReaderKeyMap.SWITCH_PROFILE, draft.keys(0)[0]);
+        assertEquals(ReaderKeyMap.SWITCH_PROFILE, draft.keys(0, true)[2]);
+    }
+
     @Test public void translationToggleCanBeSavedInNormalAndAnimatedBindings() {
         ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.TAP));
-        int normalRow = latest().getListView().getCount() - 1;
+        int normalRow = ReaderKeyMap.TOGGLE_TRANSLATION;
         assertEquals("开启/关闭翻译", latest().getListView().getAdapter().getItem(normalRow));
         latest().getListView().performItemClick(null, normalRow, 0);
         ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
         assertEquals(ReaderKeyMap.TOGGLE_TRANSLATION, draft.keys(0)[0]);
         root.findViewById(R.id.reader_keys_animated_control).performClick();
         ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.LONG_PRESS));
-        int animatedRow = latest().getListView().getCount() - 1;
+        int animatedRow = ReaderKeyMap.TOGGLE_TRANSLATION + 1;
         assertEquals("开启/关闭翻译", latest().getListView().getAdapter().getItem(animatedRow));
         latest().getListView().performItemClick(null, animatedRow, 0);
         root.findViewById(R.id.reader_keys_save).performClick();
@@ -360,7 +380,7 @@ public class ReaderKeysFragmentTest {
 
     @Test public void animationEditingKeepsNormalKeysAndModeAcrossRecreation() {
         ReflectionHelpers.callInstanceMethod(fragment, "chooseAction", ReflectionHelpers.ClassParameter.from(int.class, ReaderKeyMap.LONG_PRESS));
-        assertEquals(ReaderKeyMap.TOGGLE_TRANSLATION + 1, latest().getListView().getCount());
+        assertEquals(ReaderKeyMap.SWITCH_PROFILE + 1, latest().getListView().getCount());
         assertEquals("保存当前并下一页", latest().getListView().getAdapter().getItem(ReaderKeyMap.SAVE_NEXT + 1));
         assertEquals("保存上一页", latest().getListView().getAdapter().getItem(ReaderKeyMap.SAVE_PREVIOUS + 1));
         latest().dismiss();

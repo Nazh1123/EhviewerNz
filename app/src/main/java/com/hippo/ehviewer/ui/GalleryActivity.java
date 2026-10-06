@@ -1907,8 +1907,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void bindQuickReaderKeyProfile() {
         mQuickReaderKeyProfile.setOnClickListener(view -> {
-            ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
-            switchReaderKeyProfile(profiles, (profiles.selected + 1) % profiles.profiles.size());
+            cycleReaderKeyProfile();
             keepQuickSettingsVisible();
         });
         mQuickReaderKeyProfile.setOnLongClickListener(view -> {
@@ -1916,6 +1915,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             keepQuickSettingsVisible();
             return true;
         });
+    }
+
+    private void cycleReaderKeyProfile() {
+        ReaderKeyProfiles profiles = ReaderKeyProfiles.load();
+        switchReaderKeyProfile(profiles, (profiles.selected + 1) % profiles.profiles.size());
     }
 
     private void updateQuickReaderKeyProfile() {
@@ -1974,6 +1978,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     || isFinishing() || isDestroyed() || index != mCurrentIndex
                     || index < 0 || index >= mSize) return;
             switch (action) {
+                case ReaderKeyMap.SWITCH_PROFILE -> cycleReaderKeyProfile();
                 case ReaderKeyMap.TOGGLE_TRANSLATION -> {
                     if (mTranslationController != null) mTranslationController.toggle();
                 }

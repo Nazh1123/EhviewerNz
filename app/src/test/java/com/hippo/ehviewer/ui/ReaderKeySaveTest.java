@@ -78,6 +78,37 @@ public class ReaderKeySaveTest {
         ReflectionHelpers.setStaticField(Settings.class, "sContext", originalContext);
     }
 
+    @Test public void profileKeyCyclesAllProfilesAppliesBindingsAndWrapsToFirst() throws Exception {
+        com.hippo.ehviewer.ReaderKeyProfiles profiles = com.hippo.ehviewer.ReaderKeyProfiles.load();
+        profiles.profiles.add(new com.hippo.ehviewer.ReaderKeyProfiles.Profile("Custom"));
+        for (int i = 0; i < profiles.profiles.size(); i++) profiles.profiles.get(i).keys(0)[0] = i;
+        profiles.selected = 0;
+        profiles.save();
+        GalleryView view = new GalleryView.Builder(activity, new GalleryView.Adapter() {
+            @Override public void onBind(com.hippo.lib.glgallery.GalleryPageView page, int index) { }
+            @Override public void onUnbind(com.hippo.lib.glgallery.GalleryPageView page, int index) { }
+            @Override public String getError() { return null; }
+            @Override public int size() { return 5; }
+        }).build();
+        ReflectionHelpers.setField(activity, "mGalleryView", view);
+        android.widget.ImageButton quick = new android.widget.ImageButton(activity);
+        ReflectionHelpers.setField(activity, "mQuickReaderKeyProfile", quick);
+        for (int step = 1; step <= profiles.profiles.size(); step++) {
+            dispatch(ReaderKeyMap.SWITCH_PROFILE, 2);
+            int expected = step % profiles.profiles.size();
+            assertEquals(expected, com.hippo.ehviewer.ReaderKeyProfiles.load().selected);
+            ReaderKeyMap mapping = ReflectionHelpers.getField(view, "mReaderKeyMap");
+            assertEquals(expected, mapping.action(0, ReaderKeyMap.TAP, 0));
+            assertTrue(quick.getContentDescription().toString().contains((expected + 1) + ". "));
+        }
+        dispatch(ReaderKeyMap.SWITCH_PROFILE, 1);
+        assertEquals(0, com.hippo.ehviewer.ReaderKeyProfiles.load().selected);
+        profiles.profiles.subList(1, profiles.profiles.size()).clear();
+        profiles.save();
+        dispatch(ReaderKeyMap.SWITCH_PROFILE, 2);
+        assertEquals(0, com.hippo.ehviewer.ReaderKeyProfiles.load().selected);
+    }
+
     @Test public void translationKeyTogglesTheReaderAndIgnoresAnObsoletePage() throws Exception {
         android.widget.ImageButton button = new android.widget.ImageButton(activity);
         com.hippo.ehviewer.translation.ReaderTranslationController translation =

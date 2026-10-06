@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_unified_areas">Consistent touch areas</string>
     <string name="reader_keys_animated_control">Animation controls</string>
     <string name="reader_keys_edit_animated">Edit animation key bindings</string>
     <string name="reader_keys_edit_normal">Exit animation key bindings</string>
@@ -20,5 +21,6 @@
         <item>Save previous page</item>
         <item>Save previous page (sequential playback only)</item>
         <item>Enable / disable translation</item>
+        <item>Switch profile</item>
     </string-array>
 </resources>

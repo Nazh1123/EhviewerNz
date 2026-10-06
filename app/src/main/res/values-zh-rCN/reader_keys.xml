@@ -3,7 +3,7 @@
     <string name="reader_keys_title">键位</string>
     <string name="reader_keys_default_profile">默认</string>
     <string name="reader_keys_recommended_profile">推荐</string>
-    <string name="reader_keys_unified_areas">触摸区域统一</string>
+    <string name="reader_keys_unified_areas">触摸区域一致</string>
     <string name="reader_keys_unified_areas_hint">同步三种阅读方向的区域尺寸。开启时以当前方向的尺寸为准。</string>
     <string name="reader_keys_boundary_horizontal_percent">距屏幕左侧的百分比。拖动线条调整，单击线条输入数值。</string>
     <string name="reader_keys_boundary_vertical_percent">距屏幕顶部的百分比。拖动线条调整，单击线条输入数值。</string>
@@ -80,6 +80,7 @@
         <item>保存上一页</item>
         <item>保存上一页 (仅顺序播放时)</item>
         <item>开启/关闭翻译</item>
+        <item>切换配置</item>
     </string-array>
     <string-array name="reader_keys_swipe_choices">
         <item>关闭</item>

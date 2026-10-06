@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_unified_areas">Einheitliche Berührungsbereiche</string>
     <string name="reader_keys_animated_control">Animationssteuerung</string>
     <string name="reader_keys_edit_animated">Tasten im Animationsmodus einstellen</string>
     <string name="reader_keys_edit_normal">Tasteneinstellungen des Animationsmodus verlassen</string>
@@ -20,5 +21,6 @@
         <item>Vorherige Seite speichern</item>
         <item>Vorherige Seite speichern (nur bei sequenzieller Wiedergabe)</item>
         <item>Übersetzung ein-/ausschalten</item>
+        <item>Profil wechseln</item>
     </string-array>
 </resources>

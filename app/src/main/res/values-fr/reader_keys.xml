@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_unified_areas">Zones tactiles identiques</string>
     <string name="reader_keys_animated_control">Commandes d’animation</string>
     <string name="reader_keys_edit_animated">Configurer les touches du mode animation</string>
     <string name="reader_keys_edit_normal">Quitter les touches du mode animation</string>
@@ -20,5 +21,6 @@
         <item>Enregistrer la page précédente</item>
         <item>Enregistrer la page précédente (lecture séquentielle uniquement)</item>
         <item>Activer / désactiver la traduction</item>
+        <item>Changer de profil</item>
     </string-array>
 </resources>

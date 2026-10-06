@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_unified_areas">タッチ領域を同じにする</string>
     <string name="reader_keys_animated_control">アニメーション操作</string>
     <string name="reader_keys_edit_animated">アニメーションモードのキーを設定</string>
     <string name="reader_keys_edit_normal">アニメーションモードのキー設定を終了</string>
@@ -20,5 +21,6 @@
         <item>前のページを保存</item>
         <item>前のページを保存 (順次再生中のみ)</item>
         <item>翻訳をオン／オフ</item>
+        <item>設定を切り替え</item>
     </string-array>
 </resources>

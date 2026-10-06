@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_unified_areas">터치 영역 동일하게</string>
     <string name="reader_keys_animated_control">애니메이션 제어</string>
     <string name="reader_keys_edit_animated">애니메이션 모드 키 설정</string>
     <string name="reader_keys_edit_normal">애니메이션 모드 키 설정 종료</string>
@@ -20,5 +21,6 @@
         <item>이전 페이지 저장</item>
         <item>이전 페이지 저장 (순차 재생 중에만)</item>
         <item>번역 켜기 / 끄기</item>
+        <item>프로필 전환</item>
     </string-array>
 </resources>

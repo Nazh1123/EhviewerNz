@@ -310,12 +310,12 @@ public final class ReaderKeysFragment extends Fragment {
                 .setItems(rows, (dialog, which) -> chooseAction(which)).show();
     }
     private void chooseAction(int gesture) {
-        int count = ReaderKeyMap.TOGGLE_TRANSLATION + (animatedMode ? 2 : 1);
+        int count = ReaderKeyMap.SWITCH_PROFILE + (animatedMode ? 2 : 1);
         int[] values = new int[count];
         String[] labels = new String[count];
         labels[0] = defaultLabel(region, gesture);
         int row = 0;
-        for (int value = ReaderKeyMap.LEGACY; value <= ReaderKeyMap.TOGGLE_TRANSLATION; value++) {
+        for (int value = ReaderKeyMap.LEGACY; value <= ReaderKeyMap.SWITCH_PROFILE; value++) {
             if (!animatedMode && value == ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL) continue;
             values[row] = value;
             if (row > 0) labels[row] = actionCaption(value, gesture);

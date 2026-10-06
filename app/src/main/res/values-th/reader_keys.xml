@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="reader_keys_unified_areas">พื้นที่สัมผัสเหมือนกัน</string>
     <string name="reader_keys_animated_control">ควบคุมภาพเคลื่อนไหว</string>
     <string name="reader_keys_edit_animated">ตั้งค่าปุ่มในโหมดภาพเคลื่อนไหว</string>
     <string name="reader_keys_edit_normal">ออกจากการตั้งค่าปุ่มในโหมดภาพเคลื่อนไหว</string>
@@ -20,5 +21,6 @@
         <item>บันทึกหน้าก่อนหน้า</item>
         <item>บันทึกหน้าก่อนหน้า (เฉพาะขณะเล่นตามลำดับ)</item>
         <item>เปิด / ปิดการแปล</item>
+        <item>สลับโปรไฟล์</item>
     </string-array>
 </resources>

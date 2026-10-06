@@ -3,7 +3,7 @@
     <string name="reader_keys_title">Key bindings</string>
     <string name="reader_keys_default_profile">Default</string>
     <string name="reader_keys_recommended_profile">Recommended</string>
-    <string name="reader_keys_unified_areas">Unify touch areas</string>
+    <string name="reader_keys_unified_areas">Consistent touch areas</string>
     <string name="reader_keys_unified_areas_hint">Sync area sizes across reading directions. Enabling uses the current direction’s sizes.</string>
     <string name="reader_keys_boundary_horizontal_percent">Position from the left edge (%). Drag a line to resize, or tap it to enter a value.</string>
     <string name="reader_keys_boundary_vertical_percent">Position from the top edge (%). Drag a line to resize, or tap it to enter a value.</string>
@@ -80,6 +80,7 @@
         <item>Save previous page</item>
         <item>Save previous page (sequential playback only)</item>
         <item>Enable / disable translation</item>
+        <item>Switch profile</item>
     </string-array>
     <string-array name="reader_keys_swipe_choices">
         <item>Off</item>
