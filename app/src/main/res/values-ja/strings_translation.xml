@@ -95,7 +95,7 @@
     <string name="translation_cache_description">一時的な翻訳画像と未完了ページのキャッシュを削除します。保存済みの翻訳結果、原画像、モデルは保持されます。</string>
     <string name="translation_cache_size">一時翻訳画像のキャッシュ容量</string>
     <string name="translation_persist_downloaded">翻訳画像をギャラリーフォルダーに保存</string>
-    <string name="translation_persist_downloaded_help">ギャラリー内の _translated フォルダーにページごとに保存し、キャッシュ容量制限は適用しません。ダウンロード済みギャラリーとインポートしたローカルフォルダーに対応します。ダウンロードフォルダーがないギャラリーや圧縮ファイルには一時キャッシュを使用します。無効にしても既存の翻訳画像は使用できます。ダウンロード一覧でギャラリーを選択して翻訳結果を削除できます。\n\n各ページには翻訳結果を1つだけ保存します。モデルや言語を変更しても既存の結果を再利用します。更新するには、該当する結果を削除するか、このページを再翻訳してください。</string>
+    <string name="translation_persist_downloaded_help">ダウンロード済みギャラリーやインポートしたローカルフォルダーを翻訳する際、翻訳結果をページごとにギャラリーフォルダー内の _translated サブフォルダーに保存します。</string>
     <string name="translation_delete_results">翻訳結果を削除</string>
     <string name="translation_delete_results_confirm">選択した %1$d 件のギャラリーの保存済み翻訳画像と翻訳キャッシュをすべて削除しますか？原画像、ダウンロード履歴、モデルは保持されます。</string>
     <string name="translation_results_deleted">選択したギャラリーの翻訳結果を削除しました</string>
@@ -141,7 +141,7 @@
     <string name="translation_target">翻訳先言語</string>
     <string name="translation_inpaint">文字の背景を修復</string>
     <string name="translation_inpaint_help">AI で原文を除去して背景を修復します。無効にすると、より高速な単色塗りつぶしを使用します。</string>
-    <string name="translation_explanation">日本語漫画向けに最適化しています。OCR、文字除去、組版はスマートフォン上で行います。ローカルモデルのインポートや ML Kit 言語パックのダウンロード後はオフライン翻訳できます。API モードでは認識した文字を設定したサービスに送信します。クラウドサービスは有料の場合があります。\n\nリーダーの翻訳アイコンをタップして有効にします。再度タップすると原画像を表示して翻訳を停止します。長押しで現在のページの再翻訳、ギャラリー全体の翻訳、設定画面への移動ができます。バックグラウンドでも現在のキューを処理し続けます。ギャラリー全体の翻訳は通知から停止できます。速度と品質は端末とモデルによって異なります。メモリーが不足する場合は、より小さい量子化モデルか ML Kit を使用してください。</string>
+    <string name="translation_explanation">この処理の OCR による文字認識、文字除去、組版はすべて端末上で行います。ローカル AI モデルまたは ML Kit モードを使用すると、オフラインで翻訳できます。\n\nリーダー上部の翻訳アイコンをタップして翻訳を有効にします。再度タップすると原画像を表示して翻訳を停止します。進捗フローティングパネルをタップすると、現在のページの翻訳オーバーレイを表示または非表示にできます。長押しで現在のページの再翻訳、ギャラリー全体の翻訳、設定画面への移動ができます。バックグラウンドでも現在のキューを処理し続けますが、Android のシステム制限により処理速度が低下します。ギャラリー全体の翻訳は通知から停止できます。</string>
     <string name="translation_models_size">「モデル管理」で文字検出、OCR、文字除去モデルをダウンロードまたはインポートしてください。約 236 MiB です。アプリをアンインストールするとモデルも削除されます。</string>
     <string name="translation_mlkit_status">ML Kit 言語パックの状態</string>
     <string name="translation_mlkit_available">現在の翻訳元と翻訳先に必要な ML Kit オフラインパックは準備済みです</string>

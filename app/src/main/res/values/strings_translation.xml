@@ -107,7 +107,7 @@
     <string name="translation_cache_description">删除临时译图和未完成页缓存，保留已保存的翻译结果、原图及模型。</string>
     <string name="translation_cache_size">临时译图缓存容量</string>
     <string name="translation_persist_downloaded">保存译图到画廊目录</string>
-    <string name="translation_persist_downloaded_help">逐页保存到画廊目录的 _translated 文件夹，不受缓存容量限制。支持已下载画廊和导入的本地文件夹；尚无下载目录的画廊及压缩包使用临时缓存。关闭后已有译图仍可使用；可在下载列表中选中画廊删除翻译结果。\n\n每页只保留一份翻译结果，切换模型或语言仍复用已有译图；要更新结果，请清除对应结果或重新翻译此页。</string>
+    <string name="translation_persist_downloaded_help">在翻译已下载画廊或导入的本地文件夹时，逐页保存翻译结果到画廊目录的 _translated 子文件夹。</string>
     <string name="translation_delete_results">删除翻译结果</string>
     <string name="translation_delete_results_confirm">删除所选 %1$d 个画廊的全部持久化译图和译图缓存？原图、下载记录及模型会保留。</string>
     <string name="translation_results_deleted">所选画廊的翻译结果已删除</string>
@@ -153,7 +153,7 @@
     <string name="translation_target">目标语言</string>
     <string name="translation_inpaint">修复文字背景</string>
     <string name="translation_inpaint_help">使用 AI 去除原文并修复背景；关闭后使用更快的纯色填充。</string>
-    <string name="translation_explanation">针对日文漫画优化，文字识别、去字和排版均在手机上完成。导入本地模型或下载 ML Kit 语言包后可离线翻译；API 模式会将识别出的文字发送到所设服务，云端服务可能收费。\n\n轻触阅读器翻译图标开启，再次轻触显示原图并停止翻译；轻触进度浮窗可显示或隐藏当前页的译文遮罩。长按可重译当前页、翻译整本画廊或进入设置。切到后台后继续当前队列，完整画廊任务可通过通知停止。翻译速度和质量取决于设备与模型；内存不足时建议换用更小的量化模型或 ML Kit。</string>
+    <string name="translation_explanation">该流程的 OCR 文字识别、去字和排版均在本机上完成。使用本地 AI 模型 或 ML Kit 模式可离线翻译。\n\n轻触阅读器上方翻译图标开启，再次轻触显示原图并停止翻译；轻触进度浮窗可显示或隐藏当前页的译文遮罩；长按可重译当前页、翻译整本画廊或进入设置。切到后台后继续当前队列，但因 Android 系统限制而速度较慢。完整画廊任务可通过通知停止。</string>
     <string name="translation_models_size">在“模型管理”中下载或导入文字检测、OCR 和去字模型，约 236 MiB。卸载应用会删除模型。</string>
     <string name="translation_mlkit_status">ML Kit 语言包状态</string>
     <string name="translation_mlkit_available">当前源语言和目标语言所需的 ML Kit 离线包已就绪</string>

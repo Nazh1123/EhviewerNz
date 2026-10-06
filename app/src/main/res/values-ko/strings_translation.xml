@@ -95,7 +95,7 @@
     <string name="translation_cache_description">임시 번역 이미지와 미완료 페이지 캐시를 삭제합니다. 저장된 번역 결과, 원본 이미지 및 모델은 유지됩니다.</string>
     <string name="translation_cache_size">임시 번역 이미지 캐시 용량</string>
     <string name="translation_persist_downloaded">번역 이미지를 갤러리 폴더에 저장</string>
-    <string name="translation_persist_downloaded_help">갤러리의 _translated 하위 폴더에 페이지별로 저장하며 캐시 용량 제한을 받지 않습니다. 다운로드한 갤러리와 가져온 로컬 폴더를 지원합니다. 다운로드 폴더가 없는 갤러리와 압축 파일은 임시 캐시를 사용합니다. 이 옵션을 꺼도 기존 번역 이미지는 사용할 수 있습니다. 다운로드 목록에서 갤러리를 선택하여 번역 결과를 삭제할 수 있습니다.\n\n페이지마다 번역 결과 하나만 보관하며 모델이나 언어를 변경해도 기존 결과를 재사용합니다. 갱신하려면 해당 결과를 삭제하거나 이 페이지를 다시 번역하세요.</string>
+    <string name="translation_persist_downloaded_help">다운로드한 갤러리나 가져온 로컬 폴더를 번역할 때 번역 결과를 페이지별로 갤러리 폴더의 _translated 하위 폴더에 저장합니다.</string>
     <string name="translation_delete_results">번역 결과 삭제</string>
     <string name="translation_delete_results_confirm">선택한 갤러리 %1$d개의 저장된 번역 이미지와 번역 캐시를 모두 삭제할까요? 원본 이미지, 다운로드 기록 및 모델은 유지됩니다.</string>
     <string name="translation_results_deleted">선택한 갤러리의 번역 결과가 삭제되었습니다</string>
@@ -141,7 +141,7 @@
     <string name="translation_target">대상 언어</string>
     <string name="translation_inpaint">텍스트 배경 복원</string>
     <string name="translation_inpaint_help">AI로 원문을 제거하고 배경을 복원합니다. 끄면 더 빠른 단색 채우기를 사용합니다.</string>
-    <string name="translation_explanation">일본어 만화에 최적화되어 있습니다. OCR, 텍스트 제거 및 조판은 휴대폰에서 처리됩니다. 로컬 모델을 가져오거나 ML Kit 언어 팩을 다운로드하면 오프라인 번역이 가능합니다. API 모드는 인식된 텍스트를 설정한 서비스로 보내며 클라우드 서비스는 비용이 발생할 수 있습니다.\n\n리더의 번역 아이콘을 누르면 켜집니다. 다시 누르면 원본을 표시하고 번역을 중지합니다. 길게 누르면 현재 페이지 재번역, 갤러리 전체 번역 또는 설정으로 이동할 수 있습니다. 백그라운드에서도 현재 대기열을 계속 처리하며 전체 갤러리 작업은 알림에서 중지할 수 있습니다. 속도와 품질은 기기와 모델에 따라 달라집니다. 메모리가 부족하면 더 작은 양자화 모델이나 ML Kit를 사용하세요.</string>
+    <string name="translation_explanation">이 과정의 OCR 문자 인식, 텍스트 제거 및 조판은 모두 기기에서 처리됩니다. 로컬 AI 모델이나 ML Kit 모드를 사용하면 오프라인으로 번역할 수 있습니다.\n\n리더 상단의 번역 아이콘을 누르면 번역이 켜집니다. 다시 누르면 원본 이미지를 표시하고 번역을 중지합니다. 플로팅 진행 패널을 누르면 현재 페이지의 번역 오버레이를 표시하거나 숨길 수 있습니다. 길게 누르면 현재 페이지 재번역, 갤러리 전체 번역 또는 설정으로 이동할 수 있습니다. 백그라운드에서도 현재 대기열을 계속 처리하지만 Android 시스템 제한으로 인해 속도가 느려집니다. 갤러리 전체 번역 작업은 알림에서 중지할 수 있습니다.</string>
     <string name="translation_models_size">“모델 관리”에서 텍스트 감지, OCR 및 텍스트 제거 모델을 다운로드하거나 가져오세요. 약 236 MiB입니다. 앱을 삭제하면 모델도 삭제됩니다.</string>
     <string name="translation_mlkit_status">ML Kit 언어 팩 상태</string>
     <string name="translation_mlkit_available">현재 원본 및 대상 언어에 필요한 ML Kit 오프라인 팩이 준비되었습니다</string>

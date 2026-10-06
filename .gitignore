@@ -24,7 +24,7 @@ open_source_licenses.html
 /.vscode/settings.json
 *.ps1
 build_*.bat
-_build.bat
+_build*.bat
 *.lnk
 *.log
 /artifacts/
