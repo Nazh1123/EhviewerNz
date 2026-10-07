@@ -5,8 +5,11 @@
     <string name="gallery_read_updates">Read updates only</string>
     <string name="gallery_update_log">Update log</string>
     <string name="gallery_update_log_time">Updated at</string>
-    <string name="gallery_update_log_added">Added %1$d pages (new version)</string>
-    <string name="gallery_update_log_deleted">Deleted %1$d pages (old version)</string>
+    <string name="gallery_update_log_target">Target gallery: %1$d</string>
+    <string name="gallery_update_log_legacy_notice">This older record has no saved page identities, so its added pages cannot be opened.</string>
+    <string name="gallery_update_log_no_added">This update has no added pages to read.</string>
+    <string name="gallery_update_log_added">Added:</string>
+    <string name="gallery_update_log_deleted">Deleted:</string>
     <string name="gallery_update_log_none">None</string>
     <string name="gallery_update_log_incomplete">Page information is incomplete; additions and deletions cannot be determined reliably.</string>
     <string name="gallery_update_log_versions">View version chain history</string>

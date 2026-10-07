@@ -66,7 +66,7 @@ public class GalleryUpdateRecordStoreTest {
         stage(900, 800); assertTrue(store.complete(900, 800));
         for (long gid : new long[]{200, 300, 500, 900}) {
             store.getWritableDatabase().execSQL("UPDATE records SET completed_at=? WHERE gid=?",
-                    new Object[]{gid, gid});
+                    new Object[]{1000 - gid, gid});
         }
         assertEquals(List.of(500L, 300L, 200L), store.findHistory(500, 50).stream()
                 .map(record -> record.targetGid).toList());

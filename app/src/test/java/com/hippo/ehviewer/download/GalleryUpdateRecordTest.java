@@ -35,6 +35,7 @@ public class GalleryUpdateRecordTest {
         GalleryUpdateRecord record = GalleryUpdateRecord.compare(200, 100,
                 info("A", "B"), info("A", "X", "Y", "B", "Z")).withFirstGid(50);
         GalleryUpdateRecord saved = GalleryUpdateRecord.fromJson(200, 100, 123, 1, record.toJson());
+        assertTrue(saved.hasTokenSnapshot());
         SpiderInfo latest = info("Z", "B", "NEW", "X", "A");
         latest.gid = 400;
         assertEquals(50, saved.firstGid);
@@ -55,6 +56,7 @@ public class GalleryUpdateRecordTest {
     @Test public void legacyHistoryNeverAppliesOldPageNumbersToAnotherVersion() {
         GalleryUpdateRecord legacy = new GalleryUpdateRecord(200, 100, 123,
                 1, 2, true, new int[]{1}, new int[0], 0);
+        assertFalse(legacy.hasTokenSnapshot());
         SpiderInfo current = info("A", "X");
         current.gid = 300;
         assertArrayEquals(new int[0], legacy.resolveAddedPages(current));

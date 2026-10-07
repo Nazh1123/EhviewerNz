@@ -2594,6 +2594,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             mVersionProgressGeneration++;
             mUpdateGallery.setText(R.string.gallery_read_updates);
             mUpdateGallery.setEnabled(mGalleryUpdateRecord.complete
+                    && mGalleryUpdateRecord.hasTokenSnapshot()
                     && mGalleryUpdateRecord.addedPages.length > 0
                     && exactDownload != null && exactDownload.state == DownloadInfo.STATE_FINISH);
             mGalleryHistory.setText(R.string.gallery_update_log);
@@ -2754,7 +2755,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void readGalleryUpdates(GalleryUpdateRecord record) {
-        if (record == null || !record.complete || record.addedPages.length == 0
+        if (record == null || !record.complete || !record.hasTokenSnapshot() || record.addedPages.length == 0
                 || mGalleryDetail == null || getActivity2() == null) return;
         if (getEHContext() == null) return;
         DownloadInfo local = EhApplication.getDownloadManager(getEHContext()).getDownloadInfo(mGalleryDetail.gid);
@@ -2836,9 +2837,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                         .setPositiveButton(android.R.string.ok, null);
                 if (records.isEmpty()) builder.setMessage(R.string.gallery_update_history_empty);
                 else {
-                    String[] names = new String[records.size()];
+                    CharSequence[] names = new CharSequence[records.size()];
                     for (int i = 0; i < names.length; i++)
-                        names[i] = GalleryUpdateLogDialog.historyName(getEHContext(), records.get(i));
+                        names[i] = GalleryUpdateLogDialog.historyName(getEHContext(), records.get(i), i + 1);
                     builder.setItems(names, (dialog, index) -> {
                         dialog.dismiss();
                         showGalleryUpdateLog(records.get(index));

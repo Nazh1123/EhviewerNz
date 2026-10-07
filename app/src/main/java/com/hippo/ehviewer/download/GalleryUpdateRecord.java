@@ -59,6 +59,10 @@ public final class GalleryUpdateRecord {
 
     public boolean isFailure() { return !errorReason.isEmpty(); }
 
+    public boolean hasTokenSnapshot() {
+        return targetTokens.length > 0 && targetTokens.length == newPages;
+    }
+
     public static GalleryUpdateRecord failure(long targetGid, long sourceGid, long failedAt,
                                                String sourceTitle, String reason, long[] retained) {
         if (reason == null || reason.isBlank()) throw new IllegalArgumentException("Missing failure reason");

@@ -5,8 +5,11 @@
     <string name="gallery_read_updates">仅阅读更新</string>
     <string name="gallery_update_log">更新日志</string>
     <string name="gallery_update_log_time">更新时间</string>
-    <string name="gallery_update_log_added">新增 %1$d 页（新版页码）</string>
-    <string name="gallery_update_log_deleted">删除 %1$d 页（旧版页码）</string>
+    <string name="gallery_update_log_target">目标画廊：%1$d</string>
+    <string name="gallery_update_log_legacy_notice">该旧记录未保存页面标识，无法阅读当次新增页。</string>
+    <string name="gallery_update_log_no_added">当次更新没有新增页可供阅读。</string>
+    <string name="gallery_update_log_added">新增:</string>
+    <string name="gallery_update_log_deleted">删除:</string>
     <string name="gallery_update_log_none">无</string>
     <string name="gallery_update_log_incomplete">页面信息不完整，无法准确判断新增和删除页。</string>
     <string name="gallery_update_log_versions">查看版本链历史</string>
@@ -47,7 +50,7 @@
     <string name="gallery_update_error_interrupted">上次更新在下载完成前中断，请重试以继续更新。</string>
     <string name="gallery_update_error_tokens">画廊 GID %1$d 的页面 ptoken 信息不完整，无法找到可靠的阅读进度对应页面。</string>
     <string name="gallery_update_error_progress_save">迁移后的阅读进度无法保存，或磁盘与本地缓存中的进度校验失败。</string>
-    <string name="gallery_update_log_read">阅读当次刷新</string>
+    <string name="gallery_update_log_read">阅读当次更新</string>
     <string name="gallery_update_log_history">查看更新记录历史</string>
     <string name="gallery_update_history_local_notice">仅阅读当次新增页中仍存在于当前本地版本且可读取的图片，按当前页码排序。后续更新已删除或本地缺失的页会跳过；上方增减数量和页码仍表示当次原始更新。每条记录的阅读进度单独保存。</string>
     <string name="gallery_update_history_no_local">当前本地图集不可用或仍在更新中。</string>

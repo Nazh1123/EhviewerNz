@@ -72,14 +72,14 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
                 .withFirstGid(cursor.getLong(cursor.getColumnIndexOrThrow("first_gid")));
     }
 
-    /** Local history, newest first. Follow stored edges to include pre-migration records. */
+    /** Local history, descending by target gid then time. Include connected pre-migration records. */
     public synchronized List<GalleryUpdateRecord> findHistory(long gid, long firstGid) {
         record Link(long targetGid, long sourceGid, long firstGid) {}
         ArrayList<Link> all = new ArrayList<>();
         // Unrelated galleries may have large token snapshots; inspect only their chain keys.
         try (Cursor cursor = getReadableDatabase().query("records",
                 new String[]{"gid", "source_gid", "first_gid"}, null, null,
-                null, null, "completed_at DESC, gid DESC")) {
+                null, null, "gid DESC, completed_at DESC")) {
             while (cursor.moveToNext()) {
                 all.add(new Link(cursor.getLong(0), cursor.getLong(1), cursor.getLong(2)));
             }
