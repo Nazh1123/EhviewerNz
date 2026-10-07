@@ -63,6 +63,7 @@ internal class GalleryTranslationSession(
         }
     }
     private val models = TranslationModels(context)
+    private val ppModels = PpOcrModels(context)
     private val memoryPolicy = NativeMemoryPolicy(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val states = mutableMapOf<Int, Int>()
@@ -451,7 +452,7 @@ internal class GalleryTranslationSession(
                                 if (reuseResult()) return@withContext
                                 if (request.force) lookupKeys = results.lookupKeys(source, key)
                                 var resume = if (request.retryMissing) lookupKeys.firstNotNullOfOrNull { results.readResume(it) } else null
-                                if (modelsUnavailable || !models.ready() ||
+                                if (modelsUnavailable || !models.ready() || !ppModels.ready(pageOptions.source) ||
                                     options.backend == TranslationBackend.NATIVE_LLM &&
                                     options.source != TranslationLanguages.AUTO_SOURCE && !NativeModelStore(context).ready(options)) {
                                     modelsUnavailable = true
@@ -614,6 +615,13 @@ internal class GalleryTranslationSession(
                                 // Native work has returned safely; dispatch from the latest window next.
                             } catch (_: YieldTranslationTurn) {
                                 status(epoch, page, R.string.translation_waiting)
+                            } catch (_: MissingPpOcrModel) {
+                                modelsUnavailable = true
+                                modelsRequired(epoch, request)
+                                withContext(Dispatchers.Main) {
+                                    if (generation == epoch) android.widget.Toast.makeText(context,
+                                        R.string.translation_ppocr_required, android.widget.Toast.LENGTH_LONG).show()
+                                }
                             } catch (error: Exception) {
                                 android.util.Log.w("GalleryTranslation",
                                     "Page ${page + 1} failed before rendering (${error.javaClass.simpleName})")

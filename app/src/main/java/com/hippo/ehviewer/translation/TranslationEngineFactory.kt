@@ -17,19 +17,20 @@ object TranslationEngineFactory {
         val configured = options.engineConfig()
         // API pages may overlap network requests, but OCR must leave CPU for the reader.
         val config = configured.copy(ocr = configured.ocr.copy(concurrency = configured.ocr.concurrency.coerceIn(1, 4)))
-        val alphabet = context.assets.open("models/alphabet-all-v5.txt").bufferedReader().use { it.readLines() }
+        val ppModels = PpOcrModels(context)
+        val alphabet by lazy { context.assets.open("models/alphabet-all-v5.txt").bufferedReader().use { it.readLines() } }
         val batchSize = translationBatchSize(options)
         val sourceSeparator = TranslationLanguages.lineSeparator(options.source)
-        suspend fun recognize(ocr: Ocr, page: android.graphics.Bitmap, lines: List<TextLine>) {
-            recognizeTranslationBatches(lines, if (config.ocr.concurrent) config.ocr.concurrency else 1) {
-                ocr.recognize(page, it)
+        fun recognizer(): PageOcr = LanguageOcr({ resolvedOptions().source }, onRecognized) { key ->
+            if (key == "ja") Ocr(models.ocr, alphabet, config.ocr) else {
+                if (!ppModels.ready(key)) throw MissingPpOcrModel()
+                val dictionary = org.json.JSONArray(context.assets.open("ppocr-$key.json").bufferedReader().use { it.readText() })
+                PpOcr(ppModels.path(key), (0 until dictionary.length()).map { dictionary.getString(it) }, config.ocr)
             }
-            lines.forEach { it.text = TranslationOcrText.clean(it.text) }
-            onRecognized(lines)
         }
         if (options.backend == TranslationBackend.NATIVE_LLM) {
             val detector = TranslationStageModel { Detector(models.detectorNcnn, config.detector) }
-            val ocr = TranslationStageModel { Ocr(models.ocr, alphabet, config.ocr) }
+            val ocr = TranslationStageModel(::recognizer)
             val inpainter = TranslationStageModel { Inpainter(models.aotInpainterNcnn, config.inpainter) }
             fun releaseImages() {
                 try { detector.close() } finally { try { ocr.close() } finally { inpainter.close() } }
@@ -54,7 +55,7 @@ object TranslationEngineFactory {
                 },
                 recognize = { page, lines ->
                     policy.beforeImage()
-                    try { recognize(ocr.get(), page, lines) } finally { policy.afterImage() }
+                    try { ocr.get().recognize(page, lines) } finally { policy.afterImage() }
                 },
                 inpaint = { page, regions, mask ->
                     policy.beforeImage()
@@ -70,12 +71,12 @@ object TranslationEngineFactory {
             )
         }
         val detector = Detector(models.detectorNcnn, config.detector)
-        var ocr: Ocr? = null
+        var ocr: PageOcr? = null
         try {
-            ocr = Ocr(models.ocr, alphabet, config.ocr)
+            ocr = recognizer()
             val inpainter = Inpainter(models.aotInpainterNcnn, config.inpainter)
             val recognizer = ocr
-            return ResumablePipeline(detector::detect, { page, lines -> recognize(recognizer, page, lines) },
+            return ResumablePipeline(detector::detect, recognizer::recognize,
                 inpainter::inpaint, translator, config,
                 release = { runCatching { detector.close() }; runCatching { recognizer.close() }; runCatching { inpainter.close() } },
                 warm = { detector.warmUp(); recognizer.warmUp(); inpainter.warmUp() },

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "language": "zh",
+      "name": "ppocr-zh.onnx",
+      "size": 16534782,
+      "sha256": "da72dc72ca4dc220df0dfde68c1dedc31c58d3e76a25871122e5056227d50092",
+      "url": "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/resolve/ed152b8b495f84de93cda5709d768548a9127622/inference.onnx",
+      "dictionary": "ppocr-zh.json",
+      "revision": "ed152b8b495f84de93cda5709d768548a9127622",
+      "source": "PaddlePaddle/PP-OCRv5_mobile_rec_onnx"
+    },
+    {
+      "language": "en",
+      "name": "ppocr-en.onnx",
+      "size": 7848423,
+      "sha256": "b5f833dfc5d0eb71da397b4efa06ebeee9b431b690a47d6af40d77d8eabc557f",
+      "url": "https://huggingface.co/PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx/resolve/3fafbc3b5dcf93dd72add9f48368be8a3a2cd33b/inference.onnx",
+      "dictionary": "ppocr-en.json",
+      "revision": "3fafbc3b5dcf93dd72add9f48368be8a3a2cd33b",
+      "source": "PaddlePaddle/en_PP-OCRv5_mobile_rec_onnx"
+    },
+    {
+      "language": "ko",
+      "name": "ppocr-ko.onnx",
+      "size": 13418787,
+      "sha256": "92f0b7785e64fc9090106a241cf4c1eb97472824558272751b88a2a4476d3a08",
+      "url": "https://huggingface.co/PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx/resolve/5c6f574b8e2230adf4287b33e736d71b9fabd28e/inference.onnx",
+      "dictionary": "ppocr-ko.json",
+      "revision": "5c6f574b8e2230adf4287b33e736d71b9fabd28e",
+      "source": "PaddlePaddle/korean_PP-OCRv5_mobile_rec_onnx"
+    }
+  ]
+}

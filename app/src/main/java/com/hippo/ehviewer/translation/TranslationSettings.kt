@@ -27,14 +27,14 @@ data class TranslationOptions(
     else 1
 
     fun preparationIdentity(): String = engineConfig().let {
-        listOf("ehnz-preparation-v5", "reader-image-v1", inputImageIdentity, source,
+        listOf("ehnz-preparation-v6-ppocr-v5", "reader-image-v1", inputImageIdentity, source,
             // Line concurrency changes scheduling, not recognized text or coordinates.
             // Keep preprocessing reusable when switching to the native memory policy.
             it.detector.toString(), it.ocr.copy(concurrency = OcrConfig().concurrency).toString(),
             it.inpainter.toString()).joinToString("\n")
     }
 
-    fun cacheIdentity(): String = listOf("ehnz-overlay-v5", "reader-image-v1",
+    fun cacheIdentity(): String = listOf("ehnz-overlay-v6-ppocr-v5", "reader-image-v1",
         when (backend) {
             TranslationBackend.NATIVE_LLM -> "llama-jni-v16-thinking-checkpoints-prefix-kv\n$nativeModelId"
             TranslationBackend.ML_KIT -> "mlkit-17.0.3-multilingual"

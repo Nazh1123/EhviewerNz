@@ -9,7 +9,7 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.*
 
-class Ocr(modelPath: String, private val alphabet: List<String>, private val cfg: OcrConfig = OcrConfig()) : AutoCloseable {
+class Ocr(modelPath: String, private val alphabet: List<String>, private val cfg: OcrConfig = OcrConfig()) : PageOcr {
     private val base = modelPath.replace("_mixed.ncnn.param", ".ncnn.param")
     private val mixed = base.removeSuffix(".ncnn.param") + "_mixed.ncnn.param"
     private val useMixed = File(mixed).isFile && ImageInference.supportsFp16()
@@ -17,7 +17,7 @@ class Ocr(modelPath: String, private val alphabet: List<String>, private val cfg
     // The same permits apply across pages; page concurrency cannot multiply OCR CPU usage.
     private val permits = Semaphore(if (cfg.concurrent) cfg.concurrency.coerceIn(1, 4) else 1)
 
-    suspend fun recognize(page: Bitmap, lines: List<TextLine>) = coroutineScope {
+    override suspend fun recognize(page: Bitmap, lines: List<TextLine>) = coroutineScope {
         val next = AtomicInteger()
         repeat(min(lines.size, if (cfg.concurrent) cfg.concurrency.coerceIn(1, 4) else 1)) {
             launch(Dispatchers.Default) {
@@ -101,7 +101,7 @@ class Ocr(modelPath: String, private val alphabet: List<String>, private val cfg
         line.text = if (decoded.second >= cfg.minProb) decoded.first else ""
     }
 
-    fun warmUp() = net.warmOcr()
+    override fun warmUp() = net.warmOcr()
     override fun close() = net.close()
 
     companion object {

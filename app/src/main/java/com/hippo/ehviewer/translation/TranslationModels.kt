@@ -18,8 +18,9 @@ import kotlinx.coroutines.ensureActive
 import org.json.JSONObject
 
 /** The embedded manifest is the authority for both imported and downloaded weights. */
-class TranslationModels internal constructor(private val context: Context, manifestOverride: String? = null) {
-    private val dir = File(context.noBackupFilesDir, "translation-models").apply { mkdirs() }
+class TranslationModels internal constructor(private val context: Context, manifestOverride: String? = null,
+                                             directoryName: String = "translation-models") {
+    private val dir = File(context.noBackupFilesDir, directoryName).apply { mkdirs() }
     private val manifest = JSONObject(manifestOverride ?: context.assets.open("translation-models.json")
         .bufferedReader().use { it.readText() })
     private data class Entry(val name: String, val size: Long, val sha256: String)
@@ -117,6 +118,27 @@ class TranslationModels internal constructor(private val context: Context, manif
         verifiedStamps = stamps()
     }
 
+    internal suspend fun installFile(name: String, input: InputStream, progress: (String, Long, Long) -> Unit) {
+        val entry = files.single { it.name == name }
+        val staged = mutableListOf<Pair<File, File>>()
+        try {
+            copyVerified(input, entry, staged) { progress(name, it, entry.size) }
+            TranslationRuntime.withModelMaintenance { publish(staged) }
+        } finally { staged.forEach { it.first.delete() } }
+    }
+
+    internal suspend fun importSingle(uri: Uri, progress: (String, Long, Long) -> Unit) {
+        requireNotNull(context.contentResolver.openInputStream(uri)).use {
+            // Import is already under the maintenance lock; do not acquire it twice.
+            val staged = mutableListOf<Pair<File, File>>()
+            try {
+                val entry = files.single()
+                copyVerified(it, entry, staged) { copied -> progress(entry.name, copied, entry.size) }
+                publish(staged)
+            } finally { staged.forEach { pair -> pair.first.delete() } }
+        }
+    }
+
     fun delete() {
         verifiedStamps = null
         for (name in requiredNames) {
@@ -135,6 +157,10 @@ class TranslationModels internal constructor(private val context: Context, manif
 
     /** Private immutable files are hashed once per session, again if replaced or modified. */
     suspend fun verified(): ModelSet {
+        return requireNotNull(ModelSet.resolve(verifiedFiles().toList()))
+    }
+
+    internal suspend fun verifiedFiles(): Map<String, String> {
         currentCoroutineContext().ensureActive()
         val current = stamps()
         // Providers without file identities cannot distinguish same-size replacements.
@@ -145,6 +171,6 @@ class TranslationModels internal constructor(private val context: Context, manif
             }
             verifiedStamps = current
         }
-        return requireNotNull(ModelSet.resolve(files.map { it.name to File(dir, it.name).absolutePath }))
+        return files.associate { it.name to File(dir, it.name).absolutePath }
     }
 }

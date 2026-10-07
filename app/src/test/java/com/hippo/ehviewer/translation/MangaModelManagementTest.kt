@@ -185,4 +185,24 @@ class MangaModelManagementTest {
             assertTrue(entry.getString("sha256").matches(Regex("[0-9a-f]{64}")))
         }
     }
+
+    @Test fun singleRecognitionModelImportChecksContentRegardlessOfProviderFilename() = runBlocking {
+        val context = object : ContextWrapper(RuntimeEnvironment.getApplication()) {
+            override fun getNoBackupFilesDir() = temp.root
+        }
+        val data = "official-recognition-weights"
+        val manifest = JSONObject().put("models", JSONArray().put(JSONObject().put("name", "ppocr-en.onnx")
+            .put("size", data.length).put("sha256", MessageDigest.getInstance("SHA-256")
+                .digest(data.toByteArray()).joinToString("") { "%02x".format(it) }))).toString()
+        val store = TranslationModels(context, manifest, "ppocr-en")
+        val input = temp.newFile("inference.onnx").apply { writeText(data) }
+        store.importSingle(Uri.fromFile(input)) { _, _, _ -> }
+        val installed = File(store.verifiedFiles().getValue("ppocr-en.onnx"))
+        assertEquals(data, installed.readText())
+        input.writeText("x".repeat(data.length))
+        try { store.importSingle(Uri.fromFile(input)) { _, _, _ -> }; fail("Corrupt recognition model accepted") }
+        catch (_: IllegalStateException) { }
+        assertEquals(data, installed.readText())
+        assertFalse(installed.parentFile!!.listFiles()!!.any { it.extension == "part" })
+    }
 }

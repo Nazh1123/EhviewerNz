@@ -16,6 +16,8 @@
     <string name="translation_model_manga_card_description">文字检测 · 多语言 OCR · 背景修复</string>
     <string name="translation_model_file_count">%1$d 个文件</string>
     <string name="translation_model_manga_footnote">所有翻译引擎共用这套漫画模型，可从本项目下载或导入本地文件。</string>
+    <string name="translation_ppocr_help">非日语识别使用 PP-OCRv5，按源语言安装。中文模型兼容简体和繁体。可下载或导入对应官方 inference.onnx 文件，校验通过后使用。</string>
+    <string name="translation_ppocr_required">非日语识别需要对应 PP-OCRv5 模型，请在“翻译设置 → 模型管理 → 漫画模型”下载或导入。</string>
     <string name="translation_model_hy_card_description">HY-MT1.5 · 多语文字翻译</string>
     <string name="translation_model_manga_llm_card_description">HY-MT2 漫画翻译微调 · 日语 → 简体中文</string>
     <string name="translation_model_imported_description">已从本地导入的翻译模型</string>
@@ -204,7 +206,7 @@
     <string name="translation_native_pair_help">当前模型针对日语 → 简体中文微调。其他语言对请在模型管理中选择多语模型或自行导入。</string>
     <string name="translation_mobile_download">正在使用移动网络下载</string>
     <string name="translation_source_auto">自动</string>
-    <string name="translation_source_auto_help">自动在首次取得足够 OCR 文字后判断当前画廊语言，仅用于本次翻译，退出后重新 OCR 和判断。文字太少或混杂时下一页再次判断；手动选择优先。</string>
+    <string name="translation_source_auto_help">首次使用漫画 OCR 判断画廊语言。确定为非日语后，切换对应 PP-OCRv5 重新识别当前页，后续页面直接使用该模型；需先安装相应模型。判断仅用于本次任务，文字太少或混杂时下一页再次判断；手动选择优先。</string>
     <string name="translation_source_detected">正在翻译: %1$s → %2$s</string>
     <string name="translation_source_unknown">无法可靠识别源语言，请手动选择后再使用 ML Kit 翻译。</string>
     <string name="translation_source_auto_mlkit_help">自动模式会准备日语、韩语、中文及目标语言包，以供识别后使用；英语无需独立包。</string>

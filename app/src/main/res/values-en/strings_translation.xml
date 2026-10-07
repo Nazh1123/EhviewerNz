@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="translation_ppocr_help">Non-Japanese recognition uses PP-OCRv5. Install the source language model; Chinese supports both scripts. Download or import its official inference.onnx file, verified before use.</string>
+    <string name="translation_ppocr_required">Install the matching PP-OCRv5 model in Translation settings → Model management → Manga models for non-Japanese recognition.</string>
     <string name="settings_translation">Translation</string>
     <string name="translation_category_engine">Translation engine</string>
     <string name="translation_category_reading">Reading and translation</string>
@@ -192,7 +194,7 @@
     <string name="translation_native_pair_help">This model is fine-tuned for Japanese → Simplified Chinese. For other pairs, select or import a multilingual model in Model management.</string>
     <string name="translation_mobile_download">Downloading over mobile data</string>
     <string name="translation_source_auto">Auto</string>
-    <string name="translation_source_auto_help">Auto identifies the gallery language from sufficient OCR text for this task only. Starting again runs fresh OCR and detection. Short or mixed text is retried on the next page; manual selection takes priority.</string>
+    <string name="translation_source_auto_help">The first page uses manga OCR to identify the gallery language. For non-Japanese, the matching PP-OCRv5 model rereads this page and handles subsequent pages; install that model first. The decision lasts for this task. Short or mixed text is retried on the next page; manual selection takes priority.</string>
     <string name="translation_source_detected">Translating: %1$s → %2$s</string>
     <string name="translation_source_unknown">Cannot reliably identify the source. Select a language manually before using ML Kit.</string>
     <string name="translation_source_auto_mlkit_help">Auto prepares Japanese, Korean, Chinese and the target language packs. English needs no separate pack.</string>
