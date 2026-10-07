@@ -43,7 +43,7 @@ class PreparedPage(val mask: Bitmap, val regions: List<TextRegion>, val lines: I
 
 /** A prepared page survives navigation; only the final output is transferred to the reader. */
 class ResumablePipeline(
-    private val detect: (Bitmap) -> Detection,
+    private val detect: suspend (Bitmap) -> Detection,
     private val recognize: suspend (Bitmap, List<TextLine>) -> Unit,
     private val inpaint: suspend (Bitmap, List<TextRegion>, Bitmap) -> Bitmap,
     private val translator: Translator,

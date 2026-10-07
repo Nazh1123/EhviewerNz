@@ -1116,7 +1116,15 @@ internal class GalleryTranslationSession(
             options.inPreferredConfig = Bitmap.Config.ARGB_8888
             options.inSampleSize = 1
             if (backend == TranslationBackend.ML_KIT) {
-                while (maxOf(options.outWidth, options.outHeight) / options.inSampleSize > 2048) options.inSampleSize *= 2
+                val short = minOf(options.outWidth, options.outHeight)
+                val long = maxOf(options.outWidth, options.outHeight)
+                if (long.toFloat() / short > 2.5f) {
+                    // A longest-edge limit destroys strip text before tiled detection sees it.
+                    // Preserve the short edge, while bounding the full-page mask/inpainting heap.
+                    val pixels = options.outWidth.toLong() * options.outHeight
+                    while (short / options.inSampleSize > 1024 ||
+                        pixels / options.inSampleSize / options.inSampleSize > 8L * 1024 * 1024) options.inSampleSize *= 2
+                } else while (long / options.inSampleSize > 2048) options.inSampleSize *= 2
             }
             return requireNotNull(BitmapFactory.decodeFile(file.absolutePath, options))
         }

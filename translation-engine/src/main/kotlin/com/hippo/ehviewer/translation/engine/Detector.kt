@@ -6,7 +6,11 @@ import kotlin.math.*
 class Detector(modelPath: String, private val cfg: DetectorConfig = DetectorConfig()) : AutoCloseable {
     private val net = ImageModel(modelPath, 4, true)
 
-    fun detect(page: Bitmap): Detection {
+    fun detect(page: Bitmap): Detection = detect(page) {}
+
+    fun detect(page: Bitmap, checkRelevant: () -> Unit): Detection = DetectionTiles.detect(page, cfg, ::detectWhole, checkRelevant)
+
+    private fun detectWhole(page: Bitmap): Detection {
         val scale = cfg.inputSize.toFloat() / max(page.width, page.height)
         val width = max(1, (page.width * scale).roundToInt())
         val height = max(1, (page.height * scale).roundToInt())

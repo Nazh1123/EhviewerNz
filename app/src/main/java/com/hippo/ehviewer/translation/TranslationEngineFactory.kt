@@ -2,6 +2,8 @@ package com.hippo.ehviewer.translation
 
 import android.content.Context
 import com.hippo.ehviewer.translation.engine.*
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /** Shared image stages with backend-specific request and model-memory policies. */
 object TranslationEngineFactory {
@@ -21,6 +23,13 @@ object TranslationEngineFactory {
         val alphabet by lazy { context.assets.open("models/alphabet-all-v5.txt").bufferedReader().use { it.readLines() } }
         val batchSize = translationBatchSize(options)
         val sourceSeparator = TranslationLanguages.lineSeparator(options.source)
+        suspend fun detectPage(detector: Detector, page: android.graphics.Bitmap): Detection {
+            val coroutine = currentCoroutineContext()
+            return detector.detect(page) {
+                coroutine.ensureActive()
+                coroutine[TranslationPageRequest]?.ensureRelevant()
+            }
+        }
         fun recognizer(): PageOcr = LanguageOcr({ resolvedOptions().source }, onRecognized) { key ->
             if (key == "ja") Ocr(models.ocr, alphabet, config.ocr) else {
                 if (!ppModels.ready(key)) throw MissingPpOcrModel()
@@ -51,7 +60,7 @@ object TranslationEngineFactory {
             return ResumablePipeline(
                 detect = { page ->
                     policy.beforeImage()
-                    try { detector.get().detect(page) } finally { policy.afterImage() }
+                    try { detectPage(detector.get(), page) } finally { policy.afterImage() }
                 },
                 recognize = { page, lines ->
                     policy.beforeImage()
@@ -76,7 +85,7 @@ object TranslationEngineFactory {
             ocr = recognizer()
             val inpainter = Inpainter(models.aotInpainterNcnn, config.inpainter)
             val recognizer = ocr
-            return ResumablePipeline(detector::detect, recognizer::recognize,
+            return ResumablePipeline({ page -> detectPage(detector, page) }, recognizer::recognize,
                 inpainter::inpaint, translator, config,
                 release = { runCatching { detector.close() }; runCatching { recognizer.close() }; runCatching { inpainter.close() } },
                 warm = { detector.warmUp(); recognizer.warmUp(); inpainter.warmUp() },

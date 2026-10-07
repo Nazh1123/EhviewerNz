@@ -14,6 +14,7 @@ data class DetectorConfig(
     val boxThreshold: Float = 0.7f,
     val strokeThreshold: Float = 0.12f,
     val expansion: Float = 2.3f,
+    val tileLongImages: Boolean = true,
 )
 
 data class OcrConfig(
