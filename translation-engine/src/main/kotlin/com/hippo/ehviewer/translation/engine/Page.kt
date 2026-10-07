@@ -7,6 +7,7 @@ data class Pt(val x: Float, val y: Float)
 class TextLine(val quad: List<Pt>, val score: Float) {
     var direction: String = "h"
     var text: String = ""
+    var bubble: BubbleBoundary? = null
 }
 
 class TextRegion(
@@ -14,6 +15,7 @@ class TextRegion(
     val cx: Float = 0f, val cy: Float = 0f, val boxW: Float = 0f, val boxH: Float = 0f,
     val sourceSeparator: String = "",
 ) {
+    val bubble: BubbleBoundary? = lines.firstOrNull()?.bubble?.takeIf { boundary -> lines.all { it.bubble === boundary } }
     val x0: Float = lines.minOf { it.quad.minOf(Pt::x) }
     val y0: Float = lines.minOf { it.quad.minOf(Pt::y) }
     val x1: Float = lines.maxOf { it.quad.maxOf(Pt::x) }
