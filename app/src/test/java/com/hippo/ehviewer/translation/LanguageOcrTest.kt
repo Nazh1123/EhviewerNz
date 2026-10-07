@@ -60,4 +60,38 @@ class LanguageOcrTest {
         assertEquals("", line.text)
         assertEquals(listOf("read:ja", "close:ja"), events); page.recycle()
     }
+    @Test fun missingAutoModelKeepsOriginalResultAndRecognizerOnFollowingPages() = runBlocking {
+        for (language in listOf("en", "ko", "zh-CN", "zh-TW")) {
+            var source = "auto"
+            val events = mutableListOf<String>()
+            val page = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888)
+            LanguageOcr({ source }, { source = language }, { false }) { key ->
+                events.add("load:$key"); Fake(key, events)
+            }.use { router ->
+                repeat(2) {
+                    val line = line()
+                    router.recognize(page, listOf(line))
+                    assertEquals("ja result", line.text)
+                }
+            }
+            assertEquals(listOf("load:ja", "read:ja", "read:ja", "close:ja"), events)
+            page.recycle()
+        }
+    }
+    @Test fun missingManualModelFallsBackAndSwitchesAfterInstallation() = runBlocking {
+        var installed = false
+        val events = mutableListOf<String>()
+        val page = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888)
+        LanguageOcr({ "en" }, {}, { installed }) { key ->
+            events.add("load:$key"); Fake(key, events)
+        }.use { router ->
+            val first = line(); router.recognize(page, listOf(first))
+            assertEquals("ja result", first.text)
+            installed = true
+            val next = line(); router.recognize(page, listOf(next))
+            assertEquals("en result", next.text)
+        }
+        assertEquals(listOf("load:ja", "read:ja", "close:ja", "load:en", "read:en", "close:en"), events)
+        page.recycle()
+    }
 }

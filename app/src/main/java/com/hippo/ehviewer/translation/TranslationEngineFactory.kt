@@ -30,7 +30,7 @@ object TranslationEngineFactory {
                 coroutine[TranslationPageRequest]?.ensureRelevant()
             }
         }
-        fun recognizer(): PageOcr = LanguageOcr({ resolvedOptions().source }, onRecognized) { key ->
+        fun recognizer(): PageOcr = LanguageOcr({ resolvedOptions().source }, onRecognized, ppModels::ready) { key ->
             if (key == "ja") Ocr(models.ocr, alphabet, config.ocr) else {
                 if (!ppModels.ready(key)) throw MissingPpOcrModel()
                 val dictionary = org.json.JSONArray(context.assets.open("ppocr-$key.json").bufferedReader().use { it.readText() })

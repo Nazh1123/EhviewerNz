@@ -63,7 +63,6 @@ internal class GalleryTranslationSession(
         }
     }
     private val models = TranslationModels(context)
-    private val ppModels = PpOcrModels(context)
     private val memoryPolicy = NativeMemoryPolicy(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val states = mutableMapOf<Int, Int>()
@@ -452,7 +451,7 @@ internal class GalleryTranslationSession(
                                 if (reuseResult()) return@withContext
                                 if (request.force) lookupKeys = results.lookupKeys(source, key)
                                 var resume = if (request.retryMissing) lookupKeys.firstNotNullOfOrNull { results.readResume(it) } else null
-                                if (modelsUnavailable || !models.ready() || !ppModels.ready(pageOptions.source) ||
+                                if (modelsUnavailable || !models.ready() ||
                                     options.backend == TranslationBackend.NATIVE_LLM &&
                                     options.source != TranslationLanguages.AUTO_SOURCE && !NativeModelStore(context).ready(options)) {
                                     modelsUnavailable = true
