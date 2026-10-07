@@ -19,25 +19,22 @@ object Renderer {
                 TextOrientation.VERTICAL -> true
                 TextOrientation.HORIZONTAL -> false
             }
-            val interior = region.bubble?.layout
-            val width = interior?.width ?: ((if (region.boxW > 0) region.boxW else region.x1 - region.x0) * 1.3f)
-            val height = interior?.height ?: ((if (region.boxH > 0) region.boxH else region.y1 - region.y0) * 1.5f)
-            var low = if (interior == null) cfg.fontSizeMin else 1; var high = cfg.fontSizeMax
+            val width = (if (region.boxW > 0) region.boxW else region.x1 - region.x0) * 1.3f
+            val height = (if (region.boxH > 0) region.boxH else region.y1 - region.y0) * 1.5f
+            var low = cfg.fontSizeMin; var high = cfg.fontSizeMax
             while (low < high) {
                 val size = (low + high + 1) / 2
-                val measuredSize = if (interior == null) size.toFloat() else size * cfg.fontScale
-                measure.textSize = measuredSize
+                measure.textSize = size.toFloat()
                 val fit = if (vertical) {
                     val cells = verticalCells(text, cfg.tateChuYoko).size
-                    val rows = max(1, (height / measuredSize).toInt() - 3)
-                    ceil(cells.toFloat() / rows) * measuredSize <= width
-                } else wrap(text, measure, width, 3).size * measuredSize * 1.15f <= height
+                    val rows = max(1, (height / size).toInt() - 3)
+                    ceil(cells.toFloat() / rows) * size <= width
+                } else wrap(text, measure, width, 3).size * size * 1.15f <= height
                 if (fit) low = size else high = size - 1
             }
             val size = low * cfg.fontScale
             measure.textSize = size
-            val centerX = interior?.let { (it.left + it.right) / 2 } ?: ((region.x0 + region.x1) / 2)
-            val centerY = interior?.let { (it.top + it.bottom) / 2 } ?: ((region.y0 + region.y1) / 2)
+            val centerX = (region.x0 + region.x1) / 2; val centerY = (region.y0 + region.y1) / 2
             val metrics = measure.fontMetrics
             val baselineOffset = -(metrics.ascent + metrics.descent) / 2
             val glyphs = if (vertical) {
@@ -109,9 +106,7 @@ object Renderer {
                     strokeJoin = Paint.Join.ROUND
                 }
                 val save = canvas.save()
-                val interior = block.region.bubble?.layout
-                if (interior != null) canvas.clipRect(interior.left, interior.top, interior.right, interior.bottom)
-                else if (abs(block.region.angle) >= 1) canvas.rotate(block.region.angle,
+                if (abs(block.region.angle) >= 1) canvas.rotate(block.region.angle,
                     (block.region.x0 + block.region.x1) / 2, (block.region.y0 + block.region.y1) / 2)
                 for (glyph in block.glyphs) {
                     val glyphSave = canvas.save()
@@ -169,7 +164,7 @@ object Renderer {
                 var end = (start + count).coerceAtMost(paragraph.length)
                 if (end < paragraph.length) {
                     val space = paragraph.lastIndexOf(' ', end - 1)
-                    if (space > start) end = space
+                    if (space > start && end - space < count / 2) end = space
                     while (end < paragraph.length && paragraph[end] in "，。！？、；：)]）】」』") end++
                 }
                 lines.add(paragraph.substring(start, end).trim())

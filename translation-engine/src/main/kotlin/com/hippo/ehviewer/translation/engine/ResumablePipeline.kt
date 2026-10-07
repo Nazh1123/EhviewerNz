@@ -29,8 +29,7 @@ class PreparedPage(val mask: Bitmap, val regions: List<TextRegion>, val lines: I
         return true
     }
     val byteCount: Long get() = mask.allocationByteCount.toLong() + (cleaned?.allocationByteCount ?: 0) +
-        regions.sumOf { 1024 + it.sourceText.length.toLong() * 2 } + completed.values.sumOf { it.length.toLong() * 2 } +
-        regions.mapNotNull { it.bubble }.distinct().sumOf { it.byteCount }
+        regions.sumOf { 1024 + it.sourceText.length.toLong() * 2 } + completed.values.sumOf { it.length.toLong() * 2 }
 
     override fun close() {
         cleaned?.takeUnless { it === mask }?.recycle()
@@ -82,10 +81,6 @@ class ResumablePipeline(
             checkRelevant()
             val ocrStart = System.nanoTime()
             if (detected.lines.isNotEmpty()) recognize(page, detected.lines)
-            val coroutine = currentCoroutineContext()
-            BubbleBoundaries.attach(page, detected.textMask, detected.lines) {
-                coroutine.ensureActive(); checkRelevant()
-            }
             val regions = Grouping.group(detected.lines, sourceSeparatorProvider())
                 .filter { region -> region.lines.all { it.text.isNotBlank() } }
             val ocrMs = elapsed(ocrStart)

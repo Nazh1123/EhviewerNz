@@ -6,14 +6,13 @@ import kotlin.math.*
 internal object RemovalBackground {
     data class Sample(val color: Int, val flat: Boolean)
 
-    fun sample(pixels: IntArray, mask: ByteArray, width: Int, box: IntArray,
-               include: (Int, Int) -> Boolean = { _, _ -> true }): Sample {
+    fun sample(pixels: IntArray, mask: ByteArray, width: Int, box: IntArray): Sample {
         val histogram = IntArray(4096)
         val step = max(1, sqrt(((box[2] - box[0]) * (box[3] - box[1])).toDouble() / 4096).toInt())
         fun visit(block: (Int) -> Unit) {
             for (y in box[1] until box[3] step step) for (x in box[0] until box[2] step step) {
                 val index = y * width + x
-                if (mask[index].toInt() == 0 && include(x, y)) block(pixels[index])
+                if (mask[index].toInt() == 0) block(pixels[index])
             }
         }
         fun bucket(color: Int) = ((color ushr 12) and 0xF00) or ((color ushr 8) and 0xF0) or ((color ushr 4) and 0xF)

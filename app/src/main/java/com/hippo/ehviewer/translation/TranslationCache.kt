@@ -5,8 +5,9 @@ import java.security.MessageDigest
 
 class TranslationCache(private val dir: File, private val limit: Long = 256L * 1024 * 1024) {
     init { check(dir.isDirectory || dir.mkdirs()) }
+    // Invalidate renders from bubble grouping while retaining reuse across translation settings.
     @Suppress("UNUSED_PARAMETER")
-    fun key(source: File, options: TranslationOptions): String = key(source, "ehnz-overlay-content-v1")
+    fun key(source: File, options: TranslationOptions): String = key(source, "ehnz-overlay-content-v2-legacy-grouping-tiles")
     fun preparationKey(source: File, options: TranslationOptions): String = key(source, options.preparationIdentity())
     internal fun key(source: File, identity: String): String = keys(source, listOf(identity)).single()
     internal fun keys(source: File, identities: List<String>): List<String> {

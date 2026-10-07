@@ -161,6 +161,7 @@ internal class TranslationModelCard(context: Context, private val palette: Model
                 tag = "$key/action/${action.label}"
                 isSelected = action.label == R.string.translation_model_selected_button
                 if (isSelected) {
+                    strokeColor = ColorStateList.valueOf(palette.accent)
                     isClickable = false
                     isFocusable = false
                 }

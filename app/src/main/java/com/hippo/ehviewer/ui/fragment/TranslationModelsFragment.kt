@@ -246,7 +246,8 @@ class TranslationModelsFragment : Fragment() {
             else -> R.string.translation_model_imported_description
         })
         val actions = if (available) {
-            listOf(action(if (selected) R.string.translation_model_selected_button else R.string.translation_model_use, ModelButtonKind.PRIMARY) {
+            listOf(action(if (selected) R.string.translation_model_selected_button else R.string.translation_model_use,
+                if (selected) ModelButtonKind.SECONDARY else ModelButtonKind.PRIMARY) {
                 if (!selected) operate(name) { locked { store.select(id) } }
             }) +
                 listOf(action(R.string.translation_model_delete, ModelButtonKind.DELETE) { confirmDelete(name) { locked { store.delete(id) } } })

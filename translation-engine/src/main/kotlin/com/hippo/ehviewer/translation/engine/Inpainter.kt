@@ -24,15 +24,13 @@ class Inpainter(private val modelPath: String, private val cfg: InpainterConfig 
         val bounds = regions.map { bounds(it, width, height) }
         for (y in 0 until height) {
             textMask.getPixels(row, 0, width, 0, y, width, 1)
-            for ((index, box) in bounds.withIndex()) if (y in box[1] until box[3]) {
-                for (x in box[0] until box[2]) if ((row[x] and 255) > 127 && inside(regions[index], x, y)) seed[y * width + x] = 1
+            for (box in bounds) if (y in box[1] until box[3]) {
+                for (x in box[0] until box[2]) if ((row[x] and 255) > 127) seed[y * width + x] = 1
             }
         }
         val mask = RemovalMask.dilate(seed, width, height, cfg.maskRadius)
         if (mask.none { it.toInt() != 0 }) return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
-        val backgrounds = bounds.mapIndexed { index, box ->
-            RemovalBackground.sample(pixels, mask, width, box) { x, y -> inside(regions[index], x, y) }
-        }
+        val backgrounds = bounds.map { RemovalBackground.sample(pixels, mask, width, it) }
         val complex = regions.indices.filter { cfg.method == "aot" && !backgrounds[it].flat }
         // Complex regions win at overlaps; a neighbouring flat bubble cannot erase artwork.
         val aiMask = ByteArray(mask.size)
@@ -41,7 +39,7 @@ class Inpainter(private val modelPath: String, private val cfg: InpainterConfig 
             for (y in max(0, box[1] - cfg.maskRadius) until min(height, box[3] + cfg.maskRadius))
                 for (x in max(0, box[0] - cfg.maskRadius) until min(width, box[2] + cfg.maskRadius)) {
                     val i = y * width + x
-                    if (inside(regions[index], x, y)) aiMask[i] = mask[i]
+                    aiMask[i] = mask[i]
                 }
         }
         regions.forEachIndexed { index, region -> region.onArt = index in complex }
@@ -54,7 +52,7 @@ class Inpainter(private val modelPath: String, private val cfg: InpainterConfig 
                 val left = max(0, box[0] - cfg.maskRadius); val right = min(width, box[2] + cfg.maskRadius)
                 val top = max(0, box[1] - cfg.maskRadius); val bottom = min(height, box[3] + cfg.maskRadius)
                 for (y in top until bottom) for (x in left until right)
-                    if (mask[y * width + x].toInt() != 0 && aiMask[y * width + x].toInt() == 0 && inside(region, x, y))
+                    if (mask[y * width + x].toInt() != 0 && aiMask[y * width + x].toInt() == 0)
                         pixels[y * width + x] = color
             }
         }
@@ -91,8 +89,6 @@ class Inpainter(private val modelPath: String, private val cfg: InpainterConfig 
         }
         return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
     }
-
-    private fun inside(region: TextRegion, x: Int, y: Int) = region.bubble?.contains(x + .5f, y + .5f) ?: true
 
     private fun bounds(region: TextRegion, width: Int, height: Int) = intArrayOf(
         floor(region.x0 - cfg.regionPad).toInt().coerceIn(0, width),

@@ -9,6 +9,19 @@ import org.junit.rules.TemporaryFolder
 class TranslationCacheTest {
     @get:Rule val temp = TemporaryFolder()
 
+    @Test fun bubbleGroupingPreparationAndRenderCachesAreNotReusedAfterRollback() {
+        val cache = TranslationCache(temp.newFolder("cache"))
+        val source = temp.newFile("source").apply { writeText("same image") }
+        val options = TranslationOptions()
+        val bubbleRenderKey = cache.key(source, "ehnz-overlay-content-v1")
+        cache.image(bubbleRenderKey).writeText("old bubble render")
+        assertNotEquals(bubbleRenderKey, cache.key(source, options))
+        assertFalse(cache.image(cache.key(source, options)).exists())
+        val bubblePreparation = options.preparationIdentity()
+            .replaceFirst("ehnz-preparation-v9-legacy-grouping-tiles", "ehnz-preparation-v8-tiles")
+        assertNotEquals(cache.key(source, bubblePreparation), cache.preparationKey(source, options))
+    }
+
     @Test fun preprocessingKeyTracksInputResolutionAndIgnoresLanguageAndRequestSettings() {
         val cache = TranslationCache(temp.newFolder("prepared"))
         val source = temp.newFile("source").apply { writeText("pixels") }
