@@ -554,7 +554,7 @@ public final class GalleryUpdateManager {
     }
 
     @Nullable
-    static SpiderInfo readDownloadedSpiderInfo(long gid) {
+    public static SpiderInfo readDownloadedSpiderInfo(long gid) {
         GalleryInfo placeholder = new GalleryInfo();
         placeholder.gid = gid;
         UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
@@ -684,7 +684,15 @@ public final class GalleryUpdateManager {
             if (source != null) title = EhUtils.getSuitableTitle(source);
         }
         return GalleryUpdateRecord.failure(plan.targetGid, plan.sourceGid, failedAt, title, reason,
-                retained.stream().mapToLong(Long::longValue).toArray());
+                retained.stream().mapToLong(Long::longValue).toArray()).withFirstGid(recordFirstGid(plan));
+    }
+
+    private static long recordFirstGid(UpdatePlan plan) {
+        DownloadManager manager = EhApplication.getDownloadManager();
+        DownloadInfo target = manager.getDownloadInfo(plan.targetGid);
+        DownloadInfo source = manager.getDownloadInfo(plan.sourceGid);
+        if (target != null && target.firstGid != null && target.firstGid > 0) return target.firstGid;
+        return source != null && source.firstGid != null && source.firstGid > 0 ? source.firstGid : 0;
     }
 
     private static void saveFailure(Context context, GalleryUpdateRecord record) {
@@ -719,7 +727,7 @@ public final class GalleryUpdateManager {
         if (getPlan(plan.targetGid) != plan) return false;
         GalleryUpdateRecord snapshot = GalleryUpdateRecord.compare(
                 plan.targetGid, plan.sourceGid, readDownloadedSpiderInfo(plan.sourceGid),
-                readDownloadedSpiderInfo(plan.targetGid));
+                readDownloadedSpiderInfo(plan.targetGid)).withFirstGid(recordFirstGid(plan));
         synchronized (GalleryUpdateManager.class) {
             if (getPlan(plan.targetGid) != plan) return false;
             // Older app versions did not save titles in plans. Snapshot one before cleanup

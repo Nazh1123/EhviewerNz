@@ -167,6 +167,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public static final String KEY_PAGE = "page";
     public static final String KEY_CURRENT_INDEX = "current_index";
     public static final String KEY_UPDATE_RECORD_TIME = "update_record_time";
+    public static final String KEY_UPDATE_RECORD_GID = "update_record_gid";
+    private long mUpdateRecordGid;
     private long mUpdateRecordTime;
     private boolean mPendingUpdateStart;
     private static final String KEY_ANIMATED_WEBP_GALLERY_PLAYING =
@@ -464,7 +466,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         } else if (ACTION_EH.equals(mAction)) {
             if (mGalleryInfo != null) {
-                mGalleryProvider = new EhGalleryProvider(this, mGalleryInfo, mUpdateRecordTime);
+                mGalleryProvider = mUpdateRecordTime > 0
+                        ? new com.hippo.ehviewer.gallery.UpdatedGalleryProvider(this, mGalleryInfo,
+                                mUpdateRecordGid, mUpdateRecordTime)
+                        : new EhGalleryProvider(this, mGalleryInfo);
             }
         } else if (Intent.ACTION_VIEW.equals(mAction)) {
             if (mUri != null) {
@@ -619,6 +624,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         mPage = intent.getIntExtra(KEY_PAGE, -1);
         mUpdateRecordTime = intent.getLongExtra(KEY_UPDATE_RECORD_TIME, 0L);
+        mUpdateRecordGid = intent.getLongExtra(KEY_UPDATE_RECORD_GID, 0L);
         mPendingUpdateStart = mUpdateRecordTime > 0;
         buildProvider();
     }
@@ -631,6 +637,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mPage = savedInstanceState.getInt(KEY_PAGE, -1);
         mCurrentIndex = savedInstanceState.getInt(KEY_CURRENT_INDEX);
         mUpdateRecordTime = savedInstanceState.getLong(KEY_UPDATE_RECORD_TIME, 0L);
+        mUpdateRecordGid = savedInstanceState.getLong(KEY_UPDATE_RECORD_GID, 0L);
         mPendingUpdateStart = false;
         mAnimatedWebpGalleryPlaying = savedInstanceState.getBoolean(
                 KEY_ANIMATED_WEBP_GALLERY_PLAYING, true);
@@ -651,6 +658,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         outState.putInt(KEY_PAGE, mPage);
         outState.putInt(KEY_CURRENT_INDEX, mCurrentIndex);
         outState.putLong(KEY_UPDATE_RECORD_TIME, mUpdateRecordTime);
+        outState.putLong(KEY_UPDATE_RECORD_GID, mUpdateRecordGid);
         outState.putBoolean(KEY_ANIMATED_WEBP_GALLERY_PLAYING,
                 mAnimatedWebpGalleryPlaying);
         outState.putFloat(KEY_ANIMATED_WEBP_GALLERY_SPEED,

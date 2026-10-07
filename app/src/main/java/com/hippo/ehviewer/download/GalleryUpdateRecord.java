@@ -9,11 +9,15 @@ import org.json.JSONObject;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Arrays;
 
 /** A single update of a target gid. Page indexes are zero based, including deleted old pages. */
 public final class GalleryUpdateRecord {
     public final long targetGid;
     public final long sourceGid;
+    public final long firstGid;
+    // The target snapshot survives deletion of old download directories.
+    private final String[] targetTokens;
     public final long completedAt;
     public final int oldPages;
     public final int newPages;
@@ -29,15 +33,18 @@ public final class GalleryUpdateRecord {
                         int oldPages, int newPages, boolean complete,
                         int[] addedPages, int[] deletedPages, int readingPage) {
         this(targetGid, sourceGid, completedAt, oldPages, newPages, complete,
-                addedPages, deletedPages, readingPage, "", "", new long[0]);
+                addedPages, deletedPages, readingPage, "", "", new long[0], 0, new String[0]);
     }
 
     private GalleryUpdateRecord(long targetGid, long sourceGid, long completedAt,
                                 int oldPages, int newPages, boolean complete,
                                 int[] addedPages, int[] deletedPages, int readingPage,
-                                String sourceTitle, String errorReason, long[] retainedParentGids) {
+                                String sourceTitle, String errorReason, long[] retainedParentGids,
+                                long firstGid, String[] targetTokens) {
         this.targetGid = targetGid;
         this.sourceGid = sourceGid;
+        this.firstGid = Math.max(0, firstGid);
+        this.targetTokens = targetTokens.clone();
         this.completedAt = completedAt;
         this.oldPages = oldPages;
         this.newPages = newPages;
@@ -56,7 +63,13 @@ public final class GalleryUpdateRecord {
                                                String sourceTitle, String reason, long[] retained) {
         if (reason == null || reason.isBlank()) throw new IllegalArgumentException("Missing failure reason");
         return new GalleryUpdateRecord(targetGid, sourceGid, failedAt, 0, 0, false,
-                new int[0], new int[0], 0, sourceTitle, reason, retained);
+                new int[0], new int[0], 0, sourceTitle, reason, retained, 0, new String[0]);
+    }
+
+    public GalleryUpdateRecord withFirstGid(long firstGid) {
+        return new GalleryUpdateRecord(targetGid, sourceGid, completedAt, oldPages, newPages,
+                complete, addedPages, deletedPages, readingPage, sourceTitle, errorReason,
+                retainedParentGids, firstGid, targetTokens);
     }
 
     static GalleryUpdateRecord compare(long targetGid, long sourceGid,
@@ -84,9 +97,43 @@ public final class GalleryUpdateRecord {
         for (int page = 0; page < oldPages; page++) {
             if (!matched[page]) deleted.add(page);
         }
+        String[] tokens = new String[newPages];
+        for (int page = 0; page < newPages; page++) tokens[page] = target.pTokenMap.get(page);
         return new GalleryUpdateRecord(targetGid, sourceGid, 0, oldPages, newPages, true,
                 added.stream().mapToInt(Integer::intValue).toArray(),
-                deleted.stream().mapToInt(Integer::intValue).toArray(), 0);
+                deleted.stream().mapToInt(Integer::intValue).toArray(), 0,
+                "", "", new long[0], 0, tokens);
+    }
+
+    /** Map historical additions to the current version, preserving duplicate-token counts. */
+    public int[] resolveAddedPages(SpiderInfo current) {
+        return Arrays.stream(resolveAddedPageMap(current)).filter(page -> page >= 0).sorted().toArray();
+    }
+
+    /** One current page per original addition, or -1 if it no longer exists. */
+    public int[] resolveAddedPageMap(SpiderInfo current) {
+        int[] result = new int[addedPages.length];
+        Arrays.fill(result, -1);
+        if (!complete || isFailure() || !hasAllTokens(current)) return result;
+        if (targetTokens.length == 0) {
+            // Legacy records have no identity snapshot: only their original version is safe.
+            return current.gid == targetGid && current.pages == newPages
+                    ? addedPages.clone() : result;
+        }
+        HashMap<String, ArrayDeque<Integer>> indexes = new HashMap<>();
+        for (int page = 0; page < current.pages; page++) {
+            indexes.computeIfAbsent(current.pTokenMap.get(page), key -> new ArrayDeque<>()).add(page);
+        }
+        int addedIndex = 0;
+        for (int page = 0; page < targetTokens.length; page++) {
+            ArrayDeque<Integer> matches = indexes.get(targetTokens[page]);
+            Integer match = matches != null ? matches.pollFirst() : null;
+            if (addedIndex < addedPages.length && addedPages[addedIndex] == page) {
+                if (match != null) result[addedIndex] = match;
+                addedIndex++;
+            }
+        }
+        return result;
     }
 
     private static boolean hasAllTokens(SpiderInfo info) {
@@ -102,6 +149,10 @@ public final class GalleryUpdateRecord {
 
     String toJson() throws JSONException {
         JSONObject json = new JSONObject();
+        json.put("first_gid", firstGid);
+        JSONArray tokens = new JSONArray();
+        for (String token : targetTokens) tokens.put(token);
+        json.put("target_tokens", tokens);
         json.put("old_pages", oldPages);
         json.put("new_pages", newPages);
         json.put("complete", complete);
@@ -123,10 +174,20 @@ public final class GalleryUpdateRecord {
         JSONArray retained = json.optJSONArray("retained_parents");
         long[] retainedGids = new long[retained != null ? retained.length() : 0];
         for (int i = 0; i < retainedGids.length; i++) retainedGids[i] = retained.getLong(i);
+        JSONArray tokens = json.optJSONArray("target_tokens");
+        String[] targetTokens = new String[tokens != null ? tokens.length() : 0];
+        if (targetTokens.length != 0 && targetTokens.length != newPages)
+            throw new JSONException("Invalid token snapshot length");
+        for (int i = 0; i < targetTokens.length; i++) {
+            targetTokens[i] = tokens.getString(i);
+            if (targetTokens[i].isEmpty() || "failed".equals(targetTokens[i]))
+                throw new JSONException("Invalid token snapshot");
+        }
         return new GalleryUpdateRecord(targetGid, sourceGid, completedAt, oldPages, newPages,
                 json.getBoolean("complete"), indexes(json.getJSONArray("added"), newPages),
                 indexes(json.getJSONArray("deleted"), oldPages), readingPage,
-                json.optString("source_title", ""), json.optString("error_reason", ""), retainedGids);
+                json.optString("source_title", ""), json.optString("error_reason", ""), retainedGids,
+                json.optLong("first_gid", 0), targetTokens);
     }
 
     private static JSONArray array(int[] pages) {

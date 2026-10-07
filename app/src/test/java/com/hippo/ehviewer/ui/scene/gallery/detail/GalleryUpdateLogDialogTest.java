@@ -67,6 +67,53 @@ public class GalleryUpdateLogDialogTest {
         dialog.dismiss(); activity.finish();
     }
 
+    @Test public void fourActionsAreAvailableAndLocalActionsRunOnlyAfterClick() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setTheme(R.style.AppTheme);
+        AtomicInteger reads = new AtomicInteger(), histories = new AtomicInteger(), versions = new AtomicInteger();
+        AlertDialog dialog = GalleryUpdateLogDialog.show(activity, record(true), reads::incrementAndGet,
+                histories::incrementAndGet, versions::incrementAndGet);
+        assertEquals(0, reads.get() + histories.get() + versions.get());
+        View decor = dialog.getWindow().getDecorView();
+        assertTrue(text(decor).contains(activity.getString(R.string.gallery_update_history_local_notice)));
+        findText(decor, activity.getString(R.string.gallery_update_log_read)).performClick();
+        assertEquals(1, reads.get());
+        findText(decor, activity.getString(R.string.gallery_update_log_history)).performClick();
+        assertEquals(1, histories.get());
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+        ShadowLooper.idleMainLooper();
+        assertEquals(1, versions.get());
+        assertTrue(GalleryUpdateLogDialog.historyName(activity, record(true)).endsWith(" +11 -2"));
+        dialog.dismiss(); activity.finish();
+    }
+
+    @Test public void incompleteOrUnavailableLocalUpdatesKeepHistoryAccessible() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setTheme(R.style.AppTheme);
+        AlertDialog dialog = GalleryUpdateLogDialog.show(activity, record(false), () -> fail("Cannot read"),
+                () -> {}, () -> {});
+        assertFalse(findText(dialog.getWindow().getDecorView(),
+                activity.getString(R.string.gallery_update_log_read)).isEnabled());
+        assertTrue(findText(dialog.getWindow().getDecorView(),
+                activity.getString(R.string.gallery_update_log_history)).isEnabled());
+        dialog.dismiss();
+        dialog = GalleryUpdateLogDialog.show(activity, record(true), null, () -> {}, () -> {});
+        assertFalse(findText(dialog.getWindow().getDecorView(),
+                activity.getString(R.string.gallery_update_log_read)).isEnabled());
+        dialog.dismiss(); activity.finish();
+    }
+
+    private View findText(View view, String value) {
+        if (view instanceof TextView label && value.contentEquals(label.getText())) return view;
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View match = findText(group.getChildAt(i), value);
+                if (match != null) return match;
+            }
+        }
+        return null;
+    }
+
     @Test public void failureUsesSameDialogWithTimeSourceReasonAndRetainedParents() {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
         activity.setTheme(R.style.AppTheme);

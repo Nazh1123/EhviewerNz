@@ -2750,21 +2750,41 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void readGalleryUpdates() {
-        GalleryUpdateRecord record = mGalleryUpdateRecord;
+        readGalleryUpdates(mGalleryUpdateRecord);
+    }
+
+    private void readGalleryUpdates(GalleryUpdateRecord record) {
         if (record == null || !record.complete || record.addedPages.length == 0
                 || mGalleryDetail == null || getActivity2() == null) return;
+        if (getEHContext() == null) return;
+        DownloadInfo local = EhApplication.getDownloadManager(getEHContext()).getDownloadInfo(mGalleryDetail.gid);
+        if (local == null || local.state != DownloadInfo.STATE_FINISH
+                || GalleryUpdateManager.getPlan(local.gid) != null) {
+            showTip(R.string.gallery_update_history_no_local, LENGTH_SHORT);
+            return;
+        }
+        if (mUpdateLogDialog != null) mUpdateLogDialog.dismiss();
         Intent intent = new Intent(getActivity2(), GalleryActivity.class);
         intent.setAction(GalleryActivity.ACTION_EH);
         intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, mGalleryDetail);
         // Resolve the record in the reader, avoiding large Intent page arrays.
         intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_TIME, record.completedAt);
+        intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_GID, record.targetGid);
         startActivity(intent);
     }
 
     private void showGalleryUpdateLog() {
-        if (mGalleryUpdateRecord == null || getEHContext() == null) return;
+        showGalleryUpdateLog(mGalleryUpdateRecord);
+    }
+
+    private void showGalleryUpdateLog(GalleryUpdateRecord record) {
+        if (record == null || getEHContext() == null) return;
         if (mUpdateLogDialog != null && mUpdateLogDialog.isShowing()) return;
-        mUpdateLogDialog = GalleryUpdateLogDialog.show(getEHContext(), mGalleryUpdateRecord, () -> {
+        DownloadInfo local = EhApplication.getDownloadManager(getEHContext()).getDownloadInfo(getGid());
+        Runnable read = local != null && local.state == DownloadInfo.STATE_FINISH
+                && GalleryUpdateManager.getPlan(local.gid) == null ? () -> readGalleryUpdates(record) : null;
+        mUpdateLogDialog = GalleryUpdateLogDialog.show(getEHContext(), record, read,
+                this::showGalleryUpdateHistory, () -> {
             if (mGalleryDetail == null || getEHContext() == null) return;
             if (TextUtils.isEmpty(mGalleryDetail.parent)) {
                 showTip(R.string.gallery_history_empty, LENGTH_SHORT);
@@ -2774,6 +2794,58 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 mParentChainDialog = new GalleryParentChainDialog(this, mContext, mGalleryDetail);
             }
             mParentChainDialog.show();
+        });
+    }
+
+    private void showGalleryUpdateHistory() {
+        Context context = getEHContext();
+        GalleryDetail detail = mGalleryDetail;
+        if (context == null || detail == null) return;
+        if (mUpdateLogDialog != null) mUpdateLogDialog.dismiss();
+        long gid = detail.gid;
+        long firstGid = detail.firstGid != null && detail.firstGid > 0 ? detail.firstGid
+                : mGalleryUpdateRecord != null ? mGalleryUpdateRecord.firstGid : 0;
+        AlertDialog loading = new AlertDialog.Builder(context)
+                .setTitle(R.string.gallery_update_log_history)
+                .setMessage(R.string.gallery_update_log_loading)
+                .setPositiveButton(android.R.string.cancel, null).create();
+        mUpdateLogDialog = loading;
+        loading.show();
+        Context application = context.getApplicationContext();
+        EhApplication.getExecutorService(application).execute(() -> {
+            java.util.List<GalleryUpdateRecord> loaded;
+            try {
+                loaded = GalleryUpdateRecordStore.get(application).findHistory(gid, firstGid);
+            } catch (RuntimeException e) {
+                android.util.Log.w("GalleryUpdateRecords", "Unable to load update history", e);
+                handler.post(() -> {
+                    if (mUpdateLogDialog == loading && loading.isShowing()) {
+                        loading.dismiss();
+                        showTip(R.string.gallery_update_log_unavailable, LENGTH_SHORT);
+                    }
+                });
+                return;
+            }
+            java.util.List<GalleryUpdateRecord> records = loaded;
+            handler.post(() -> {
+                if (mUpdateLogDialog != loading || !loading.isShowing() || getEHContext() == null
+                        || mGalleryDetail == null || mGalleryDetail.gid != gid) return;
+                loading.dismiss();
+                AlertDialog.Builder builder = new AlertDialog.Builder(getEHContext())
+                        .setTitle(R.string.gallery_update_log_history)
+                        .setPositiveButton(android.R.string.ok, null);
+                if (records.isEmpty()) builder.setMessage(R.string.gallery_update_history_empty);
+                else {
+                    String[] names = new String[records.size()];
+                    for (int i = 0; i < names.length; i++)
+                        names[i] = GalleryUpdateLogDialog.historyName(getEHContext(), records.get(i));
+                    builder.setItems(names, (dialog, index) -> {
+                        dialog.dismiss();
+                        showGalleryUpdateLog(records.get(index));
+                    });
+                }
+                mUpdateLogDialog = builder.show();
+            });
         });
     }
 

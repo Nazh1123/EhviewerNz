@@ -9,7 +9,7 @@
     <string name="gallery_update_log_deleted">Deleted %1$d pages (old version)</string>
     <string name="gallery_update_log_none">None</string>
     <string name="gallery_update_log_incomplete">Page information is incomplete; additions and deletions cannot be determined reliably.</string>
-    <string name="gallery_update_log_versions">View version history</string>
+    <string name="gallery_update_log_versions">View version chain history</string>
     <string name="gallery_update_log_loading">Loading update record…</string>
     <string name="gallery_update_log_unavailable">Update record is no longer available</string>
     <string name="gallery_update_reader_progress">Updates %1$d/%2$d · p%3$d</string>
@@ -53,4 +53,11 @@
     <string name="gallery_update_error_interrupted">The previous update was interrupted before the download finished. Retry to continue.</string>
     <string name="gallery_update_error_tokens">Page tokens for gallery GID %1$d are incomplete; no reliable reading-progress anchor can be found.</string>
     <string name="gallery_update_error_progress_save">Unable to save and verify the migrated reading position on disk and in the local cache.</string>
+    <string name="gallery_update_log_read">Read this update</string>
+    <string name="gallery_update_log_history">View update record history</string>
+    <string name="gallery_update_history_local_notice">Only added pages that still exist and are readable in the current local version will be opened, in current page order. Pages deleted by later updates or missing locally are skipped. Counts and page numbers above describe the original update. Each update has its own reading progress.</string>
+    <string name="gallery_update_history_no_local">The current local gallery is unavailable or still updating.</string>
+    <string name="gallery_update_history_no_pages">No added pages from this update remain readable locally. They may have been deleted in a later version or be missing locally. Older records without page-token snapshots can only be read in their original local version.</string>
+    <string name="gallery_update_history_incomplete">Page information incomplete</string>
+    <string name="gallery_update_history_empty">No saved update records for this version chain. Older records may have been removed by the record count limit.</string>
 </resources>

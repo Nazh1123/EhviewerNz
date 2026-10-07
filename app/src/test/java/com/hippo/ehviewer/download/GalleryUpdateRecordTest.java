@@ -31,6 +31,49 @@ public class GalleryUpdateRecordTest {
         assertArrayEquals(new int[]{1}, record.deletedPages);
     }
 
+    @Test public void historicalAdditionsFollowTokensAfterDeletionAndReordering() throws Exception {
+        GalleryUpdateRecord record = GalleryUpdateRecord.compare(200, 100,
+                info("A", "B"), info("A", "X", "Y", "B", "Z")).withFirstGid(50);
+        GalleryUpdateRecord saved = GalleryUpdateRecord.fromJson(200, 100, 123, 1, record.toJson());
+        SpiderInfo latest = info("Z", "B", "NEW", "X", "A");
+        latest.gid = 400;
+        assertEquals(50, saved.firstGid);
+        assertArrayEquals(new int[]{0, 3}, saved.resolveAddedPages(latest));
+        // Maps each original addition to its current page, retaining the missing Y slot.
+        assertArrayEquals(new int[]{3, -1, 0}, saved.resolveAddedPageMap(latest));
+        assertArrayEquals(new int[]{1, 2, 4}, saved.addedPages);
+    }
+
+    @Test public void duplicateHistoricalAdditionsDoNotReadAnUnchangedOccurrence() {
+        GalleryUpdateRecord record = GalleryUpdateRecord.compare(200, 100,
+                info("A", "B"), info("A", "B", "B", "X"));
+        assertArrayEquals(new int[]{2, 3}, record.addedPages);
+        assertArrayEquals(new int[]{0}, record.resolveAddedPages(info("X", "B", "A")));
+        assertArrayEquals(new int[]{0, 2}, record.resolveAddedPages(info("X", "B", "B", "A")));
+    }
+
+    @Test public void legacyHistoryNeverAppliesOldPageNumbersToAnotherVersion() {
+        GalleryUpdateRecord legacy = new GalleryUpdateRecord(200, 100, 123,
+                1, 2, true, new int[]{1}, new int[0], 0);
+        SpiderInfo current = info("A", "X");
+        current.gid = 300;
+        assertArrayEquals(new int[0], legacy.resolveAddedPages(current));
+        current.gid = 200;
+        assertArrayEquals(new int[]{1}, legacy.resolveAddedPages(current));
+        assertArrayEquals(new int[0], legacy.resolveAddedPages(info("A", null)));
+    }
+
+    @Test public void corruptTokenSnapshotsCannotSelectWrongPages() throws Exception {
+        for (String tokens : new String[]{"[\"A\"]", "[\"A\",\"failed\"]", "[\"A\",\"\"]"}) {
+            try {
+                GalleryUpdateRecord.fromJson(200, 100, 1, 0,
+                        "{\"old_pages\":1,\"new_pages\":2,\"complete\":true,\"added\":[1],"
+                                + "\"deleted\":[],\"target_tokens\":" + tokens + "}");
+                fail("Invalid token snapshot accepted");
+            } catch (org.json.JSONException expected) { }
+        }
+    }
+
     @Test public void duplicateOccurrencesAreCountedRatherThanCollapsed() {
         GalleryUpdateRecord record = GalleryUpdateRecord.compare(200, 100,
                 info("A", "A", "B"), info("A", "B", "B"));

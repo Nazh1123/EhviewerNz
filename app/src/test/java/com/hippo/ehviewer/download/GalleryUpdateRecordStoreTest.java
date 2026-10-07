@@ -52,6 +52,54 @@ public class GalleryUpdateRecordStoreTest {
         assertArrayEquals(new int[]{1, 3, 4}, store.find(200).addedPages);
     }
 
+    @Test public void historyGroupsByFirstGidAndIncludesConnectedLegacyRecords() {
+        stage(200, 100); assertTrue(store.complete(200, 100));
+        GalleryUpdateManager.UpdatePlan plan = new GalleryUpdateManager.UpdatePlan(300, 200, List.of(200L));
+        assertTrue(store.stage(plan, () -> new GalleryUpdateRecord(300, 200, 0,
+                1, 2, true, new int[]{1}, new int[0], 0).withFirstGid(50)));
+        assertTrue(store.complete(300, 200));
+        // An update can skip local versions; first_gid still joins its history.
+        plan = new GalleryUpdateManager.UpdatePlan(500, 450, List.of(450L));
+        assertTrue(store.stage(plan, () -> new GalleryUpdateRecord(500, 450, 0,
+                1, 2, true, new int[]{1}, new int[0], 0).withFirstGid(50)));
+        assertTrue(store.complete(500, 450));
+        stage(900, 800); assertTrue(store.complete(900, 800));
+        for (long gid : new long[]{200, 300, 500, 900}) {
+            store.getWritableDatabase().execSQL("UPDATE records SET completed_at=? WHERE gid=?",
+                    new Object[]{gid, gid});
+        }
+        assertEquals(List.of(500L, 300L, 200L), store.findHistory(500, 50).stream()
+                .map(record -> record.targetGid).toList());
+        assertEquals(50, store.find(500).firstGid);
+        stage(600, 500); assertTrue(store.complete(600, 500));
+        assertEquals(50, store.find(600).firstGid);
+        assertEquals(List.of(600L, 500L, 300L, 200L), store.findHistory(300, 0).stream()
+                .map(record -> record.targetGid).toList());
+    }
+
+    @Test public void databaseUpgradeKeepsOriginalLogsAndResumePositions() throws Exception {
+        store.close();
+        context.deleteDatabase("gallery_update_records.db");
+        GalleryUpdateRecord legacy = new GalleryUpdateRecord(200, 100, 123,
+                2, 5, true, new int[]{1, 3, 4}, new int[0], 2);
+        try (android.database.sqlite.SQLiteDatabase db = context.openOrCreateDatabase(
+                "gallery_update_records.db", Context.MODE_PRIVATE, null)) {
+            for (String table : new String[]{"records", "pending"}) {
+                db.execSQL("CREATE TABLE " + table + " (gid INTEGER PRIMARY KEY, source_gid INTEGER NOT NULL, "
+                        + "completed_at INTEGER NOT NULL, reading_page INTEGER NOT NULL DEFAULT 0, payload TEXT NOT NULL)");
+            }
+            db.execSQL("INSERT INTO records VALUES(200,100,123,2,?)", new Object[]{legacy.toJson()});
+            db.setVersion(1);
+        }
+        store = new GalleryUpdateRecordStore(context);
+        assertEquals(2, store.getReadableDatabase().getVersion());
+        assertEquals(123, store.find(200).completedAt);
+        assertEquals(2, store.find(200).readingPage);
+        assertEquals(0, store.find(200).firstGid);
+        assertArrayEquals(new int[]{1, 3, 4}, store.find(200).addedPages);
+        assertEquals(1, store.findHistory(200, 0).size());
+    }
+
     @Test public void successfulRetryDoesNotResetTimeOrIndependentReadingProgress() {
         stage(200, 100);
         assertTrue(store.complete(200, 100));

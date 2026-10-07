@@ -5,6 +5,7 @@ import android.graphics.Typeface;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Button;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -20,6 +21,11 @@ final class GalleryUpdateLogDialog {
     private GalleryUpdateLogDialog() {}
 
     static AlertDialog show(Context context, GalleryUpdateRecord record, Runnable showVersions) {
+        return show(context, record, null, null, showVersions);
+    }
+
+    static AlertDialog show(Context context, GalleryUpdateRecord record, Runnable readUpdate,
+                            Runnable showHistory, Runnable showVersions) {
         int padding = Math.round(24 * context.getResources().getDisplayMetrics().density);
         LinearLayout content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -53,6 +59,23 @@ final class GalleryUpdateLogDialog {
             notice.setText(R.string.gallery_update_log_incomplete);
             content.addView(notice);
         }
+        if (!record.isFailure()) {
+            section(context, content, context.getString(R.string.gallery_read_updates),
+                    context.getString(R.string.gallery_update_history_local_notice), padding);
+        }
+        if (readUpdate != null || showHistory != null) {
+            Button read = new Button(context);
+            read.setText(R.string.gallery_update_log_read);
+            read.setEnabled(readUpdate != null && record.complete && !record.isFailure()
+                    && record.addedPages.length > 0);
+            read.setOnClickListener(view -> readUpdate.run());
+            content.addView(read);
+            Button history = new Button(context);
+            history.setText(R.string.gallery_update_log_history);
+            history.setEnabled(showHistory != null);
+            history.setOnClickListener(view -> showHistory.run());
+            content.addView(history);
+        }
         ScrollView scroll = new ScrollView(context);
         scroll.addView(content);
         AlertDialog dialog = new AlertDialog.Builder(context)
@@ -64,6 +87,14 @@ final class GalleryUpdateLogDialog {
                 .create();
         dialog.show();
         return dialog;
+    }
+
+    static String historyName(Context context, GalleryUpdateRecord record) {
+        String time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                .format(new Date(record.completedAt));
+        if (record.isFailure()) return time + " · " + context.getString(R.string.gallery_update_error_log);
+        if (!record.complete) return time + " · " + context.getString(R.string.gallery_update_history_incomplete);
+        return time + " +" + record.addedPages.length + " -" + record.deletedPages.length;
     }
 
     private static String pages(Context context, int[] pages) {

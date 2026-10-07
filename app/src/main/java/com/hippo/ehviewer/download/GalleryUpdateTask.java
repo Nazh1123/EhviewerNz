@@ -130,6 +130,7 @@ public final class GalleryUpdateTask {
             @Override
             public void onSuccess(@NonNull GalleryChainMetadata metadata) {
                 firstGid = metadata.firstGid;
+                if (firstGid > 0L) target.firstGid = firstGid;
                 if (metadata.firstGid > 0L && !TextUtils.isEmpty(metadata.firstToken)
                         && metadata.firstGid != target.gid) {
                     requestForwardSegment(metadata.firstGid, metadata.firstToken);

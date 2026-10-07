@@ -49,6 +49,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     private static final String TAG = DirGalleryProvider.class.getSimpleName();
     private static final AtomicInteger sIdGenerator = new AtomicInteger();
 
+    @Nullable
     private final UniFile mDir;
     @Nullable
     private final String mInitialFilename;
@@ -70,13 +71,24 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         mInitialFilename = initialFilename;
     }
 
-    @Override
-    public GalleryProvider2 createTranslationProvider(Context context) {
-        return new DirGalleryProvider(mDir);
+    /** Subclasses can resolve their local directory and selection on the decoder thread. */
+    protected DirGalleryProvider() {
+        mDir = null;
+        mInitialFilename = null;
+    }
+
+    @Nullable
+    protected UniFile[] loadImageFiles() {
+        return mDir != null ? listAndSortImageFiles(mDir) : null;
     }
 
     @Override
-    public String getTranslationIdentity() { return "dir:" + mDir.getUri(); }
+    public GalleryProvider2 createTranslationProvider(Context context) {
+        return mDir != null ? new DirGalleryProvider(mDir) : null;
+    }
+
+    @Override
+    public String getTranslationIdentity() { return mDir != null ? "dir:" + mDir.getUri() : null; }
 
     @Override
     public UniFile getTranslationDirectory() { return mDir; }
@@ -241,7 +253,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     @Override
     public void run() {
         // It may take a long time, so run it in new thread
-        UniFile[] files = listAndSortImageFiles(mDir);
+        UniFile[] files = loadImageFiles();
 
         if (files == null) {
             mSize = STATE_ERROR;
