@@ -30,17 +30,33 @@ class Inpainter(private val modelPath: String, private val cfg: InpainterConfig 
         }
         val mask = RemovalMask.dilate(seed, width, height, cfg.maskRadius)
         if (mask.none { it.toInt() != 0 }) return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
-        if (cfg.method == "boxfill") {
+        val backgrounds = bounds.map { RemovalBackground.sample(pixels, mask, width, it) }
+        val complex = regions.indices.filter { cfg.method == "aot" && !backgrounds[it].flat }
+        // Complex regions win at overlaps; a neighbouring flat bubble cannot erase artwork.
+        val aiMask = ByteArray(mask.size)
+        for (index in complex) {
+            val box = bounds[index]
+            for (y in max(0, box[1] - cfg.maskRadius) until min(height, box[3] + cfg.maskRadius))
+                for (x in max(0, box[0] - cfg.maskRadius) until min(width, box[2] + cfg.maskRadius)) {
+                    val i = y * width + x
+                    aiMask[i] = mask[i]
+                }
+        }
+        regions.forEachIndexed { index, region -> region.onArt = index in complex }
+        run {
             for ((index, region) in regions.withIndex()) {
+                if (index in complex) continue
                 val box = bounds[index]
-                val color = backgroundColor(pixels, seed, width, box)
+                val color = backgrounds[index].color
                 region.onArt = false
                 val left = max(0, box[0] - cfg.maskRadius); val right = min(width, box[2] + cfg.maskRadius)
                 val top = max(0, box[1] - cfg.maskRadius); val bottom = min(height, box[3] + cfg.maskRadius)
                 for (y in top until bottom) for (x in left until right)
-                    if (mask[y * width + x].toInt() != 0) pixels[y * width + x] = color
+                    if (mask[y * width + x].toInt() != 0 && aiMask[y * width + x].toInt() == 0)
+                        pixels[y * width + x] = color
             }
-        } else {
+        }
+        if (aiMask.any { it.toInt() != 0 }) {
             val side = cfg.tileSize
             val resized = Bitmap.createScaledBitmap(page, side, side, true)
             val small = IntArray(side * side)
@@ -51,7 +67,7 @@ class Inpainter(private val modelPath: String, private val cfg: InpainterConfig 
             for (y in 0 until side) for (x in 0 until side) {
                 val i = y * side + x
                 val sx = (x.toLong() * width / side).toInt(); val sy = (y.toLong() * height / side).toInt()
-                if (mask[sy * width + sx].toInt() != 0) holes[i] = 1f
+                if (aiMask[sy * width + sx].toInt() != 0) holes[i] = 1f
                 else for (channel in 0..2) input[channel * small.size + i] =
                     ((small[i] ushr (16 - channel * 8)) and 255) / 127.5f - 1f
             }
@@ -67,10 +83,9 @@ class Inpainter(private val modelPath: String, private val cfg: InpainterConfig 
             try {
                 for (y in 0 until height) {
                     restoredPage.getPixels(row, 0, width, 0, y, width, 1)
-                    for (x in row.indices) if (mask[y * width + x].toInt() != 0) pixels[y * width + x] = row[x]
+                    for (x in row.indices) if (aiMask[y * width + x].toInt() != 0) pixels[y * width + x] = row[x]
                 }
             } finally { if (restoredPage !== resultSmall) restoredPage.recycle(); resultSmall.recycle() }
-            regions.forEach { it.onArt = true }
         }
         return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
     }
@@ -81,23 +96,7 @@ class Inpainter(private val modelPath: String, private val cfg: InpainterConfig 
         ceil(region.x1 + cfg.regionPad).toInt().coerceIn(0, width),
         ceil(region.y1 + cfg.regionPad).toInt().coerceIn(0, height))
 
-    private fun backgroundColor(pixels: IntArray, letters: ByteArray, width: Int, box: IntArray): Int {
-        // Quantized mode rejects a few foreground strokes without requiring a second image mask.
-        val histogram = IntArray(4096)
-        for (y in box[1] until box[3] step 2) for (x in box[0] until box[2] step 2) {
-            val index = y * width + x
-            if (letters[index].toInt() != 0) continue
-            val color = pixels[index]
-            val bucket = ((color ushr 12) and 0xF00) or ((color ushr 8) and 0xF0) or ((color ushr 4) and 0xF)
-            histogram[bucket]++
-        }
-        val bucket = histogram.indices.maxByOrNull { histogram[it] } ?: 4095
-        if (histogram[bucket] == 0) return Color.WHITE
-        return Color.rgb(((bucket ushr 8) and 15) * 17, ((bucket ushr 4) and 15) * 17, (bucket and 15) * 17)
-    }
-
-    fun warmUp() {
-        if (cfg.method == "aot") model().inpaint(FloatArray(64 * 64 * 3), FloatArray(64 * 64), 64, FloatArray(64 * 64 * 3))
-    }
+    // First complex region loads AOT; flat-only pages never allocate its weights/workspace.
+    fun warmUp() = Unit
     @Synchronized override fun close() { closed = true; model?.close(); model = null }
 }
