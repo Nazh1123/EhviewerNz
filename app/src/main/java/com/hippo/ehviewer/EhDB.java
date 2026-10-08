@@ -704,12 +704,13 @@ public class EhDB {
         return new ArrayList<>(list);
     }
 
+    @Nullable
     public static synchronized GalleryInfo searchLocalFavorites(long query) {
         //        query = SqlUtils.sqlEscapeString("%" + query+ "%");
         LocalFavoritesDao dao = sDaoSession.getLocalFavoritesDao();
         List<LocalFavoriteInfo> list = dao.queryBuilder().orderDesc(LocalFavoritesDao.Properties.Time)
                 .where(LocalFavoritesDao.Properties.Gid.eq(query)).list();
-        return list.get(0);
+        return list.isEmpty() ? null : list.get(0);
     }
 
     public static synchronized void removeLocalFavorites(long gid) {
@@ -926,6 +927,11 @@ public class EhDB {
 
     public static synchronized LazyList<HistoryInfo> getHistoryLazyList() {
         return sDaoSession.getHistoryDao().queryBuilder().orderDesc(HistoryDao.Properties.Time).listLazy();
+    }
+
+    @Nullable
+    public static synchronized GalleryInfo getHistoryInfo(long gid) {
+        return sDaoSession.getHistoryDao().load(gid);
     }
 
     public static synchronized void putHistoryInfo(GalleryInfo galleryInfo) {

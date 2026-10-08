@@ -96,6 +96,7 @@ import com.hippo.ehviewer.client.data.GalleryComment;
 import com.hippo.ehviewer.client.data.GalleryCommentList;
 import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ehviewer.client.data.GalleryInfo;
+import com.hippo.ehviewer.client.data.GalleryPreview;
 import com.hippo.ehviewer.client.data.GalleryTagGroup;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.data.PreviewSet;
@@ -133,6 +134,7 @@ import com.hippo.ehviewer.ui.scene.history.HistoryScene;
 import com.hippo.ehviewer.util.ClipboardUtil;
 import com.hippo.ehviewer.widget.ArchiverDownloadProgress;
 import com.hippo.ehviewer.widget.GalleryRatingBar;
+import com.hippo.ehviewer.widget.LocalImageLoader;
 import com.hippo.lib.yorozuya.AssertUtils;
 import com.hippo.lib.yorozuya.IOUtils;
 import com.hippo.lib.yorozuya.IntIdGenerator;
@@ -210,6 +212,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     public static final String KEY_PAGE = "page";
 
     private static final String KEY_GALLERY_DETAIL = "gallery_detail";
+    private static final String KEY_OFFLINE = "offline";
+    private static final String KEY_OFFLINE_ERROR = "offline_error";
     private static final String KEY_REQUEST_ID = "request_id";
     private static final String KEY_GALLERY_UPDATE_SESSION_GID = "gallery_update_session_gid";
     private static final String KEY_GALLERY_UPDATE_BUTTON_STATE = "gallery_update_button_state";
@@ -354,6 +358,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     @Nullable
     private GalleryDetail mGalleryDetail;
+    private boolean mOffline;
+    private String mOfflineError;
+    private OfflineGalleryDetail mOfflineDetail;
+    private int mOfflineGeneration;
     @Nullable
     private GalleryVersionMetadataTask mGalleryVersionLookup;
     private long mVersionInfoTipShownForGid = -1L;
@@ -554,6 +562,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mGid = savedInstanceState.getLong(KEY_GID);
         mToken = savedInstanceState.getString(KEY_TOKEN);
         mGalleryDetail = savedInstanceState.getParcelable(KEY_GALLERY_DETAIL);
+        mOffline = savedInstanceState.getBoolean(KEY_OFFLINE);
+        mOfflineError = savedInstanceState.getString(KEY_OFFLINE_ERROR);
         mRequestId = savedInstanceState.getInt(KEY_REQUEST_ID);
         mGalleryUpdateSessionGid = savedInstanceState.getLong(
                 KEY_GALLERY_UPDATE_SESSION_GID, -1L);
@@ -573,12 +583,14 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         outState.putLong(KEY_GID, mGid);
         if (mToken != null) {
-            outState.putString(KEY_TOKEN, mAction);
+            outState.putString(KEY_TOKEN, mToken);
         }
         if (mGalleryDetail != null) {
             outState.putParcelable(KEY_GALLERY_DETAIL, mGalleryDetail);
         }
         outState.putInt(KEY_REQUEST_ID, mRequestId);
+        outState.putBoolean(KEY_OFFLINE, mOffline);
+        outState.putString(KEY_OFFLINE_ERROR, mOfflineError);
         if (mGalleryUpdateSessionGid > 0L) {
             outState.putLong(KEY_GALLERY_UPDATE_SESSION_GID, mGalleryUpdateSessionGid);
             outState.putInt(KEY_GALLERY_UPDATE_BUTTON_STATE, mGalleryUpdateButtonState);
@@ -830,9 +842,15 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mProgress = ViewUtils.$$(mainView, R.id.progress);
 
         mViewTransition2 = new ViewTransition(mBelowHeader, mProgress);
+        mState = STATE_INIT;
 
         if (prepareData()) {
-            if (mGalleryDetail != null) {
+            if (mOffline) {
+                if (mOfflineDetail != null) bindOfflineDetail();
+                else loadOfflineDetail(null);
+                setTransitionName();
+                adjustViewVisibility(mOfflineDetail == null ? STATE_REFRESH_HEADER : STATE_NORMAL, false);
+            } else if (mGalleryDetail != null) {
                 bindViewSecond();
                 setTransitionName();
                 adjustViewVisibility(STATE_NORMAL, false);
@@ -864,6 +882,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @Override
     public void onResume() {
         super.onResume();
+        if (mOffline) {
+            if (mOfflineDetail != null && !isDetailRequestPending()) loadOfflineDetail(null);
+            return;
+        }
         invalidateUpdateRecord();
         GalleryInfo info = getGalleryInfo();
         if (info != null && mGalleryDetail != null && mPages != null) {
@@ -878,6 +900,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        mOfflineGeneration++;
 
         Context context = getEHContext();
         AssertUtils.assertNotNull(context);
@@ -992,7 +1015,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Context context = getEHContext();
         AssertUtils.assertNotNull(context);
 
-        if (mGalleryDetail != null) {
+        if (mOffline || mGalleryDetail != null) {
             return true;
         }
 
@@ -1237,6 +1260,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         if (gd == null) {
             return;
         }
+        setOfflineVisibility(false);
         if (mThumb == null || mTitle == null || mUploader == null || mCategory == null ||
                 mLanguage == null || mPages == null || mSize == null || mPosted == null ||
                 mFavoredTimes == null || mRatingText == null || mRating == null || mTorrent == null) {
@@ -1299,6 +1323,152 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         if (mArchiverDownloadProgress != null) {
             mArchiverDownloadProgress.initThread(gd);
         }
+    }
+
+    private boolean isDetailRequestPending() {
+        Context context = getEHContext();
+        return context != null && ((EhApplication) context.getApplicationContext()).containGlobalStuff(mRequestId);
+    }
+
+    private void refreshDetail() {
+        if (isDetailRequestPending()) return;
+        mOfflineGeneration++;
+        if (request()) {
+            if (mOffline) {
+                mDownload.setEnabled(false);
+                mDownload.setText(R.string.offline_gallery_refreshing);
+                mCommentsText.setText(R.string.offline_gallery_refreshing);
+            } else {
+                adjustViewVisibility(STATE_REFRESH, true);
+            }
+        }
+    }
+
+    /** Disk and database work stays off the UI thread; stale results cannot replace an online success. */
+    private void loadOfflineDetail(@Nullable Exception error) {
+        Context context = getEHContext();
+        if (context == null || mTip == null) return;
+        if (error != null) mOfflineError = ExceptionUtils.getReadableString(error);
+        final long gid = getGid();
+        final String token = getToken();
+        final GalleryInfo passedInfo = getGalleryInfo();
+        final int generation = ++mOfflineGeneration;
+        EhApplication.getExecutorService(context).execute(() -> {
+            OfflineGalleryDetail local = null;
+            try {
+                GalleryInfo source = EhApplication.getDownloadManager(context).getDownloadInfo(gid);
+                if (source == null) source = passedInfo;
+                if (source == null) source = EhDB.getHistoryInfo(gid);
+                if (source == null) source = EhDB.searchLocalFavorites(gid);
+                if (source == null) {
+                    source = new GalleryInfo();
+                    source.gid = gid;
+                    source.token = token;
+                }
+                local = OfflineGalleryDetail.read(source, EhDB.queryGalleryTags(gid),
+                        SpiderDen.getExistingGalleryDownloadDir(source));
+            } catch (Exception failure) {
+                android.util.Log.w("GalleryDetailScene", "Unable to read local gallery " + gid, failure);
+            }
+            final OfflineGalleryDetail result = local;
+            handler.post(() -> {
+                if (generation != mOfflineGeneration || mTip == null || gid != getGid()) return;
+                if (result == null) {
+                    if (error != null) mTip.setText(ExceptionUtils.getReadableString(error));
+                    else mTip.setText(R.string.error_cannot_find_gallery);
+                    mOffline = false;
+                    adjustViewVisibility(STATE_FAILED, true);
+                    return;
+                }
+                mOffline = true;
+                mOfflineDetail = result;
+                mGalleryInfo = result.info;
+                mGalleryDetail = null;
+                if (mGalleryVersionLookup != null) {
+                    mGalleryVersionLookup.cancel();
+                    mGalleryVersionLookup = null;
+                }
+                bindOfflineDetail();
+                adjustViewVisibility(STATE_NORMAL, true);
+            });
+        });
+    }
+
+    private void setOfflineVisibility(boolean offline) {
+        for (View action : new View[]{mHeartGroup, mRate, mShare, mTorrent, mArchiver, mHaH, mSearchCover}) {
+            action.setVisibility(offline ? View.GONE : View.VISIBLE);
+        }
+        mLocalDelete.setVisibility(offline ? View.VISIBLE : View.GONE);
+        mRating.setVisibility(offline ? View.GONE : Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
+        mRatingText.setVisibility(offline || Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
+        mRatingText.setGravity(Gravity.CENTER);
+        int textPadding = offline ? getResources().getDimensionPixelSize(R.dimen.keyline_margin) : 0;
+        mRatingText.setPadding(textPadding, 0, textPadding, 0);
+        mComments.setVisibility(offline || Settings.getShowGalleryComment() ? View.VISIBLE : View.GONE);
+        mCommentsText.setVisibility(offline || Settings.getShowGalleryComment() ? View.VISIBLE : View.GONE);
+        mFavoredTimes.setVisibility(offline ? View.GONE : View.VISIBLE);
+        mDownload.setEnabled(true);
+        mRead.setEnabled(true);
+        mNoTags.setText(R.string.no_tags);
+        if (offline) {
+            mHaveNewVersion.setVisibility(View.GONE);
+            mArchiverDownloadProgress.setVisibility(View.GONE);
+            setGalleryVersionActionVisibility(false, false);
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
+    private void bindOfflineDetail() {
+        if (mOfflineDetail == null || mThumb == null) return;
+        OfflineGalleryDetail local = mOfflineDetail;
+        GalleryDetail info = local.info;
+        setOfflineVisibility(true);
+        mTitle.setText(EhUtils.getSuitableTitle(info));
+        mUploader.setText(info.uploader);
+        mCategory.setText(EhUtils.getCategory(info.category));
+        mCategory.setTextColor(EhUtils.getCategoryColor(info.category));
+        mThumb.unload();
+        if (local.cover != null) LocalImageLoader.load(mThumb, local.cover);
+        else mThumb.load(EhCacheKeyFactory.getThumbKey(info.gid), info.thumb, false);
+        mLanguage.setText(TextUtils.isEmpty(info.language) ? "—" : info.language);
+        mPosted.setText(info.posted);
+        mPages.setText(info.pages > 0 ? (local.startPage > 0 ? local.startPage + 1 : 0) + "/" + info.pages + "P"
+                : local.previews.isEmpty() ? "—" : getString(R.string.offline_gallery_local_pages, local.previews.size()));
+        info.size = local.imageBytes > 0 ? getString(R.string.offline_gallery_local_size,
+                android.text.format.Formatter.formatFileSize(getEHContext(), local.imageBytes)) : null;
+        mSize.setText(TextUtils.isEmpty(info.size) ? "—" : info.size);
+        mRatingText.setText("\n" + getString(R.string.offline_gallery_notice)
+                + (TextUtils.isEmpty(mOfflineError) ? "" : "\n" + mOfflineError));
+        mDownload.setText(R.string.refresh);
+        mRead.setEnabled(!local.previews.isEmpty());
+        bindTags(info.tags);
+        if (info.tags.length == 0) mNoTags.setText(R.string.offline_gallery_no_tags);
+        bindComments(null);
+        mCommentsText.setText(R.string.offline_gallery_refresh);
+        mGridLayout.removeAllViews();
+        mGridLayout.setColumnSize(getResources().getDimensionPixelOffset(Settings.getThumbSizeResId()));
+        mGridLayout.setStrategy(SimpleGridAutoSpanLayout.STRATEGY_SUITABLE_SIZE);
+        int count = Math.min(27, local.previews.size());
+        for (int i = 0; i < count; i++) {
+            GalleryPreview preview = local.previews.get(i);
+            View view = getLayoutInflater2().inflate(R.layout.item_gallery_preview, mGridLayout, false);
+            LoadImageView image = view.findViewById(R.id.image);
+            image.setTag(R.id.index, preview.getPosition());
+            image.setOnClickListener(this);
+            ((TextView) view.findViewById(R.id.text)).setText(Integer.toString(preview.getPosition() + 1));
+            mGridLayout.addView(view);
+            preview.load(image);
+        }
+        mPreviewText.setText(count == 0 ? R.string.offline_gallery_no_images : R.string.offline_gallery_previews);
+        if (isDetailRequestPending()) {
+            mDownload.setEnabled(false);
+            mDownload.setText(R.string.offline_gallery_refreshing);
+            mCommentsText.setText(R.string.offline_gallery_refreshing);
+        }
+    }
+
+    private GalleryDetail getDisplayDetail() {
+        return mOffline && mOfflineDetail != null ? mOfflineDetail.info : mGalleryDetail;
     }
 
     private void bindReadProgress(GalleryInfo info) {
@@ -1592,10 +1762,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                     }
                     break;
                 case R.id.action_refresh:
-                    if (mState != STATE_REFRESH && mState != STATE_REFRESH_HEADER) {
-                        adjustViewVisibility(STATE_REFRESH, true);
-                        request();
-                    }
+                    refreshDetail();
                     break;
                 case R.id.action_open_local_gallery_image:
                     handleLocalGalleryAction(LOCAL_ACTION_OPEN_IMAGE);
@@ -1622,7 +1789,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void showArtistGalleryList() {
-        GalleryDetail gd = mGalleryDetail;
+        GalleryDetail gd = getDisplayDetail();
         if (null == gd) {
             return;
         }
@@ -1656,7 +1823,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     private void showTitleKeywordSearchDialog() {
         Context context = getEHContext();
-        GalleryDetail galleryDetail = mGalleryDetail;
+        GalleryDetail galleryDetail = getDisplayDetail();
         if (context == null || galleryDetail == null) {
             return;
         }
@@ -1743,7 +1910,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void showSimilarGalleryList() {
-        GalleryDetail gd = mGalleryDetail;
+        GalleryDetail gd = getDisplayDetail();
         if (null == gd) {
             return;
         }
@@ -1844,6 +2011,14 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void openGalleryPreviews(boolean jumpToNewContent, boolean swipeTransition) {
+        if (mOffline && mOfflineDetail != null) {
+            if (mOfflineDetail.previews.isEmpty()) return;
+            Bundle args = new Bundle();
+            args.putParcelable(GalleryPreviewsScene.KEY_GALLERY_INFO, mOfflineDetail.info);
+            args.putString(GalleryPreviewsScene.KEY_LOCAL_DIRECTORY, mOfflineDetail.directory.getUri().toString());
+            startScene(new Announcer(GalleryPreviewsScene.class).setArgs(args));
+            return;
+        }
         if (mGalleryDetail == null) {
             return;
         }
@@ -1952,7 +2127,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             }
         } else if (mInfo == v) {
             Bundle args = new Bundle();
-            args.putParcelable(GalleryInfoScene.KEY_GALLERY_DETAIL, mGalleryDetail);
+            args.putParcelable(GalleryInfoScene.KEY_GALLERY_DETAIL, getDisplayDetail());
+            args.putBoolean(GalleryInfoScene.KEY_OFFLINE, mOffline);
             startScene(new Announcer(GalleryInfoScene.class).setArgs(args));
         } else if (mHeartGroup == v) {
             if (mGalleryDetail != null && !mModifingFavorites) {
@@ -2032,6 +2208,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         } else if (mSearchCover == v) {
             showCoverGalleryList();
         } else if (mComments == v) {
+            if (mOffline) {
+                refreshDetail();
+                return;
+            }
             if (mGalleryDetail == null) {
                 return;
             }
@@ -2047,8 +2227,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         } else if (mPreviews == v) {
             openGalleryPreviews(Settings.getGalleryPreviewImmediateJump());
         } else if (mTitle == v) {
-            if (mGalleryDetail != null && mGalleryDetail.title != null) {
-                ClipboardUtil.copyText(mGalleryDetail.title);
+            GalleryDetail detail = getDisplayDetail();
+            if (detail != null && detail.title != null) {
+                ClipboardUtil.copyText(detail.title);
                 Toast.makeText(getContext(), R.string.copied_to_clipboard, Toast.LENGTH_SHORT).show();
             }
         } else {
@@ -2078,7 +2259,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private void showCoverImageDialog() {
         Context context = getEHContext();
         GalleryInfo galleryInfo = getGalleryInfo();
-        if (context == null || galleryInfo == null || TextUtils.isEmpty(galleryInfo.thumb)) {
+        if (context == null || galleryInfo == null || (TextUtils.isEmpty(galleryInfo.thumb)
+                && !(mOffline && mOfflineDetail != null && mOfflineDetail.cover != null))) {
             return;
         }
 
@@ -2089,7 +2271,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         View content = inflater.inflate(R.layout.dialog_gallery_cover, null);
         LoadImageView cover = content.findViewById(R.id.cover);
-        cover.load(EhCacheKeyFactory.getThumbKey(galleryInfo.gid), galleryInfo.thumb);
+        if (mOffline && mOfflineDetail != null && mOfflineDetail.cover != null) {
+            LocalImageLoader.load(cover, mOfflineDetail.cover);
+        } else {
+            cover.load(EhCacheKeyFactory.getThumbKey(galleryInfo.gid), galleryInfo.thumb, !mOffline);
+        }
 
         Dialog dialog = new Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dialog.setContentView(content);
@@ -2221,6 +2407,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void onDownload() {
+        if (mOffline) {
+            refreshDetail();
+            return;
+        }
         GalleryInfo galleryInfo = getGalleryInfo();
         if (galleryInfo != null) {
             if (EhApplication.getDownloadManager(mContext).getDownloadState(galleryInfo.gid) == DownloadInfo.STATE_INVALID) {
@@ -2503,6 +2693,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     private void updateDownloadText() {
         if (null == mDownload) {
+            return;
+        }
+        if (mOffline) {
+            mDownload.setText(isDetailRequestPending() ? R.string.offline_gallery_refreshing : R.string.refresh);
+            mDownload.setEnabled(!isDetailRequestPending());
             return;
         }
         switch (mDownloadState) {
@@ -2992,6 +3187,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     protected void onGetGalleryDetailSuccess(GalleryDetail result) {
+        ++mOfflineGeneration;
+        mOffline = false;
+        mOfflineError = null;
+        mOfflineDetail = null;
         if (mGalleryDetail == null || mGalleryDetail.gid != result.gid
                 || !TextUtils.equals(mGalleryDetail.token, result.token)) {
             if (mGalleryVersionLookup != null) {
@@ -3032,9 +3231,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         e.printStackTrace();
         Context context = getEHContext();
         if (null != context && null != mTip) {
-            String error = ExceptionUtils.getReadableString(e);
-            mTip.setText(error);
-            adjustViewVisibility(STATE_FAILED, true);
+            loadOfflineDetail(e);
         }
     }
 

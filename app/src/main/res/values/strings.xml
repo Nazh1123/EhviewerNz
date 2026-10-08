@@ -1299,4 +1299,13 @@
     <string name="sync_folder_success">Sync complete: %1$d added, %2$d updated</string>
     <string name="sync_folder_failed">Could not sync local folder</string>
     <string name="sync_folder_label_removed">Sync cancelled: the download label was removed</string>
+    <string name="offline_gallery_notice">- Currently viewing an offline page -</string>
+    <string name="offline_gallery_refresh">Tap to refresh this page</string>
+    <string name="offline_gallery_refreshing">Refreshing…</string>
+    <string name="offline_gallery_no_tags">No locally saved tags</string>
+    <string name="offline_gallery_no_images">No local images available</string>
+    <string name="offline_gallery_previews">View local previews</string>
+    <string name="offline_gallery_local_size">Local: %1$s</string>
+    <string name="offline_gallery_local_pages">%1$d local pages</string>
+    <string name="offline_gallery_saved_rating">Saved rating</string>
 </resources>

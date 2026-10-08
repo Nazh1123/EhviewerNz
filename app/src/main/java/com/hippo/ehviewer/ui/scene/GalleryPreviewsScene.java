@@ -71,6 +71,8 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
 
     public static final String KEY_GALLERY_INFO = "gallery_info";
     public static final String KEY_INITIAL_PAGE = "initial_page";
+    public static final String KEY_LOCAL_DIRECTORY = "local_directory";
+    private String mLocalDirectory;
     private final static String KEY_HAS_FIRST_REFRESH = "has_first_refresh";
     private static final int COLUMN_WIDTH_UNSET = -1;
     private static final int MAX_PREVIEW_COLUMNS = 8;
@@ -131,6 +133,7 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
         }
 
         mGalleryInfo = args.getParcelable(KEY_GALLERY_INFO);
+        mLocalDirectory = args.getString(KEY_LOCAL_DIRECTORY);
         mInitialPage = Math.max(0, args.getInt(KEY_INITIAL_PAGE, 0));
     }
 
@@ -256,6 +259,8 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
                 mHasFirstRefresh = false;
             }
         }
+        mHelper = null;
+        if (mLocalDirectory != null) mHasFirstRefresh = false;
         if (null != mRecyclerView) {
             mRecyclerView.stopScroll();
             if (mScaleTouchListener != null) {
@@ -438,6 +443,28 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
 
         @Override
         protected void getPageData(final int taskId, int type, int page) {
+            if (mLocalDirectory != null) {
+                Context context = getContext();
+                String directory = mLocalDirectory;
+                EhApplication.getExecutorService(context).execute(() -> {
+                    try {
+                        com.hippo.unifile.UniFile dir = com.hippo.unifile.UniFile.fromUri(context, android.net.Uri.parse(directory));
+                        ArrayList<GalleryPreview> all = com.hippo.ehviewer.ui.scene.gallery.detail.OfflineGalleryDetail.readPreviews(dir);
+                        int pages = Math.max(1, (all.size() + 59) / 60);
+                        int current = Math.max(0, Math.min(page, pages - 1));
+                        int from = Math.min(current * 60, all.size());
+                        ArrayList<GalleryPreview> result = new ArrayList<>(all.subList(from, Math.min(from + 60, all.size())));
+                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                            if (mHelper == this && isCurrentTask(taskId)) onGetPageData(taskId, pages, current, result);
+                        });
+                    } catch (Exception error) {
+                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                            if (mHelper == this && isCurrentTask(taskId)) onGetException(taskId, error);
+                        });
+                    }
+                });
+                return;
+            }
             MainActivity activity = getActivity2();
             if (null == activity || null == mClient || null == mGalleryInfo) {
                 try {
@@ -464,6 +491,10 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
 
         @Override
         protected void getExPageData(int pageAction, int taskId, int page) {
+            if (mLocalDirectory != null) {
+                getPageData(taskId, pageAction, page);
+                return;
+            }
             MainActivity activity = getActivity2();
             if (null == activity || null == mClient || null == mGalleryInfo) {
                 onGetException(taskId, new EhException(getString(R.string.error_cannot_find_gallery)));

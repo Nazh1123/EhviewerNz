@@ -49,6 +49,7 @@ import java.util.ArrayList;
 public final class GalleryInfoScene extends ToolbarScene implements EasyRecyclerView.OnItemClickListener {
 
     public static final String KEY_GALLERY_DETAIL = "gallery_detail";
+    public static final String KEY_OFFLINE = "offline";
     public static final String KEY_KEYS = "keys";
     public static final String KEY_VALUES = "values";
 
@@ -64,6 +65,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
     private ArrayList<String> mValues;
     @Nullable
     private GalleryDetail mGalleryDetail;
+    private boolean mOffline;
 
     @Nullable
     private EasyRecyclerView mRecyclerView;
@@ -89,6 +91,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
             return;
         }
         mGalleryDetail = gd;
+        mOffline = args.getBoolean(KEY_OFFLINE);
         if (mKeys == null || mValues == null) {
             return;
         }
@@ -115,6 +118,20 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
         mValues.add(gd.uploader);
         mKeys.add(resources.getString(R.string.key_posted));
         mValues.add(gd.posted);
+        if (mOffline) {
+            addOfflineValue(resources.getString(R.string.key_language), gd.language);
+            if (gd.pages > 0) addOfflineValue(resources.getString(R.string.key_pages), Integer.toString(gd.pages));
+            addOfflineValue(resources.getString(R.string.key_size), gd.size);
+            if (gd.rating > 0) addOfflineValue(resources.getString(R.string.offline_gallery_saved_rating), Float.toString(gd.rating));
+            // Empty local fields are unavailable, not zero-valued website metadata.
+            for (int i = mValues.size() - 1; i > 0; i--) {
+                if (mValues.get(i) == null || mValues.get(i).trim().isEmpty()) {
+                    mKeys.remove(i);
+                    mValues.remove(i);
+                }
+            }
+            return;
+        }
         mKeys.add(resources.getString(R.string.key_parent));
         mValues.add(gd.parent);
         mKeys.add(resources.getString(R.string.key_visible));
@@ -147,10 +164,18 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
         handlerArgs(getArguments());
     }
 
+    private void addOfflineValue(String key, String value) {
+        if (value != null && !value.trim().isEmpty()) {
+            mKeys.add(key);
+            mValues.add(value);
+        }
+    }
+
     protected void onRestore(@NonNull Bundle savedInstanceState) {
         mKeys = savedInstanceState.getStringArrayList(KEY_KEYS);
         mValues = savedInstanceState.getStringArrayList(KEY_VALUES);
         mGalleryDetail = savedInstanceState.getParcelable(KEY_GALLERY_DETAIL);
+        mOffline = savedInstanceState.getBoolean(KEY_OFFLINE);
     }
 
     @Override
@@ -159,6 +184,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
         outState.putStringArrayList(KEY_KEYS, mKeys);
         outState.putStringArrayList(KEY_VALUES, mValues);
         outState.putParcelable(KEY_GALLERY_DETAIL, mGalleryDetail);
+        outState.putBoolean(KEY_OFFLINE, mOffline);
     }
 
     @NonNull
@@ -212,7 +238,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
     public boolean onItemClick(EasyRecyclerView parent, View view, int position, long id) {
         Context context = getEHContext();
         if (null != context && 0 != position && null != mValues) {
-            if (position == INDEX_PARENT) {
+            if (!mOffline && position == INDEX_PARENT) {
                 if (mGalleryDetail != null && !TextUtils.isEmpty(mGalleryDetail.parent)) {
                     if (mParentChainDialog == null) {
                         mParentChainDialog = new GalleryParentChainDialog(
@@ -224,7 +250,8 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
                 ClipboardManager cmb = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
                 cmb.setPrimaryClip(ClipData.newPlainText(null, mValues.get(position)));
 
-                if (position == INDEX_URL) {
+                if ((!mOffline && position == INDEX_URL)
+                        || (mOffline && mKeys.get(position).equals(getString(R.string.key_url)))) {
                     // Save it to avoid detect the gallery
                     Settings.putClipboardTextHashCode(mValues.get(position).hashCode());
                 }

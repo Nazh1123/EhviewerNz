@@ -1153,4 +1153,13 @@
     <string name="settings_delete_old_gallery_versions_summary">Examinar las cadenas de versiones de las galerías descargadas y conservar la galería completa utilizable más reciente</string>
     <string name="gallery_version_database_upgrade_prompt">¿Actualizar en segundo plano la información de las cadenas de versiones de las galerías para determinar durante la navegación si una galería puede actualizarse desde una versión anterior? Si cancela, podrá actualizarla más tarde desde Ajustes.</string>
     <string name="gallery_version_update_in_background">Actualizar en segundo plano</string>
+    <string name="offline_gallery_notice">- Esta página se muestra sin conexión -</string>
+    <string name="offline_gallery_refresh">Toca para actualizar esta página</string>
+    <string name="offline_gallery_refreshing">Actualizando…</string>
+    <string name="offline_gallery_no_tags">No hay etiquetas guardadas localmente</string>
+    <string name="offline_gallery_no_images">No hay imágenes locales disponibles</string>
+    <string name="offline_gallery_previews">Ver vistas previas locales</string>
+    <string name="offline_gallery_local_size">Local: %1$s</string>
+    <string name="offline_gallery_local_pages">%1$d páginas locales</string>
+    <string name="offline_gallery_saved_rating">Valoración guardada</string>
 </resources>

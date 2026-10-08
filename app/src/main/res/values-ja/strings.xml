@@ -1099,4 +1099,13 @@
     <string name="import_album_no_images">選択したフォルダに対応する画像がありません</string>
     <string name="import_album_already_imported">アルバムは既にインポートされています</string>
     <string name="import_album_success">%d 枚の画像をインポートしました</string>
+    <string name="offline_gallery_notice">- 現在はオフラインページです -</string>
+    <string name="offline_gallery_refresh">タップしてページを再読み込み</string>
+    <string name="offline_gallery_refreshing">再読み込み中…</string>
+    <string name="offline_gallery_no_tags">ローカルに保存されたタグはありません</string>
+    <string name="offline_gallery_no_images">利用可能なローカル画像はありません</string>
+    <string name="offline_gallery_previews">ローカルのプレビューを表示</string>
+    <string name="offline_gallery_local_size">ローカル：%1$s</string>
+    <string name="offline_gallery_local_pages">ローカル画像 %1$d ページ</string>
+    <string name="offline_gallery_saved_rating">保存された評価</string>
 </resources>

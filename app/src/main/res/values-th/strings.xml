@@ -1161,4 +1161,13 @@
     <string name="settings_delete_old_gallery_versions_summary">สแกนสายเวอร์ชันของแกลเลอรีที่ดาวน์โหลดไว้ และเก็บแกลเลอรีล่าสุดที่สมบูรณ์และใช้งานได้</string>
     <string name="gallery_version_database_upgrade_prompt">ต้องการอัปเดตข้อมูลสายเวอร์ชันของแกลเลอรีในเบื้องหลัง เพื่อใช้ตรวจสอบขณะเรียกดูว่าแกลเลอรีสามารถอัปเดตจากเวอร์ชันเก่าได้หรือไม่ หากยกเลิก คุณสามารถอัปเดตภายหลังได้จากเมนูการตั้งค่า</string>
     <string name="gallery_version_update_in_background">อัปเดตในเบื้องหลัง</string>
+    <string name="offline_gallery_notice">- ขณะนี้เป็นหน้าออฟไลน์ -</string>
+    <string name="offline_gallery_refresh">แตะเพื่อรีเฟรชหน้านี้</string>
+    <string name="offline_gallery_refreshing">กำลังรีเฟรช…</string>
+    <string name="offline_gallery_no_tags">ไม่มีแท็กที่บันทึกไว้ในเครื่อง</string>
+    <string name="offline_gallery_no_images">ไม่มีรูปภาพในเครื่องที่ใช้งานได้</string>
+    <string name="offline_gallery_previews">ดูตัวอย่างรูปภาพในเครื่อง</string>
+    <string name="offline_gallery_local_size">ในเครื่อง: %1$s</string>
+    <string name="offline_gallery_local_pages">รูปภาพในเครื่อง %1$d หน้า</string>
+    <string name="offline_gallery_saved_rating">คะแนนที่บันทึกไว้</string>
 </resources>

@@ -1175,4 +1175,13 @@
     <string name="settings_delete_old_gallery_versions_summary">다운로드한 갤러리의 버전 체인을 검사하고 완전하게 사용 가능한 최신 갤러리를 유지합니다</string>
     <string name="gallery_version_database_upgrade_prompt">갤러리를 탐색할 때 이전 버전에서 업데이트할 수 있는지 판단하기 위해 갤러리 버전 체인 정보를 백그라운드에서 업데이트하시겠습니까? 취소하면 나중에 설정 메뉴에서 업데이트할 수 있습니다.</string>
     <string name="gallery_version_update_in_background">백그라운드에서 업데이트</string>
+    <string name="offline_gallery_notice">- 현재 오프라인 페이지입니다 -</string>
+    <string name="offline_gallery_refresh">탭하여 페이지 새로고침</string>
+    <string name="offline_gallery_refreshing">새로고침 중…</string>
+    <string name="offline_gallery_no_tags">로컬에 저장된 태그가 없습니다</string>
+    <string name="offline_gallery_no_images">사용 가능한 로컬 이미지가 없습니다</string>
+    <string name="offline_gallery_previews">로컬 미리 보기</string>
+    <string name="offline_gallery_local_size">로컬: %1$s</string>
+    <string name="offline_gallery_local_pages">로컬 이미지 %1$d페이지</string>
+    <string name="offline_gallery_saved_rating">저장된 평점</string>
 </resources>

@@ -1204,4 +1204,13 @@
     <string name="sync_folder_success">同步完成：新增 %1$d 项，更新 %2$d 项</string>
     <string name="sync_folder_failed">本地文件夹同步失败</string>
     <string name="sync_folder_label_removed">同步已取消：下载标签已被移除</string>
+    <string name="offline_gallery_notice">- 当前为离线页面 -</string>
+    <string name="offline_gallery_refresh">点击刷新页面</string>
+    <string name="offline_gallery_refreshing">正在刷新…</string>
+    <string name="offline_gallery_no_tags">没有本地保存的标签</string>
+    <string name="offline_gallery_no_images">没有可用的本地图片</string>
+    <string name="offline_gallery_previews">查看本地预览</string>
+    <string name="offline_gallery_local_size">本地：%1$s</string>
+    <string name="offline_gallery_local_pages">%1$d 页本地图片</string>
+    <string name="offline_gallery_saved_rating">已保存的评分</string>
 </resources>

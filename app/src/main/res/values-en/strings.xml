@@ -908,4 +908,13 @@
     <string name="settings_delete_old_gallery_versions_summary">Scan downloaded gallery version chains and keep the newest complete usable gallery</string>
     <string name="gallery_version_database_upgrade_prompt">Update gallery version-chain information in the background so the app can determine while browsing whether a gallery can be updated from an older version? If you cancel, you can update it later from Settings.</string>
     <string name="gallery_version_update_in_background">Update in background</string>
+    <string name="offline_gallery_notice">- Currently viewing an offline page -</string>
+    <string name="offline_gallery_refresh">Tap to refresh this page</string>
+    <string name="offline_gallery_refreshing">Refreshing…</string>
+    <string name="offline_gallery_no_tags">No locally saved tags</string>
+    <string name="offline_gallery_no_images">No local images available</string>
+    <string name="offline_gallery_previews">View local previews</string>
+    <string name="offline_gallery_local_size">Local: %1$s</string>
+    <string name="offline_gallery_local_pages">%1$d local pages</string>
+    <string name="offline_gallery_saved_rating">Saved rating</string>
 </resources>

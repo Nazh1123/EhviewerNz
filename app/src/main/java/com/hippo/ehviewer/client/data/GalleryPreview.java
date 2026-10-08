@@ -16,10 +16,16 @@
 
 package com.hippo.ehviewer.client.data;
 
+import android.net.Uri;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.widget.LocalImageLoader;
+import com.hippo.unifile.UniFile;
 import com.hippo.widget.LoadImageView;
+
+import java.io.File;
 
 public class GalleryPreview implements Parcelable {
 
@@ -31,14 +37,38 @@ public class GalleryPreview implements Parcelable {
     int offsetY = Integer.MIN_VALUE;
     int clipWidth = Integer.MIN_VALUE;
     int clipHeight = Integer.MIN_VALUE;
+    private UniFile localFile;
 
     public int getPosition() {
         return position;
     }
 
     public void load(LoadImageView view) {
+        UniFile local = getLocalFile();
+        if (local != null) {
+            LocalImageLoader.load(view, local);
+            return;
+        }
         view.setClip(offsetX, offsetY, clipWidth, clipHeight);
         view.load(imageKey, imageUrl);
+    }
+
+    public static GalleryPreview fromLocalFile(int position, UniFile file) {
+        GalleryPreview preview = new GalleryPreview();
+        preview.position = position;
+        preview.localFile = file;
+        preview.imageUrl = file.getUri().toString();
+        return preview;
+    }
+
+    public UniFile getLocalFile() {
+        if (localFile != null) return localFile;
+        if (imageUrl == null) return null;
+        Uri uri = Uri.parse(imageUrl);
+        if (!"file".equals(uri.getScheme()) && !"content".equals(uri.getScheme())) return null;
+        localFile = "file".equals(uri.getScheme()) ? UniFile.fromFile(new File(uri.getPath()))
+                : UniFile.fromUri(EhApplication.getInstance(), uri);
+        return localFile;
     }
 
     @Override

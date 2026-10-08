@@ -1090,4 +1090,13 @@
     <string name="import_album_no_images">Keine unterstützten Bilder im ausgewählten Ordner</string>
     <string name="import_album_already_imported">Album wurde bereits importiert</string>
     <string name="import_album_success">%d Bilder erfolgreich importiert</string>
+    <string name="offline_gallery_notice">- Diese Seite wird offline angezeigt -</string>
+    <string name="offline_gallery_refresh">Tippen, um diese Seite zu aktualisieren</string>
+    <string name="offline_gallery_refreshing">Wird aktualisiert…</string>
+    <string name="offline_gallery_no_tags">Keine lokal gespeicherten Tags</string>
+    <string name="offline_gallery_no_images">Keine lokalen Bilder verfügbar</string>
+    <string name="offline_gallery_previews">Lokale Vorschauen anzeigen</string>
+    <string name="offline_gallery_local_size">Lokal: %1$s</string>
+    <string name="offline_gallery_local_pages">%1$d lokale Seiten</string>
+    <string name="offline_gallery_saved_rating">Gespeicherte Bewertung</string>
 </resources>
