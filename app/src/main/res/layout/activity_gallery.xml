@@ -360,7 +360,7 @@
         android:visibility="gone"
         tools:ignore="RtlHardcoded">
 
-        <ImageView
+        <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/save_notice_icon"
             android:layout_width="36dp"
             android:layout_height="36dp"
@@ -368,7 +368,7 @@
             android:alpha="0.5"
             android:importantForAccessibility="no"
             android:src="@drawable/v_save_x24"
-            android:tint="?attr/iconColor" />
+            app:tint="?attr/iconColor" />
 
     </FrameLayout>
 

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/header_content"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -49,7 +50,7 @@
         android:paddingEnd="8dp"
         android:visibility="gone">
 
-        <ImageButton
+        <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/action_rename"
             android:layout_width="48dp"
             android:layout_height="match_parent"
@@ -59,9 +60,9 @@
             android:focusable="true"
             android:padding="12dp"
             android:src="@drawable/v_pencil_dark_x24"
-            android:tint="?attr/iconColor" />
+            app:tint="?attr/iconColor" />
 
-        <ImageButton
+        <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/action_search_or_sync"
             android:layout_width="48dp"
             android:layout_height="match_parent"
@@ -70,9 +71,9 @@
             android:focusable="true"
             android:padding="12dp"
             android:src="@drawable/v_magnify_dark_x24"
-            android:tint="?attr/iconColor" />
+            app:tint="?attr/iconColor" />
 
-        <ImageButton
+        <androidx.appcompat.widget.AppCompatImageButton
             android:id="@+id/action_enter"
             android:layout_width="48dp"
             android:layout_height="match_parent"
@@ -82,7 +83,7 @@
             android:focusable="true"
             android:padding="12dp"
             android:src="@drawable/v_detail_dark_x24"
-            android:tint="?attr/iconColor" />
+            app:tint="?attr/iconColor" />
     </LinearLayout>
 
 </FrameLayout>

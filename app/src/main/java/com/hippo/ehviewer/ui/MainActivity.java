@@ -644,7 +644,7 @@ public final class MainActivity extends StageActivity
             mSearchLanguagePreference = preference;
         }
         mSearchLanguagePreference.setValue(Settings.getSearchLanguage());
-        mSearchLanguagePreference.performClick();
+        mSearchLanguagePreference.showDialog();
     }
 
     private void updateSearchLanguageNavigationItem() {

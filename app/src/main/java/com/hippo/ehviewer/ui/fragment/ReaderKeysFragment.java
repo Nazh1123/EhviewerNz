@@ -194,7 +194,6 @@ public final class ReaderKeysFragment extends Fragment {
         if (requireActivity() instanceof SettingsActivity activity) activity.setSettingsTitle(R.string.reader_keys_title);
         if (requireActivity() instanceof AppCompatActivity activity && activity.getSupportActionBar() != null) {
             actionBarWasShown = activity.getSupportActionBar().isShowing();
-            activity.getSupportActionBar().setShowHideAnimationEnabled(false);
             activity.getSupportActionBar().hide();
         }
         Window window = requireActivity().getWindow();
@@ -232,7 +231,6 @@ public final class ReaderKeysFragment extends Fragment {
         window.getDecorView().setSystemUiVisibility(originalSystemUi);
         if (requireActivity() instanceof AppCompatActivity activity && activity.getSupportActionBar() != null) {
             if (actionBarWasShown) activity.getSupportActionBar().show();
-            activity.getSupportActionBar().setShowHideAnimationEnabled(true);
         }
         zones = null; profileButton = null; saveButton = null; directionButton = null;
         animatedButton = null; helpButton = null; copyButton = null;

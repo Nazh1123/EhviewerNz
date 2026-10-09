@@ -236,6 +236,13 @@ public abstract class DialogPreference extends Preference implements
         showDialog(null);
     }
 
+    /** Opens this preference's dialog from an action outside a preference list. */
+    public void showDialog() {
+        if (isEnabled() && isSelectable()) {
+            onClick();
+        }
+    }
+
     /**
      * Shows the dialog associated with this Preference. This is normally initiated
      * automatically on clicking on the preference. Call this method if you need to
