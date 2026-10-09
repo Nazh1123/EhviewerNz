@@ -163,6 +163,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     public static final String KEY_ACTION = "action";
     public static final String KEY_FILENAME = "filename";
+    public static final String KEY_LOCAL_RESUME_FILENAME = "local_resume_filename";
     public static final String KEY_URI = "uri";
     public static final String KEY_GALLERY_INFO = "gallery_info";
     public static final String DATA_IN_EVENT = "data_in_event";
@@ -460,7 +461,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         if (ACTION_DIR.equals(mAction)) {
             if (mFilename != null) {
-                mGalleryProvider = new DirGalleryProvider(UniFile.fromFile(new File(mFilename)));
+                File directory = new File(mFilename);
+                mLocalGalleryDirectory = directoryHistoryKey(directory);
+                String resumeFilename = getIntent().getStringExtra(KEY_LOCAL_RESUME_FILENAME);
+                mGalleryProvider = new DirGalleryProvider(UniFile.fromFile(directory),
+                        resumeFilename, true);
             }
         } else if (ACTION_LOCAL_FOLDER.equals(mAction)) {
             if (mFilename != null) {
@@ -552,7 +557,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void updateLocalGalleryHistoryPage(int page) {
-        if (!mExternalImage || mLocalGalleryDirectory == null
+        if (mLocalGalleryDirectory == null
                 || !(mGalleryProvider instanceof DirGalleryProvider)) {
             return;
         }
@@ -592,6 +597,23 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         ImportedGalleryProgress.save(
                 getApplicationContext(), mGalleryInfo.gid, page, mSize);
+    }
+
+    private void persistReadingHistoryProgressNow() {
+        if (ACTION_EH.equals(mAction) || mGalleryProvider == null || mGalleryProvider.size() <= 0) return;
+        int page = mGalleryView == null ? mCurrentIndex : mGalleryView.getCurrentIndex();
+        if (page < 0) page = mCurrentIndex;
+        if (page < 0 || page >= mGalleryProvider.size()) return;
+        Intent visit = new Intent(getIntent()).setAction(mAction).setData(mUri);
+        visit.putExtra(KEY_FILENAME, mFilename);
+        visit.putExtra(KEY_GALLERY_INFO, mGalleryInfo);
+        String filename = mGalleryProvider instanceof DirGalleryProvider
+                ? ((DirGalleryProvider) mGalleryProvider).getFilename(page) : null;
+        try {
+            ReadingHistory.saveLocalProgress(getApplicationContext(), visit, page, filename);
+        } catch (RuntimeException e) {
+            Log.w(TAG, "Unable to save local reader progress", e);
+        }
     }
 
     private void updateImportedGalleryPageCount(int pages) {
@@ -726,9 +748,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             finish();
             return;
         }
-        boolean deferProviderStart = mExternalImage;
+        boolean deferProviderStart = mGalleryProvider instanceof DirGalleryProvider
+                || mGalleryProvider instanceof LocalFolderGalleryProvider;
         mPendingExternalImageStart = savedInstanceState == null
-                && mExternalImage && mPage < 0;
+                && mGalleryProvider instanceof DirGalleryProvider && mPage < 0;
         if (!deferProviderStart) {
             mGalleryProvider.start();
         }
@@ -1010,6 +1033,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpLifecycleGeneration++;
         persistLocalGalleryHistoryNow();
         persistImportedGalleryProgressNow();
+        persistReadingHistoryProgressNow();
         if (mLocalGalleryHistorySnackbar != null) {
             mLocalGalleryHistorySnackbar.dismiss();
             mLocalGalleryHistorySnackbar = null;
@@ -1104,6 +1128,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mAnimatedWebpLifecycleGeneration++;
         persistLocalGalleryHistoryNow();
         persistImportedGalleryProgressNow();
+        persistReadingHistoryProgressNow();
         restoreAnimatedWebpLongPressPlayback();
         updateAllAnimatedPagePlayback();
         mAnimatedWebpHandler.removeCallbacksAndMessages(null);
@@ -3647,7 +3672,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                                 ? mGalleryProvider.getStartPage() : 0;
                         if (mGalleryView != null && startPage >= 0 && startPage < mValue) {
                             mGalleryView.setCurrentPage(startPage);
-                            showLocalGalleryHistoryPrompt(startPage);
+                            if (mExternalImage) showLocalGalleryHistoryPrompt(startPage);
                             updateLocalGalleryHistoryPage(startPage);
                         }
                     }

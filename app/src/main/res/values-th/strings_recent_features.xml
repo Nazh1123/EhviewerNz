@@ -9,6 +9,7 @@
     <string name="popular_page_no_updates">หน้ายอดนิยมนี้ไม่มีรายการใหม่</string>
     <string name="reading_history">ประวัติการอ่าน</string>
     <string name="settings_record_reading_history">บันทึกประวัติการอ่าน</string>
+    <string name="settings_reading_history_size">จำนวนรายการประวัติการอ่าน</string>
     <string name="settings_record_reading_history_summary">บันทึกการเปิดตัวอ่านและแสดงประวัติการอ่านในแถบด้านข้าง แตะบันทึกเพื่ออ่านอีกครั้งจากแหล่งเดิม</string>
     <string name="reading_history_empty">แกลเลอรีที่เปิดในตัวอ่านจะแสดงที่นี่</string>
     <string name="reading_history_source_detail">หน้ารายละเอียด</string>

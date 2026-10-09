@@ -13,18 +13,21 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.hippo.android.resource.AttrResources;
 import com.hippo.easyrecyclerview.FastScroller;
 import com.hippo.easyrecyclerview.HandlerDrawable;
+import com.hippo.easyrecyclerview.MarginItemDecoration;
 import com.hippo.ehviewer.R;
-import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
+import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.view.ViewTransition;
+import com.hippo.lib.yorozuya.ViewUtils;
 import com.hippo.widget.LoadImageView;
+import com.hippo.widget.recyclerview.AutoStaggeredGridLayoutManager;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,8 +49,20 @@ public class ReadingHistoryScene extends ToolbarScene {
         TextView tip = root.findViewById(R.id.tip);
         tip.setText(R.string.reading_history_empty);
         transition = new ViewTransition(root.findViewById(R.id.content), tip);
-        recycler.setLayoutManager(new LinearLayoutManager(inflater.getContext()));
-        adapter = new ReadingAdapter();
+        android.content.res.Resources resources = inflater.getContext().getResources();
+        AutoStaggeredGridLayoutManager manager = new AutoStaggeredGridLayoutManager(
+                0, StaggeredGridLayoutManager.VERTICAL);
+        manager.setColumnSize(resources.getDimensionPixelOffset(Settings.getDetailSizeResId()));
+        manager.setStrategy(AutoStaggeredGridLayoutManager.STRATEGY_MIN_SIZE);
+        recycler.setLayoutManager(manager);
+        recycler.setClipToPadding(false);
+        int interval = resources.getDimensionPixelOffset(R.dimen.gallery_list_interval);
+        int paddingH = resources.getDimensionPixelOffset(R.dimen.gallery_list_margin_h);
+        int paddingV = resources.getDimensionPixelOffset(R.dimen.gallery_list_margin_v);
+        MarginItemDecoration decoration = new MarginItemDecoration(interval, paddingH, paddingV, paddingH, paddingV);
+        recycler.addItemDecoration(decoration);
+        decoration.applyPaddings(recycler);
+        adapter = new ReadingAdapter(inflater);
         recycler.setAdapter(adapter);
         FastScroller scroller = root.findViewById(R.id.fast_scroller);
         scroller.attachToRecyclerView(recycler);
@@ -114,10 +129,23 @@ public class ReadingHistoryScene extends ToolbarScene {
     }
 
     private class ReadingAdapter extends RecyclerView.Adapter<ReadingHolder> {
+        private final int coverHeight;
+
+        ReadingAdapter(LayoutInflater inflater) {
+            View calculator = inflater.inflate(R.layout.item_gallery_list_thumb_height, null);
+            ViewUtils.measureView(calculator, 1024, ViewGroup.LayoutParams.WRAP_CONTENT);
+            coverHeight = calculator.getMeasuredHeight();
+        }
+
         @NonNull
         @Override public ReadingHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            return new ReadingHolder(LayoutInflater.from(parent.getContext())
+            ReadingHolder holder = new ReadingHolder(LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_reading_history, parent, false));
+            ViewGroup.LayoutParams params = holder.cover.getLayoutParams();
+            params.height = coverHeight;
+            params.width = coverHeight * 2 / 3;
+            holder.cover.setLayoutParams(params);
+            return holder;
         }
 
         @Override public void onBindViewHolder(@NonNull ReadingHolder holder, int position) {
@@ -129,11 +157,6 @@ public class ReadingHistoryScene extends ToolbarScene {
                     DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_SHOW_TIME | DateUtils.FORMAT_SHOW_YEAR);
             holder.metadata.setText(context.getString(R.string.reading_history_metadata,
                     context.getString(ReadingHistory.sourceLabel(entry.source)), date));
-            String path = entry.uri != null ? entry.uri : entry.filename;
-            LocalFolderGallerySource folder = LocalFolderGallerySource.parse(entry.filename);
-            if (folder != null) path = folder.getTreeUri() + "/" + folder.relativePath;
-            holder.path.setText(path);
-            holder.path.setVisibility(path == null ? View.GONE : View.VISIBLE);
             holder.itemView.setOnClickListener(view -> open(entry));
             holder.itemView.setOnLongClickListener(view -> {
                 new AlertDialog.Builder(context).setTitle(entry.title)
@@ -157,13 +180,11 @@ public class ReadingHistoryScene extends ToolbarScene {
     private static class ReadingHolder extends RecyclerView.ViewHolder {
         final TextView title;
         final TextView metadata;
-        final TextView path;
         final LoadImageView cover;
         ReadingHolder(View view) {
             super(view);
             title = view.findViewById(R.id.title);
             metadata = view.findViewById(R.id.reading_metadata);
-            path = view.findViewById(R.id.reading_path);
             cover = view.findViewById(R.id.reading_cover);
         }
     }

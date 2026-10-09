@@ -9,6 +9,7 @@
     <string name="popular_page_no_updates">Diese Seite mit beliebten Galerien enthält keine Aktualisierungen</string>
     <string name="reading_history">Leseverlauf</string>
     <string name="settings_record_reading_history">Leseverlauf aufzeichnen</string>
+    <string name="settings_reading_history_size">Anzahl der Leseverlaufseinträge</string>
     <string name="settings_record_reading_history_summary">Besuche im Reader aufzeichnen und den Leseverlauf in der Seitenleiste anzeigen. Ein Eintrag öffnet den Reader erneut über die ursprüngliche Quelle.</string>
     <string name="reading_history_empty">Im Reader geöffnete Galerien werden hier angezeigt</string>
     <string name="reading_history_source_detail">Detailseite</string>

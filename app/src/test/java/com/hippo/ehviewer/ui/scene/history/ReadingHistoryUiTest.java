@@ -84,6 +84,17 @@ public class ReadingHistoryUiTest {
         assertNotNull(toggle);
         assertTrue(toggle.isChecked());
         assertEquals("保存与历史", toggle.getParent().getTitle().toString());
+        com.hippo.preference.ListPreference limit = preferences.findPreference(Settings.KEY_READING_HISTORY_SIZE);
+        assertNotNull(limit);
+        assertEquals("阅读历史记录数量", limit.getTitle().toString());
+        assertEquals("100", limit.getValue());
+        assertEquals("100", limit.getSummary().toString());
+        assertArrayEquals(new CharSequence[]{"100", "500", "1000", "5000", "10000", "20000"},
+                limit.getEntryValues());
+        limit.setValue("500");
+        assertFalse(limit.callChangeListener("invalid"));
+        assertEquals(500, Settings.getReadingHistorySize());
+        assertEquals(100, Settings.getHistoryInfoSize());
         toggle.setChecked(false);
         assertFalse(Settings.isReadingHistoryEnabled());
         toggle.setChecked(true);
@@ -103,10 +114,12 @@ public class ReadingHistoryUiTest {
         TestScene scene = new TestScene(context);
         View root = scene.onCreateView3(LayoutInflater.from(context), null, null);
         RecyclerView recycler = root.findViewById(R.id.recycler_view);
+        assertTrue(recycler.getLayoutManager() instanceof com.hippo.widget.recyclerview.AutoStaggeredGridLayoutManager);
         RecyclerView.Adapter adapter = recycler.getAdapter();
         assertEquals(1, adapter.getItemCount());
         RecyclerView.ViewHolder row = adapter.createViewHolder(recycler, 0);
         adapter.bindViewHolder(row, 0);
+        assertTrue(row.itemView instanceof androidx.cardview.widget.CardView);
         assertEquals("Reading example", ((TextView) row.itemView.findViewById(R.id.title)).getText().toString());
         String metadata = ((TextView) row.itemView.findViewById(R.id.reading_metadata)).getText().toString();
         assertTrue(metadata.contains("下载"));
@@ -126,6 +139,7 @@ public class ReadingHistoryUiTest {
     public static class Harness extends PreferenceFragmentCompat {
         @Override public void onCreatePreferences(Bundle state, String rootKey) {
             setPreferencesFromResource(R.xml.fork_features_settings, rootKey);
+            com.hippo.ehviewer.ui.fragment.ReadingHistoryPreferences.bind(this);
         }
     }
 

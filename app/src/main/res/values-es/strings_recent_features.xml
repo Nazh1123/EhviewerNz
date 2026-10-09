@@ -9,6 +9,7 @@
     <string name="popular_page_no_updates">Esta página de populares no tiene novedades</string>
     <string name="reading_history">Historial de lectura</string>
     <string name="settings_record_reading_history">Registrar historial de lectura</string>
+    <string name="settings_reading_history_size">Número de registros del historial de lectura</string>
     <string name="settings_record_reading_history_summary">Registrar las visitas al lector y mostrar el historial de lectura en la barra lateral. Toca un registro para volver a leer desde su origen.</string>
     <string name="reading_history_empty">Las galerías abiertas en el lector aparecerán aquí</string>
     <string name="reading_history_source_detail">Detalles</string>

@@ -2061,6 +2061,7 @@ public class Settings {
     public static final String KEY_HISTORY_INFO_SIZE = "history_info_size";
 
     public static final String KEY_RECORD_READING_HISTORY = "record_reading_history";
+    public static final String KEY_READING_HISTORY_SIZE = "reading_history_size";
 
     public static boolean isReadingHistoryEnabled() {
         return getBoolean(KEY_RECORD_READING_HISTORY, true);
@@ -2079,6 +2080,19 @@ public class Settings {
 
     public static void setHistoryInfoSize(int value) {
         putIntToStr(KEY_HISTORY_INFO_SIZE, value);
+    }
+
+    public static int getReadingHistorySize() {
+        int size = getIntFromStr(KEY_READING_HISTORY_SIZE, DEFAULT_HISTORY_INFO_SIZE);
+        if (size < DEFAULT_HISTORY_INFO_SIZE) {
+            setReadingHistorySize(DEFAULT_HISTORY_INFO_SIZE);
+            return DEFAULT_HISTORY_INFO_SIZE;
+        }
+        return size;
+    }
+
+    public static void setReadingHistorySize(int value) {
+        putIntToStr(KEY_READING_HISTORY_SIZE, value);
     }
 
     public static final String KEY_DOWNLOAD_TIMEOUT = "download_timeout";

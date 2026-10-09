@@ -9,6 +9,7 @@
     <string name="popular_page_no_updates">이 인기 페이지에는 업데이트가 없습니다</string>
     <string name="reading_history">읽기 기록</string>
     <string name="settings_record_reading_history">읽기 기록 저장</string>
+    <string name="settings_reading_history_size">읽기 기록 수</string>
     <string name="settings_record_reading_history_summary">리더를 연 기록을 저장하고 사이드바에 읽기 기록을 표시합니다. 기록을 누르면 원래 진입 방식으로 다시 읽을 수 있습니다.</string>
     <string name="reading_history_empty">리더에서 연 갤러리가 여기에 표시됩니다</string>
     <string name="reading_history_source_detail">상세 페이지</string>

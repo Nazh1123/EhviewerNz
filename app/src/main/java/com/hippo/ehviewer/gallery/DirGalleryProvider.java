@@ -53,6 +53,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     private final UniFile mDir;
     @Nullable
     private final String mInitialFilename;
+    private final boolean mResumeFilename;
     private final Stack<Integer> mRequests = new Stack<>();
     private final AtomicInteger mDecodingIndex = new AtomicInteger(GalleryPageView.INVALID_INDEX);
     private final AtomicReference<UniFile[]> mFileList = new AtomicReference<>();
@@ -67,14 +68,21 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     }
 
     public DirGalleryProvider(@NonNull UniFile dir, @Nullable String initialFilename) {
+        this(dir, initialFilename, false);
+    }
+
+    public DirGalleryProvider(@NonNull UniFile dir, @Nullable String initialFilename,
+            boolean resumeFilename) {
         mDir = dir;
         mInitialFilename = initialFilename;
+        mResumeFilename = resumeFilename;
     }
 
     /** Subclasses can resolve their local directory and selection on the decoder thread. */
     protected DirGalleryProvider() {
         mDir = null;
         mInitialFilename = null;
+        mResumeFilename = false;
     }
 
     @Nullable
@@ -266,7 +274,9 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
             return;
         }
 
-        mStartPage = findStartPage(files, mInitialFilename);
+        mStartPage = mResumeFilename
+                ? Math.max(0, findPageAtOrBeforeFilename(files, mInitialFilename))
+                : findStartPage(files, mInitialFilename);
 
         // Put file list
         mFileList.lazySet(files);

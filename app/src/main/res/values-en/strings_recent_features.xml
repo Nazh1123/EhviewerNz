@@ -9,6 +9,7 @@
     <string name="popular_page_no_updates">This popular page has no updates</string>
     <string name="reading_history">Reading history</string>
     <string name="settings_record_reading_history">Record reading history</string>
+    <string name="settings_reading_history_size">Number of reading history records</string>
     <string name="settings_record_reading_history_summary">Record reader visits and show Reading history in the sidebar. Tap a record to read again using its original source.</string>
     <string name="reading_history_empty">Galleries opened in the reader will be shown here</string>
     <string name="reading_history_source_detail">Details</string>

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="reading_history">阅读历史</string>
+    <string name="settings_reading_history_size">阅读历史记录数量</string>
     <string name="settings_record_reading_history">记录阅读历史</string>
     <string name="settings_record_reading_history_summary">记录进入阅读器的历史，并在侧边栏显示阅读历史。点击记录按原进入方式重新阅读。</string>
     <string name="reading_history_empty">进入阅读器的画廊将在这里显示</string>

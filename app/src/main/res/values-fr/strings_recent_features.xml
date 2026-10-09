@@ -9,6 +9,7 @@
     <string name="popular_page_no_updates">Cette page de galeries populaires ne contient aucune nouveauté</string>
     <string name="reading_history">Historique de lecture</string>
     <string name="settings_record_reading_history">Enregistrer l’historique de lecture</string>
+    <string name="settings_reading_history_size">Nombre d’entrées dans l’historique de lecture</string>
     <string name="settings_record_reading_history_summary">Enregistrer les ouvertures du lecteur et afficher l’historique de lecture dans la barre latérale. Touchez une entrée pour relire depuis sa source d’origine.</string>
     <string name="reading_history_empty">Les galeries ouvertes dans le lecteur s’affichent ici</string>
     <string name="reading_history_source_detail">Détails</string>

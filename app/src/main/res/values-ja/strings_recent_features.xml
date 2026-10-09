@@ -9,6 +9,7 @@
     <string name="popular_page_no_updates">この人気ページに更新はありません</string>
     <string name="reading_history">閲覧履歴</string>
     <string name="settings_record_reading_history">閲覧履歴を記録</string>
+    <string name="settings_reading_history_size">閲覧履歴の記録数</string>
     <string name="settings_record_reading_history_summary">リーダーを開いた履歴を記録し、サイドバーに閲覧履歴を表示します。履歴をタップすると、元の方法でリーダーを開きます。</string>
     <string name="reading_history_empty">リーダーで開いたギャラリーがここに表示されます</string>
     <string name="reading_history_source_detail">詳細ページ</string>

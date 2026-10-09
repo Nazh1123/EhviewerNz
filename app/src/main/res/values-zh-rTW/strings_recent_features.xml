@@ -8,6 +8,7 @@
     <string name="popular_no_updates">相比上次熱門暫無新增畫廊</string>
     <string name="popular_page_no_updates">該熱門頁沒有更新</string>
     <string name="reading_history">閱讀歷史</string>
+    <string name="settings_reading_history_size">閱讀歷史記錄數量</string>
     <string name="settings_record_reading_history">記錄閱讀歷史</string>
     <string name="settings_record_reading_history_summary">記錄進入閱讀器的歷史，並在側邊欄顯示閱讀歷史。點選紀錄會按原進入方式重新閱讀。</string>
     <string name="reading_history_empty">進入閱讀器的畫廊將在這裡顯示</string>
