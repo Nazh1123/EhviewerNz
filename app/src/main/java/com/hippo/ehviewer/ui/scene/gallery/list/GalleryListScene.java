@@ -69,6 +69,7 @@ import com.github.amlcurran.showcaseview.targets.PointTarget;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.hippo.android.resource.AttrResources;
 import com.hippo.app.CheckBoxDialogBuilder;
 import com.hippo.app.EditTextDialogBuilder;
@@ -191,6 +192,9 @@ public class GalleryListScene extends BaseScene
     private static final String KEY_MULTI_SELECT_MODE = "multi_select_mode";
     private static final String KEY_SELECTED_GIDS = "selected_gids";
     private static final String KEY_DOWNLOADED_ONLY_MODE = "downloaded_only_mode";
+    private static final String KEY_POPULAR_VIEW_MODE = "popular_view_mode";
+    private static final String KEY_POPULAR_ACTIONS_OFFERED = "popular_actions_offered";
+    private static final String KEY_POPULAR_SCROLL_DISTANCE = "popular_scroll_distance";
 
     final static int STATE_NORMAL = 0;
     final static int STATE_SIMPLE_SEARCH = 1;
@@ -205,6 +209,8 @@ public class GalleryListScene extends BaseScene
     private static final int FAB_REFRESH = 5;
     private static final int FAB_RANDOM = 6;
     private static final int FAB_DOWNLOADED_ONLY = 7;
+    private static final int FAB_POPULAR_UPDATES = 8;
+    private static final int FAB_POPULAR_PREVIOUS = 9;
 
     private static final int DOWNLOADED_SCAN_PAGE_LIMIT = 5;
     private static final int DOWNLOADED_SUBSCRIPTION_SCAN_PAGE_LIMIT = 2;
@@ -243,6 +249,18 @@ public class GalleryListScene extends BaseScene
     private FloatingActionButton mMultiSelectFab;
     @Nullable
     private FloatingActionButton mDownloadedOnlyFab;
+    private View mPopularActions;
+    private ExtendedFloatingActionButton mPopularUpdates;
+    private ExtendedFloatingActionButton mPopularPrevious;
+    private ExtendedFloatingActionButton mPopularUpdatesMenu;
+    private ExtendedFloatingActionButton mPopularPreviousMenu;
+    private PopularGalleryHistory mPopularHistory;
+    private int mPopularHistorySite = -1;
+    private int mPopularViewMode = PopularGalleryHistory.CURRENT;
+    private boolean mPopularResponseReady;
+    private boolean mPopularRequestInFlight;
+    private boolean mPopularActionsOffered;
+    private long mPopularScrollDistance;
     @Nullable
     private ViewTransition mViewTransition;
     @Nullable
@@ -313,6 +331,14 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+            if (isPopularMode() && mPopularActionsOffered
+                    && recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
+                mPopularScrollDistance += Math.abs((long) dy);
+                if (mPopularScrollDistance >= Math.max(1, recyclerView.getHeight() / 2)) {
+                    mPopularActionsOffered = false;
+                    updatePopularActions();
+                }
+            }
             if (mMultiSelectMode) {
                 return;
             }
@@ -484,6 +510,7 @@ public class GalleryListScene extends BaseScene
         mDownloadManager.addDownloadInfoListener(mDownloadInfoListener);
 
         mFavouriteStatusRouterListener = (gid, slot) -> {
+            if (mPopularHistory != null) mPopularHistory.updateFavorite(gid, slot);
             if (mAdapter != null) {
                 mAdapter.notifyDataSetChanged();
             }
@@ -515,6 +542,10 @@ public class GalleryListScene extends BaseScene
         mState = savedInstanceState.getInt(KEY_STATE);
         mMultiSelectMode = savedInstanceState.getBoolean(KEY_MULTI_SELECT_MODE);
         mDownloadedOnlyMode = savedInstanceState.getBoolean(KEY_DOWNLOADED_ONLY_MODE);
+        mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
+        mPopularActionsOffered = savedInstanceState.getBoolean(KEY_POPULAR_ACTIONS_OFFERED);
+        mPopularScrollDistance = savedInstanceState.getLong(KEY_POPULAR_SCROLL_DISTANCE);
+        mPopularResponseReady = mHasFirstRefresh && isPopularMode();
         long[] selectedGids = savedInstanceState.getLongArray(KEY_SELECTED_GIDS);
         if (selectedGids != null) {
             for (long gid : selectedGids) {
@@ -534,11 +565,15 @@ public class GalleryListScene extends BaseScene
             hasFirstRefresh = mHasFirstRefresh;
         }
         outState.putBoolean(KEY_HAS_FIRST_REFRESH,
-                isBookmarkSubscriptionMode() ? false : hasFirstRefresh);
+                !isBookmarkSubscriptionMode() && hasFirstRefresh
+                        && !(isPopularMode() && mPopularRequestInFlight));
         outState.putParcelable(KEY_LIST_URL_BUILDER, mUrlBuilder);
         outState.putInt(KEY_STATE, mState);
         outState.putBoolean(KEY_MULTI_SELECT_MODE, mMultiSelectMode);
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
+        outState.putInt(KEY_POPULAR_VIEW_MODE, mPopularViewMode);
+        outState.putBoolean(KEY_POPULAR_ACTIONS_OFFERED, mPopularActionsOffered);
+        outState.putLong(KEY_POPULAR_SCROLL_DISTANCE, mPopularScrollDistance);
         long[] selectedGids = new long[mSelectedGids.size()];
         int selectedIndex = 0;
         for (long gid : mSelectedGids) {
@@ -733,6 +768,13 @@ public class GalleryListScene extends BaseScene
         }
         setNavCheckedItem(checkedItemId);
         mNavCheckedId = checkedItemId;
+        if (!isPopularMode()) {
+            mPopularResponseReady = false;
+            mPopularActionsOffered = false;
+            mPopularViewMode = PopularGalleryHistory.CURRENT;
+        }
+        if (mFabLayout != null && !mMultiSelectMode) showNormalFabs(mFabLayout);
+        updatePopularActions();
     }
 
     @NonNull
@@ -768,6 +810,18 @@ public class GalleryListScene extends BaseScene
         mMultiSelectFab = (FloatingActionButton) ViewUtils.$$(mFabLayout, R.id.multi_select_fab);
         mDownloadedOnlyFab = (FloatingActionButton) ViewUtils.$$(mFabLayout,
                 R.id.downloaded_only_fab);
+        mPopularActions = ViewUtils.$$(mainLayout, R.id.popular_actions);
+        mPopularUpdates = mainLayout.findViewById(R.id.popular_updates);
+        mPopularPrevious = mainLayout.findViewById(R.id.popular_previous);
+        mPopularUpdatesMenu = mainLayout.findViewById(R.id.popular_updates_menu);
+        mPopularPreviousMenu = mainLayout.findViewById(R.id.popular_previous_menu);
+        mPopularUpdates.setOnClickListener(v -> togglePopularView(PopularGalleryHistory.UPDATES));
+        mPopularPrevious.setOnClickListener(v -> togglePopularView(PopularGalleryHistory.PREVIOUS));
+        stylePopularAction(mPopularUpdates, false);
+        stylePopularAction(mPopularUpdatesMenu, false);
+        stylePopularAction(mPopularPrevious, true);
+        stylePopularAction(mPopularPreviousMenu, true);
+        addAboveSnackView(mPopularActions);
 
         onFilter(filterOpen, filterTagList.size());
 
@@ -853,6 +907,11 @@ public class GalleryListScene extends BaseScene
         if (!mHasFirstRefresh) {
             mHasFirstRefresh = true;
             mHelper.firstRefresh();
+        } else if (isPopularMode()) {
+            loadPopularHistory(Settings.getGallerySite(), () -> {
+                mPopularResponseReady = mPopularHistory.hasCurrent();
+                if (!mPopularRequestInFlight) updatePopularProjection();
+            });
         }
 
         guideQuickSearch();
@@ -1068,6 +1127,10 @@ public class GalleryListScene extends BaseScene
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        if (isPopularMode() && mPopularRequestInFlight) {
+            mHasFirstRefresh = false;
+            mPopularRequestInFlight = false;
+        }
         stopDownloadedPageScan(false);
         destroyQuickDownloadNotice();
         mDownloadedBrowseTouchDownY = Float.NaN;
@@ -1108,6 +1171,12 @@ public class GalleryListScene extends BaseScene
         mFloatingActionButton = null;
         mMultiSelectFab = null;
         mDownloadedOnlyFab = null;
+        if (mPopularActions != null) removeAboveSnackView(mPopularActions);
+        mPopularActions = null;
+        mPopularUpdates = null;
+        mPopularPrevious = null;
+        mPopularUpdatesMenu = null;
+        mPopularPreviousMenu = null;
         mViewTransition = null;
         mLeftDrawable = null;
         mRightDrawable = null;
@@ -1833,6 +1902,7 @@ public class GalleryListScene extends BaseScene
         if (enabled && showEmptyTip && mAdapter != null && mAdapter.getItemCount() == 0) {
             showTip(R.string.gallery_list_downloaded_only_empty, LENGTH_SHORT);
         }
+        if (isPopularMode() && mPopularResponseReady) updatePopularProjection();
     }
 
     void resetDownloadedOnlyModeForNewSearch() {
@@ -1846,6 +1916,100 @@ public class GalleryListScene extends BaseScene
         mDownloadedOnlyFab.setImageResource(mDownloadedOnlyMode
                 ? R.drawable.v_download_box_dark_x24
                 : R.drawable.v_download_box_outline_dark_x24);
+    }
+
+    private boolean isPopularMode() {
+        return mUrlBuilder != null && mUrlBuilder.getMode() == ListUrlBuilder.MODE_WHATS_HOT;
+    }
+
+    private void stylePopularAction(ExtendedFloatingActionButton button, boolean previous) {
+        Context context = button.getContext();
+        boolean light = AttrResources.getAttrBoolean(context, androidx.appcompat.R.attr.isLightTheme);
+        int background = previous
+                ? (light ? R.color.popular_previous_light : R.color.popular_previous_dark)
+                : (light ? R.color.popular_updates_light : R.color.popular_updates_dark);
+        button.setBackgroundTintList(ColorStateList.valueOf(context.getColor(background)));
+        button.setTextColor(context.getColor(light ? android.R.color.white : R.color.popular_action_dark_text));
+    }
+
+    private void updatePopularActions() {
+        if (mPopularActions == null || mFabLayout == null) return;
+        boolean popular = isPopularMode();
+        mFabLayout.setSecondaryFabVisibilityAt(FAB_POPULAR_UPDATES, popular);
+        mFabLayout.setSecondaryFabVisibilityAt(FAB_POPULAR_PREVIOUS, popular);
+        boolean enabled = popular && mPopularResponseReady && !mPopularRequestInFlight && !mMultiSelectMode;
+        int updatesText = mPopularViewMode == PopularGalleryHistory.UPDATES
+                ? R.string.popular_show_all : R.string.popular_updates_only;
+        int previousText = mPopularViewMode == PopularGalleryHistory.PREVIOUS
+                ? R.string.popular_return_current : R.string.popular_previous;
+        for (ExtendedFloatingActionButton button : new ExtendedFloatingActionButton[]{
+                mPopularUpdates, mPopularUpdatesMenu, mPopularPrevious, mPopularPreviousMenu}) {
+            button.setEnabled(enabled);
+            button.setAlpha(enabled ? 1f : 0.5f);
+        }
+        mPopularUpdates.setText(updatesText);
+        mPopularUpdatesMenu.setText(updatesText);
+        mPopularPrevious.setText(previousText);
+        mPopularPreviousMenu.setText(previousText);
+        mPopularActions.setVisibility(enabled && mPopularActionsOffered
+                && mState == STATE_NORMAL && !mFabLayout.isExpanded() ? View.VISIBLE : View.GONE);
+    }
+
+    private void loadPopularHistory(int site, Runnable continuation) {
+        if (mPopularHistory != null && mPopularHistorySite == site) {
+            continuation.run();
+            return;
+        }
+        MainActivity activity = getActivity2();
+        if (activity == null) return;
+        File directory = activity.getFilesDir();
+        PopularGalleryHistory.IO.execute(() -> {
+            PopularGalleryHistory history = new PopularGalleryHistory(directory, site);
+            history.load();
+            activity.runOnUiThread(() -> {
+                if (mRecyclerView == null || !isPopularMode() || Settings.getGallerySite() != site) return;
+                if (mPopularHistory == null || mPopularHistorySite != site) {
+                    mPopularHistory = history;
+                    mPopularHistorySite = site;
+                }
+                continuation.run();
+            });
+        });
+    }
+
+    private void togglePopularView(int mode) {
+        if (!isPopularMode() || !mPopularResponseReady || mPopularHistory == null
+                || mPopularRequestInFlight || mMultiSelectMode) return;
+        if (mPopularViewMode != mode && !mPopularHistory.hasPrevious()) {
+            showTip(R.string.popular_no_previous, LENGTH_SHORT);
+            return;
+        }
+        mPopularViewMode = mPopularViewMode == mode ? PopularGalleryHistory.CURRENT : mode;
+        updatePopularProjection();
+        if (mRecyclerView != null) {
+            mRecyclerView.stopScroll();
+            mRecyclerView.scrollToPosition(0);
+        }
+        showActionFab();
+    }
+
+    private void updatePopularProjection() {
+        if (mAdapter == null || mHelper == null) return;
+        mAdapter.onSourceDataSetChanged();
+        mHelper.setEmptyString(getString(mPopularViewMode == PopularGalleryHistory.UPDATES
+                ? R.string.popular_no_updates : R.string.gallery_list_empty_hit));
+        if (mAdapter.getItemCount() == 0 && !mDownloadedOnlyMode) mHelper.showEmptyString();
+        else mHelper.showContent();
+        updatePopularActions();
+    }
+
+    @Override
+    public void onClickSecondaryAction(FabLayout view, View action, int position) {
+        if (position == FAB_POPULAR_UPDATES || position == FAB_POPULAR_PREVIOUS) {
+            togglePopularView(position == FAB_POPULAR_UPDATES
+                    ? PopularGalleryHistory.UPDATES : PopularGalleryHistory.PREVIOUS);
+            view.setExpanded(false);
+        }
     }
 
     private int getDownloadedPageScanLimit() {
@@ -1999,6 +2163,7 @@ public class GalleryListScene extends BaseScene
             fabLayout.setSecondaryFabVisibilityAt(FAB_RANDOM, false);
             fabLayout.setSecondaryFabVisibilityAt(FAB_DOWNLOADED_ONLY, false);
             fabLayout.setAutoCancel(false);
+            updatePopularActions();
             fabLayout.setExpanded(true, animation);
         } else {
             fabLayout.setAutoCancel(true);
@@ -2019,11 +2184,12 @@ public class GalleryListScene extends BaseScene
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DOWNLOAD, false);
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DELETE, false);
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT, true);
-        fabLayout.setSecondaryFabVisibilityAt(FAB_TAG_FILTER, true);
-        fabLayout.setSecondaryFabVisibilityAt(FAB_GO_TO, !mDownloadedOnlyMode);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_TAG_FILTER, !isPopularMode());
+        fabLayout.setSecondaryFabVisibilityAt(FAB_GO_TO, !mDownloadedOnlyMode && !isPopularMode());
         fabLayout.setSecondaryFabVisibilityAt(FAB_REFRESH, true);
         fabLayout.setSecondaryFabVisibilityAt(FAB_RANDOM, true);
         fabLayout.setSecondaryFabVisibilityAt(FAB_DOWNLOADED_ONLY, true);
+        updatePopularActions();
     }
 
     private void notifyGallerySelectionChanged(long gid) {
@@ -2042,8 +2208,9 @@ public class GalleryListScene extends BaseScene
         if (mHelper == null) {
             return galleries;
         }
-        for (int i = 0, size = mHelper.size(); i < size; i++) {
-            GalleryInfo galleryInfo = mHelper.getDataAtEx(i);
+        List<GalleryInfo> source = isPopularMode() && mPopularResponseReady && mPopularHistory != null
+                ? mPopularHistory.galleries(mPopularViewMode) : mHelper.getData();
+        for (GalleryInfo galleryInfo : source) {
             if (galleryInfo != null && mSelectedGids.contains(galleryInfo.gid)) {
                 galleries.add(galleryInfo);
             }
@@ -2136,6 +2303,8 @@ public class GalleryListScene extends BaseScene
             return;
         }
         if (STATE_NORMAL == mState) {
+            mPopularActionsOffered = false;
+            updatePopularActions();
             view.toggle();
         }
 
@@ -2328,6 +2497,8 @@ public class GalleryListScene extends BaseScene
     @SuppressLint("RtlHardcoded")
     @Override
     public void onExpand(boolean expanded) {
+        if (expanded) mPopularActionsOffered = false;
+        updatePopularActions();
         if (null == mActionFabDrawable) {
             return;
         }
@@ -2519,6 +2690,7 @@ public class GalleryListScene extends BaseScene
                     break;
             }
         }
+        updatePopularActions();
     }
 
     @Override
@@ -2771,6 +2943,17 @@ public class GalleryListScene extends BaseScene
     private void onGetGalleryListSuccess(GalleryListParser.Result result, int taskId) {
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
+            if (isPopularMode() && mPopularHistory != null && result.customErrorString == null) {
+                mPopularHistory.record(result.galleryInfoList);
+                mPopularHistory.persist();
+                mPopularResponseReady = true;
+                mPopularRequestInFlight = false;
+                mPopularViewMode = PopularGalleryHistory.CURRENT;
+                // Popular is a single snapshot, without list pagination.
+                result.pages = 1;
+                result.nextPage = 0;
+                result.firstHref = result.prevHref = result.nextHref = result.lastHref = null;
+            }
             if (mUrlBuilder != null
                     && mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION
                     && mHelper.isCurrentTaskRefresh(taskId)
@@ -2791,6 +2974,13 @@ public class GalleryListScene extends BaseScene
 //            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
             mHelper.onGetPageData(taskId, result, result.galleryInfoList);
             onDownloadedPageScanPageLoaded();
+            if (isPopularMode()) {
+                mPopularRequestInFlight = false;
+                mPopularActionsOffered = result.customErrorString == null;
+                mPopularScrollDistance = 0;
+                if (result.customErrorString == null) updatePopularProjection();
+                else updatePopularActions();
+            }
         }
     }
 
@@ -2799,6 +2989,8 @@ public class GalleryListScene extends BaseScene
                 mHelper.isCurrentTask(taskId)) {
             stopDownloadedPageScan(false);
             mHelper.onGetException(taskId, e);
+            mPopularRequestInFlight = false;
+            updatePopularActions();
         }
     }
 
@@ -2971,6 +3163,21 @@ public class GalleryListScene extends BaseScene
     private class GalleryListAdapter extends GalleryAdapterNew {
 
         private final List<GalleryInfo> mDownloadedData = new ArrayList<>();
+        private final List<GalleryInfo> mPopularData = new ArrayList<>();
+
+        private boolean hasPopularProjection() {
+            return isPopularMode() && mPopularResponseReady && mPopularHistory != null
+                    && mPopularHistorySite == Settings.getGallerySite();
+        }
+
+        private List<GalleryInfo> getSourceData() {
+            return hasPopularProjection() ? mPopularData : mHelper.getData();
+        }
+
+        private void rebuildPopularData() {
+            mPopularData.clear();
+            if (hasPopularProjection()) mPopularData.addAll(mPopularHistory.galleries(mPopularViewMode));
+        }
 
         public GalleryListAdapter(@NonNull LayoutInflater inflater,
                                   @NonNull Resources resources, @NonNull RecyclerView recyclerView, int type) {
@@ -2982,6 +3189,7 @@ public class GalleryListScene extends BaseScene
             if (mDownloadedOnlyMode) {
                 return mDownloadedData != null ? mDownloadedData.size() : 0;
             }
+            if (hasPopularProjection()) return mPopularData != null ? mPopularData.size() : 0;
             return null != mHelper ? mHelper.size() : 0;
         }
 
@@ -2993,15 +3201,20 @@ public class GalleryListScene extends BaseScene
                         && position < mDownloadedData.size()
                         ? mDownloadedData.get(position) : null;
             }
+            if (hasPopularProjection()) {
+                return position >= 0 && position < mPopularData.size() ? mPopularData.get(position) : null;
+            }
             return null != mHelper ? mHelper.getDataAtEx(position) : null;
         }
 
         void onDownloadedOnlyModeChanged() {
+            rebuildPopularData();
             rebuildDownloadedData();
             notifyDataSetChanged();
         }
 
         void onSourceDataSetChanged() {
+            rebuildPopularData();
             if (mDownloadedOnlyMode) {
                 rebuildDownloadedData();
             }
@@ -3009,6 +3222,10 @@ public class GalleryListScene extends BaseScene
         }
 
         void onSourceItemRangeInserted(int positionStart, int itemCount) {
+            if (hasPopularProjection()) {
+                onSourceDataSetChanged();
+                return;
+            }
             if (mDownloadedOnlyMode) {
                 rebuildDownloadedData();
                 notifyDataSetChanged();
@@ -3018,6 +3235,10 @@ public class GalleryListScene extends BaseScene
         }
 
         void onSourceItemRangeRemoved(int positionStart, int itemCount) {
+            if (hasPopularProjection()) {
+                onSourceDataSetChanged();
+                return;
+            }
             if (mDownloadedOnlyMode) {
                 rebuildDownloadedData();
                 notifyDataSetChanged();
@@ -3032,7 +3253,7 @@ public class GalleryListScene extends BaseScene
             if (!mDownloadedOnlyMode || mHelper == null || downloadManager == null) {
                 return;
             }
-            for (GalleryInfo galleryInfo : mHelper.getData()) {
+            for (GalleryInfo galleryInfo : getSourceData()) {
                 if (galleryInfo == null) {
                     continue;
                 }
@@ -3096,6 +3317,23 @@ public class GalleryListScene extends BaseScene
         protected void getPageData(int taskId, int type, int page) {
             MainActivity activity = getActivity2();
             if (null == activity || null == mClient || null == mUrlBuilder) {
+                return;
+            }
+
+            if (isPopularMode()) {
+                mPopularRequestInFlight = true;
+                updatePopularActions();
+                String url = mUrlBuilder.build();
+                int site = Settings.getGallerySite();
+                loadPopularHistory(site, () -> {
+                    if (mHelper != this || !isCurrentTask(taskId) || !isPopularMode()) return;
+                    EhRequest request = new EhRequest();
+                    request.setMethod(EhClient.METHOD_GET_GALLERY_LIST);
+                    request.setCallback(new GetGalleryListListener(getContext(),
+                            activity.getStageId(), getTag(), taskId));
+                    request.setArgs(url, ListUrlBuilder.MODE_WHATS_HOT);
+                    mClient.execute(request);
+                });
                 return;
             }
 
@@ -3172,6 +3410,10 @@ public class GalleryListScene extends BaseScene
             if (null == activity || null == mClient || null == mUrlBuilder) {
                 return;
             }
+            if (isPopularMode()) {
+                getPageData(taskId, pageAction, page);
+                return;
+            }
             if (isBookmarkSubscriptionMode()) {
                 BookmarkSubscriptionCoordinator coordinator =
                         getBookmarkSubscriptionCoordinator();
@@ -3227,6 +3469,7 @@ public class GalleryListScene extends BaseScene
 
         @Override
         protected boolean shouldRequestNextPageOnScroll(int dy) {
+            if (isPopularMode()) return false;
             return !mDownloadedOnlyMode || (mDownloadedBrowseGestureArmed
                     && !mDownloadedPageScanActive && dy > 0 && hasNextPage());
         }

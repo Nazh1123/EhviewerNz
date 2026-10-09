@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="popular_updates_only">仅查看更新</string>
+    <string name="popular_show_all">显示全部</string>
+    <string name="popular_previous">回看上次</string>
+    <string name="popular_return_current">返回本次</string>
+    <string name="popular_no_previous">暂无上一次热门请求记录</string>
+    <string name="popular_no_updates">相比上次热门暂无新增画廊</string>
+</resources>

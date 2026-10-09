@@ -26,6 +26,7 @@ import android.view.ViewGroup;
 import android.view.animation.Interpolator;
 import androidx.annotation.NonNull;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.hippo.ehviewer.R;
 import com.hippo.lib.yorozuya.AnimationUtils;
 import com.hippo.lib.yorozuya.AssertUtils;
@@ -78,9 +79,9 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
 
     @Override
     public void addView(@NonNull View child, int index, LayoutParams params) {
-        if (!(child instanceof FloatingActionButton)) {
-            throw new IllegalStateException("FloatingActionBarLayout should only " +
-                    "contain FloatingActionButton, but try to add "+ child.getClass().getName());
+        if (!(child instanceof FloatingActionButton) && !(child instanceof ExtendedFloatingActionButton)) {
+            throw new IllegalStateException("FabLayout should only contain floating action buttons, " +
+                    "but tried to add " + child.getClass().getName());
         }
         super.addView(child, index, params);
     }
@@ -102,11 +103,12 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
         if (index < 0 || index >= getSecondaryFabCount()) {
             return null;
         }
-        return (FloatingActionButton) getChildAt(index);
+        View action = getChildAt(index);
+        return action instanceof FloatingActionButton ? (FloatingActionButton) action : null;
     }
 
     public void setSecondaryFabVisibilityAt(int index, boolean visible) {
-        View fab = getSecondaryFabAt(index);
+        View fab = index >= 0 && index < getSecondaryFabCount() ? getChildAt(index) : null;
         if (fab != null) {
             if (visible && fab.getVisibility() == View.GONE) {
                 fab.animate().cancel();
@@ -169,9 +171,15 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
                 centerX = layoutRight - (childWidth / 2);
                 mMainFabCenterY = layoutBottom - (childHeight / 2f);
             } else {
-                layoutBottom = bottom + ((childHeight - mFabMiniSize) / 2);
-                layoutRight = centerX + (childWidth / 2);
-                bottom -= mFabMiniSize + mIntervalSecondary;
+                if (child instanceof ExtendedFloatingActionButton) {
+                    layoutBottom = bottom;
+                    layoutRight = getMeasuredWidth() - getPaddingRight();
+                    bottom -= childHeight + mIntervalSecondary;
+                } else {
+                    layoutBottom = bottom + ((childHeight - mFabMiniSize) / 2);
+                    layoutRight = centerX + (childWidth / 2);
+                    bottom -= mFabMiniSize + mIntervalSecondary;
+                }
             }
             child.layout(layoutRight - childWidth, layoutBottom - childHeight, layoutRight, layoutBottom);
         }
@@ -253,9 +261,11 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
                         if (child.getVisibility() == GONE) {
                             continue;
                         }
+                        child.animate().cancel();
                         child.setVisibility(expanded ? View.VISIBLE : View.INVISIBLE);
                         if (expanded) {
                             child.setAlpha(1f);
+                            child.setTranslationY(0f);
                         }
                     }
                 } else {
@@ -383,7 +393,11 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
             if (position == getChildCount() - 1) {
                 mOnClickFabListener.onClickPrimaryFab(this, (FloatingActionButton) v);
             } else if (position >= 0 && mExpanded) {
-                mOnClickFabListener.onClickSecondaryFab(this, (FloatingActionButton) v, position);
+                if (v instanceof FloatingActionButton) {
+                    mOnClickFabListener.onClickSecondaryFab(this, (FloatingActionButton) v, position);
+                } else {
+                    mOnClickFabListener.onClickSecondaryAction(this, v, position);
+                }
             }
         }
     }
@@ -421,5 +435,8 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
         void onClickPrimaryFab(FabLayout view, FloatingActionButton fab);
 
         void onClickSecondaryFab(FabLayout view, FloatingActionButton fab, int position);
+
+        default void onClickSecondaryAction(FabLayout view, View action, int position) {
+        }
     }
 }

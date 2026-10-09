@@ -115,6 +115,18 @@
             style="@style/Widget.Design.FloatingActionButton.Mini"/>
 
 
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/popular_updates_menu"
+            android:visibility="gone"
+            android:text="@string/popular_updates_only"
+            style="@style/Widget.PopularAction"/>
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/popular_previous_menu"
+            android:visibility="gone"
+            android:text="@string/popular_previous"
+            style="@style/Widget.PopularAction"/>
+
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -122,6 +134,30 @@
             style="@style/Widget.Design.FloatingActionButton"/>
 
     </com.hippo.widget.FabLayout>
+
+    <LinearLayout
+        android:id="@+id/popular_actions"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|right"
+        android:layout_marginRight="@dimen/corner_fab_margin"
+        android:layout_marginBottom="104dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/popular_updates"
+            android:layout_gravity="right"
+            android:layout_marginBottom="12dp"
+            android:text="@string/popular_updates_only"
+            style="@style/Widget.PopularAction"/>
+
+        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+            android:id="@+id/popular_previous"
+            android:layout_gravity="right"
+            android:text="@string/popular_previous"
+            style="@style/Widget.PopularAction"/>
+    </LinearLayout>
 
     <com.hippo.widget.FabLayout
         xmlns:app="http://schemas.android.com/apk/res-auto"
