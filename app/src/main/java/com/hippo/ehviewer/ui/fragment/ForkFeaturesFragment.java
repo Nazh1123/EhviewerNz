@@ -9,9 +9,6 @@ import androidx.preference.Preference;
 
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
-import com.hippo.ehviewer.ui.MainActivity;
-import com.hippo.ehviewer.ui.scene.gallery.list.QuickSearchScene;
-import com.hippo.scene.StageActivity;
 import com.hippo.unifile.UniFile;
 
 public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
@@ -20,8 +17,6 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
             "manual_image_save_location";
     private static final int REQUEST_CODE_PICK_MANUAL_IMAGE_DIR = 0;
     private static final int REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L = 1;
-    private static final String KEY_BOOKMARK_SUBSCRIPTION_SETTINGS =
-            "bookmark_subscription_settings";
     private static final String KEY_DELETE_EMPTY_GALLERIES =
             "fork_delete_empty_galleries";
 
@@ -32,7 +27,6 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
     public void onCreatePreferences(@Nullable Bundle savedInstanceState,
                                     @Nullable String rootKey) {
         addPreferencesFromResource(R.xml.fork_features_settings);
-        SubscriptionUpdatePreferences.bind(this);
         GalleryUpdateRecordPreferences.bind(this);
         mManualImageSaveLocation = findPreference(KEY_MANUAL_IMAGE_SAVE_LOCATION);
         Preference showThumbnailDownloadBadge =
@@ -58,21 +52,6 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         if (galleryLongPressQuickDownload != null) {
             galleryLongPressQuickDownload.setOnPreferenceChangeListener(
                     galleryListPreferenceListener);
-        }
-        Preference bookmarkSubscriptionSettings =
-                findPreference(KEY_BOOKMARK_SUBSCRIPTION_SETTINGS);
-        if (bookmarkSubscriptionSettings != null) {
-            bookmarkSubscriptionSettings.setOnPreferenceClickListener(preference -> {
-                Intent intent = new Intent(requireContext(), MainActivity.class);
-                intent.setAction(StageActivity.ACTION_START_SCENE);
-                intent.putExtra(StageActivity.KEY_SCENE_NAME,
-                        QuickSearchScene.class.getName());
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP |
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                startActivity(intent);
-                requireActivity().finish();
-                return true;
-            });
         }
         Preference deleteEmptyGalleries = findPreference(KEY_DELETE_EMPTY_GALLERIES);
         if (deleteEmptyGalleries != null) {

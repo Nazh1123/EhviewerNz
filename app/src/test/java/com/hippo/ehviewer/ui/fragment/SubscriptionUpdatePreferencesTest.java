@@ -123,7 +123,7 @@ public class SubscriptionUpdatePreferencesTest {
     public static class Harness extends PreferenceFragmentCompat {
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
-            addPreferencesFromResource(R.xml.fork_features_settings);
+            addPreferencesFromResource(R.xml.subscription_settings);
             SubscriptionUpdatePreferences.bind(this);
         }
     }

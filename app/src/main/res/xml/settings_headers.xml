@@ -66,6 +66,12 @@
         app:fragment="com.hippo.ehviewer.ui.fragment.ForkFeaturesFragment" />
 
     <com.hippo.ehviewer.ui.fragment.BasePreference
+        android:icon="@drawable/ic_baseline_subscriptions_24"
+        android:title="@string/settings_fork_category_subscriptions"
+        app:allowDividerAbove="true"
+        app:fragment="com.hippo.ehviewer.ui.fragment.SubscriptionFragment" />
+
+    <com.hippo.ehviewer.ui.fragment.BasePreference
         android:icon="@drawable/v_info_primary_x24"
         android:title="@string/settings_about"
         app:allowDividerAbove="true"

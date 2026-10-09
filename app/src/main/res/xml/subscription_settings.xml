@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Preference
+        android:key="bookmark_subscription_settings"
+        android:summary="@string/settings_fork_bookmark_subscription_summary"
+        android:title="@string/settings_bookmark_subscription_management"
+        app:iconSpaceReserved="false" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="show_subscription_buttons"
+        android:title="@string/settings_subscription_sidebar_buttons" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:dependency="show_subscription_buttons"
+        android:key="show_bookmark_subscription"
+        android:title="@string/bookmark_subscription" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:dependency="show_subscription_buttons"
+        android:key="show_global_subscription"
+        android:title="@string/global_subscription" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:dependency="show_subscription_buttons"
+        android:key="show_update_subscription"
+        android:title="@string/update_subscriptions" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="auto_subscription_updates"
+        android:summary="@string/settings_fork_auto_subscription_updates_summary"
+        android:title="@string/settings_fork_auto_subscription_updates" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:dependency="auto_subscription_updates"
+        android:key="auto_subscription_updates_eh"
+        android:title="@string/settings_fork_auto_subscription_updates_eh" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:dependency="auto_subscription_updates"
+        android:key="auto_subscription_updates_bookmark"
+        android:title="@string/settings_fork_auto_subscription_updates_bookmark" />
+
+    <EditTextPreference
+        android:defaultValue="60"
+        android:dependency="auto_subscription_updates"
+        android:key="auto_subscription_update_interval"
+        android:title="@string/settings_fork_auto_subscription_update_interval" />
+
+    <Preference
+        android:key="test_bookmark_subscription"
+        android:title="@string/settings_test_bookmark_subscription"
+        app:iconSpaceReserved="false" />
+</PreferenceScreen>

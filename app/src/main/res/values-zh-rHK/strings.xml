@@ -1202,9 +1202,9 @@
     <string name="settings_gallery_long_press_quick_download_summary">長按畫廊項目的指定區域即可快速開始下載</string>
     <string name="settings_eh_system_theme">系統主題</string>
     <string name="settings_fork_auto_subscription_updates">自動獲取訂閱更新</string>
-    <string name="settings_fork_auto_subscription_updates_eh">EH 訂閱</string>
+    <string name="settings_fork_auto_subscription_updates_eh">自動更新 EH訂閱</string>
     <string name="settings_fork_auto_subscription_updates_summary">按設定間隔獲取訂閱內容的更新畫廊數量</string>
-    <string name="settings_fork_auto_subscription_update_interval">自動獲取間隔</string>
+    <string name="settings_fork_auto_subscription_update_interval">自動更新間隔</string>
     <string name="settings_fork_auto_subscription_update_interval_summary">%1$d 分鐘</string>
     <string name="settings_fork_auto_subscription_update_interval_invalid">請輸入有效的正整數分鐘數</string>
     <string name="settings_fork_subscription_update_minutes">分鐘</string>
@@ -1251,4 +1251,12 @@
     <string name="offline_gallery_local_size">本機：%1$s</string>
     <string name="offline_gallery_local_pages">%1$d 頁本機圖片</string>
     <string name="offline_gallery_saved_rating">已儲存的評分</string>
+    <string name="settings_bookmark_subscription_management">書籤訂閱管理</string>
+    <string name="settings_subscription_sidebar_buttons">側邊欄按鈕顯示</string>
+    <string name="settings_fork_auto_subscription_updates_bookmark">自動更新 書籤訂閱</string>
+    <string name="settings_test_bookmark_subscription">測試書籤訂閱</string>
+    <string name="settings_test_bookmark_subscription_summary">進行一輪實際書籤訂閱請求\n書籤訂閱數: %1$s, 網站請求數: %2$s, 單輪耗時: %3$ss</string>
+    <string name="settings_test_bookmark_subscription_running">正在測試書籤訂閱…</string>
+    <string name="settings_test_bookmark_subscription_finished">書籤訂閱測試完成</string>
+    <string name="settings_test_bookmark_subscription_failed">部分書籤訂閱請求失敗</string>
 </resources>

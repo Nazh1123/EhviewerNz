@@ -597,6 +597,7 @@ public final class MainActivity extends StageActivity
     private boolean onNavigationItemLongClick(@IdRes int itemId) {
         switch (itemId) {
             case R.id.nav_bookmark_subscription:
+            case R.id.nav_global_subscription:
                 startScene(new Announcer(QuickSearchScene.class));
                 if (mDrawerLayout != null) {
                     mDrawerLayout.closeDrawers();
@@ -1194,6 +1195,15 @@ public final class MainActivity extends StageActivity
     }
 
     private void renderSubscriptionUpdateState() {
+        if (mNavView != null) {
+            boolean visible = Settings.getShowSubscriptionButtons();
+            mNavView.getMenu().findItem(R.id.nav_bookmark_subscription)
+                    .setVisible(visible && Settings.getShowBookmarkSubscription());
+            mNavView.getMenu().findItem(R.id.nav_global_subscription)
+                    .setVisible(visible && Settings.getShowGlobalSubscription());
+            mNavView.getMenu().findItem(R.id.nav_update_subscription)
+                    .setVisible(visible && Settings.getShowUpdateSubscription());
+        }
         SubscriptionUpdateManager manager = mSubscriptionUpdateManager;
         if (manager == null) {
             return;

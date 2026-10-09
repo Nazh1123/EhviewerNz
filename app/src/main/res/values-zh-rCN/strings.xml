@@ -769,11 +769,11 @@
     <string name="settings_fork_download_label_continuous_browse_summary">在下载页面中按标签从上到下连续显示下载画廊</string>
     <string name="settings_fork_auto_subscription_updates">自动获取订阅更新</string>
     <string name="settings_fork_auto_subscription_updates_summary">按设定间隔获取订阅内容的更新画廊数量</string>
-    <string name="settings_fork_auto_subscription_update_interval">自动获取间隔</string>
+    <string name="settings_fork_auto_subscription_update_interval">自动更新间隔</string>
     <string name="settings_fork_auto_subscription_update_interval_summary">%1$d 分钟</string>
     <string name="settings_fork_auto_subscription_update_interval_invalid">请输入有效的正整数分钟数</string>
     <string name="settings_fork_subscription_update_minutes">分钟</string>
-    <string name="settings_fork_auto_subscription_updates_eh">EH 订阅</string>
+    <string name="settings_fork_auto_subscription_updates_eh">自动更新 EH订阅</string>
     <string name="settings_fork_gallery_immediate_jump">画廊立即跳转</string>
     <string name="settings_fork_long_press_save_summary">长按下一页翻页区域，将当前图片保存到本地</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">长按保存成功后自动翻至下一页</string>
@@ -1213,4 +1213,12 @@
     <string name="offline_gallery_local_size">本地：%1$s</string>
     <string name="offline_gallery_local_pages">%1$d 页本地图片</string>
     <string name="offline_gallery_saved_rating">已保存的评分</string>
+    <string name="settings_bookmark_subscription_management">书签订阅管理</string>
+    <string name="settings_subscription_sidebar_buttons">侧边栏按钮显示</string>
+    <string name="settings_fork_auto_subscription_updates_bookmark">自动更新 书签订阅</string>
+    <string name="settings_test_bookmark_subscription">测试书签订阅</string>
+    <string name="settings_test_bookmark_subscription_summary">进行一轮实际书签订阅请求\n书签订阅数: %1$s, 网站请求数: %2$s, 单轮耗时: %3$ss</string>
+    <string name="settings_test_bookmark_subscription_running">正在测试书签订阅…</string>
+    <string name="settings_test_bookmark_subscription_finished">书签订阅测试完成</string>
+    <string name="settings_test_bookmark_subscription_failed">部分书签订阅请求失败</string>
 </resources>

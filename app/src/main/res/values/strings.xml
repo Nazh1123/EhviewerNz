@@ -755,11 +755,11 @@
     <string name="settings_read_auto_transfer_time">Auto Transfer(ms)</string>
     <string name="settings_fork_auto_subscription_updates">Automatically fetch subscription updates</string>
     <string name="settings_fork_auto_subscription_updates_summary">Fetch the number of updated galleries in subscriptions at the configured interval</string>
-    <string name="settings_fork_auto_subscription_update_interval">Automatic fetch interval</string>
+    <string name="settings_fork_auto_subscription_update_interval">Automatic update interval</string>
     <string name="settings_fork_auto_subscription_update_interval_summary">%1$d minutes</string>
     <string name="settings_fork_auto_subscription_update_interval_invalid">Enter a valid positive whole number of minutes</string>
     <string name="settings_fork_subscription_update_minutes">minutes</string>
-    <string name="settings_fork_auto_subscription_updates_eh">EH subscriptions</string>
+    <string name="settings_fork_auto_subscription_updates_eh">Automatically update EH subscriptions</string>
     <string name="settings_read_direct_save">Long-press save</string>
     <string name="settings_read_long_press_save_turn_page">Turn page after saving</string>
     <string name="settings_read_quick_page_turn">Quick page turning</string>
@@ -1308,4 +1308,12 @@
     <string name="offline_gallery_local_size">Local: %1$s</string>
     <string name="offline_gallery_local_pages">%1$d local pages</string>
     <string name="offline_gallery_saved_rating">Saved rating</string>
+    <string name="settings_bookmark_subscription_management">Manage bookmark subscriptions</string>
+    <string name="settings_subscription_sidebar_buttons">Sidebar button visibility</string>
+    <string name="settings_fork_auto_subscription_updates_bookmark">Automatically update bookmark subscriptions</string>
+    <string name="settings_test_bookmark_subscription">Test bookmark subscriptions</string>
+    <string name="settings_test_bookmark_subscription_summary">Run one round of actual bookmark subscription requests\nSubscribed bookmarks: %1$s, Website requests: %2$s, Round duration: %3$ss</string>
+    <string name="settings_test_bookmark_subscription_running">Testing bookmark subscriptions…</string>
+    <string name="settings_test_bookmark_subscription_finished">Bookmark subscription test finished</string>
+    <string name="settings_test_bookmark_subscription_failed">Some bookmark subscription requests failed</string>
 </resources>
