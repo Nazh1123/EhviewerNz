@@ -6,10 +6,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 
 import androidx.appcompat.view.ContextThemeWrapper;
-import androidx.core.graphics.ColorUtils;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
@@ -22,6 +20,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.GraphicsMode;
 import org.robolectric.util.ReflectionHelpers;
 import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
@@ -108,23 +107,30 @@ public class PopularGalleryActionsTest {
         assertFalse(ReflectionHelpers.<Boolean>getField(scene, "mPopularRequestInFlight"));
     }
 
-    @Test public void bothLocationsUseMatchingColorsWithReadableTextInAllThemes() {
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    public void iconAndBackgroundColorsMatchNeighboringFabsInAllThemes() {
         for (int theme : new int[]{R.style.AppTheme, R.style.AppTheme_Dark, R.style.AppTheme_Black}) {
             Context context = new ContextThemeWrapper(RuntimeEnvironment.getApplication(), theme);
-            for (boolean previous : new boolean[]{false, true}) {
-                ExtendedFloatingActionButton outside = new ExtendedFloatingActionButton(context);
-                ExtendedFloatingActionButton inside = new ExtendedFloatingActionButton(context);
-                style(outside, previous);
-                style(inside, previous);
-                int color = outside.getBackgroundTintList().getDefaultColor();
-                assertEquals(color, inside.getBackgroundTintList().getDefaultColor());
-                assertEquals(outside.getCurrentTextColor(), inside.getCurrentTextColor());
-                assertTrue(ColorUtils.calculateContrast(outside.getCurrentTextColor(), color) >= 4.5);
+            View themed = LayoutInflater.from(context).inflate(R.layout.scene_gallery_list, null);
+            FabLayout themedMenu = themed.findViewById(R.id.fab_layout);
+            FloatingActionButton menuPeer = themed.findViewById(R.id.downloaded_only_fab);
+            FloatingActionButton outsidePeer = themedMenu.getPrimaryFab();
+            outsidePeer.setImageDrawable(new com.hippo.drawable.AddDeleteDrawable(context,
+                    context.getColor(R.color.primary_drawable_dark)));
+            for (int id : new int[]{R.id.popular_updates, R.id.popular_previous,
+                    R.id.popular_updates_menu, R.id.popular_previous_menu}) {
+                FloatingActionButton action = themed.findViewById(id);
+                FloatingActionButton backgroundPeer = id == R.id.popular_updates || id == R.id.popular_previous
+                        ? outsidePeer : menuPeer;
+                assertEquals(backgroundPeer.getBackgroundTintList().getDefaultColor(),
+                        action.getBackgroundTintList().getDefaultColor());
+                assertEquals(iconColor(backgroundPeer), iconColor(action));
+                assertNotNull(action.getContentDescription());
             }
         }
     }
 
-    @Test public void extendedMenuActionsFitAndDispatchWithoutCastingToRoundFabs() {
+    @Test public void iconMenuActionsFitAndDispatchWithOtherRoundFabs() {
         ReflectionHelpers.callInstanceMethod(scene, "showNormalFabs", ClassParameter.from(FabLayout.class, menu));
         menu.setExpanded(true, false);
         int width = (int) (360 * root.getResources().getDisplayMetrics().density);
@@ -141,9 +147,6 @@ public class PopularGalleryActionsTest {
         menu.setOnClickFabListener(new FabLayout.OnClickFabListener() {
             @Override public void onClickPrimaryFab(FabLayout view, FloatingActionButton fab) {}
             @Override public void onClickSecondaryFab(FabLayout view, FloatingActionButton fab, int position) {
-                fail("Extended action dispatched as round FAB");
-            }
-            @Override public void onClickSecondaryAction(FabLayout view, View action, int position) {
                 clicked[0] = position;
             }
         });
@@ -159,9 +162,18 @@ public class PopularGalleryActionsTest {
     private void update() {
         ReflectionHelpers.callInstanceMethod(scene, "updatePopularActions");
     }
-    private void style(ExtendedFloatingActionButton button, boolean previous) {
-        ReflectionHelpers.callInstanceMethod(scene, "stylePopularAction",
-                ClassParameter.from(ExtendedFloatingActionButton.class, button),
-                ClassParameter.from(boolean.class, previous));
+    private int iconColor(FloatingActionButton button) {
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(48, 48,
+                android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.drawable.Drawable icon = button.getDrawable();
+        icon.setBounds(0, 0, 48, 48);
+        icon.draw(new android.graphics.Canvas(bitmap));
+        for (int y = 0; y < 48; y++) {
+            for (int x = 0; x < 48; x++) {
+                int color = bitmap.getPixel(x, y);
+                if (android.graphics.Color.alpha(color) == 255) return color;
+            }
+        }
+        throw new AssertionError("Icon did not draw any solid pixels");
     }
 }

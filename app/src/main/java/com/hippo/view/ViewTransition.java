@@ -73,13 +73,7 @@ public class ViewTransition {
             int oldShownView = mShownView;
             mShownView = shownView;
 
-            // Cancel animation
-            if (mAnimator1 != null) {
-                mAnimator1.cancel();
-            }
-            if (mAnimator2 != null) {
-                mAnimator2.cancel();
-            }
+            cancelAnimations();
 
             if (animation) {
                 for (int i = 0; i < length; i++) {
@@ -91,16 +85,7 @@ public class ViewTransition {
                 }
                 startAnimations(views[oldShownView], views[shownView]);
             } else {
-                for (int i = 0; i < length; i++) {
-                    View v = views[i];
-                    if (i == shownView) {
-                        v.setAlpha(1f);
-                        v.setVisibility(View.VISIBLE);
-                    } else {
-                        v.setAlpha(0f);
-                        v.setVisibility(View.GONE);
-                    }
-                }
+                applyVisibility();
             }
 
             if (null != mOnShowViewListener) {
@@ -109,7 +94,29 @@ public class ViewTransition {
 
             return true;
         } else {
+            // The logical target can already be current while its fade is still running,
+            // or its view has been hidden. An immediate show must settle that state too.
+            if (!animation || (mAnimator1 == null && mAnimator2 == null)) {
+                cancelAnimations();
+                applyVisibility();
+            }
             return false;
+        }
+    }
+
+    private void cancelAnimations() {
+        Animator outgoing = mAnimator1;
+        Animator incoming = mAnimator2;
+        mAnimator1 = null;
+        mAnimator2 = null;
+        if (outgoing != null) outgoing.cancel();
+        if (incoming != null) incoming.cancel();
+    }
+
+    private void applyVisibility() {
+        for (int i = 0; i < mViews.length; i++) {
+            mViews[i].setAlpha(i == mShownView ? 1f : 0f);
+            mViews[i].setVisibility(i == mShownView ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -119,12 +126,12 @@ public class ViewTransition {
         oa1.addListener(new SimpleAnimatorListener() {
             @Override
             public void onAnimationEnd(Animator animation) {
-                hiddenView.setVisibility(View.GONE);
-                mAnimator1 = null;
+                if (hiddenView != mViews[mShownView]) hiddenView.setVisibility(View.GONE);
+                if (mAnimator1 == animation) mAnimator1 = null;
             }
         });
-        oa1.start();
         mAnimator1 = oa1;
+        oa1.start();
 
         shownView.setVisibility(View.VISIBLE);
         ObjectAnimator oa2 = ObjectAnimator.ofFloat(shownView, "alpha", 1f);
@@ -132,11 +139,11 @@ public class ViewTransition {
         oa2.addListener(new SimpleAnimatorListener() {
             @Override
             public void onAnimationEnd(Animator animation) {
-                mAnimator2 = null;
+                if (mAnimator2 == animation) mAnimator2 = null;
             }
         });
-        oa2.start();
         mAnimator2 = oa2;
+        oa2.start();
     }
 
     public interface OnShowViewListener {

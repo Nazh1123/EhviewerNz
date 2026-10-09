@@ -115,17 +115,25 @@
             style="@style/Widget.Design.FloatingActionButton.Mini"/>
 
 
-        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/popular_updates_menu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:visibility="gone"
-            android:text="@string/popular_updates_only"
-            style="@style/Widget.PopularAction"/>
+            android:contentDescription="@string/popular_updates_only"
+            app:srcCompat="@drawable/v_popular_updates_x24"
+            app:backgroundTint="?attr/widgetColorThemeAccent"
+            style="@style/Widget.Design.FloatingActionButton.Mini"/>
 
-        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/popular_previous_menu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:visibility="gone"
-            android:text="@string/popular_previous"
-            style="@style/Widget.PopularAction"/>
+            android:contentDescription="@string/popular_previous"
+            app:srcCompat="@drawable/v_history_dark_x24"
+            app:backgroundTint="?attr/widgetColorThemeAccent"
+            style="@style/Widget.Design.FloatingActionButton.Mini"/>
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:layout_width="wrap_content"
@@ -145,18 +153,28 @@
         android:orientation="vertical"
         android:visibility="gone">
 
-        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/popular_updates"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="right"
-            android:layout_marginBottom="12dp"
-            android:text="@string/popular_updates_only"
-            style="@style/Widget.PopularAction"/>
+            android:layout_marginBottom="@dimen/fab_layout_secondary_margin"
+            android:contentDescription="@string/popular_updates_only"
+            app:srcCompat="@drawable/v_popular_updates_x24"
+            app:backgroundTint="?attr/widgetColorThemePrimary"
+            app:tint="@color/primary_drawable_dark"
+            style="@style/Widget.Design.FloatingActionButton.Mini"/>
 
-        <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/popular_previous"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="right"
-            android:text="@string/popular_previous"
-            style="@style/Widget.PopularAction"/>
+            android:contentDescription="@string/popular_previous"
+            app:srcCompat="@drawable/v_history_dark_x24"
+            app:backgroundTint="?attr/widgetColorThemePrimary"
+            app:tint="@color/primary_drawable_dark"
+            style="@style/Widget.Design.FloatingActionButton.Mini"/>
     </LinearLayout>
 
     <com.hippo.widget.FabLayout

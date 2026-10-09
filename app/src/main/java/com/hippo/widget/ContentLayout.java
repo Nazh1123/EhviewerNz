@@ -880,7 +880,11 @@ public class ContentLayout extends FrameLayout {
         }
 
         public void showContent() {
-            mViewTransition.showView(0);
+            showContent(true);
+        }
+
+        public void showContent(boolean animation) {
+            mViewTransition.showView(0, animation);
         }
 
         private boolean isContentShowing() {
@@ -902,6 +906,11 @@ public class ContentLayout extends FrameLayout {
 
         public void showEmptyString() {
             showText(mEmptyString);
+        }
+
+        public void showEmptyString(boolean animation) {
+            mTipView.setText(mEmptyString);
+            mViewTransition.showView(2, animation);
         }
 
         /**

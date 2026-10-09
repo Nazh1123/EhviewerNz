@@ -69,7 +69,7 @@ import com.github.amlcurran.showcaseview.targets.PointTarget;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
+import androidx.appcompat.widget.TooltipCompat;
 import com.hippo.android.resource.AttrResources;
 import com.hippo.app.CheckBoxDialogBuilder;
 import com.hippo.app.EditTextDialogBuilder;
@@ -250,10 +250,10 @@ public class GalleryListScene extends BaseScene
     @Nullable
     private FloatingActionButton mDownloadedOnlyFab;
     private View mPopularActions;
-    private ExtendedFloatingActionButton mPopularUpdates;
-    private ExtendedFloatingActionButton mPopularPrevious;
-    private ExtendedFloatingActionButton mPopularUpdatesMenu;
-    private ExtendedFloatingActionButton mPopularPreviousMenu;
+    private FloatingActionButton mPopularUpdates;
+    private FloatingActionButton mPopularPrevious;
+    private FloatingActionButton mPopularUpdatesMenu;
+    private FloatingActionButton mPopularPreviousMenu;
     private PopularGalleryHistory mPopularHistory;
     private int mPopularHistorySite = -1;
     private int mPopularViewMode = PopularGalleryHistory.CURRENT;
@@ -817,10 +817,6 @@ public class GalleryListScene extends BaseScene
         mPopularPreviousMenu = mainLayout.findViewById(R.id.popular_previous_menu);
         mPopularUpdates.setOnClickListener(v -> togglePopularView(PopularGalleryHistory.UPDATES));
         mPopularPrevious.setOnClickListener(v -> togglePopularView(PopularGalleryHistory.PREVIOUS));
-        stylePopularAction(mPopularUpdates, false);
-        stylePopularAction(mPopularUpdatesMenu, false);
-        stylePopularAction(mPopularPrevious, true);
-        stylePopularAction(mPopularPreviousMenu, true);
         addAboveSnackView(mPopularActions);
 
         onFilter(filterOpen, filterTagList.size());
@@ -1922,16 +1918,6 @@ public class GalleryListScene extends BaseScene
         return mUrlBuilder != null && mUrlBuilder.getMode() == ListUrlBuilder.MODE_WHATS_HOT;
     }
 
-    private void stylePopularAction(ExtendedFloatingActionButton button, boolean previous) {
-        Context context = button.getContext();
-        boolean light = AttrResources.getAttrBoolean(context, androidx.appcompat.R.attr.isLightTheme);
-        int background = previous
-                ? (light ? R.color.popular_previous_light : R.color.popular_previous_dark)
-                : (light ? R.color.popular_updates_light : R.color.popular_updates_dark);
-        button.setBackgroundTintList(ColorStateList.valueOf(context.getColor(background)));
-        button.setTextColor(context.getColor(light ? android.R.color.white : R.color.popular_action_dark_text));
-    }
-
     private void updatePopularActions() {
         if (mPopularActions == null || mFabLayout == null) return;
         boolean popular = isPopularMode();
@@ -1942,17 +1928,27 @@ public class GalleryListScene extends BaseScene
                 ? R.string.popular_show_all : R.string.popular_updates_only;
         int previousText = mPopularViewMode == PopularGalleryHistory.PREVIOUS
                 ? R.string.popular_return_current : R.string.popular_previous;
-        for (ExtendedFloatingActionButton button : new ExtendedFloatingActionButton[]{
+        for (FloatingActionButton button : new FloatingActionButton[]{
                 mPopularUpdates, mPopularUpdatesMenu, mPopularPrevious, mPopularPreviousMenu}) {
             button.setEnabled(enabled);
-            button.setAlpha(enabled ? 1f : 0.5f);
         }
-        mPopularUpdates.setText(updatesText);
-        mPopularUpdatesMenu.setText(updatesText);
-        mPopularPrevious.setText(previousText);
-        mPopularPreviousMenu.setText(previousText);
+        int updatesIcon = mPopularViewMode == PopularGalleryHistory.UPDATES
+                ? R.drawable.v_check_all_dark_x24 : R.drawable.v_popular_updates_x24;
+        int previousIcon = mPopularViewMode == PopularGalleryHistory.PREVIOUS
+                ? R.drawable.v_return_curve_dark_x24 : R.drawable.v_history_dark_x24;
+        updatePopularAction(mPopularUpdates, updatesIcon, updatesText);
+        updatePopularAction(mPopularUpdatesMenu, updatesIcon, updatesText);
+        updatePopularAction(mPopularPrevious, previousIcon, previousText);
+        updatePopularAction(mPopularPreviousMenu, previousIcon, previousText);
         mPopularActions.setVisibility(enabled && mPopularActionsOffered
                 && mState == STATE_NORMAL && !mFabLayout.isExpanded() ? View.VISIBLE : View.GONE);
+    }
+
+    private void updatePopularAction(FloatingActionButton button, int icon, int description) {
+        button.setImageResource(icon);
+        CharSequence label = button.getContext().getText(description);
+        button.setContentDescription(label);
+        TooltipCompat.setTooltipText(button, label);
     }
 
     private void loadPopularHistory(int site, Runnable continuation) {
@@ -1998,18 +1994,9 @@ public class GalleryListScene extends BaseScene
         mAdapter.onSourceDataSetChanged();
         mHelper.setEmptyString(getString(mPopularViewMode == PopularGalleryHistory.UPDATES
                 ? R.string.popular_no_updates : R.string.gallery_list_empty_hit));
-        if (mAdapter.getItemCount() == 0 && !mDownloadedOnlyMode) mHelper.showEmptyString();
-        else mHelper.showContent();
+        if (mAdapter.getItemCount() == 0 && !mDownloadedOnlyMode) mHelper.showEmptyString(false);
+        else mHelper.showContent(false);
         updatePopularActions();
-    }
-
-    @Override
-    public void onClickSecondaryAction(FabLayout view, View action, int position) {
-        if (position == FAB_POPULAR_UPDATES || position == FAB_POPULAR_PREVIOUS) {
-            togglePopularView(position == FAB_POPULAR_UPDATES
-                    ? PopularGalleryHistory.UPDATES : PopularGalleryHistory.PREVIOUS);
-            view.setExpanded(false);
-        }
     }
 
     private int getDownloadedPageScanLimit() {
@@ -2440,6 +2427,12 @@ public class GalleryListScene extends BaseScene
                 break;
             case FAB_DOWNLOADED_ONLY:
                 setDownloadedOnlyMode(!mDownloadedOnlyMode, true);
+                break;
+            case FAB_POPULAR_UPDATES:
+                togglePopularView(PopularGalleryHistory.UPDATES);
+                break;
+            case FAB_POPULAR_PREVIOUS:
+                togglePopularView(PopularGalleryHistory.PREVIOUS);
                 break;
         }
 
