@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_gallery_update_record_limit">Update record count</string>
-    <string name="settings_fork_category_saving">Saving</string>
+    <string name="settings_fork_category_saving">Saving and history</string>
     <string name="gallery_read_updates">Read updates only</string>
     <string name="gallery_update_log">Update log</string>
     <string name="gallery_update_log_time">Updated at</string>

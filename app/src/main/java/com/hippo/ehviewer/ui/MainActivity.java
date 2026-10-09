@@ -101,6 +101,7 @@ import com.hippo.ehviewer.ui.scene.gallery.list.SubscriptionsScene;
 import com.hippo.ehviewer.ui.scene.sign.GetProfileScene;
 import com.hippo.ehviewer.ui.scene.topList.EhTopListScene;
 import com.hippo.ehviewer.ui.scene.history.HistoryScene;
+import com.hippo.ehviewer.ui.scene.history.ReadingHistoryScene;
 import com.hippo.ehviewer.ui.scene.ProgressScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.QuickSearchScene;
 import com.hippo.ehviewer.ui.scene.SecurityScene;
@@ -262,6 +263,7 @@ public final class MainActivity extends StageActivity
         registerLaunchMode(DownloadLabelsScene.class, SceneFragment.LAUNCH_MODE_SINGLE_TASK);
         registerLaunchMode(FavoritesScene.class, SceneFragment.LAUNCH_MODE_SINGLE_TASK);
         registerLaunchMode(HistoryScene.class, SceneFragment.LAUNCH_MODE_SINGLE_TOP);
+        registerLaunchMode(ReadingHistoryScene.class, SceneFragment.LAUNCH_MODE_SINGLE_TOP);
         registerLaunchMode(ProgressScene.class, SceneFragment.LAUNCH_MODE_STANDARD);
     }
 
@@ -656,6 +658,13 @@ public final class MainActivity extends StageActivity
         }
     }
 
+    private void updateReadingHistoryNavigationItem() {
+        if (mNavView != null) {
+            MenuItem item = mNavView.getMenu().findItem(R.id.nav_reading_history);
+            if (item != null) item.setVisible(Settings.isReadingHistoryEnabled());
+        }
+    }
+
     @Override
     protected void onStart() {
         super.onStart();
@@ -863,6 +872,7 @@ public final class MainActivity extends StageActivity
 
         setNavCheckedItem(mNavCheckedItem);
         updateSearchLanguageNavigationItem();
+        updateReadingHistoryNavigationItem();
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
 
@@ -1519,6 +1529,11 @@ public final class MainActivity extends StageActivity
                 break;
             case R.id.nav_history:
                 startScene(new Announcer(HistoryScene.class));
+                break;
+            case R.id.nav_reading_history:
+                if (Settings.isReadingHistoryEnabled()) {
+                    startScene(new Announcer(ReadingHistoryScene.class));
+                }
                 break;
             case R.id.nav_search_language:
                 toggleSearchLanguage();

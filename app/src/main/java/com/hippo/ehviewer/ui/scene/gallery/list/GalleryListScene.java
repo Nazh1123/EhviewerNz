@@ -83,6 +83,7 @@ import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.FavouriteStatusRouter;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.callBack.SubscriptionCallback;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhClient;
@@ -1802,6 +1803,7 @@ public class GalleryListScene extends BaseScene
                     switch (which) {
                         case 0: // Read
                             Intent intent = new Intent(activity, GalleryActivity.class);
+                            intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.LIST);
                             intent.setAction(GalleryActivity.ACTION_EH);
                             intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, gi);
                             startActivity(intent);

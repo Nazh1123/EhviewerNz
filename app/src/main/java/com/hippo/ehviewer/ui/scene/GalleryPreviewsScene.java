@@ -43,6 +43,7 @@ import com.hippo.ehviewer.Analytics;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.EhUrl;
@@ -380,6 +381,7 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
             if (p != null) {
                 try {
                     Intent intent = new Intent(context, GalleryActivity.class);
+                    intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.PREVIEW);
                     intent.setAction(GalleryActivity.ACTION_EH);
                     intent.putExtra(GalleryActivity.DATA_IN_EVENT, true);
 //                    intent.putExtra(GalleryActivity.KEY_PAGE, p.getPosition());

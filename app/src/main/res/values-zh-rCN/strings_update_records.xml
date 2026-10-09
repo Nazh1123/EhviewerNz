@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_gallery_update_record_limit">更新记录数量</string>
-    <string name="settings_fork_category_saving">保存</string>
+    <string name="settings_fork_category_saving">保存与历史</string>
     <string name="gallery_read_updates">仅阅读更新</string>
     <string name="gallery_update_log">更新日志</string>
     <string name="gallery_update_log_time">更新时间</string>

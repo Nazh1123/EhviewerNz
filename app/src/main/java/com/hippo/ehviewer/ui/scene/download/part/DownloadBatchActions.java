@@ -40,6 +40,7 @@ import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
+import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
@@ -311,6 +312,7 @@ public class DownloadBatchActions {
         }
 
         Intent intent = new Intent(activity, GalleryActivity.class);
+        intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.DOWNLOAD);
         intent.setAction(GalleryActivity.ACTION_EH);
         intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, list.get(position));
         mHost.launchGalleryActivity(intent);

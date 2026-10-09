@@ -82,6 +82,7 @@ import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.UrlOpener;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhClient;
@@ -2121,6 +2122,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             }
             if (galleryInfo != null) {
                 Intent intent = new Intent(activity, GalleryActivity.class);
+                intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.DETAIL);
                 intent.setAction(GalleryActivity.ACTION_EH);
                 intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, galleryInfo);
                 startActivity(intent);
@@ -2247,6 +2249,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             if (null != galleryInfo && o instanceof Integer) {
                 int index = (Integer) o;
                 Intent intent = new Intent(mContext, GalleryActivity.class);
+                intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.PREVIEW);
                 intent.setAction(GalleryActivity.ACTION_EH);
                 intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, galleryInfo);
                 intent.putExtra(GalleryActivity.KEY_PAGE, index);
@@ -2961,6 +2964,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         if (mUpdateLogDialog != null) mUpdateLogDialog.dismiss();
         Intent intent = new Intent(getActivity2(), GalleryActivity.class);
+        intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.UPDATE);
         intent.setAction(GalleryActivity.ACTION_EH);
         intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, mGalleryDetail);
         // Resolve the record in the reader, avoiding large Intent page arrays.

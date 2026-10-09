@@ -2060,6 +2060,12 @@ public class Settings {
 
     public static final String KEY_HISTORY_INFO_SIZE = "history_info_size";
 
+    public static final String KEY_RECORD_READING_HISTORY = "record_reading_history";
+
+    public static boolean isReadingHistoryEnabled() {
+        return getBoolean(KEY_RECORD_READING_HISTORY, true);
+    }
+
     public static int DEFAULT_HISTORY_INFO_SIZE = 100;
 
     public static int getHistoryInfoSize() {

@@ -61,6 +61,13 @@
         android:title="@string/settings_fork_category_saving"
         app:allowDividerAbove="true">
 
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="true"
+            android:key="record_reading_history"
+            android:title="@string/settings_record_reading_history"
+            android:summary="@string/settings_record_reading_history_summary"
+            app:iconSpaceReserved="false" />
+
         <Preference
             android:key="manual_image_save_location"
             android:title="@string/settings_download_manual_save_location"

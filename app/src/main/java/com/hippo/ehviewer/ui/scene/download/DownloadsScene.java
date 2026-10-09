@@ -94,6 +94,7 @@ import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.gallery.LocalFolderGalleryScanner;
 import com.hippo.ehviewer.gallery.LocalFolderCoverStore;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
+import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.sync.DownloadListInfosExecutor;
 import com.hippo.ehviewer.sync.DownloadSpiderInfoExecutor;
@@ -1049,6 +1050,7 @@ public class DownloadsScene extends ToolbarScene
 
             DownloadInfo downloadInfo = list.get(listPosition);
             Intent intent = new Intent(activity, GalleryActivity.class);
+            intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.DOWNLOAD);
             LocalFolderGallerySource folderSource =
                     LocalFolderGallerySource.parse(downloadInfo.archiveUri);
             if (folderSource != null) {

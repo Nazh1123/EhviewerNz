@@ -101,6 +101,7 @@ import com.hippo.ehviewer.gallery.GalleryProvider2;
 import com.hippo.ehviewer.translation.ReaderTranslationController;
 import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.gallery.LocalGalleryHistory;
+import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.gallery.LocalFolderGalleryProvider;
 import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
@@ -154,6 +155,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         GalleryView.Listener, ImageTexture.PlaybackListener {
 
     private static final String TAG = "GalleryActivity";
+    private boolean mReadingHistoryRecorded;
 
     public static final String ACTION_DIR = "dir";
     public static final String ACTION_EH = "eh";
@@ -491,6 +493,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 }
             }
         }
+        if (mGalleryProvider != null && !mReadingHistoryRecorded) {
+            mReadingHistoryRecorded = true;
+            Intent visit = new Intent(getIntent()).setAction(mAction).setData(mUri);
+            visit.putExtra(KEY_FILENAME, mFilename);
+            visit.putExtra(KEY_GALLERY_INFO, mGalleryInfo);
+            visit.putExtra(KEY_PAGE, mPage);
+            try {
+                ReadingHistory.record(getApplicationContext(), visit);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Unable to record reader visit", e);
+            }
+        }
     }
 
     @NonNull
@@ -630,6 +644,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void onRestore(@NonNull Bundle savedInstanceState) {
+        // A configuration change is the same reader visit, not a new history entry.
+        mReadingHistoryRecorded = true;
         mAction = savedInstanceState.getString(KEY_ACTION);
         mFilename = savedInstanceState.getString(KEY_FILENAME);
         mUri = savedInstanceState.getParcelable(KEY_URI);
