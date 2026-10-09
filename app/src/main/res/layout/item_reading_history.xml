@@ -10,11 +10,12 @@
     android:clickable="true"
     android:focusable="true">
 
-    <ImageView
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+    <com.hippo.widget.LoadImageView
+        android:id="@+id/reading_cover"
+        android:layout_width="64dp"
+        android:layout_height="88dp"
         android:layout_marginEnd="16dp"
-        android:src="@drawable/v_book_open_primary_x24"
+        android:scaleType="fitCenter"
         android:importantForAccessibility="no" />
 
     <LinearLayout

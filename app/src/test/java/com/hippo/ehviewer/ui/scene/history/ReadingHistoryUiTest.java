@@ -18,6 +18,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.navigation.NavigationView;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.EhApplication;
+import com.hippo.conaco.Conaco;
+import com.hippo.lib.image.Image;
+import com.hippo.widget.LoadImageView;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.ui.GalleryActivity;
@@ -30,12 +34,16 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.Implements;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.RealObject;
 import org.robolectric.util.ReflectionHelpers;
 
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(application = Application.class, sdk = 28, qualifiers = "zh-rCN")
+@Config(application = Application.class, sdk = 28, qualifiers = "zh-rCN", shadows = {
+        ReadingHistoryUiTest.AppShadow.class, ReadingHistoryUiTest.ImageShadow.class})
 public class ReadingHistoryUiTest {
     private Context context;
     private SharedPreferences settings;
@@ -88,6 +96,7 @@ public class ReadingHistoryUiTest {
         gallery.gid = 21;
         gallery.token = "token21";
         gallery.title = "Reading example";
+        gallery.thumb = "https://example.com/cover.jpg";
         ReadingHistory.record(context, new Intent(GalleryActivity.ACTION_EH)
                 .putExtra(GalleryActivity.KEY_GALLERY_INFO, gallery)
                 .putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.DOWNLOAD));
@@ -129,5 +138,20 @@ public class ReadingHistoryUiTest {
         @Override public Context getEHContext() { return context; }
         @Override public MainActivity getActivity2() { return activity; }
         @Override public void startActivity(Intent intent) { launched = intent; }
+    }
+
+    @Implements(EhApplication.class)
+    public static class AppShadow extends org.robolectric.shadows.ShadowApplication {
+        @Implementation protected static Conaco<Image> getConaco(Context context) { return null; }
+    }
+
+    @Implements(LoadImageView.class)
+    public static class ImageShadow extends org.robolectric.shadows.ShadowView {
+        @RealObject private LoadImageView view;
+        String url;
+        @Implementation protected void load(String key, String url, boolean network) { this.url = url; }
+        @Implementation protected void load(int id) { view.setImageResource(id); }
+        @Implementation protected void load(android.graphics.drawable.Drawable drawable) { view.setImageDrawable(drawable); }
+        @Implementation protected void unload() { url = null; view.setImageDrawable(null); }
     }
 }

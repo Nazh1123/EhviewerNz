@@ -24,6 +24,7 @@ import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.view.ViewTransition;
+import com.hippo.widget.LoadImageView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -122,6 +123,7 @@ public class ReadingHistoryScene extends ToolbarScene {
         @Override public void onBindViewHolder(@NonNull ReadingHolder holder, int position) {
             ReadingHistory.Entry entry = entries.get(position);
             Context context = holder.itemView.getContext();
+            ReadingHistoryCoverLoader.load(holder.cover, entry);
             holder.title.setText(entry.title);
             String date = DateUtils.formatDateTime(context, entry.readAt,
                     DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_SHOW_TIME | DateUtils.FORMAT_SHOW_YEAR);
@@ -145,17 +147,24 @@ public class ReadingHistoryScene extends ToolbarScene {
         }
 
         @Override public int getItemCount() { return entries.size(); }
+
+        @Override public void onViewRecycled(@NonNull ReadingHolder holder) {
+            ReadingHistoryCoverLoader.clear(holder.cover);
+            super.onViewRecycled(holder);
+        }
     }
 
     private static class ReadingHolder extends RecyclerView.ViewHolder {
         final TextView title;
         final TextView metadata;
         final TextView path;
+        final LoadImageView cover;
         ReadingHolder(View view) {
             super(view);
             title = view.findViewById(R.id.title);
             metadata = view.findViewById(R.id.reading_metadata);
             path = view.findViewById(R.id.reading_path);
+            cover = view.findViewById(R.id.reading_cover);
         }
     }
 }
