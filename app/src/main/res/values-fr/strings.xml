@@ -1037,9 +1037,9 @@
     <string name="settings_gallery_long_press_quick_download_summary">Appuyez longuement sur la zone indiquée d\'une galerie pour lancer immédiatement son téléchargement</string>
     <string name="settings_eh_system_theme">Thème système</string>
     <string name="settings_fork_auto_subscription_updates">Obtenez automatiquement les mises à jour de votre abonnement</string>
-    <string name="settings_fork_auto_subscription_updates_eh">EH Abonnez-vous</string>
+    <string name="settings_fork_auto_subscription_updates_eh">Mettre à jour automatiquement les abonnements EH</string>
     <string name="settings_fork_auto_subscription_updates_summary">Récupérer le nombre de galeries mises à jour dans les abonnements selon l’intervalle configuré</string>
-    <string name="settings_fork_auto_subscription_update_interval">Intervalle de récupération automatique</string>
+    <string name="settings_fork_auto_subscription_update_interval">Intervalle de mise à jour automatique</string>
     <string name="settings_fork_auto_subscription_update_interval_summary">%1$d minutes</string>
     <string name="settings_fork_auto_subscription_update_interval_invalid">Saisissez un nombre entier positif valide de minutes</string>
     <string name="settings_fork_subscription_update_minutes">minutes</string>
@@ -1047,7 +1047,7 @@
     <string name="settings_fork_delete_empty_galleries">Supprimer la galerie vide</string>
     <string name="settings_fork_download_label_continuous_browse">Onglet de téléchargement navigation continue</string>
     <string name="settings_fork_download_label_continuous_browse_summary">Afficher la galerie de téléchargement en continu de haut en bas par balise dans la page de téléchargement</string>
-    <string name="settings_fork_features">Fonctionnalités supplémentaires de Fork</string>
+    <string name="settings_fork_features">Fonctions diverses du Fork</string>
     <string name="settings_fork_gallery_immediate_jump">Galerie sauter maintenant</string>
     <string name="settings_fork_long_press_save_summary">Appuyez longuement sur la zone de tournage de page pour enregistrer l\'image actuelle localement</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Appuyez longuement pour enregistrer avec succès et passer automatiquement à la page suivante.</string>
@@ -1156,4 +1156,13 @@
     <string name="offline_gallery_local_size">Local : %1$s</string>
     <string name="offline_gallery_local_pages">%1$d pages locales</string>
     <string name="offline_gallery_saved_rating">Note enregistrée</string>
+    <string name="settings_fork_category_subscriptions">Abonnements</string>
+    <string name="settings_bookmark_subscription_management">Gérer les abonnements aux favoris</string>
+    <string name="settings_subscription_sidebar_buttons">Afficher les boutons de la barre latérale</string>
+    <string name="settings_fork_auto_subscription_updates_bookmark">Mettre à jour automatiquement les abonnements aux favoris</string>
+    <string name="settings_test_bookmark_subscription">Tester les abonnements aux favoris</string>
+    <string name="settings_test_bookmark_subscription_summary">Exécuter un cycle de requêtes réelles pour les abonnements aux favoris\nFavoris abonnés : %1$s, Requêtes au site : %2$s, Durée : %3$s s</string>
+    <string name="settings_test_bookmark_subscription_running">Test des abonnements aux favoris…</string>
+    <string name="settings_test_bookmark_subscription_finished">Test des abonnements aux favoris terminé</string>
+    <string name="settings_test_bookmark_subscription_failed">Certaines requêtes pour les abonnements aux favoris ont échoué</string>
 </resources>

@@ -1209,7 +1209,7 @@
     <string name="settings_fork_auto_subscription_update_interval_invalid">請輸入有效的正整數分鐘數</string>
     <string name="settings_fork_subscription_update_minutes">分鐘</string>
     <string name="settings_fork_bookmark_subscription_summary">點擊此項目或在書籤欄設定中為書籤新增訂閱。後可在側邊欄中點選「書籤訂閱」以查看依據時間排序的符合書籤條件的所有畫廊</string>
-    <string name="settings_fork_features">Fork額外功能</string>
+    <string name="settings_fork_features">Fork功能雜項</string>
     <string name="settings_fork_category_gallery">畫廊與搜尋</string>
     <string name="settings_fork_category_reading">閱讀與儲存</string>
     <string name="settings_fork_category_animated_webp">動態 WebP</string>

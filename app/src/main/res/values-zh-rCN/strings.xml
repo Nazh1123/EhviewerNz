@@ -758,7 +758,7 @@
     <string name="settings_advanced_app_language_title">App 界面语言</string>
     <string name="settings_search_language">搜索语言标签</string>
     <string name="settings_search_language_disabled">关闭</string>
-    <string name="settings_fork_features">Fork额外功能</string>
+    <string name="settings_fork_features">Fork功能杂项</string>
     <string name="settings_fork_category_gallery">画廊与搜索</string>
     <string name="settings_fork_category_reading">阅读与保存</string>
     <string name="settings_fork_category_animated_webp">动态 WebP</string>

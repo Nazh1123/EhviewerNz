@@ -1055,9 +1055,9 @@
     <string name="settings_gallery_long_press_quick_download_summary">ギャラリー項目の指定領域を長押しすると、すぐにダウンロードを開始します</string>
     <string name="settings_eh_system_theme">システムテーマ</string>
     <string name="settings_fork_auto_subscription_updates">サブスクリプションの更新を自動的に取得する</string>
-    <string name="settings_fork_auto_subscription_updates_eh">EH 登録</string>
+    <string name="settings_fork_auto_subscription_updates_eh">EH購読を自動更新</string>
     <string name="settings_fork_auto_subscription_updates_summary">設定した間隔で購読コンテンツの更新ギャラリー数を取得</string>
-    <string name="settings_fork_auto_subscription_update_interval">自動取得間隔</string>
+    <string name="settings_fork_auto_subscription_update_interval">自動更新間隔</string>
     <string name="settings_fork_auto_subscription_update_interval_summary">%1$d 分</string>
     <string name="settings_fork_auto_subscription_update_interval_invalid">有効な正の整数で分数を入力してください</string>
     <string name="settings_fork_subscription_update_minutes">分</string>
@@ -1065,7 +1065,7 @@
     <string name="settings_fork_delete_empty_galleries">空のギャラリーを削除する</string>
     <string name="settings_fork_download_label_continuous_browse">「ダウンロード」タブの継続的な閲覧</string>
     <string name="settings_fork_download_label_continuous_browse_summary">ダウンロード ページのタグごとにダウンロード ギャラリーを上から下に連続して表示します</string>
-    <string name="settings_fork_features">追加機能をフォークする</string>
+    <string name="settings_fork_features">Forkのその他の機能</string>
     <string name="settings_fork_gallery_immediate_jump">今すぐギャラリージャンプ</string>
     <string name="settings_fork_long_press_save_summary">ページめくり領域を長押しして、現在の画像をローカルに保存します</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">長押しすると正常に保存され、自動的に次のページに進みます。</string>
@@ -1108,4 +1108,13 @@
     <string name="offline_gallery_local_size">ローカル：%1$s</string>
     <string name="offline_gallery_local_pages">ローカル画像 %1$d ページ</string>
     <string name="offline_gallery_saved_rating">保存された評価</string>
+    <string name="settings_fork_category_subscriptions">購読</string>
+    <string name="settings_bookmark_subscription_management">ブックマーク購読の管理</string>
+    <string name="settings_subscription_sidebar_buttons">サイドバーのボタンを表示</string>
+    <string name="settings_fork_auto_subscription_updates_bookmark">ブックマーク購読を自動更新</string>
+    <string name="settings_test_bookmark_subscription">ブックマーク購読をテスト</string>
+    <string name="settings_test_bookmark_subscription_summary">実際のブックマーク購読リクエストを1回実行\n購読ブックマーク数: %1$s、サイトへのリクエスト数: %2$s、所要時間: %3$s秒</string>
+    <string name="settings_test_bookmark_subscription_running">ブックマーク購読をテスト中…</string>
+    <string name="settings_test_bookmark_subscription_finished">ブックマーク購読のテストが完了しました</string>
+    <string name="settings_test_bookmark_subscription_failed">一部のブックマーク購読リクエストが失敗しました</string>
 </resources>

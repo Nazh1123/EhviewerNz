@@ -1197,12 +1197,18 @@ public final class MainActivity extends StageActivity
     private void renderSubscriptionUpdateState() {
         if (mNavView != null) {
             boolean visible = Settings.getShowSubscriptionButtons();
-            mNavView.getMenu().findItem(R.id.nav_bookmark_subscription)
-                    .setVisible(visible && Settings.getShowBookmarkSubscription());
-            mNavView.getMenu().findItem(R.id.nav_global_subscription)
-                    .setVisible(visible && Settings.getShowGlobalSubscription());
-            mNavView.getMenu().findItem(R.id.nav_update_subscription)
-                    .setVisible(visible && Settings.getShowUpdateSubscription());
+            mBookmarkSubscriptionBadge = updateSubscriptionNavigationItem(
+                    R.id.nav_bookmark_subscription, visible && Settings.getShowBookmarkSubscription(),
+                    R.layout.nav_subscription_badge, R.id.subscription_update_badge);
+            mGlobalSubscriptionBadge = updateSubscriptionNavigationItem(
+                    R.id.nav_global_subscription, visible && Settings.getShowGlobalSubscription(),
+                    R.layout.nav_subscription_badge, R.id.subscription_update_badge);
+            mSubscriptionUpdateCountdown = updateSubscriptionNavigationItem(
+                    R.id.nav_update_subscription, visible && Settings.getShowUpdateSubscription(),
+                    R.layout.nav_subscription_countdown, R.id.subscription_update_countdown);
+            if (mSubscriptionUpdateCountdown == null) {
+                mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionCountdownRunnable);
+            }
         }
         SubscriptionUpdateManager manager = mSubscriptionUpdateManager;
         if (manager == null) {
@@ -1226,6 +1232,35 @@ public final class MainActivity extends StageActivity
         renderSubscriptionUpdateCountdown();
     }
 
+    @Nullable
+    private TextView updateSubscriptionNavigationItem(@IdRes int itemId, boolean visible,
+                                                       int layoutRes, @IdRes int textId) {
+        MenuItem item = mNavView.getMenu().findItem(itemId);
+        if (item == null) return null;
+        View actionView = item.getActionView();
+        if (!visible) {
+            // NavigationView can reuse a hidden row without clearing its old action area.
+            // Remove the view before hiding the item so it cannot follow the row to Hot.
+            if (actionView != null) {
+                TextView text = actionView.findViewById(textId);
+                if (text != null) text.setText(null);
+                actionView.setVisibility(View.GONE);
+                if (actionView.getParent() instanceof ViewGroup parent) {
+                    parent.removeView(actionView);
+                }
+                item.setActionView(null);
+            }
+            item.setVisible(false);
+            return null;
+        }
+        if (actionView == null) {
+            item.setActionView(layoutRes);
+            actionView = item.getActionView();
+        }
+        item.setVisible(true);
+        return actionView == null ? null : actionView.findViewById(textId);
+    }
+
     private void startSubscriptionUpdateCountdown() {
         mSubscriptionCountdownRunning = true;
         renderSubscriptionUpdateCountdown();
@@ -1245,6 +1280,7 @@ public final class MainActivity extends StageActivity
         boolean hasEnabledSource = Settings.getAutoSubscriptionUpdatesEh()
                 || Settings.getAutoSubscriptionUpdatesBookmark();
         if (countdown == null || manager == null
+                || !Settings.getShowSubscriptionButtons() || !Settings.getShowUpdateSubscription()
                 || !Settings.getAutoSubscriptionUpdates()
                 || !hasEnabledSource) {
             if (countdown != null) {

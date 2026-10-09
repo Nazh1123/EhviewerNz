@@ -1103,9 +1103,9 @@
     <string name="settings_gallery_long_press_quick_download_summary">갤러리 항목의 지정 영역을 길게 눌러 즉시 다운로드를 시작합니다</string>
     <string name="settings_eh_system_theme">시스템 테마</string>
     <string name="settings_fork_auto_subscription_updates">자동으로 구독 업데이트 받기</string>
-    <string name="settings_fork_auto_subscription_updates_eh">에에 구독</string>
+    <string name="settings_fork_auto_subscription_updates_eh">EH 구독 자동 업데이트</string>
     <string name="settings_fork_auto_subscription_updates_summary">설정한 간격으로 구독 콘텐츠의 업데이트된 갤러리 수 가져오기</string>
-    <string name="settings_fork_auto_subscription_update_interval">자동 가져오기 간격</string>
+    <string name="settings_fork_auto_subscription_update_interval">자동 업데이트 간격</string>
     <string name="settings_fork_auto_subscription_update_interval_summary">%1$d분</string>
     <string name="settings_fork_auto_subscription_update_interval_invalid">분 단위로 유효한 양의 정수를 입력하세요</string>
     <string name="settings_fork_subscription_update_minutes">분</string>
@@ -1113,7 +1113,7 @@
     <string name="settings_fork_delete_empty_galleries">빈 갤러리 삭제</string>
     <string name="settings_fork_download_label_continuous_browse">다운로드 탭 연속 탐색</string>
     <string name="settings_fork_download_label_continuous_browse_summary">다운로드 페이지의 태그를 통해 다운로드 갤러리를 위에서 아래로 연속적으로 표시합니다.</string>
-    <string name="settings_fork_features">포크 추가 기능</string>
+    <string name="settings_fork_features">Fork 기타 기능</string>
     <string name="settings_fork_gallery_immediate_jump">지금 갤러리 점프</string>
     <string name="settings_fork_long_press_save_summary">현재 사진을 로컬에 저장하려면 페이지 넘김 영역을 길게 누르세요.</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">길게 누르면 성공적으로 저장되고 자동으로 다음 페이지로 넘어갑니다.</string>
@@ -1184,4 +1184,13 @@
     <string name="offline_gallery_local_size">로컬: %1$s</string>
     <string name="offline_gallery_local_pages">로컬 이미지 %1$d페이지</string>
     <string name="offline_gallery_saved_rating">저장된 평점</string>
+    <string name="settings_fork_category_subscriptions">구독</string>
+    <string name="settings_bookmark_subscription_management">북마크 구독 관리</string>
+    <string name="settings_subscription_sidebar_buttons">사이드바 버튼 표시</string>
+    <string name="settings_fork_auto_subscription_updates_bookmark">북마크 구독 자동 업데이트</string>
+    <string name="settings_test_bookmark_subscription">북마크 구독 테스트</string>
+    <string name="settings_test_bookmark_subscription_summary">실제 북마크 구독 요청을 한 차례 실행\n구독 중인 북마크 수: %1$s, 사이트 요청 수: %2$s, 소요 시간: %3$s초</string>
+    <string name="settings_test_bookmark_subscription_running">북마크 구독 테스트 중…</string>
+    <string name="settings_test_bookmark_subscription_finished">북마크 구독 테스트 완료</string>
+    <string name="settings_test_bookmark_subscription_failed">일부 북마크 구독 요청 실패</string>
 </resources>

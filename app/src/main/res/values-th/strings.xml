@@ -1114,9 +1114,9 @@
     <string name="settings_gallery_long_press_quick_download_summary">กดค้างบริเวณที่กำหนดของรายการแกลเลอรีเพื่อเริ่มดาวน์โหลดทันที</string>
     <string name="settings_eh_system_theme">ธีมของระบบ</string>
     <string name="settings_fork_auto_subscription_updates">รับการอัปเดตการสมัครรับข้อมูลโดยอัตโนมัติ</string>
-    <string name="settings_fork_auto_subscription_updates_eh">EH สมัครสมาชิก</string>
+    <string name="settings_fork_auto_subscription_updates_eh">อัปเดตการสมัครรับข้อมูล EH อัตโนมัติ</string>
     <string name="settings_fork_auto_subscription_updates_summary">รับจำนวนแกลเลอรีที่อัปเดตในการสมัครรับข้อมูลตามช่วงเวลาที่กำหนด</string>
-    <string name="settings_fork_auto_subscription_update_interval">ช่วงเวลารับข้อมูลอัตโนมัติ</string>
+    <string name="settings_fork_auto_subscription_update_interval">ช่วงเวลาอัปเดตอัตโนมัติ</string>
     <string name="settings_fork_auto_subscription_update_interval_summary">%1$d นาที</string>
     <string name="settings_fork_auto_subscription_update_interval_invalid">ป้อนจำนวนนาทีเป็นจำนวนเต็มบวกที่ถูกต้อง</string>
     <string name="settings_fork_subscription_update_minutes">นาที</string>
@@ -1124,7 +1124,7 @@
     <string name="settings_fork_delete_empty_galleries">ลบแกลเลอรีที่ว่างเปล่า</string>
     <string name="settings_fork_download_label_continuous_browse">ดาวน์โหลดแท็บเรียกดูอย่างต่อเนื่อง</string>
     <string name="settings_fork_download_label_continuous_browse_summary">แสดงแกลเลอรีดาวน์โหลดอย่างต่อเนื่องจากบนลงล่างด้วยแท็กในหน้าดาวน์โหลด</string>
-    <string name="settings_fork_features">คุณสมบัติพิเศษของส้อม</string>
+    <string name="settings_fork_features">ฟังก์ชันเบ็ดเตล็ดของ Fork</string>
     <string name="settings_fork_gallery_immediate_jump">แกลลอรี่กระโดดตอนนี้</string>
     <string name="settings_fork_long_press_save_summary">กดบริเวณเปลี่ยนหน้าค้างไว้เพื่อบันทึกรูปภาพปัจจุบันในเครื่อง</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">กดค้างเพื่อบันทึกสำเร็จและเปิดหน้าถัดไปโดยอัตโนมัติ</string>
@@ -1170,4 +1170,13 @@
     <string name="offline_gallery_local_size">ในเครื่อง: %1$s</string>
     <string name="offline_gallery_local_pages">รูปภาพในเครื่อง %1$d หน้า</string>
     <string name="offline_gallery_saved_rating">คะแนนที่บันทึกไว้</string>
+    <string name="settings_fork_category_subscriptions">การสมัครรับข้อมูล</string>
+    <string name="settings_bookmark_subscription_management">จัดการการสมัครรับข้อมูลบุ๊กมาร์ก</string>
+    <string name="settings_subscription_sidebar_buttons">แสดงปุ่มในแถบด้านข้าง</string>
+    <string name="settings_fork_auto_subscription_updates_bookmark">อัปเดตการสมัครรับข้อมูลบุ๊กมาร์กอัตโนมัติ</string>
+    <string name="settings_test_bookmark_subscription">ทดสอบการสมัครรับข้อมูลบุ๊กมาร์ก</string>
+    <string name="settings_test_bookmark_subscription_summary">ส่งคำขอการสมัครรับข้อมูลบุ๊กมาร์กจริงหนึ่งรอบ\nบุ๊กมาร์กที่สมัครรับข้อมูล: %1$s, คำขอไปยังเว็บไซต์: %2$s, เวลาที่ใช้: %3$s วินาที</string>
+    <string name="settings_test_bookmark_subscription_running">กำลังทดสอบการสมัครรับข้อมูลบุ๊กมาร์ก…</string>
+    <string name="settings_test_bookmark_subscription_finished">ทดสอบการสมัครรับข้อมูลบุ๊กมาร์กเสร็จแล้ว</string>
+    <string name="settings_test_bookmark_subscription_failed">คำขอการสมัครรับข้อมูลบุ๊กมาร์กบางรายการล้มเหลว</string>
 </resources>

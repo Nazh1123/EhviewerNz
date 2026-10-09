@@ -917,4 +917,16 @@
     <string name="offline_gallery_local_size">Local: %1$s</string>
     <string name="offline_gallery_local_pages">%1$d local pages</string>
     <string name="offline_gallery_saved_rating">Saved rating</string>
+    <string name="settings_fork_features">Miscellaneous Fork features</string>
+    <string name="settings_fork_category_subscriptions">Subscriptions</string>
+    <string name="settings_bookmark_subscription_management">Manage bookmark subscriptions</string>
+    <string name="settings_subscription_sidebar_buttons">Sidebar button visibility</string>
+    <string name="settings_fork_auto_subscription_updates_eh">Automatically update EH subscriptions</string>
+    <string name="settings_fork_auto_subscription_updates_bookmark">Automatically update bookmark subscriptions</string>
+    <string name="settings_fork_auto_subscription_update_interval">Automatic update interval</string>
+    <string name="settings_test_bookmark_subscription">Test bookmark subscriptions</string>
+    <string name="settings_test_bookmark_subscription_summary">Run one round of actual bookmark subscription requests\nSubscribed bookmarks: %1$s, Website requests: %2$s, Round duration: %3$ss</string>
+    <string name="settings_test_bookmark_subscription_running">Testing bookmark subscriptions…</string>
+    <string name="settings_test_bookmark_subscription_finished">Bookmark subscription test finished</string>
+    <string name="settings_test_bookmark_subscription_failed">Some bookmark subscription requests failed</string>
 </resources>
