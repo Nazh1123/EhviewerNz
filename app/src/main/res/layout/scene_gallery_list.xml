@@ -163,7 +163,7 @@
             app:srcCompat="@drawable/v_popular_updates_x24"
             app:backgroundTint="?attr/widgetColorThemePrimary"
             app:tint="@color/primary_drawable_dark"
-            style="@style/Widget.Design.FloatingActionButton.Mini"/>
+            style="@style/Widget.Design.FloatingActionButton"/>
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/popular_previous"
@@ -174,7 +174,7 @@
             app:srcCompat="@drawable/v_history_dark_x24"
             app:backgroundTint="?attr/widgetColorThemePrimary"
             app:tint="@color/primary_drawable_dark"
-            style="@style/Widget.Design.FloatingActionButton.Mini"/>
+            style="@style/Widget.Design.FloatingActionButton"/>
     </LinearLayout>
 
     <com.hippo.widget.FabLayout

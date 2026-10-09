@@ -331,7 +331,8 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
-            if (isPopularMode() && mPopularActionsOffered
+            if (isPopularMode() && mPopularViewMode == PopularGalleryHistory.CURRENT
+                    && mPopularActionsOffered
                     && recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
                 mPopularScrollDistance += Math.abs((long) dy);
                 if (mPopularScrollDistance >= Math.max(1, recyclerView.getHeight() / 2)) {

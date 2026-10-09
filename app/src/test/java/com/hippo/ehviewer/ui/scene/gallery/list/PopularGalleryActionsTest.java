@@ -88,6 +88,33 @@ public class PopularGalleryActionsTest {
         assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
     }
 
+    @Test public void scrollingKeepsOutsideActionsInUpdatesAndPreviousUntilMenuOpens() {
+        RecyclerView recycler = new RecyclerView(root.getContext());
+        recycler.layout(0, 0, 600, 1200);
+        ReflectionHelpers.setField(recycler, "mScrollState", RecyclerView.SCROLL_STATE_DRAGGING);
+        RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(scene, "mOnScrollListener");
+        for (int mode : new int[]{PopularGalleryHistory.UPDATES, PopularGalleryHistory.PREVIOUS}) {
+            menu.setExpanded(false, false);
+            ReflectionHelpers.setField(scene, "mPopularActionsOffered", true);
+            ReflectionHelpers.setField(scene, "mPopularViewMode", mode);
+            update();
+            listener.onScrolled(recycler, 0, 1200);
+            listener.onScrolled(recycler, 0, -1200);
+            assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
+            assertEquals(0L, (long) ReflectionHelpers.<Long>getField(scene, "mPopularScrollDistance"));
+            scene.onClickPrimaryFab(menu, menu.getPrimaryFab());
+            assertTrue(menu.isExpanded());
+            assertEquals(View.GONE, root.findViewById(R.id.popular_actions).getVisibility());
+            menu.setExpanded(false, false);
+            assertEquals(View.GONE, root.findViewById(R.id.popular_actions).getVisibility());
+        }
+        ReflectionHelpers.setField(scene, "mPopularActionsOffered", true);
+        ReflectionHelpers.setField(scene, "mPopularViewMode", PopularGalleryHistory.CURRENT);
+        update();
+        listener.onScrolled(recycler, 0, 600);
+        assertEquals(View.GONE, root.findViewById(R.id.popular_actions).getVisibility());
+    }
+
     @Test public void actionsAppearOnlyOnPopularAndStayDisabledDuringRequests() {
         ReflectionHelpers.setField(scene, "mPopularRequestInFlight", true);
         update();
