@@ -9,4 +9,7 @@
         android:strokeWidth="1.5"/>
     <path android:fillColor="@color/primary_drawable_dark"
         android:pathData="M18 9.7 19.2 12.8 22.3 14 19.2 15.2 18 18.3 16.8 15.2 13.7 14 16.8 12.8Z"/>
+    <path android:strokeColor="@color/primary_drawable_dark"
+        android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M3,3L21,21"/>
 </vector>

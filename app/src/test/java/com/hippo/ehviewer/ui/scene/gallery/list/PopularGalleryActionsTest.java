@@ -53,12 +53,11 @@ public class PopularGalleryActionsTest {
         bind("mPopularUpdatesMenu", R.id.popular_updates_menu);
         bind("mPopularPreviousMenu", R.id.popular_previous_menu);
         ReflectionHelpers.setField(scene, "mPopularResponseReady", true);
-        ReflectionHelpers.setField(scene, "mPopularActionsOffered", true);
         menu.setOnExpandListener(scene);
         update();
     }
 
-    @Test public void accumulatesSmallScrollStepsAndKeepsMenuActionsAfterHalfScreen() {
+    @Test public void outsideActionsFollowFabInsteadOfAccumulatingScrollDistance() {
         RecyclerView recycler = new RecyclerView(root.getContext());
         recycler.layout(0, 0, 600, 1200);
         RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(scene, "mOnScrollListener");
@@ -66,10 +65,14 @@ public class PopularGalleryActionsTest {
         listener.onScrolled(recycler, 0, -1200);
         assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
         ReflectionHelpers.setField(recycler, "mScrollState", RecyclerView.SCROLL_STATE_DRAGGING);
-        for (int i = 0; i < 59; i++) listener.onScrolled(recycler, 0, 10);
+        // Small steps do not hide the main FAB, regardless of their total distance.
+        ReflectionHelpers.setField(scene, "mHideActionFabSlop", 20);
+        for (int i = 0; i < 100; i++) listener.onScrolled(recycler, 0, 10);
         assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
-        listener.onScrolled(recycler, 0, 10);
+        listener.onScrolled(recycler, 0, 20);
         assertEquals(View.GONE, root.findViewById(R.id.popular_actions).getVisibility());
+        listener.onScrolled(recycler, 0, -20);
+        assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
         menu.setExpanded(true, false);
         assertEquals(View.VISIBLE, root.findViewById(R.id.popular_updates_menu).getVisibility());
         assertEquals(View.VISIBLE, root.findViewById(R.id.popular_previous_menu).getVisibility());
@@ -77,38 +80,43 @@ public class PopularGalleryActionsTest {
         assertEquals(View.GONE, root.findViewById(R.id.popular_actions).getVisibility());
     }
 
-    @Test public void openingMenuDismissesOutsideActionsUntilAnotherResponse() {
+    @Test public void closingMenuRestoresOutsideActions() {
         scene.onClickPrimaryFab(menu, menu.getPrimaryFab());
         assertTrue(menu.isExpanded());
         assertEquals(View.GONE, root.findViewById(R.id.popular_actions).getVisibility());
         menu.setExpanded(false, false);
-        assertEquals(View.GONE, root.findViewById(R.id.popular_actions).getVisibility());
-        ReflectionHelpers.setField(scene, "mPopularActionsOffered", true);
-        update();
         assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
     }
 
-    @Test public void scrollingKeepsOutsideActionsInUpdatesAndPreviousUntilMenuOpens() {
+    @Test public void activeModeKeepsOnlyItsReturnButtonAndOccupiesHiddenFabPosition() {
         RecyclerView recycler = new RecyclerView(root.getContext());
         recycler.layout(0, 0, 600, 1200);
         ReflectionHelpers.setField(recycler, "mScrollState", RecyclerView.SCROLL_STATE_DRAGGING);
         RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(scene, "mOnScrollListener");
         for (int mode : new int[]{PopularGalleryHistory.UPDATES, PopularGalleryHistory.PREVIOUS}) {
             menu.setExpanded(false, false);
-            ReflectionHelpers.setField(scene, "mPopularActionsOffered", true);
             ReflectionHelpers.setField(scene, "mPopularViewMode", mode);
             update();
+            int activeId = mode == PopularGalleryHistory.UPDATES
+                    ? R.id.popular_updates : R.id.popular_previous;
+            int otherId = mode == PopularGalleryHistory.UPDATES
+                    ? R.id.popular_previous : R.id.popular_updates;
+            assertEquals(View.VISIBLE, root.findViewById(activeId).getVisibility());
+            assertEquals(View.GONE, root.findViewById(otherId).getVisibility());
             listener.onScrolled(recycler, 0, 1200);
-            listener.onScrolled(recycler, 0, -1200);
             assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
-            assertEquals(0L, (long) ReflectionHelpers.<Long>getField(scene, "mPopularScrollDistance"));
+            View actions = root.findViewById(R.id.popular_actions);
+            android.view.ViewGroup.MarginLayoutParams params =
+                    (android.view.ViewGroup.MarginLayoutParams) actions.getLayoutParams();
+            assertEquals(params.bottomMargin - menu.getPaddingBottom(), actions.getTranslationY(), 0f);
+            listener.onScrolled(recycler, 0, -1200);
+            assertEquals(0f, actions.getTranslationY(), 0f);
             scene.onClickPrimaryFab(menu, menu.getPrimaryFab());
             assertTrue(menu.isExpanded());
             assertEquals(View.GONE, root.findViewById(R.id.popular_actions).getVisibility());
             menu.setExpanded(false, false);
-            assertEquals(View.GONE, root.findViewById(R.id.popular_actions).getVisibility());
+            assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
         }
-        ReflectionHelpers.setField(scene, "mPopularActionsOffered", true);
         ReflectionHelpers.setField(scene, "mPopularViewMode", PopularGalleryHistory.CURRENT);
         update();
         listener.onScrolled(recycler, 0, 600);

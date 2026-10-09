@@ -4,9 +4,8 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <path android:fillColor="@color/primary_drawable_dark" android:pathData="@string/pd_history"/>
     <path android:strokeColor="@color/primary_drawable_dark"
-        android:pathData="M4 4H17V7.9L12.5 12V18L8.5 20V12L4 7.9Z"
-        android:strokeWidth="1.5"/>
-    <path android:fillColor="@color/primary_drawable_dark"
-        android:pathData="M18 9.7 19.2 12.8 22.3 14 19.2 15.2 18 18.3 16.8 15.2 13.7 14 16.8 12.8Z"/>
+        android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M3,3L21,21"/>
 </vector>

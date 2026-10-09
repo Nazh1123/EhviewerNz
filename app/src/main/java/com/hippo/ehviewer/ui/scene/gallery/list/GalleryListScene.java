@@ -193,8 +193,6 @@ public class GalleryListScene extends BaseScene
     private static final String KEY_SELECTED_GIDS = "selected_gids";
     private static final String KEY_DOWNLOADED_ONLY_MODE = "downloaded_only_mode";
     private static final String KEY_POPULAR_VIEW_MODE = "popular_view_mode";
-    private static final String KEY_POPULAR_ACTIONS_OFFERED = "popular_actions_offered";
-    private static final String KEY_POPULAR_SCROLL_DISTANCE = "popular_scroll_distance";
 
     final static int STATE_NORMAL = 0;
     final static int STATE_SIMPLE_SEARCH = 1;
@@ -259,8 +257,6 @@ public class GalleryListScene extends BaseScene
     private int mPopularViewMode = PopularGalleryHistory.CURRENT;
     private boolean mPopularResponseReady;
     private boolean mPopularRequestInFlight;
-    private boolean mPopularActionsOffered;
-    private long mPopularScrollDistance;
     @Nullable
     private ViewTransition mViewTransition;
     @Nullable
@@ -331,15 +327,6 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
-            if (isPopularMode() && mPopularViewMode == PopularGalleryHistory.CURRENT
-                    && mPopularActionsOffered
-                    && recyclerView.getScrollState() != RecyclerView.SCROLL_STATE_IDLE) {
-                mPopularScrollDistance += Math.abs((long) dy);
-                if (mPopularScrollDistance >= Math.max(1, recyclerView.getHeight() / 2)) {
-                    mPopularActionsOffered = false;
-                    updatePopularActions();
-                }
-            }
             if (mMultiSelectMode) {
                 return;
             }
@@ -544,8 +531,6 @@ public class GalleryListScene extends BaseScene
         mMultiSelectMode = savedInstanceState.getBoolean(KEY_MULTI_SELECT_MODE);
         mDownloadedOnlyMode = savedInstanceState.getBoolean(KEY_DOWNLOADED_ONLY_MODE);
         mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
-        mPopularActionsOffered = savedInstanceState.getBoolean(KEY_POPULAR_ACTIONS_OFFERED);
-        mPopularScrollDistance = savedInstanceState.getLong(KEY_POPULAR_SCROLL_DISTANCE);
         mPopularResponseReady = mHasFirstRefresh && isPopularMode();
         long[] selectedGids = savedInstanceState.getLongArray(KEY_SELECTED_GIDS);
         if (selectedGids != null) {
@@ -573,8 +558,6 @@ public class GalleryListScene extends BaseScene
         outState.putBoolean(KEY_MULTI_SELECT_MODE, mMultiSelectMode);
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
         outState.putInt(KEY_POPULAR_VIEW_MODE, mPopularViewMode);
-        outState.putBoolean(KEY_POPULAR_ACTIONS_OFFERED, mPopularActionsOffered);
-        outState.putLong(KEY_POPULAR_SCROLL_DISTANCE, mPopularScrollDistance);
         long[] selectedGids = new long[mSelectedGids.size()];
         int selectedIndex = 0;
         for (long gid : mSelectedGids) {
@@ -771,7 +754,6 @@ public class GalleryListScene extends BaseScene
         mNavCheckedId = checkedItemId;
         if (!isPopularMode()) {
             mPopularResponseReady = false;
-            mPopularActionsOffered = false;
             mPopularViewMode = PopularGalleryHistory.CURRENT;
         }
         if (mFabLayout != null && !mMultiSelectMode) showNormalFabs(mFabLayout);
@@ -1934,15 +1916,25 @@ public class GalleryListScene extends BaseScene
             button.setEnabled(enabled);
         }
         int updatesIcon = mPopularViewMode == PopularGalleryHistory.UPDATES
-                ? R.drawable.v_check_all_dark_x24 : R.drawable.v_popular_updates_x24;
+                ? R.drawable.v_popular_updates_off_x24 : R.drawable.v_popular_updates_x24;
         int previousIcon = mPopularViewMode == PopularGalleryHistory.PREVIOUS
-                ? R.drawable.v_return_curve_dark_x24 : R.drawable.v_history_dark_x24;
+                ? R.drawable.v_history_off_x24 : R.drawable.v_history_dark_x24;
         updatePopularAction(mPopularUpdates, updatesIcon, updatesText);
         updatePopularAction(mPopularUpdatesMenu, updatesIcon, updatesText);
         updatePopularAction(mPopularPrevious, previousIcon, previousText);
         updatePopularAction(mPopularPreviousMenu, previousIcon, previousText);
-        mPopularActions.setVisibility(enabled && mPopularActionsOffered
+        boolean active = mPopularViewMode != PopularGalleryHistory.CURRENT;
+        mPopularUpdates.setVisibility(!active || mPopularViewMode == PopularGalleryHistory.UPDATES
+                ? View.VISIBLE : View.GONE);
+        mPopularPrevious.setVisibility(!active || mPopularViewMode == PopularGalleryHistory.PREVIOUS
+                ? View.VISIBLE : View.GONE);
+        // The active mode always offers a way back, even when scrolling hides the main FAB.
+        mPopularActions.setVisibility(enabled && (active || mShowActionFab)
                 && mState == STATE_NORMAL && !mFabLayout.isExpanded() ? View.VISIBLE : View.GONE);
+        android.view.ViewGroup.MarginLayoutParams params =
+                (android.view.ViewGroup.MarginLayoutParams) mPopularActions.getLayoutParams();
+        mPopularActions.setTranslationY(active && !mShowActionFab
+                ? params.bottomMargin - mFabLayout.getPaddingBottom() : 0f);
     }
 
     private void updatePopularAction(FloatingActionButton button, int icon, int description) {
@@ -2291,7 +2283,6 @@ public class GalleryListScene extends BaseScene
             return;
         }
         if (STATE_NORMAL == mState) {
-            mPopularActionsOffered = false;
             updatePopularActions();
             view.toggle();
         }
@@ -2491,7 +2482,6 @@ public class GalleryListScene extends BaseScene
     @SuppressLint("RtlHardcoded")
     @Override
     public void onExpand(boolean expanded) {
-        if (expanded) mPopularActionsOffered = false;
         updatePopularActions();
         if (null == mActionFabDrawable) {
             return;
@@ -2517,6 +2507,7 @@ public class GalleryListScene extends BaseScene
             fab.animate().scaleX(1.0f).scaleY(1.0f).rotation(0.0f).setListener(null)
                     .setDuration(ANIMATE_TIME).setStartDelay(0L)
                     .setInterpolator(AnimationUtils.FAST_SLOW_INTERPOLATOR).start();
+            updatePopularActions();
         }
     }
 
@@ -2527,6 +2518,7 @@ public class GalleryListScene extends BaseScene
             fab.animate().scaleX(0.0f).scaleY(0.0f).setListener(mActionFabAnimatorListener)
                     .setDuration(ANIMATE_TIME).setStartDelay(0L)
                     .setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR).start();
+            updatePopularActions();
         }
     }
 
@@ -2970,8 +2962,6 @@ public class GalleryListScene extends BaseScene
             onDownloadedPageScanPageLoaded();
             if (isPopularMode()) {
                 mPopularRequestInFlight = false;
-                mPopularActionsOffered = result.customErrorString == null;
-                mPopularScrollDistance = 0;
                 if (result.customErrorString == null) updatePopularProjection();
                 else updatePopularActions();
             }
