@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="popular_updates_only">Updates only</string>
+    <string name="popular_show_all">Show all</string>
+    <string name="popular_previous">Previous popular</string>
+    <string name="popular_return_current">Current popular</string>
+    <string name="popular_no_previous">No previous popular request is saved yet</string>
+    <string name="popular_no_updates">No new galleries since the previous popular request</string>
+    <string name="popular_page_no_updates">This popular page has no updates</string>
+    <string name="reading_history">Reading history</string>
+    <string name="settings_record_reading_history">Record reading history</string>
+    <string name="settings_record_reading_history_summary">Record reader visits and show Reading history in the sidebar. Tap a record to read again using its original source.</string>
+    <string name="reading_history_empty">Galleries opened in the reader will be shown here</string>
+    <string name="reading_history_source_detail">Details</string>
+    <string name="reading_history_source_download">Downloads</string>
+    <string name="reading_history_source_local">Local</string>
+    <string name="reading_history_source_preview">Previews</string>
+    <string name="reading_history_source_list">Gallery list</string>
+    <string name="reading_history_source_update">Updates only</string>
+    <string name="reading_history_clear_all">Clear all reading history?</string>
+    <string name="reading_history_remove">Remove record</string>
+    <string name="reading_history_unavailable">The reading source is unavailable. Restore access to the file or folder and try again.</string>
+    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="settings_fork_category_saving">Saving and history</string>
+</resources>

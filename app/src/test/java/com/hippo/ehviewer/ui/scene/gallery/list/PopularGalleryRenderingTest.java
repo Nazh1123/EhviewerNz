@@ -97,12 +97,15 @@ public class PopularGalleryRenderingTest {
         assertRendered(2);
     }
 
-    @Test public void emptyUpdatesThenCurrentRefreshAndNewSearchAllRender() {
+    @Test public void noUpdatesActionsShowTipAndCurrentRefreshAndNewSearchAllRender() {
         toggle(PopularGalleryHistory.UPDATES);
-        layout();
-        assertEquals(0, adapter.getItemCount());
-        assertEquals(2, helper.getShownViewIndex());
-        toggle(PopularGalleryHistory.UPDATES);
+        assertEquals(R.string.popular_page_no_updates, scene.lastTip);
+        assertEquals(PopularGalleryHistory.CURRENT, (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+        assertRendered(2);
+        scene.lastTip = 0;
+        toggle(PopularGalleryHistory.PREVIOUS);
+        assertEquals(R.string.popular_page_no_updates, scene.lastTip);
+        assertEquals(PopularGalleryHistory.CURRENT, (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
         assertRendered(2);
         refresh(3, 4, 5);
         assertRendered(3);
@@ -124,7 +127,7 @@ public class PopularGalleryRenderingTest {
         assertRendered(3);
     }
 
-    @Test public void rapidEmptyUpdatesAndCurrentSwitchesDoNotLeaveContentHidden() {
+    @Test public void rapidNoUpdateActionsDoNotLeaveContentHidden() {
         for (int i = 0; i < 4; i++) {
             toggle(PopularGalleryHistory.UPDATES);
             toggle(PopularGalleryHistory.UPDATES);
@@ -132,6 +135,17 @@ public class PopularGalleryRenderingTest {
         assertRendered(2);
         refresh(3, 4);
         assertRendered(2);
+    }
+
+    @Test public void restoredSpecialModeCanStillExitWhenCurrentHasNoUpdates() {
+        for (int mode : new int[]{PopularGalleryHistory.UPDATES, PopularGalleryHistory.PREVIOUS}) {
+            ReflectionHelpers.setField(scene, "mPopularViewMode", mode);
+            scene.lastTip = 0;
+            toggle(mode);
+            assertEquals(0, scene.lastTip);
+            assertEquals(PopularGalleryHistory.CURRENT, (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+            assertRendered(2);
+        }
     }
 
     private void refresh(long... gids) {
@@ -181,9 +195,11 @@ public class PopularGalleryRenderingTest {
 
     private static class TestScene extends GalleryListScene {
         private final Context context;
+        int lastTip;
         TestScene(Context context) { this.context = context; }
         @Override public Context getContext() { return context; }
         @Override public Context getEHContext() { return context; }
+        @Override public void showTip(int id, int length) { lastTip = id; }
     }
 
     @Implements(EhApplication.class)

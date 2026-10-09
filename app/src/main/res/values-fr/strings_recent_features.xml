@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="popular_updates_only">Nouveautés uniquement</string>
+    <string name="popular_show_all">Tout afficher</string>
+    <string name="popular_previous">Galeries populaires précédentes</string>
+    <string name="popular_return_current">Galeries populaires actuelles</string>
+    <string name="popular_no_previous">Aucune requête précédente de galeries populaires n’est encore enregistrée</string>
+    <string name="popular_no_updates">Aucune nouvelle galerie depuis la requête précédente</string>
+    <string name="popular_page_no_updates">Cette page de galeries populaires ne contient aucune nouveauté</string>
+    <string name="reading_history">Historique de lecture</string>
+    <string name="settings_record_reading_history">Enregistrer l’historique de lecture</string>
+    <string name="settings_record_reading_history_summary">Enregistrer les ouvertures du lecteur et afficher l’historique de lecture dans la barre latérale. Touchez une entrée pour relire depuis sa source d’origine.</string>
+    <string name="reading_history_empty">Les galeries ouvertes dans le lecteur s’affichent ici</string>
+    <string name="reading_history_source_detail">Détails</string>
+    <string name="reading_history_source_download">Téléchargements</string>
+    <string name="reading_history_source_local">Local</string>
+    <string name="reading_history_source_preview">Aperçus</string>
+    <string name="reading_history_source_list">Liste des galeries</string>
+    <string name="reading_history_source_update">Nouveautés uniquement</string>
+    <string name="reading_history_clear_all">Effacer tout l’historique de lecture ?</string>
+    <string name="reading_history_remove">Supprimer l’entrée</string>
+    <string name="reading_history_unavailable">La source de lecture est indisponible. Rétablissez l’accès au fichier ou au dossier, puis réessayez.</string>
+    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="settings_fork_category_saving">Enregistrement et historique</string>
+</resources>

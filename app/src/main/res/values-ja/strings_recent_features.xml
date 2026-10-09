@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="popular_updates_only">更新のみ表示</string>
+    <string name="popular_show_all">すべて表示</string>
+    <string name="popular_previous">前回の人気ギャラリー</string>
+    <string name="popular_return_current">今回の人気ギャラリー</string>
+    <string name="popular_no_previous">前回の人気ギャラリーの取得結果はまだ保存されていません</string>
+    <string name="popular_no_updates">前回の取得以降に追加されたギャラリーはありません</string>
+    <string name="popular_page_no_updates">この人気ページに更新はありません</string>
+    <string name="reading_history">閲覧履歴</string>
+    <string name="settings_record_reading_history">閲覧履歴を記録</string>
+    <string name="settings_record_reading_history_summary">リーダーを開いた履歴を記録し、サイドバーに閲覧履歴を表示します。履歴をタップすると、元の方法でリーダーを開きます。</string>
+    <string name="reading_history_empty">リーダーで開いたギャラリーがここに表示されます</string>
+    <string name="reading_history_source_detail">詳細ページ</string>
+    <string name="reading_history_source_download">ダウンロード</string>
+    <string name="reading_history_source_local">ローカル</string>
+    <string name="reading_history_source_preview">プレビュー</string>
+    <string name="reading_history_source_list">ギャラリー一覧</string>
+    <string name="reading_history_source_update">更新のみ</string>
+    <string name="reading_history_clear_all">閲覧履歴をすべて削除しますか？</string>
+    <string name="reading_history_remove">履歴を削除</string>
+    <string name="reading_history_unavailable">閲覧元にアクセスできません。ファイルまたはフォルダーへのアクセスを復元してから、もう一度お試しください。</string>
+    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="settings_fork_category_saving">保存と履歴</string>
+</resources>

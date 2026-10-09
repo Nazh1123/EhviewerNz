@@ -149,7 +149,7 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|right"
         android:layout_marginRight="@dimen/corner_fab_margin"
-        android:layout_marginBottom="104dp"
+        android:layout_marginBottom="@dimen/corner_fab_margin"
         android:orientation="vertical"
         android:visibility="gone">
 
@@ -162,7 +162,7 @@
             app:srcCompat="@drawable/v_popular_updates_x24"
             app:backgroundTint="?attr/widgetColorThemePrimary"
             app:tint="@color/primary_drawable_dark"
-            style="@style/Widget.Design.FloatingActionButton"/>
+            style="@style/Widget.PopularAction"/>
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/popular_previous"
@@ -174,7 +174,7 @@
             app:srcCompat="@drawable/v_history_dark_x24"
             app:backgroundTint="?attr/widgetColorThemePrimary"
             app:tint="@color/primary_drawable_dark"
-            style="@style/Widget.Design.FloatingActionButton"/>
+            style="@style/Widget.PopularAction"/>
     </LinearLayout>
 
     <com.hippo.widget.FabLayout

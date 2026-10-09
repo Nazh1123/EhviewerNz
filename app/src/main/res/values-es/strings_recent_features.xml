@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="popular_updates_only">Solo novedades</string>
+    <string name="popular_show_all">Mostrar todo</string>
+    <string name="popular_previous">Populares anteriores</string>
+    <string name="popular_return_current">Populares actuales</string>
+    <string name="popular_no_previous">Aún no se ha guardado una consulta anterior de populares</string>
+    <string name="popular_no_updates">No hay galerías nuevas desde la consulta anterior de populares</string>
+    <string name="popular_page_no_updates">Esta página de populares no tiene novedades</string>
+    <string name="reading_history">Historial de lectura</string>
+    <string name="settings_record_reading_history">Registrar historial de lectura</string>
+    <string name="settings_record_reading_history_summary">Registrar las visitas al lector y mostrar el historial de lectura en la barra lateral. Toca un registro para volver a leer desde su origen.</string>
+    <string name="reading_history_empty">Las galerías abiertas en el lector aparecerán aquí</string>
+    <string name="reading_history_source_detail">Detalles</string>
+    <string name="reading_history_source_download">Descargas</string>
+    <string name="reading_history_source_local">Local</string>
+    <string name="reading_history_source_preview">Vistas previas</string>
+    <string name="reading_history_source_list">Lista de galerías</string>
+    <string name="reading_history_source_update">Solo novedades</string>
+    <string name="reading_history_clear_all">¿Borrar todo el historial de lectura?</string>
+    <string name="reading_history_remove">Eliminar registro</string>
+    <string name="reading_history_unavailable">El origen de lectura no está disponible. Restablece el acceso al archivo o a la carpeta e inténtalo de nuevo.</string>
+    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="settings_fork_category_saving">Guardado e historial</string>
+</resources>

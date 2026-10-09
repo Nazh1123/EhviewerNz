@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="popular_updates_only">Nur Aktualisierungen</string>
+    <string name="popular_show_all">Alle anzeigen</string>
+    <string name="popular_previous">Vorherige beliebte Galerien</string>
+    <string name="popular_return_current">Aktuelle beliebte Galerien</string>
+    <string name="popular_no_previous">Es ist noch keine vorherige Abfrage beliebter Galerien gespeichert</string>
+    <string name="popular_no_updates">Keine neuen Galerien seit der vorherigen Abfrage</string>
+    <string name="popular_page_no_updates">Diese Seite mit beliebten Galerien enthält keine Aktualisierungen</string>
+    <string name="reading_history">Leseverlauf</string>
+    <string name="settings_record_reading_history">Leseverlauf aufzeichnen</string>
+    <string name="settings_record_reading_history_summary">Besuche im Reader aufzeichnen und den Leseverlauf in der Seitenleiste anzeigen. Ein Eintrag öffnet den Reader erneut über die ursprüngliche Quelle.</string>
+    <string name="reading_history_empty">Im Reader geöffnete Galerien werden hier angezeigt</string>
+    <string name="reading_history_source_detail">Detailseite</string>
+    <string name="reading_history_source_download">Downloads</string>
+    <string name="reading_history_source_local">Lokal</string>
+    <string name="reading_history_source_preview">Vorschauen</string>
+    <string name="reading_history_source_list">Galerieliste</string>
+    <string name="reading_history_source_update">Nur Aktualisierungen</string>
+    <string name="reading_history_clear_all">Gesamten Leseverlauf löschen?</string>
+    <string name="reading_history_remove">Eintrag entfernen</string>
+    <string name="reading_history_unavailable">Die Lesequelle ist nicht verfügbar. Stelle den Zugriff auf die Datei oder den Ordner wieder her und versuche es erneut.</string>
+    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="settings_fork_category_saving">Speichern und Verlauf</string>
+</resources>

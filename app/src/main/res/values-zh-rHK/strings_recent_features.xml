@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="popular_updates_only">只查看更新</string>
+    <string name="popular_show_all">顯示全部</string>
+    <string name="popular_previous">回看上次</string>
+    <string name="popular_return_current">返回本次</string>
+    <string name="popular_no_previous">暫無上一次熱門請求記錄</string>
+    <string name="popular_no_updates">相比上次熱門暫無新增畫廊</string>
+    <string name="popular_page_no_updates">該熱門頁沒有更新</string>
+    <string name="reading_history">閱讀歷史</string>
+    <string name="settings_record_reading_history">記錄閱讀歷史</string>
+    <string name="settings_record_reading_history_summary">記錄進入閱讀器的歷史，並在側邊欄顯示閱讀歷史。點擊記錄會按原進入方式重新閱讀。</string>
+    <string name="reading_history_empty">進入閱讀器的畫廊會在這裏顯示</string>
+    <string name="reading_history_source_detail">詳情頁</string>
+    <string name="reading_history_source_download">下載</string>
+    <string name="reading_history_source_local">本地</string>
+    <string name="reading_history_source_preview">預覽</string>
+    <string name="reading_history_source_list">畫廊列表</string>
+    <string name="reading_history_source_update">只閱讀更新</string>
+    <string name="reading_history_clear_all">清空所有閱讀歷史？</string>
+    <string name="reading_history_remove">刪除記錄</string>
+    <string name="reading_history_unavailable">無法存取閱讀來源，請恢復檔案或資料夾的存取權限後重試。</string>
+    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="settings_fork_category_saving">儲存與歷史</string>
+</resources>

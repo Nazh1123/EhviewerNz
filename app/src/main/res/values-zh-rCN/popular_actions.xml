@@ -6,4 +6,5 @@
     <string name="popular_return_current">返回本次</string>
     <string name="popular_no_previous">暂无上一次热门请求记录</string>
     <string name="popular_no_updates">相比上次热门暂无新增画廊</string>
+    <string name="popular_page_no_updates">该热门页没有更新</string>
 </resources>

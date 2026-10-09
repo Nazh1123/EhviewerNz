@@ -195,6 +195,12 @@
         <item name="fabSize">mini</item>
     </style>
 
+    <style name="Widget.PopularAction" parent="Widget.Design.FloatingActionButton">
+        <item name="elevation">0dp</item>
+        <item name="hoveredFocusedTranslationZ">0dp</item>
+        <item name="pressedTranslationZ">0dp</item>
+    </style>
+
     <style name="Guide.Title" parent="TextAppearance.AppCompat.Title">
         <item name="android:textColor">?attr/guideTitleColor</item>
     </style>

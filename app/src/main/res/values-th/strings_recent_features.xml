@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="popular_updates_only">ดูเฉพาะรายการใหม่</string>
+    <string name="popular_show_all">แสดงทั้งหมด</string>
+    <string name="popular_previous">แกลเลอรียอดนิยมครั้งก่อน</string>
+    <string name="popular_return_current">แกลเลอรียอดนิยมครั้งนี้</string>
+    <string name="popular_no_previous">ยังไม่มีผลการดึงแกลเลอรียอดนิยมครั้งก่อนที่บันทึกไว้</string>
+    <string name="popular_no_updates">ไม่มีแกลเลอรีใหม่ตั้งแต่การดึงรายการครั้งก่อน</string>
+    <string name="popular_page_no_updates">หน้ายอดนิยมนี้ไม่มีรายการใหม่</string>
+    <string name="reading_history">ประวัติการอ่าน</string>
+    <string name="settings_record_reading_history">บันทึกประวัติการอ่าน</string>
+    <string name="settings_record_reading_history_summary">บันทึกการเปิดตัวอ่านและแสดงประวัติการอ่านในแถบด้านข้าง แตะบันทึกเพื่ออ่านอีกครั้งจากแหล่งเดิม</string>
+    <string name="reading_history_empty">แกลเลอรีที่เปิดในตัวอ่านจะแสดงที่นี่</string>
+    <string name="reading_history_source_detail">หน้ารายละเอียด</string>
+    <string name="reading_history_source_download">ดาวน์โหลด</string>
+    <string name="reading_history_source_local">ในเครื่อง</string>
+    <string name="reading_history_source_preview">ภาพตัวอย่าง</string>
+    <string name="reading_history_source_list">รายการแกลเลอรี</string>
+    <string name="reading_history_source_update">เฉพาะรายการใหม่</string>
+    <string name="reading_history_clear_all">ล้างประวัติการอ่านทั้งหมดหรือไม่?</string>
+    <string name="reading_history_remove">ลบบันทึก</string>
+    <string name="reading_history_unavailable">ไม่สามารถเข้าถึงแหล่งอ่านได้ โปรดคืนสิทธิ์การเข้าถึงไฟล์หรือโฟลเดอร์แล้วลองอีกครั้ง</string>
+    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="settings_fork_category_saving">การบันทึกและประวัติ</string>
+</resources>

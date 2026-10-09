@@ -1935,8 +1935,15 @@ public class GalleryListScene extends BaseScene
                 && mState == STATE_NORMAL && !mFabLayout.isExpanded() ? View.VISIBLE : View.GONE);
         android.view.ViewGroup.MarginLayoutParams params =
                 (android.view.ViewGroup.MarginLayoutParams) mPopularActions.getLayoutParams();
+        int offset = mFabLayout.getResources().getDimensionPixelSize(R.dimen.fab_size)
+                + mFabLayout.getResources().getDimensionPixelSize(R.dimen.fab_layout_secondary_margin);
+        int bottomMargin = mFabLayout.getPaddingBottom() + offset;
+        if (params.bottomMargin != bottomMargin) {
+            params.bottomMargin = bottomMargin;
+            mPopularActions.setLayoutParams(params);
+        }
         mPopularActions.setTranslationY(active && !mShowActionFab
-                ? params.bottomMargin - mFabLayout.getPaddingBottom() : 0f);
+                ? offset : 0f);
     }
 
     private void updatePopularAction(FloatingActionButton button, int icon, int description) {
@@ -1973,6 +1980,10 @@ public class GalleryListScene extends BaseScene
                 || mPopularRequestInFlight || mMultiSelectMode) return;
         if (mPopularViewMode != mode && !mPopularHistory.hasPrevious()) {
             showTip(R.string.popular_no_previous, LENGTH_SHORT);
+            return;
+        }
+        if (mPopularViewMode != mode && mPopularHistory.galleries(PopularGalleryHistory.UPDATES).isEmpty()) {
+            showTip(R.string.popular_page_no_updates, LENGTH_SHORT);
             return;
         }
         mPopularViewMode = mPopularViewMode == mode ? PopularGalleryHistory.CURRENT : mode;
