@@ -185,7 +185,7 @@ public class PopularGalleryActions extends FrameLayout {
 
     public void showNoUpdatesNotice() {
         cancelNoUpdatesNotice();
-        mNoticeAnimator = ValueAnimator.ofFloat(2f, 1f);
+        mNoticeAnimator = ValueAnimator.ofFloat(2.5f, 1f);
         mNoticeAnimator.setDuration(1500L);
         mNoticeAnimator.setInterpolator(new LinearInterpolator());
         mNoticeAnimator.addUpdateListener(animation -> {
@@ -221,7 +221,7 @@ public class PopularGalleryActions extends FrameLayout {
         float y = mParentLocation[1] - mLocation[1] + button.getY() + button.getHeight() / 2f;
         mNoticePaint.setColor(button.getBackgroundTintList().getColorForState(
                 button.getDrawableState(), button.getBackgroundTintList().getDefaultColor()));
-        mNoticePaint.setAlpha(30);
+        mNoticePaint.setAlpha(65);
         canvas.drawCircle(x, y, mContentBounds.width() / 2f * mNoticeRadiusFactor, mNoticePaint);
     }
 

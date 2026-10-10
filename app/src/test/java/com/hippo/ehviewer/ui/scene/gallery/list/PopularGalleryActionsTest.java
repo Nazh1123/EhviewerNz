@@ -275,20 +275,20 @@ public class PopularGalleryActionsTest {
         ReflectionHelpers.callInstanceMethod(scene, "showPopularNoUpdatesNotice");
         ValueAnimator animator = ReflectionHelpers.getField(actions, "mNoticeAnimator");
         assertEquals(1500L, animator.getDuration());
-        assertEquals(2f, ReflectionHelpers.<Float>getField(actions, "mNoticeRadiusFactor"), 0f);
+        assertEquals(2.5f, ReflectionHelpers.<Float>getField(actions, "mNoticeRadiusFactor"), 0f);
         android.graphics.Rect bounds = new android.graphics.Rect();
         outside.getContentRect(bounds);
-        int x = Math.round(outside.getX() + outside.getWidth() / 2f - bounds.width() * 0.875f);
+        int x = Math.round(outside.getX() + outside.getWidth() / 2f - bounds.width() * 1.125f);
         int y = Math.round(outside.getY() + outside.getHeight() / 2f);
         Bitmap bitmap = Bitmap.createBitmap(600, 1200, Bitmap.Config.ARGB_8888);
         actions.draw(new Canvas(bitmap));
-        assertEquals(30, Color.alpha(bitmap.getPixel(x, y)));
+        assertEquals(65, Color.alpha(bitmap.getPixel(x, y)));
         // Low-alpha pixels are quantized by the premultiplied bitmap; the paint retains exact RGB.
         android.graphics.Paint paint = ReflectionHelpers.getField(actions, "mNoticePaint");
         assertEquals(outsideTint.getDefaultColor() & 0xffffff, paint.getColor() & 0xffffff);
         assertEquals(Color.green(outsideTint.getDefaultColor()), Color.green(bitmap.getPixel(x, y)), 4);
         animator.setCurrentPlayTime(750L);
-        assertEquals(1.5f, ReflectionHelpers.<Float>getField(actions, "mNoticeRadiusFactor"), 0f);
+        assertEquals(1.75f, ReflectionHelpers.<Float>getField(actions, "mNoticeRadiusFactor"), 0f);
         bitmap.eraseColor(Color.TRANSPARENT);
         actions.draw(new Canvas(bitmap));
         assertEquals(0, Color.alpha(bitmap.getPixel(x, y)));
@@ -310,7 +310,7 @@ public class PopularGalleryActionsTest {
         ColorStateList original = button.getBackgroundTintList();
         ReflectionHelpers.callInstanceMethod(scene, "showPopularNoUpdatesNotice");
         ReflectionHelpers.callInstanceMethod(scene, "showPopularNoUpdatesNotice");
-        assertEquals(2f, ReflectionHelpers.<Float>getField(actions, "mNoticeRadiusFactor"), 0f);
+        assertEquals(2.5f, ReflectionHelpers.<Float>getField(actions, "mNoticeRadiusFactor"), 0f);
         ReflectionHelpers.setField(scene, "mPopularRequestInFlight", true);
         update();
         assertSame(original, button.getBackgroundTintList());
