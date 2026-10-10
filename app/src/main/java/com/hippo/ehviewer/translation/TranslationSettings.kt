@@ -40,7 +40,8 @@ data class TranslationOptions(
             TranslationBackend.ML_KIT -> "mlkit-17.0.3-multilingual"
             TranslationBackend.LLM_API -> "llm-api-v5-reader-regions\n${apiUrl.trim()}\n${apiModel.trim()}"
         },
-        "$source\n$target",
+        "$source\n$target" + if (backend != TranslationBackend.ML_KIT &&
+            targetLanguageName().startsWith("Traditional Chinese")) "\ntraditional-script-v1" else "",
         inpaint.toString(), inputImageIdentity).joinToString("\n")
 
     /** Only the previous sparse Japanese overlays are compatible; older full-page PNGs are not. */
@@ -74,11 +75,7 @@ data class TranslationOptions(
     fun withBackend(backend: TranslationBackend): TranslationOptions {
         val mappedTarget = if (backend == TranslationBackend.ML_KIT) {
             if (target == "zh-CN") "zh" else target
-        } else when (target) {
-            "zh" -> "zh-CN"
-            "zh-Hant" -> "zh-TW"
-            else -> target
-        }
+        } else TranslationLanguages.llmTarget(target)
         val updated = copy(backend = backend, target = mappedTarget,
             source = source.takeIf { it in TranslationLanguages.sources } ?: TranslationLanguages.DEFAULT_SOURCE)
         return if (TranslationLanguages.validTarget(updated)) updated

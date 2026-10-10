@@ -15,6 +15,28 @@ import java.io.File
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28], manifest = Config.NONE)
 class MultilingualTranslationTest {
+    @Test fun chineseTargetsKeepTheirScriptInNativePageSampleAndApiPrompts() {
+        for ((target, name) in listOf(
+            "zh-CN" to "Simplified Chinese", "zh-Hans-CN" to "Simplified Chinese",
+            "zh-TW" to "Traditional Chinese (Taiwan)", "zh-Hant-TW" to "Traditional Chinese (Taiwan)",
+            "zh-tw" to "Traditional Chinese (Taiwan)",
+            "zh-HK" to "Traditional Chinese (Hong Kong)", "zh-Hant-HK" to "Traditional Chinese (Hong Kong)",
+            "zh-Hant" to "Traditional Chinese",
+        )) {
+            val options = TranslationOptions(target = target)
+            assertEquals(name, options.targetLanguageName())
+            assertTrue(NativeTranslator.sampleInstruction(options).contains("text into $name,"))
+            val nativePrompt = NativeTranslator.buildNumberedMessages(options, listOf("こんにちは"))
+                .getJSONObject(0).getString("content")
+            assertTrue(nativePrompt.contains("Japanese text into $name:"))
+            val apiPrompt = LlmTranslator(options.engineConfig().translator).buildMessages(listOf("こんにちは"))
+                .getJSONObject(0).getString("content")
+            assertTrue(apiPrompt.contains("Japanese text into $name."))
+            assertFalse(nativePrompt.contains("text into Chinese:"))
+            assertFalse(apiPrompt.contains("text into Chinese."))
+        }
+    }
+
     @Test fun eachSourcePersistsAcrossBackendsAndUsesItsOwnPromptAndSample() {
         val settings = TranslationSettings(RuntimeEnvironment.getApplication())
         assertEquals("ja", settings.read().source)

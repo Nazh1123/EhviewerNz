@@ -78,6 +78,8 @@ class TranslationSettingsTest {
         val prefs = context.getSharedPreferences("manga_translation", Context.MODE_PRIVATE)
         for (backend in listOf("NATIVE_LLM", "LLM_API")) {
             for ((saved, expected) in listOf("zh" to "zh-CN", "zh-Hant" to "zh-TW",
+                    "zh-Hant-TW" to "zh-TW", "zh-Hant-HK" to "zh-HK", "zh-tw" to "zh-TW",
+                    "zh-Hans-CN" to "zh-CN", "zh-Hans-TW" to "zh-CN",
                     "system" to "zh-CN", "custom" to "zh-CN", "it" to "zh-CN", "fr" to "fr")) {
                 prefs.edit().putString("target", saved).putString("backend", backend).commit()
                 assertEquals(expected, settings.read().target)

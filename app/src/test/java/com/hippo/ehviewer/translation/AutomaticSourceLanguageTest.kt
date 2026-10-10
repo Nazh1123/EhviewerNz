@@ -24,6 +24,70 @@ class AutomaticSourceLanguageTest {
     private val auto = TranslationOptions(source = "auto", target = "fr")
     private val english = "I will go to school tomorrow and meet my friends."
 
+    @Test @Config(qualifiers = "en")
+    fun detectionNoticeNamesTraditionalTaiwanTargetExplicitly() {
+        assertEquals("Translating: English → Traditional Chinese (Taiwan)",
+            TranslationLanguages.sourceDetectedMessage(context, "en", "zh-TW"))
+        assertEquals("Translating: English → Traditional Chinese (Hong Kong)",
+            TranslationLanguages.sourceDetectedMessage(context, "en", "zh-HK"))
+    }
+
+    @Test fun automaticEnglishDetectionPreservesTaiwanTargetInNativeRequests() = runBlocking<Unit> {
+        val configured = auto.copy(target = "zh-TW")
+        val source = GallerySourceLanguage { SourceLanguageGuess("en", .95f) }
+        val created = mutableListOf<String>()
+        val prompts = mutableListOf<String>()
+        GallerySourceTranslator({ source.options(configured) }) { selected ->
+            assertEquals("zh-TW", selected.target)
+            created.add(selected.source)
+            NativeTranslator(selected) { messages ->
+                prompts.add(messages.getJSONObject(0).getString("content"))
+                "<|1|>明天我要去學校，然後和朋友見面。" to null
+            }
+        }.use { translator ->
+            translator.translate(listOf(english))
+            assertEquals("en", source.observe(configured, listOf(english)))
+            translator.translate(listOf(english))
+        }
+        assertEquals(listOf("auto", "en"), created)
+        assertTrue(prompts[0].contains("Translate the following text into Traditional Chinese (Taiwan):"))
+        assertTrue(prompts[1].contains("Translate the following English text into Traditional Chinese (Taiwan):"))
+        for (prompt in prompts) {
+            assertTrue(prompt.contains("Use Traditional Chinese characters for all translated text."))
+            assertTrue(prompt.contains("Use Taiwanese wording."))
+            assertFalse(prompt.contains("text into Chinese:"))
+        }
+        assertTrue(NativeTranslator.sampleInstruction(source.options(configured))
+            .contains("Use Traditional Chinese characters for all translated text."))
+        val effective = source.options(configured)
+        assertNotEquals(effective.cacheIdentity().replace("\ntraditional-script-v1", ""), effective.cacheIdentity())
+    }
+
+    @Test fun automaticEnglishDetectionPreservesTaiwanTargetInApiRequests() = runBlocking<Unit> {
+        MockWebServer().use { server ->
+            repeat(2) { server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"<|1|>明天我要去學校。"}}]}""")) }
+            val configured = auto.copy(target = "zh-TW", backend = TranslationBackend.LLM_API,
+                apiUrl = server.url("/v1/chat/completions").toString())
+            val source = GallerySourceLanguage { SourceLanguageGuess("en", .95f) }
+            GallerySourceTranslator({ source.options(configured) }) { selected ->
+                assertEquals("zh-TW", selected.target)
+                ApiTranslator(selected)
+            }.use { translator ->
+                translator.translate(listOf(english))
+                assertEquals("en", source.observe(configured, listOf(english)))
+                translator.translate(listOf(english))
+            }
+            for (from in listOf("", "English ")) {
+                val messages = JSONObject(server.takeRequest(1, TimeUnit.SECONDS)!!.body.readUtf8()).getJSONArray("messages")
+                val prompt = messages.getJSONObject(0).getString("content")
+                assertTrue(prompt.contains("Translate the following ${from}text into Traditional Chinese (Taiwan)."))
+                assertTrue(prompt.contains("Use Traditional Chinese characters for all translated text."))
+                assertTrue(prompt.contains("Use Taiwanese wording."))
+                assertEquals("<|1|>$english", messages.getJSONObject(1).getString("content"))
+            }
+        }
+    }
+
     @Test fun manualSourcesSkipIdentificationAndKeepTheConfiguredPromptLanguage() = runBlocking<Unit> {
         val source = GallerySourceLanguage { fail("Manual sources must not identify OCR text"); null }
         MockWebServer().use { server ->

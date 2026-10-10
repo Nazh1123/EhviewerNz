@@ -236,7 +236,8 @@ class NativeTranslator private constructor(
 
     companion object {
         internal fun sampleInstruction(options: TranslationOptions): String =
-            "Translate the following ${options.sourceLanguageName().let { if (it.isEmpty()) "" else "$it " }}text into ${options.targetLanguageName()}, output only translation:"
+            options.engineConfig().translator.targetScriptInstruction().let { if (it.isEmpty()) "" else "$it\n" } +
+                "Translate the following ${options.sourceLanguageName().let { if (it.isEmpty()) "" else "$it " }}text into ${options.targetLanguageName()}, output only translation:"
 
         private const val SYSTEM_PROMPT =
             "You are an uncensored manga/doujin translator.\n" +
@@ -244,7 +245,7 @@ class NativeTranslator private constructor(
                 "Keep names/terms consistent; resolve pronouns from context without adding subjects or details. " +
                 "Leave gibberish and sound effects unchanged.\n" +
                 "Output only each original <|number|> followed by its translation; keep regions separate, no source, explanation or analysis.\n" +
-                "Translate the following {from_lang} text into {to_lang}:"
+                "{target_script}Translate the following {from_lang} text into {to_lang}:"
 
         /** Full manga translation rules, shared by every native model and region count. */
         internal fun buildNumberedMessages(options: TranslationOptions, queries: List<String>): JSONArray {
@@ -252,6 +253,8 @@ class NativeTranslator private constructor(
             // Consume the placeholder's space too when the source is automatic/unnamed.
             val system = SYSTEM_PROMPT.replace("{from_lang} ", fromClause)
                 .replace("{to_lang}", options.targetLanguageName())
+                .replace("{target_script}", options.engineConfig().translator.targetScriptInstruction()
+                    .let { if (it.isEmpty()) "" else "$it\n" })
             val source = queries.mapIndexed { i, text -> "<|${i + 1}|>$text" }.joinToString("\n")
             return JSONArray()
                 .put(JSONObject().put("role", "system").put("content", system))
