@@ -89,6 +89,17 @@ final class PopularGalleryHistory {
         }
     }
 
+    List<GalleryInfo> repeatedGalleries() {
+        List<GalleryInfo> result = new ArrayList<>();
+        if (current == null || previous == null) return result;
+        Set<Long> oldGids = new HashSet<>();
+        for (GalleryInfo gallery : previous) oldGids.add(gallery.gid);
+        for (GalleryInfo gallery : current) {
+            if (oldGids.contains(gallery.gid)) result.add(gallery);
+        }
+        return result;
+    }
+
     void persist() {
         // Capture the pair now so another response cannot change a queued write's baseline.
         JSONObject saved = new JSONObject();

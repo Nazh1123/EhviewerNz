@@ -61,6 +61,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 import androidx.viewpager.widget.ViewPager;
 
 import com.github.amlcurran.showcaseview.ShowcaseView;
@@ -196,6 +197,7 @@ public class GalleryListScene extends BaseScene
     private static final String KEY_SELECTED_GIDS = "selected_gids";
     private static final String KEY_DOWNLOADED_ONLY_MODE = "downloaded_only_mode";
     private static final String KEY_POPULAR_VIEW_MODE = "popular_view_mode";
+    private static final String KEY_POPULAR_REPEATED_EXPANDED = "popular_repeated_expanded";
 
     final static int STATE_NORMAL = 0;
     final static int STATE_SIMPLE_SEARCH = 1;
@@ -258,6 +260,7 @@ public class GalleryListScene extends BaseScene
     private PopularGalleryHistory mPopularHistory;
     private int mPopularHistorySite = -1;
     private int mPopularViewMode = PopularGalleryHistory.CURRENT;
+    private boolean mPopularRepeatedExpanded;
     private boolean mPopularResponseReady;
     private boolean mPopularRequestInFlight;
     @Nullable
@@ -534,6 +537,7 @@ public class GalleryListScene extends BaseScene
         mMultiSelectMode = savedInstanceState.getBoolean(KEY_MULTI_SELECT_MODE);
         mDownloadedOnlyMode = savedInstanceState.getBoolean(KEY_DOWNLOADED_ONLY_MODE);
         mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
+        mPopularRepeatedExpanded = savedInstanceState.getBoolean(KEY_POPULAR_REPEATED_EXPANDED);
         mPopularResponseReady = mHasFirstRefresh && isPopularMode();
         long[] selectedGids = savedInstanceState.getLongArray(KEY_SELECTED_GIDS);
         if (selectedGids != null) {
@@ -561,6 +565,7 @@ public class GalleryListScene extends BaseScene
         outState.putBoolean(KEY_MULTI_SELECT_MODE, mMultiSelectMode);
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
         outState.putInt(KEY_POPULAR_VIEW_MODE, mPopularViewMode);
+        outState.putBoolean(KEY_POPULAR_REPEATED_EXPANDED, mPopularRepeatedExpanded);
         long[] selectedGids = new long[mSelectedGids.size()];
         int selectedIndex = 0;
         for (long gid : mSelectedGids) {
@@ -758,6 +763,7 @@ public class GalleryListScene extends BaseScene
         if (!isPopularMode()) {
             mPopularResponseReady = false;
             mPopularViewMode = PopularGalleryHistory.CURRENT;
+            mPopularRepeatedExpanded = false;
         }
         if (mFabLayout != null && !mMultiSelectMode) showNormalFabs(mFabLayout);
         updatePopularActions();
@@ -1927,7 +1933,7 @@ public class GalleryListScene extends BaseScene
             int total = mPopularHistory != null
                     ? mPopularHistory.galleries(PopularGalleryHistory.CURRENT).size()
                     : mHelper != null ? mHelper.size() : 0;
-            int filtered = mAdapter != null ? mAdapter.getItemCount()
+            int filtered = mAdapter != null ? mAdapter.getGalleryCount()
                     : mPopularHistory != null ? mPopularHistory.galleries(PopularGalleryHistory.UPDATES).size() : 0;
             updatePopularCountAction(mPopularUpdates, filtered, total);
             updatePopularCountAction(mPopularUpdatesMenu, filtered, total);
@@ -1987,6 +1993,9 @@ public class GalleryListScene extends BaseScene
             activity.runOnUiThread(() -> {
                 if (mRecyclerView == null || !isPopularMode() || Settings.getGallerySite() != site) return;
                 if (mPopularHistory == null || mPopularHistorySite != site) {
+                    if (mPopularHistorySite != -1 && mPopularHistorySite != site) {
+                        mPopularRepeatedExpanded = false;
+                    }
                     mPopularHistory = history;
                     mPopularHistorySite = site;
                 }
@@ -2007,6 +2016,7 @@ public class GalleryListScene extends BaseScene
             return;
         }
         cancelPopularNoUpdatesNotice();
+        mPopularRepeatedExpanded = false;
         mPopularViewMode = mPopularViewMode == mode ? PopularGalleryHistory.CURRENT : mode;
         updatePopularProjection();
         if (mRecyclerView != null) {
@@ -2014,6 +2024,14 @@ public class GalleryListScene extends BaseScene
             mRecyclerView.scrollToPosition(0);
         }
         showActionFab();
+    }
+
+    private List<GalleryInfo> getPopularDisplayGalleries() {
+        List<GalleryInfo> galleries = mPopularHistory.galleries(mPopularViewMode);
+        if (mPopularViewMode == PopularGalleryHistory.UPDATES && mPopularRepeatedExpanded) {
+            galleries.addAll(mPopularHistory.repeatedGalleries());
+        }
+        return galleries;
     }
 
     private void updatePopularProjection() {
@@ -2223,7 +2241,7 @@ public class GalleryListScene extends BaseScene
             return galleries;
         }
         List<GalleryInfo> source = isPopularMode() && mPopularResponseReady && mPopularHistory != null
-                ? mPopularHistory.galleries(mPopularViewMode) : mHelper.getData();
+                ? getPopularDisplayGalleries() : mHelper.getData();
         for (GalleryInfo galleryInfo : source) {
             if (galleryInfo != null && mSelectedGids.contains(galleryInfo.gid)) {
                 galleries.add(galleryInfo);
@@ -2445,11 +2463,11 @@ public class GalleryListScene extends BaseScene
                 mHelper.refresh();
                 break;
             case FAB_RANDOM:
-                if (mAdapter == null || mAdapter.getItemCount() == 0) {
+                if (mAdapter == null || mAdapter.getGalleryCount() == 0) {
                     return;
                 }
-                onItemClick(null, mAdapter.getDataAt(
-                        (int) (Math.random() * mAdapter.getItemCount())));
+                onItemClick(null, mAdapter.getGalleryAtIndex(
+                        (int) (Math.random() * mAdapter.getGalleryCount())));
                 break;
             case FAB_DOWNLOADED_ONLY:
                 setDownloadedOnlyMode(!mDownloadedOnlyMode, true);
@@ -2976,6 +2994,7 @@ public class GalleryListScene extends BaseScene
                 mHelper.isCurrentTask(taskId)) {
             boolean noPopularUpdates = false;
             if (isPopularMode() && mPopularHistory != null && result.customErrorString == null) {
+                mPopularRepeatedExpanded = false;
                 mPopularHistory.record(result.galleryInfoList);
                 mPopularHistory.persist();
                 mPopularResponseReady = true;
@@ -3203,8 +3222,11 @@ public class GalleryListScene extends BaseScene
 
     private class GalleryListAdapter extends GalleryAdapterNew {
 
+        private static final int TYPE_POPULAR_DIVIDER = 2;
         private final List<GalleryInfo> mDownloadedData = new ArrayList<>();
         private final List<GalleryInfo> mPopularData = new ArrayList<>();
+        private int mPopularNewCount;
+        private int mPopularDividerPosition = -1;
 
         private boolean hasPopularProjection() {
             return isPopularMode() && mPopularResponseReady && mPopularHistory != null
@@ -3217,7 +3239,30 @@ public class GalleryListScene extends BaseScene
 
         private void rebuildPopularData() {
             mPopularData.clear();
-            if (hasPopularProjection()) mPopularData.addAll(mPopularHistory.galleries(mPopularViewMode));
+            mPopularNewCount = 0;
+            if (hasPopularProjection()) {
+                mPopularData.addAll(getPopularDisplayGalleries());
+                mPopularNewCount = mPopularHistory.galleries(PopularGalleryHistory.UPDATES).size();
+            }
+        }
+
+        private void rebuildPopularDivider() {
+            mPopularDividerPosition = -1;
+            if (!hasPopularProjection() || mPopularViewMode != PopularGalleryHistory.UPDATES
+                    || !mPopularRepeatedExpanded) return;
+            Set<Long> newGids = new HashSet<>();
+            for (int i = 0; i < mPopularNewCount; i++) newGids.add(mPopularData.get(i).gid);
+            List<GalleryInfo> visible = mDownloadedOnlyMode ? mDownloadedData : mPopularData;
+            int newCount = 0;
+            for (GalleryInfo gallery : visible) {
+                if (newGids.contains(gallery.gid)) newCount++;
+            }
+            if (newCount > 0 && newCount < visible.size()) mPopularDividerPosition = newCount;
+        }
+
+        private boolean hasPopularDivider() {
+            return hasPopularProjection() && mPopularViewMode == PopularGalleryHistory.UPDATES
+                    && mPopularRepeatedExpanded && mPopularDividerPosition >= 0;
         }
 
         public GalleryListAdapter(@NonNull LayoutInflater inflater,
@@ -3227,6 +3272,10 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public int getItemCount() {
+            return getGalleryCount() + (hasPopularDivider() ? 1 : 0);
+        }
+
+        int getGalleryCount() {
             if (mDownloadedOnlyMode) {
                 return mDownloadedData != null ? mDownloadedData.size() : 0;
             }
@@ -3237,6 +3286,16 @@ public class GalleryListScene extends BaseScene
         @Nullable
         @Override
         public GalleryInfo getDataAt(int position) {
+            if (position < 0) return null;
+            if (hasPopularDivider()) {
+                if (position == mPopularDividerPosition) return null;
+                if (position > mPopularDividerPosition) position--;
+            }
+            return getGalleryAtIndex(position);
+        }
+
+        @Nullable
+        GalleryInfo getGalleryAtIndex(int position) {
             if (mDownloadedOnlyMode) {
                 return mDownloadedData != null && position >= 0
                         && position < mDownloadedData.size()
@@ -3248,9 +3307,43 @@ public class GalleryListScene extends BaseScene
             return null != mHelper ? mHelper.getDataAtEx(position) : null;
         }
 
+        @Override
+        public int getItemViewType(int position) {
+            return hasPopularDivider() && position == mPopularDividerPosition
+                    ? TYPE_POPULAR_DIVIDER : super.getItemViewType(position);
+        }
+
+        @Override
+        public GalleryHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            if (viewType != TYPE_POPULAR_DIVIDER) return super.onCreateViewHolder(parent, viewType);
+            View divider = LayoutInflater.from(parent.getContext()).inflate(
+                    R.layout.item_popular_history_divider, parent, false);
+            StaggeredGridLayoutManager.LayoutParams params = new StaggeredGridLayoutManager.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            params.setFullSpan(true);
+            divider.setLayoutParams(params);
+            return new GalleryHolder(divider, null, null, TYPE_INVALID);
+        }
+
+        @Override
+        public void onBindViewHolder(GalleryHolder holder, int position) {
+            if (getItemViewType(position) != TYPE_POPULAR_DIVIDER) super.onBindViewHolder(holder, position);
+        }
+
+        boolean appendPopularRepeatedGalleries() {
+            int oldCount = getItemCount();
+            rebuildPopularData();
+            if (mDownloadedOnlyMode) rebuildDownloadedData();
+            rebuildPopularDivider();
+            int added = getItemCount() - oldCount;
+            if (added > 0) notifyItemRangeInserted(oldCount, added);
+            return added > 0;
+        }
+
         void onDownloadedOnlyModeChanged() {
             rebuildPopularData();
             rebuildDownloadedData();
+            rebuildPopularDivider();
             notifyDataSetChanged();
         }
 
@@ -3259,6 +3352,7 @@ public class GalleryListScene extends BaseScene
             if (mDownloadedOnlyMode) {
                 rebuildDownloadedData();
             }
+            rebuildPopularDivider();
             notifyDataSetChanged();
         }
 
@@ -3347,6 +3441,20 @@ public class GalleryListScene extends BaseScene
     }
 
     class GalleryListHelper extends GalleryInfoContentHelper {
+
+        @Override
+        protected boolean onInterceptFooterRefresh() {
+            if (!isPopularMode() || !mPopularResponseReady
+                    || mPopularViewMode != PopularGalleryHistory.UPDATES) return false;
+            if (!mPopularRequestInFlight && !mMultiSelectMode && !mPopularRepeatedExpanded
+                    && mPopularHistory != null && mPopularHistorySite == Settings.getGallerySite()
+                    && mAdapter != null) {
+                mPopularRepeatedExpanded = true;
+                if (mAdapter.appendPopularRepeatedGalleries()) scrollToRevealNewContent();
+                updatePopularActions();
+            }
+            return true;
+        }
 
         @Override
         public void refresh() {

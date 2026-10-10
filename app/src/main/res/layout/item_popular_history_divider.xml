@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.hippo.ehviewer.widget.GallerySectionDivider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/popular_history_divider"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingTop="4px"
+    android:paddingBottom="4px"
+    android:importantForAccessibility="no" />

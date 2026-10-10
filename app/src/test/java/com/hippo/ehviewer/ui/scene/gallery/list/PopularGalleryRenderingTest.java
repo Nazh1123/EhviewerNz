@@ -10,6 +10,7 @@ import android.widget.TextView;
 
 import androidx.appcompat.view.ContextThemeWrapper;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.hippo.conaco.Conaco;
@@ -23,6 +24,8 @@ import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.lib.image.Image;
+import com.hippo.lib.yorozuya.LayoutUtils;
+import com.hippo.refreshlayout.RefreshLayout;
 import com.hippo.widget.ContentLayout;
 import com.hippo.widget.FabLayout;
 import com.hippo.widget.LoadImageViewNew;
@@ -43,6 +46,7 @@ import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -65,6 +69,7 @@ public class PopularGalleryRenderingTest {
     private GalleryAdapterNew adapter;
     private ListUrlBuilder builder;
     private RecyclerView recycler;
+    private int revealScrollCount;
 
     @Before public void setUp() throws Exception {
         Context app = RuntimeEnvironment.getApplication();
@@ -85,7 +90,13 @@ public class PopularGalleryRenderingTest {
         ReflectionHelpers.setField(scene, "mUrlBuilder", builder);
         ReflectionHelpers.setField(scene, "mRecyclerView", recycler);
         ReflectionHelpers.setField(scene, "executorService", Executors.newSingleThreadExecutor());
-        helper = scene.new GalleryListHelper();
+        revealScrollCount = 0;
+        helper = scene.new GalleryListHelper() {
+            @Override protected void scrollToRevealNewContent() {
+                revealScrollCount++;
+                super.scrollToRevealNewContent();
+            }
+        };
         ReflectionHelpers.setField(scene, "mHelper", helper);
         content.setHelper(helper);
         ReflectionHelpers.setField(scene, "mSearchBarMover", new SearchBarMover(scene, new View(context), recycler));
@@ -166,7 +177,7 @@ public class PopularGalleryRenderingTest {
     }
 
     private void assertCountButtons(View actions, int filtered, int total) {
-        assertEquals(filtered, adapter.getItemCount());
+        assertEquals(filtered, (int) ReflectionHelpers.callInstanceMethod(adapter, "getGalleryCount"));
         for (int id : new int[]{R.id.popular_updates, R.id.popular_updates_menu}) {
             FloatingActionButton button = actions.findViewById(id);
             assertTrue(button.getDrawable() instanceof GalleryCountDrawable);
@@ -246,6 +257,199 @@ public class PopularGalleryRenderingTest {
         ReflectionHelpers.setField(scene, "mPopularUpdatesMenu", actions.findViewById(R.id.popular_updates_menu));
         ReflectionHelpers.setField(scene, "mPopularPreviousMenu", actions.findViewById(R.id.popular_previous_menu));
         return actions;
+    }
+
+    @Test public void footerAppendsRepeatedGalleriesOnceWithoutARequestOrBaselineChange() {
+        View actions = bindPopularActions();
+        refresh(2, 3, 1, 4);
+        toggle(PopularGalleryHistory.UPDATES);
+        layout();
+        List<String> notifications = new ArrayList<>();
+        adapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+            @Override public void onChanged() { notifications.add("changed"); }
+            @Override public void onItemRangeInserted(int start, int count) {
+                notifications.add(start + ":" + count);
+            }
+        });
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        int firstTop = recycler.getChildAt(0).getTop();
+        footer();
+        layout();
+        assertEquals(task, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+        assertFalse(content.getRefreshLayout().isRefreshing());
+        assertEquals(Arrays.asList(3L, 4L, null, 2L, 1L), visibleIds());
+        assertEquals(Arrays.asList("2:3"), notifications);
+        assertEquals(1, revealScrollCount);
+        assertEquals(firstTop, recycler.getChildAt(0).getTop());
+        assertNull(adapter.getDataAt(2));
+        assertEquals(4, (int) ReflectionHelpers.callInstanceMethod(adapter, "getGalleryCount"));
+        assertEquals(2L, ((GalleryInfo) ReflectionHelpers.callInstanceMethod(adapter, "getGalleryAtIndex",
+                ClassParameter.from(int.class, 2))).gid);
+        assertCountButtons(actions, 4, 4);
+        PopularGalleryHistory history = ReflectionHelpers.getField(scene, "mPopularHistory");
+        assertEquals(Arrays.asList(1L, 2L), ids(history.galleries(PopularGalleryHistory.PREVIOUS)));
+        assertEquals(Arrays.asList(2L, 3L, 1L, 4L), ids(history.galleries(PopularGalleryHistory.CURRENT)));
+        assertEquals(Arrays.asList(3L, 4L), ids(history.galleries(PopularGalleryHistory.UPDATES)));
+        footer();
+        assertEquals(Arrays.asList(3L, 4L, null, 2L, 1L), visibleIds());
+        assertEquals(Arrays.asList("2:3"), notifications);
+        assertEquals(1, revealScrollCount);
+        assertEquals(task, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+        assertFalse(content.getRefreshLayout().isRefreshing());
+        ReflectionHelpers.<Set<Long>>getField(scene, "mSelectedGids").add(2L);
+        assertEquals(Arrays.asList(2L), ids(ReflectionHelpers.callInstanceMethod(
+                scene, "getSelectedGalleriesOldestFirst")));
+    }
+
+    @Test @Config(sdk = 34, qualifiers = "xxhdpi")
+    public void dividerUsesThreePixelRoundLineWithFifteenPercentInsetsAndFourPixelGaps() {
+        refresh(2, 3, 4);
+        toggle(PopularGalleryHistory.UPDATES);
+        adapter.setType(GalleryAdapterNew.TYPE_GRID);
+        footer();
+        layout();
+        View divider = recycler.findViewHolderForAdapterPosition(2).itemView;
+        assertEquals(R.id.popular_history_divider, divider.getId());
+        assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
+        assertEquals(recycler.getWidth() - recycler.getPaddingLeft() - recycler.getPaddingRight(),
+                divider.getWidth());
+        assertEquals(4, divider.getPaddingTop());
+        assertEquals(4, divider.getPaddingBottom());
+        assertEquals(11, divider.getHeight());
+        assertTrue(divider instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
+    }
+
+    @Test public void headerRefreshAndModeSwitchResetExpansion() {
+        setDefaultUpdates(true);
+        refresh(2, 3, 4);
+        footer();
+        assertEquals(Arrays.asList(3L, 4L, null, 2L), visibleIds());
+        refresh(2, 3, 4, 5);
+        assertEquals(Arrays.asList(5L), visibleIds());
+        assertFalse(ReflectionHelpers.getField(scene, "mPopularRepeatedExpanded"));
+        footer();
+        assertEquals(Arrays.asList(5L, null, 2L, 3L, 4L), visibleIds());
+        toggle(PopularGalleryHistory.UPDATES);
+        assertEquals(Arrays.asList(2L, 3L, 4L, 5L), visibleIds());
+        toggle(PopularGalleryHistory.UPDATES);
+        assertEquals(Arrays.asList(5L), visibleIds());
+        footer();
+        toggle(PopularGalleryHistory.PREVIOUS);
+        assertEquals(Arrays.asList(2L, 3L, 4L), visibleIds());
+        assertFalse(ReflectionHelpers.getField(scene, "mPopularRepeatedExpanded"));
+    }
+
+    @Test public void footerWithNoRepeatedGalleriesFinishesWithoutADividerOrRequest() {
+        refresh(3, 4);
+        toggle(PopularGalleryHistory.UPDATES);
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        footer();
+        assertEquals(Arrays.asList(3L, 4L), visibleIds());
+        assertEquals(task, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+        assertFalse(content.getRefreshLayout().isRefreshing());
+        assertEquals(0, revealScrollCount);
+    }
+
+    @Test public void appendingAtTheBottomScrollsDownByTheNormalNextPageDistance() {
+        long[] gids = new long[32];
+        for (int i = 0; i < 30; i++) gids[i] = i + 3;
+        gids[30] = 2;
+        gids[31] = 1;
+        refresh(gids);
+        toggle(PopularGalleryHistory.UPDATES);
+        layout();
+        recycler.scrollToPosition(29);
+        layout();
+        int oldTop = recycler.findViewHolderForAdapterPosition(29).itemView.getTop();
+        footer();
+        layout();
+        assertEquals(oldTop - LayoutUtils.dp2pix(recycler.getContext(), 48),
+                recycler.findViewHolderForAdapterPosition(29).itemView.getTop());
+        assertEquals(1, revealScrollCount);
+        assertEquals(33, adapter.getItemCount());
+        assertEquals(32L, adapter.getDataAt(29).gid);
+        assertNull(adapter.getDataAt(30));
+        assertEquals(2L, adapter.getDataAt(31).gid);
+        assertEquals(1L, adapter.getDataAt(32).gid);
+        int newTop = recycler.findViewHolderForAdapterPosition(29).itemView.getTop();
+        footer();
+        layout();
+        assertEquals(newTop, recycler.findViewHolderForAdapterPosition(29).itemView.getTop());
+        assertEquals(1, revealScrollCount);
+    }
+
+    @Test public void normalSearchNextPageStillUsesTheSameScrollFeedback() {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        helper.doGetData(ContentLayout.ContentHelper.TYPE_NEXT_PAGE_KEEP_POS, 1,
+                ContentLayout.ContentHelper.REFRESH_TYPE_FOOTER);
+        helper.onGetPageData(ReflectionHelpers.getField(helper, "mCurrentTaskId"), 2, 0, galleries(3, 4));
+        assertEquals(Arrays.asList(1L, 2L, 3L, 4L), visibleIds());
+        assertEquals(1, revealScrollCount);
+        assertFalse(content.getRefreshLayout().isRefreshing());
+    }
+
+    @Test public void footerInAllPopularKeepsTheNormalLastPageRefresh() {
+        refresh(2, 3, 4);
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        footer();
+        assertNotEquals(task, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+        assertEquals(ContentLayout.ContentHelper.TYPE_REFRESH_PAGE,
+                (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskType"));
+        assertFalse(ReflectionHelpers.getField(scene, "mPopularRepeatedExpanded"));
+        helper.onGetPageData(ReflectionHelpers.getField(helper, "mCurrentTaskId"), 1, 0, galleries(2, 3, 4));
+        assertFalse(content.getRefreshLayout().isRefreshing());
+    }
+
+    @Test public void leavingExpandedPopularDoesNotShiftNormalGalleryPositions() {
+        refresh(2, 3, 1, 4);
+        toggle(PopularGalleryHistory.UPDATES);
+        footer();
+        assertEquals(Arrays.asList(3L, 4L, null, 2L, 1L), visibleIds());
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        assertEquals(Arrays.asList(2L, 3L, 1L, 4L), visibleIds());
+        assertEquals(GalleryAdapterNew.TYPE_LIST, adapter.getItemViewType(2));
+        refresh(7, 8);
+        assertEquals(Arrays.asList(7L, 8L), visibleIds());
+    }
+
+    @Test public void downloadedFilterKeepsBothGroupsInOrderAndHidesAnEmptyBoundary() {
+        View actions = bindPopularActions();
+        refresh(2, 3, 1, 4);
+        toggle(PopularGalleryHistory.UPDATES);
+        downloadedGids.addAll(Arrays.asList(3L, 1L));
+        ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
+                ClassParameter.from(boolean.class, true), ClassParameter.from(boolean.class, false));
+        assertEquals(Arrays.asList(3L), visibleIds());
+        footer();
+        assertEquals(Arrays.asList(3L, null, 1L), visibleIds());
+        assertCountButtons(actions, 2, 4);
+        downloadedGids.remove(3L);
+        ReflectionHelpers.callInstanceMethod(scene, "onDownloadMembershipChanged");
+        assertEquals(Arrays.asList(1L), visibleIds());
+        ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
+                ClassParameter.from(boolean.class, false), ClassParameter.from(boolean.class, false));
+        assertEquals(Arrays.asList(3L, 4L, null, 2L, 1L), visibleIds());
+    }
+
+    private void footer() {
+        content.getRefreshLayout().setFooterRefreshing(true);
+        RefreshLayout.OnRefreshListener listener = ReflectionHelpers.getField(helper, "mOnRefreshListener");
+        listener.onFooterRefresh();
+    }
+
+    private List<Long> visibleIds() {
+        List<Long> result = new ArrayList<>();
+        for (int i = 0; i < adapter.getItemCount(); i++) {
+            GalleryInfo gallery = adapter.getDataAt(i);
+            result.add(gallery == null ? null : gallery.gid);
+        }
+        return result;
+    }
+
+    private static List<Long> ids(List<GalleryInfo> galleries) {
+        List<Long> result = new ArrayList<>();
+        for (GalleryInfo gallery : galleries) result.add(gallery.gid);
+        return result;
     }
 
     @Test public void defaultUpdatesWithNoHistoryShowsAllAndCanExitWithoutPreviousSnapshot() {

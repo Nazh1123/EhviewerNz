@@ -301,6 +301,10 @@ public class ContentLayout extends FrameLayout {
 
             @Override
             public void onFooterRefresh() {
+                if (onInterceptFooterRefresh()) {
+                    mRefreshLayout.setFooterRefreshing(false);
+                    return;
+                }
                 if (mEndPage == -1 || mPages == -1) {
                     mCurrentTaskId = mIdGenerator.nextId();
                     mCurrentTaskType = TYPE_NEXT_PAGE_KEEP_POS;
@@ -400,6 +404,19 @@ public class ContentLayout extends FrameLayout {
          */
         protected boolean shouldRequestNextPageOnScroll(int dy) {
             return true;
+        }
+
+        /** Handles a local footer action without creating a page request. */
+        protected boolean onInterceptFooterRefresh() {
+            return false;
+        }
+
+        /** Uses the same short scroll for fetched pages and locally appended content. */
+        protected void scrollToRevealNewContent() {
+            if (mRecyclerView.isAttachedToWindow()) {
+                mRecyclerView.stopScroll();
+                mRecyclerView.smoothScrollBy(0, mNextPageScrollSize);
+            }
         }
 
         /** Called immediately before a scroll-triggered next-page request starts. */
@@ -740,8 +757,7 @@ public class ContentLayout extends FrameLayout {
 
                 if (mRecyclerView.isAttachedToWindow()) {
                     if (mCurrentTaskType == TYPE_NEXT_PAGE_KEEP_POS) {
-                        mRecyclerView.stopScroll();
-                        mRecyclerView.smoothScrollBy(0, mNextPageScrollSize);
+                        scrollToRevealNewContent();
                     } else {
                         mRecyclerView.stopScroll();
                         RecyclerView.LayoutManager manager = mRecyclerView.getLayoutManager();
