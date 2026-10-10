@@ -478,6 +478,12 @@ public class Settings {
         return getIntFromStr(KEY_LIST_MODE, DEFAULT_LIST_MODE);
     }
 
+    public static final String KEY_POPULAR_UPDATES_ONLY = "popular_updates_only";
+
+    public static boolean getPopularUpdatesOnly() {
+        return getBoolean(KEY_POPULAR_UPDATES_ONLY, false);
+    }
+
     public static final String KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE =
             "show_thumbnail_download_badge";
     private static final boolean DEFAULT_SHOW_THUMBNAIL_DOWNLOAD_BADGE = true;

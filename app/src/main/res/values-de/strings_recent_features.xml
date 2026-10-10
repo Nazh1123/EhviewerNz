@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_popular_updates_only">Beliebte Galerien standardmäßig filtern</string>
+    <string name="settings_popular_updates_only_summary">Auf der Seite mit beliebten Galerien nur neue Galerien anzeigen. Die Ansicht lässt sich mit den Schaltflächen unten rechts wechseln.</string>
     <string name="popular_updates_only">Nur Aktualisierungen</string>
     <string name="popular_show_all">Alle anzeigen</string>
     <string name="popular_previous">Vorherige beliebte Galerien</string>

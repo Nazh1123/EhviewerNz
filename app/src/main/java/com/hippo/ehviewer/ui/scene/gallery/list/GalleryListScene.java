@@ -2947,7 +2947,8 @@ public class GalleryListScene extends BaseScene
                 mPopularHistory.persist();
                 mPopularResponseReady = true;
                 mPopularRequestInFlight = false;
-                mPopularViewMode = PopularGalleryHistory.CURRENT;
+                mPopularViewMode = Settings.getPopularUpdatesOnly()
+                        ? PopularGalleryHistory.UPDATES : PopularGalleryHistory.CURRENT;
                 // Popular is a single snapshot, without list pagination.
                 result.pages = 1;
                 result.nextPage = 0;

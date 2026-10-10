@@ -148,6 +148,51 @@ public class PopularGalleryRenderingTest {
         }
     }
 
+    @Test public void defaultUpdatesFilterCanExitAndDisablingSettingRestoresNormalResponses() {
+        assertFalse(Settings.getPopularUpdatesOnly());
+        setDefaultUpdates(true);
+        refresh(2, 3, 4);
+        assertRendered(2);
+        assertEquals("Gallery 3", ((TextView) recycler.getChildAt(0).findViewById(R.id.title)).getText().toString());
+        toggle(PopularGalleryHistory.UPDATES);
+        assertRendered(3);
+        setDefaultUpdates(false);
+        refresh(2, 3, 4);
+        assertRendered(3);
+    }
+
+    @Test public void defaultUpdatesEmptyResultCanReturnToAllAndNewSearchStillRenders() {
+        setDefaultUpdates(true);
+        refresh(1, 2);
+        layout();
+        assertEquals(0, adapter.getItemCount());
+        assertEquals(2, helper.getData().size());
+        toggle(PopularGalleryHistory.UPDATES);
+        assertRendered(2);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("new search");
+        refresh(5, 6);
+        assertRendered(2);
+    }
+
+    @Test public void defaultUpdatesWithNoHistoryShowsAllAndCanExitWithoutPreviousSnapshot() {
+        setDefaultUpdates(true);
+        ReflectionHelpers.setField(scene, "mPopularHistory",
+                new PopularGalleryHistory(scene.getContext().getCacheDir(), Settings.getGallerySite()));
+        refresh(7, 8);
+        assertRendered(2);
+        assertEquals(PopularGalleryHistory.UPDATES,
+                (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+        toggle(PopularGalleryHistory.UPDATES);
+        assertRendered(2);
+        assertEquals(PopularGalleryHistory.CURRENT,
+                (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+    }
+
+    private void setDefaultUpdates(boolean enabled) {
+        Settings.putBoolean(Settings.KEY_POPULAR_UPDATES_ONLY, enabled);
+    }
+
     private void refresh(long... gids) {
         helper.refresh();
         GalleryListParser.Result result = new GalleryListParser.Result();

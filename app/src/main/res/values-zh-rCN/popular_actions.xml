@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_popular_updates_only">热门默认仅查看更新</string>
+    <string name="settings_popular_updates_only_summary">热门页仅显示新出现画廊。可在右下角按钮切换显示。</string>
     <string name="popular_updates_only">仅查看更新</string>
     <string name="popular_show_all">显示全部</string>
     <string name="popular_previous">回看上次</string>

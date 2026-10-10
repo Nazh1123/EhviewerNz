@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_popular_updates_only">人気ページは標準で更新のみ表示</string>
+    <string name="settings_popular_updates_only_summary">人気ページに新しく登場したギャラリーのみ表示します。右下のボタンで表示を切り替えられます。</string>
     <string name="popular_updates_only">更新のみ表示</string>
     <string name="popular_show_all">すべて表示</string>
     <string name="popular_previous">前回の人気ギャラリー</string>

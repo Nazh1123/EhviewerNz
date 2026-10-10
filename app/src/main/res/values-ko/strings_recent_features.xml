@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_popular_updates_only">인기 페이지에서 기본으로 새 항목만 표시</string>
+    <string name="settings_popular_updates_only_summary">인기 페이지에서 새로 등장한 갤러리만 표시합니다. 오른쪽 아래 버튼으로 보기를 전환할 수 있습니다.</string>
     <string name="popular_updates_only">업데이트만 보기</string>
     <string name="popular_show_all">모두 보기</string>
     <string name="popular_previous">이전 인기 갤러리</string>

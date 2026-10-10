@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_popular_updates_only">熱門預設只查看更新</string>
+    <string name="settings_popular_updates_only_summary">熱門頁只顯示新出現畫廊。可透過右下角按鈕切換顯示。</string>
     <string name="popular_updates_only">只查看更新</string>
     <string name="popular_show_all">顯示全部</string>
     <string name="popular_previous">回看上次</string>

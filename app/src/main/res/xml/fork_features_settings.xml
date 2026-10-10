@@ -6,6 +6,12 @@
         android:title="@string/settings_fork_category_gallery"
         app:allowDividerAbove="true">
 
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="false"
+            android:key="popular_updates_only"
+            android:title="@string/settings_popular_updates_only"
+            android:summary="@string/settings_popular_updates_only_summary" />
+
         <com.hippo.preference.ListPreference
             android:key="search_language"
             android:summary="%s"

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_popular_updates_only">Mostrar novedades de populares por defecto</string>
+    <string name="settings_popular_updates_only_summary">Mostrar solo galerías nuevas en la página de populares. Usa los botones de la esquina inferior derecha para cambiar la vista.</string>
     <string name="popular_updates_only">Solo novedades</string>
     <string name="popular_show_all">Mostrar todo</string>
     <string name="popular_previous">Populares anteriores</string>

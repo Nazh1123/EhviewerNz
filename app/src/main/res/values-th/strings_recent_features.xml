@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_popular_updates_only">แสดงเฉพาะรายการใหม่ในหน้ายอดนิยมเป็นค่าเริ่มต้น</string>
+    <string name="settings_popular_updates_only_summary">แสดงเฉพาะแกลเลอรีที่เพิ่งปรากฏในหน้ายอดนิยม ใช้ปุ่มมุมขวาล่างเพื่อสลับการแสดงผล</string>
     <string name="popular_updates_only">ดูเฉพาะรายการใหม่</string>
     <string name="popular_show_all">แสดงทั้งหมด</string>
     <string name="popular_previous">แกลเลอรียอดนิยมครั้งก่อน</string>
