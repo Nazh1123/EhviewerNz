@@ -21,7 +21,9 @@ class LlmTranslator(
 
     fun buildMessages(queries: List<String>): JSONArray {
         val source = cfg.fromLangName.trim().let { if (it.isEmpty()) "" else "$it " }
+        val script = cfg.targetScriptInstruction().let { if (it.isEmpty()) "" else "$it " }
         val instruction = "Translate the following ${source}text into ${cfg.toLangName}. " +
+            script +
             "These are dialogue and captions from a comic. Preserve meaning, tone, names and sound effects. " +
             "Use context to resolve pronouns and keep terminology consistent. " +
             "Each input region starts with <|number|>. Return every region with the same marker, " +

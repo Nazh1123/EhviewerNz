@@ -1,5 +1,7 @@
 package com.hippo.ehviewer.translation
 
+import android.content.Context
+import com.hippo.ehviewer.R
 import com.google.mlkit.nl.translate.TranslateLanguage
 import java.util.Locale
 
@@ -34,6 +36,22 @@ object TranslationLanguages {
         else -> Locale.forLanguageTag(code).getDisplayLanguage(locale)
     }
 
+    /** Use the same localized Chinese target labels as settings, independent of platform Locale data. */
+    fun targetDisplayName(code: String, context: Context): String {
+        val label = when (llmTarget(code)) {
+            "zh-CN" -> R.string.translation_target_zh_cn
+            "zh-HK" -> R.string.translation_target_zh_hk
+            "zh-TW" -> R.string.translation_target_zh_tw
+            else -> null
+        }
+        return label?.let(context::getString)
+            ?: displayName(code, context.resources.configuration.locales[0])
+    }
+
+    internal fun sourceDetectedMessage(context: Context, source: String, target: String): String =
+        context.getString(R.string.translation_source_detected,
+            displayName(source, context.resources.configuration.locales[0]), targetDisplayName(target, context))
+
     /** ML Kit has one Chinese model; keep the selected script in app settings/prompts. */
     fun mlKitSource(source: String): String = when (source) {
         "zh-CN", "zh-TW" -> "zh"
@@ -51,13 +69,32 @@ object TranslationLanguages {
         else -> "明日は学校へ行きます。"
     }
 
-    fun promptName(code: String): String = when (code) {
-        AUTO_SOURCE -> ""
-        "zh", "zh-CN", "zh-Hans" -> "Simplified Chinese"
-        "zh-HK" -> "Traditional Chinese (Hong Kong)"
-        "zh-TW" -> "Traditional Chinese (Taiwan)"
-        "zh-Hant" -> "Traditional Chinese"
-        else -> Locale.forLanguageTag(code).getDisplayLanguage(Locale.ENGLISH)
+    private fun usesTraditionalChinese(locale: Locale): Boolean = when (locale.script) {
+        "Hant" -> true
+        "Hans" -> false
+        else -> locale.country in setOf("TW", "HK", "MO")
+    }
+
+    /** Preserve Chinese script/region; getDisplayLanguage alone collapses both to Chinese. */
+    fun promptName(code: String): String {
+        if (code == AUTO_SOURCE) return ""
+        val locale = Locale.forLanguageTag(code)
+        if (locale.language != "zh") return locale.getDisplayLanguage(Locale.ENGLISH)
+        if (!usesTraditionalChinese(locale)) return "Simplified Chinese"
+        return when (locale.country) {
+            "HK" -> "Traditional Chinese (Hong Kong)"
+            "TW" -> "Traditional Chinese (Taiwan)"
+            "MO" -> "Traditional Chinese (Macau)"
+            else -> "Traditional Chinese"
+        }
+    }
+
+    /** Restore script-qualified and differently cased tags into the supported LLM presets. */
+    fun llmTarget(code: String): String {
+        val locale = Locale.forLanguageTag(code)
+        if (locale.language != "zh") return code
+        if (!usesTraditionalChinese(locale)) return "zh-CN"
+        return if (locale.country == "HK") "zh-HK" else "zh-TW"
     }
 
     fun validTarget(options: TranslationOptions): Boolean =

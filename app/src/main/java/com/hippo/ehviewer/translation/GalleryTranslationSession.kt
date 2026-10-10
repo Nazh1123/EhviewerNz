@@ -56,9 +56,7 @@ internal class GalleryTranslationSession(
         if (detected != null) withContext(Dispatchers.Main) {
             if (generation != epoch) throw SupersededTranslationPage()
             request.ensureRelevant()
-            android.widget.Toast.makeText(context, context.getString(R.string.translation_source_detected,
-                TranslationLanguages.displayName(detected, context.resources.configuration.locales[0]),
-                TranslationLanguages.displayName(options.target, context.resources.configuration.locales[0])),
+            android.widget.Toast.makeText(context, TranslationLanguages.sourceDetectedMessage(context, detected, options.target),
                 android.widget.Toast.LENGTH_LONG).show()
         }
     }

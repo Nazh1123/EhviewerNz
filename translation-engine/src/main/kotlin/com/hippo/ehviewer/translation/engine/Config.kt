@@ -27,7 +27,13 @@ data class OcrConfig(
 data class InpainterConfig(val method: String = "aot", val tileSize: Int = 768,
                            val maskRadius: Int = 12, val regionPad: Int = 16)
 
-data class TranslatorConfig(val fromLangName: String = "Japanese", val toLangName: String = "Simplified Chinese")
+data class TranslatorConfig(val fromLangName: String = "Japanese", val toLangName: String = "Simplified Chinese") {
+    /** Models biased toward simplified output need a character constraint as well as a language name. */
+    fun targetScriptInstruction(): String = if (toLangName.startsWith("Traditional Chinese"))
+        "Use Traditional Chinese characters for all translated text. Do not use Simplified Chinese characters." +
+            if (toLangName == "Traditional Chinese (Taiwan)") " Use Taiwanese wording." else ""
+    else ""
+}
 
 enum class TextOrientation { AUTO, HORIZONTAL, VERTICAL }
 

@@ -38,7 +38,8 @@ class ApiTranslatorTest {
     @Test fun japaneseSourceAndSelectedChineseRegionReachApiRequests() {
         MockWebServer().use { server ->
             for ((target, name) in listOf("zh-CN" to "Simplified Chinese",
-                "zh-HK" to "Traditional Chinese (Hong Kong)", "zh-TW" to "Traditional Chinese (Taiwan)")) {
+                "zh-HK" to "Traditional Chinese (Hong Kong)", "zh-TW" to "Traditional Chinese (Taiwan)",
+                "zh-Hant-HK" to "Traditional Chinese (Hong Kong)", "zh-Hant-TW" to "Traditional Chinese (Taiwan)")) {
                 server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"<|1|>譯文"}}]}"""))
                 ApiTranslator(options(server).copy(target = target)).use {
                     runBlocking { it.translate(listOf("こんにちは")) }
