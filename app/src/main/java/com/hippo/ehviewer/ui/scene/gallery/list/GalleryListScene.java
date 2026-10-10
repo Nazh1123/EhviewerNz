@@ -83,6 +83,7 @@ import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.FavouriteStatusRouter;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.widget.PopularGalleryActions;
 import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.callBack.SubscriptionCallback;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
@@ -248,7 +249,7 @@ public class GalleryListScene extends BaseScene
     private FloatingActionButton mMultiSelectFab;
     @Nullable
     private FloatingActionButton mDownloadedOnlyFab;
-    private View mPopularActions;
+    private PopularGalleryActions mPopularActions;
     private FloatingActionButton mPopularUpdates;
     private FloatingActionButton mPopularPrevious;
     private FloatingActionButton mPopularUpdatesMenu;
@@ -298,7 +299,7 @@ public class GalleryListScene extends BaseScene
     private final Animator.AnimatorListener mActionFabAnimatorListener = new SimpleAnimatorListener() {
         @Override
         public void onAnimationEnd(Animator animation) {
-            if (null != mFabLayout) {
+            if (null != mFabLayout && !mShowActionFab) {
                 mFabLayout.getPrimaryFab().setVisibility(View.INVISIBLE);
             }
         }
@@ -794,14 +795,13 @@ public class GalleryListScene extends BaseScene
         mMultiSelectFab = (FloatingActionButton) ViewUtils.$$(mFabLayout, R.id.multi_select_fab);
         mDownloadedOnlyFab = (FloatingActionButton) ViewUtils.$$(mFabLayout,
                 R.id.downloaded_only_fab);
-        mPopularActions = ViewUtils.$$(mainLayout, R.id.popular_actions);
+        mPopularActions = mainLayout.findViewById(R.id.popular_actions);
         mPopularUpdates = mainLayout.findViewById(R.id.popular_updates);
         mPopularPrevious = mainLayout.findViewById(R.id.popular_previous);
         mPopularUpdatesMenu = mainLayout.findViewById(R.id.popular_updates_menu);
         mPopularPreviousMenu = mainLayout.findViewById(R.id.popular_previous_menu);
         mPopularUpdates.setOnClickListener(v -> togglePopularView(PopularGalleryHistory.UPDATES));
         mPopularPrevious.setOnClickListener(v -> togglePopularView(PopularGalleryHistory.PREVIOUS));
-        addAboveSnackView(mPopularActions);
 
         onFilter(filterOpen, filterTagList.size());
 
@@ -1107,6 +1107,7 @@ public class GalleryListScene extends BaseScene
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        cancelPopularNoUpdatesNotice();
         if (isPopularMode() && mPopularRequestInFlight) {
             mHasFirstRefresh = false;
             mPopularRequestInFlight = false;
@@ -1151,7 +1152,7 @@ public class GalleryListScene extends BaseScene
         mFloatingActionButton = null;
         mMultiSelectFab = null;
         mDownloadedOnlyFab = null;
-        if (mPopularActions != null) removeAboveSnackView(mPopularActions);
+        if (mPopularActions != null) mPopularActions.destroy();
         mPopularActions = null;
         mPopularUpdates = null;
         mPopularPrevious = null;
@@ -1904,6 +1905,7 @@ public class GalleryListScene extends BaseScene
     }
 
     private void updatePopularActions() {
+        if (!isPopularMode() || mPopularRequestInFlight) cancelPopularNoUpdatesNotice();
         if (mPopularActions == null || mFabLayout == null) return;
         boolean popular = isPopularMode();
         mFabLayout.setSecondaryFabVisibilityAt(FAB_POPULAR_UPDATES, popular);
@@ -1926,24 +1928,11 @@ public class GalleryListScene extends BaseScene
         updatePopularAction(mPopularPrevious, previousIcon, previousText);
         updatePopularAction(mPopularPreviousMenu, previousIcon, previousText);
         boolean active = mPopularViewMode != PopularGalleryHistory.CURRENT;
-        mPopularUpdates.setVisibility(!active || mPopularViewMode == PopularGalleryHistory.UPDATES
-                ? View.VISIBLE : View.GONE);
-        mPopularPrevious.setVisibility(!active || mPopularViewMode == PopularGalleryHistory.PREVIOUS
-                ? View.VISIBLE : View.GONE);
         // The active mode always offers a way back, even when scrolling hides the main FAB.
-        mPopularActions.setVisibility(enabled && (active || mShowActionFab)
-                && mState == STATE_NORMAL && !mFabLayout.isExpanded() ? View.VISIBLE : View.GONE);
-        android.view.ViewGroup.MarginLayoutParams params =
-                (android.view.ViewGroup.MarginLayoutParams) mPopularActions.getLayoutParams();
-        int offset = mFabLayout.getResources().getDimensionPixelSize(R.dimen.fab_size)
-                + mFabLayout.getResources().getDimensionPixelSize(R.dimen.fab_layout_secondary_margin);
-        int bottomMargin = mFabLayout.getPaddingBottom() + offset;
-        if (params.bottomMargin != bottomMargin) {
-            params.bottomMargin = bottomMargin;
-            mPopularActions.setLayoutParams(params);
-        }
-        mPopularActions.setTranslationY(active && !mShowActionFab
-                ? offset : 0f);
+        int activeIndex = !active ? -1 : mPopularViewMode == PopularGalleryHistory.UPDATES ? 0 : 1;
+        mPopularActions.update(mFabLayout.getPrimaryFab(), mPopularUpdatesMenu,
+                enabled && (active || mShowActionFab) && mState == STATE_NORMAL && !mFabLayout.isExpanded(),
+                activeIndex, mShowActionFab);
     }
 
     private void updatePopularAction(FloatingActionButton button, int icon, int description) {
@@ -1951,6 +1940,14 @@ public class GalleryListScene extends BaseScene
         CharSequence label = button.getContext().getText(description);
         button.setContentDescription(label);
         TooltipCompat.setTooltipText(button, label);
+    }
+
+    private void cancelPopularNoUpdatesNotice() {
+        if (mPopularActions != null) mPopularActions.cancelNoUpdatesNotice();
+    }
+
+    private void showPopularNoUpdatesNotice() {
+        if (mPopularActions != null) mPopularActions.showNoUpdatesNotice();
     }
 
     private void loadPopularHistory(int site, Runnable continuation) {
@@ -1986,6 +1983,7 @@ public class GalleryListScene extends BaseScene
             showTip(R.string.popular_page_no_updates, LENGTH_SHORT);
             return;
         }
+        cancelPopularNoUpdatesNotice();
         mPopularViewMode = mPopularViewMode == mode ? PopularGalleryHistory.CURRENT : mode;
         updatePopularProjection();
         if (mRecyclerView != null) {
@@ -2513,12 +2511,15 @@ public class GalleryListScene extends BaseScene
 
     private void showActionFab() {
         if (null != mFabLayout && STATE_NORMAL == mState && !mShowActionFab) {
+            long delay = mPopularActions != null ? mPopularActions.primaryShowDelay() : 0L;
             mShowActionFab = true;
             View fab = mFabLayout.getPrimaryFab();
+            fab.animate().setListener(null);
+            fab.animate().cancel();
             fab.setVisibility(View.VISIBLE);
             fab.setRotation(-45.0f);
             fab.animate().scaleX(1.0f).scaleY(1.0f).rotation(0.0f).setListener(null)
-                    .setDuration(ANIMATE_TIME).setStartDelay(0L)
+                    .setDuration(ANIMATE_TIME).setStartDelay(delay)
                     .setInterpolator(AnimationUtils.FAST_SLOW_INTERPOLATOR).start();
             updatePopularActions();
         }
@@ -2528,6 +2529,8 @@ public class GalleryListScene extends BaseScene
         if (null != mFabLayout && STATE_NORMAL == mState && mShowActionFab) {
             mShowActionFab = false;
             View fab = mFabLayout.getPrimaryFab();
+            fab.animate().setListener(null);
+            fab.animate().cancel();
             fab.animate().scaleX(0.0f).scaleY(0.0f).setListener(mActionFabAnimatorListener)
                     .setDuration(ANIMATE_TIME).setStartDelay(0L)
                     .setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR).start();
@@ -2588,6 +2591,9 @@ public class GalleryListScene extends BaseScene
                         .setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR).start();
             }
             View fab = mFabLayout.getPrimaryFab();
+            delay = Math.max(delay, mPopularActions != null ? mPopularActions.primaryShowDelay() : 0L);
+            fab.animate().setListener(null);
+            fab.animate().cancel();
             fab.setVisibility(View.VISIBLE);
             fab.setRotation(-45.0f);
             fab.animate().scaleX(1.0f).scaleY(1.0f).rotation(0.0f).setListener(null)
@@ -2598,6 +2604,9 @@ public class GalleryListScene extends BaseScene
             mFabLayout.setExpanded(false, false);
             View fab = mFabLayout.getPrimaryFab();
             fab.setVisibility(View.VISIBLE);
+            fab.animate().setListener(null);
+            fab.animate().cancel();
+            if (mPopularActions != null) mPopularActions.snapAbovePrimary();
             fab.setScaleX(1.0f);
             fab.setScaleY(1.0f);
             mSearchFab.setVisibility(View.INVISIBLE);
@@ -2942,6 +2951,7 @@ public class GalleryListScene extends BaseScene
     private void onGetGalleryListSuccess(GalleryListParser.Result result, int taskId) {
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
+            boolean noPopularUpdates = false;
             if (isPopularMode() && mPopularHistory != null && result.customErrorString == null) {
                 mPopularHistory.record(result.galleryInfoList);
                 mPopularHistory.persist();
@@ -2949,6 +2959,12 @@ public class GalleryListScene extends BaseScene
                 mPopularRequestInFlight = false;
                 mPopularViewMode = Settings.getPopularUpdatesOnly()
                         ? PopularGalleryHistory.UPDATES : PopularGalleryHistory.CURRENT;
+                if (mPopularViewMode == PopularGalleryHistory.UPDATES && mPopularHistory.hasPrevious()
+                        && mPopularHistory.galleries(PopularGalleryHistory.UPDATES).isEmpty()) {
+                    // Keep the current list readable when the default filter has no new galleries.
+                    mPopularViewMode = PopularGalleryHistory.CURRENT;
+                    noPopularUpdates = true;
+                }
                 // Popular is a single snapshot, without list pagination.
                 result.pages = 1;
                 result.nextPage = 0;
@@ -2978,6 +2994,10 @@ public class GalleryListScene extends BaseScene
                 mPopularRequestInFlight = false;
                 if (result.customErrorString == null) updatePopularProjection();
                 else updatePopularActions();
+                if (noPopularUpdates) {
+                    showActionFab();
+                    showPopularNoUpdatesNotice();
+                }
             }
         }
     }

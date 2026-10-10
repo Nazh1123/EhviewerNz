@@ -143,15 +143,11 @@
 
     </com.hippo.widget.FabLayout>
 
-    <LinearLayout
+    <com.hippo.ehviewer.widget.PopularGalleryActions
         android:id="@+id/popular_actions"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|right"
-        android:layout_marginRight="@dimen/corner_fab_margin"
-        android:layout_marginBottom="@dimen/corner_fab_margin"
-        android:orientation="vertical"
-        android:visibility="gone">
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="invisible">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/popular_updates"
@@ -169,13 +165,12 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="right"
-            android:layout_marginTop="@dimen/fab_layout_secondary_margin"
             android:contentDescription="@string/popular_previous"
             app:srcCompat="@drawable/v_history_dark_x24"
             app:backgroundTint="?attr/widgetColorThemePrimary"
             app:tint="@color/primary_drawable_dark"
             style="@style/Widget.PopularAction"/>
-    </LinearLayout>
+    </com.hippo.ehviewer.widget.PopularGalleryActions>
 
     <com.hippo.widget.FabLayout
         xmlns:app="http://schemas.android.com/apk/res-auto"

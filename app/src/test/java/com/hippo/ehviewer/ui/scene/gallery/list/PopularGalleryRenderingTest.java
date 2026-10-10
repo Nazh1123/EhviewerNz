@@ -22,6 +22,7 @@ import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.lib.image.Image;
 import com.hippo.widget.ContentLayout;
+import com.hippo.widget.FabLayout;
 import com.hippo.widget.LoadImageViewNew;
 import com.hippo.widget.SearchBarMover;
 
@@ -161,12 +162,30 @@ public class PopularGalleryRenderingTest {
         assertRendered(3);
     }
 
-    @Test public void defaultUpdatesEmptyResultCanReturnToAllAndNewSearchStillRenders() {
+    @Test public void defaultUpdatesWithNoNewGalleriesShowsCurrentListAndSignalsWithButton() {
+        View actions = LayoutInflater.from(scene.getContext()).inflate(R.layout.scene_gallery_list, null);
+        FabLayout menu = actions.findViewById(R.id.fab_layout);
+        menu.setExpanded(false, false);
+        ReflectionHelpers.setField(scene, "mFabLayout", menu);
+        ReflectionHelpers.setField(scene, "mPopularActions", actions.findViewById(R.id.popular_actions));
+        ReflectionHelpers.setField(scene, "mPopularUpdates", actions.findViewById(R.id.popular_updates));
+        ReflectionHelpers.setField(scene, "mPopularPrevious", actions.findViewById(R.id.popular_previous));
+        ReflectionHelpers.setField(scene, "mPopularUpdatesMenu", actions.findViewById(R.id.popular_updates_menu));
+        ReflectionHelpers.setField(scene, "mPopularPreviousMenu", actions.findViewById(R.id.popular_previous_menu));
+        ReflectionHelpers.setField(scene, "mShowActionFab", false);
         setDefaultUpdates(true);
         refresh(1, 2);
-        layout();
-        assertEquals(0, adapter.getItemCount());
+        assertNotNull(ReflectionHelpers.getField(actions.findViewById(R.id.popular_actions), "mNoticeAnimator"));
+        assertEquals(View.VISIBLE, actions.findViewById(R.id.popular_actions).getVisibility());
+        assertEquals(PopularGalleryHistory.CURRENT,
+                (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+        assertEquals(0, scene.lastTip);
         assertEquals(2, helper.getData().size());
+        assertRendered(2);
+        toggle(PopularGalleryHistory.UPDATES);
+        assertRendered(2);
+        refresh(2, 3);
+        assertRendered(1);
         toggle(PopularGalleryHistory.UPDATES);
         assertRendered(2);
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
