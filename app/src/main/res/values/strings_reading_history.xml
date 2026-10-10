@@ -14,5 +14,5 @@
     <string name="reading_history_clear_all">Clear all reading history?</string>
     <string name="reading_history_remove">Remove record</string>
     <string name="reading_history_unavailable">The reading source is unavailable. Restore access to the file or folder and try again.</string>
-    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="reading_history_metadata">%1$s - %2$s / %3$s</string>
 </resources>

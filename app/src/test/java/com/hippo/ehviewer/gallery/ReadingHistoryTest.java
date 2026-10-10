@@ -286,9 +286,11 @@ public class ReadingHistoryTest {
         ReadingHistory.record(context, new Intent(Intent.ACTION_VIEW, first));
         Intent open = new Intent(Intent.ACTION_VIEW, last);
         ReadingHistory.record(context, open);
-        ReadingHistory.saveLocalProgress(context, open, 8, null);
+        ReadingHistory.saveProgress(context, open, 8, 20, null);
         assertEquals(1, ReadingHistory.list(context).size());
         ReadingHistory.Entry entry = ReadingHistory.list(context).get(0);
+        assertEquals(8, entry.readingPage);
+        assertEquals(20, entry.pages);
         assertEquals(new File(android.os.Environment.getExternalStorageDirectory(), "Pictures/Book")
                 .getCanonicalPath(), entry.title);
         Intent reopen = entry.createIntent(context);
@@ -310,6 +312,24 @@ public class ReadingHistoryTest {
         LocalGalleryHistory.put(context, entry.filename, "4.jpg", 40);
         settings.edit().putBoolean(Settings.KEY_RECORD_READING_HISTORY, true).apply();
         assertEquals("4.jpg", entry.createIntent(context).getStringExtra(GalleryActivity.KEY_LOCAL_RESUME_FILENAME));
+    }
+
+    @Test public void onlineDisplayProgressPersistsWithoutOverridingResumeOrRecreatingRemovedVisits() {
+        Intent open = online(7, ReadingHistory.DOWNLOAD);
+        ReadingHistory.record(context, open);
+        ReadingHistory.Entry original = ReadingHistory.list(context).get(0);
+        ReadingHistory.saveProgress(context, open, 1, 78, null);
+        ReadingHistory.Entry entry = ReadingHistory.list(context).get(0);
+        assertEquals(1, entry.readingPage);
+        assertEquals(78, entry.pages);
+        assertEquals(original.readAt, entry.readAt);
+        assertEquals(-1, entry.createIntent(context).getIntExtra(GalleryActivity.KEY_PAGE, 0));
+        ReadingHistory.record(context, open);
+        assertEquals(1, ReadingHistory.list(context).get(0).readingPage);
+        assertEquals(78, ReadingHistory.list(context).get(0).pages);
+        ReadingHistory.remove(context, entry);
+        ReadingHistory.saveProgress(context, open, 5, 78, null);
+        assertTrue(ReadingHistory.list(context).isEmpty());
     }
 
     @Test public void providerCreationRecordsOnceAndConfigurationRestoreDoesNotAddVisit() {

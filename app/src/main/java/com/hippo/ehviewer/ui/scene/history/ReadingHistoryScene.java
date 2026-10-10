@@ -2,7 +2,6 @@ package com.hippo.ehviewer.ui.scene.history;
 
 import android.content.Context;
 import android.os.Bundle;
-import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -29,8 +28,11 @@ import com.hippo.lib.yorozuya.ViewUtils;
 import com.hippo.widget.LoadImageView;
 import com.hippo.widget.recyclerview.AutoStaggeredGridLayoutManager;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 /** Unlike HistoryScene, selecting a visit opens the reader directly. */
 public class ReadingHistoryScene extends ToolbarScene {
@@ -153,10 +155,15 @@ public class ReadingHistoryScene extends ToolbarScene {
             Context context = holder.itemView.getContext();
             ReadingHistoryCoverLoader.load(holder.cover, entry);
             holder.title.setText(entry.title);
-            String date = DateUtils.formatDateTime(context, entry.readAt,
-                    DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_SHOW_TIME | DateUtils.FORMAT_SHOW_YEAR);
             holder.metadata.setText(context.getString(R.string.reading_history_metadata,
-                    context.getString(ReadingHistory.sourceLabel(entry.source)), date));
+                    context.getString(ReadingHistory.sourceLabel(entry.source)),
+                    Integer.toString(Math.max(0,
+                            (entry.readingPage >= 0 ? entry.readingPage : entry.page) + 1)),
+                    entry.pages > 0 ? Integer.toString(entry.pages)
+                            : entry.gallery != null && entry.gallery.pages > 0
+                                    ? Integer.toString(entry.gallery.pages) : "—"));
+            holder.time.setText(new SimpleDateFormat("yyyy-MM-dd hh:mm", Locale.ROOT)
+                    .format(new Date(entry.readAt)));
             holder.itemView.setOnClickListener(view -> open(entry));
             holder.itemView.setOnLongClickListener(view -> {
                 new AlertDialog.Builder(context).setTitle(entry.title)
@@ -180,11 +187,13 @@ public class ReadingHistoryScene extends ToolbarScene {
     private static class ReadingHolder extends RecyclerView.ViewHolder {
         final TextView title;
         final TextView metadata;
+        final TextView time;
         final LoadImageView cover;
         ReadingHolder(View view) {
             super(view);
             title = view.findViewById(R.id.title);
             metadata = view.findViewById(R.id.reading_metadata);
+            time = view.findViewById(R.id.reading_time);
             cover = view.findViewById(R.id.reading_cover);
         }
     }

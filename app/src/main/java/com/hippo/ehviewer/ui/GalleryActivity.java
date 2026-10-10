@@ -600,7 +600,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void persistReadingHistoryProgressNow() {
-        if (ACTION_EH.equals(mAction) || mGalleryProvider == null || mGalleryProvider.size() <= 0) return;
+        if (mGalleryProvider == null || mGalleryProvider.size() <= 0) return;
         int page = mGalleryView == null ? mCurrentIndex : mGalleryView.getCurrentIndex();
         if (page < 0) page = mCurrentIndex;
         if (page < 0 || page >= mGalleryProvider.size()) return;
@@ -610,9 +610,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         String filename = mGalleryProvider instanceof DirGalleryProvider
                 ? ((DirGalleryProvider) mGalleryProvider).getFilename(page) : null;
         try {
-            ReadingHistory.saveLocalProgress(getApplicationContext(), visit, page, filename);
+            ReadingHistory.saveProgress(getApplicationContext(), visit, page, mGalleryProvider.size(), filename);
         } catch (RuntimeException e) {
-            Log.w(TAG, "Unable to save local reader progress", e);
+            Log.w(TAG, "Unable to save reading history progress", e);
         }
     }
 

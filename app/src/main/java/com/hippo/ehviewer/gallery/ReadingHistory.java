@@ -52,9 +52,16 @@ public final class ReadingHistory {
         if (entry == null) return;
         List<Entry> entries = list(context);
         for (Entry old : entries) {
-            if (old.key.equals(entry.key) && entry.resumeFilename == null) {
-                entry.resumeFilename = old.resumeFilename;
-                entry.progressAt = old.progressAt;
+            if (old.key.equals(entry.key)) {
+                if (entry.resumeFilename == null) {
+                    entry.resumeFilename = old.resumeFilename;
+                    entry.progressAt = old.progressAt;
+                }
+                if (entry.action.equals(old.action) && Objects.equals(entry.uri, old.uri)
+                        && Objects.equals(entry.filename, old.filename)) {
+                    if (entry.readingPage < 0) entry.readingPage = old.readingPage;
+                    if (entry.pages <= 0) entry.pages = old.pages;
+                }
             }
         }
         entries.removeIf(old -> old.key.equals(entry.key));
@@ -123,9 +130,16 @@ public final class ReadingHistory {
     /** Update retained local progress without changing the visit order or recreating a removed visit. */
     public static synchronized void saveLocalProgress(Context context, Intent intent, int page,
             @Nullable String filename) {
+        if (GalleryActivity.ACTION_EH.equals(intent.getAction())) return;
+        saveProgress(context, intent, page, 0, filename);
+    }
+
+    /** Save display progress for every reader source without changing reader resume behavior. */
+    public static synchronized void saveProgress(Context context, Intent intent, int page, int pages,
+            @Nullable String filename) {
         if (!Settings.isReadingHistoryEnabled() || page < 0) return;
         Entry visit = fromIntent(context, intent);
-        if (visit == null || GalleryActivity.ACTION_EH.equals(visit.action)) return;
+        if (visit == null) return;
         String saved = preferences(context).getString(visit.key, null);
         if (saved == null) return;
         try {
@@ -133,7 +147,9 @@ public final class ReadingHistory {
             if (entry == null || !entry.valid()) return;
             // Another file in this directory may have been opened since this reader started.
             if (!Objects.equals(entry.uri, visit.uri) || !entry.action.equals(visit.action)) return;
-            entry.page = page;
+            entry.readingPage = page;
+            if (pages > 0) entry.pages = pages;
+            if (!GalleryActivity.ACTION_EH.equals(entry.action)) entry.page = page;
             if (filename != null) entry.resumeFilename = filename;
             entry.progressAt = System.currentTimeMillis();
             preferences(context).edit().putString(entry.key, JSON.toJSONString(entry)).apply();
@@ -172,6 +188,8 @@ public final class ReadingHistory {
             entry.source = GalleryActivity.ACTION_EH.equals(entry.action) ? DETAIL : LOCAL;
         }
         entry.page = intent.getIntExtra(GalleryActivity.KEY_PAGE, -1);
+        entry.readingPage = entry.page;
+        entry.pages = gallery == null ? 0 : gallery.pages;
         if (GalleryActivity.ACTION_DIR.equals(entry.action)) {
             entry.resumeFilename = intent.getStringExtra(GalleryActivity.KEY_LOCAL_RESUME_FILENAME);
         }
@@ -289,6 +307,8 @@ public final class ReadingHistory {
         public long progressAt;
         public GalleryInfo gallery;
         public int page = -1;
+        public int readingPage = -1;
+        public int pages;
         public long readAt;
         public long updateGid;
         public long updateTime;
