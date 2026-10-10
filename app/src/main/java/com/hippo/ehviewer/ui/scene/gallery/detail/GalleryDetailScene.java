@@ -457,7 +457,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         } else {
             return null;
         }
-        return EhUrl.getGalleryDetailUrl(gid, token, 0, false);
+        return TextUtils.isEmpty(token) ? null : EhUrl.getGalleryDetailUrl(gid, token, 0, false);
     }
 
     // -1 for error
@@ -863,7 +863,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 adjustViewVisibility(STATE_REFRESH, false);
             }
         } else {
-            mTip.setText(R.string.error_cannot_find_gallery);
+            mTip.setText(getGid() > 0 && TextUtils.isEmpty(getToken())
+                    ? getString(R.string.gallery_update_history_missing_token, getGid())
+                    : getString(R.string.error_cannot_find_gallery));
             adjustViewVisibility(STATE_FAILED, false);
         }
 

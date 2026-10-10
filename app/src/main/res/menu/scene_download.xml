@@ -189,6 +189,11 @@
       app:showAsAction="never"/>
 
     <item
+        android:id="@+id/action_gallery_update_history"
+        android:title="@string/gallery_update_history_title"
+        app:showAsAction="never"/>
+
+    <item
       android:id="@+id/search_download_gallery"
       android:title="@string/download_search_gallery"
       app:showAsAction="never"/>

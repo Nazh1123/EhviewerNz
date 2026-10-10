@@ -95,6 +95,7 @@ import com.hippo.ehviewer.gallery.LocalFolderGalleryScanner;
 import com.hippo.ehviewer.gallery.LocalFolderCoverStore;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.gallery.ReadingHistory;
+import com.hippo.ehviewer.ui.scene.history.GalleryUpdateHistoryScene;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.sync.DownloadListInfosExecutor;
 import com.hippo.ehviewer.sync.DownloadSpiderInfoExecutor;
@@ -849,6 +850,10 @@ public class DownloadsScene extends ToolbarScene
     @SuppressLint("NonConstantResourceId")
     @Override
     public boolean onMenuItemClick(MenuItem item) {
+        if (item.getItemId() == R.id.action_gallery_update_history) {
+            startScene(new Announcer(GalleryUpdateHistoryScene.class));
+            return true;
+        }
         // Skip when in choice mode
         Activity activity = getActivity2();
         if (null == activity || null == mRecyclerView || mRecyclerView.isInCustomChoice()) {

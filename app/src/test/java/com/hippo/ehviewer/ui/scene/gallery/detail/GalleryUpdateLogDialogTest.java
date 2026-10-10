@@ -62,7 +62,8 @@ public class GalleryUpdateLogDialogTest {
                 ReflectionHelpers.ClassParameter.from(long.class, 50L),
                 ReflectionHelpers.ClassParameter.from(String[].class, hasTokens
                         ? IntStream.range(0, 121).mapToObj(i -> "token" + i).toArray(String[]::new)
-                        : new String[0]));
+                        : new String[0]),
+                ReflectionHelpers.ClassParameter.from(String.class, "gallery-token"));
     }
 
     @Test public void versionHistoryIsIdleUntilClickedAndLogUsesCorrectPageRanges() {

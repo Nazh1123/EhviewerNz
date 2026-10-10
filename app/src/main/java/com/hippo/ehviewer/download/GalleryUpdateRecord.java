@@ -16,6 +16,7 @@ public final class GalleryUpdateRecord {
     public final long targetGid;
     public final long sourceGid;
     public final long firstGid;
+    public final String targetToken;
     // The target snapshot survives deletion of old download directories.
     private final String[] targetTokens;
     public final long completedAt;
@@ -33,17 +34,18 @@ public final class GalleryUpdateRecord {
                         int oldPages, int newPages, boolean complete,
                         int[] addedPages, int[] deletedPages, int readingPage) {
         this(targetGid, sourceGid, completedAt, oldPages, newPages, complete,
-                addedPages, deletedPages, readingPage, "", "", new long[0], 0, new String[0]);
+                addedPages, deletedPages, readingPage, "", "", new long[0], 0, new String[0], "");
     }
 
     private GalleryUpdateRecord(long targetGid, long sourceGid, long completedAt,
                                 int oldPages, int newPages, boolean complete,
                                 int[] addedPages, int[] deletedPages, int readingPage,
                                 String sourceTitle, String errorReason, long[] retainedParentGids,
-                                long firstGid, String[] targetTokens) {
+                                long firstGid, String[] targetTokens, String targetToken) {
         this.targetGid = targetGid;
         this.sourceGid = sourceGid;
         this.firstGid = Math.max(0, firstGid);
+        this.targetToken = targetToken != null ? targetToken : "";
         this.targetTokens = targetTokens.clone();
         this.completedAt = completedAt;
         this.oldPages = oldPages;
@@ -67,13 +69,24 @@ public final class GalleryUpdateRecord {
                                                String sourceTitle, String reason, long[] retained) {
         if (reason == null || reason.isBlank()) throw new IllegalArgumentException("Missing failure reason");
         return new GalleryUpdateRecord(targetGid, sourceGid, failedAt, 0, 0, false,
-                new int[0], new int[0], 0, sourceTitle, reason, retained, 0, new String[0]);
+                new int[0], new int[0], 0, sourceTitle, reason, retained, 0, new String[0], "");
     }
 
     public GalleryUpdateRecord withFirstGid(long firstGid) {
         return new GalleryUpdateRecord(targetGid, sourceGid, completedAt, oldPages, newPages,
                 complete, addedPages, deletedPages, readingPage, sourceTitle, errorReason,
-                retainedParentGids, firstGid, targetTokens);
+                retainedParentGids, firstGid, targetTokens, targetToken);
+    }
+
+    public GalleryUpdateRecord withTargetToken(String token) {
+        return new GalleryUpdateRecord(targetGid, sourceGid, completedAt, oldPages, newPages,
+                complete, addedPages, deletedPages, readingPage, sourceTitle, errorReason,
+                retainedParentGids, firstGid, targetTokens, token);
+    }
+
+    /** A legacy snapshot can resolve the gallery token through its first page. */
+    public String getFirstPageToken() {
+        return targetTokens.length > 0 ? targetTokens[0] : "";
     }
 
     static GalleryUpdateRecord compare(long targetGid, long sourceGid,
@@ -83,7 +96,7 @@ public final class GalleryUpdateRecord {
         boolean complete = hasAllTokens(source) && hasAllTokens(target);
         if (!complete) {
             return new GalleryUpdateRecord(targetGid, sourceGid, 0, oldPages, newPages,
-                    false, new int[0], new int[0], 0);
+                    false, new int[0], new int[0], 0).withTargetToken(target != null ? target.token : "");
         }
         HashMap<String, ArrayDeque<Integer>> oldIndexes = new HashMap<>();
         for (int page = 0; page < oldPages; page++) {
@@ -106,7 +119,7 @@ public final class GalleryUpdateRecord {
         return new GalleryUpdateRecord(targetGid, sourceGid, 0, oldPages, newPages, true,
                 added.stream().mapToInt(Integer::intValue).toArray(),
                 deleted.stream().mapToInt(Integer::intValue).toArray(), 0,
-                "", "", new long[0], 0, tokens);
+                "", "", new long[0], 0, tokens, target.token);
     }
 
     /** Map historical additions to the current version, preserving duplicate-token counts. */
@@ -154,6 +167,7 @@ public final class GalleryUpdateRecord {
     String toJson() throws JSONException {
         JSONObject json = new JSONObject();
         json.put("first_gid", firstGid);
+        json.put("target_token", targetToken);
         JSONArray tokens = new JSONArray();
         for (String token : targetTokens) tokens.put(token);
         json.put("target_tokens", tokens);
@@ -191,7 +205,7 @@ public final class GalleryUpdateRecord {
                 json.getBoolean("complete"), indexes(json.getJSONArray("added"), newPages),
                 indexes(json.getJSONArray("deleted"), oldPages), readingPage,
                 json.optString("source_title", ""), json.optString("error_reason", ""), retainedGids,
-                json.optLong("first_gid", 0), targetTokens);
+                json.optLong("first_gid", 0), targetTokens, json.optString("target_token", ""));
     }
 
     private static JSONArray array(int[] pages) {

@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="gallery_update_history_title">Gallery update history</string>
+    <string name="gallery_update_history_all_empty">No saved gallery update records</string>
+    <string name="gallery_update_history_load_failed">Unable to load gallery update history</string>
+    <string name="gallery_update_history_updated">Completed</string>
+    <string name="gallery_update_history_failed">Failed</string>
+    <string name="gallery_update_history_updated_incomplete">Completed · incomplete page info</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">Gallery GID %1$d has no saved gallery token, so its details cannot be loaded.</string>
     <string name="settings_gallery_update_record_limit">Update record count</string>
     <string name="settings_fork_category_saving">Saving and history</string>
     <string name="gallery_read_updates">Read updates only</string>

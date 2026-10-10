@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="gallery_update_history_title">画廊更新历史</string>
+    <string name="gallery_update_history_all_empty">暂无保存的画廊更新记录</string>
+    <string name="gallery_update_history_load_failed">无法加载画廊更新历史</string>
+    <string name="gallery_update_history_updated">已完成</string>
+    <string name="gallery_update_history_failed">失败</string>
+    <string name="gallery_update_history_updated_incomplete">已完成 · 页面信息不完整</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">画廊 GID %1$d 未保存画廊 token，无法加载详情。</string>
     <string name="settings_gallery_update_record_limit">更新记录数量</string>
     <string name="settings_fork_category_saving">保存与历史</string>
     <string name="gallery_read_updates">仅阅读更新</string>

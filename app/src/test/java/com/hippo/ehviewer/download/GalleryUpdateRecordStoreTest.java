@@ -180,6 +180,38 @@ public class GalleryUpdateRecordStoreTest {
         assertArrayEquals(new int[]{1, 3, 4}, store.find(200).addedPages);
     }
 
+    @Test public void globalCardsSortByTimeAndGidIncludeFailuresAndKeepIndependentProgress() {
+        stage(200, 100); assertTrue(store.complete(200, 100));
+        stage(300, 200); assertTrue(store.complete(300, 200));
+        store.getWritableDatabase().execSQL("UPDATE records SET completed_at=100 WHERE gid=200");
+        store.getWritableDatabase().execSQL("UPDATE records SET completed_at=50 WHERE gid=300");
+        store.saveReadingPage(200, 100, 2);
+        assertTrue(store.saveFailure(GalleryUpdateRecord.failure(150, 120, 100,
+                "Old title", "Failed", new long[]{120}).withTargetToken("token150")));
+        List<GalleryUpdateRecordStore.Summary> cards = store.listSummaries();
+        assertEquals(List.of(200L, 150L, 300L), cards.stream().map(card -> card.targetGid()).toList());
+        assertEquals(3, cards.get(0).addedPages());
+        assertEquals(2, cards.get(0).readingPage());
+        assertEquals(0, cards.get(2).readingPage());
+        assertTrue(cards.get(1).failure());
+        assertEquals("token150", cards.get(1).targetToken());
+    }
+
+    @Test public void targetTokenSurvivesCleanupFailureAndReopeningWithoutChangingDatabaseVersion() {
+        GalleryUpdateManager.UpdatePlan plan = new GalleryUpdateManager.UpdatePlan(200, 100, List.of(100L));
+        assertTrue(store.stage(plan, () -> new GalleryUpdateRecord(200, 100, 0,
+                2, 5, true, new int[]{1, 3, 4}, new int[0], 0).withTargetToken("target200")));
+        assertTrue(store.saveFailure(GalleryUpdateRecord.failure(200, 100, 123,
+                "", "Target removed", new long[0])));
+        assertEquals("target200", store.find(200).targetToken);
+        assertTrue(store.complete(200, 100));
+        store.close();
+        store = new GalleryUpdateRecordStore(context);
+        assertEquals("target200", store.find(200).targetToken);
+        assertEquals("target200", store.listSummaries().get(0).targetToken());
+        assertEquals(2, store.getReadableDatabase().getVersion());
+    }
+
     @Test public void failureReplacesPreviousAttemptAndSharesRecordLimit() {
         stage(200, 100); assertTrue(store.complete(200, 100));
         assertTrue(store.saveFailure(GalleryUpdateRecord.failure(200, 50, 999,

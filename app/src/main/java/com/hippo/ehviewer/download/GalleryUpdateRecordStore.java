@@ -6,12 +6,15 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
+import android.util.JsonReader;
 
 import androidx.annotation.Nullable;
 
 import com.hippo.ehviewer.Settings;
 
 import org.json.JSONException;
+import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +53,57 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
 
     @Nullable public synchronized GalleryUpdateRecord find(long gid) {
         return read("records", gid);
+    }
+
+    /** Card metadata only; skip page-token snapshots without constructing their arrays. */
+    public record Summary(long targetGid, long completedAt, int readingPage,
+                          int addedPages, int deletedPages, boolean complete,
+                          boolean failure, String targetToken) {}
+
+    public synchronized List<Summary> listSummaries() {
+        ArrayList<Summary> result = new ArrayList<>();
+        try (Cursor cursor = getReadableDatabase().query("records",
+                new String[]{"gid", "completed_at", "reading_page", "payload"},
+                null, null, null, null, "completed_at DESC, gid DESC")) {
+            while (cursor.moveToNext()) {
+                try (JsonReader json = new JsonReader(new StringReader(cursor.getString(3)))) {
+                    int added = 0, deleted = 0;
+                    boolean complete = false, failure = false;
+                    String token = "";
+                    json.beginObject();
+                    while (json.hasNext()) {
+                        switch (json.nextName()) {
+                            case "added" -> added = countIndexes(json);
+                            case "deleted" -> deleted = countIndexes(json);
+                            case "complete" -> complete = json.nextBoolean();
+                            case "error_reason" -> failure = !json.nextString().isEmpty();
+                            case "target_token" -> token = json.nextString();
+                            default -> json.skipValue();
+                        }
+                    }
+                    json.endObject();
+                    result.add(new Summary(cursor.getLong(0), cursor.getLong(1),
+                            Math.max(0, Math.min(cursor.getInt(2), added - 1)),
+                            added, deleted, complete, failure, token));
+                } catch (IOException | IllegalStateException | NumberFormatException e) {
+                    Log.w("GalleryUpdateRecords", "Invalid history card for " + cursor.getLong(0), e);
+                }
+            }
+        }
+        return result;
+    }
+
+    private static int countIndexes(JsonReader json) throws IOException {
+        int count = 0, previous = -1;
+        json.beginArray();
+        while (json.hasNext()) {
+            int page = json.nextInt();
+            if (page < 0 || page <= previous) throw new IOException("Invalid page index");
+            previous = page;
+            count++;
+        }
+        json.endArray();
+        return count;
     }
 
     @Nullable private GalleryUpdateRecord read(String table, long gid) {
@@ -184,6 +238,11 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
     /** A failed attempt is visible immediately; keep the draft and plan for a successful retry. */
     public synchronized boolean saveFailure(GalleryUpdateRecord record) {
         if (!record.isFailure()) throw new IllegalArgumentException("Expected failure record");
+        if (record.targetToken.isEmpty()) {
+            GalleryUpdateRecord previous = read("pending", record.targetGid);
+            if (previous == null || previous.targetToken.isEmpty()) previous = find(record.targetGid);
+            if (previous != null) record = record.withTargetToken(previous.targetToken);
+        }
         if (record.firstGid == 0) {
             GalleryUpdateRecord previous = find(record.targetGid);
             if (previous == null) previous = find(record.sourceGid);

@@ -683,8 +683,10 @@ public final class GalleryUpdateManager {
             DownloadInfo source = EhApplication.getDownloadManager().getDownloadInfo(plan.sourceGid);
             if (source != null) title = EhUtils.getSuitableTitle(source);
         }
+        DownloadInfo target = EhApplication.getDownloadManager().getDownloadInfo(plan.targetGid);
         return GalleryUpdateRecord.failure(plan.targetGid, plan.sourceGid, failedAt, title, reason,
-                retained.stream().mapToLong(Long::longValue).toArray()).withFirstGid(recordFirstGid(plan));
+                retained.stream().mapToLong(Long::longValue).toArray()).withFirstGid(recordFirstGid(plan))
+                .withTargetToken(target != null ? target.token : "");
     }
 
     private static long recordFirstGid(UpdatePlan plan) {
