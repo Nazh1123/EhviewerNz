@@ -75,6 +75,7 @@ import com.hippo.app.CheckBoxDialogBuilder;
 import com.hippo.app.EditTextDialogBuilder;
 import com.hippo.drawable.AddDeleteDrawable;
 import com.hippo.drawable.DrawerArrowDrawable;
+import com.hippo.drawable.GalleryCountDrawable;
 import com.hippo.drawerlayout.DrawerLayout;
 import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.easyrecyclerview.FastScroller;
@@ -1852,6 +1853,7 @@ public class GalleryListScene extends BaseScene
         if (mAdapter != null) {
             mAdapter.onSourceDataSetChanged();
         }
+        if (isPopularMode() && mPopularResponseReady) updatePopularActions();
     }
 
     private void setDownloadedOnlyMode(boolean enabled, boolean showEmptyTip) {
@@ -1919,12 +1921,20 @@ public class GalleryListScene extends BaseScene
                 mPopularUpdates, mPopularUpdatesMenu, mPopularPrevious, mPopularPreviousMenu}) {
             button.setEnabled(enabled);
         }
-        int updatesIcon = mPopularViewMode == PopularGalleryHistory.UPDATES
-                ? R.drawable.v_popular_updates_off_x24 : R.drawable.v_popular_updates_x24;
         int previousIcon = mPopularViewMode == PopularGalleryHistory.PREVIOUS
                 ? R.drawable.v_history_off_x24 : R.drawable.v_history_dark_x24;
-        updatePopularAction(mPopularUpdates, updatesIcon, updatesText);
-        updatePopularAction(mPopularUpdatesMenu, updatesIcon, updatesText);
+        if (mPopularViewMode == PopularGalleryHistory.UPDATES) {
+            int total = mPopularHistory != null
+                    ? mPopularHistory.galleries(PopularGalleryHistory.CURRENT).size()
+                    : mHelper != null ? mHelper.size() : 0;
+            int filtered = mAdapter != null ? mAdapter.getItemCount()
+                    : mPopularHistory != null ? mPopularHistory.galleries(PopularGalleryHistory.UPDATES).size() : 0;
+            updatePopularCountAction(mPopularUpdates, filtered, total);
+            updatePopularCountAction(mPopularUpdatesMenu, filtered, total);
+        } else {
+            updatePopularAction(mPopularUpdates, R.drawable.v_popular_updates_x24, updatesText);
+            updatePopularAction(mPopularUpdatesMenu, R.drawable.v_popular_updates_x24, updatesText);
+        }
         updatePopularAction(mPopularPrevious, previousIcon, previousText);
         updatePopularAction(mPopularPreviousMenu, previousIcon, previousText);
         boolean active = mPopularViewMode != PopularGalleryHistory.CURRENT;
@@ -1936,8 +1946,21 @@ public class GalleryListScene extends BaseScene
     }
 
     private void updatePopularAction(FloatingActionButton button, int icon, int description) {
+        button.setMaxImageSize(Math.round(24 * button.getResources().getDisplayMetrics().density));
         button.setImageResource(icon);
         CharSequence label = button.getContext().getText(description);
+        button.setContentDescription(label);
+        TooltipCompat.setTooltipText(button, label);
+    }
+
+    private void updatePopularCountAction(FloatingActionButton button, int filtered, int total) {
+        GalleryCountDrawable icon = button.getDrawable() instanceof GalleryCountDrawable
+                ? (GalleryCountDrawable) button.getDrawable() : new GalleryCountDrawable(button.getContext());
+        icon.setCounts(filtered, total);
+        int size = button.getSize() == FloatingActionButton.SIZE_MINI ? 28 : 32;
+        button.setMaxImageSize(Math.round(size * button.getResources().getDisplayMetrics().density));
+        if (button.getDrawable() != icon) button.setImageDrawable(icon);
+        CharSequence label = button.getContext().getString(R.string.popular_show_all_count, filtered, total);
         button.setContentDescription(label);
         TooltipCompat.setTooltipText(button, label);
     }

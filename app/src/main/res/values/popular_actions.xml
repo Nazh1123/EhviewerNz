@@ -4,6 +4,7 @@
     <string name="settings_popular_updates_only_summary">Show only new galleries on the popular page. Use the bottom-right buttons to switch views.</string>
     <string name="popular_updates_only">Updates only</string>
     <string name="popular_show_all">Show all</string>
+    <string name="popular_show_all_count">Show all (%1$d/%2$d galleries)</string>
     <string name="popular_previous">Previous popular</string>
     <string name="popular_return_current">Current popular</string>
     <string name="popular_no_previous">No previous popular request is saved yet</string>

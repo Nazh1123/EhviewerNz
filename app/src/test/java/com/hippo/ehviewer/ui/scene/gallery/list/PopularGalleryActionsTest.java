@@ -345,6 +345,12 @@ public class PopularGalleryActionsTest {
                         action.getBackgroundTintList().getDefaultColor());
                 assertEquals(iconColor(backgroundPeer), iconColor(action));
                 assertNotNull(action.getContentDescription());
+                if (id == R.id.popular_updates || id == R.id.popular_updates_menu) {
+                    com.hippo.drawable.GalleryCountDrawable count = new com.hippo.drawable.GalleryCountDrawable(context);
+                    count.setCounts(12, 25);
+                    action.setImageDrawable(count);
+                    assertEquals(iconColor(backgroundPeer), iconColor(action));
+                }
             }
         }
     }

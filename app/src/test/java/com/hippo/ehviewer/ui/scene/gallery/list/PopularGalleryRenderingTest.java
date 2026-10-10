@@ -11,7 +11,9 @@ import android.widget.TextView;
 import androidx.appcompat.view.ContextThemeWrapper;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.hippo.conaco.Conaco;
+import com.hippo.drawable.GalleryCountDrawable;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.FavouriteStatusRouter;
 import com.hippo.ehviewer.R;
@@ -41,7 +43,9 @@ import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executors;
 
 import static org.junit.Assert.*;
@@ -54,6 +58,7 @@ import static org.robolectric.Shadows.shadowOf;
 public class PopularGalleryRenderingTest {
     private static FavouriteStatusRouter router;
     private static DownloadManager downloads;
+    private static final Set<Long> downloadedGids = new HashSet<>();
     private TestScene scene;
     private ContentLayout content;
     private GalleryListScene.GalleryListHelper helper;
@@ -67,8 +72,10 @@ public class PopularGalleryRenderingTest {
                 app.getSharedPreferences("popular-render-test", Context.MODE_PRIVATE));
         router = new FavouriteStatusRouter();
         downloads = Shadow.newInstanceOf(DownloadManager.class);
+        downloadedGids.clear();
         Context context = new ContextThemeWrapper(app, R.style.AppTheme);
         scene = new TestScene(context);
+        ReflectionHelpers.setField(scene, "mDownloadManager", downloads);
         content = new ContentLayout(context);
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
         activity.setContentView(content);
@@ -128,6 +135,48 @@ public class PopularGalleryRenderingTest {
         assertRendered(3);
     }
 
+    @Test public void countButtonsFollowVisibleUpdatesAndKeepTheCurrentSnapshotTotal() {
+        View actions = bindPopularActions();
+        refresh(2, 3, 4);
+        toggle(PopularGalleryHistory.UPDATES);
+        assertCountButtons(actions, 2, 3);
+        ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
+                ClassParameter.from(boolean.class, true), ClassParameter.from(boolean.class, false));
+        assertCountButtons(actions, 0, 3);
+        downloadedGids.add(3L);
+        ReflectionHelpers.callInstanceMethod(scene, "onDownloadMembershipChanged");
+        assertCountButtons(actions, 1, 3);
+        ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
+                ClassParameter.from(boolean.class, false), ClassParameter.from(boolean.class, false));
+        assertCountButtons(actions, 2, 3);
+        setDefaultUpdates(true);
+        refresh(2, 3, 4, 5);
+        assertCountButtons(actions, 1, 4);
+        toggle(PopularGalleryHistory.UPDATES);
+        for (int id : new int[]{R.id.popular_updates, R.id.popular_updates_menu}) {
+            FloatingActionButton button = actions.findViewById(id);
+            assertFalse(button.getDrawable() instanceof GalleryCountDrawable);
+            assertEquals(scene.getContext().getString(R.string.popular_updates_only), button.getContentDescription());
+        }
+        assertRendered(4);
+        ReflectionHelpers.setField(scene, "mPopularHistory",
+                new PopularGalleryHistory(scene.getContext().getCacheDir(), Settings.getGallerySite()));
+        refresh(7, 8);
+        assertCountButtons(actions, 2, 2);
+    }
+
+    private void assertCountButtons(View actions, int filtered, int total) {
+        assertEquals(filtered, adapter.getItemCount());
+        for (int id : new int[]{R.id.popular_updates, R.id.popular_updates_menu}) {
+            FloatingActionButton button = actions.findViewById(id);
+            assertTrue(button.getDrawable() instanceof GalleryCountDrawable);
+            assertEquals(Integer.toString(filtered), ReflectionHelpers.getField(button.getDrawable(), "filtered"));
+            assertEquals(Integer.toString(total), ReflectionHelpers.getField(button.getDrawable(), "total"));
+            assertEquals(scene.getContext().getString(R.string.popular_show_all_count, filtered, total),
+                    button.getContentDescription());
+        }
+    }
+
     @Test public void rapidNoUpdateActionsDoNotLeaveContentHidden() {
         for (int i = 0; i < 4; i++) {
             toggle(PopularGalleryHistory.UPDATES);
@@ -163,15 +212,7 @@ public class PopularGalleryRenderingTest {
     }
 
     @Test public void defaultUpdatesWithNoNewGalleriesShowsCurrentListAndSignalsWithButton() {
-        View actions = LayoutInflater.from(scene.getContext()).inflate(R.layout.scene_gallery_list, null);
-        FabLayout menu = actions.findViewById(R.id.fab_layout);
-        menu.setExpanded(false, false);
-        ReflectionHelpers.setField(scene, "mFabLayout", menu);
-        ReflectionHelpers.setField(scene, "mPopularActions", actions.findViewById(R.id.popular_actions));
-        ReflectionHelpers.setField(scene, "mPopularUpdates", actions.findViewById(R.id.popular_updates));
-        ReflectionHelpers.setField(scene, "mPopularPrevious", actions.findViewById(R.id.popular_previous));
-        ReflectionHelpers.setField(scene, "mPopularUpdatesMenu", actions.findViewById(R.id.popular_updates_menu));
-        ReflectionHelpers.setField(scene, "mPopularPreviousMenu", actions.findViewById(R.id.popular_previous_menu));
+        View actions = bindPopularActions();
         ReflectionHelpers.setField(scene, "mShowActionFab", false);
         setDefaultUpdates(true);
         refresh(1, 2);
@@ -192,6 +233,19 @@ public class PopularGalleryRenderingTest {
         builder.setKeyword("new search");
         refresh(5, 6);
         assertRendered(2);
+    }
+
+    private View bindPopularActions() {
+        View actions = LayoutInflater.from(scene.getContext()).inflate(R.layout.scene_gallery_list, null);
+        FabLayout menu = actions.findViewById(R.id.fab_layout);
+        menu.setExpanded(false, false);
+        ReflectionHelpers.setField(scene, "mFabLayout", menu);
+        ReflectionHelpers.setField(scene, "mPopularActions", actions.findViewById(R.id.popular_actions));
+        ReflectionHelpers.setField(scene, "mPopularUpdates", actions.findViewById(R.id.popular_updates));
+        ReflectionHelpers.setField(scene, "mPopularPrevious", actions.findViewById(R.id.popular_previous));
+        ReflectionHelpers.setField(scene, "mPopularUpdatesMenu", actions.findViewById(R.id.popular_updates_menu));
+        ReflectionHelpers.setField(scene, "mPopularPreviousMenu", actions.findViewById(R.id.popular_previous_menu));
+        return actions;
     }
 
     @Test public void defaultUpdatesWithNoHistoryShowsAllAndCanExitWithoutPreviousSnapshot() {
@@ -274,7 +328,7 @@ public class PopularGalleryRenderingTest {
     }
     @Implements(DownloadManager.class)
     public static class DownloadShadow {
-        @Implementation protected boolean containDownloadInfo(long gid) { return false; }
+        @Implementation protected boolean containDownloadInfo(long gid) { return downloadedGids.contains(gid); }
         @Implementation protected boolean hasOlderGalleryVersion(long firstGid, long gid) { return false; }
     }
     @Implements(LoadImageViewNew.class)

@@ -4,6 +4,7 @@
     <string name="settings_popular_updates_only_summary">热门页仅显示新出现画廊。可在右下角按钮切换显示。</string>
     <string name="popular_updates_only">仅查看更新</string>
     <string name="popular_show_all">显示全部</string>
+    <string name="popular_show_all_count">显示全部（%1$d/%2$d 个画廊）</string>
     <string name="popular_previous">回看上次</string>
     <string name="popular_return_current">返回本次</string>
     <string name="popular_no_previous">暂无上一次热门请求记录</string>
