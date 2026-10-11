@@ -302,7 +302,7 @@ public class PopularGalleryRenderingTest {
     }
 
     @Test @Config(sdk = 34, qualifiers = "xxhdpi")
-    public void dividerUsesThreePixelRoundLineWithFifteenPercentInsetsAndFourPixelGaps() {
+    public void dividerUsesSixteenPixelRoundLineWithFifteenPercentInsetsAndFourPixelGaps() {
         refresh(2, 3, 4);
         toggle(PopularGalleryHistory.UPDATES);
         adapter.setType(GalleryAdapterNew.TYPE_GRID);
@@ -315,7 +315,7 @@ public class PopularGalleryRenderingTest {
                 divider.getWidth());
         assertEquals(4, divider.getPaddingTop());
         assertEquals(4, divider.getPaddingBottom());
-        assertEquals(11, divider.getHeight());
+        assertEquals(24, divider.getHeight());
         assertTrue(divider instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
     }
 

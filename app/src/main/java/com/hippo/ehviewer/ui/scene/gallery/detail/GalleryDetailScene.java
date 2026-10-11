@@ -143,6 +143,7 @@ import com.hippo.lib.yorozuya.LayoutUtils;
 import com.hippo.lib.yorozuya.SimpleHandler;
 import com.hippo.lib.yorozuya.ViewUtils;
 import com.hippo.reveal.ViewAnimationUtils;
+import com.hippo.refreshlayout.RefreshLayout;
 import com.hippo.ripple.Ripple;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.SceneFragment;
@@ -324,6 +325,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     // Previews
     @Nullable
     private GalleryDetailScrollView mDetailScrollView;
+    @Nullable
+    private RefreshLayout mPreviewPullLayout;
     @Nullable
     private View mBackToTop;
     @Nullable
@@ -624,7 +627,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         });
         mDetailScrollView.setOnScrollChangeListener(
                 (v, scrollX, scrollY, oldScrollX, oldScrollY) -> updateBackToTopVisibility());
-        View mainView = mDetailScrollView;
+        RefreshLayout previewPullLayout = (RefreshLayout) ViewUtils.$$(main, R.id.preview_pull_layout);
+        initPreviewPull(previewPullLayout);
+        View mainView = previewPullLayout;
         View progressView = ViewUtils.$$(main, R.id.progress_view);
         mTip = (TextView) ViewUtils.$$(main, R.id.tip);
         mViewTransition = new ViewTransition(mainView, progressView, mTip);
@@ -911,6 +916,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         GalleryUpdateManager.removeUpdateStateListener(this);
 
         setDrawerGestureBlocker(null);
+        if (mPreviewPullLayout != null) {
+            mPreviewPullLayout.setOnRefreshListener(null);
+            mPreviewPullLayout.setFooterRefreshing(false);
+            mPreviewPullLayout = null;
+        }
         if (mDetailScrollView != null) {
             mDetailScrollView.setOnScrollChangeListener(null);
             mDetailScrollView.setOnSwipeLeftListener(null);
@@ -2007,6 +2017,27 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                     })
                     .start();
         }
+    }
+
+    private void initPreviewPull(RefreshLayout refreshLayout) {
+        mPreviewPullLayout = refreshLayout;
+        refreshLayout.setFooterColorSchemeResources(
+                R.color.loading_indicator_red,
+                R.color.loading_indicator_blue,
+                R.color.loading_indicator_green,
+                R.color.loading_indicator_orange);
+        refreshLayout.setOnRefreshListener(new RefreshLayout.OnRefreshListener() {
+            @Override
+            public void onHeaderRefresh() {
+                refreshLayout.setHeaderRefreshing(false);
+            }
+
+            @Override
+            public void onFooterRefresh() {
+                refreshLayout.setFooterRefreshing(false);
+                openGalleryPreviews(Settings.getGalleryPreviewImmediateJump());
+            }
+        });
     }
 
     private void openGalleryPreviews(boolean jumpToNewContent) {

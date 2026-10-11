@@ -22,16 +22,23 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScrollView
-        android:id="@+id/scroll_view"
+    <com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailRefreshLayout
+        android:id="@+id/preview_pull_layout"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:overScrollMode="never"
-        android:scrollbars="none">
+        android:layout_height="match_parent">
 
-        <include layout="@layout/gallery_detail_content" />
+        <com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScrollView
+            android:id="@+id/scroll_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:overScrollMode="never"
+            android:scrollbars="none">
 
-    </com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScrollView>
+            <include layout="@layout/gallery_detail_content" />
+
+        </com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScrollView>
+
+    </com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailRefreshLayout>
 
     <com.hippo.widget.ProgressView
         android:id="@+id/progress_view"

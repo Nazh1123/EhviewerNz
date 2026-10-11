@@ -12,7 +12,7 @@ import com.hippo.android.resource.AttrResources;
 
 /** Reserves space for the entire stroke instead of fitting a drawable into a thin child. */
 public final class GallerySectionDivider extends View {
-    private static final int STROKE_PX = 3;
+    private static final int STROKE_PX = 16;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public GallerySectionDivider(Context context, @Nullable AttributeSet attrs) {
