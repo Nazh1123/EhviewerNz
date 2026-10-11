@@ -63,6 +63,11 @@ class TranslationModelsFragment : Fragment() {
             operate("PP-OCRv5") { locked { ppModels.import(language, uri, ::reportProgress) } }
         }
     }
+    private val importPpRuntime = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) operate(getString(R.string.translation_ppocr_runtime_title)) {
+            ppModels.runtime.import(uri, ::reportProgress)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -162,8 +167,10 @@ class TranslationModelsFragment : Fragment() {
 
     private fun render() {
         val context = requireContext()
-        countText.text = (installed.size + ppModels.entries.count { ppModels.store(it.language).ready() } + if (mangaReady == true) 1 else 0).toString()
-        storageText.text = size(models.storedBytes() + installed.sumOf { it.size } + ppModels.entries.sumOf { ppModels.store(it.language).storedBytes() })
+        countText.text = (installed.size + ppModels.entries.count { ppModels.store(it.language).ready() } +
+            (if (mangaReady == true) 1 else 0) + (if (ppModels.runtime.ready()) 1 else 0)).toString()
+        storageText.text = size(models.storedBytes() + installed.sumOf { it.size } +
+            ppModels.entries.sumOf { ppModels.store(it.language).storedBytes() } + ppModels.runtime.store.storedBytes())
         tabs.removeAllViews()
         listOf(R.string.translation_model_tab_manga, R.string.translation_model_tab_native, R.string.translation_model_tab_language).forEachIndexed { index, title ->
             tabs.addView(modelButton(context, palette, getString(title)) {
@@ -206,9 +213,25 @@ class TranslationModelsFragment : Fragment() {
                 confirmDelete(getString(R.string.translation_model_manga_title)) { locked { models.delete() } }
             }) else emptyList(), getString(R.string.translation_model_manga_help) + "\n\n" + models.requiredNames.joinToString("\n"))
         cards.addView(modelText(requireContext(), getString(R.string.translation_model_manga_footnote), 13f, palette.secondary))
+        val runtime = ppModels.runtime
+        val runtimeReady = runtime.ready()
+        val runtimeTitle = getString(R.string.translation_ppocr_runtime_title)
+        card("translation_ppocr_runtime", runtimeTitle, getString(R.string.translation_ppocr_runtime_help),
+            R.drawable.v_download_box_outline_dark_x24,
+            getString(if (runtimeReady) R.string.translation_model_installed else R.string.translation_model_not_downloaded),
+            runtimeReady, listOf(size(runtime.store.totalBytes)),
+            (if (runtimeReady) emptyList() else listOf(action(R.string.translation_model_download, ModelButtonKind.PRIMARY) {
+                operate(runtimeTitle) {
+                    notifyModelDownloadNetwork(requireContext().applicationContext)
+                    runtime.download(::reportProgress)
+                }
+            })) + listOf(action(R.string.translation_model_import) { importPpRuntime.launch(arrayOf("*/*")) }) +
+                if (runtime.store.storedBytes() > 0) listOf(action(R.string.translation_model_delete, ModelButtonKind.DELETE) {
+                    confirmDelete(runtimeTitle) { locked { runtime.store.delete() } }
+                }) else emptyList(), getString(R.string.translation_ppocr_runtime_help))
         for (entry in ppModels.entries) {
             val ppStore = ppModels.store(entry.language)
-            val ppReady = ppStore.ready()
+            val ppReady = ppStore.ready() && runtimeReady
             val title = "PP-OCRv5 · ${TranslationLanguages.displayName(entry.language, resources.configuration.locales[0])}"
             card("translation_ppocr_${entry.language}", title, getString(R.string.translation_ppocr_help),
                 R.drawable.v_translate_x24, getString(if (ppReady) R.string.translation_model_installed else R.string.translation_model_missing),
@@ -216,7 +239,8 @@ class TranslationModelsFragment : Fragment() {
                 (if (ppReady) emptyList() else listOf(action(R.string.translation_model_download, ModelButtonKind.PRIMARY) {
                     operate(title) {
                         notifyModelDownloadNetwork(requireContext().applicationContext)
-                        ppModels.download(entry.language, ::reportProgress)
+                        if (!runtime.ready()) runtime.download(::reportProgress)
+                        if (!ppStore.ready()) ppModels.download(entry.language, ::reportProgress)
                     }
                 })) + listOf(action(R.string.translation_model_import) {
                     ppImportLanguage = entry.language; importPp.launch(arrayOf("*/*"))

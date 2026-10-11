@@ -65,6 +65,11 @@ class PpOcr(path: String, private val alphabet: List<String>, private val cfg: O
     @Synchronized override fun close() { if (!closed) { closed = true; session.close() } }
 
     companion object {
+        /** Call only after verifying both native files against the pinned component manifest. */
+        fun configureRuntime(directory: String) {
+            System.setProperty("onnxruntime.native.path", directory)
+        }
+
         fun decode(probabilities: FloatBuffer, steps: Int, alphabet: List<String>): Pair<String, Float> {
             require(steps >= 0 && alphabet.isNotEmpty() && probabilities.remaining().toLong() == steps.toLong() * alphabet.size)
             val base = probabilities.position()

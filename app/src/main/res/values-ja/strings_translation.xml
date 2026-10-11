@@ -16,7 +16,7 @@
     <string name="translation_model_manga_card_description">文字検出 · 多言語 OCR · 背景修復</string>
     <string name="translation_model_file_count">%1$d ファイル</string>
     <string name="translation_model_manga_footnote">すべての翻訳エンジンで共通のモデルです。本プロジェクトからダウンロードするか、ローカルファイルをインポートできます。</string>
-    <string name="translation_model_hy_card_description">HY-MT1.5 · 多言語テキスト翻訳</string>
+    <string name="translation_model_hy_card_description">HY-MT2 · 多言語テキスト翻訳</string>
     <string name="translation_model_manga_llm_card_description">HY-MT2 漫画翻訳向けファインチューニング · 日本語 → 簡体字中国語</string>
     <string name="translation_model_imported_description">ローカルからインポートした翻訳モデル</string>
     <string name="translation_model_import_card_title">自分のモデルをインポート</string>
@@ -53,7 +53,7 @@
     <string name="translation_model_import_manga">漫画モデルセットをインポート</string>
     <string name="translation_model_import_manga_help">以下のファイルをすべて一度に選択してください。名前とバージョンが一致する必要があります。検証に成功した後でコピーします。元のファイルは保持されます。\n\n%1$s</string>
     <string name="translation_model_delete_confirm">アプリ内の「%1$s」のモデルファイルを削除しますか？\n\n対応する翻訳機能を使用するには、再ダウンロードまたはインポートが必要になります。現在のローカル AI モデルの場合は選択が解除されます。漫画の原画像、保存済みの翻訳画像、インポート元のファイルは保持されます。</string>
-    <string name="translation_model_hy_help">HY-MT1.5 · 多言語テキスト翻訳。ダウンロードと検証の後で現在のモデルに設定します。他のインストール済みモデルは保持されます。</string>
+    <string name="translation_model_hy_help">HY-MT2 · 多言語テキスト翻訳。ダウンロードと検証の後で現在のモデルに設定します。他のインストール済みモデルは保持されます。</string>
     <string name="translation_model_manga_llm_help">HY-MT2 漫画翻訳向けファインチューニング · 日本語 → 簡体字中国語。ダウンロードと検証の後で現在のモデルに設定します。他のインストール済みモデルは保持されます。</string>
     <string name="translation_model_language_target">準備する翻訳先言語</string>
     <string name="translation_model_language_download">元の言語と翻訳先のパックを準備</string>

@@ -36,6 +36,12 @@
 
 EOS 或输出预算在片段中间出现时先返回已生成字节，再返回结束/抛预算异常，防止丢掉片段尾部的可靠区域。逐 token `next` 保留用于诊断和字节对照。结果缓存身份升至 v17；OCR/预处理身份未因本轮调用改动升级。
 
+## 设置页单句试译
+
+本地 GGUF 和 API 的设置页试译共用 `LlmSampleTranslation` 的单条 user 提示词及响应校验，不走漫画页编号协议。因此服务直接返回纯译文时不会误报 `Parsed 0/1 regions`。语言方向、繁体约束、多行文本、思考块清理和完整代码块包装共用同一处理；也接受有效的单个编号 `<|1|>`。
+
+空译文、未闭合思考块或代码块、错误/重复/未完成编号仍返回失败。API 的 HTTP、认证、温度兼容和取消机制沿用原传输；服务报告 `length` 或 `content_filter` 时不接受截断文本。本地试译保留输出预算和重复生成检查，在完整响应后由共用解析器校验编号；漫画页仍执行原有流式编号检查。此改动只涉及设置页诊断，不变更阅读结果缓存身份。
+
 ## 验证入口
 
 - JVM：`NativeAdaptiveBatchTest`、`NativeTranslationProtocolTest`、`NativeTranslationCheckpointTest`。

@@ -27,8 +27,8 @@ internal object NativeTranslationResponse {
         }
     }
 
-    fun generationFailure(text: String, queries: List<String>): Boolean =
-        protocolFailure(text, queries.size) || repetition.findAll(text).any { repeated ->
+    fun generationFailure(text: String, queries: List<String>, validateRegionMarkers: Boolean = true): Boolean =
+        (validateRegionMarkers && protocolFailure(text, queries.size)) || repetition.findAll(text).any { repeated ->
             queries.none { repeated.value in it }
         }
 

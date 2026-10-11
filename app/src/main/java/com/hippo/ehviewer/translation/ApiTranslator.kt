@@ -35,6 +35,13 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
         if (queries.all { it.isBlank() }) LlmTranslator.TranslateResult(queries)
         else LlmBatching.translate(queries, delegate::translateDetailed)
 
+    /** Settings diagnostics use the same single-sentence protocol as native GGUF. */
+    internal suspend fun translateSample(source: String): LlmTranslator.TranslateResult =
+        LlmBatching.translate(listOf(source)) {
+            val (raw, usage) = request(LlmSampleTranslation.messages(options, source))
+            LlmSampleTranslation.parse(source, raw, usage)
+        }
+
     private suspend fun request(messages: JSONArray): Pair<String, Usage?> = request(messages, !temperatureRejected)
 
     private suspend fun request(messages: JSONArray, includeTemperature: Boolean): Pair<String, Usage?> {

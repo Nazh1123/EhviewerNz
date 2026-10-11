@@ -61,6 +61,9 @@ class TranslationNavigationTest {
             val root = requireNotNull(page.view)
             fun button(tag: String) = requireNotNull(root.findViewWithTag<com.google.android.material.button.MaterialButton>(tag))
             assertNotNull(root.findViewWithTag<android.view.View>("translation_manga_bundle"))
+            assertNotNull(root.findViewWithTag<android.view.View>("translation_ppocr_runtime"))
+            assertNotNull(button("translation_ppocr_runtime/action/${R.string.translation_model_download}"))
+            assertNotNull(button("translation_ppocr_runtime/action/${R.string.translation_model_import}"))
             button("translation_manga_bundle/action/${R.string.translation_model_import}").performClick()
             val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
             assertTrue(dialog.isShowing)

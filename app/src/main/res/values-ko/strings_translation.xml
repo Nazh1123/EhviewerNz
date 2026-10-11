@@ -16,7 +16,7 @@
     <string name="translation_model_manga_card_description">텍스트 감지 · 다국어 OCR · 배경 복원</string>
     <string name="translation_model_file_count">파일 %1$d개</string>
     <string name="translation_model_manga_footnote">모든 번역 엔진이 이 모델을 공유합니다. 이 프로젝트에서 다운로드하거나 로컬 파일을 가져오세요.</string>
-    <string name="translation_model_hy_card_description">HY-MT1.5 · 다국어 텍스트 번역</string>
+    <string name="translation_model_hy_card_description">HY-MT2 · 다국어 텍스트 번역</string>
     <string name="translation_model_manga_llm_card_description">HY-MT2 만화 번역 미세 조정 · 일본어 → 중국어 간체</string>
     <string name="translation_model_imported_description">로컬 저장소에서 가져온 번역 모델</string>
     <string name="translation_model_import_card_title">내 모델 가져오기</string>
@@ -53,7 +53,7 @@
     <string name="translation_model_import_manga">만화 모델 세트 가져오기</string>
     <string name="translation_model_import_manga_help">아래 파일을 모두 한 번에 선택하세요. 이름과 버전이 일치해야 합니다. 검증을 통과한 후에만 복사하며 원본 파일은 유지됩니다.\n\n%1$s</string>
     <string name="translation_model_delete_confirm">앱 내부에 저장된 “%1$s” 모델 파일을 삭제할까요?\n\n해당 번역 기능을 사용하려면 다시 다운로드하거나 가져와야 합니다. 현재 로컬 AI 모델이라면 선택이 해제됩니다. 만화 원본 이미지, 저장된 번역 이미지 및 가져오기 원본 파일은 유지됩니다.</string>
-    <string name="translation_model_hy_help">HY-MT1.5 · 다국어 텍스트 번역. 다운로드 및 검증 후 현재 모델로 설정됩니다. 다른 설치된 모델은 유지됩니다.</string>
+    <string name="translation_model_hy_help">HY-MT2 · 다국어 텍스트 번역. 다운로드 및 검증 후 현재 모델로 설정됩니다. 다른 설치된 모델은 유지됩니다.</string>
     <string name="translation_model_manga_llm_help">HY-MT2 만화 번역 미세 조정 · 일본어 → 중국어 간체. 다운로드 및 검증 후 현재 모델로 설정됩니다. 다른 설치된 모델은 유지됩니다.</string>
     <string name="translation_model_language_target">준비할 대상 언어</string>
     <string name="translation_model_language_download">원문 및 대상 언어 팩 준비</string>

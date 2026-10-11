@@ -16,9 +16,11 @@
     <string name="translation_model_manga_card_description">文字检测 · 多语言 OCR · 背景修复</string>
     <string name="translation_model_file_count">%1$d 个文件</string>
     <string name="translation_model_manga_footnote">所有翻译引擎共用这套漫画模型，可从本项目下载或导入本地文件。</string>
-    <string name="translation_ppocr_help">非日语识别使用 PP-OCRv5，按源语言安装。中文模型兼容简体和繁体。可下载或导入对应官方 inference.onnx 文件，校验通过后使用。</string>
-    <string name="translation_ppocr_required">非日语识别需要对应 PP-OCRv5 模型，请在“翻译设置 → 模型管理 → 漫画模型”下载或导入。</string>
-    <string name="translation_model_hy_card_description">HY-MT1.5 · 多语文字翻译</string>
+    <string name="translation_ppocr_help">非日语识别使用 PP-OCRv5，需要识别组件和对应语言模型。下载时自动补齐识别组件；也可分别导入组件 ZIP 和官方 inference.onnx 文件。中文模型兼容简体和繁体，校验通过后使用。</string>
+    <string name="translation_ppocr_required">非日语识别需要 PP-OCRv5 识别组件和对应语言模型，请在“翻译设置 → 模型管理 → 漫画模型”下载或导入。</string>
+    <string name="translation_ppocr_runtime_title">PP-OCRv5 识别组件</string>
+    <string name="translation_ppocr_runtime_help">可选组件，用于中文、英文和韩文 OCR，日语识别无需安装。在线下载官方 ONNX Runtime 1.24.3（约 41 MB），仅安装 arm64 运行库（约 26 MB）；也可导入对应组件 ZIP。安装前校验完整性。删除组件后可重新下载启用，语言模型保留。</string>
+    <string name="translation_model_hy_card_description">HY-MT2 · 多语文字翻译</string>
     <string name="translation_model_manga_llm_card_description">HY-MT2 漫画翻译微调 · 日语 → 简体中文</string>
     <string name="translation_model_imported_description">已从本地导入的翻译模型</string>
     <string name="translation_model_import_card_title">导入你的模型</string>
@@ -55,7 +57,7 @@
     <string name="translation_model_import_manga">导入漫画模型组</string>
     <string name="translation_model_import_manga_help">请一次选择以下全部文件，名称和版本须匹配。校验通过后才写入，原文件会保留。\n\n%1$s</string>
     <string name="translation_model_delete_confirm">删除“%1$s”在应用内的模型文件？\n\n删除后需要重新下载或导入才能使用相应翻译功能。若为当前本地 AI 模型，将清除其选择。漫画原图、已保存译图和导入来源文件会保留。</string>
-    <string name="translation_model_hy_help">HY-MT1.5 · 多语文字翻译。下载并校验后设为当前模型，保留其他已安装模型。</string>
+    <string name="translation_model_hy_help">HY-MT2 · 多语文字翻译。下载并校验后设为当前模型，保留其他已安装模型。</string>
     <string name="translation_model_manga_llm_help">HY-MT2 漫画翻译微调 · 日语 → 简体中文。下载并校验后设为当前模型，保留其他已安装模型。</string>
     <string name="translation_model_language_target">要准备的目标语言</string>
     <string name="translation_model_language_download">准备源语言与目标语言包</string>

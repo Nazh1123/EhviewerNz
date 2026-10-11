@@ -29,8 +29,10 @@ _build*.bat
 *.log
 /artifacts/
 /docs/
-/tools/
+/tools/*
+!/tools/package_ppocr_runtime.py
 /translation-engine/build/
 /translation-engine/.cxx/
 /translation-engine/*.md
+!/translation-engine/PP_OCR_RUNTIME.md
 !/translation-engine/NATIVE_TRANSLATION.md

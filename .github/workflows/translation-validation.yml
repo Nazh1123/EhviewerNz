@@ -29,6 +29,14 @@ jobs:
       - name: Verify portable native release
         run: |
           python tools/verify_release.py app/build/outputs/apk/appRelease/release/app-appRelease-release-unsigned.apk --native-build translation-engine/.cxx/RelWithDebInfo --manifest app/build/intermediates/merged_manifests/appReleaseRelease/processAppReleaseReleaseManifest/AndroidManifest.xml
+      - name: Package optional OCR component
+        run: |
+          ./gradlew :translation-engine:copyPpOcrRuntimeArchive
+          python tools/package_ppocr_runtime.py translation-engine/build/onnx-archive/onnxruntime-android-1.24.3.aar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EhViewerNz-ppocr-runtime-arm64
+          path: artifacts/ppocr-runtime/*
       - uses: actions/upload-artifact@v4
         with:
           name: EhViewerNz-arm64-release-unsigned

@@ -1,12 +1,33 @@
 apply plugin: 'com.android.library'
 apply plugin: 'org.jetbrains.kotlin.android'
 
+// Keep the small Java API in the APK; install the pinned native runtime on demand.
+configurations { onnxRuntimeArchive { transitive = false } }
+tasks.register('copyPpOcrRuntimeArchive', Copy) {
+    from configurations.onnxRuntimeArchive
+    into layout.buildDirectory.dir('onnx-archive')
+}
+def onnxJavaJar = tasks.register('prepareOnnxJava', Jar) {
+    archiveFileName = 'onnxruntime-java-1.24.3.jar'
+    destinationDirectory = layout.buildDirectory.dir('onnx-java')
+    inputs.files(configurations.onnxRuntimeArchive)
+    from({
+        def aar = configurations.onnxRuntimeArchive.singleFile
+        def classes = zipTree(aar).matching { include 'classes.jar' }.singleFile
+        zipTree(classes)
+    }) {
+        // This one upstream class is compiled from source with an Android path loader.
+        exclude 'ai/onnxruntime/OnnxRuntime.class'
+    }
+}
+
 android {
     namespace 'com.hippo.ehviewer.translation.engine'
     compileSdk 35
     ndkVersion '28.2.13676358'
     defaultConfig {
         minSdk 26
+        consumerProguardFiles 'consumer-rules.pro'
         ndk { abiFilters 'arm64-v8a' }
         externalNativeBuild {
             cmake {
@@ -15,7 +36,7 @@ android {
             }
         }
     }
-    sourceSets { main.java.srcDirs = ['src/main/kotlin'] }
+    sourceSets { main.java.srcDirs = ['src/main/kotlin', 'src/main/java'] }
     externalNativeBuild {
         cmake {
             path file('src/main/cpp/CMakeLists.txt')
@@ -30,7 +51,8 @@ android {
 }
 
 dependencies {
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.24.3'
+    onnxRuntimeArchive 'com.microsoft.onnxruntime:onnxruntime-android:1.24.3@aar'
+    implementation files(onnxJavaJar)
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
     testImplementation 'junit:junit:4.13.2'
 }

@@ -85,10 +85,15 @@ EhViewerNz 是基于 [Ehviewer_CN_SXJ](https://github.com/xiaojieonly/Ehviewer_C
 - 在 `设置 - 翻译` 中选择翻译的方式、模型、语言、去字方式、预翻译页数。
 - 阅读器中可在上方快速按钮栏轻触翻译图标 或 长按菜单中开启或关闭翻译；并提供完整翻译画廊、切换翻译源语言按钮。
 - 默认提前翻译后续 `2` 页，可设为 `0 ~ 10` 页；完整翻译画廊可在离开阅读器后继续，并通过通知查看进度或停止任务。
-- `设置 - 翻译 - 模型管理` 集中管理漫画识别模型、ML Kit 语言包和本地 GGUF，支持下载、校验、删除及漫画模型 / GGUF 文件导入；可保留多个 GGUF 并切换使用，App 已提供 HY-MT1.5-1.8B Q4_K_M 和基于 HY-MT2 1.8B Q4_K_M的日译中漫画微调模型下载途径。
+- `设置 - 翻译 - 模型管理` 集中管理漫画识别模型、ML Kit 语言包和本地 GGUF，支持下载、校验、删除及漫画模型 / GGUF 文件导入；可保留多个 GGUF 并切换使用，App 已提供腾讯 HY-MT2-1.8B Q4_K_M 和基于 HY-MT2-1.8B 的日译中漫画微调模型 Q4_K_M 下载途径。
 - 翻译结果为以透明 png 遮罩图片形式。
 - “保存译图到画廊目录”支持将已下载画廊和导入的本地文件夹的译图逐页保存至 `_translated` 文件夹。
 - “删除翻译结果”，可在下载列表中多选画廊后清理译图与缓存。
+
+| 本地翻译模型 | GGUF 下载地址 |
+| --- | --- |
+| 腾讯 HY-MT2-1.8B · Q4_K_M | [Hy-MT2-1.8B-Q4_K_M.gguf](https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/a0c709d9fac510f2c807aa3af52872340dc37a4a/Hy-MT2-1.8B-Q4_K_M.gguf?download=true) |
+| HY-MT2 日译中漫画微调 · Q4_K_M | [manga-zh-Hans-v1-Q4_K_M.gguf](https://huggingface.co/fumetodev/Hy-MT2-1.8B-JP-Manga-Finetune-chinese-zh-Hans-v1-GGUF/resolve/e5c4591e678ad7a0e46a305a02468d6da4e90fb9/manga-zh-Hans-v1-Q4_K_M.gguf?download=true) |
 
 ### 画廊更新
 

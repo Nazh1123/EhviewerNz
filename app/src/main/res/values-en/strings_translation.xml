@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="translation_ppocr_help">Non-Japanese recognition uses PP-OCRv5. Install the source language model; Chinese supports both scripts. Download or import its official inference.onnx file, verified before use.</string>
-    <string name="translation_ppocr_required">Install the matching PP-OCRv5 model in Translation settings → Model management → Manga models for non-Japanese recognition.</string>
+    <string name="translation_ppocr_help">PP-OCRv5 requires the OCR component and a source language model. Downloading a model also installs the component when needed. Alternatively, import the component ZIP and the official inference.onnx file separately. Chinese supports both scripts. All files are verified before use.</string>
+    <string name="translation_ppocr_required">Install the PP-OCRv5 component and matching language model in Translation settings → Model management → Manga models.</string>
+    <string name="translation_ppocr_runtime_title">PP-OCRv5 component</string>
+    <string name="translation_ppocr_runtime_help">Optional OCR component for Chinese, English and Korean. Japanese recognition works without it. Downloads official ONNX Runtime 1.24.3 (about 41 MB) and installs only the arm64 libraries (about 26 MB). You can also import the matching component ZIP. Files are verified before installation. Deleting the component preserves language models; download it again to enable recognition.</string>
     <string name="settings_translation">Translation</string>
     <string name="translation_category_engine">Translation engine</string>
     <string name="translation_category_reading">Reading and translation</string>
@@ -18,7 +20,7 @@
     <string name="translation_model_manga_card_description">Text detection · Multilingual OCR · Background restoration</string>
     <string name="translation_model_file_count">%1$d files</string>
     <string name="translation_model_manga_footnote">All translation engines share these image models. Download from this project or import local files.</string>
-    <string name="translation_model_hy_card_description">HY-MT1.5 · Multilingual text translation</string>
+    <string name="translation_model_hy_card_description">HY-MT2 · Multilingual text translation</string>
     <string name="translation_model_manga_llm_card_description">HY-MT2 fine-tuned for manga translation · Japanese → Simplified Chinese</string>
     <string name="translation_model_imported_description">Translation model imported from local storage</string>
     <string name="translation_model_import_card_title">Import your model</string>
@@ -55,7 +57,7 @@
     <string name="translation_model_import_manga">Import manga model set</string>
     <string name="translation_model_import_manga_help">Select all the files below at once. Names and versions must match. Files are copied only after validation; the originals are kept.\n\n%1$s</string>
     <string name="translation_model_delete_confirm">Delete the model files for “%1$s” stored in the app?\n\nYou will need to download or import them again to use the corresponding translation features. If this is the current local AI model, its selection will be cleared. Original manga images, saved translations and import source files are kept.</string>
-    <string name="translation_model_hy_help">HY-MT1.5 · Multilingual text translation. Set as the current model after download and validation. Other installed models are kept.</string>
+    <string name="translation_model_hy_help">HY-MT2 · Multilingual text translation. Set as the current model after download and validation. Other installed models are kept.</string>
     <string name="translation_model_manga_llm_help">HY-MT2 fine-tuned for manga translation · Japanese → Simplified Chinese. Set as the current model after download and validation. Other installed models are kept.</string>
     <string name="translation_model_language_target">Target language to prepare</string>
     <string name="translation_model_language_download">Prepare source and target language packs</string>

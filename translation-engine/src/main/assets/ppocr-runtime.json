@@ -1,0 +1,21 @@
+{
+  "version": "1.24.3",
+  "abi": "arm64-v8a",
+  "bundle": {
+    "url": "https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.24.3/onnxruntime-android-1.24.3.aar",
+    "size": 40948335,
+    "sha256": "67397e4a970e75617f765d2015ceaf911917e1d822276cfb5792744e8085cbce"
+  },
+  "models": [
+    {
+      "name": "libonnxruntime.so",
+      "size": 25831632,
+      "sha256": "4d2318b3849abb8862133d3068fc7e807ed8b2671cc6d83657fff2fcb9e1caad"
+    },
+    {
+      "name": "libonnxruntime4j_jni.so",
+      "size": 111976,
+      "sha256": "5c032a6547e3c33671c07d885af59f1bddd92eb72c595ae8d80db5bbe3fdd2ef"
+    }
+  ]
+}

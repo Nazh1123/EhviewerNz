@@ -16,7 +16,7 @@
     <string name="translation_model_manga_card_description">文字偵測 · 多語言 OCR · 背景修復</string>
     <string name="translation_model_file_count">%1$d 個檔案</string>
     <string name="translation_model_manga_footnote">所有翻譯引擎共用這套漫畫模型，可從本專案下載或匯入本機檔案。</string>
-    <string name="translation_model_hy_card_description">HY-MT1.5 · 多語文字翻譯</string>
+    <string name="translation_model_hy_card_description">HY-MT2 · 多語文字翻譯</string>
     <string name="translation_model_manga_llm_card_description">HY-MT2 漫畫翻譯微調 · 日語 → 簡體中文</string>
     <string name="translation_model_imported_description">已從本機匯入的翻譯模型</string>
     <string name="translation_model_import_card_title">匯入你的模型</string>
@@ -53,7 +53,7 @@
     <string name="translation_model_import_manga">匯入漫畫模型組</string>
     <string name="translation_model_import_manga_help">請一次選擇以下全部檔案，名稱和版本必須相符。通過驗證後才複製，原始檔案會保留。\n\n%1$s</string>
     <string name="translation_model_delete_confirm">刪除「%1$s」在應用程式內的模型檔案？\n\n刪除後需要重新下載或匯入才能使用對應翻譯功能。若為目前的本機 AI 模型，將清除其選擇。漫畫原圖、已儲存譯圖和匯入來源檔案會保留。</string>
-    <string name="translation_model_hy_help">HY-MT1.5 · 多語文字翻譯。下載並驗證後設為目前模型，保留其他已安裝模型。</string>
+    <string name="translation_model_hy_help">HY-MT2 · 多語文字翻譯。下載並驗證後設為目前模型，保留其他已安裝模型。</string>
     <string name="translation_model_manga_llm_help">HY-MT2 漫畫翻譯微調 · 日語 → 簡體中文。下載並驗證後設為目前模型，保留其他已安裝模型。</string>
     <string name="translation_model_language_target">要準備的目標語言</string>
     <string name="translation_model_language_download">準備來源與目標語言包</string>

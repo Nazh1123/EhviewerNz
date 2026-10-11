@@ -16,7 +16,7 @@
     <string name="translation_model_manga_card_description">ตรวจจับข้อความ · OCR หลายภาษา · ฟื้นฟูพื้นหลัง</string>
     <string name="translation_model_file_count">%1$d ไฟล์</string>
     <string name="translation_model_manga_footnote">ทุกเอนจินใช้โมเดลชุดนี้ร่วมกัน ดาวน์โหลดจากโครงการนี้หรือนำเข้าไฟล์ในเครื่องได้</string>
-    <string name="translation_model_hy_card_description">HY-MT1.5 · แปลข้อความหลายภาษา</string>
+    <string name="translation_model_hy_card_description">HY-MT2 · แปลข้อความหลายภาษา</string>
     <string name="translation_model_manga_llm_card_description">HY-MT2 ปรับแต่งสำหรับการแปลมังงะ · ญี่ปุ่น → จีนตัวย่อ</string>
     <string name="translation_model_imported_description">โมเดลแปลภาษาที่นำเข้าจากเครื่อง</string>
     <string name="translation_model_import_card_title">นำเข้าโมเดลของคุณ</string>
@@ -53,7 +53,7 @@
     <string name="translation_model_import_manga">นำเข้าชุดโมเดลมังงะ</string>
     <string name="translation_model_import_manga_help">เลือกไฟล์ด้านล่างทั้งหมดพร้อมกัน ชื่อและเวอร์ชันต้องตรงกัน จะคัดลอกหลังผ่านการตรวจสอบเท่านั้น และเก็บไฟล์ต้นฉบับไว้\n\n%1$s</string>
     <string name="translation_model_delete_confirm">ลบไฟล์โมเดล “%1$s” ที่เก็บในแอปหรือไม่?\n\nต้องดาวน์โหลดหรือนำเข้าใหม่จึงจะใช้ฟังก์ชันแปลที่เกี่ยวข้องได้ หากเป็นโมเดล AI ในเครื่องที่ใช้อยู่ จะยกเลิกการเลือกโมเดลนั้น ภาพมังงะต้นฉบับ ภาพแปลที่บันทึกไว้ และไฟล์ต้นทางที่นำเข้าจะยังคงอยู่</string>
-    <string name="translation_model_hy_help">HY-MT1.5 · แปลข้อความหลายภาษา ตั้งเป็นโมเดลปัจจุบันหลังดาวน์โหลดและตรวจสอบ โดยเก็บโมเดลอื่นที่ติดตั้งไว้</string>
+    <string name="translation_model_hy_help">HY-MT2 · แปลข้อความหลายภาษา ตั้งเป็นโมเดลปัจจุบันหลังดาวน์โหลดและตรวจสอบ โดยเก็บโมเดลอื่นที่ติดตั้งไว้</string>
     <string name="translation_model_manga_llm_help">HY-MT2 ปรับแต่งสำหรับการแปลมังงะ · ญี่ปุ่น → จีนตัวย่อ ตั้งเป็นโมเดลปัจจุบันหลังดาวน์โหลดและตรวจสอบ โดยเก็บโมเดลอื่นที่ติดตั้งไว้</string>
     <string name="translation_model_language_target">ภาษาปลายทางที่จะเตรียม</string>
     <string name="translation_model_language_download">เตรียมชุดภาษาต้นทางและปลายทาง</string>

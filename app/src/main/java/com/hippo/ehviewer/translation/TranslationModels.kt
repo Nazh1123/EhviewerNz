@@ -19,7 +19,8 @@ import org.json.JSONObject
 
 /** The embedded manifest is the authority for both imported and downloaded weights. */
 class TranslationModels internal constructor(private val context: Context, manifestOverride: String? = null,
-                                             directoryName: String = "translation-models") {
+                                             directoryName: String = "translation-models",
+                                             private val readOnly: Boolean = false) {
     private val dir = File(context.noBackupFilesDir, directoryName).apply { mkdirs() }
     private val manifest = JSONObject(manifestOverride ?: context.assets.open("translation-models.json")
         .bufferedReader().use { it.readText() })
@@ -60,7 +61,12 @@ class TranslationModels internal constructor(private val context: Context, manif
 
     /** Stream into verified staging files without retaining another full ZIP on disk.
      * Network and decompression stay outside the inference lock. */
-    internal suspend fun installArchive(input: InputStream, progress: (String, Long, Long) -> Unit) {
+    internal suspend fun installArchive(input: InputStream, progress: (String, Long, Long) -> Unit) =
+        installMappedArchive(input, requiredNames.associateWith { it }, false, progress)
+
+    /** Only use ignoreUnlisted after validating the complete source archive. */
+    internal suspend fun installMappedArchive(input: InputStream, archiveNames: Map<String, String>,
+                                             ignoreUnlisted: Boolean, progress: (String, Long, Long) -> Unit) {
         val remaining = files.associateBy { it.name }.toMutableMap()
         val staged = mutableListOf<Pair<File, File>>()
         var completed = 0L
@@ -70,7 +76,9 @@ class TranslationModels internal constructor(private val context: Context, manif
                     currentCoroutineContext().ensureActive()
                     val item = zip.nextEntry ?: break
                     // Match an exact manifest name; never resolve a ZIP path on disk.
-                    val entry = requireNotNull(remaining.remove(item.name)) { "Unexpected or duplicate model: ${item.name}" }
+                    val name = archiveNames[item.name]
+                    if (name == null && ignoreUnlisted) { zip.closeEntry(); continue }
+                    val entry = requireNotNull(remaining.remove(name)) { "Unexpected or duplicate model: ${item.name}" }
                     copyVerified(zip, entry, staged) { copied -> progress(entry.name, completed + copied, totalBytes) }
                     zip.closeEntry()
                     completed += entry.size
@@ -91,6 +99,8 @@ class TranslationModels internal constructor(private val context: Context, manif
         var reported = 0L
         progress(0)
         temp.outputStream().use { output ->
+            // Open the descriptor before removing write permission for executable components.
+            if (readOnly) check(temp.setReadOnly()) { "Cannot protect component: ${entry.name}" }
             val buffer = ByteArray(65536)
             while (true) {
                 currentCoroutineContext().ensureActive()

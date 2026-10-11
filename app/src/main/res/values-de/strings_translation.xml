@@ -16,7 +16,7 @@
     <string name="translation_model_manga_card_description">Texterkennung · Mehrsprachige OCR · Hintergrundrestaurierung</string>
     <string name="translation_model_file_count">%1$d Dateien</string>
     <string name="translation_model_manga_footnote">Alle Übersetzungsengines nutzen diese Manga-Modelle. Aus diesem Projekt herunterladen oder lokale Dateien importieren.</string>
-    <string name="translation_model_hy_card_description">HY-MT1.5 · Mehrsprachige Textübersetzung</string>
+    <string name="translation_model_hy_card_description">HY-MT2 · Mehrsprachige Textübersetzung</string>
     <string name="translation_model_manga_llm_card_description">HY-MT2 für Manga-Übersetzung angepasst · Japanisch → Vereinfachtes Chinesisch</string>
     <string name="translation_model_imported_description">Aus lokalem Speicher importiertes Übersetzungsmodell</string>
     <string name="translation_model_import_card_title">Eigenes Modell importieren</string>
@@ -53,7 +53,7 @@
     <string name="translation_model_import_manga">Manga-Modellsatz importieren</string>
     <string name="translation_model_import_manga_help">Alle folgenden Dateien gleichzeitig auswählen. Namen und Versionen müssen übereinstimmen. Dateien werden erst nach erfolgreicher Prüfung kopiert; die Originale bleiben erhalten.\n\n%1$s</string>
     <string name="translation_model_delete_confirm">Die in der App gespeicherten Modelldateien für „%1$s“ löschen?\n\nFür die entsprechenden Übersetzungsfunktionen müssen sie erneut heruntergeladen oder importiert werden. Ist dies das aktuelle lokale KI-Modell, wird seine Auswahl aufgehoben. Originalbilder, gespeicherte Übersetzungen und Importquelldateien bleiben erhalten.</string>
-    <string name="translation_model_hy_help">HY-MT1.5 · Mehrsprachige Textübersetzung. Nach Download und Prüfung als aktuelles Modell festgelegt. Andere installierte Modelle bleiben erhalten.</string>
+    <string name="translation_model_hy_help">HY-MT2 · Mehrsprachige Textübersetzung. Nach Download und Prüfung als aktuelles Modell festgelegt. Andere installierte Modelle bleiben erhalten.</string>
     <string name="translation_model_manga_llm_help">HY-MT2 für Manga-Übersetzung angepasst · Japanisch → Vereinfachtes Chinesisch. Nach Download und Prüfung als aktuelles Modell festgelegt. Andere installierte Modelle bleiben erhalten.</string>
     <string name="translation_model_language_target">Vorzubereitende Zielsprache</string>
     <string name="translation_model_language_download">Quell- und Zielsprachpakete vorbereiten</string>

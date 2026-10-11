@@ -16,7 +16,7 @@
     <string name="translation_model_manga_card_description">Détection de texte · OCR multilingue · Restauration du fond</string>
     <string name="translation_model_file_count">%1$d fichiers</string>
     <string name="translation_model_manga_footnote">Tous les moteurs partagent ces modèles. Téléchargez-les depuis ce projet ou importez des fichiers locaux.</string>
-    <string name="translation_model_hy_card_description">HY-MT1.5 · Traduction multilingue de texte</string>
+    <string name="translation_model_hy_card_description">HY-MT2 · Traduction multilingue de texte</string>
     <string name="translation_model_manga_llm_card_description">HY-MT2 affiné pour la traduction de mangas · Japonais → Chinois simplifié</string>
     <string name="translation_model_imported_description">Modèle de traduction importé du stockage local</string>
     <string name="translation_model_import_card_title">Importer votre modèle</string>
@@ -53,7 +53,7 @@
     <string name="translation_model_import_manga">Importer le jeu de modèles manga</string>
     <string name="translation_model_import_manga_help">Sélectionnez tous les fichiers ci-dessous en une fois. Les noms et versions doivent correspondre. Les fichiers ne sont copiés qu’après validation ; les originaux sont conservés.\n\n%1$s</string>
     <string name="translation_model_delete_confirm">Supprimer les fichiers du modèle « %1$s » stockés dans l’application ?\n\nIl faudra les télécharger ou les importer à nouveau pour utiliser les fonctions de traduction correspondantes. Si c’est le modèle d’IA locale actuel, sa sélection sera effacée. Les images originales, traductions enregistrées et fichiers sources importés sont conservés.</string>
-    <string name="translation_model_hy_help">HY-MT1.5 · Traduction multilingue de texte. Défini comme modèle actuel après téléchargement et validation. Les autres modèles installés sont conservés.</string>
+    <string name="translation_model_hy_help">HY-MT2 · Traduction multilingue de texte. Défini comme modèle actuel après téléchargement et validation. Les autres modèles installés sont conservés.</string>
     <string name="translation_model_manga_llm_help">HY-MT2 affiné pour la traduction de mangas · Japonais → Chinois simplifié. Défini comme modèle actuel après téléchargement et validation. Les autres modèles installés sont conservés.</string>
     <string name="translation_model_language_target">Langue cible à préparer</string>
     <string name="translation_model_language_download">Préparer les packs source et cible</string>

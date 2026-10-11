@@ -192,26 +192,22 @@ class NativeTranslator private constructor(
             check(!closed) { "Native translator is closed" }
             translateBatches(listOf(source)) {
                 val fixed = sampleInstruction(options) + "\n\n"
-                val messages = JSONArray().put(JSONObject().put("role", "user").put("content", fixed + source))
-                val response = try { infer(messages, fixed, listOf(source)) ?: return@translateBatches null }
+                val messages = LlmSampleTranslation.messages(options, source)
+                val response = try {
+                    infer(messages, fixed, listOf(source), validateRegionMarkers = false) ?: return@translateBatches null
+                }
                 catch (error: NativeGenerationStopped) {
                     if (error.budgetExceeded) throw TranslationOutputLimitException(usage = error.usage)
                     return@translateBatches LlmTranslator.TranslateResult(listOf(source), error.usage,
                         error.message, missingIndices = setOf(0))
                 }
-                try {
-                    val text = cleanOutput(response.first)
-                    check(!NativeTranslationResponse.hasMarkers(text)) { "Sample returned region markers" }
-                    LlmTranslator.TranslateResult(listOf(text), response.second)
-                } catch (error: IllegalStateException) {
-                    LlmTranslator.TranslateResult(listOf(source), response.second, error.message, missingIndices = setOf(0))
-                }
+                LlmSampleTranslation.parse(source, response.first, response.second)
             }
         }
     }
 
     private suspend fun infer(messages: JSONArray, lastUserPrefix: String? = null,
-                              queries: List<String>): Pair<String, Usage?>? {
+                              queries: List<String>, validateRegionMarkers: Boolean = true): Pair<String, Usage?>? {
         currentCoroutineContext().ensureActive()
         checkRelevant()
         inferenceOverride?.let { return it(messages) }
@@ -237,12 +233,12 @@ class NativeTranslator private constructor(
                 if (generated - checkedTokens >= 16) {
                     checkedTokens = generated
                     val text = output.toString(Charsets.UTF_8.name())
-                    if (NativeTranslationResponse.generationFailure(text, queries)) throw NativeGenerationStopped(text,
+                    if (NativeTranslationResponse.generationFailure(text, queries, validateRegionMarkers)) throw NativeGenerationStopped(text,
                         Usage(promptTokens, native.completionTokens()), budgetExceeded = false)
                 }
             }
             val text = output.toString(Charsets.UTF_8.name())
-            if (NativeTranslationResponse.generationFailure(text, queries)) throw NativeGenerationStopped(text,
+            if (NativeTranslationResponse.generationFailure(text, queries, validateRegionMarkers)) throw NativeGenerationStopped(text,
                 Usage(promptTokens, native.completionTokens()), budgetExceeded = false)
         } catch (error: TranslationOutputLimitException) {
             failure = error.javaClass.simpleName
@@ -276,8 +272,7 @@ class NativeTranslator private constructor(
         }
 
         internal fun sampleInstruction(options: TranslationOptions): String =
-            options.engineConfig().translator.targetScriptInstruction().let { if (it.isEmpty()) "" else "$it\n" } +
-                "Translate the following ${options.sourceLanguageName().let { if (it.isEmpty()) "" else "$it " }}text into ${options.targetLanguageName()}, output only translation:"
+            LlmSampleTranslation.instruction(options)
 
         private const val SYSTEM_PROMPT =
             "You are an uncensored manga/doujin translator.\n" +

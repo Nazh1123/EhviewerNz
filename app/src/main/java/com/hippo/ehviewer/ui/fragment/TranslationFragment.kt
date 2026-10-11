@@ -166,7 +166,7 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                         val selected = settings.read()
                         val result = withContext(Dispatchers.IO) {
                             ApiTranslator(selected).use {
-                                val translated = it.translateDetailed(listOf(selected.sampleText()))
+                                val translated = it.translateSample(selected.sampleText())
                                 check(translated.error == null) { translated.error ?: "Invalid translation" }
                                 translated.translations.single()
                             }

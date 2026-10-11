@@ -59,6 +59,7 @@ def verify_apk(path):
         native_names = [n for n in names if n.startswith("lib/") and n.endswith(".so")]
         require(all(n.startswith("lib/arm64-v8a/") for n in native_names), "APK contains an unsupported native ABI")
         libraries = {n.rsplit("/", 1)[-1]: n for n in native_names}
+        require(not any("onnxruntime" in name for name in names), "Optional OCR runtime packaged in APK")
         require(len(libraries) == len(native_names), "Duplicate native library entries")
         expected = {f"libggml-cpu-{v}.so" for v in CPU_VARIANTS} | {
             "libehnz_llama.so", "libllama.so", "libggml.so", "libggml-base.so", "libehnz_image.so"}

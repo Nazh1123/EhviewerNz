@@ -33,6 +33,7 @@ object TranslationEngineFactory {
         fun recognizer(): PageOcr = LanguageOcr({ resolvedOptions().source }, onRecognized, ppModels::ready) { key ->
             if (key == "ja") Ocr(models.ocr, alphabet, config.ocr) else {
                 if (!ppModels.ready(key)) throw MissingPpOcrModel()
+                ppModels.runtime.prepare()
                 val dictionary = org.json.JSONArray(context.assets.open("ppocr-$key.json").bufferedReader().use { it.readText() })
                 PpOcr(ppModels.path(key), (0 until dictionary.length()).map { dictionary.getString(it) }, config.ocr)
             }

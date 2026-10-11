@@ -22,6 +22,76 @@ class ApiTranslatorTest {
     private fun options(server: MockWebServer) = TranslationOptions(backend = TranslationBackend.LLM_API,
         apiUrl = server.url("/v1/chat/completions").toString())
 
+    private fun sampleResponse(content: String, finishReason: String = "stop") = MockResponse().setBody(
+        JSONObject().put("choices", org.json.JSONArray().put(JSONObject().put("finish_reason", finishReason)
+            .put("message", JSONObject().put("content", content))))
+            .put("usage", JSONObject().put("prompt_tokens", 20).put("completion_tokens", 8)).toString())
+
+    @Test fun apiSettingsSampleAcceptsPlainTranslationAndUsesTheNativeSampleProtocol() = runBlocking<Unit> {
+        MockWebServer().use { server ->
+            server.enqueue(sampleResponse("明天我要去学校。"))
+            val selected = options(server).copy(apiModel = "chosen-model", apiKey = "secret-test")
+            ApiTranslator(selected).use { translator ->
+                val result = translator.translateSample(selected.sampleText())
+                assertNull(result.error)
+                assertTrue(result.missingIndices.isEmpty())
+                assertEquals(listOf("明天我要去学校。"), result.translations)
+                assertEquals(Usage(20, 8), result.usage)
+            }
+            val request = server.takeRequest(1, TimeUnit.SECONDS)!!
+            val body = JSONObject(request.body.readUtf8())
+            assertEquals(LlmSampleTranslation.messages(selected, selected.sampleText()).toString(),
+                body.getJSONArray("messages").toString())
+            assertEquals("Bearer secret-test", request.getHeader("Authorization"))
+            assertEquals("chosen-model", body.getString("model"))
+            assertFalse(body.getBoolean("stream"))
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun apiSampleResponseValidationMatchesNativeSampleValidation() = runBlocking<Unit> {
+        MockWebServer().use { server ->
+            val source = "明日は学校へ行きます。"
+            val outputs = listOf("<think>reasoning</think>明天去学校。", "<|1|>明天去学校。",
+                "```text\n<|1|>明天去学校。\n```", "<think>unfinished", "<|1", "<|2|>wrong",
+                "<|1|>one<|1|>two", "<|1|>one<|2|>two")
+            outputs.forEach { server.enqueue(sampleResponse(it)) }
+            ApiTranslator(options(server)).use { translator ->
+                for (output in outputs) assertEquals(LlmSampleTranslation.parse(source, output, Usage(20, 8)),
+                    translator.translateSample(source))
+            }
+            assertEquals(outputs.size, server.requestCount)
+        }
+    }
+
+    @Test fun apiSampleNeverAcceptsProviderTruncationOrContentFiltering() = runBlocking<Unit> {
+        MockWebServer().use { server ->
+            server.enqueue(sampleResponse("partial translation", "length"))
+            server.enqueue(sampleResponse("partial translation", "content_filter"))
+            ApiTranslator(options(server)).use { translator ->
+                val result = translator.translateSample("原文")
+                assertNotNull(result.error)
+                assertEquals(listOf("原文"), result.translations)
+                assertEquals(setOf(0), result.missingIndices)
+                assertEquals(Usage(20, 8), result.usage)
+                assertThrows(IOException::class.java) { runBlocking { translator.translateSample("原文") } }
+            }
+            assertEquals(2, server.requestCount)
+        }
+    }
+
+    @Test fun plainSampleSupportDoesNotRelaxTheReaderRegionProtocol() = runBlocking<Unit> {
+        MockWebServer().use { server ->
+            server.enqueue(sampleResponse("你好，谢谢。"))
+            ApiTranslator(options(server)).use { translator ->
+                val result = translator.translateDetailed(listOf("こんにちは", "ありがとう"))
+                assertEquals("Parsed 0/2 regions", result.error)
+                assertEquals(setOf(0, 1), result.missingIndices)
+                assertEquals(listOf("こんにちは", "ありがとう"), result.translations)
+            }
+        }
+    }
+
     @Test fun selectedNonJapaneseSourcesReachRealApiTransport() {
         MockWebServer().use { server ->
             for ((source, name) in listOf("en" to "English", "ko" to "Korean", "zh-TW" to "Traditional Chinese (Taiwan)")) {

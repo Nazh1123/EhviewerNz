@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit
 
 /** Pinned official recognition weights; dictionaries are bundled, weights are installed explicitly. */
 class PpOcrModels(context: Context) {
+    val runtime = PpOcrRuntime(context)
     data class Entry(val language: String, val name: String, val size: Long, val url: String)
     private val manifest = JSONObject(context.assets.open("ppocr-models.json").bufferedReader().use { it.readText() })
     private val specs = manifest.getJSONArray("models").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
@@ -19,7 +20,7 @@ class PpOcrModels(context: Context) {
             JSONObject().put("models", org.json.JSONArray().put(spec)).toString(), "ppocr-${spec.getString("language")}")
     }
     fun store(language: String): TranslationModels = stores.getValue(language)
-    fun ready(source: String): Boolean = key(source)?.let { store(it).ready() } ?: true
+    fun ready(source: String): Boolean = key(source)?.let { runtime.ready() && store(it).ready() } ?: true
     suspend fun path(language: String): String = store(language).verifiedFiles().getValue(entries.single { it.language == language }.name)
     suspend fun import(language: String, uri: Uri, progress: (String, Long, Long) -> Unit) = store(language).importSingle(uri, progress)
 
@@ -52,4 +53,4 @@ class PpOcrModels(context: Context) {
     }
 }
 
-internal class MissingPpOcrModel : IllegalStateException("Required PP-OCR model is not installed")
+internal class MissingPpOcrModel : IllegalStateException("Required PP-OCR runtime or language model is not installed")

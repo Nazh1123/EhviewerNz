@@ -12,9 +12,9 @@ data class NativeDownloadModel(val name: String, val url: String, val size: Long
 object NativeModelCatalog {
     // Pin revisions and LFS hashes so the downloaded file always matches the reviewed artifact.
     val models = listOf(
-        NativeDownloadModel("HY-MT1.5-1.8B-Q4_K_M.gguf",
-            "https://huggingface.co/tencent/HY-MT1.5-1.8B-GGUF/resolve/265b2e615a7dc9b06c435dc878829ad99a512ba2/HY-MT1.5-1.8B-Q4_K_M.gguf?download=true",
-            1133080512L, "4383ac0c3c8e476de98ff979c2a3f069f8c4fb385e7860cf2d28da896cc477c7"),
+        NativeDownloadModel("Hy-MT2-1.8B-Q4_K_M.gguf",
+            "https://huggingface.co/tencent/Hy-MT2-1.8B-GGUF/resolve/a0c709d9fac510f2c807aa3af52872340dc37a4a/Hy-MT2-1.8B-Q4_K_M.gguf?download=true",
+            1133080448L, "dc5f44fcf1fa496ee7ad725982c0c8c553a4de00259b53af84c4b89fb0c06699"),
         NativeDownloadModel("manga-zh-Hans-v1-Q4_K_M.gguf",
             "https://huggingface.co/fumetodev/Hy-MT2-1.8B-JP-Manga-Finetune-chinese-zh-Hans-v1-GGUF/resolve/e5c4591e678ad7a0e46a305a02468d6da4e90fb9/manga-zh-Hans-v1-Q4_K_M.gguf?download=true",
             1133080416L, "7ffb275d839a8463f4a4ab4cc1fe22107d9d83ec85464f11ed8ef648f71ef21f"),

@@ -20,6 +20,11 @@ class PpOcrDeviceTest {
         val args = InstrumentationRegistry.getArguments()
         assumeTrue(args.getString("testPpOcr") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val runtime = PpOcrRuntime(context)
+        args.getString("ppOcrRuntimeArchive")?.let { archive ->
+            runtime.import(android.net.Uri.fromFile(File(archive))) { _, _, _ -> }
+        }
+        runtime.prepare()
         val directory = args.getString("ppOcrDirectory") ?: "/data/local/tmp/ehnz-ppocr"
         for ((language, text) in listOf("en" to "HELLO WORLD", "zh" to "你好世界", "ko" to "안녕하세요")) {
             val path = File(directory, "$language-inference.onnx")
