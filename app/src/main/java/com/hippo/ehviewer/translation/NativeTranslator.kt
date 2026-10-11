@@ -8,6 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import com.hippo.ehviewer.translation.engine.NativeLlm
+import com.hippo.ehviewer.translation.engine.NativeSampling
 import com.hippo.ehviewer.translation.engine.NativePrefixCache
 import com.hippo.ehviewer.translation.engine.DetailedTranslator
 import com.hippo.ehviewer.translation.engine.LlmTranslator
@@ -39,6 +40,7 @@ class NativeTranslator private constructor(
     private var closed = false
     private val lock = Mutex()
     private var userOnlyTemplate = false
+    private val batchPolicy = NativeBatchPolicy()
     /** Explicit fixture diagnostics only; production never installs this observer. */
     internal var inferenceObserver: ((JSONArray, String, Usage, Int, Long, String?) -> Unit)? = null
 
@@ -46,7 +48,7 @@ class NativeTranslator private constructor(
         check(!closed) { "Native translator is closed" }
         return native ?: run {
             val cache = prefixCache ?: (prefixCacheProvider?.invoke() ?: NativePrefixCache()).also { prefixCache = it }
-            NativeLlm(checkNotNull(modelPath), cache).also { native = it }
+            NativeLlm(checkNotNull(modelPath), cache, sampling(options.nativeModelId)).also { native = it }
         }
     }
 
@@ -70,27 +72,50 @@ class NativeTranslator private constructor(
             if (preserved.isNotEmpty()) onCompleted(preserved.associateWith { queries[it] })
             val indices = queries.indices.filter { queries[it].isNotBlank() && it !in preserved }
             if (indices.isEmpty()) return@withLock LlmTranslator.TranslateResult(queries)
-            val result = LlmBatching.translateIndexed(indices.map { queries[it] }) { batch, offset ->
+            val sources = indices.map { queries[it] }
+            val tokenCounts = sources.map { source ->
                 currentCoroutineContext().ensureActive()
                 checkRelevant()
-                translateNumbered(batch) { completed ->
-                    onCompleted(completed.mapKeys { (index, _) -> indices[offset + index] })
-                }
+                // JVM adapter fixtures have no native tokenizer. Production measures the selected GGUF.
+                if (inferenceOverride != null) 1 else model().countTokens(source)
             }
-            if (indices.size == queries.size) result else {
+            var result: LlmTranslator.TranslateResult? = null
+            var start = 0
+            while (start < sources.size) {
+                val end = start + batchPolicy.batchSize(tokenCounts, start)
+                val chunkStart = start
+                val chunk = LlmBatching.translateIndexed(sources.subList(start, end)) { batch, offset ->
+                    currentCoroutineContext().ensureActive()
+                    checkRelevant()
+                    translateNumbered(batch) { completed ->
+                        onCompleted(completed.mapKeys { (index, _) -> indices[chunkStart + offset + index] })
+                    }
+                }
+                result = result?.let { LlmBatching.merge(it, chunk) } ?: chunk
+                start = end
+            }
+            val translated = checkNotNull(result)
+            if (indices.size == queries.size) translated else {
                 val translations = queries.toMutableList()
-                indices.forEachIndexed { local, original -> translations[original] = result.translations[local] }
-                result.copy(translations = translations,
-                    missingIndices = result.missingIndices.mapTo(linkedSetOf()) { indices[it] })
+                indices.forEachIndexed { local, original -> translations[original] = translated.translations[local] }
+                translated.copy(translations = translations,
+                    missingIndices = translated.missingIndices.mapTo(linkedSetOf()) { indices[it] })
             }
         }
     }
 
-    private suspend fun translateNumbered(queries: List<String>, onCompleted: suspend (Map<Int, String>) -> Unit): LlmTranslator.TranslateResult? {
+    private suspend fun translateNumbered(queries: List<String>, learn: Boolean = true,
+                                         onCompleted: suspend (Map<Int, String>) -> Unit): LlmTranslator.TranslateResult? {
         var interrupted = false
         var budgetExceeded = false
         val response = try {
-            inferTranslation(queries) ?: return null
+            inferTranslation(queries) ?: run {
+                if (learn) batchPolicy.failed(queries.size)
+                return null
+            }
+        } catch (error: TranslationOutputLimitException) {
+            if (learn) batchPolicy.failed(queries.size)
+            throw error
         } catch (error: NativeGenerationStopped) {
             interrupted = true
             budgetExceeded = error.budgetExceeded
@@ -101,12 +126,17 @@ class NativeTranslator private constructor(
         // The request still uses the same full system instruction and numbered input.
         val answer = NativeTranslationResponse.answerText(raw)
         if (queries.size == 1 && !interrupted && !answer.isNullOrBlank() && !NativeTranslationResponse.hasMarkers(answer)) {
+            if (learn) batchPolicy.succeeded(1)
             onCompleted(mapOf(0 to answer))
             return LlmTranslator.TranslateResult(listOf(answer), usage)
         }
         val parsed = if (queries.size == 1 && NativeTranslationResponse.protocolFailure(raw, 1))
             LlmTranslator.TranslateResult(queries, usage, "Native model returned unexpected region markers", missingIndices = setOf(0))
         else NativeTranslationResponse.parse(queries, raw, usage, truncated = interrupted)
+        if (learn) {
+            if (parsed.missingIndices.isEmpty()) batchPolicy.succeeded(queries.size)
+            else batchPolicy.failed(queries.size)
+        }
         // If a token budget produced no complete segments, retain the existing
         // bounded split policy. Otherwise salvage completed regions first.
         if (budgetExceeded && parsed.missingIndices.size == queries.size)
@@ -130,7 +160,7 @@ class NativeTranslator private constructor(
         var totalUsage = usage
         for (index in retryIndices) {
             val fallback = translateBatches(listOf(queries[index])) { batch ->
-                translateNumbered(batch) { completedRegion ->
+                translateNumbered(batch, learn = false) { completedRegion ->
                     onCompleted(completedRegion.mapKeys { index })
                 }
             }
@@ -192,18 +222,20 @@ class NativeTranslator private constructor(
             lastUserPrefix = lastUserPrefix)
         if (promptTokens < 0) return null
         val output = ByteArrayOutputStream()
-        var outputPieces = 0
+        var checkedTokens = 0
         val began = System.nanoTime()
         var failure: String? = null
         try {
             while (true) {
                 currentCoroutineContext().ensureActive()
                 checkRelevant()
-                val piece = native.next() ?: break
+                val piece = native.nextChunk() ?: break
                 output.write(piece)
-                // Decode and scan the complete output every 16 emitted pieces, plus EOS.
-                // Prompt batches return empty pieces; cancellation still runs on every step.
-                if (piece.isNotEmpty() && ++outputPieces % 16 == 0) {
+                // Chunk size/time are bounded in native code. Keep the guard measured in tokens,
+                // not chunks, so batching does not delay protocol/repetition detection by 4x.
+                val generated = native.chunkCompletionTokens()
+                if (generated - checkedTokens >= 16) {
+                    checkedTokens = generated
                     val text = output.toString(Charsets.UTF_8.name())
                     if (NativeTranslationResponse.generationFailure(text, queries)) throw NativeGenerationStopped(text,
                         Usage(promptTokens, native.completionTokens()), budgetExceeded = false)
@@ -235,6 +267,14 @@ class NativeTranslator private constructor(
     }
 
     companion object {
+        internal fun sampling(modelId: String): NativeSampling = when (modelId) {
+            // HY-MT2 1.8B recommends the same top-k/top-p/temperature/repetition profile.
+            "4383ac0c3c8e476de98ff979c2a3f069f8c4fb385e7860cf2d28da896cc477c7",
+            "dc5f44fcf1fa496ee7ad725982c0c8c553a4de00259b53af84c4b89fb0c06699" -> NativeSampling.HY_TRANSLATION
+            "7ffb275d839a8463f4a4ab4cc1fe22107d9d83ec85464f11ed8ef648f71ef21f" -> NativeSampling.HY_MT2_MANGA
+            else -> NativeSampling.GREEDY
+        }
+
         internal fun sampleInstruction(options: TranslationOptions): String =
             options.engineConfig().translator.targetScriptInstruction().let { if (it.isEmpty()) "" else "$it\n" } +
                 "Translate the following ${options.sourceLanguageName().let { if (it.isEmpty()) "" else "$it " }}text into ${options.targetLanguageName()}, output only translation:"

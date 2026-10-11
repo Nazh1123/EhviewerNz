@@ -36,7 +36,7 @@ data class TranslationOptions(
 
     fun cacheIdentity(): String = listOf("ehnz-overlay-v9-legacy-grouping-tiles", "reader-image-v2",
         when (backend) {
-            TranslationBackend.NATIVE_LLM -> "llama-jni-v16-thinking-checkpoints-prefix-kv\n$nativeModelId"
+            TranslationBackend.NATIVE_LLM -> "llama-jni-v17-adaptive-sampling-jinja-chunks\n$nativeModelId"
             TranslationBackend.ML_KIT -> "mlkit-17.0.3-multilingual"
             TranslationBackend.LLM_API -> "llm-api-v5-reader-regions\n${apiUrl.trim()}\n${apiModel.trim()}"
         },

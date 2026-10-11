@@ -64,7 +64,17 @@ FetchContent_MakeAvailable(llama)
 if(NOT TARGET ggml-cpu-android_armv8.0_1)
     message(FATAL_ERROR "The portable ARMv8 CPU backend must be built")
 endif()
-add_library(ehnz_llama SHARED llama_jni.cpp)
+set(TRANSLATION_JINJA_SOURCES
+    ${llama_SOURCE_DIR}/common/jinja/lexer.cpp
+    ${llama_SOURCE_DIR}/common/jinja/parser.cpp
+    ${llama_SOURCE_DIR}/common/jinja/runtime.cpp
+    ${llama_SOURCE_DIR}/common/jinja/value.cpp
+    ${llama_SOURCE_DIR}/common/jinja/string.cpp
+    ${llama_SOURCE_DIR}/common/json.cpp
+    ${llama_SOURCE_DIR}/common/unicode.cpp)
+# Only the standalone template interpreter, without llama's HTTP/server/common library.
+add_library(ehnz_llama SHARED llama_jni.cpp ${TRANSLATION_JINJA_SOURCES})
+target_include_directories(ehnz_llama PRIVATE ${llama_SOURCE_DIR}/common ${llama_SOURCE_DIR}/vendor)
 target_link_libraries(ehnz_llama PRIVATE llama log dl)
 target_link_options(ehnz_llama PRIVATE "-Wl,-z,max-page-size=16384")
 

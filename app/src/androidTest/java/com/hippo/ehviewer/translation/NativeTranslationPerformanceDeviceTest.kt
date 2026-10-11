@@ -14,12 +14,20 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /** Opt-in timing of the imported GGUF only; no OCR, downloads or saved-setting changes. */
 @RunWith(AndroidJUnit4::class)
 class NativeTranslationPerformanceDeviceTest {
+    @Before fun keepOptInInferenceInForeground() {
+        if (InstrumentationRegistry.getArguments().getString("testNativePerformance") != "true") return
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.startActivity(android.content.Intent(context, com.hippo.ehviewer.ui.splash.SplashActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     @Test(timeout = 300000) fun optimizedMangaSystemReducesFixedPrefixSnapshot() = runBlocking<Unit>(Dispatchers.IO) {
         assumeTrue(InstrumentationRegistry.getArguments().getString("testNativePerformance") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -138,14 +146,12 @@ class NativeTranslationPerformanceDeviceTest {
                 "compactNumbered" to NativeTranslator.buildNumberedMessages(options, source)) +
                 source.mapIndexed { i, text -> "sample$i" to JSONArray().put(JSONObject()
                     .put("role", "user").put("content", NativeTranslator.sampleInstruction(options) + "\n\n$text")) }
-            var upstreamPromptTokens = 0
             for ((name, messages) in requests) {
                 val began = SystemClock.elapsedRealtime()
                 val prompt = model.begin(messages)
                 assertTrue("Request must fit", prompt > 0)
-                if (name == "upstreamNumbered") upstreamPromptTokens = prompt
-                if (name == "compactNumbered")
-                    assertTrue("Compact instructions must reduce actual model input tokens", prompt < upstreamPromptTokens)
+                // The generic remote prompt contains fewer rules than the native manga prompt.
+                // Report both; the dedicated old/new manga test compares equivalent instructions.
                 val output = ByteArrayOutputStream()
                 var firstText = 0L
                 while (true) {
@@ -232,6 +238,12 @@ class NativeTranslationPerformanceDeviceTest {
 
                 // Abandon a cache miss before the fixed prefix is fully evaluated.
                 val otherLanguage = NativeTranslator.buildNumberedMessages(options.copy(target = "en"), source)
+                // Foreground devices can prefill 128 tokens per call. Make this fixture
+                // longer than that boundary instead of relying on a background CPU limit.
+                val longFixed = otherLanguage.getJSONObject(0).getString("content") +
+                    "\nPreserve each region separately and never omit its marker.".repeat(16)
+                otherLanguage.getJSONObject(0).put("content", longFixed)
+                assertTrue(model.countTokens(longFixed) > 128)
                 assertTrue(model.begin(otherLanguage) > 0)
                 assertEquals(0, model.cachedPromptTokens())
                 assertNotNull(model.next())

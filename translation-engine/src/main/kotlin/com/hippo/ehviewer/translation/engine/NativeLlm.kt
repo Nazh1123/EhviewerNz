@@ -4,11 +4,16 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 
-class NativeLlm(path: String, prefixCache: NativePrefixCache? = null) : AutoCloseable {
+class NativeLlm(path: String, prefixCache: NativePrefixCache? = null,
+                sampling: NativeSampling = NativeSampling.GREEDY) : AutoCloseable {
     private val cache = prefixCache ?: NativePrefixCache()
     private val ownsCache = prefixCache == null
+    private val chunkState = IntArray(1)
     private var handle = try {
-        cache.createModel(path, Runtime.getRuntime().availableProcessors().coerceIn(1, 4))
+        cache.createModel(path, Runtime.getRuntime().availableProcessors().coerceIn(1, 4)).also { model ->
+            try { configureSampling(model, sampling.id) }
+            catch (error: Throwable) { destroy(model); throw error }
+        }
     } catch (error: Throwable) {
         if (ownsCache) cache.close()
         throw error
@@ -60,6 +65,20 @@ class NativeLlm(path: String, prefixCache: NativePrefixCache? = null) : AutoClos
         return next(handle)
     }
 
+    /** At most four tokens / 32 ms between Kotlin cancellation checks (plus one decode). */
+    @Synchronized fun nextChunk(): ByteArray? {
+        check(handle != 0L) { "Native translator is closed" }
+        return nextChunk(handle, 4, 32, chunkState)
+    }
+
+    /** Count returned with the last chunk; no extra JNI call in the generation loop. */
+    @Synchronized fun chunkCompletionTokens(): Int = chunkState[0]
+
+    @Synchronized fun countTokens(text: String): Int {
+        check(handle != 0L) { "Native translator is closed" }
+        return countTokens(handle, text.toByteArray(Charsets.UTF_8))
+    }
+
     @Synchronized override fun close() {
         if (handle != 0L) { destroy(handle); handle = 0L }
         if (ownsCache) cache.close()
@@ -72,6 +91,9 @@ class NativeLlm(path: String, prefixCache: NativePrefixCache? = null) : AutoClos
     private external fun systemInfo(handle: Long): String
     private external fun cpuState(handle: Long): IntArray
     private external fun next(handle: Long): ByteArray?
+    private external fun nextChunk(handle: Long, maxTokens: Int, maxMillis: Int, state: IntArray): ByteArray?
+    private external fun countTokens(handle: Long, text: ByteArray): Int
+    private external fun configureSampling(handle: Long, profile: Int)
     private external fun destroy(handle: Long)
 
     companion object { init { System.loadLibrary("ehnz_llama") } }

@@ -2,9 +2,11 @@
 #include <llama.h>
 #include <ggml-cpu.h>
 #include "llama_cpu_policy.h"
+#include "translation_chat_template.h"
 #include <dlfcn.h>
 #include <android/log.h>
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <sched.h>
@@ -36,6 +38,8 @@ struct Session {
     llama_model *model = nullptr;
     llama_context *ctx = nullptr;
     llama_sampler *sampler = nullptr;
+    std::unique_ptr<ehnz::TranslationChatTemplate> chat_template;
+    bool supports_system = false;
     ggml_threadpool_t threadpool = nullptr;
     std::vector<ggml_threadpool_t> retired_pools;
     decltype(&ggml_threadpool_new) new_threadpool = nullptr;
@@ -46,6 +50,7 @@ struct Session {
     int allowed_cpus = 0;
     std::vector<llama_token> prompt;
     std::vector<char> output_piece = std::vector<char>(256);
+    std::vector<char> output_chunk;
     CacheHandle cache;
     std::string model_key;
     std::vector<llama_token> prefix, live_prefix;
@@ -55,6 +60,7 @@ struct Session {
     int generated = 0;
     int max_output = MAX_OUTPUT;
     bool finished = true;
+    bool pending_limit = false;
     ~Session() {
         if (sampler) llama_sampler_free(sampler);
         if (ctx) {
@@ -119,6 +125,47 @@ std::vector<llama_token> tokenize(const llama_vocab *vocab, const std::vector<ch
     if (llama_tokenize(vocab, text.data(), length, tokens.data(), count, true, true) != count)
         throw std::runtime_error("Tokenization failed");
     return tokens;
+}
+
+std::string tokenText(const llama_vocab *vocab, llama_token token) {
+    if (token == LLAMA_TOKEN_NULL) return "";
+    const char *text = llama_vocab_get_text(vocab, token);
+    return text ? text : "";
+}
+
+std::vector<llama_token> chatTokens(Session &s, const std::vector<ehnz::ChatMessage> &messages) {
+    auto text = s.chat_template->render(messages);
+    const auto *vocab = llama_model_get_vocab(s.model);
+    // The tokenizer adds configured BOS/EOS. Avoid doubling tokens already emitted by Jinja.
+    const auto bos = tokenText(vocab, llama_vocab_bos(vocab));
+    const auto eos = tokenText(vocab, llama_vocab_eos(vocab));
+    if (llama_vocab_get_add_bos(vocab) && !bos.empty() && text.compare(0, bos.size(), bos) == 0)
+        text.erase(0, bos.size());
+    if (llama_vocab_get_add_eos(vocab) && !eos.empty() && text.size() >= eos.size() &&
+        text.compare(text.size() - eos.size(), eos.size(), eos) == 0)
+        text.resize(text.size() - eos.size());
+    if (text.empty() || text.size() > 256 * 1024)
+        throw std::runtime_error("Invalid formatted translation prompt");
+    return tokenize(vocab, std::vector<char>(text.begin(), text.end()), text.size());
+}
+
+void configureSampler(Session &s, int profile) {
+    if (profile < 0 || profile > 2) throw std::runtime_error("Unknown translation sampling profile");
+    auto *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    if (!sampler) throw std::runtime_error("Cannot allocate translation sampler");
+    // Penalties -> top-k -> top-p -> temperature -> seeded distribution; no min-p filter.
+    if (profile != 0) {
+        llama_sampler_chain_add(sampler, llama_sampler_init_penalties(
+            llama_vocab_n_tokens(llama_model_get_vocab(s.model)), 64, 1.05f, 0.0f, 0.0f));
+        llama_sampler_chain_add(sampler, llama_sampler_init_top_k(20));
+        llama_sampler_chain_add(sampler, llama_sampler_init_top_p(0.6f, 1));
+        llama_sampler_chain_add(sampler, llama_sampler_init_temp(profile == 1 ? 0.7f : 0.15f));
+        llama_sampler_chain_add(sampler, llama_sampler_init_dist(42));
+    } else {
+        llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
+    }
+    if (s.sampler) llama_sampler_free(s.sampler);
+    s.sampler = sampler;
 }
 void savePrefix(Session &s) noexcept {
     try {
@@ -237,9 +284,22 @@ Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_createModel(JNIEnv 
         if (!s->model) throw std::runtime_error("Cannot load GGUF model (unsupported, damaged or insufficient memory)");
         if (llama_model_has_encoder(s->model)) throw std::runtime_error("Use a decoder-only GGUF instruction model");
         const char *tmpl = llama_model_chat_template(s->model, nullptr);
-        llama_chat_message probe{"user", "Translate into English: test"};
-        if (!tmpl || llama_chat_apply_template(tmpl, &probe, 1, true, nullptr, 0) <= 0)
-            throw std::runtime_error("GGUF chat template is missing or unsupported");
+        if (!tmpl || !*tmpl) throw std::runtime_error("GGUF chat template is missing");
+        const auto *vocab = llama_model_get_vocab(s->model);
+        s->chat_template = std::make_unique<ehnz::TranslationChatTemplate>(tmpl,
+            tokenText(vocab, llama_vocab_bos(vocab)), tokenText(vocab, llama_vocab_eos(vocab)),
+            [name = std::string(tmpl)](const std::vector<ehnz::ChatMessage> &input) {
+                std::vector<llama_chat_message> chat;
+                for (const auto &message : input) chat.push_back({message.role.c_str(), message.content.c_str()});
+                int length = llama_chat_apply_template(name.c_str(), chat.data(), chat.size(), true, nullptr, 0);
+                if (length <= 0) throw std::runtime_error("Unsupported GGUF chat template name");
+                std::vector<char> text(length + 1);
+                length = llama_chat_apply_template(name.c_str(), chat.data(), chat.size(), true, text.data(), text.size());
+                if (length <= 0 || length >= static_cast<int>(text.size()))
+                    throw std::runtime_error("GGUF chat formatting failed");
+                return std::string(text.data(), length);
+            });
+        s->supports_system = s->chat_template->supportsSystem();
         auto cp = llama_context_default_params();
         cp.n_ctx = std::min(2048, llama_model_n_ctx_train(s->model));
         if (cp.n_ctx <= MAX_OUTPUT) throw std::runtime_error("GGUF context is too small");
@@ -263,8 +323,7 @@ Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_createModel(JNIEnv 
             ggml_backend_reg_get_proc_address(cpu, "ggml_threadpool_free"));
         if (!s->new_threadpool || !s->free_threadpool) throw std::runtime_error("CPU thread pool is unavailable");
         updateCpuPool(*s);
-        s->sampler = llama_sampler_init_greedy();
-        if (!s->sampler) throw std::runtime_error("Cannot allocate translation sampler");
+        configureSampler(*s, 0);
         return reinterpret_cast<jlong>(s.release());
     } catch (const std::exception &e) { fail(env, e.what()); }
     catch (...) { fail(env, "Native model initialization failed"); }
@@ -283,54 +342,40 @@ Java_com_hippo_ehviewer_translation_engine_NativeLlm_beginMessages(JNIEnv *env, 
             throw std::runtime_error("Invalid chat messages");
         const int n = env->GetArrayLength(roleBytes);
         if (n < 1 || n > 128) throw std::runtime_error("Invalid chat message count");
-        std::vector<std::string> roles(n), contents(n);
-        std::vector<llama_chat_message> messages(n);
+        std::vector<ehnz::ChatMessage> messages(n);
         size_t total = 0;
         for (int i = 0; i < n; ++i) {
             auto role = static_cast<jbyteArray>(env->GetObjectArrayElement(roleBytes, i));
             auto content = static_cast<jbyteArray>(env->GetObjectArrayElement(contentBytes, i));
-            roles[i] = utf8(env, role);
-            contents[i] = utf8(env, content);
+            messages[i] = {utf8(env, role), utf8(env, content)};
             env->DeleteLocalRef(role);
             env->DeleteLocalRef(content);
-            if (roles[i] != "system" && roles[i] != "user" && roles[i] != "assistant")
+            if (messages[i].role != "system" && messages[i].role != "user" && messages[i].role != "assistant")
                 throw std::runtime_error("Unsupported message role");
-            total += contents[i].size();
-            messages[i] = {roles[i].c_str(), contents[i].c_str()};
+            if (messages[i].role == "system" && !s.supports_system) return -2;
+            total += messages[i].content.size();
         }
         if (total > 65536) return -1;
-        const char *tmpl = llama_model_chat_template(s.model, nullptr);
-        int length = llama_chat_apply_template(tmpl, messages.data(), messages.size(), true, nullptr, 0);
-        if (length <= 0) return -2; // Valid user-only models may not support system/few-shot roles.
-        std::vector<char> formatted(length + 1);
-        length = llama_chat_apply_template(tmpl, messages.data(), messages.size(), true, formatted.data(), formatted.size());
-        if (length <= 0 || length >= static_cast<int>(formatted.size())) throw std::runtime_error("Chat formatting failed");
-        const auto *vocab = llama_model_get_vocab(s.model);
-        auto prompt = tokenize(vocab, formatted, length);
+        auto prompt = chatTokens(s, messages);
         const int count = prompt.size();
         s.max_output = std::clamp(static_cast<int>(maxOutput), 1, static_cast<int>(llama_n_ctx(s.ctx)) / 2);
         if (count + s.max_output > static_cast<int>(llama_n_ctx(s.ctx))) return -1;
         s.cache_enabled = cacheEnabled;
         s.prefix.clear();
-        if (s.cache_enabled && roles.back() == "user") {
+        if (s.cache_enabled && messages.back().role == "user") {
             const std::string fixed = lastUserPrefix ? utf8(env, lastUserPrefix) : "";
-            if (contents.back().compare(0, fixed.size(), fixed) != 0)
+            if (messages.back().content.compare(0, fixed.size(), fixed) != 0)
                 throw std::runtime_error("Invalid fixed user prefix");
-            contents.back() = fixed;
-            messages.back().content = contents.back().c_str();
-            int fixed_length = llama_chat_apply_template(tmpl, messages.data(), messages.size(), true, nullptr, 0);
-            if (fixed_length > 0) {
-                std::vector<char> fixed_text(fixed_length + 1);
-                fixed_length = llama_chat_apply_template(tmpl, messages.data(), messages.size(), true,
-                                                        fixed_text.data(), fixed_text.size());
-                if (fixed_length > 0 && fixed_length < static_cast<int>(fixed_text.size())) {
-                    auto fixed_tokens = tokenize(vocab, fixed_text, fixed_length);
-                    size_t common = 0;
-                    while (common < fixed_tokens.size() && common + 1 < prompt.size() &&
-                           fixed_tokens[common] == prompt[common]) ++common;
-                    if (common <= MAX_PREFIX_TOKENS)
-                        s.prefix.assign(prompt.begin(), prompt.begin() + common);
-                }
+            messages.back().content = fixed;
+            try {
+                auto fixed_tokens = chatTokens(s, messages);
+                size_t common = 0;
+                while (common < fixed_tokens.size() && common + 1 < prompt.size() &&
+                       fixed_tokens[common] == prompt[common]) ++common;
+                if (common <= MAX_PREFIX_TOKENS)
+                    s.prefix.assign(prompt.begin(), prompt.begin() + common);
+            } catch (const std::exception &) {
+                // Some templates reject an empty user message; full requests remain usable without a snapshot.
             }
         }
         s.consumed = restorePrefix(s);
@@ -338,6 +383,7 @@ Java_com_hippo_ehviewer_translation_engine_NativeLlm_beginMessages(JNIEnv *env, 
         s.prompt = std::move(prompt);
         llama_sampler_reset(s.sampler);
         s.generated = 0;
+        s.pending_limit = false;
         s.finished = false;
         return count;
     } catch (const std::exception &e) { fail(env, e.what()); }
@@ -380,10 +426,16 @@ Java_com_hippo_ehviewer_translation_engine_NativeLlm_cpuState(JNIEnv *env, jobje
     return nullptr;
 }
 
-extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_hippo_ehviewer_translation_engine_NativeLlm_next(JNIEnv *env, jobject, jlong handle) {
+namespace {
+jbyteArray generateChunk(JNIEnv *env, jlong handle, int maxTokens, int maxMillis) {
     try {
         auto &s = session(handle);
+        if (s.pending_limit) {
+            s.pending_limit = false;
+            env->ThrowNew(env->FindClass("com/hippo/ehviewer/translation/engine/TranslationOutputLimitException"),
+                          "Translation was truncated");
+            return nullptr;
+        }
         if (s.finished) return nullptr;
         updateCpuPool(s);
         if (s.consumed < s.prompt.size()) {
@@ -399,35 +451,85 @@ Java_com_hippo_ehviewer_translation_engine_NativeLlm_next(JNIEnv *env, jobject, 
             if (s.cache_enabled && !s.prefix.empty() && s.consumed == s.prefix.size()) savePrefix(s);
             return env->NewByteArray(0);
         }
-        auto token = llama_sampler_sample(s.sampler, s.ctx, -1);
         const auto *vocab = llama_model_get_vocab(s.model);
-        if (llama_vocab_is_eog(vocab, token)) { s.finished = true; return nullptr; }
-        if (s.generated >= s.max_output) {
-            s.finished = true;
-            env->ThrowNew(env->FindClass("com/hippo/ehviewer/translation/engine/TranslationOutputLimitException"),
-                          "Translation was truncated");
-            return nullptr;
+        auto &chunk = s.output_chunk;
+        chunk.clear();
+        const auto began = std::chrono::steady_clock::now();
+        for (int step = 0; step < std::clamp(maxTokens, 1, 4); ++step) {
+            auto token = llama_sampler_sample(s.sampler, s.ctx, -1);
+            if (llama_vocab_is_eog(vocab, token)) { s.finished = true; break; }
+            if (s.generated >= s.max_output) {
+                s.finished = true;
+                // Deliver this chunk before surfacing the limit, so completed translations survive.
+                s.pending_limit = true;
+                break;
+            }
+            auto &piece = s.output_piece;
+            int length = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, false);
+            if (length < 0) {
+                piece.resize(-length);
+                length = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, false);
+            }
+            if (length < 0) throw std::runtime_error("Cannot decode output token");
+            if (llama_decode(s.ctx, llama_batch_get_one(&token, 1)) != 0) {
+                s.live_prefix.clear();
+                s.finished = true;
+                throw std::runtime_error("Native token decoding failed");
+            }
+            releaseRetiredPools(s);
+            ++s.generated;
+            chunk.insert(chunk.end(), piece.begin(), piece.begin() + length);
+            if (std::chrono::steady_clock::now() - began >=
+                std::chrono::milliseconds(std::clamp(maxMillis, 1, 32))) break;
         }
-        auto &piece = s.output_piece;
-        int length = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, false);
-        if (length < 0) {
-            piece.resize(-length);
-            length = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, false);
-        }
-        if (length < 0) throw std::runtime_error("Cannot decode output token");
-        if (llama_decode(s.ctx, llama_batch_get_one(&token, 1)) != 0) {
-            s.live_prefix.clear();
-            s.finished = true;
-            throw std::runtime_error("Native token decoding failed");
-        }
-        releaseRetiredPools(s);
-        ++s.generated;
-        auto result = env->NewByteArray(length);
-        if (result) env->SetByteArrayRegion(result, 0, length, reinterpret_cast<const jbyte *>(piece.data()));
+        if (chunk.empty() && s.pending_limit) return generateChunk(env, handle, maxTokens, maxMillis);
+        if (chunk.empty() && s.finished) return nullptr;
+        auto result = env->NewByteArray(chunk.size());
+        if (result && !chunk.empty()) env->SetByteArrayRegion(result, 0, chunk.size(),
+            reinterpret_cast<const jbyte *>(chunk.data()));
         return result;
     } catch (const std::exception &e) { fail(env, e.what()); }
     catch (...) { fail(env, "Native translation failed"); }
     return nullptr;
+}
+} // namespace
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_next(JNIEnv *env, jobject, jlong handle) {
+    return generateChunk(env, handle, 1, 1);
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_nextChunk(JNIEnv *env, jobject, jlong handle,
+        jint maxTokens, jint maxMillis, jintArray state) {
+    if (!state || env->GetArrayLength(state) != 1) {
+        fail(env, "Invalid generation chunk state");
+        return nullptr;
+    }
+    auto result = generateChunk(env, handle, maxTokens, maxMillis);
+    if (!env->ExceptionCheck()) {
+        const jint count = session(handle).generated;
+        env->SetIntArrayRegion(state, 0, 1, &count);
+    }
+    return result;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_countTokens(JNIEnv *env, jobject, jlong handle, jbyteArray text) {
+    try {
+        auto &s = session(handle);
+        const auto content = utf8(env, text);
+        const int count = llama_tokenize(llama_model_get_vocab(s.model), content.data(), content.size(),
+                                        nullptr, 0, false, false);
+        return count < 0 ? -count : count;
+    } catch (const std::exception &e) { fail(env, e.what()); }
+    return 0;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_hippo_ehviewer_translation_engine_NativeLlm_configureSampling(JNIEnv *env, jobject, jlong handle, jint profile) {
+    try { configureSampler(session(handle), profile); }
+    catch (const std::exception &e) { fail(env, e.what()); }
 }
 
 extern "C" JNIEXPORT void JNICALL

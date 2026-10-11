@@ -33,3 +33,4 @@ _build*.bat
 /translation-engine/build/
 /translation-engine/.cxx/
 /translation-engine/*.md
+!/translation-engine/NATIVE_TRANSLATION.md

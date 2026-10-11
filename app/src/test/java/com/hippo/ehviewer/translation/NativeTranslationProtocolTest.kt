@@ -435,8 +435,8 @@ class NativeTranslationProtocolTest {
             translator.unloadModel()
             val next = translator.translateDetailed(source)
             assertEquals(result.translations, next.translations)
-            assertEquals(Usage(120, 20), next.usage)
-            assertEquals(2, numberedCalls)
+            assertEquals(Usage(40, 10), next.usage)
+            assertEquals(1, numberedCalls)
             assertEquals(listOf("こんにちは", "ありがとう", "こんにちは", "ありがとう"), plainInputs)
         }
     }
