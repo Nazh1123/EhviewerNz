@@ -165,11 +165,13 @@ import com.hippo.widget.SimpleGridAutoSpanLayout;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -202,6 +204,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private static final int LOCAL_ACTION_DELETE = 0;
     private static final int LOCAL_ACTION_OPEN_IMAGE = 1;
     private static final int LOCAL_ACTION_COPY_PATH = 2;
+    private static final int LOCAL_ACTION_VIEW_SIZE = 3;
 
     public final static String KEY_ACTION = "action";
     public static final String ACTION_GALLERY_INFO = "action_gallery_info";
@@ -1411,7 +1414,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         for (View action : new View[]{mHeartGroup, mRate, mShare, mTorrent, mArchiver, mHaH, mSearchCover}) {
             action.setVisibility(offline ? View.GONE : View.VISIBLE);
         }
-        mLocalDelete.setVisibility(offline ? View.VISIBLE : View.GONE);
+        updateLocalActionsVisibility();
         mRating.setVisibility(offline ? View.GONE : Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
         mRatingText.setVisibility(offline || Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
         mRatingText.setGravity(Gravity.CENTER);
@@ -1783,9 +1786,13 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 case R.id.action_copy_local_gallery_path:
                     handleLocalGalleryAction(LOCAL_ACTION_COPY_PATH);
                     break;
+                case R.id.action_view_local_gallery_size:
+                    handleLocalGalleryAction(LOCAL_ACTION_VIEW_SIZE);
+                    break;
             }
             return true;
         });
+        updateLocalActionsVisibility();
     }
 
     @Nullable
@@ -2086,6 +2093,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         } else if (mOtherActions == v) {
             ensurePopMenu();
             if (mPopupMenu != null) {
+                updateLocalActionsVisibility();
                 mPopupMenu.show();
             }
         } else if (mUploader == v) {
@@ -2478,9 +2486,16 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 || mDownloadState == DownloadInfo.STATE_NONE;
     }
 
-    private void updateLocalDeleteVisibility() {
+    private void updateLocalActionsVisibility() {
+        boolean visible = hasLocalDownloadState();
         if (mLocalDelete != null) {
-            mLocalDelete.setVisibility(hasLocalDownloadState() ? View.VISIBLE : View.GONE);
+            mLocalDelete.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
+        if (mPopupMenu != null) {
+            for (int id : new int[]{R.id.action_open_local_gallery_image,
+                    R.id.action_copy_local_gallery_path, R.id.action_view_local_gallery_size}) {
+                mPopupMenu.getMenu().findItem(id).setVisible(visible);
+            }
         }
     }
 
@@ -2491,8 +2506,13 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             showNoLocalGalleryFiles();
             return;
         }
-        if (action == LOCAL_ACTION_DELETE && !hasLocalDownloadState()) {
+        if (!hasLocalDownloadState()) {
             showNoLocalGalleryFiles();
+            return;
+        }
+
+        if (action == LOCAL_ACTION_VIEW_SIZE) {
+            showLocalGallerySize(galleryInfo);
             return;
         }
 
@@ -2522,6 +2542,70 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 }
             });
         });
+    }
+
+    private void showLocalGallerySize(GalleryInfo galleryInfo) {
+        Context context = getEHContext();
+        if (context == null) {
+            return;
+        }
+        Toast.makeText(context, R.string.calculating_local_gallery_size, Toast.LENGTH_SHORT).show();
+        EhApplication.getExecutorService(context).execute(() -> {
+            long size;
+            try {
+                UniFile directory = SpiderDen.getExistingGalleryDownloadDir(galleryInfo);
+                if (directory == null || !directory.exists() || !directory.isDirectory()) {
+                    handler.post(() -> {
+                        if (isAdded() && mActions != null) showNoLocalGalleryFiles();
+                    });
+                    return;
+                }
+                size = calculateLocalGallerySize(directory);
+            } catch (Throwable e) {
+                ExceptionUtils.throwIfFatal(e);
+                handler.post(() -> {
+                    if (isAdded() && mActions != null) {
+                        Toast.makeText(context, R.string.cannot_get_local_gallery_size,
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+                return;
+            }
+            handler.post(() -> {
+                if (!isAdded() || mActions == null) {
+                    return;
+                }
+                new AlertDialog.Builder(context)
+                        .setTitle(R.string.view_local_gallery_size)
+                        .setMessage(getString(R.string.local_gallery_size_message,
+                                android.text.format.Formatter.formatFileSize(context, size)))
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show();
+            });
+        });
+    }
+
+    private static long calculateLocalGallerySize(UniFile directory) throws IOException {
+        ArrayDeque<UniFile> pending = new ArrayDeque<>();
+        pending.add(directory);
+        long size = 0;
+        while (!pending.isEmpty()) {
+            UniFile file = pending.removeLast();
+            if (file.isDirectory()) {
+                UniFile[] children = file.listFiles();
+                if (children == null) {
+                    throw new IOException("Cannot list gallery directory");
+                }
+                for (UniFile child : children) pending.add(child);
+            } else {
+                long length = file.length();
+                if (!file.isFile() || length < 0) {
+                    throw new IOException("Cannot read gallery file size");
+                }
+                size += length;
+            }
+        }
+        return size;
     }
 
     @Nullable
@@ -2728,6 +2812,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void updateDownloadText() {
+        updateLocalActionsVisibility();
         if (null == mDownload) {
             return;
         }
@@ -2763,7 +2848,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 //                mDownload.setText(R.string.new_version);
 //                break;
         }
-        updateLocalDeleteVisibility();
     }
 
     private void updateDownloadState() {

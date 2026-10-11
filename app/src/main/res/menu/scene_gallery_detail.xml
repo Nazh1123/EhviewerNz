@@ -34,4 +34,8 @@
         android:id="@+id/action_copy_local_gallery_path"
         android:title="@string/copy_local_gallery_path"/>
 
+    <item
+        android:id="@+id/action_view_local_gallery_size"
+        android:title="@string/view_local_gallery_size"/>
+
 </menu>

@@ -6,7 +6,10 @@ import android.os.Bundle;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.TextView;
+
+import androidx.appcompat.widget.PopupMenu;
 
 import com.hippo.conaco.Conaco;
 import com.hippo.conaco.DataContainer;
@@ -24,17 +27,21 @@ import com.hippo.ehviewer.client.data.GalleryTagGroup;
 import com.hippo.ehviewer.client.data.NormalPreviewSet;
 import com.hippo.ehviewer.client.exception.EhException;
 import com.hippo.ehviewer.dao.DaoMaster;
+import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.scene.GalleryInfoScene;
 import com.hippo.lib.image.Image;
+import com.hippo.unifile.UniFile;
 import com.hippo.view.ViewTransition;
 import com.hippo.widget.LoadImageView;
 
 import org.greenrobot.greendao.database.StandardDatabase;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
@@ -45,6 +52,11 @@ import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowLooper;
 import org.robolectric.util.ReflectionHelpers;
 
+import java.io.File;
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.AbstractExecutorService;
@@ -59,6 +71,7 @@ import static org.junit.Assert.*;
         OfflineGalleryDetailSceneTest.ClientShadow.class,
         OfflineGalleryDetailSceneTest.ImageShadow.class})
 public class OfflineGalleryDetailSceneTest {
+    @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
     private static DownloadManager manager;
     private static EhClient client;
     private static QueuedExecutor executor;
@@ -83,6 +96,7 @@ public class OfflineGalleryDetailSceneTest {
         requests.clear();
         imageNetworkLoads.clear();
         scene = new TestScene(context);
+        ReflectionHelpers.setField(scene, "mDownloadState", DownloadInfo.STATE_INVALID);
         content = LayoutInflater.from(context).inflate(R.layout.gallery_detail_content, null);
         String[] fields = {"mThumb", "mTitle", "mUploader", "mCategory", "mDownload", "mRead", "mHaveNewVersion",
                 "mArchiverDownloadProgress", "mUpdateActionGroup", "mUpdateGallery", "mGalleryHistory", "mUpdateActionDivider",
@@ -146,9 +160,9 @@ public class OfflineGalleryDetailSceneTest {
         assertEquals(context.getString(R.string.refresh), text(R.id.download));
         assertEquals("\n" + context.getString(R.string.offline_gallery_notice) + "\nGallery removed", text(R.id.rating_text));
         assertEquals(context.getString(R.string.offline_gallery_refresh), text(R.id.comments_text));
-        for (int id : new int[]{R.id.artist, R.id.similar, R.id.local_delete, R.id.comments, R.id.rating_text}) assertEquals(View.VISIBLE, content.findViewById(id).getVisibility());
+        for (int id : new int[]{R.id.artist, R.id.similar, R.id.comments, R.id.rating_text}) assertEquals(View.VISIBLE, content.findViewById(id).getVisibility());
         for (int id : new int[]{R.id.heart_group, R.id.rate, R.id.share, R.id.torrent, R.id.archiver, R.id.h_h, R.id.search_cover,
-                R.id.rating, R.id.favoredTimes, R.id.update_action_card}) assertEquals(View.GONE, content.findViewById(id).getVisibility());
+                R.id.rating, R.id.favoredTimes, R.id.update_action_card, R.id.local_delete}) assertEquals(View.GONE, content.findViewById(id).getVisibility());
         assertFalse(imageNetworkLoads.isEmpty());
         assertFalse(imageNetworkLoads.contains(true));
         assertNull(ReflectionHelpers.getField(scene, "mGalleryDetail"));
@@ -224,6 +238,55 @@ public class OfflineGalleryDetailSceneTest {
         assertFalse(keys.contains(context.getString(R.string.key_rating_count)));
         assertFalse(keys.contains(context.getString(R.string.key_torrents)));
         assertFalse(keys.contains(context.getString(R.string.key_parent)));
+    }
+
+    @Test public void localMenuActionsFollowLocalDeleteForEveryDownloadStateOnlineAndOffline() {
+        ReflectionHelpers.setField(scene, "mOtherActions", new ImageView(context));
+        ReflectionHelpers.callInstanceMethod(scene, "ensurePopMenu");
+        PopupMenu popup = ReflectionHelpers.getField(scene, "mPopupMenu");
+        assertFalse(popup.getMenu().findItem(R.id.action_view_local_gallery_size).isVisible());
+        for (boolean offline : new boolean[]{false, true}) {
+            ReflectionHelpers.setField(scene, "mOffline", offline);
+            for (int state : new int[]{DownloadInfo.STATE_FINISH, DownloadInfo.STATE_NONE,
+                    DownloadInfo.STATE_INVALID, DownloadInfo.STATE_WAIT, DownloadInfo.STATE_DOWNLOAD,
+                    DownloadInfo.STATE_FAILED, DownloadInfo.STATE_UPDATE, DownloadInfo.GOTO_NEW}) {
+                ReflectionHelpers.setField(scene, "mDownloadState", state);
+                ReflectionHelpers.callInstanceMethod(scene, "updateDownloadText");
+                boolean visible = state == DownloadInfo.STATE_FINISH || state == DownloadInfo.STATE_NONE;
+                assertEquals(visible ? View.VISIBLE : View.GONE, content.findViewById(R.id.local_delete).getVisibility());
+                for (int id : new int[]{R.id.action_open_local_gallery_image,
+                        R.id.action_copy_local_gallery_path, R.id.action_view_local_gallery_size}) {
+                    assertEquals("offline=" + offline + ", state=" + state, visible, popup.getMenu().findItem(id).isVisible());
+                }
+                assertTrue(popup.getMenu().findItem(R.id.action_refresh).isVisible());
+                assertTrue(popup.getMenu().findItem(R.id.action_open_in_other_app).isVisible());
+            }
+        }
+    }
+
+    @Test public void localFolderSizeIncludesNestedFilesAndMetadataWithoutRequiringImages() throws Exception {
+        File directory = temporaryFolder.newFolder("gallery");
+        File nested = new File(directory, "translations");
+        assertTrue(nested.mkdir());
+        Files.write(new File(directory, ".ehviewer").toPath(), new byte[13]);
+        Files.write(new File(nested, "translated.png").toPath(), new byte[1024]);
+        Files.write(new File(nested, "empty").toPath(), new byte[0]);
+        assertEquals(1037L, calculateSize(directory));
+        Files.write(new File(directory, ".ehviewer").toPath(), new byte[26]);
+        assertEquals(1050L, calculateSize(directory));
+        assertEquals(0L, calculateSize(temporaryFolder.newFolder("empty")));
+    }
+
+    @Test public void missingLocalFolderDoesNotReportZeroSize() throws Exception {
+        InvocationTargetException error = assertThrows(InvocationTargetException.class,
+                () -> calculateSize(new File(temporaryFolder.getRoot(), "missing")));
+        assertTrue(error.getCause() instanceof IOException);
+    }
+
+    private long calculateSize(File directory) throws Exception {
+        Method method = GalleryDetailScene.class.getDeclaredMethod("calculateLocalGallerySize", UniFile.class);
+        method.setAccessible(true);
+        return (long) method.invoke(null, UniFile.fromFile(directory));
     }
 
     private String text(int id) { return ((TextView) content.findViewById(id)).getText().toString(); }

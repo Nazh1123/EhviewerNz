@@ -373,6 +373,10 @@
     <string name="local_delete">Local Delete</string>
     <string name="open_local_gallery_image">Open Local Gallery Image</string>
     <string name="copy_local_gallery_path">Copy Gallery Local Path</string>
+    <string name="view_local_gallery_size">View Local Storage Size</string>
+    <string name="calculating_local_gallery_size">Calculating local folder size…</string>
+    <string name="local_gallery_size_message">Local gallery folder size: %1$s</string>
+    <string name="cannot_get_local_gallery_size">Can\'t calculate the local gallery folder size</string>
     <string name="no_local_gallery_files">No local gallery files</string>
     <string name="cannot_open_local_gallery">No app can open this local gallery item</string>
     <string name="cannot_get_local_gallery_path">Can\'t get the local gallery path</string>

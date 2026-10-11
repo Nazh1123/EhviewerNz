@@ -1148,6 +1148,10 @@
     <string name="cannot_get_local_gallery_path">無法取得畫廊本地路徑</string>
     <string name="cannot_open_local_gallery">沒有可開啟該本地畫廊專案的應用</string>
     <string name="copy_local_gallery_path">複製畫廊本地路徑</string>
+    <string name="view_local_gallery_size">查看本地佔用大小</string>
+    <string name="calculating_local_gallery_size">正在計算本地資料夾大小…</string>
+    <string name="local_gallery_size_message">此畫廊本地資料夾大小：%1$s</string>
+    <string name="cannot_get_local_gallery_size">無法計算畫廊本地資料夾大小</string>
     <string name="download_filter_by_kind">根據類型過濾</string>
     <string name="error_open_image_directory">無法讀取所選圖片所在目錄。請授予儲存存取權限，或換用可提供本機路徑的檔案管理器。</string>
     <string name="gallery_history_empty">此畫廊沒有父親畫廊歷史</string>

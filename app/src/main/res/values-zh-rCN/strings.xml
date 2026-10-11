@@ -284,6 +284,10 @@
     <string name="local_delete">本地删除</string>
     <string name="open_local_gallery_image">打开本地画廊图片</string>
     <string name="copy_local_gallery_path">复制画廊本地路径</string>
+    <string name="view_local_gallery_size">查看本地占用大小</string>
+    <string name="calculating_local_gallery_size">正在计算本地文件夹大小…</string>
+    <string name="local_gallery_size_message">该画廊本地文件夹大小：%1$s</string>
+    <string name="cannot_get_local_gallery_size">无法计算画廊本地文件夹大小</string>
     <string name="no_local_gallery_files">不存在本地画廊文件</string>
     <string name="cannot_open_local_gallery">没有可打开该本地画廊项目的应用</string>
     <string name="cannot_get_local_gallery_path">无法获取画廊本地路径</string>
