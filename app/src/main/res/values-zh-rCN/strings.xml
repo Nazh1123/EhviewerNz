@@ -1231,4 +1231,6 @@
     <string name="settings_test_bookmark_subscription_running">正在测试书签订阅…</string>
     <string name="settings_test_bookmark_subscription_finished">书签订阅测试完成</string>
     <string name="settings_test_bookmark_subscription_failed">部分书签订阅请求失败</string>
+    <string name="settings_show_viewed_galleries">显示已浏览画廊</string>
+    <string name="settings_show_viewed_galleries_summary">记录画廊搜索结果中的最新画廊，用于后续执行相同条件的搜索时，标记已浏览过的画廊。</string>
 </resources>

@@ -1326,4 +1326,6 @@
     <string name="settings_test_bookmark_subscription_running">Testing bookmark subscriptions…</string>
     <string name="settings_test_bookmark_subscription_finished">Bookmark subscription test finished</string>
     <string name="settings_test_bookmark_subscription_failed">Some bookmark subscription requests failed</string>
+    <string name="settings_show_viewed_galleries">Show browsed galleries</string>
+    <string name="settings_show_viewed_galleries_summary">Record the newest gallery in search results to mark previously browsed galleries when searching with the same conditions again.</string>
 </resources>

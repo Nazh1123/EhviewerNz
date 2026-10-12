@@ -1219,4 +1219,6 @@
     <string name="settings_test_bookmark_subscription_running">正在測試書籤訂閱…</string>
     <string name="settings_test_bookmark_subscription_finished">書籤訂閱測試完成</string>
     <string name="settings_test_bookmark_subscription_failed">部分書籤訂閱請求失敗</string>
+    <string name="settings_show_viewed_galleries">顯示已瀏覽畫廊</string>
+    <string name="settings_show_viewed_galleries_summary">記錄畫廊搜尋結果中的最新畫廊，用於後續執行相同條件的搜尋時，標記已瀏覽過的畫廊。</string>
 </resources>

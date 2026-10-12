@@ -2123,6 +2123,12 @@ public class Settings {
 
     public static final String KEY_HISTORY_INFO_SIZE = "history_info_size";
 
+    public static final String KEY_SHOW_VIEWED_GALLERIES = "show_viewed_galleries";
+
+    public static boolean getShowViewedGalleries() {
+        return getBoolean(KEY_SHOW_VIEWED_GALLERIES, false);
+    }
+
     public static final String KEY_RECORD_READING_HISTORY = "record_reading_history";
     public static final String KEY_READING_HISTORY_SIZE = "reading_history_size";
 
@@ -2143,6 +2149,7 @@ public class Settings {
 
     public static void setHistoryInfoSize(int value) {
         putIntToStr(KEY_HISTORY_INFO_SIZE, value);
+        com.hippo.ehviewer.client.SeenGalleryHistory.trimToHistorySize(value);
     }
 
     public static int getReadingHistorySize() {

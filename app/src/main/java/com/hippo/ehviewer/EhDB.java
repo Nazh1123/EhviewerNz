@@ -53,6 +53,7 @@ import com.hippo.ehviewer.dao.HistoryInfo;
 import com.hippo.ehviewer.dao.LocalFavoriteInfo;
 import com.hippo.ehviewer.dao.LocalFavoritesDao;
 import com.hippo.ehviewer.dao.QuickSearch;
+import com.hippo.ehviewer.client.SeenGalleryHistory;
 import com.hippo.ehviewer.dao.QuickSearchDao;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.util.ExceptionUtils;
@@ -873,13 +874,17 @@ public class EhDB {
     }
 
     public static synchronized void updateQuickSearch(QuickSearch quickSearch) {
+        SeenGalleryHistory.onBookmarksChanged(getAllQuickSearch());
         QuickSearchDao dao = sDaoSession.getQuickSearchDao();
         dao.update(quickSearch);
+        SeenGalleryHistory.onBookmarksChanged(getAllQuickSearch());
     }
 
     public static synchronized void deleteQuickSearch(QuickSearch quickSearch) {
+        SeenGalleryHistory.onBookmarksChanged(getAllQuickSearch());
         QuickSearchDao dao = sDaoSession.getQuickSearchDao();
         dao.delete(quickSearch);
+        SeenGalleryHistory.onBookmarksChanged(getAllQuickSearch());
     }
 
     /**

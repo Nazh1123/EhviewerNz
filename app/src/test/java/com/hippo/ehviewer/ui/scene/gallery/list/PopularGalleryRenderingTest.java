@@ -16,6 +16,8 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.hippo.conaco.Conaco;
 import com.hippo.drawable.GalleryCountDrawable;
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.EhDB;
+import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.FavouriteStatusRouter;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
@@ -61,8 +63,9 @@ import static org.robolectric.Shadows.shadowOf;
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = 28, shadows = {
         PopularGalleryRenderingTest.AppShadow.class, PopularGalleryRenderingTest.DownloadShadow.class,
-        PopularGalleryRenderingTest.ImageShadow.class})
+        PopularGalleryRenderingTest.ImageShadow.class, PopularGalleryRenderingTest.DbShadow.class})
 public class PopularGalleryRenderingTest {
+    private static final List<QuickSearch> bookmarks = new ArrayList<>();
     private static FavouriteStatusRouter router;
     private static DownloadManager downloads;
     private static final Set<Long> downloadedGids = new HashSet<>();
@@ -78,6 +81,7 @@ public class PopularGalleryRenderingTest {
         Context app = RuntimeEnvironment.getApplication();
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 app.getSharedPreferences("popular-render-test", Context.MODE_PRIVATE));
+        bookmarks.clear();
         router = new FavouriteStatusRouter();
         downloads = Shadow.newInstanceOf(DownloadManager.class);
         downloadedGids.clear();
@@ -436,6 +440,7 @@ public class PopularGalleryRenderingTest {
 
     @Test @Config(sdk = 34, qualifiers = "600dpi")
     public void allSubscriptionEntriesUseSidebarGidsAndKeepTheBoundaryAfterClearingBadges() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, true);
         for (int mode : new int[]{ListUrlBuilder.MODE_SUBSCRIPTION,
@@ -518,6 +523,7 @@ public class PopularGalleryRenderingTest {
     }
 
     private SubscriptionUpdateManager subscriptionManager(int mode, long... gids) {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
         builder.setMode(mode);
         SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
         Set<Long> eh = ReflectionHelpers.getField(manager, "mEhUnreadGids");
@@ -530,6 +536,68 @@ public class PopularGalleryRenderingTest {
         }
         ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
         return manager;
+    }
+
+    @Test public void viewedSearchUsesPreviousMaximumAndPaginationKeepsTheBoundary() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("seen-search");
+        refresh(4, 3);
+        assertEquals(Arrays.asList(4L, 3L), visibleIds());
+        refresh(6, 4, 5, 3);
+        assertEquals(Arrays.asList(6L, 5L, null, 4L, 3L), visibleIds());
+        assertEquals(3, helper.getAdapterPosition(1));
+        assertEquals(1, helper.getDataPosition(2));
+        helper.getData().addAll(galleries(2, 1));
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceItemRangeInserted",
+                ClassParameter.from(int.class, 4), ClassParameter.from(int.class, 2));
+        assertEquals(Arrays.asList(6L, 5L, null, 4L, 3L, 2L, 1L), visibleIds());
+        layout();
+        assertTrue(recycler.findViewHolderForAdapterPosition(2).itemView
+                instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
+        android.os.Bundle saved = new android.os.Bundle();
+        scene.onSaveInstanceState(saved);
+        ReflectionHelpers.setField(scene, "mSeenSearch", null);
+        ReflectionHelpers.callInstanceMethod(scene, "onRestore", ClassParameter.from(android.os.Bundle.class, saved));
+        builder = ReflectionHelpers.getField(scene, "mUrlBuilder");
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceDataSetChanged");
+        assertEquals(Arrays.asList(6L, 5L, null, 4L, 3L, 2L, 1L), visibleIds());
+        builder.setKeyword("different-search");
+        refresh(8, 3);
+        assertEquals(Arrays.asList(8L, 3L), visibleIds());
+    }
+
+    @Test public void disabledSwitchHidesSubscriptionBoundaryButStillAdvancesSubscriptionBaseline() {
+        subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 5);
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, false);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(5, 4);
+        assertEquals(Arrays.asList(5L, 4L), visibleIds());
+        assertEquals(5, Settings.getLong("subscription_updates_last_seen_eh_gid", 0));
+        assertEquals("", Settings.getString("seen_gallery_searches_v1", ""));
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("disabled-search");
+        refresh(9, 5);
+        assertEquals(Arrays.asList(9L, 5L), visibleIds());
+        assertEquals("", Settings.getString("seen_gallery_searches_v1", ""));
+    }
+
+    @Test public void subscribedBookmarkAndGlobalSubscriptionShareViewedMaximum() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("subscribed-bookmark");
+        QuickSearch bookmark = builder.toQuickSearch();
+        bookmark.subscribed = true;
+        bookmarks.add(bookmark);
+        SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
+        ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+        manager.recordGlobalPageViewed(90, 100);
+        refresh(110, 100, 95);
+        assertEquals(Arrays.asList(110L, null, 100L, 95L), visibleIds());
+        assertEquals(110, SubscriptionUpdateManager.getLastSeenBookmarkGid());
+        manager.recordBookmarkPageViewed(120);
+        refresh(125, 115, 100);
+        assertEquals(Arrays.asList(125L, null, 115L, 100L), visibleIds());
     }
 
     private void footer() {
@@ -632,6 +700,10 @@ public class PopularGalleryRenderingTest {
         @Implementation protected static DownloadManager getDownloadManager(Context context) { return downloads; }
         @Implementation protected static FavouriteStatusRouter getFavouriteStatusRouter() { return router; }
         @Implementation protected static Conaco<Image> getConaco(Context context) { return null; }
+    }
+    @Implements(EhDB.class)
+    public static class DbShadow {
+        @Implementation protected static List<QuickSearch> getAllQuickSearch() { return bookmarks; }
     }
     @Implements(DownloadManager.class)
     public static class DownloadShadow {

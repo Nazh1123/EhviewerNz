@@ -487,6 +487,10 @@ public final class SubscriptionUpdateManager {
         notifyStateChanged();
     }
 
+    public static long getLastSeenBookmarkGid() {
+        return Settings.getLong(KEY_LAST_SEEN_BOOKMARK_GID, 0L);
+    }
+
     public void recordGlobalPageViewed(long ehMaxGid, long bookmarkMaxGid) {
         clearEhUnread();
         clearBookmarkUnread();

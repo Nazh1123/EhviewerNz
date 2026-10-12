@@ -117,6 +117,12 @@
             app:entries="@array/gallery_update_record_limit_entries"
             app:entryValues="@array/gallery_update_record_limit_values"
             app:allowDividerAbove="true" />
+
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="false"
+            android:key="show_viewed_galleries"
+            android:title="@string/settings_show_viewed_galleries"
+            android:summary="@string/settings_show_viewed_galleries_summary" />
     <!-- Retired switches: use key bindings.
 
         <com.hippo.preference.SwitchPreference

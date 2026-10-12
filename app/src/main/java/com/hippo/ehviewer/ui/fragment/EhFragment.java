@@ -121,6 +121,7 @@ public class EhFragment extends BasePreferenceFragmentCompat
             }catch (NumberFormatException e){
                 EhDB.MAX_HISTORY_COUNT = Settings.DEFAULT_HISTORY_INFO_SIZE;
             }
+            com.hippo.ehviewer.client.SeenGalleryHistory.trimToHistorySize(EhDB.MAX_HISTORY_COUNT);
             return true;
         } else if (Settings.KEY_SHOW_GALLERY_COMMENT.equals(key)) {
             getActivity().setResult(Activity.RESULT_OK);
