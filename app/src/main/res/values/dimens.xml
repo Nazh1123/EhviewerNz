@@ -194,4 +194,7 @@ http://developer.android.com/guide/topics/appwidgets/index.html#CreatingLayout
     -->
     <dimen name="widget_margin">0dp</dimen>
 
+    <dimen name="gallery_section_divider_thickness">3.2dp</dimen>
+    <dimen name="gallery_section_divider_gap">1.07dp</dimen>
+
 </resources>

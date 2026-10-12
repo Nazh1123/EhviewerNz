@@ -563,6 +563,9 @@
     <string name="settings_eh_detail_size_long">長</string>
     <string name="settings_eh_detail_size_short">短</string>
     <string name="settings_eh_thumb_size">縮圖大小</string>
+    <string name="settings_eh_cover_thumb_size">封面縮圖大小</string>
+    <string name="settings_eh_preview_thumb_size">預覽縮圖大小</string>
+    <string name="settings_eh_thumb_size_description">調整直向每行顯示的縮圖數量。大 / 中 / 小 為原版本預設值的保留項。</string>
     <string name="settings_eh_thumb_size_large">大</string>
     <string name="settings_eh_thumb_size_middle">中</string>
     <string name="settings_eh_thumb_size_small">小</string>

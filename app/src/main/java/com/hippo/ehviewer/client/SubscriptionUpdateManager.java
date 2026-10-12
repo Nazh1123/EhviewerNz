@@ -328,14 +328,31 @@ public final class SubscriptionUpdateManager {
     public Snapshot getSnapshot() {
         boolean ehEnabled = Settings.getAutoSubscriptionUpdatesEh();
         boolean bookmarkEnabled = Settings.getAutoSubscriptionUpdatesBookmark();
-        int globalCount = 0;
-        if (ehEnabled && bookmarkEnabled) {
-            HashSet<Long> globalGids = new HashSet<>(mEhUnreadGids);
-            globalGids.addAll(mBookmarkUnreadGids);
-            globalCount = globalGids.size();
-        }
+        int globalCount = getUnreadGalleryGids(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION).size();
         return new Snapshot(ehEnabled, bookmarkEnabled,
                 mEhUnreadGids.size(), mBookmarkUnreadGids.size(), globalCount);
+    }
+
+    /** Copies the same GIDs counted by the sidebar before opening clears its badge. */
+    @NonNull
+    public Set<Long> getUnreadGalleryGids(int mode) {
+        Set<Long> gids = new HashSet<>();
+        switch (mode) {
+            case ListUrlBuilder.MODE_SUBSCRIPTION:
+                gids.addAll(mEhUnreadGids);
+                break;
+            case ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION:
+                gids.addAll(mBookmarkUnreadGids);
+                break;
+            case ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION:
+                if (Settings.getAutoSubscriptionUpdatesEh()
+                        && Settings.getAutoSubscriptionUpdatesBookmark()) {
+                    gids.addAll(mEhUnreadGids);
+                    gids.addAll(mBookmarkUnreadGids);
+                }
+                break;
+        }
+        return gids;
     }
 
     /** Returns false when another check is active or no source is enabled. */

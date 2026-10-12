@@ -29,6 +29,7 @@ public class SimpleGridAutoSpanLayout extends SimpleGridLayout {
     private int mColumnSize = -1;
     private boolean mColumnSizeChanged = true;
     private int mStrategy;
+    private final PortraitColumnSize mPortraitColumnSize = new PortraitColumnSize();
 
     // 缓存字段，用于性能优化
     private int mLastWidthSize = -1;
@@ -53,6 +54,7 @@ public class SimpleGridAutoSpanLayout extends SimpleGridLayout {
     }
 
     public void setColumnSize(int columnSize) {
+        mPortraitColumnSize.setColumns(0);
         if (columnSize == mColumnSize) {
             return;
         }
@@ -61,6 +63,11 @@ public class SimpleGridAutoSpanLayout extends SimpleGridLayout {
         // 清除缓存，确保下次 onMeasure 时重新计算
         mLastWidthSize = -1;
         mLastTotalSpace = -1;
+    }
+
+    public void setPortraitSpanCount(int columns) {
+        mPortraitColumnSize.setColumns(columns);
+        mColumnSizeChanged = true;
     }
 
     public void setStrategy(int strategy) {
@@ -122,6 +129,14 @@ public class SimpleGridAutoSpanLayout extends SimpleGridLayout {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int widthMode = MeasureSpec.getMode(widthMeasureSpec);
         int widthSize = MeasureSpec.getSize(widthMeasureSpec);
+        if (mPortraitColumnSize.getColumns() > 0 && widthMode == MeasureSpec.EXACTLY) {
+            int size = mPortraitColumnSize.resolve(getResources(), widthSize,
+                    getPaddingLeft() + getPaddingRight());
+            if (size > 0 && size != mColumnSize) {
+                mColumnSize = size;
+                mColumnSizeChanged = true;
+            }
+        }
 
         // 检查是否需要重新计算列数
         boolean needRecalculate = false;

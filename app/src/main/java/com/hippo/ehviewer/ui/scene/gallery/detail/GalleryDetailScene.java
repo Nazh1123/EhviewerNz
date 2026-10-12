@@ -1462,7 +1462,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         bindComments(null);
         mCommentsText.setText(R.string.offline_gallery_refresh);
         mGridLayout.removeAllViews();
-        mGridLayout.setColumnSize(getResources().getDimensionPixelOffset(Settings.getThumbSizeResId()));
+        mGridLayout.setColumnSize(getResources().getDimensionPixelOffset(
+                Settings.getThumbSizeResId(Settings.getPreviewThumbSize())));
+        mGridLayout.setPortraitSpanCount(Settings.getThumbPortraitColumns(Settings.getPreviewThumbSize()));
         mGridLayout.setStrategy(SimpleGridAutoSpanLayout.STRATEGY_SUITABLE_SIZE);
         int count = Math.min(27, local.previews.size());
         for (int i = 0; i < count; i++) {
@@ -1625,8 +1627,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         PreviewSet previewSet = gd.previewSet;
 
 
-        int columnWidth = resources.getDimensionPixelOffset(Settings.getThumbSizeResId());
+        int columnWidth = resources.getDimensionPixelOffset(
+                Settings.getThumbSizeResId(Settings.getPreviewThumbSize()));
         mGridLayout.setColumnSize(columnWidth);
+        mGridLayout.setPortraitSpanCount(Settings.getThumbPortraitColumns(Settings.getPreviewThumbSize()));
         mGridLayout.setStrategy(SimpleGridAutoSpanLayout.STRATEGY_SUITABLE_SIZE);
 
         // 限制初始显示的预览数量，避免创建过多视图导致滚动卡顿

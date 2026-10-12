@@ -65,6 +65,26 @@ public class SubscriptionCheckReuseTest {
         manager = new SubscriptionUpdateManager(context);
     }
 
+    @Test public void dividerSnapshotMatchesActualSidebarCheckAndSurvivesBadgeClearing() {
+        enableBookmark();
+        manager.recordGlobalPageViewed(100, 100);
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(200, null));
+        java.util.Set<Long> eh = manager.getUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION);
+        java.util.Set<Long> bookmark = manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        java.util.Set<Long> global = manager.getUnreadGalleryGids(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        assertEquals(Collections.singleton(200L), eh);
+        assertEquals(eh, bookmark);
+        assertEquals(eh, global);
+        assertEquals(eh.size(), manager.getSnapshot().ehCount);
+        assertEquals(bookmark.size(), manager.getSnapshot().bookmarkCount);
+        assertEquals(global.size(), manager.getSnapshot().globalCount);
+        manager.onSubscriptionOpened(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION).isEmpty());
+        assertEquals(Collections.singleton(200L), global);
+    }
+
     @Test public void manualAndAutomaticChecksAreReusableByGlobalEntryOnly() {
         for (boolean manual : new boolean[]{false, true}) {
             assertTrue(manager.checkForUpdates(manual));

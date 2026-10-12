@@ -16,9 +16,14 @@
 
 package com.hippo.widget.recyclerview;
 
+import android.content.res.Resources;
 import android.view.View;
+
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
+
+import com.hippo.widget.PortraitColumnSize;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,6 +35,9 @@ public class AutoStaggeredGridLayoutManager extends StaggeredGridLayoutManager {
     private int mColumnSize = -1;
     private boolean mColumnSizeChanged = true;
     private int mStrategy;
+    private int mLastTotalSpace = -1;
+    private final PortraitColumnSize mPortraitColumnSize = new PortraitColumnSize();
+    private Resources mResources;
 
     private List<OnUpdateSpanCountListener> mListeners;
 
@@ -39,10 +47,17 @@ public class AutoStaggeredGridLayoutManager extends StaggeredGridLayoutManager {
     }
 
     public void setColumnSize(int columnSize) {
+        mPortraitColumnSize.setColumns(0);
         if (columnSize == mColumnSize) {
             return;
         }
         mColumnSize = columnSize;
+        mColumnSizeChanged = true;
+    }
+
+    public void setPortraitSpanCount(Resources resources, int columns) {
+        mResources = resources;
+        mPortraitColumnSize.setColumns(columns);
         mColumnSizeChanged = true;
     }
 
@@ -71,7 +86,16 @@ public class AutoStaggeredGridLayoutManager extends StaggeredGridLayoutManager {
 
     @Override
     public void onMeasure(RecyclerView.Recycler recycler, RecyclerView.State state, int widthSpec, int heightSpec) {
-        if (mColumnSizeChanged && mColumnSize > 0) {
+        if (mPortraitColumnSize.getColumns() > 0
+                && View.MeasureSpec.getMode(widthSpec) == View.MeasureSpec.EXACTLY) {
+            int size = mPortraitColumnSize.resolve(mResources, View.MeasureSpec.getSize(widthSpec),
+                    getPaddingLeft() + getPaddingRight());
+            if (size > 0 && size != mColumnSize) {
+                mColumnSize = size;
+                mColumnSizeChanged = true;
+            }
+        }
+        if (mColumnSize > 0) {
             int totalSpace;
             if (getOrientation() == VERTICAL) {
                 if (View.MeasureSpec.EXACTLY != View.MeasureSpec.getMode(widthSpec)) {
@@ -84,23 +108,25 @@ public class AutoStaggeredGridLayoutManager extends StaggeredGridLayoutManager {
                 }
                 totalSpace = View.MeasureSpec.getSize(heightSpec) - getPaddingTop() - getPaddingBottom();
             }
+            if (totalSpace > 0 && (mColumnSizeChanged || totalSpace != mLastTotalSpace)) {
+                int spanCount;
+                switch (mStrategy) {
+                    default:
+                    case STRATEGY_MIN_SIZE:
+                        spanCount = getSpanCountForMinSize(totalSpace, mColumnSize);
+                        break;
+                    case STRATEGY_SUITABLE_SIZE:
+                        spanCount = getSpanCountForSuitableSize(totalSpace, mColumnSize);
+                        break;
+                }
+                setSpanCount(spanCount);
+                mColumnSizeChanged = false;
+                mLastTotalSpace = totalSpace;
 
-            int spanCount;
-            switch (mStrategy) {
-                default:
-                case STRATEGY_MIN_SIZE:
-                    spanCount = getSpanCountForMinSize(totalSpace, mColumnSize);
-                    break;
-                case STRATEGY_SUITABLE_SIZE:
-                    spanCount = getSpanCountForSuitableSize(totalSpace, mColumnSize);
-                    break;
-            }
-            setSpanCount(spanCount);
-            mColumnSizeChanged = false;
-
-            if (null != mListeners) {
-                for (int i = 0, n = mListeners.size(); i < n; i++) {
-                    mListeners.get(i).onUpdateSpanCount(spanCount);
+                if (null != mListeners) {
+                    for (int i = 0, n = mListeners.size(); i < n; i++) {
+                        mListeners.get(i).onUpdateSpanCount(spanCount);
+                    }
                 }
             }
         }

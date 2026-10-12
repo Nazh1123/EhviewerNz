@@ -426,6 +426,14 @@ public class ContentLayout extends FrameLayout {
         protected void onScrollToPosition(int postion) {
         }
 
+        protected int getAdapterPosition(int dataPosition) {
+            return dataPosition;
+        }
+
+        protected int getDataPosition(int adapterPosition) {
+            return adapterPosition;
+        }
+
         @Override
         public void onShowView(View hiddenView, View shownView) {
         }
@@ -664,7 +672,7 @@ public class ContentLayout extends FrameLayout {
                     if (manager == null) {
                         return;
                     }
-                    LayoutManagerUtils.scrollToPositionWithOffset(manager, newIndexEnd - 1, 0);
+                    LayoutManagerUtils.scrollToPositionWithOffset(manager, getAdapterPosition(newIndexEnd - 1), 0);
                     onScrollToPosition(newIndexEnd - 1);
                 }
             }
@@ -741,7 +749,7 @@ public class ContentLayout extends FrameLayout {
                         if (manager == null) {
                             return;
                         }
-                        LayoutManagerUtils.scrollToPositionWithOffset(manager, oldDataSize, 0);
+                        LayoutManagerUtils.scrollToPositionWithOffset(manager, getAdapterPosition(oldDataSize), 0);
                         onScrollToPosition(oldDataSize);
                     }
                 }
@@ -764,7 +772,7 @@ public class ContentLayout extends FrameLayout {
                         if (manager == null) {
                             return;
                         }
-                        LayoutManagerUtils.scrollToPositionWithOffset(manager, oldDataSize, 0);
+                        LayoutManagerUtils.scrollToPositionWithOffset(manager, getAdapterPosition(oldDataSize), 0);
                         onScrollToPosition(oldDataSize);
                     }
                 }
@@ -820,7 +828,7 @@ public class ContentLayout extends FrameLayout {
                     if (mCurrentTaskType == TYPE_PRE_PAGE_KEEP_POS) {
                         mRecyclerView.stopScroll();
                         LayoutManagerUtils.scrollToPositionProperly(mRecyclerView.getLayoutManager(), getContext(),
-                                dataSize - 1, mOnScrollToPositionListener);
+                                getAdapterPosition(dataSize - 1), mOnScrollToPositionListener);
                     } else {
                         mRecyclerView.stopScroll();
                         RecyclerView.LayoutManager manager = mRecyclerView.getLayoutManager();
@@ -1008,6 +1016,7 @@ public class ContentLayout extends FrameLayout {
         }
 
         private int getPageForPosition(int position) {
+            position = getDataPosition(position);
             if (position < 0) {
                 return -1;
             }
@@ -1057,7 +1066,7 @@ public class ContentLayout extends FrameLayout {
 
                 int position = getPageStart(page);
                 mRecyclerView.stopScroll();
-                LayoutManagerUtils.scrollToPositionWithOffset(mRecyclerView.getLayoutManager(), position, 0);
+                LayoutManagerUtils.scrollToPositionWithOffset(mRecyclerView.getLayoutManager(), getAdapterPosition(position), 0);
                 onScrollToPosition(position);
             } else if (page == mStartPage - 1) {
                 mRefreshLayout.setFooterRefreshing(false);

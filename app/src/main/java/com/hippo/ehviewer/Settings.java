@@ -96,6 +96,9 @@ public class Settings {
         }
         // migrateQuickPageTurnSetting(); // Legacy switches migrate into ReaderKeyProfiles instead.
         migrateThumbnailInfoBarSetting();
+        if (!sSettingsPre.contains(KEY_PREVIEW_THUMB_SIZE)) {
+            putString(KEY_PREVIEW_THUMB_SIZE, Integer.toString(getThumbSize()));
+        }
         getStartTransferTime();
     }
 
@@ -654,15 +657,30 @@ public class Settings {
     }
 
     public static final String KEY_THUMB_SIZE = "thumb_size";
+    public static final String KEY_PREVIEW_THUMB_SIZE = "preview_thumb_size";
     private static final int DEFAULT_THUMB_SIZE = 1;
 
     public static int getThumbSize() {
         return getIntFromStr(KEY_THUMB_SIZE, DEFAULT_THUMB_SIZE);
     }
 
+    public static int getPreviewThumbSize() {
+        return getIntFromStr(KEY_PREVIEW_THUMB_SIZE, DEFAULT_THUMB_SIZE);
+    }
+
+    /** Numeric choices use 101..108 so the legacy 0/1/2 presets keep their meaning. */
+    public static int getThumbPortraitColumns(int size) {
+        return size >= 101 && size <= 108 ? size - 100 : 0;
+    }
+
     @DimenRes
     public static int getThumbSizeResId() {
-        switch (getThumbSize()) {
+        return getThumbSizeResId(getThumbSize());
+    }
+
+    @DimenRes
+    public static int getThumbSizeResId(int size) {
+        switch (size) {
             case 0:
                 return R.dimen.gallery_grid_column_width_large;
             default:

@@ -115,6 +115,29 @@
         <item>2</item>
     </string-array>
 
+    <string-array name="cover_thumb_size_entries" translatable="false">
+        <item>@string/settings_eh_thumb_size_large</item>
+        <item>@string/settings_eh_thumb_size_middle</item>
+        <item>@string/settings_eh_thumb_size_small</item>
+        <item>1</item><item>2</item><item>3</item><item>4</item><item>5</item>
+    </string-array>
+    <string-array name="cover_thumb_size_entry_values" translatable="false">
+        <item>0</item><item>1</item><item>2</item>
+        <item>101</item><item>102</item><item>103</item><item>104</item><item>105</item>
+    </string-array>
+    <string-array name="preview_thumb_size_entries" translatable="false">
+        <item>@string/settings_eh_thumb_size_large</item>
+        <item>@string/settings_eh_thumb_size_middle</item>
+        <item>@string/settings_eh_thumb_size_small</item>
+        <item>1</item><item>2</item><item>3</item><item>4</item><item>5</item>
+        <item>6</item><item>7</item><item>8</item>
+    </string-array>
+    <string-array name="preview_thumb_size_entry_values" translatable="false">
+        <item>0</item><item>1</item><item>2</item>
+        <item>101</item><item>102</item><item>103</item><item>104</item><item>105</item>
+        <item>106</item><item>107</item><item>108</item>
+    </string-array>
+
     <string-array name="history_info_size_entries" translatable="false">
         <item>100</item>
         <item>500</item>

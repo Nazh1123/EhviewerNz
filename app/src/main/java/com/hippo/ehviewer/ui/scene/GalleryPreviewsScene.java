@@ -108,6 +108,8 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
     private int mPreviewColumnWidth = COLUMN_WIDTH_UNSET;
     private float mPreviewColumnWidthExact = COLUMN_WIDTH_UNSET;
     private int mMaxPreviewColumnWidth;
+    private int mAppliedThumbSize = Integer.MIN_VALUE;
+    private int mPortraitPreviewColumns;
     private boolean mCompactPreviewGrid;
 
     private boolean mHasFirstRefresh = false;
@@ -173,16 +175,33 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
         mCompactPreviewGrid = false;
         mAdapter = new GalleryPreviewAdapter();
         mRecyclerView.setAdapter(mAdapter);
-        mMaxPreviewColumnWidth = resources.getDimensionPixelOffset(
-                R.dimen.gallery_grid_column_width_large);
-        if (mPreviewColumnWidth == COLUMN_WIDTH_UNSET) {
-            mPreviewColumnWidth = resources.getDimensionPixelOffset(Settings.getThumbSizeResId());
+        int thumbSize = Settings.getPreviewThumbSize();
+        mPortraitPreviewColumns = Settings.getThumbPortraitColumns(thumbSize);
+        if (mAppliedThumbSize != thumbSize) {
+            mAppliedThumbSize = thumbSize;
+            mPreviewColumnWidth = COLUMN_WIDTH_UNSET;
+        }
+        if (mPortraitPreviewColumns == 0) {
+            mMaxPreviewColumnWidth = resources.getDimensionPixelOffset(
+                    R.dimen.gallery_grid_column_width_large);
+        }
+        if (mPreviewColumnWidth == COLUMN_WIDTH_UNSET && mPortraitPreviewColumns == 0) {
+            mPreviewColumnWidth = resources.getDimensionPixelOffset(Settings.getThumbSizeResId(thumbSize));
             mPreviewColumnWidthExact = mPreviewColumnWidth;
         }
         mLayoutManager = new AutoGridLayoutManager(context, mPreviewColumnWidth);
+        if (mPreviewColumnWidth == COLUMN_WIDTH_UNSET) {
+            mLayoutManager.setPortraitSpanCount(resources, mPortraitPreviewColumns);
+        }
         mLayoutManager.setStrategy(AutoGridLayoutManager.STRATEGY_SUITABLE_SIZE);
-        mLayoutManager.setMaxSpanCount(MAX_PREVIEW_COLUMNS);
+        mLayoutManager.setMaxSpanCount(mPortraitPreviewColumns > 0
+                ? Integer.MAX_VALUE : MAX_PREVIEW_COLUMNS);
         mLayoutManager.addOnUpdateSpanCountListener(spanCount -> {
+            if (mPreviewColumnWidth == COLUMN_WIDTH_UNSET) {
+                mPreviewColumnWidth = mLayoutManager.getColumnSize();
+                mPreviewColumnWidthExact = mPreviewColumnWidth;
+                mMaxPreviewColumnWidth = mPreviewColumnWidth * mPortraitPreviewColumns;
+            }
             EasyRecyclerView recyclerView = mRecyclerView;
             if (recyclerView != null) {
                 recyclerView.post(() -> {
@@ -279,6 +298,7 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
     private boolean updatePreviewColumnWidth(float scaleFactor) {
         if (Float.isNaN(scaleFactor) || Float.isInfinite(scaleFactor) || scaleFactor <= 0f
                 || mLayoutManager == null
+                || mPreviewColumnWidth == COLUMN_WIDTH_UNSET
                 || mRecyclerView == null) {
             return false;
         }
@@ -299,6 +319,9 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
     }
 
     private int getMinPreviewColumnWidth() {
+        if (mPortraitPreviewColumns > 0) {
+            return Math.max(1, Math.round(mMaxPreviewColumnWidth / (float) MAX_PREVIEW_COLUMNS));
+        }
         if (mRecyclerView == null) {
             return 1;
         }

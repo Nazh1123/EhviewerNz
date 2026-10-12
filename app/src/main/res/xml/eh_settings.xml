@@ -151,14 +151,23 @@
         app:entries="@array/detail_size_entries"
         app:entryValues="@array/detail_size_entry_values" />
 
-    <com.hippo.preference.ListPreference
+    <com.hippo.preference.ThumbnailSizePreference
         android:defaultValue="1"
         android:key="thumb_size"
         android:summary="%s"
-        android:title="@string/settings_eh_thumb_size"
+        android:title="@string/settings_eh_cover_thumb_size"
         app:allowDividerAbove="true"
-        app:entries="@array/thumb_size_entries"
-        app:entryValues="@array/thumb_size_entry_values" />
+        app:entries="@array/cover_thumb_size_entries"
+        app:entryValues="@array/cover_thumb_size_entry_values" />
+
+    <com.hippo.preference.ThumbnailSizePreference
+        android:defaultValue="1"
+        android:key="preview_thumb_size"
+        android:summary="%s"
+        android:title="@string/settings_eh_preview_thumb_size"
+        app:allowDividerAbove="true"
+        app:entries="@array/preview_thumb_size_entries"
+        app:entryValues="@array/preview_thumb_size_entry_values" />
 
     <com.hippo.preference.ListPreference
         android:defaultValue="100"

@@ -540,6 +540,9 @@
     <string name="settings_eh_detail_size_long">Long</string>
     <string name="settings_eh_detail_size_short">Short</string>
     <string name="settings_eh_thumb_size">Thumb size</string>
+    <string name="settings_eh_cover_thumb_size">Cover thumbnail size</string>
+    <string name="settings_eh_preview_thumb_size">Preview thumbnail size</string>
+    <string name="settings_eh_thumb_size_description">Adjust the number of thumbnails per row in portrait. Large / Middle / Small retain the original presets.</string>
     <string name="settings_eh_thumb_size_large">Large</string>
     <string name="settings_eh_thumb_size_middle">Middle</string>
     <string name="settings_eh_thumb_size_small">Small</string>

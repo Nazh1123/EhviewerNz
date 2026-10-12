@@ -606,6 +606,9 @@
     <string name="settings_eh_detail_size_long">长</string>
     <string name="settings_eh_detail_size_short">短</string>
     <string name="settings_eh_thumb_size">缩略图大小</string>
+    <string name="settings_eh_cover_thumb_size">封面缩略图大小</string>
+    <string name="settings_eh_preview_thumb_size">预览缩略图大小</string>
+    <string name="settings_eh_thumb_size_description">调整竖屏每行显示的缩略图数量。大 / 中 / 小 为原版本预设值的保留项。</string>
     <string name="settings_eh_thumb_size_large">大</string>
     <string name="settings_eh_thumb_size_middle">中</string>
     <string name="settings_eh_thumb_size_small">小</string>

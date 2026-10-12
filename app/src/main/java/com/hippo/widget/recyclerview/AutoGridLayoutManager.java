@@ -17,8 +17,13 @@
 package com.hippo.widget.recyclerview;
 
 import android.content.Context;
+import android.content.res.Resources;
+
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
+import com.hippo.widget.PortraitColumnSize;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +36,9 @@ public class AutoGridLayoutManager extends GridLayoutManager {
     private boolean mColumnSizeChanged = true;
     private int mStrategy;
     private int mMaxSpanCount = Integer.MAX_VALUE;
+    private int mLastTotalSpace = -1;
+    private final PortraitColumnSize mPortraitColumnSize = new PortraitColumnSize();
+    private Resources mResources;
 
     private List<OnUpdateSpanCountListener> mListeners;
 
@@ -45,11 +53,22 @@ public class AutoGridLayoutManager extends GridLayoutManager {
     }
 
     public void setColumnSize(int columnSize) {
+        mPortraitColumnSize.setColumns(0);
         if (columnSize == mColumnSize) {
             return;
         }
         mColumnSize = columnSize;
         mColumnSizeChanged = true;
+    }
+
+    public void setPortraitSpanCount(Resources resources, int columns) {
+        mResources = resources;
+        mPortraitColumnSize.setColumns(columns);
+        mColumnSizeChanged = true;
+    }
+
+    public int getColumnSize() {
+        return mColumnSize;
     }
 
     public void setStrategy(int strategy) {
@@ -88,14 +107,22 @@ public class AutoGridLayoutManager extends GridLayoutManager {
 
     @Override
     public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
-        if (mColumnSizeChanged && mColumnSize > 0) {
-            int totalSpace;
-            if (getOrientation() == RecyclerView.VERTICAL) {
-                totalSpace = getWidth() - getPaddingRight() - getPaddingLeft();
-            } else {
-                totalSpace = getHeight() - getPaddingTop() - getPaddingBottom();
+        if (mPortraitColumnSize.getColumns() > 0) {
+            int size = mPortraitColumnSize.resolve(mResources, getWidth(),
+                    getPaddingLeft() + getPaddingRight());
+            if (size > 0 && size != mColumnSize) {
+                mColumnSize = size;
+                mColumnSizeChanged = true;
             }
-
+        }
+        int totalSpace;
+        if (getOrientation() == RecyclerView.VERTICAL) {
+            totalSpace = getWidth() - getPaddingRight() - getPaddingLeft();
+        } else {
+            totalSpace = getHeight() - getPaddingTop() - getPaddingBottom();
+        }
+        if (mColumnSize > 0 && totalSpace > 0
+                && (mColumnSizeChanged || totalSpace != mLastTotalSpace)) {
             int spanCount;
             switch (mStrategy) {
                 default:
@@ -109,6 +136,7 @@ public class AutoGridLayoutManager extends GridLayoutManager {
             spanCount = Math.min(spanCount, mMaxSpanCount);
             setSpanCount(spanCount);
             mColumnSizeChanged = false;
+            mLastTotalSpace = totalSpace;
 
             if (null != mListeners) {
                 for (int i = 0, n = mListeners.size(); i < n; i++) {

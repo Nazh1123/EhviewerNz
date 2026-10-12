@@ -21,6 +21,8 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
+import com.hippo.ehviewer.client.EhClient;
+import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.lib.image.Image;
@@ -51,6 +53,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 
 import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
@@ -301,8 +304,8 @@ public class PopularGalleryRenderingTest {
                 scene, "getSelectedGalleriesOldestFirst")));
     }
 
-    @Test @Config(sdk = 34, qualifiers = "xxhdpi")
-    public void dividerUsesSixteenPixelRoundLineWithFifteenPercentInsetsAndFourPixelGaps() {
+    @Test @Config(sdk = 34, qualifiers = "600dpi")
+    public void dividerUsesTwelvePixelRoundLineWithFifteenPercentInsetsAndFourPixelGapsAtDeviceDensity() {
         refresh(2, 3, 4);
         toggle(PopularGalleryHistory.UPDATES);
         adapter.setType(GalleryAdapterNew.TYPE_GRID);
@@ -315,7 +318,7 @@ public class PopularGalleryRenderingTest {
                 divider.getWidth());
         assertEquals(4, divider.getPaddingTop());
         assertEquals(4, divider.getPaddingBottom());
-        assertEquals(24, divider.getHeight());
+        assertEquals(20, divider.getHeight());
         assertTrue(divider instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
     }
 
@@ -431,6 +434,104 @@ public class PopularGalleryRenderingTest {
         assertEquals(Arrays.asList(3L, 4L, null, 2L, 1L), visibleIds());
     }
 
+    @Test @Config(sdk = 34, qualifiers = "600dpi")
+    public void allSubscriptionEntriesUseSidebarGidsAndKeepTheBoundaryAfterClearingBadges() {
+        Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
+        Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, true);
+        for (int mode : new int[]{ListUrlBuilder.MODE_SUBSCRIPTION,
+                ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION, ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION}) {
+            adapter.setType(GalleryAdapterNew.TYPE_LIST);
+            SubscriptionUpdateManager manager = subscriptionManager(mode, 3, 5);
+            assertEquals(new HashSet<>(Arrays.asList(3L, 5L)), manager.getUnreadGalleryGids(mode));
+            ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+            assertTrue(manager.getUnreadGalleryGids(mode).isEmpty());
+            // A backdated update appears after an old item in server order; GID membership wins.
+            refresh(7, 5, 4, 3, 2);
+            assertEquals(Arrays.asList(5L, 3L, null, 7L, 4L, 2L), visibleIds());
+            assertRendered(6);
+            adapter.setType(GalleryAdapterNew.TYPE_GRID);
+            layout();
+            View divider = recycler.findViewHolderForAdapterPosition(2).itemView;
+            assertEquals(20, divider.getHeight());
+            assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
+            assertEquals(3, helper.getAdapterPosition(0));
+            assertEquals(1, helper.getDataPosition(0));
+            assertEquals(0, helper.getDataPosition(2));
+        }
+    }
+
+    @Test public void subscriptionBoundaryAppearsWhenPaginationReachesOldGalleries() {
+        subscriptionManager(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION, 5, 4);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(5, 4);
+        assertEquals(Arrays.asList(5L, 4L), visibleIds());
+        helper.getData().addAll(galleries(3, 2));
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceItemRangeInserted",
+                ClassParameter.from(int.class, 2), ClassParameter.from(int.class, 2));
+        assertEquals(Arrays.asList(5L, 4L, null, 3L, 2L), visibleIds());
+        assertEquals(3, helper.getAdapterPosition(2));
+        assertEquals(2, helper.getDataPosition(3));
+    }
+
+    @Test public void subscriptionDownloadedFilterHidesEmptyGroupsAndNewSearchDropsTheBoundary() {
+        subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 5, 4);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(5, 4, 3, 2);
+        downloadedGids.addAll(Arrays.asList(5L, 3L));
+        ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
+                ClassParameter.from(boolean.class, true), ClassParameter.from(boolean.class, false));
+        assertEquals(Arrays.asList(5L, null, 3L), visibleIds());
+        downloadedGids.remove(5L);
+        ReflectionHelpers.callInstanceMethod(scene, "onDownloadMembershipChanged");
+        assertEquals(Arrays.asList(3L), visibleIds());
+        ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
+                ClassParameter.from(boolean.class, false), ClassParameter.from(boolean.class, false));
+        assertEquals(Arrays.asList(5L, 4L, null, 3L, 2L), visibleIds());
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        refresh(9, 8);
+        assertEquals(Arrays.asList(9L, 8L), visibleIds());
+    }
+
+    @Test public void subscriptionWithoutUnreadOrWithoutVisibleUpdatesHasNoDivider() {
+        subscriptionManager(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(5, 4, 3);
+        assertEquals(Arrays.asList(5L, 4L, 3L), visibleIds());
+        subscriptionManager(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION, 9);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(5, 4, 3);
+        assertEquals(Arrays.asList(5L, 4L, 3L), visibleIds());
+    }
+
+    @Test public void subscriptionUnreadSnapshotSurvivesSceneStateRestoration() {
+        subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 5);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(5, 4);
+        android.os.Bundle state = new android.os.Bundle();
+        scene.onSaveInstanceState(state);
+        ReflectionHelpers.<Set<Long>>getField(scene, "mSubscriptionNewGids").clear();
+        ReflectionHelpers.callInstanceMethod(scene, "onRestore", ClassParameter.from(android.os.Bundle.class, state));
+        builder = ReflectionHelpers.getField(scene, "mUrlBuilder");
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened", ClassParameter.from(boolean.class, false));
+        refresh(5, 4);
+        assertEquals(Arrays.asList(5L, null, 4L), visibleIds());
+    }
+
+    private SubscriptionUpdateManager subscriptionManager(int mode, long... gids) {
+        builder.setMode(mode);
+        SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
+        Set<Long> eh = ReflectionHelpers.getField(manager, "mEhUnreadGids");
+        Set<Long> bookmark = ReflectionHelpers.getField(manager, "mBookmarkUnreadGids");
+        eh.clear();
+        bookmark.clear();
+        for (long gid : gids) {
+            if (mode != ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION) eh.add(gid);
+            if (mode != ListUrlBuilder.MODE_SUBSCRIPTION) bookmark.add(gid);
+        }
+        ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+        return manager;
+    }
+
     private void footer() {
         content.getRefreshLayout().setFooterRefreshing(true);
         RefreshLayout.OnRefreshListener listener = ReflectionHelpers.getField(helper, "mOnRefreshListener");
@@ -526,6 +627,8 @@ public class PopularGalleryRenderingTest {
 
     @Implements(EhApplication.class)
     public static class AppShadow extends org.robolectric.shadows.ShadowApplication {
+        @Implementation protected static EhClient getEhClient(Context context) { return null; }
+        @Implementation protected static ExecutorService getExecutorService(Context context) { return null; }
         @Implementation protected static DownloadManager getDownloadManager(Context context) { return downloads; }
         @Implementation protected static FavouriteStatusRouter getFavouriteStatusRouter() { return router; }
         @Implementation protected static Conaco<Image> getConaco(Context context) { return null; }

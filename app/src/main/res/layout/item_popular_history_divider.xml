@@ -3,6 +3,6 @@
     android:id="@+id/popular_history_divider"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingTop="4px"
-    android:paddingBottom="4px"
+    android:paddingTop="@dimen/gallery_section_divider_gap"
+    android:paddingBottom="@dimen/gallery_section_divider_gap"
     android:importantForAccessibility="no" />

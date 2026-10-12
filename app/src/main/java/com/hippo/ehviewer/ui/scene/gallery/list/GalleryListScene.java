@@ -198,6 +198,7 @@ public class GalleryListScene extends BaseScene
     private static final String KEY_DOWNLOADED_ONLY_MODE = "downloaded_only_mode";
     private static final String KEY_POPULAR_VIEW_MODE = "popular_view_mode";
     private static final String KEY_POPULAR_REPEATED_EXPANDED = "popular_repeated_expanded";
+    private static final String KEY_SUBSCRIPTION_NEW_GIDS = "subscription_new_gids";
 
     final static int STATE_NORMAL = 0;
     final static int STATE_SIMPLE_SEARCH = 1;
@@ -386,6 +387,7 @@ public class GalleryListScene extends BaseScene
     private BookmarkSubscriptionCoordinator mBookmarkSubscriptionCoordinator;
     @Nullable
     private SubscriptionUpdateManager mSubscriptionUpdateManager;
+    private final Set<Long> mSubscriptionNewGids = new HashSet<>();
     @Nullable
     private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
 
@@ -520,7 +522,8 @@ public class GalleryListScene extends BaseScene
         } else {
             onRestore(savedInstanceState);
         }
-        markSubscriptionOpened();
+        markSubscriptionOpened(savedInstanceState == null
+                || !savedInstanceState.containsKey(KEY_SUBSCRIPTION_NEW_GIDS));
         showReadProgress = Settings.getShowReadProgress();
     }
 
@@ -539,6 +542,10 @@ public class GalleryListScene extends BaseScene
         mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
         mPopularRepeatedExpanded = savedInstanceState.getBoolean(KEY_POPULAR_REPEATED_EXPANDED);
         mPopularResponseReady = mHasFirstRefresh && isPopularMode();
+        long[] subscriptionNewGids = savedInstanceState.getLongArray(KEY_SUBSCRIPTION_NEW_GIDS);
+        if (subscriptionNewGids != null) {
+            for (long gid : subscriptionNewGids) mSubscriptionNewGids.add(gid);
+        }
         long[] selectedGids = savedInstanceState.getLongArray(KEY_SELECTED_GIDS);
         if (selectedGids != null) {
             for (long gid : selectedGids) {
@@ -566,6 +573,10 @@ public class GalleryListScene extends BaseScene
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
         outState.putInt(KEY_POPULAR_VIEW_MODE, mPopularViewMode);
         outState.putBoolean(KEY_POPULAR_REPEATED_EXPANDED, mPopularRepeatedExpanded);
+        long[] subscriptionNewGids = new long[mSubscriptionNewGids.size()];
+        int subscriptionIndex = 0;
+        for (long gid : mSubscriptionNewGids) subscriptionNewGids[subscriptionIndex++] = gid;
+        outState.putLongArray(KEY_SUBSCRIPTION_NEW_GIDS, subscriptionNewGids);
         long[] selectedGids = new long[mSelectedGids.size()];
         int selectedIndex = 0;
         for (long gid : mSelectedGids) {
@@ -3061,6 +3072,11 @@ public class GalleryListScene extends BaseScene
     }
 
     private void markSubscriptionOpened() {
+        markSubscriptionOpened(true);
+    }
+
+    private void markSubscriptionOpened(boolean captureUnread) {
+        if (captureUnread) mSubscriptionNewGids.clear();
         if (mUrlBuilder == null || mSubscriptionUpdateManager == null) {
             return;
         }
@@ -3069,6 +3085,9 @@ public class GalleryListScene extends BaseScene
         if (mode == ListUrlBuilder.MODE_SUBSCRIPTION
                 || mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
                 || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
+            if (captureUnread) {
+                mSubscriptionNewGids.addAll(mSubscriptionUpdateManager.getUnreadGalleryGids(mode));
+            }
             mSubscriptionUpdateManager.onSubscriptionOpened(mode);
         }
         if (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
@@ -3076,6 +3095,11 @@ public class GalleryListScene extends BaseScene
             mRecentCheckResult =
                     mSubscriptionUpdateManager.getRecentCheckResult(mode);
         }
+    }
+
+    private boolean isSubscriptionMode() {
+        return mUrlBuilder != null && (mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION
+                || isBookmarkSubscriptionMode());
     }
 
     private boolean isGlobalSubscriptionMode() {
@@ -3222,11 +3246,12 @@ public class GalleryListScene extends BaseScene
 
     private class GalleryListAdapter extends GalleryAdapterNew {
 
-        private static final int TYPE_POPULAR_DIVIDER = 2;
+        private static final int TYPE_SECTION_DIVIDER = 2;
         private final List<GalleryInfo> mDownloadedData = new ArrayList<>();
         private final List<GalleryInfo> mPopularData = new ArrayList<>();
+        private final List<GalleryInfo> mSubscriptionData = new ArrayList<>();
         private int mPopularNewCount;
-        private int mPopularDividerPosition = -1;
+        private int mSectionDividerPosition = -1;
 
         private boolean hasPopularProjection() {
             return isPopularMode() && mPopularResponseReady && mPopularHistory != null
@@ -3234,7 +3259,24 @@ public class GalleryListScene extends BaseScene
         }
 
         private List<GalleryInfo> getSourceData() {
-            return hasPopularProjection() ? mPopularData : mHelper.getData();
+            if (hasPopularProjection()) return mPopularData;
+            return hasSubscriptionProjection() ? mSubscriptionData : mHelper.getData();
+        }
+
+        private boolean hasSubscriptionProjection() {
+            return isSubscriptionMode() && !mSubscriptionNewGids.isEmpty() && mHelper != null;
+        }
+
+        private void rebuildSubscriptionData() {
+            mSubscriptionData.clear();
+            if (!hasSubscriptionProjection()) return;
+            // Keep each group's server order, including backdated galleries counted as updates.
+            for (GalleryInfo gallery : mHelper.getData()) {
+                if (mSubscriptionNewGids.contains(gallery.gid)) mSubscriptionData.add(gallery);
+            }
+            for (GalleryInfo gallery : mHelper.getData()) {
+                if (!mSubscriptionNewGids.contains(gallery.gid)) mSubscriptionData.add(gallery);
+            }
         }
 
         private void rebuildPopularData() {
@@ -3246,23 +3288,29 @@ public class GalleryListScene extends BaseScene
             }
         }
 
-        private void rebuildPopularDivider() {
-            mPopularDividerPosition = -1;
-            if (!hasPopularProjection() || mPopularViewMode != PopularGalleryHistory.UPDATES
-                    || !mPopularRepeatedExpanded) return;
+        private void rebuildSectionDivider() {
+            mSectionDividerPosition = -1;
             Set<Long> newGids = new HashSet<>();
-            for (int i = 0; i < mPopularNewCount; i++) newGids.add(mPopularData.get(i).gid);
-            List<GalleryInfo> visible = mDownloadedOnlyMode ? mDownloadedData : mPopularData;
+            if (hasPopularProjection() && mPopularViewMode == PopularGalleryHistory.UPDATES
+                    && mPopularRepeatedExpanded) {
+                for (int i = 0; i < mPopularNewCount; i++) newGids.add(mPopularData.get(i).gid);
+            } else if (hasSubscriptionProjection()) {
+                newGids.addAll(mSubscriptionNewGids);
+            } else {
+                return;
+            }
+            List<GalleryInfo> visible = mDownloadedOnlyMode ? mDownloadedData : getSourceData();
             int newCount = 0;
             for (GalleryInfo gallery : visible) {
                 if (newGids.contains(gallery.gid)) newCount++;
             }
-            if (newCount > 0 && newCount < visible.size()) mPopularDividerPosition = newCount;
+            if (newCount > 0 && newCount < visible.size()) mSectionDividerPosition = newCount;
         }
 
-        private boolean hasPopularDivider() {
-            return hasPopularProjection() && mPopularViewMode == PopularGalleryHistory.UPDATES
-                    && mPopularRepeatedExpanded && mPopularDividerPosition >= 0;
+        private boolean hasSectionDivider() {
+            return mSectionDividerPosition >= 0 && (hasSubscriptionProjection()
+                    || (hasPopularProjection() && mPopularViewMode == PopularGalleryHistory.UPDATES
+                    && mPopularRepeatedExpanded));
         }
 
         public GalleryListAdapter(@NonNull LayoutInflater inflater,
@@ -3272,7 +3320,7 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public int getItemCount() {
-            return getGalleryCount() + (hasPopularDivider() ? 1 : 0);
+            return getGalleryCount() + (hasSectionDivider() ? 1 : 0);
         }
 
         int getGalleryCount() {
@@ -3280,6 +3328,7 @@ public class GalleryListScene extends BaseScene
                 return mDownloadedData != null ? mDownloadedData.size() : 0;
             }
             if (hasPopularProjection()) return mPopularData != null ? mPopularData.size() : 0;
+            if (hasSubscriptionProjection()) return mSubscriptionData.size();
             return null != mHelper ? mHelper.size() : 0;
         }
 
@@ -3287,9 +3336,9 @@ public class GalleryListScene extends BaseScene
         @Override
         public GalleryInfo getDataAt(int position) {
             if (position < 0) return null;
-            if (hasPopularDivider()) {
-                if (position == mPopularDividerPosition) return null;
-                if (position > mPopularDividerPosition) position--;
+            if (hasSectionDivider()) {
+                if (position == mSectionDividerPosition) return null;
+                if (position > mSectionDividerPosition) position--;
             }
             return getGalleryAtIndex(position);
         }
@@ -3304,18 +3353,21 @@ public class GalleryListScene extends BaseScene
             if (hasPopularProjection()) {
                 return position >= 0 && position < mPopularData.size() ? mPopularData.get(position) : null;
             }
+            if (hasSubscriptionProjection()) {
+                return position >= 0 && position < mSubscriptionData.size() ? mSubscriptionData.get(position) : null;
+            }
             return null != mHelper ? mHelper.getDataAtEx(position) : null;
         }
 
         @Override
         public int getItemViewType(int position) {
-            return hasPopularDivider() && position == mPopularDividerPosition
-                    ? TYPE_POPULAR_DIVIDER : super.getItemViewType(position);
+            return hasSectionDivider() && position == mSectionDividerPosition
+                    ? TYPE_SECTION_DIVIDER : super.getItemViewType(position);
         }
 
         @Override
         public GalleryHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            if (viewType != TYPE_POPULAR_DIVIDER) return super.onCreateViewHolder(parent, viewType);
+            if (viewType != TYPE_SECTION_DIVIDER) return super.onCreateViewHolder(parent, viewType);
             View divider = LayoutInflater.from(parent.getContext()).inflate(
                     R.layout.item_popular_history_divider, parent, false);
             StaggeredGridLayoutManager.LayoutParams params = new StaggeredGridLayoutManager.LayoutParams(
@@ -3327,14 +3379,14 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public void onBindViewHolder(GalleryHolder holder, int position) {
-            if (getItemViewType(position) != TYPE_POPULAR_DIVIDER) super.onBindViewHolder(holder, position);
+            if (getItemViewType(position) != TYPE_SECTION_DIVIDER) super.onBindViewHolder(holder, position);
         }
 
         boolean appendPopularRepeatedGalleries() {
             int oldCount = getItemCount();
             rebuildPopularData();
             if (mDownloadedOnlyMode) rebuildDownloadedData();
-            rebuildPopularDivider();
+            rebuildSectionDivider();
             int added = getItemCount() - oldCount;
             if (added > 0) notifyItemRangeInserted(oldCount, added);
             return added > 0;
@@ -3342,22 +3394,24 @@ public class GalleryListScene extends BaseScene
 
         void onDownloadedOnlyModeChanged() {
             rebuildPopularData();
+            rebuildSubscriptionData();
             rebuildDownloadedData();
-            rebuildPopularDivider();
+            rebuildSectionDivider();
             notifyDataSetChanged();
         }
 
         void onSourceDataSetChanged() {
             rebuildPopularData();
+            rebuildSubscriptionData();
             if (mDownloadedOnlyMode) {
                 rebuildDownloadedData();
             }
-            rebuildPopularDivider();
+            rebuildSectionDivider();
             notifyDataSetChanged();
         }
 
         void onSourceItemRangeInserted(int positionStart, int itemCount) {
-            if (hasPopularProjection()) {
+            if (hasPopularProjection() || hasSubscriptionProjection()) {
                 onSourceDataSetChanged();
                 return;
             }
@@ -3370,7 +3424,7 @@ public class GalleryListScene extends BaseScene
         }
 
         void onSourceItemRangeRemoved(int positionStart, int itemCount) {
-            if (hasPopularProjection()) {
+            if (hasPopularProjection() || hasSubscriptionProjection()) {
                 onSourceDataSetChanged();
                 return;
             }
@@ -3441,6 +3495,23 @@ public class GalleryListScene extends BaseScene
     }
 
     class GalleryListHelper extends GalleryInfoContentHelper {
+
+        @Override
+        protected int getAdapterPosition(int dataPosition) {
+            if (mAdapter == null || !mAdapter.hasSubscriptionProjection()) return dataPosition;
+            GalleryInfo gallery = getDataAtEx(dataPosition);
+            int position = gallery == null ? -1 : mAdapter.findVisiblePosition(gallery.gid);
+            return Math.max(0, position);
+        }
+
+        @Override
+        protected int getDataPosition(int adapterPosition) {
+            if (mAdapter == null || !mAdapter.hasSubscriptionProjection()) return adapterPosition;
+            if (adapterPosition < 0) return -1;
+            GalleryInfo gallery = mAdapter.getDataAt(adapterPosition);
+            if (gallery == null) gallery = mAdapter.getDataAt(adapterPosition + 1);
+            return gallery == null ? -1 : getData().indexOf(gallery);
+        }
 
         @Override
         protected boolean onInterceptFooterRefresh() {

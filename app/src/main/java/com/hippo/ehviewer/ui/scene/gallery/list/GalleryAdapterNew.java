@@ -175,6 +175,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 int columnWidth = mResources.getDimensionPixelOffset(Settings.getThumbSizeResId());
                 mLayoutManager.setColumnSize(columnWidth);
                 mLayoutManager.setStrategy(AutoStaggeredGridLayoutManager.STRATEGY_SUITABLE_SIZE);
+                mLayoutManager.setPortraitSpanCount(mResources,
+                        Settings.getThumbPortraitColumns(Settings.getThumbSize()));
                 if (null != mListDecoration) {
                     recyclerView.removeItemDecoration(mListDecoration);
                 }
