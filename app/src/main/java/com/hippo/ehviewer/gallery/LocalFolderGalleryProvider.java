@@ -301,6 +301,11 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
         return index >= 0 && index < current.size() ? current.get(index) : null;
     }
 
+    @Override public UniFile getPreviewFile(int index) {
+        LocalFolderGalleryScanner.ImageEntry image = getImage(index);
+        return image != null ? UniFile.fromUri(context, image.uri) : null;
+    }
+
     private void fail(int stringId) {
         size = STATE_ERROR;
         error = GetText.getString(stringId);

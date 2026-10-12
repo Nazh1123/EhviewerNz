@@ -255,6 +255,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
                 .setKey(key)
                 .setUrl(url)
                 .setUseNetwork(useNetwork)
+                .setNetworkAdmission(networkAdmission())
                 .setHardware(hardware);
         if (dataContainer!=null){
             builder.setDataContainer(dataContainer);
@@ -262,6 +263,9 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
 
         mConaco.load(builder);
     }
+
+    /** Optional admission policy for specialised views. Runs after caches miss, off the UI thread. */
+    protected java.util.function.BooleanSupplier networkAdmission() { return null; }
 
     public void load(Drawable drawable) {
         unload();

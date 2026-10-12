@@ -44,13 +44,19 @@ public class GalleryPreview implements Parcelable {
     }
 
     public void load(LoadImageView view) {
+        load(view, true);
+    }
+
+    public String getImageKey() { return imageKey; }
+
+    public void load(LoadImageView view, boolean useNetwork) {
         UniFile local = getLocalFile();
         if (local != null) {
             LocalImageLoader.load(view, local);
             return;
         }
         view.setClip(offsetX, offsetY, clipWidth, clipHeight);
-        view.load(imageKey, imageUrl);
+        view.load(imageKey, imageUrl, useNetwork);
     }
 
     public static GalleryPreview fromLocalFile(int position, UniFile file) {

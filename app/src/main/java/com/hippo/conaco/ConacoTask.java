@@ -53,6 +53,7 @@ public class ConacoTask<V> {
     private final boolean mUseMemoryCache;
     private final boolean mUseDiskCache;
     private final boolean mUseNetwork;
+    private final java.util.function.BooleanSupplier mNetworkAdmission;
     private final ValueHelper<V> mHelper;
     private final ValueCache<V> mCache;
     private final OkHttpClient mOkHttpClient;
@@ -76,6 +77,7 @@ public class ConacoTask<V> {
         mUseMemoryCache = builder.mUseMemoryCache;
         mUseDiskCache = builder.mUseDiskCache;
         mUseNetwork = builder.mUseNetwork;
+        mNetworkAdmission = builder.mNetworkAdmission;
         mHelper = builder.mHelper;
         mCache = builder.mCache;
         mOkHttpClient = builder.mOkHttpClient;
@@ -310,16 +312,16 @@ public class ConacoTask<V> {
             OutputStreamPipe pipe = diskCache.getOutputStreamPipe(mKey);
             try {
                 pipe.obtain();
-                OutputStream os = pipe.open();
-
-                final byte buffer[] = new byte[1024 * 4];
-                long receivedSize = 0;
-                int bytesRead;
-
-                while ((bytesRead = is.read(buffer)) != -1) {
-                    os.write(buffer, 0, bytesRead);
-                    receivedSize += bytesRead;
-                    notifyProgress((long) bytesRead, receivedSize, length);
+                // Close the file before committing the cache entry, including on cancellation.
+                try (OutputStream os = pipe.open()) {
+                    final byte buffer[] = new byte[1024 * 4];
+                    long receivedSize = 0;
+                    int bytesRead;
+                    while ((bytesRead = is.read(buffer)) != -1) {
+                        os.write(buffer, 0, bytesRead);
+                        receivedSize += bytesRead;
+                        notifyProgress((long) bytesRead, receivedSize, length);
+                    }
                 }
 
                 return true;
@@ -349,6 +351,7 @@ public class ConacoTask<V> {
                 return null;
             }
 
+            if (mNetworkAdmission != null && !mNetworkAdmission.getAsBoolean()) return null;
             V value;
             InputStream is = null;
             try {
@@ -470,6 +473,7 @@ public class ConacoTask<V> {
         private boolean mUseMemoryCache = true;
         private boolean mUseDiskCache = true;
         private boolean mUseNetwork = true;
+        private java.util.function.BooleanSupplier mNetworkAdmission;
         private ValueHelper<T> mHelper;
         private ValueCache<T> mCache;
         private OkHttpClient mOkHttpClient;
@@ -535,6 +539,12 @@ public class ConacoTask<V> {
 
         public Builder<T> setUseNetwork(boolean useNetwork) {
             mUseNetwork = useNetwork;
+            return this;
+        }
+
+        /** Invoked on the network worker only after both caches miss. */
+        public Builder<T> setNetworkAdmission(java.util.function.BooleanSupplier admission) {
+            mNetworkAdmission = admission;
             return this;
         }
 

@@ -130,6 +130,11 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         return mSize;
     }
 
+    @Override public UniFile getPreviewFile(int index) {
+        UniFile[] files = mFileList.get();
+        return files != null && index >= 0 && index < files.length ? files[index] : null;
+    }
+
     @Override
     protected void onRequest(int index) {
         synchronized (mRequests) {

@@ -255,6 +255,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private TextView mRightText;
     @Nullable
     private ReversibleSeekBar mSeekBar;
+    private ReaderPagePreview mPagePreview;
+    private boolean mPageSeeking;
     @Nullable
     private View mSaveNotice;
     @Nullable
@@ -852,6 +854,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mRightText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.right);
         mSeekBar = (ReversibleSeekBar) ViewUtils.$$(mSeekBarPanel, R.id.seek_bar);
         mSeekBar.setOnSeekBarChangeListener(this);
+        if (mGalleryProvider != null) {
+            mPagePreview = new ReaderPagePreview(this,
+                    (android.widget.LinearLayout) findViewById(R.id.page_preview_strip), mGalleryProvider);
+        }
         mPageSliderDefaultProgressTint = mSeekBar.getProgressTintList();
         mPageSliderDefaultProgressBackgroundTint =
                 mSeekBar.getProgressBackgroundTintList();
@@ -1024,6 +1030,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        if (mPagePreview != null) { mPagePreview.close(); mPagePreview = null; }
         if (mTranslationController != null) {
             mTranslationController.close(isFinishing());
             mTranslationController = null;
@@ -1119,6 +1126,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onPause() {
+        cancelPagePreview();
         if (mTranslationController != null) mTranslationController.pause(isFinishing());
         if (mOrientationEventListener != null) {
             mOrientationEventListener.disable();
@@ -1286,7 +1294,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             long waitTime = initialDelay * 2L;
             try {
                 transferService.scheduleWithFixedDelay(() -> transHandle.post(() -> {
-                    if (mGalleryView == null) {
+                    if (mGalleryView == null || mPageSeeking || !autoTransferring) {
                         return;
                     }
                     if (mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT) {
@@ -1890,10 +1898,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             end = mRightText;
             mSeekBar.setReverse(false);
         }
-        start.setText(Integer.toString(mCurrentIndex + 1));
+        int displayedIndex = mPageSeeking ? Math.min(mSeekBar.getProgress(), mSize - 1) : mCurrentIndex;
+        start.setText(Integer.toString(displayedIndex + 1));
         end.setText(Integer.toString(mSize));
         mSeekBar.setMax(mSize - 1);
-        mSeekBar.setProgress(mCurrentIndex);
+        mSeekBar.setProgress(displayedIndex);
+        if (mPageSeeking && mPagePreview != null) {
+            mPagePreview.update(displayedIndex, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
+        }
     }
 
     @Override
@@ -1908,20 +1920,40 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (fromUser && null != start) {
             start.setText(Integer.toString(progress + 1));
         }
+        if (fromUser && mPageSeeking && mPagePreview != null) {
+            mPagePreview.update(progress, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
+        }
     }
 
     @Override
     public void onStartTrackingTouch(SeekBar seekBar) {
         SimpleHandler.getInstance().removeCallbacks(mHideSliderRunnable);
+        mPageSeeking = true;
+        if (autoTransferring) autoRead(mAutoTransferPanel);
+        if (mPagePreview != null) mPagePreview.show(seekBar.getProgress(), mSize,
+                mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
+        updateAnimatedWebpUi();
     }
 
     @Override
     public void onStopTrackingTouch(SeekBar seekBar) {
         SimpleHandler.getInstance().postDelayed(mHideSliderRunnable, HIDE_SLIDER_DELAY);
         int progress = seekBar.getProgress();
-        if (progress != mCurrentIndex && null != mGalleryView) {
+        boolean commit = mPageSeeking && (!(seekBar instanceof ReversibleSeekBar)
+                || !((ReversibleSeekBar) seekBar).wasTouchCancelled());
+        mPageSeeking = false;
+        if (mPagePreview != null) mPagePreview.hide();
+        if (commit && progress != mCurrentIndex && null != mGalleryView) {
             mGalleryView.setCurrentPage(progress);
-        }
+        } else updateSlider();
+        updateAnimatedWebpUi();
+    }
+
+    private void cancelPagePreview() {
+        mPageSeeking = false;
+        if (mPagePreview != null) mPagePreview.hide();
+        updateSlider();
+        updateAnimatedWebpUi();
     }
 
     @Override
@@ -2154,6 +2186,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
 
     private void hideSlider(View sliderPanel, ObjectAnimator animator) {
+        if (sliderPanel == mSeekBarPanel) cancelPagePreview();
         if (null != animator) {
             animator.cancel();
         }
@@ -3286,7 +3319,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mGalleryView.setAnimatedPageControlAreasEnabled(visible);
         }
         if (mAnimatedWebpPanel != null) {
-            mAnimatedWebpPanel.setVisibility(visible ? View.VISIBLE : View.GONE);
+            mAnimatedWebpPanel.setVisibility(visible && !mPageSeeking ? View.VISIBLE : View.GONE);
         }
         if (!visible) {
             if (mAutoTransferPanel != null && sliderVisible) {
@@ -3380,6 +3413,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     lifecycleGeneration != mAnimatedWebpLifecycleGeneration ||
                     texture != mAnimatedWebpTexture) return;
             if (Settings.getAnimatedWebpAutoAdvance() && mGalleryView != null &&
+                    !mPageSeeking &&
                     !swipeInProgress && !mGalleryView.isPageSwipeInProgress() &&
                     mCurrentIndex >= 0 && mCurrentIndex + 1 < mSize) {
                 mGalleryView.setCurrentPage(mCurrentIndex + 1);

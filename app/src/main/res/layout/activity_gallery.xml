@@ -172,6 +172,15 @@
             android:layout_gravity="end"
             android:src="@drawable/ic_start_play_24" />
 
+        <LinearLayout
+            android:id="@+id/page_preview_strip"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:orientation="horizontal"
+            android:visibility="gone" />
+
         <com.hippo.ehviewer.widget.SeekBarPanel
             android:id="@+id/seek_bar_panel"
             android:layout_width="match_parent"

@@ -189,6 +189,8 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
         return pages != null && index >= 0 && index < pages.length ? pages[index] : index;
     }
 
+    public GalleryInfo getPreviewGalleryInfo() { return mGalleryInfo; }
+
     private int readerIndex(int sourcePage) {
         if (mUpdateRecordTime <= 0) return sourcePage;
         int[] pages = mUpdatePages;

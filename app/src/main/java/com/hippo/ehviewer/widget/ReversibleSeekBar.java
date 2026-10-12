@@ -25,6 +25,9 @@ import androidx.appcompat.widget.AppCompatSeekBar;
 public class ReversibleSeekBar extends AppCompatSeekBar {
 
     private boolean mReverse;
+    private boolean mTouchCancelled;
+
+    public boolean wasTouchCancelled() { return mTouchCancelled; }
 
     public ReversibleSeekBar(Context context) {
         super(context);
@@ -61,6 +64,8 @@ public class ReversibleSeekBar extends AppCompatSeekBar {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) mTouchCancelled = false;
+        else if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) mTouchCancelled = true;
         boolean reverse = mReverse;
         float x = 0.0f, y = 0.0f;
         if (reverse) {

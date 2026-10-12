@@ -24,6 +24,19 @@ import com.hippo.unifile.UniFile;
 
 public abstract class GalleryProvider2 extends GalleryProvider {
 
+    /** Called only by the preview worker; never requests or decodes a reader page. */
+    @Nullable
+    public UniFile getPreviewFile(int index) { return null; }
+
+    public ReaderPreviewSource createPreviewSource(Context context) {
+        return (index, edge) -> {
+            UniFile file = getPreviewFile(index);
+            return file == null ? null : ReaderPreviewBitmapCache.load(context,
+                    file.getUri() + ":" + file.lastModified() + ":" + file.length(),
+                    edge, file::openInputStream);
+        };
+    }
+
     /** A source-only copy, with no reader, Activity, or GL surface attached. */
     @Nullable
     public GalleryProvider2 createTranslationProvider(Context context) { return null; }

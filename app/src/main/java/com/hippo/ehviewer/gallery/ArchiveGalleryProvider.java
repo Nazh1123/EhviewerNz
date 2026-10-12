@@ -73,6 +73,53 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
   @Override
   public String getTranslationIdentity() { return file != null ? "archive:" + file.getUri() : null; }
 
+  @Override public ReaderPreviewSource createPreviewSource(Context context) {
+    return new ReaderPreviewSource() {
+      private A7ZipArchive archive;
+      private UniRandomAccessFile randomFile;
+      private List<A7ZipArchive.A7ZipArchiveEntry> entries;
+
+      @Override public ReaderPreviewBitmapCache.Result load(int index, int edge) throws IOException {
+        if (file == null || index < 0) return null;
+        String identity = file.getUri() + ":" + file.lastModified() + ":" + file.length() + ":" + index;
+        ReaderPreviewBitmapCache.Result cached = ReaderPreviewBitmapCache.cached(context, identity, edge);
+        if (cached != null) return cached;
+        try {
+          if (archive == null) {
+            randomFile = file.createRandomAccessFile("r");
+            try { archive = A7ZipArchive.create(randomFile); }
+            catch (ArchiveException | RuntimeException failure) {
+              randomFile.close();
+              randomFile = null;
+              throw failure;
+            }
+            entries = archive.getArchiveEntries();
+            Collections.sort(entries, naturalComparator);
+          }
+          if (index >= entries.size()) return null;
+          java.io.File temporary = java.io.File.createTempFile("reader-preview-", ".image", context.getCacheDir());
+          try {
+            try (java.io.OutputStream output = new java.io.FilterOutputStream(new java.io.FileOutputStream(temporary)) {
+              @Override public void write(byte[] bytes, int offset, int count) throws IOException {
+                if (Thread.currentThread().isInterrupted()) throw new java.io.InterruptedIOException();
+                out.write(bytes, offset, count);
+              }
+            }) { entries.get(index).extract(output); }
+            return ReaderPreviewBitmapCache.load(context, identity, edge,
+                    () -> new java.io.FileInputStream(temporary));
+          } finally { temporary.delete(); }
+        } catch (ArchiveException e) {
+          throw new IOException(e);
+        }
+      }
+
+      @Override public void close() throws IOException {
+        try { if (archive != null) archive.close(); }
+        finally { if (randomFile != null) randomFile.close(); }
+      }
+    };
+  }
+
   @Override
   public void start() {
     super.start();
