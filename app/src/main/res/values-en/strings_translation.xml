@@ -174,8 +174,9 @@
     <string name="translation_native_model">Import local model</string>
     <string name="translation_native_download_validating">Download complete. Validating and loading the model; it will be imported automatically on success. Please wait…</string>
     <string name="translation_native_download_failed">Model download failed: %1$s. Check network, storage space and the connection to Hugging Face downloads, then retry.</string>
-    <string name="translation_native_model_help">Import a single-file GGUF translation or instruction model. It becomes the current model after copying and validation. Other installed models are kept and can be switched or deleted. Small quantized models are recommended; required memory exceeds the file size.</string>
+    <string name="translation_native_model_help">Import a single-file GGUF translation or instruction model. It becomes the current model after validation. Other installed models are kept and can be switched or deleted. Small quantized models are recommended; required memory exceeds the file size.</string>
     <string name="translation_native_importing">Copying and validating the model. Please wait…</string>
+    <string name="translation_native_referencing">Reading and validating the external model. Please wait…</string>
     <string name="translation_native_imported">Model imported. Tap “Try a sentence” to check the result.</string>
     <string name="translation_native_import_required">Manga models are ready. Import a local GGUF translation model separately.</string>
     <string name="translation_native_prepare_required">Prepare manga models and a local GGUF translation model in “Model management”.</string>

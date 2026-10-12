@@ -161,8 +161,9 @@
     <string name="translation_native_model">ローカルモデルをインポート</string>
     <string name="translation_native_download_validating">ダウンロード完了。モデルを検証して読み込み中です。成功後に自動インポートします。お待ちください…</string>
     <string name="translation_native_download_failed">モデルのダウンロードに失敗しました：%1$s。ネットワーク、空き容量、Hugging Face のダウンロード先への接続を確認して再試行してください。</string>
-    <string name="translation_native_model_help">単一ファイルの GGUF 翻訳モデルまたは指示モデルをインポートします。コピーと検証の後で現在のモデルに設定します。他のインストール済みモデルは保持され、切り替えや削除ができます。小型の量子化モデルを推奨します。必要なメモリーはファイルサイズより大きくなります。</string>
+    <string name="translation_native_model_help">単一ファイルの GGUF 翻訳モデルまたは指示モデルをインポートします。検証の後で現在のモデルに設定します。他のインストール済みモデルは保持され、切り替えや削除ができます。小型の量子化モデルを推奨します。必要なメモリーはファイルサイズより大きくなります。</string>
     <string name="translation_native_importing">モデルをコピーして検証中です。お待ちください…</string>
+    <string name="translation_native_referencing">外部モデルを読み込んで検証中です。お待ちください…</string>
     <string name="translation_native_imported">モデルをインポートしました。「一文を試訳」で結果を確認できます。</string>
     <string name="translation_native_import_required">漫画モデルは準備済みです。GGUF ローカル翻訳モデルを別途インポートしてください。</string>
     <string name="translation_native_prepare_required">「モデル管理」で漫画モデルと GGUF ローカル翻訳モデルを準備してください。</string>

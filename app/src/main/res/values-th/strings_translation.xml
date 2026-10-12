@@ -161,8 +161,9 @@
     <string name="translation_native_model">นำเข้าโมเดลในเครื่อง</string>
     <string name="translation_native_download_validating">ดาวน์โหลดเสร็จแล้ว กำลังตรวจสอบและโหลดโมเดล จะนำเข้าอัตโนมัติเมื่อสำเร็จ โปรดรอสักครู่…</string>
     <string name="translation_native_download_failed">ดาวน์โหลดโมเดลไม่สำเร็จ: %1$s ตรวจสอบ เครือข่าย พื้นที่ว่าง และการเชื่อมต่อดาวน์โหลด Hugging Face แล้วลองอีกครั้ง</string>
-    <string name="translation_native_model_help">นำเข้าโมเดลแปลหรือโมเดลตามคำสั่ง GGUF แบบไฟล์เดียว ตั้งเป็นโมเดลปัจจุบันหลังคัดลอกและตรวจสอบ โมเดลอื่นที่ติดตั้งจะยังคงอยู่และสลับหรือลบได้ แนะนำโมเดลควอนไทซ์ขนาดเล็ก หน่วยความจำที่ต้องใช้มากกว่าขนาดไฟล์</string>
+    <string name="translation_native_model_help">นำเข้าโมเดลแปลหรือโมเดลตามคำสั่ง GGUF แบบไฟล์เดียว ตั้งเป็นโมเดลปัจจุบันหลังตรวจสอบ โมเดลอื่นที่ติดตั้งจะยังคงอยู่และสลับหรือลบได้ แนะนำโมเดลควอนไทซ์ขนาดเล็ก หน่วยความจำที่ต้องใช้มากกว่าขนาดไฟล์</string>
     <string name="translation_native_importing">กำลังคัดลอกและตรวจสอบโมเดล โปรดรอสักครู่…</string>
+    <string name="translation_native_referencing">กำลังอ่านและตรวจสอบโมเดลภายนอก โปรดรอสักครู่…</string>
     <string name="translation_native_imported">นำเข้าโมเดลแล้ว แตะ “ลองแปลหนึ่งประโยค” เพื่อดูผล</string>
     <string name="translation_native_import_required">โมเดลมังงะพร้อมแล้ว โปรดนำเข้าโมเดลแปล GGUF ในเครื่องแยกต่างหาก</string>
     <string name="translation_native_prepare_required">เตรียมโมเดลมังงะและโมเดลแปล GGUF ในเครื่องใน “จัดการโมเดล”</string>

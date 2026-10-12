@@ -161,8 +161,9 @@
     <string name="translation_native_model">Lokales Modell importieren</string>
     <string name="translation_native_download_validating">Download abgeschlossen. Modell wird geprüft und geladen; nach Erfolg automatisch importiert. Bitte warten…</string>
     <string name="translation_native_download_failed">Modelldownload fehlgeschlagen: %1$s. Netzwerk, Speicherplatz und Verbindung zu Hugging Face-Downloads prüfen und erneut versuchen.</string>
-    <string name="translation_native_model_help">Einzelne GGUF-Datei eines Übersetzungs- oder Instruktionsmodells importieren. Nach Kopieren und Prüfung wird es als aktuelles Modell festgelegt. Andere installierte Modelle bleiben erhalten und können gewechselt oder gelöscht werden. Kleine quantisierte Modelle werden empfohlen; der Arbeitsspeicherbedarf übersteigt die Dateigröße.</string>
+    <string name="translation_native_model_help">Einzelne GGUF-Datei eines Übersetzungs- oder Instruktionsmodells importieren. Nach der Prüfung wird es als aktuelles Modell festgelegt. Andere installierte Modelle bleiben erhalten und können gewechselt oder gelöscht werden. Kleine quantisierte Modelle werden empfohlen; der Arbeitsspeicherbedarf übersteigt die Dateigröße.</string>
     <string name="translation_native_importing">Modell wird kopiert und geprüft. Bitte warten…</string>
+    <string name="translation_native_referencing">Externes Modell wird gelesen und geprüft. Bitte warten…</string>
     <string name="translation_native_imported">Modell importiert. Auf „Testsatz übersetzen“ tippen, um das Ergebnis zu prüfen.</string>
     <string name="translation_native_import_required">Manga-Modelle sind bereit. Lokales GGUF-Übersetzungsmodell separat importieren.</string>
     <string name="translation_native_prepare_required">Manga-Modelle und lokales GGUF-Übersetzungsmodell in der „Modellverwaltung“ vorbereiten.</string>

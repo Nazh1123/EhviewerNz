@@ -54,7 +54,14 @@ class TranslationModelsFragment : Fragment() {
     private val handler = Handler(Looper.getMainLooper())
     private val importNative = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val mode = nativeImportMode
-        if (uri != null) operate(getString(R.string.translation_native_importing)) { locked { store.import(uri, mode) } }
+        if (uri != null) {
+            val title = if (mode == NativeModelStore.ImportMode.REFERENCE) {
+                R.string.translation_native_referencing
+            } else {
+                R.string.translation_native_importing
+            }
+            operate(getString(title)) { locked { store.import(uri, mode) } }
+        }
     }
     private val importManga = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) operate(getString(R.string.translation_model_import_manga)) { locked { models.import(uris, ::reportProgress) } }

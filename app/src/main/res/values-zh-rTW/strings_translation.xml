@@ -161,8 +161,9 @@
     <string name="translation_native_model">匯入本機模型</string>
     <string name="translation_native_download_validating">下載已完成，正在驗證並載入模型；成功後自動匯入，請稍候…</string>
     <string name="translation_native_download_failed">模型下載失敗：%1$s。請檢查 網路、儲存空間及 Hugging Face 下載連線後重試。</string>
-    <string name="translation_native_model_help">匯入單一檔案 GGUF 翻譯或指令模型，複製並驗證後設為目前模型。其他已安裝模型保留，可切換或刪除。建議使用小型量化模型，所需記憶體高於檔案大小。</string>
+    <string name="translation_native_model_help">匯入單一檔案 GGUF 翻譯或指令模型，驗證後設為目前模型。其他已安裝模型保留，可切換或刪除。建議使用小型量化模型，所需記憶體高於檔案大小。</string>
     <string name="translation_native_importing">正在複製並驗證模型，請稍候…</string>
+    <string name="translation_native_referencing">正在讀取並驗證外部模型，請稍候…</string>
     <string name="translation_native_imported">模型已匯入，可點選「試譯一句」查看效果。</string>
     <string name="translation_native_import_required">漫畫模型已就緒，請另行匯入 GGUF 本機翻譯模型。</string>
     <string name="translation_native_prepare_required">請進入「模型管理」準備漫畫模型及本機 GGUF 翻譯模型。</string>
