@@ -9,7 +9,6 @@ import androidx.preference.Preference;
 
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
-import com.hippo.unifile.UniFile;
 
 public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
 
@@ -73,10 +72,10 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
         updateManualSaveLocationSummary();
         if (mManualImageSaveLocation != null) {
             mManualImageSaveLocation.setOnPreferenceClickListener(preference -> {
-                SettingsDirectoryPicker.selectLocation(this,
-                        Settings.getManualImageSaveLocation(),
+                ManualImageSaveLocationPreferences.selectLocation(this,
                         REQUEST_CODE_PICK_MANUAL_IMAGE_DIR,
-                        REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L);
+                        REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L,
+                        this::updateManualSaveLocationSummary);
                 return true;
             });
         }
@@ -110,16 +109,7 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
     }
 
     private void updateManualSaveLocationSummary() {
-        if (mManualImageSaveLocation == null) {
-            return;
-        }
-        UniFile directory = Settings.getManualImageSaveLocation();
-        if (directory != null) {
-            mManualImageSaveLocation.setSummary(directory.getUri().toString());
-        } else {
-            mManualImageSaveLocation.setSummary(
-                    R.string.settings_download_invalid_download_location);
-        }
+        ManualImageSaveLocationPreferences.updateSummary(this, mManualImageSaveLocation);
     }
 
 }

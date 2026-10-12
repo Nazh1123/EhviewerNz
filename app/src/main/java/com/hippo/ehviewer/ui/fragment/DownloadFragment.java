@@ -173,15 +173,7 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
     }
 
     private void onUpdateManualImageSaveLocation() {
-        UniFile file = Settings.getManualImageSaveLocation();
-        if (mManualImageSaveLocation != null) {
-            if (file != null) {
-                mManualImageSaveLocation.setSummary(file.getUri().toString());
-            } else {
-                mManualImageSaveLocation.setSummary(
-                        R.string.settings_download_invalid_download_location);
-            }
-        }
+        ManualImageSaveLocationPreferences.updateSummary(this, mManualImageSaveLocation);
     }
 
     @Override
@@ -219,14 +211,15 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
     }
 
     private void selectLocation(boolean manualSaveLocation) {
-        UniFile uniFile = manualSaveLocation
-                ? Settings.getManualImageSaveLocation()
-                : Settings.getDownloadLocation();
-        SettingsDirectoryPicker.selectLocation(this, uniFile,
-                manualSaveLocation ? REQUEST_CODE_PICK_MANUAL_IMAGE_DIR
-                        : REQUEST_CODE_PICK_IMAGE_DIR,
-                manualSaveLocation ? REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L
-                        : REQUEST_CODE_PICK_IMAGE_DIR_L);
+        if (manualSaveLocation) {
+            ManualImageSaveLocationPreferences.selectLocation(this,
+                    REQUEST_CODE_PICK_MANUAL_IMAGE_DIR,
+                    REQUEST_CODE_PICK_MANUAL_IMAGE_DIR_L,
+                    this::onUpdateManualImageSaveLocation);
+        } else {
+            SettingsDirectoryPicker.selectLocation(this, Settings.getDownloadLocation(),
+                    REQUEST_CODE_PICK_IMAGE_DIR, REQUEST_CODE_PICK_IMAGE_DIR_L);
+        }
     }
 
     private void exportDownloadItems() {
@@ -310,6 +303,7 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         } else {
             Settings.putDownloadLocation(location);
             onUpdateDownloadLocation();
+            onUpdateManualImageSaveLocation();
         }
     }
 

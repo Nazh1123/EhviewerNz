@@ -1252,6 +1252,25 @@ public class Settings {
      */
     private static final String KEY_MANUAL_IMAGE_SAVE_LOCATION =
             "manual_image_save_location";
+    private static final String KEY_MANUAL_IMAGE_SAVE_MODE = "manual_image_save_mode";
+    public static final int MANUAL_IMAGE_SAVE_CUSTOM = 0;
+    public static final int MANUAL_IMAGE_SAVE_DEFAULT = 1;
+    public static final int MANUAL_IMAGE_SAVE_FOLLOW_DOWNLOAD = 2;
+    public static final String MANUAL_IMAGE_SAVE_DOWNLOAD_SUBDIR = "_image";
+
+    public static int getManualImageSaveMode() {
+        // Preserve custom directories selected before the mode setting was introduced.
+        return getInt(KEY_MANUAL_IMAGE_SAVE_MODE, getManualImageSaveLocationUri() != null
+                ? MANUAL_IMAGE_SAVE_CUSTOM : MANUAL_IMAGE_SAVE_DEFAULT);
+    }
+
+    public static void putManualImageSaveMode(int mode) {
+        if (mode != MANUAL_IMAGE_SAVE_CUSTOM && mode != MANUAL_IMAGE_SAVE_DEFAULT
+                && mode != MANUAL_IMAGE_SAVE_FOLLOW_DOWNLOAD) {
+            throw new IllegalArgumentException("Unknown manual image save mode: " + mode);
+        }
+        putInt(KEY_MANUAL_IMAGE_SAVE_MODE, mode);
+    }
 
     @Nullable
     public static Uri getManualImageSaveLocationUri() {
@@ -1287,23 +1306,43 @@ public class Settings {
     }
 
     /**
-     * Returns the effective manual image destination. The historical EhViewer/image directory is
-     * used only when no custom directory was selected. If a configured directory becomes
-     * unavailable, return {@code null} instead of silently saving somewhere else.
+     * Returns the effective manual image destination, creating the download directory's _image
+     * child when following downloads. If a selected directory becomes unavailable, return
+     * {@code null} instead of silently saving somewhere else.
      */
     @Nullable
     public static UniFile getManualImageSaveLocation() {
-        return getManualImageSaveLocationUri() != null
-                ? getConfiguredManualImageSaveLocation()
-                : UniFile.fromFile(AppConfig.getExternalImageDir());
+        switch (getManualImageSaveMode()) {
+            case MANUAL_IMAGE_SAVE_CUSTOM:
+                return getConfiguredManualImageSaveLocation();
+            case MANUAL_IMAGE_SAVE_FOLLOW_DOWNLOAD:
+                try {
+                    UniFile dir = getDownloadLocation();
+                    if (dir == null || !dir.exists() || !dir.isDirectory() || !dir.canWrite()) {
+                        return null;
+                    }
+                    UniFile images = dir.createDirectory(MANUAL_IMAGE_SAVE_DOWNLOAD_SUBDIR);
+                    return images != null && images.isDirectory() && images.canWrite()
+                            ? images : null;
+                } catch (Throwable e) {
+                    ExceptionUtils.throwIfFatal(e);
+                    return null;
+                }
+            default:
+                return UniFile.fromFile(AppConfig.getExternalImageDir());
+        }
     }
 
     public static void putManualImageSaveLocation(@NonNull UniFile location) {
-        putString(KEY_MANUAL_IMAGE_SAVE_LOCATION, location.getUri().toString());
+        sSettingsPre.edit()
+                .putString(KEY_MANUAL_IMAGE_SAVE_LOCATION, location.getUri().toString())
+                .putInt(KEY_MANUAL_IMAGE_SAVE_MODE, MANUAL_IMAGE_SAVE_CUSTOM)
+                .apply();
     }
 
     public static void clearManualImageSaveLocation() {
-        sSettingsPre.edit().remove(KEY_MANUAL_IMAGE_SAVE_LOCATION).apply();
+        sSettingsPre.edit().remove(KEY_MANUAL_IMAGE_SAVE_LOCATION)
+                .remove(KEY_MANUAL_IMAGE_SAVE_MODE).apply();
     }
 
     public static final String KEY_MEDIA_SCAN = "media_scan";

@@ -67,6 +67,29 @@
         android:title="@string/settings_fork_category_saving"
         app:allowDividerAbove="true">
 
+        <Preference
+            android:key="manual_image_save_location"
+            android:title="@string/settings_download_manual_save_location"
+            app:iconSpaceReserved="false" />
+
+        <com.hippo.preference.ThumbnailSizePreference
+            android:defaultValue="1"
+            android:key="thumb_size"
+            android:summary="%s"
+            android:title="@string/settings_eh_cover_thumb_size"
+            app:allowDividerAbove="true"
+            app:entries="@array/cover_thumb_size_entries"
+            app:entryValues="@array/cover_thumb_size_entry_values" />
+
+        <com.hippo.preference.ThumbnailSizePreference
+            android:defaultValue="1"
+            android:key="preview_thumb_size"
+            android:summary="%s"
+            android:title="@string/settings_eh_preview_thumb_size"
+            app:allowDividerAbove="true"
+            app:entries="@array/preview_thumb_size_entries"
+            app:entryValues="@array/preview_thumb_size_entry_values" />
+            
         <com.hippo.preference.SwitchPreference
             android:defaultValue="true"
             android:key="record_reading_history"
@@ -82,13 +105,8 @@
             app:entries="@array/history_info_size_entries"
             app:entryValues="@array/history_info_size_entry_values" />
 
-        <Preference
-            android:key="manual_image_save_location"
-            android:title="@string/settings_download_manual_save_location"
-            app:iconSpaceReserved="false" />
-
         <com.hippo.preference.ListPreference
-            android:defaultValue="200"
+            android:defaultValue="50"
             android:key="gallery_update_record_limit"
             android:summary="%s"
             android:title="@string/settings_gallery_update_record_limit"

@@ -785,6 +785,9 @@
     <string name="settings_download">Download</string>
     <string name="settings_download_download_location">Download location</string>
     <string name="settings_download_manual_save_location">Manual save locatoin</string>
+    <string name="settings_manual_save_custom">Custom</string>
+    <string name="settings_manual_save_default">Default</string>
+    <string name="settings_manual_save_follow_download">Follow download location</string>
     <string name="settings_download_invalid_download_location">Invalid download location</string>
     <string name="settings_download_cant_get_download_location">Can\'t get download location</string>
     <string name="settings_download_pick_dir_kk">On Android 4.4+, apps can\'t write any data on your external SD card, unless you root the system and apply a patch. But &lt;SD card&gt;/Android/data/com.hippo.ehviewer is an exception. It is writable for this app.</string>

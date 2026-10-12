@@ -100,6 +100,33 @@
         app:entries="@array/list_mode_entries"
         app:entryValues="@array/list_mode_entry_values" />
 
+    <com.hippo.preference.ListPreference
+        android:defaultValue="0"
+        android:key="detail_size"
+        android:summary="%s"
+        android:title="@string/settings_eh_detail_size"
+        app:allowDividerAbove="true"
+        app:entries="@array/detail_size_entries"
+        app:entryValues="@array/detail_size_entry_values" />
+
+    <com.hippo.preference.ThumbnailSizePreference
+        android:defaultValue="1"
+        android:key="thumb_size"
+        android:summary="%s"
+        android:title="@string/settings_eh_cover_thumb_size"
+        app:allowDividerAbove="true"
+        app:entries="@array/cover_thumb_size_entries"
+        app:entryValues="@array/cover_thumb_size_entry_values" />
+
+    <com.hippo.preference.ThumbnailSizePreference
+        android:defaultValue="1"
+        android:key="preview_thumb_size"
+        android:summary="%s"
+        android:title="@string/settings_eh_preview_thumb_size"
+        app:allowDividerAbove="true"
+        app:entries="@array/preview_thumb_size_entries"
+        app:entryValues="@array/preview_thumb_size_entry_values" />
+
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="show_thumbnail_info_bar"
@@ -141,34 +168,7 @@
         android:key="show_read_progress"
         android:summary="@string/settings_eh_list_show_read_progress_summary"
         android:title="@string/settings_eh_list_show_read_progress" />
-
-    <com.hippo.preference.ListPreference
-        android:defaultValue="0"
-        android:key="detail_size"
-        android:summary="%s"
-        android:title="@string/settings_eh_detail_size"
-        app:allowDividerAbove="true"
-        app:entries="@array/detail_size_entries"
-        app:entryValues="@array/detail_size_entry_values" />
-
-    <com.hippo.preference.ThumbnailSizePreference
-        android:defaultValue="1"
-        android:key="thumb_size"
-        android:summary="%s"
-        android:title="@string/settings_eh_cover_thumb_size"
-        app:allowDividerAbove="true"
-        app:entries="@array/cover_thumb_size_entries"
-        app:entryValues="@array/cover_thumb_size_entry_values" />
-
-    <com.hippo.preference.ThumbnailSizePreference
-        android:defaultValue="1"
-        android:key="preview_thumb_size"
-        android:summary="%s"
-        android:title="@string/settings_eh_preview_thumb_size"
-        app:allowDividerAbove="true"
-        app:entries="@array/preview_thumb_size_entries"
-        app:entryValues="@array/preview_thumb_size_entry_values" />
-
+        
     <com.hippo.preference.ListPreference
         android:defaultValue="100"
         android:key="history_info_size"
@@ -179,7 +179,7 @@
         app:entryValues="@array/history_info_size_entry_values" />
 
     <com.hippo.preference.ListPreference
-        android:defaultValue="200"
+        android:defaultValue="50"
         android:key="gallery_update_record_limit"
         android:summary="%s"
         android:title="@string/settings_gallery_update_record_limit"

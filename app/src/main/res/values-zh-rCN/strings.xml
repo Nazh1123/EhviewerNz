@@ -689,6 +689,9 @@
     <string name="settings_download">下载</string>
     <string name="settings_download_download_location">下载路径</string>
     <string name="settings_download_manual_save_location">手动保存路径</string>
+    <string name="settings_manual_save_custom">自定义</string>
+    <string name="settings_manual_save_default">默认</string>
+    <string name="settings_manual_save_follow_download">跟随\"下载路径\"</string>
     <string name="settings_download_invalid_download_location">无效的下载路径</string>
     <string name="settings_download_cant_get_download_location">无法获取下载路径</string>
     <string name="settings_download_pick_dir_kk">在 KitKat 中您无法把数据写入外置 SD 卡，除非您做了奇怪的事情。不过 &lt;SD card&gt;/Android/data/com.hippo.ehviewer 这个路径比较特殊，是可以写入的。</string>
