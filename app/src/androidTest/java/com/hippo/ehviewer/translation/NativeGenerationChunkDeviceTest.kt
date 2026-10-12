@@ -2,7 +2,6 @@ package com.hippo.ehviewer.translation
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.hippo.ehviewer.translation.engine.NativeLlm
 import com.hippo.ehviewer.translation.engine.TranslationOutputLimitException
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +27,7 @@ class NativeGenerationChunkDeviceTest {
         val messages = JSONArray().put(JSONObject().put("role", "user").put("content",
             NativeTranslator.sampleInstruction(options.copy(source = "ja", target = "zh-CN")) +
                 "\n\n明日は学校へ行きます。田中さん、一緒に帰ろう。"))
-        NativeLlm(NativeModelStore(context).file(options.nativeModelId).absolutePath).use { model ->
+        NativeModelStore(context).load(options.nativeModelId).use { model ->
             assertTrue(model.countTokens("明日は学校へ行きます。") > 0)
             suspend fun generate(chunked: Boolean, budget: Int): Pair<ByteArray, Boolean> {
                 assertTrue(model.begin(messages, maxOutputTokens = budget, cacheEnabled = false) > 0)

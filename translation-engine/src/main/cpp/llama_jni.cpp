@@ -7,12 +7,14 @@
 #include <android/log.h>
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <memory>
 #include <mutex>
 #include <sched.h>
 #include <stdexcept>
 #include <string>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -35,6 +37,7 @@ struct PrefixCache {
 };
 using CacheHandle = std::shared_ptr<PrefixCache>;
 struct Session {
+    FILE *model_file = nullptr; // Own the duplicated SAF descriptor until the model is freed.
     llama_model *model = nullptr;
     llama_context *ctx = nullptr;
     llama_sampler *sampler = nullptr;
@@ -70,6 +73,7 @@ struct Session {
         if (threadpool) free_threadpool(threadpool);
         for (auto pool : retired_pools) free_threadpool(pool);
         if (model) llama_model_free(model);
+        if (model_file) std::fclose(model_file);
     }
 };
 std::once_flag initialized;
@@ -272,7 +276,7 @@ Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_destroyCache(JNIEnv
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_createModel(JNIEnv *env, jobject, jlong cacheHandle,
-        jbyteArray path, jint threads) {
+        jbyteArray path, jint threads, jint fileDescriptor) {
     try {
         std::call_once(initialized, initializeBackend);
         auto s = std::make_unique<Session>();
@@ -280,7 +284,22 @@ Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_createModel(JNIEnv 
         const auto model_path = utf8(env, path);
         auto mp = llama_model_default_params();
         mp.n_gpu_layers = 0;
-        s->model = llama_model_load_from_file(model_path.c_str(), mp);
+        struct stat info{};
+        if (fileDescriptor >= 0) {
+            const int owned_fd = dup(fileDescriptor);
+            if (owned_fd < 0) throw std::runtime_error("Cannot retain external GGUF file");
+            s->model_file = fdopen(owned_fd, "rb");
+            if (!s->model_file) {
+                close(owned_fd);
+                throw std::runtime_error("Cannot open external GGUF file");
+            }
+            if (fstat(owned_fd, &info) || !S_ISREG(info.st_mode) || fseeko(s->model_file, 0, SEEK_SET))
+                throw std::runtime_error("External GGUF must support random access; copy it into the app instead");
+            s->model = llama_model_load_from_file_ptr(s->model_file, mp);
+        } else {
+            if (stat(model_path.c_str(), &info)) throw std::runtime_error("Cannot identify GGUF file");
+            s->model = llama_model_load_from_file(model_path.c_str(), mp);
+        }
         if (!s->model) throw std::runtime_error("Cannot load GGUF model (unsupported, damaged or insufficient memory)");
         if (llama_model_has_encoder(s->model)) throw std::runtime_error("Use a decoder-only GGUF instruction model");
         const char *tmpl = llama_model_chat_template(s->model, nullptr);
@@ -309,8 +328,6 @@ Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_createModel(JNIEnv 
         s->max_threads = cp.n_threads;
         s->ctx = llama_init_from_model(s->model, cp);
         if (!s->ctx) throw std::runtime_error("Cannot allocate translation context");
-        struct stat info{};
-        if (stat(model_path.c_str(), &info)) throw std::runtime_error("Cannot identify GGUF file");
         s->model_key = model_path + ":" + std::to_string(info.st_dev) + ":" + std::to_string(info.st_ino) +
             ":" + std::to_string(info.st_size) + ":" + std::to_string(info.st_mtim.tv_sec) +
             ":" + std::to_string(info.st_mtim.tv_nsec) + ":" + std::to_string(info.st_ctim.tv_sec) +

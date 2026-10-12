@@ -11,7 +11,6 @@ import java.math.BigInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import com.hippo.ehviewer.translation.engine.LlmTranslator
-import com.hippo.ehviewer.translation.engine.NativeLlm
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -67,7 +66,7 @@ class NativeCpuBackgroundDeviceTest {
             val source = listOf("明日は学校へ行きます。", "この本を読んでください。")
             val messages = NativeTranslator.buildNumberedMessages(options, source)
             try {
-                NativeLlm(NativeModelStore(context).file(options.nativeModelId).absolutePath).use { model ->
+                NativeModelStore(context).load(options.nativeModelId).use { model ->
                     for (phase in listOf("restrictedPrefill", "restrictedGeneration", "restored")) {
                         val began = SystemClock.elapsedRealtime()
                         val prompt = model.begin(messages, cacheEnabled = false)

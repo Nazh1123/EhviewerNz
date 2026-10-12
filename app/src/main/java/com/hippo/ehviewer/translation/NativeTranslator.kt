@@ -22,14 +22,15 @@ import org.json.JSONObject
 /** JNI stays off the UI thread. GGUF loads on demand and can be released between image stages. */
 class NativeTranslator private constructor(
     private val options: TranslationOptions,
-    private val modelPath: String?,
+    private val loadModel: ((NativePrefixCache) -> NativeLlm)?,
     private val checkRelevant: () -> Unit,
     private val inferenceOverride: (suspend (JSONArray) -> Pair<String, Usage?>?)?,
     private val prefixCacheProvider: (() -> NativePrefixCache)?,
 ) : DetailedTranslator, AutoCloseable {
     constructor(context: Context, options: TranslationOptions, prefixCacheProvider: (() -> NativePrefixCache)? = null,
                 checkRelevant: () -> Unit = {}) :
-        this(options, NativeModelStore(context).file(options.nativeModelId).absolutePath, checkRelevant, null, prefixCacheProvider)
+        this(options, { cache -> NativeModelStore(context).load(options.nativeModelId, cache, sampling(options.nativeModelId)) },
+            checkRelevant, null, prefixCacheProvider)
 
     /** Exercise the real request/response adapter on JVM without loading an Android JNI library. */
     internal constructor(options: TranslationOptions, inference: suspend (JSONArray) -> Pair<String, Usage?>?) :
@@ -48,7 +49,7 @@ class NativeTranslator private constructor(
         check(!closed) { "Native translator is closed" }
         return native ?: run {
             val cache = prefixCache ?: (prefixCacheProvider?.invoke() ?: NativePrefixCache()).also { prefixCache = it }
-            NativeLlm(checkNotNull(modelPath), cache, sampling(options.nativeModelId)).also { native = it }
+            checkNotNull(loadModel)(cache).also { native = it }
         }
     }
 

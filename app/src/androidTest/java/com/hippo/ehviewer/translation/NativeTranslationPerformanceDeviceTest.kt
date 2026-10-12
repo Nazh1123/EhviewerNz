@@ -33,7 +33,7 @@ class NativeTranslationPerformanceDeviceTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val selected = TranslationSettings(context).read()
         assertTrue(NativeModelStore(context).ready(selected))
-        val path = NativeModelStore(context).file(selected.nativeModelId).absolutePath
+        val modelId = selected.nativeModelId
         val options = selected.copy(source = TranslationLanguages.DEFAULT_SOURCE, target = "zh-CN")
         val source = listOf("明日は学校へ行きます。", "田中さん、ちょっと待って！\n一緒に帰ろう。", "ドキドキ")
         val current = NativeTranslator.buildNumberedMessages(options, source)
@@ -46,7 +46,7 @@ class NativeTranslationPerformanceDeviceTest {
         report.writeText("model=${selected.nativeModelName}; same numbered sources=$source\n" +
             "One loaded model; reset live context and prefix cache for each request; old/new/new/old order.\n")
         NativePrefixCache().use { cache ->
-            NativeLlm(path, cache).use { model ->
+            NativeModelStore(context).load(modelId, cache).use { model ->
                 fun measure(name: String, messages: JSONArray): Pair<Int, Long> {
                     cache.clear()
                     // Clearing host snapshots preserves the active context by design.
@@ -139,7 +139,7 @@ class NativeTranslationPerformanceDeviceTest {
             }
         }
         val load = SystemClock.elapsedRealtime()
-        NativeLlm(NativeModelStore(context).file(options.nativeModelId).absolutePath).use { model ->
+        NativeModelStore(context).load(options.nativeModelId).use { model ->
             report.appendText("loadMs=${SystemClock.elapsedRealtime() - load}\n")
             report.appendText("backend=${model.systemInfo()}\n")
             val requests = listOf("upstreamNumbered" to LlmTranslator(options.engineConfig().translator).buildMessages(source),
@@ -178,7 +178,7 @@ class NativeTranslationPerformanceDeviceTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val options = TranslationSettings(context).read().copy(backend = TranslationBackend.NATIVE_LLM)
         assertTrue(NativeModelStore(context).ready(options))
-        val path = NativeModelStore(context).file(options.nativeModelId).absolutePath
+        val modelId = options.nativeModelId
         val source = listOf("明日は学校へ行きます。", "この本を読んでください。")
         val changed = listOf("ありがとうございます。", "少し待ってください。", "また明日会いましょう。")
         val original = NativeTranslator.buildNumberedMessages(options, source)
@@ -213,7 +213,7 @@ class NativeTranslationPerformanceDeviceTest {
         }
         NativePrefixCache().use { cache ->
             var expected = ""
-            NativeLlm(path, cache).use { model ->
+            NativeModelStore(context).load(modelId, cache).use { model ->
                 checkPage(request(model, "disabled", original, enabled = false).first, source)
                 assertEquals(0L, cache.sizeBytes())
                 val built = request(model, "build", original)
@@ -260,7 +260,7 @@ class NativeTranslationPerformanceDeviceTest {
             // Both weights and context have been freed; only the bounded host snapshot survives.
             report.appendText("snapshotBytes=${cache.sizeBytes()}\n")
             val loaded = SystemClock.elapsedRealtime()
-            NativeLlm(path, cache).use { model ->
+            NativeModelStore(context).load(modelId, cache).use { model ->
                 report.appendText("reloadMs=${SystemClock.elapsedRealtime() - loaded}\n")
                 val restored = request(model, "restoredAfterUnload", original)
                 assertTrue(restored.second > 0)
@@ -295,8 +295,8 @@ class NativeTranslationPerformanceDeviceTest {
             assertTrue(result.missingIndices.isEmpty())
         }
         assertEquals(bytes, cache.sizeBytes())
-        val path = NativeModelStore(context).file(options.nativeModelId).absolutePath
-        NativeLlm(path, cache).use { model ->
+        val modelId = options.nativeModelId
+        NativeModelStore(context).load(modelId, cache).use { model ->
             assertTrue(model.begin(NativeTranslator.buildNumberedMessages(options, source)) > 0)
             assertTrue(model.cachedPromptTokens() > 0)
             TranslationRuntime.trimMemory()
@@ -304,7 +304,7 @@ class NativeTranslationPerformanceDeviceTest {
             // Clearing snapshots must not invalidate an already restored context.
             while (model.next() != null) { }
         }
-        NativeLlm(path, cache).use { model ->
+        NativeModelStore(context).load(modelId, cache).use { model ->
             assertTrue(model.begin(NativeTranslator.buildNumberedMessages(options, source)) > 0)
             assertEquals("Trimmed snapshots must not survive model reload", 0, model.cachedPromptTokens())
         }

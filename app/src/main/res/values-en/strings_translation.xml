@@ -11,7 +11,7 @@
     <string name="translation_model_management">Model management</string>
     <string name="translation_model_local_count">Local model sets / GGUF</string>
     <string name="translation_model_local_storage">Local file storage</string>
-    <string name="translation_model_short_intro">Mobile data supported · Models stored in the app</string>
+    <string name="translation_model_short_intro">Mobile data supported · Copy or reference GGUF files</string>
     <string name="translation_model_tab_manga">Manga models</string>
     <string name="translation_model_tab_native">Local AI</string>
     <string name="translation_model_tab_language">Language packs</string>
@@ -24,7 +24,7 @@
     <string name="translation_model_manga_llm_card_description">HY-MT2 fine-tuned for manga translation · Japanese → Simplified Chinese</string>
     <string name="translation_model_imported_description">Translation model imported from local storage</string>
     <string name="translation_model_import_card_title">Import your model</string>
-    <string name="translation_model_import_card_description">Select a single-file GGUF model. It is ready to use after validation.</string>
+    <string name="translation_model_import_card_description">Choose whether to copy or reference an external file, then select a single-file GGUF model for validation.</string>
     <string name="translation_model_current_badge">In use</string>
     <string name="translation_model_not_downloaded">Not downloaded</string>
     <string name="translation_model_status_unknown">Status not checked</string>
@@ -53,6 +53,15 @@
     <string name="translation_model_use">Use this model</string>
     <string name="translation_model_refresh">Refresh status</string>
     <string name="translation_model_choose_file">Choose GGUF file</string>
+    <string name="translation_model_import_mode">Choose GGUF import method</string>
+    <string name="translation_model_import_copy">Copy to app-private storage</string>
+    <string name="translation_model_import_reference">Use external file directly</string>
+    <string name="translation_model_external_badge">External file</string>
+    <string name="translation_model_remove_reference">Remove reference</string>
+    <string name="translation_model_remove_reference_confirm">Remove the reference to “%1$s”? The original GGUF file will be kept.</string>
+    <string name="translation_model_external_help">Reads the original GGUF without keeping a private copy. Keep the file in place and do not modify it. Import with copy mode to use a private copy; referencing the same model removes its existing private copy. Removing a reference preserves the original file.</string>
+    <string name="translation_model_external_unsupported">This external file cannot be loaded directly. Choose “Copy to app-private storage”.</string>
+    <string name="translation_model_external_changed">The external model has changed or is unavailable. Select the GGUF file again.</string>
     <string name="translation_model_choose_files">Choose model files</string>
     <string name="translation_model_import_manga">Import manga model set</string>
     <string name="translation_model_import_manga_help">Select all the files below at once. Names and versions must match. Files are copied only after validation; the originals are kept.\n\n%1$s</string>

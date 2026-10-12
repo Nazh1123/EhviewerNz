@@ -7,7 +7,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withLock
 import com.hippo.ehviewer.translation.engine.PageResult
-import com.hippo.ehviewer.translation.engine.NativeLlm
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -30,7 +29,7 @@ class NativeComplexPageDeviceTest {
         val baseline = JSONObject(File(root, "report-baseline-en.json").readText()).getJSONArray("pages")
         val output = JSONArray()
         val report = File(root, "dialogue-rule-comparison.json")
-        NativeLlm(NativeModelStore(context).file(options.nativeModelId).absolutePath).use { model ->
+        NativeModelStore(context).load(options.nativeModelId).use { model ->
             for (index in 0 until baseline.length()) {
                 val page = baseline.getJSONObject(index)
                 if (page.getString("name") !in listOf("00000004", "00000011")) continue

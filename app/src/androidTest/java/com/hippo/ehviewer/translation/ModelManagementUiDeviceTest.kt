@@ -1,9 +1,11 @@
 package com.hippo.ehviewer.translation
 
 import android.content.Intent
+import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
 import android.os.SystemClock
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.graphics.ColorUtils
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -20,6 +22,46 @@ import org.junit.runner.RunWith
 /** UI-only validation: reads model inventory, never downloads, selects or deletes a model. */
 @RunWith(AndroidJUnit4::class)
 class ModelManagementUiDeviceTest {
+    @Test fun choosesStorageMethodBeforeOpeningDocumentPicker() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val pickerPackages = context.packageManager.queryIntentActivities(Intent(Intent.ACTION_OPEN_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+            .map { it.activityInfo.packageName }.toSet()
+        val activity = instrumentation.startActivitySync(Intent(context, SettingsActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SettingsActivity
+        try {
+            instrumentation.runOnMainSync {
+                activity.supportFragmentManager.beginTransaction().replace(R.id.settings, TranslationModelsFragment()).commitNow()
+                val root = requireNotNull(activity.supportFragmentManager.findFragmentById(R.id.settings)!!.view)
+                root.findViewWithTag<MaterialButton>("translation_model_tab_1").performClick()
+            }
+            instrumentation.waitForIdleSync()
+            SystemClock.sleep(600)
+            for (method in listOf(R.string.translation_model_import_copy, R.string.translation_model_import_reference)) {
+                instrumentation.runOnMainSync {
+                    val root = requireNotNull(activity.supportFragmentManager.findFragmentById(R.id.settings)!!.view)
+                    val actions = root.findViewWithTag<ViewGroup>("translation_native_import/actions")
+                    (actions.getChildAt(0) as MaterialButton).performClick()
+                }
+                instrumentation.waitForIdleSync()
+                SystemClock.sleep(200)
+                val dialog = requireNotNull(instrumentation.uiAutomation.rootInActiveWindow)
+                for (label in listOf(R.string.translation_model_import_copy, R.string.translation_model_import_reference))
+                    assertTrue("${dialog.packageName}: ${activity.getString(label)}",
+                        dialog.findAccessibilityNodeInfosByText(activity.getString(label)).isNotEmpty())
+                val button = dialog.findAccessibilityNodeInfosByText(activity.getString(method)).first()
+                assertTrue(button.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+                SystemClock.sleep(800)
+                val picker = requireNotNull(instrumentation.uiAutomation.rootInActiveWindow)
+                assertTrue("Expected document picker: ${picker.packageName}", picker.packageName.toString() in pickerPackages)
+                assertTrue(instrumentation.uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK))
+                instrumentation.waitForIdleSync()
+                SystemClock.sleep(300)
+            }
+        } finally { instrumentation.runOnMainSync { activity.finish() } }
+    }
+
     @Test fun capturesLightDarkAndBlackCardsWithReadableButtons() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

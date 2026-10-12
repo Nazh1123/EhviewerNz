@@ -16,6 +16,58 @@ import android.net.Uri
 
 @RunWith(AndroidJUnit4::class)
 class NativeTranslationDeviceTest {
+    /** Opt-in real GGUF test: never copies, modifies or deletes the supplied external source. */
+    @Test fun referencesAndReloadsExternalFixture() = runBlocking<Unit>(Dispatchers.IO) {
+        val path = InstrumentationRegistry.getArguments().getString("nativeModelPath")
+        assumeTrue(path != null)
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        app.startActivity(android.content.Intent(app, com.hippo.ehviewer.ui.splash.SplashActivity::class.java)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        val root = File(app.cacheDir, "native-reference-test").apply { mkdirs() }
+        val context = object : ContextWrapper(app) {
+            override fun getNoBackupFilesDir() = root
+            override fun getSharedPreferences(name: String, mode: Int) = app.getSharedPreferences("native-reference-test-$name", mode)
+        }
+        val source = File(requireNotNull(path))
+        val sourceSize = source.length()
+        val store = NativeModelStore(context)
+        try {
+            store.import(Uri.fromFile(source), NativeModelStore.ImportMode.REFERENCE)
+            val options = TranslationSettings(context).read()
+            NativeModelCatalog.models.firstOrNull { it.name == source.name }?.let {
+                assertEquals("Referenced preset must retain its content identity", it.sha256, options.nativeModelId)
+            }
+            assertTrue(store.ready(options))
+            assertTrue(store.installed().single().external)
+            assertEquals(0L, store.installed().single().privateBytes)
+            assertFalse(store.file(options.nativeModelId).exists())
+            NativeTranslator(context, options).use { translator ->
+                repeat(2) {
+                    val result = translator.translateSample("こんにちは。")
+                    assertEquals(1, result.translations.size)
+                    assertTrue(result.missingIndices.isEmpty())
+                    assertNotEquals("こんにちは。", result.translations.single())
+                    translator.unloadModel() // Each reload must reopen a fresh descriptor for the URI.
+                }
+            }
+            store.delete(options.nativeModelId)
+            assertTrue(store.installed().isEmpty())
+            assertTrue(source.isFile)
+            assertEquals(sourceSize, source.length())
+        } finally {
+            context.getSharedPreferences("manga_translation", Context.MODE_PRIVATE).edit().clear().commit()
+            context.getSharedPreferences("translation_model_names", Context.MODE_PRIVATE).edit().clear().commit()
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun nativeLoaderRejectsNonSeekableExternalDescriptor() {
+        val pipe = android.os.ParcelFileDescriptor.createPipe()
+        try {
+            assertThrows(IllegalStateException::class.java) { NativeLlm("external-pipe", fileDescriptor = pipe[0].fd).close() }
+        } finally { pipe.forEach { it.close() } }
+    }
+
     @Test fun importsAndTranslatesFixture() = runBlocking<Unit>(Dispatchers.IO) {
         val path = InstrumentationRegistry.getArguments().getString("nativeModelPath")
         assumeTrue(path != null)

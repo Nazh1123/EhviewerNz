@@ -5,12 +5,12 @@ import org.json.JSONObject
 
 
 class NativeLlm(path: String, prefixCache: NativePrefixCache? = null,
-                sampling: NativeSampling = NativeSampling.GREEDY) : AutoCloseable {
+                sampling: NativeSampling = NativeSampling.GREEDY, fileDescriptor: Int = -1) : AutoCloseable {
     private val cache = prefixCache ?: NativePrefixCache()
     private val ownsCache = prefixCache == null
     private val chunkState = IntArray(1)
     private var handle = try {
-        cache.createModel(path, Runtime.getRuntime().availableProcessors().coerceIn(1, 4)).also { model ->
+        cache.createModel(path, Runtime.getRuntime().availableProcessors().coerceIn(1, 4), fileDescriptor).also { model ->
             try { configureSampling(model, sampling.id) }
             catch (error: Throwable) { destroy(model); throw error }
         }

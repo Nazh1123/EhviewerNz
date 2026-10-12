@@ -26,6 +26,7 @@ class TranslationModelsFragment : Fragment() {
     private lateinit var models: TranslationModels
     private lateinit var ppModels: PpOcrModels
     private var ppImportLanguage = "en"
+    private var nativeImportMode = NativeModelStore.ImportMode.COPY
     private lateinit var store: NativeModelStore
     private lateinit var palette: ModelPalette
     private lateinit var cards: LinearLayout
@@ -52,7 +53,8 @@ class TranslationModelsFragment : Fragment() {
     private var busy = false
     private val handler = Handler(Looper.getMainLooper())
     private val importNative = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) operate(getString(R.string.translation_native_importing)) { locked { store.import(uri) } }
+        val mode = nativeImportMode
+        if (uri != null) operate(getString(R.string.translation_native_importing)) { locked { store.import(uri, mode) } }
     }
     private val importManga = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) operate(getString(R.string.translation_model_import_manga)) { locked { models.import(uris, ::reportProgress) } }
@@ -74,6 +76,9 @@ class TranslationModelsFragment : Fragment() {
         models = TranslationModels(requireContext().applicationContext)
         ppModels = PpOcrModels(requireContext().applicationContext)
         ppImportLanguage = savedInstanceState?.getString("pp_import_language") ?: "en"
+        nativeImportMode = savedInstanceState?.getString("native_import_mode")?.let {
+            runCatching { NativeModelStore.ImportMode.valueOf(it) }.getOrNull()
+        } ?: NativeModelStore.ImportMode.COPY
         store = NativeModelStore(requireContext().applicationContext)
         section = savedInstanceState?.getInt("section", 0)?.coerceIn(0, 2) ?: 0
         languageTarget = savedInstanceState?.getString("language_target")
@@ -169,7 +174,7 @@ class TranslationModelsFragment : Fragment() {
         val context = requireContext()
         countText.text = (installed.size + ppModels.entries.count { ppModels.store(it.language).ready() } +
             (if (mangaReady == true) 1 else 0) + (if (ppModels.runtime.ready()) 1 else 0)).toString()
-        storageText.text = size(models.storedBytes() + installed.sumOf { it.size } +
+        storageText.text = size(models.storedBytes() + installed.sumOf { it.privateBytes } +
             ppModels.entries.sumOf { ppModels.store(it.language).storedBytes() } + ppModels.runtime.store.storedBytes())
         tabs.removeAllViews()
         listOf(R.string.translation_model_tab_manga, R.string.translation_model_tab_native, R.string.translation_model_tab_language).forEachIndexed { index, title ->
@@ -259,11 +264,12 @@ class TranslationModelsFragment : Fragment() {
         for (local in installed.filter { item -> NativeModelCatalog.models.none { it.sha256 == item.id } })
             addNativeCard(local.id, local.name, local.size, true, selected.nativeModelId == local.id, null)
         card("translation_native_import", getString(R.string.translation_model_import_card_title), getString(R.string.translation_model_import_card_description),
-            R.drawable.v_folders_import_dark_x24, "GGUF", false, emptyList(), listOf(action(R.string.translation_model_choose_file) { importNative.launch(arrayOf("*/*")) }),
+            R.drawable.v_folders_import_dark_x24, "GGUF", false, emptyList(), listOf(action(R.string.translation_model_choose_file) { chooseNativeImportMode() }),
             getString(R.string.translation_native_model_help))
     }
 
     private fun addNativeCard(id: String, name: String, bytes: Long, available: Boolean, selected: Boolean, catalog: NativeDownloadModel?) {
+        val external = installed.firstOrNull { it.id == id }?.external == true
         val description = getString(when (catalog) {
             NativeModelCatalog.models[0] -> R.string.translation_model_hy_card_description
             NativeModelCatalog.models[1] -> R.string.translation_model_manga_llm_card_description
@@ -274,7 +280,13 @@ class TranslationModelsFragment : Fragment() {
                 if (selected) ModelButtonKind.SECONDARY else ModelButtonKind.PRIMARY) {
                 if (!selected) operate(name) { locked { store.select(id) } }
             }) +
-                listOf(action(R.string.translation_model_delete, ModelButtonKind.DELETE) { confirmDelete(name) { locked { store.delete(id) } } })
+                listOf(action(if (external) R.string.translation_model_remove_reference else R.string.translation_model_delete, ModelButtonKind.DELETE) {
+                    if (external) showDialog(AlertDialog.Builder(requireContext()).setTitle(R.string.translation_model_remove_reference)
+                        .setMessage(getString(R.string.translation_model_remove_reference_confirm, name))
+                        .setPositiveButton(R.string.translation_model_remove_reference) { _, _ -> operate(name, false) { locked { store.delete(id) } } }
+                        .setNegativeButton(android.R.string.cancel, null), true)
+                    else confirmDelete(name) { locked { store.delete(id) } }
+                })
         } else if (catalog != null) listOf(action(R.string.translation_model_download, ModelButtonKind.PRIMARY) {
             operate(name) {
                 notifyModelDownloadNetwork(requireContext().applicationContext)
@@ -286,8 +298,24 @@ class TranslationModelsFragment : Fragment() {
         }) else emptyList()
         card("translation_native_$id", name, description, R.drawable.v_download_box_outline_dark_x24,
             getString(if (selected && available) R.string.translation_model_current_badge else if (available) R.string.translation_model_installed else R.string.translation_model_not_downloaded),
-            selected && available, listOf(size(bytes)) + if (catalog == null) emptyList() else listOf("1.8B · Q4_K_M"), actions,
-            name + "\n\n" + getString(if (catalog == null) R.string.translation_native_model_help else if (catalog == NativeModelCatalog.models[0]) R.string.translation_model_hy_help else R.string.translation_model_manga_llm_help))
+            selected && available, listOf(size(bytes)) + (if (external) listOf(getString(R.string.translation_model_external_badge)) else emptyList()) +
+                (if (catalog == null) emptyList() else listOf("1.8B · Q4_K_M")), actions,
+            name + "\n\n" + getString(if (catalog == null) R.string.translation_native_model_help else if (catalog == NativeModelCatalog.models[0]) R.string.translation_model_hy_help else R.string.translation_model_manga_llm_help) +
+                if (external) "\n\n${getString(R.string.translation_model_external_help)}" else "")
+    }
+
+    private fun chooseNativeImportMode() {
+        val options = listOf(R.string.translation_model_import_copy, R.string.translation_model_import_reference)
+        val adapter = object : ArrayAdapter<String>(requireContext(), android.R.layout.simple_list_item_1, options.map { getString(it) }) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                super.getView(position, convertView, parent).also { (it as TextView).setTextColor(palette.text) }
+        }
+        showDialog(AlertDialog.Builder(requireContext()).setTitle(R.string.translation_model_import_mode)
+            .setAdapter(adapter) { dialog, which ->
+                nativeImportMode = if (which == 0) NativeModelStore.ImportMode.COPY else NativeModelStore.ImportMode.REFERENCE
+                dialog.dismiss()
+                importNative.launch(arrayOf("*/*"))
+            }.setNegativeButton(android.R.string.cancel, null))
     }
 
     private fun renderLanguages() {
@@ -410,6 +438,7 @@ class TranslationModelsFragment : Fragment() {
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("language_target", languageTarget); outState.putInt("section", section)
         outState.putString("pp_import_language", ppImportLanguage)
+        outState.putString("native_import_mode", nativeImportMode.name)
         super.onSaveInstanceState(outState)
     }
     override fun onResume() { super.onResume(); (activity as? SettingsActivity)?.setSettingsTitle(R.string.translation_model_management) }

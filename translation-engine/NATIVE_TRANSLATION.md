@@ -1,5 +1,21 @@
 # 本地 GGUF 翻译调用
 
+## GGUF 导入与存储
+
+模型管理的“选择 GGUF 文件”先选择“复制到应用私有目录”或“直接调用外部文件”，再打开系统文件选择器。选择方式随 Fragment 状态保存，文件选择器取消不改变模型。
+
+复制模式沿用 `noBackupFilesDir/translation-llm/<SHA-256>.gguf`。引用模式保存系统返回的 URI 和持久读取权限，不复制权重；首次导入仍完整计算 SHA-256 并实际加载校验。预设模型身份、采样和翻译结果缓存继续使用内容摘要，不依赖文件名或存储方式。
+
+每次加载引用时重新打开只读文件描述符，JNI 复制该描述符并通过 `fdopen`、`llama_model_load_from_file_ptr` 加载。保留默认 mmap 策略，原生 Session 在释放模型后关闭它拥有的 FILE；Kotlin 打开的描述符在加载完成或失败后关闭。不支持普通文件、随机读取或 mmap 的提供者导入失败，用户可以改用复制模式，不做隐式复制。
+
+引用保存文件大小和数据修改时间，每次检查或重载时验证。原文件被删除、权限丢失或检测到修改后需重新选择。重启可能改变设备号或 inode，共享存储的权限/扩展属性更新会改变 ctime，因此这些信息不作为持久引用的有效性条件；原生前缀缓存仍用实际文件身份区分会话。正在使用的原文件不可改写或截断。
+
+同一内容切换为引用时，验证和保存成功后移除已有私有副本；切回复制时释放不再使用的 URI 读取权限。移除引用仅删除登记和权限，不删除用户原始 GGUF。界面标记“外部文件”，应用文件占用只统计私有副本。
+
+验证：`NativeModelReferenceTest` 覆盖权限、模式切换、源文件改变/丢失、取消和失败保留；`NativeTranslationDeviceTest.referencesAndReloadsExternalFixture` 用显式 `nativeModelPath` 验证真实 GGUF 推理、重载及原文件保留；`nativeLoaderRejectsNonSeekableExternalDescriptor` 验证管道拒绝；`ModelManagementUiDeviceTest.choosesStorageMethodBeforeOpeningDocumentPicker` 检查两种方式先弹选择框再打开系统选择器。
+
+2026-10-11 本轮验证：上述存储与既有协议/持久化相关 JVM 测试 77 项通过；vivo V2227A / Android 16 的导入方式界面检查、管道拒绝、Hy-MT2 与漫画微调两个预设的引用/推理/重载检查通过。Debug、测试和 Release APK（含 release vital lint）构建通过。两份预设直接从固定 Hugging Face 修订下载到设备共享目录，文件大小及 SHA-256 与模型目录一致。
+
 ## 请求与批量
 
 所有模型继续使用 `NativeTranslator.buildNumberedMessages` 的完整漫画翻译规则和编号原文。单区域兼容重试不切换为设置页面的短句试译指令。
