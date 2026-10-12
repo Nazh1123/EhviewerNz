@@ -6,7 +6,6 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Process;
 import android.os.SystemClock;
 import android.util.LruCache;
 import android.util.Pair;
@@ -26,17 +25,11 @@ import com.hippo.ehviewer.client.data.GalleryPreview;
 import com.hippo.ehviewer.client.data.PreviewSet;
 import com.hippo.ehviewer.gallery.EhGalleryProvider;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
-import com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache;
-import com.hippo.ehviewer.gallery.ReaderPreviewSource;
+import com.hippo.ehviewer.gallery.ReaderPreviewLoader;
 import com.hippo.lib.image.Image;
 import com.hippo.widget.LoadImageView;
-import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /** A fixed five-card window: work stays bounded regardless of the gallery's page count. */
 final class ReaderPagePreview implements AutoCloseable {
@@ -49,18 +42,10 @@ final class ReaderPagePreview implements AutoCloseable {
     private final LinearLayout row;
     private final Card[] cards = new Card[5];
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final ThreadPoolExecutor worker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<>(), runnable -> new Thread(() -> {
-                Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
-                runnable.run();
-            }, "Reader-Preview"));
-    private final LruCache<Integer, Bitmap> posters = new LruCache<>(8 * 1024 * 1024) {
-        @Override protected int sizeOf(Integer key, Bitmap value) { return value.getAllocationByteCount(); }
-    };
+    private final ReaderPreviewLoader localLoader;
     private final LruCache<String, Long> failures = new LruCache<>(128);
     private final Set<String> downloading = new HashSet<>();
     private final int edge;
-    private volatile int generation;
     private volatile boolean closed;
     private volatile boolean visible;
     private boolean dispatchPending;
@@ -70,9 +55,8 @@ final class ReaderPagePreview implements AutoCloseable {
     private int perPage;
     private boolean reverse;
     private EhRequest metadataRequest;
-    private Future<?> localTask;
-    // Accessed and closed only on worker, after all its image jobs finish.
-    private ReaderPreviewSource source;
+    private int[] preparedPages;
+    private final Runnable prepare = this::prepareLocal;
     private final Runnable dispatch = () -> {
         dispatchPending = false;
         if (visible && !closed) dispatchOnline();
@@ -84,7 +68,12 @@ final class ReaderPagePreview implements AutoCloseable {
         this.provider = provider;
         gallery = provider instanceof EhGalleryProvider
                 ? ((EhGalleryProvider) provider).getPreviewGalleryInfo() : null;
-        edge = Math.min(512, Math.max(192, dp(110)));
+        edge = Math.min(256, Math.max(128, dp(72)));
+        localLoader = gallery == null ? new ReaderPreviewLoader(this.context, provider, (page, bitmap) -> {
+            if (!visible || closed) return;
+            for (Card card : cards) if (card.page == page)
+                card.image.load(new android.graphics.drawable.BitmapDrawable(row.getResources(), bitmap));
+        }) : null;
         row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
         for (int i = 0; i < cards.length; i++) {
             cards[i] = new Card(context);
@@ -104,6 +93,7 @@ final class ReaderPagePreview implements AutoCloseable {
 
     void show(int page, int count, boolean rightToLeft) {
         if (closed || count <= 0) return;
+        handler.removeCallbacks(prepare);
         visible = true;
         row.setVisibility(View.VISIBLE);
         update(page, count, rightToLeft);
@@ -112,9 +102,8 @@ final class ReaderPagePreview implements AutoCloseable {
     void update(int page, int count, boolean rightToLeft) {
         if (!visible || closed || count <= 0) return;
         int target = Math.max(0, Math.min(page, count - 1));
-        boolean changed = target != selected || count != size || rightToLeft != reverse;
         selected = target; size = count; reverse = rightToLeft;
-        if (changed) generation++;
+        reuseCards(target, count, rightToLeft);
         for (int i = 0; i < cards.length; i++) {
             Card card = cards[i];
             int index = windowPage(target, count, i, rightToLeft);
@@ -127,18 +116,19 @@ final class ReaderPagePreview implements AutoCloseable {
                 card.label.setText(index < 0 ? "" : Integer.toString(index + 1));
             }
             card.container.setVisibility(index < 0 ? View.INVISIBLE : View.VISIBLE);
-            if (gallery != null && index >= 0) bindOnline(card);
-            else if (index >= 0) {
-                Bitmap bitmap = posters.get(index);
+            if (gallery == null && index >= 0 && card.image.getDrawable() == null) {
+                Bitmap bitmap = localLoader.get(index);
                 if (bitmap != null) card.image.load(new android.graphics.drawable.BitmapDrawable(row.getResources(), bitmap));
             }
         }
+        // Bind the online center first when a cache miss needs a disk request.
+        if (gallery != null) for (int slot : LOAD_ORDER) if (cards[slot].page >= 0) bindOnline(cards[slot]);
         Set<String> currentKeys = new HashSet<>();
         for (Card card : cards) if (card.image.preview != null && card.image.network)
             currentKeys.add(card.image.preview.getImageKey());
         downloading.retainAll(currentKeys);
         if (gallery != null) schedule(75);
-        else if (changed || localTask == null) loadLocal();
+        else loadLocal();
     }
 
     static int windowPage(int target, int size, int slot, boolean reverse) {
@@ -146,15 +136,56 @@ final class ReaderPagePreview implements AutoCloseable {
         return index >= 0 && index < size ? index : -1;
     }
 
+    void prepare(int page, int count, boolean rightToLeft) {
+        if (closed || visible || count <= 0 || localLoader == null || provider.getPreviewConcurrency() <= 1) return;
+        int target = Math.max(0, Math.min(page, count - 1));
+        preparedPages = new int[cards.length];
+        for (int i = 0; i < preparedPages.length; i++)
+            preparedPages[i] = windowPage(target, count, LOAD_ORDER[i], rightToLeft);
+        handler.removeCallbacks(prepare);
+        // Warm only a settled five-page neighborhood, so fast page turns do not start more reads.
+        handler.postDelayed(prepare, 150);
+    }
+
+    private void prepareLocal() {
+        if (!visible && !closed && localLoader != null && preparedPages != null)
+            localLoader.request(preparedPages, edge, false);
+    }
+
+    private void reuseCards(int target, int count, boolean rightToLeft) {
+        Card[] ordered = new Card[cards.length];
+        Set<Card> used = new HashSet<>();
+        for (int slot = 0; slot < ordered.length; slot++) {
+            int page = windowPage(target, count, slot, rightToLeft);
+            if (page < 0) continue;
+            for (Card card : cards) if (card.page == page) {
+                ordered[slot] = card;
+                used.add(card);
+                break;
+            }
+        }
+        for (int slot = 0; slot < ordered.length; slot++) if (ordered[slot] == null) {
+            for (Card card : cards) if (used.add(card)) { ordered[slot] = card; break; }
+        }
+        boolean moved = false;
+        for (int slot = 0; slot < ordered.length; slot++) if (ordered[slot] != cards[slot]) moved = true;
+        if (!moved) return;
+        for (int slot = 0; slot < ordered.length; slot++) {
+            cards[slot] = ordered[slot];
+            // Reorder without detaching views and cancelling their in-flight requests.
+            row.bringChildToFront(cards[slot].container);
+            cards[slot].container.setBackground(background(slot == 2));
+            cards[slot].container.setSelected(slot == 2);
+        }
+    }
+
     void hide() {
         visible = false;
-        generation++;
         handler.removeCallbacksAndMessages(null);
         dispatchPending = false;
         row.setVisibility(View.GONE);
         if (metadataRequest != null) { metadataRequest.cancel(); metadataRequest = null; }
-        if (localTask != null) { localTask.cancel(true); localTask = null; }
-        worker.getQueue().clear();
+        if (localLoader != null) localLoader.stop();
         for (Card card : cards) {
             card.image.unload();
             card.image.preview = null;
@@ -168,41 +199,13 @@ final class ReaderPagePreview implements AutoCloseable {
         if (closed) return;
         hide();
         closed = true;
-        worker.execute(() -> {
-            if (source != null) try { source.close(); } catch (IOException ignored) { }
-            source = null;
-        });
-        worker.shutdown();
-        posters.evictAll();
+        if (localLoader != null) localLoader.close();
     }
 
     private void loadLocal() {
-        if (localTask != null) localTask.cancel(true);
-        worker.getQueue().clear();
-        int token = generation;
         int[] pages = new int[5];
         for (int i = 0; i < pages.length; i++) pages[i] = cards[LOAD_ORDER[i]].page;
-        localTask = worker.submit(() -> {
-            if (source == null) source = provider.createPreviewSource(context);
-            for (int page : pages) {
-                if (closed || token != generation || Thread.currentThread().isInterrupted()) return;
-                if (page < 0 || posters.get(page) != null) continue;
-                try {
-                    ReaderPreviewBitmapCache.Result result = source.load(page, edge);
-                    if (result == null) continue;
-                    if (closed || token != generation || Thread.currentThread().isInterrupted()) return;
-                    posters.put(page, result.bitmap);
-                    handler.post(() -> {
-                        if (!visible || closed || token != generation) return;
-                        for (Card card : cards) if (card.page == page)
-                            card.image.load(new android.graphics.drawable.BitmapDrawable(row.getResources(), result.bitmap));
-                    });
-                    result.persist(context);
-                } catch (IOException | RuntimeException ignored) {
-                    // Keep the numbered placeholder; preview failure never interrupts reading.
-                }
-            }
-        });
+        localLoader.request(pages, edge, true);
     }
 
     private String metadataKey(int page) { return gallery.gid + ":" + gallery.token + ":" + page; }
@@ -342,6 +345,7 @@ final class ReaderPagePreview implements AutoCloseable {
         boolean network;
         boolean missed;
         PreviewImage(Context context) { super(context); }
+        @Override protected boolean animateImageChanges() { return false; }
         @Override protected java.util.function.BooleanSupplier networkAdmission() {
             return ReaderPagePreview.this::admitNetwork;
         }

@@ -1931,6 +1931,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSeekBar.setProgress(displayedIndex);
         if (mPageSeeking && mPagePreview != null) {
             mPagePreview.update(displayedIndex, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
+        } else if (mPagePreview != null) {
+            mPagePreview.prepare(displayedIndex, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
         }
     }
 

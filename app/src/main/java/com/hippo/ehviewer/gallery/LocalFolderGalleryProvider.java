@@ -306,6 +306,8 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
         return image != null ? UniFile.fromUri(context, image.uri) : null;
     }
 
+    @Override public int getPreviewConcurrency() { return 4; }
+
     private void fail(int stringId) {
         size = STATE_ERROR;
         error = GetText.getString(stringId);

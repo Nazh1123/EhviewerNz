@@ -285,6 +285,9 @@ public class ImageWrapper {
         return mImage.isRecycled();
     }
 
+    /** Caller retains this wrapper while copying; animated sources fall back to static decoding. */
+    public Bitmap createPreview(int edge) { return mImage.createPreview(edge); }
+
     /**
      * @see Image#getAnimated()
      */

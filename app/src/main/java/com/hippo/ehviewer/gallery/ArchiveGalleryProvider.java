@@ -106,7 +106,7 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
               }
             }) { entries.get(index).extract(output); }
             return ReaderPreviewBitmapCache.load(context, identity, edge,
-                    () -> new java.io.FileInputStream(temporary));
+                    Uri.fromFile(temporary), () -> new java.io.FileInputStream(temporary));
           } finally { temporary.delete(); }
         } catch (ArchiveException e) {
           throw new IOException(e);

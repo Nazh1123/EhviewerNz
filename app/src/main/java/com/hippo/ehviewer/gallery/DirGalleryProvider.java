@@ -135,6 +135,8 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         return files != null && index >= 0 && index < files.length ? files[index] : null;
     }
 
+    @Override public int getPreviewConcurrency() { return 4; }
+
     @Override
     protected void onRequest(int index) {
         synchronized (mRequests) {

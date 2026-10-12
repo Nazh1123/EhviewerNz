@@ -28,12 +28,15 @@ public abstract class GalleryProvider2 extends GalleryProvider {
     @Nullable
     public UniFile getPreviewFile(int index) { return null; }
 
+    /** Each concurrent preview worker owns a separate source. Archives keep the default single worker. */
+    public int getPreviewConcurrency() { return 1; }
+
     public ReaderPreviewSource createPreviewSource(Context context) {
         return (index, edge) -> {
             UniFile file = getPreviewFile(index);
             return file == null ? null : ReaderPreviewBitmapCache.load(context,
                     file.getUri() + ":" + file.lastModified() + ":" + file.length(),
-                    edge, file::openInputStream);
+                    edge, file.getUri(), file::openInputStream, () -> getCachedPreview(index, edge));
         };
     }
 

@@ -101,6 +101,17 @@ public abstract class GalleryProvider {
         mImageCache.remove(index);
     }
 
+    /** Preview worker only: borrow a cached original without requesting another reader decode. */
+    public android.graphics.Bitmap getCachedPreview(int index, int edge) {
+        ImageWrapper image;
+        synchronized (mImageCache) {
+            image = mImageCache.getLive(index);
+            if (image == null || !image.obtain()) return null;
+        }
+        try { return image.createPreview(edge); }
+        finally { image.release(); }
+    }
+
     public void setAnimatedWebpDecodeMode(int index, int mode) {
         if (mode == Image.ANIMATED_WEBP_MODE_DEFAULT) {
             mAnimatedWebpDecodeModes.remove(index);

@@ -42,6 +42,23 @@ class TranslationImageOwnershipTest {
         assertTrue(bitmap.isRecycled)
     }
 
+    @Test fun previewRemainsUsableAfterOriginalCacheIsEvicted() {
+        for (edge in listOf(16, 128)) {
+            val bitmap = Bitmap.createBitmap(64, 32, Bitmap.Config.ARGB_8888)
+            val provider = Provider()
+            provider.notifyPageSucceed(0, requireNotNull(Image.create(bitmap)))
+            val poster = requireNotNull(provider.getCachedPreview(0, edge))
+            assertNotSame(bitmap, poster)
+            assertTrue(poster.width <= edge && poster.height <= edge)
+            provider.removeCache(0)
+            assertTrue(bitmap.isRecycled)
+            assertFalse(poster.isRecycled)
+            assertNull(provider.getCachedPreview(0, edge))
+            assertEquals(0, provider.requests)
+            poster.recycle()
+        }
+    }
+
     @Test fun differentWrappersAndDrawableOwnersReleaseOnlyTheirOwnReferences() {
         val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
         val image = requireNotNull(Image.create(bitmap))

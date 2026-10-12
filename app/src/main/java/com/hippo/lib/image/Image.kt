@@ -237,6 +237,18 @@ class Image private constructor(
         return mObtainedDrawable as Drawable
     }
 
+    /** Independent static poster; never exposes the reader bitmap's recycling lifetime. */
+    @Synchronized
+    fun createPreview(edge: Int): Bitmap? {
+        val bitmap = (mObtainedDrawable as? BitmapDrawable)?.bitmap ?: return null
+        if (bitmap.isRecycled || bitmap.config == Bitmap.Config.HARDWARE) return null
+        val scale = min(1f, edge.coerceAtLeast(1).toFloat() / max(bitmap.width, bitmap.height))
+        val width = max(1, (bitmap.width * scale).toInt())
+        val height = max(1, (bitmap.height * scale).toInt())
+        val poster = Bitmap.createScaledBitmap(bitmap, width, height, true)
+        return if (poster === bitmap) bitmap.copy(Bitmap.Config.ARGB_8888, false) else poster
+    }
+
     fun texImage(init: Boolean, offsetX: Int, offsetY: Int, width: Int, height: Int) {
         check(!hardware) { "Hardware buffer cannot be used in glgallery" }
         mNativeImage?.let {

@@ -267,6 +267,8 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     /** Optional admission policy for specialised views. Runs after caches miss, off the UI thread. */
     protected java.util.function.BooleanSupplier networkAdmission() { return null; }
 
+    protected boolean animateImageChanges() { return true; }
+
     public void load(Drawable drawable) {
         unload();
         mLoadFromDrawable = true;
@@ -334,7 +336,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
         }
 
         onPreSetImageDrawable(drawable, true);
-        if ((source == Conaco.SOURCE_DISK || source == Conaco.SOURCE_NETWORK) && isShown()) {
+        if (animateImageChanges() && (source == Conaco.SOURCE_DISK || source == Conaco.SOURCE_NETWORK) && isShown()) {
             Drawable[] layers = new Drawable[2];
             layers[0] = new ColorDrawable(Color.TRANSPARENT);
             layers[1] = drawable;
