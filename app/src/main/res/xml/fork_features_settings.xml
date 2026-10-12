@@ -29,25 +29,29 @@
             android:defaultValue="false"
             android:dependency="show_thumbnail_info_bar"
             android:key="show_thumbnail_info_title"
-            android:title="@string/settings_eh_show_thumbnail_info_title" />
+            android:title="@string/settings_eh_show_thumbnail_info_title"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
             android:dependency="show_thumbnail_info_bar"
             android:key="show_thumbnail_info_details"
-            android:title="@string/settings_eh_show_thumbnail_info_details" />
+            android:title="@string/settings_eh_show_thumbnail_info_details"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
             android:dependency="show_thumbnail_info_details"
             android:key="show_thumbnail_info_highlight"
-            android:title="@string/settings_eh_show_thumbnail_info_highlight" />
+            android:title="@string/settings_eh_show_thumbnail_info_highlight"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="true"
             android:key="show_thumbnail_download_badge"
             android:summary="@string/settings_eh_show_thumbnail_download_badge_summary"
-            android:title="@string/settings_eh_show_thumbnail_download_badge" />
+            android:title="@string/settings_eh_show_thumbnail_download_badge"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
@@ -59,7 +63,8 @@
             android:defaultValue="true"
             android:key="gallery_preview_immediate_jump"
             android:summary="@string/settings_eh_gallery_preview_immediate_jump_summary"
-            android:title="@string/settings_fork_gallery_immediate_jump" />
+            android:title="@string/settings_fork_gallery_immediate_jump"
+            app:allowDividerAbove="false" />
 
     </PreferenceCategory>
 
@@ -77,7 +82,6 @@
             android:key="thumb_size"
             android:summary="%s"
             android:title="@string/settings_eh_cover_thumb_size"
-            app:allowDividerAbove="true"
             app:entries="@array/cover_thumb_size_entries"
             app:entryValues="@array/cover_thumb_size_entry_values" />
 
@@ -86,7 +90,7 @@
             android:key="preview_thumb_size"
             android:summary="%s"
             android:title="@string/settings_eh_preview_thumb_size"
-            app:allowDividerAbove="true"
+            app:allowDividerAbove="false"
             app:entries="@array/preview_thumb_size_entries"
             app:entryValues="@array/preview_thumb_size_entry_values" />
             
@@ -111,7 +115,8 @@
             android:summary="%s"
             android:title="@string/settings_gallery_update_record_limit"
             app:entries="@array/gallery_update_record_limit_entries"
-            app:entryValues="@array/gallery_update_record_limit_values" />
+            app:entryValues="@array/gallery_update_record_limit_values"
+            app:allowDividerAbove="true" />
     <!-- Retired switches: use key bindings.
 
         <com.hippo.preference.SwitchPreference
@@ -151,35 +156,40 @@
             android:dependency="experimental_animated_webp"
             android:key="animated_webp_show_time"
             android:summary="@string/settings_animated_webp_playback_time_summary"
-            android:title="@string/settings_animated_webp_playback_time" />
+            android:title="@string/settings_animated_webp_playback_time"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="true"
             android:dependency="experimental_animated_webp"
             android:key="animated_webp_allow_seek"
             android:summary="@string/settings_animated_webp_progress_control_summary"
-            android:title="@string/settings_animated_webp_progress_control" />
+            android:title="@string/settings_animated_webp_progress_control"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
             android:dependency="experimental_animated_webp"
             android:key="animated_webp_auto_advance"
             android:summary="@string/settings_animated_webp_sequential_playback_summary"
-            android:title="@string/settings_animated_webp_sequential_playback" />
+            android:title="@string/settings_animated_webp_sequential_playback"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
             android:dependency="experimental_animated_webp"
             android:key="animated_webp_auto_transfer_button"
             android:summary="@string/settings_animated_webp_auto_transfer_button_summary"
-            android:title="@string/settings_animated_webp_auto_transfer_button" />
+            android:title="@string/settings_animated_webp_auto_transfer_button"
+            app:allowDividerAbove="false" />
 
         <androidx.preference.EditTextPreference
             android:defaultValue="2.0"
             android:dependency="experimental_animated_webp"
             android:key="animated_webp_long_press_speed"
             android:summary="@string/settings_animated_webp_long_press_speed_summary"
-            android:title="@string/settings_animated_webp_long_press_speed" />
+            android:title="@string/settings_animated_webp_long_press_speed"
+            app:allowDividerAbove="false" />
 
     </PreferenceCategory>
 

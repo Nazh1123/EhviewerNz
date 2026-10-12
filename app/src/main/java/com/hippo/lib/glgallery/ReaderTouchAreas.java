@@ -15,7 +15,7 @@ public final class ReaderTouchAreas {
     }
 
     public static ReaderTouchAreas recommended() {
-        return new ReaderTouchAreas(new float[]{.36f, .64f, .5f, .5f, .15f, .5f, .7f});
+        return new ReaderTouchAreas(new float[]{.35f, .65f, .5f, .5f, .15f, .5f, .7f});
     }
 
     public static ReaderTouchAreas from(float[] values, ReaderTouchAreas fallback) {

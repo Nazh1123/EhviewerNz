@@ -8,10 +8,13 @@ public class ReaderTouchAreasTest {
         ReaderTouchAreas defaults = ReaderTouchAreas.defaults();
         assertEquals(1f / 3f, defaults.position(0), 0f);
         assertEquals(2f / 3f, defaults.position(1), 0f);
-        assertEquals(.36f, ReaderTouchAreas.recommended().position(0), 0f);
-        assertEquals(.64f, ReaderTouchAreas.recommended().position(1), 0f);
+        assertEquals(.35f, ReaderTouchAreas.recommended().position(0), 0f);
+        assertEquals(.65f, ReaderTouchAreas.recommended().position(1), 0f);
         assertEquals(ReaderKeyMap.CENTER_MENU, defaults.region(.35f, .2f, 1, 1));
-        assertEquals(ReaderKeyMap.LEFT_TOP, ReaderTouchAreas.recommended().region(.35f, .2f, 1, 1));
+        assertEquals(ReaderKeyMap.LEFT_TOP, ReaderTouchAreas.recommended().region(.34f, .2f, 1, 1));
+        assertEquals(ReaderKeyMap.CENTER_MENU, ReaderTouchAreas.recommended().region(.35f, .2f, 1, 1));
+        assertEquals(ReaderKeyMap.CENTER_MENU, ReaderTouchAreas.recommended().region(.64f, .2f, 1, 1));
+        assertEquals(ReaderKeyMap.RIGHT_TOP, ReaderTouchAreas.recommended().region(.65f, .2f, 1, 1));
     }
 
     @Test public void resizedRegionsTileTheViewportAndAgreeWithTheirBounds() {

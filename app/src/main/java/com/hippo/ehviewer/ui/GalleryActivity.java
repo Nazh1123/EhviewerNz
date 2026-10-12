@@ -33,6 +33,7 @@ import android.content.pm.ActivityInfo;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.Typeface;
@@ -78,6 +79,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.graphics.ColorUtils;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -816,6 +818,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mBattery.setVisibility(Settings.getShowBattery() ? View.VISIBLE : View.GONE);
 
         mQuickSettingsPanel = ViewUtils.$$(this, R.id.quick_settings_panel);
+        setQuickSettingsBackgroundAlpha(mQuickSettingsPanel, getStatusBarBackgroundAlpha(getWindow()));
         mQuickScreenOrientation = (ImageButton) ViewUtils.$$(
                 mQuickSettingsPanel, R.id.quick_screen_orientation);
         mQuickReadingDirection = (ImageButton) ViewUtils.$$(
@@ -1748,6 +1751,29 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
     }
 
+    static void setQuickSettingsBackgroundAlpha(View panel, int alpha) {
+        int color = AttrResources.getAttrColor(panel.getContext(), R.attr.gallerySliderBackgroundColor);
+        // Set through View so its cached opacity matches the translucent background.
+        panel.setBackgroundColor(ColorUtils.setAlphaComponent(color, alpha));
+    }
+
+    @SuppressLint("DiscouragedApi")
+    static int getStatusBarBackgroundAlpha(Window window) {
+        int flags = window.getAttributes().flags;
+        if ((flags & WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS) != 0) {
+            // Translucent system bars use this device resource, not Window.statusBarColor.
+            Resources resources = window.getContext().getResources();
+            int colorId = resources.getIdentifier(
+                    "system_bar_background_semi_transparent", "color", "android");
+            int color = colorId != 0 ? resources.getColor(colorId, null) : 0x66000000;
+            return Color.alpha(color);
+        }
+        if ((flags & WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS) == 0) {
+            return 255;
+        }
+        return Color.alpha(window.getStatusBarColor());
+    }
+
     private void updateQuickSettingsButtons() {
         updateQuickReaderKeyProfile();
         if (mQuickScreenOrientation == null || mQuickReadingDirection == null
@@ -2161,6 +2187,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             sliderPanel.setTranslationX(sliderPanel.getWidth());
             animator = ObjectAnimator.ofFloat(sliderPanel, "translationX", 0.0f);
         } else if (sliderPanel == mQuickSettingsPanel) {
+            setQuickSettingsBackgroundAlpha(sliderPanel, getStatusBarBackgroundAlpha(getWindow()));
             sliderPanel.setTranslationY(-sliderPanel.getHeight());
             animator = ObjectAnimator.ofFloat(sliderPanel, "translationY", 0.0f);
         } else {

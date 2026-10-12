@@ -112,13 +112,13 @@ public class ReaderKeysFragmentTest {
         assertEquals("2. 推荐", choices.getListView().getAdapter().getItem(1));
         choices.getListView().performItemClick(null, 1, 1);
         ReaderKeyProfiles.Profile draft = ReflectionHelpers.getField(fragment, "draft");
-        assertEquals(.36f, draft.areas(0).position(0), 0f);
+        assertEquals(.35f, draft.areas(0).position(0), 0f);
         assertEquals(ReaderKeyMap.NONE, draft.keys(0)[1]);
         ReflectionHelpers.callInstanceMethod(fragment, "addProfile", ReflectionHelpers.ClassParameter.from(boolean.class, true));
         ReaderKeyProfiles store = ReaderKeyProfiles.load();
         assertEquals(3, store.profiles.size());
         assertEquals("配置 3", store.active().displayName(controller.get(), 2));
-        assertEquals(.36f, store.active().areas(0).position(0), 0f);
+        assertEquals(.35f, store.active().areas(0).position(0), 0f);
         assertArrayEquals(store.profiles.get(1).keys(0), store.active().keys(0));
         root.findViewById(R.id.reader_keys_manage).performClick();
         latest().getListView().performItemClick(null, 4, 4);
