@@ -61,6 +61,7 @@ public class ReaderPageSeekTest {
     private TextView left, right;
     private Context context;
     private static com.hippo.conaco.Conaco<com.hippo.lib.image.Image> previewConaco;
+    private static int thumbnailLoaderRequests;
     private static final androidx.collection.LruCache<Long, com.hippo.ehviewer.client.data.GalleryDetail> details = new androidx.collection.LruCache<>(2);
     private static EhRequest metadataRequest;
 
@@ -90,6 +91,7 @@ public class ReaderPageSeekTest {
         builder.hasMemoryCache = true; builder.memoryCacheMaxSize = 1024 * 1024;
         builder.okHttpClient = new okhttp3.OkHttpClient(); builder.objectHelper = new com.hippo.ehviewer.ImageBitmapHelper();
         previewConaco = builder.build(); details.evictAll(); metadataRequest = null;
+        thumbnailLoaderRequests = 0;
         ((android.util.LruCache<?, ?>) ReflectionHelpers.getStaticField(ReaderPagePreview.class, "METADATA")).evictAll();
         Object budget = ReflectionHelpers.getStaticField(ReaderPagePreview.class, "BUDGET");
         ((ArrayDeque<?>) ReflectionHelpers.getField(budget, "starts")).clear();
@@ -262,19 +264,21 @@ public class ReaderPageSeekTest {
         }
     }
 
-    @Test public void idlePreparedPagesBindSynchronouslyWhenTheCarouselOpens() throws Exception {
+    @Test public void hiddenCarouselAndReaderProgressDoNotLoadPreviews() throws Exception {
         RecyclerView row = strip(); AtomicInteger reads = new AtomicInteger();
         try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(reads))) {
-            // Preparation and display must share a viewport; resizing needs new posters.
+            ReflectionHelpers.setField(activity, "mPagePreview", preview);
             layout(row);
-            preview.prepare(0, 64, false);
-            Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(200));
+            ReflectionHelpers.callInstanceMethod(activity, "updateSlider");
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(300));
             ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");
-            waitFor(() -> loader.get(63) != null && !loader.isLoading());
-            int preparedReads = reads.get();
+            assertFalse(loader.isLoading());
+            assertEquals("Hidden carousel started background preview decoding", 0, reads.get());
             preview.show(30, 64, false); layout(row);
-            for (int i = 0; i < row.getChildCount(); i++) assertNotNull(image(row.getChildAt(i)).getDrawable());
-            assertEquals(preparedReads, reads.get());
+            waitFor(() -> page(row, 30) != null && image(page(row, 30)).getDrawable() != null);
+            assertTrue(reads.get() > 0);
+            assertNull(loader.get(0));
+            assertNull(loader.get(63));
         }
     }
 
@@ -316,14 +320,12 @@ public class ReaderPageSeekTest {
         assertEquals(10, seek.getProgress()); assertFalse(methods().contains(jumpMethod()));
     }
 
-    @Test public void pausingDoesNotRestartPreparationThroughProgressUpdates() {
+    @Test public void pausingAndProgressUpdatesDoNotLoadHiddenPreviews() {
         RecyclerView row = strip(); AtomicInteger reads = new AtomicInteger();
         DirGalleryProvider provider = local(reads);
         ReaderPagePreview preview = new ReaderPagePreview(context, row, provider);
         ReflectionHelpers.setField(activity, "mPagePreview", preview);
         ReflectionHelpers.setField(activity, "mGalleryProvider", provider);
-        ReflectionHelpers.setField(activity, "mPagePreviewResumed", true);
-        preview.prepare(10, 1000, false);
         androidx.savedstate.SavedStateRegistryController savedState = ReflectionHelpers.getField(activity, "mSavedStateRegistryController");
         savedState.performRestore(null);
         androidx.fragment.app.FragmentController fragments = ReflectionHelpers.getField(activity, "mFragments");
@@ -331,7 +333,7 @@ public class ReaderPageSeekTest {
         androidx.lifecycle.LifecycleRegistry lifecycle = ReflectionHelpers.getField(activity, "mFragmentLifecycleRegistry");
         lifecycle.setCurrentState(androidx.lifecycle.Lifecycle.State.RESUMED);
         activity.onPause();
-        // A late reader notification must not rearm the work canceled by onPause.
+        // A late reader notification must not start decoding a hidden preview.
         ReflectionHelpers.callInstanceMethod(activity, "updateSlider");
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(300));
         assertEquals("Paused reader started background thumbnail decoding", 0, reads.get());
@@ -362,6 +364,28 @@ public class ReaderPageSeekTest {
             preview.show(50, 1000, false);
             Shadows.shadowOf(Looper.getMainLooper()).idle();
             assertNotNull("Reopening the same position left the cleared thumbnail blank", image(page(row, 50)).getDrawable());
+        }
+        assertEquals("Local bitmap binding and dismissal initialized the shared thumbnail loader", 0, thumbnailLoaderRequests);
+    }
+
+    @Test public void onlineThumbnailRequestInitializesDeferredLoader() throws Exception {
+        GalleryInfo info = new GalleryInfo(); info.gid = 456; info.token = "deferred-thumbnail";
+        com.hippo.ehviewer.client.data.NormalPreviewSet set = new com.hippo.ehviewer.client.data.NormalPreviewSet();
+        set.addItem(0, "https://example.invalid/deferred", 0, 0, 100, 150, "");
+        com.hippo.ehviewer.client.data.GalleryDetail detail = new com.hippo.ehviewer.client.data.GalleryDetail();
+        detail.token = info.token; detail.previewSet = set; details.put(info.gid, detail);
+        EhGalleryProvider provider = new EhGalleryProvider(context, info) {
+            @Override protected UniFile getPreviewDirectory() { return null; }
+        };
+        RecyclerView row = strip();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, provider)) {
+            assertEquals(0, thumbnailLoaderRequests);
+            preview.show(0, 1, false); layout(row);
+            assertEquals(1, thumbnailLoaderRequests);
+            assertEquals(set.getGalleryPreview(info.gid, 0).getImageKey(),
+                    ReflectionHelpers.getField(image(page(row, 0)), "mKey"));
+            preview.hide();
+            assertNull(image(page(row, 0)).getDrawable());
         }
     }
 
@@ -415,7 +439,7 @@ public class ReaderPageSeekTest {
 
     @Implements(com.hippo.ehviewer.EhApplication.class)
     public static class PreviewAppShadow extends org.robolectric.shadows.ShadowApplication {
-        @Implementation protected static com.hippo.conaco.Conaco<com.hippo.lib.image.Image> getConaco(Context context) { return previewConaco; }
+        @Implementation protected static com.hippo.conaco.Conaco<com.hippo.lib.image.Image> getConaco(Context context) { thumbnailLoaderRequests++; return previewConaco; }
         @Implementation protected static androidx.collection.LruCache<Long, com.hippo.ehviewer.client.data.GalleryDetail> getGalleryDetailCache(Context context) { return details; }
         @Implementation protected static com.hippo.ehviewer.client.EhClient getEhClient(Context context) { return new com.hippo.ehviewer.client.EhClient(context); }
     }

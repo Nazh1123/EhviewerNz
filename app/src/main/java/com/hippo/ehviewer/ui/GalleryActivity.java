@@ -263,7 +263,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private ReversibleSeekBar mSeekBar;
     private ReaderPagePreview mPagePreview;
     private boolean mPageSeeking;
-    private boolean mPagePreviewResumed;
     private boolean mDismissingPagePreviewTouch;
     @Nullable
     private View mSaveNotice;
@@ -1037,7 +1036,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
-        mPagePreviewResumed = false;
         if (mPagePreview != null) { mPagePreview.close(); mPagePreview = null; }
         if (mTranslationController != null) {
             mTranslationController.close(isFinishing());
@@ -1139,7 +1137,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onPause() {
-        mPagePreviewResumed = false;
         mDismissingPagePreviewTouch = false;
         cancelPagePreview();
         if (mTranslationController != null) mTranslationController.pause(isFinishing());
@@ -1165,7 +1162,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onResume() {
         super.onResume();
-        mPagePreviewResumed = true;
         applyPagePreviewSetting();
         applyReaderKeyProfile();
         if (mTranslationController != null) mTranslationController.resume();
@@ -1964,8 +1960,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSeekBar.setProgress(displayedIndex);
         if (Settings.getReaderPagePreview() && mPageSeeking && mPagePreview != null) {
             mPagePreview.update(displayedIndex, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
-        } else if (mPagePreviewResumed && Settings.getReaderPagePreview() && mPagePreview != null) {
-            mPagePreview.prepare(displayedIndex, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
         }
     }
 

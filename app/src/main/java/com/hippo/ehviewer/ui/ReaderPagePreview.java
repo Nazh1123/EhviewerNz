@@ -73,9 +73,6 @@ final class ReaderPagePreview implements AutoCloseable {
     private int imageHeight;
     private boolean reverse;
     private EhRequest metadataRequest;
-    private int[] preparedPages;
-    private int preparedCount;
-    private final Runnable prepare = this::prepareLocal;
     private final Runnable refresh = this::refreshVisible;
     private final Runnable dispatch = () -> {
         dispatchPending = false;
@@ -153,7 +150,6 @@ final class ReaderPagePreview implements AutoCloseable {
 
     void show(int page, int count, boolean rightToLeft) {
         if (closed || count <= 0) return;
-        handler.removeCallbacks(prepare);
         visible = true;
         manualScrolling = false;
         row.stopScroll();
@@ -207,7 +203,6 @@ final class ReaderPagePreview implements AutoCloseable {
         edge = Math.max(Math.max(1, itemWidth - dp(4)), imageHeight);
         if (localLoader != null) {
             if (visible) loadLocal();
-            else if (preparedPages != null) prepareLocal();
         }
         if (row instanceof ReaderPreviewRecyclerView)
             ((ReaderPreviewRecyclerView) row).setPreviewHeight(imageHeight + dp(30));
@@ -228,20 +223,6 @@ final class ReaderPagePreview implements AutoCloseable {
             selected = page;
             onBrowsed.accept(page);
         }
-    }
-
-    void prepare(int page, int count, boolean rightToLeft) {
-        if (closed || visible || count <= 0 || provider.getPreviewConcurrency() <= 1) return;
-        int center = Math.max(0, Math.min(page, count - 1));
-        preparedCount = count;
-        preparedPages = new int[] {center, center > 0 ? center - 1 : -1,
-                center + 1 < count ? center + 1 : -1};
-        handler.removeCallbacks(prepare);
-        handler.postDelayed(prepare, 150);
-    }
-
-    private void prepareLocal() {
-        if (!visible && !closed && preparedPages != null) localLoader.prepare(preparedPages, edge, preparedCount);
     }
 
     void hide() {
@@ -307,7 +288,7 @@ final class ReaderPagePreview implements AutoCloseable {
     }
 
     private void loadLocal() {
-        localLoader.request(new int[] {selected}, edge, true);
+        localLoader.request(new int[] {selected}, edge);
     }
 
     private void loadLocalNeighbors() {
@@ -318,7 +299,7 @@ final class ReaderPagePreview implements AutoCloseable {
         int[] pages = new int[cards.size() + 1];
         pages[0] = selected;
         for (int i = 0; i < cards.size(); i++) pages[i + 1] = cards.get(i).page;
-        localLoader.request(pages, edge, true);
+        localLoader.request(pages, edge);
         if (gallery != null) schedule(75);
     }
 
@@ -494,7 +475,7 @@ final class ReaderPagePreview implements AutoCloseable {
         GalleryPreview preview;
         boolean network;
         boolean missed;
-        PreviewImage(Context ui, Card card) { super(ui); this.card = card; }
+        PreviewImage(Context ui, Card card) { super(ui, false); this.card = card; }
         @Override protected boolean animateImageChanges() { return false; }
         @Override protected java.util.function.BooleanSupplier networkAdmission() {
             return () -> attached.contains(card) && admitNetwork();

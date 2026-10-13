@@ -84,7 +84,6 @@ public class ReaderPreviewPerformanceDeviceTest {
                     benchmarkDecode(name, new File(folder, "000.image." + extension(name)));
                 if ("decode".equals(InstrumentationRegistry.getArguments().getString("mode"))) continue;
                 if (!mode.equals("scrub")) measureReader(name, folder, false);
-                if (mode.endsWith("prepared")) continue;
                 int scrubRuns = Math.max(1, Math.min(5, Integer.parseInt(InstrumentationRegistry.getArguments().getString("scrubRuns", "1"))));
                 for (int run = 0; run < scrubRuns; run++) {
                     File scrubFolder = new File(root, name + "-scrub-" + run);
@@ -212,7 +211,6 @@ public class ReaderPreviewPerformanceDeviceTest {
             ReversibleSeekBar seek = reader.findViewById(R.id.seek_bar);
             String mode = InstrumentationRegistry.getArguments().getString("mode", "full");
             boolean downloaded = mode.startsWith("downloaded");
-            boolean prepared = mode.endsWith("prepared");
             if (downloaded) {
                 File download = new File(folder.getParentFile(), folder.getName() + "-download");
                 download.mkdirs();
@@ -234,31 +232,16 @@ public class ReaderPreviewPerformanceDeviceTest {
                         Field field = reader.getClass().getDeclaredField("mPagePreview");
                         field.setAccessible(true); field.set(reader, preview);
                     } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
-                    preview.prepare(0, 64, false);
                 });
-            }
-            if (prepared) {
-                int idleMs = Math.max(0, Math.min(30000,
-                        Integer.parseInt(InstrumentationRegistry.getArguments().getString("idleMs", "15000"))));
-                SystemClock.sleep(idleMs);
-                ReaderPreviewLoader loader = (ReaderPreviewLoader) field(field(reader, "mPagePreview"), "localLoader");
-                int ready = 0;
-                for (int page = 0; page < 64; page++) if (loader.get(page) != null) ready++;
-                measurements.put(new JSONObject().put("case", name).put("phase", "preparation")
-                        .put("waitMs", idleMs).put("readyPages", ready).put("totalPages", 64));
-                writeReport();
             }
             captureShell("dumpsys gfxinfo " + instrumentation.getTargetContext().getPackageName() + " reset", null);
             if (!scrub) {
-                if (prepared) {
-                    for (int target : new int[] {10, 30, 60}) timePreview(name,
-                            downloaded ? "downloaded-idle-prepared" : "idle-prepared", reader, seek, target);
-                } else for (int target : new int[] {10, 20, 30, 40, 50}) {
+                for (int target : new int[] {10, 20, 30, 40, 50}) {
                     timePreview(name, downloaded ? "downloaded-cold" : "cold", reader, seek, target);
                     timePreview(name, downloaded ? "downloaded-memory" : "memory", reader, seek, target);
                 }
             }
-            if (scrub || prepared) {
+            if (scrub) {
                 long began = SystemClock.elapsedRealtimeNanos();
                 DrawProbe probe = new DrawProbe(reader);
                 instrumentation.runOnMainSync(() -> reader.onStartTrackingTouch(seek));
@@ -271,7 +254,7 @@ public class ReaderPreviewPerformanceDeviceTest {
                     SystemClock.sleep(16);
                 }
                 probe.await();
-                measurements.put(new JSONObject().put("case", name).put("phase", prepared ? "prepared-scrub" : "scrub")
+                measurements.put(new JSONObject().put("case", name).put("phase", "scrub")
                         .put("centerAfterReleaseMs", probe.centerMs()).put("windowAfterReleaseMs", probe.windowMs())
                         .put("totalMs", (probe.centerAt - began) / 1e6));
                 writeReport();
