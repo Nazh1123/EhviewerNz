@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="gallery_update_history_missing_gallery_title">GID: %1$d\nギャラリーは削除または更新されました</string>
     <string name="gallery_update_history_title">ギャラリー更新履歴</string>
     <string name="gallery_update_history_all_empty">保存されたギャラリー更新履歴はありません</string>
     <string name="gallery_update_history_load_failed">ギャラリー更新履歴を読み込めませんでした</string>

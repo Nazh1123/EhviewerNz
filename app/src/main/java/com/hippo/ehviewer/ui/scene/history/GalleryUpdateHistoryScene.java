@@ -276,14 +276,16 @@ public class GalleryUpdateHistoryScene extends ToolbarScene implements GalleryUp
             holder.cover.unload();
             holder.cover.setImageDrawable(null);
             String title = local != null ? EhUtils.getSuitableTitle(local) : null;
-            holder.title.setText(TextUtils.isEmpty(title) ? Long.toString(entry.targetGid()) : title);
+            holder.title.setText(local == null
+                    ? context.getString(R.string.gallery_update_history_missing_gallery_title, entry.targetGid())
+                    : TextUtils.isEmpty(title) ? Long.toString(entry.targetGid()) : title);
             if (local != null && !TextUtils.isEmpty(local.thumb)) {
                 holder.cover.load(EhCacheKeyFactory.getThumbKey(local.gid), local.thumb,
                         new ThumbDataContainer(local), true, false);
             }
-            holder.category.setVisibility(local != null ? View.VISIBLE : View.GONE);
-            holder.category.setText(local != null ? EhUtils.getCategory(local.category) : "");
-            holder.category.setBackground(local != null ? new ColorDrawable(EhUtils.getCategoryColor(local.category)) : null);
+            int category = local != null ? local.category : EhUtils.UNKNOWN;
+            holder.category.setText(EhUtils.getCategory(category));
+            holder.category.setBackground(new ColorDrawable(EhUtils.getCategoryColor(category)));
             holder.time.setText(time.format(new Date(entry.completedAt())));
             boolean known = entry.complete() && !entry.failure();
             SpannableStringBuilder counts = new SpannableStringBuilder();

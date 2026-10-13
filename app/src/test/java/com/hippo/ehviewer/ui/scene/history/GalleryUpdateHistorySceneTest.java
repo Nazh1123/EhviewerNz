@@ -6,6 +6,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
@@ -23,6 +24,7 @@ import com.hippo.conaco.DataContainer;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.GalleryUpdateRecordStore.Summary;
 import com.hippo.ehviewer.ui.scene.download.DownloadsScene;
@@ -120,7 +122,13 @@ public class GalleryUpdateHistorySceneTest {
         assertEquals(200, ((DownloadInfo) scene.launched.getArgs()
                 .getParcelable(GalleryDetailScene.KEY_GALLERY_INFO)).gid);
         int compactHeight = preview(row.itemView, "success", "本地画廊标题");
+        Rect shortTitleBounds = bounds(row.itemView, R.id.title);
+        Rect shortTimeBounds = bounds(row.itemView, R.id.update_time);
+        Rect shortCountsBounds = bounds(row.itemView, R.id.update_counts_row);
         int longTitleHeight = preview(row.itemView, "long-title", "第一行标题\n第二行标题\n第三行标题\n第四行标题\n第五行标题");
+        assertEquals(shortTitleBounds, bounds(row.itemView, R.id.title));
+        assertEquals(shortTimeBounds, bounds(row.itemView, R.id.update_time));
+        assertEquals(shortCountsBounds, bounds(row.itemView, R.id.update_counts_row));
         assertEquals("History bounds: title=" + bounds(row.itemView, R.id.title)
                 + ", time=" + bounds(row.itemView, R.id.update_time)
                 + ", counts=" + bounds(row.itemView, R.id.update_counts_row)
@@ -134,8 +142,13 @@ public class GalleryUpdateHistorySceneTest {
         preview(row.itemView, "large-text", "较大的标题文字\n第二行标题\n第三行标题\n第四行标题");
 
         adapter.bindViewHolder(row, 1);
-        assertEquals("150", text(row, R.id.title));
-        assertEquals(View.GONE, row.itemView.findViewById(R.id.category).getVisibility());
+        assertEquals("GID: 150\n画廊已被删除或更新", text(row, R.id.title));
+        TextView category = row.itemView.findViewById(R.id.category);
+        assertEquals(View.VISIBLE, category.getVisibility());
+        assertEquals("UNKNOWN", category.getTransformationMethod()
+                .getTransformation(category.getText(), category).toString());
+        assertEquals(EhUtils.getCategoryColor(EhUtils.UNKNOWN),
+                ((ColorDrawable) category.getBackground()).getColor());
         assertNull(((LoadImageView) row.itemView.findViewById(R.id.thumb)).getDrawable());
         assertEquals("+—  -—", text(row, R.id.update_counts));
         assertEquals("失败", text(row, R.id.state));
@@ -145,7 +158,10 @@ public class GalleryUpdateHistorySceneTest {
         assertEquals(GalleryDetailScene.ACTION_GID_TOKEN, args.getString(GalleryDetailScene.KEY_ACTION));
         assertEquals(150, args.getLong(GalleryDetailScene.KEY_GID));
         assertEquals("token150", args.getString(GalleryDetailScene.KEY_TOKEN));
-        preview(row.itemView, "missing-gallery", "150");
+        ((TextView) row.itemView.findViewById(R.id.title)).setTextSize(
+                android.util.TypedValue.COMPLEX_UNIT_PX,
+                context.getResources().getDimension(R.dimen.text_little_small));
+        preview(row.itemView, "missing-gallery", text(row, R.id.title));
     }
 
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
