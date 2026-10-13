@@ -164,10 +164,10 @@
     <string name="translation_native_model_help">匯入單一檔案 GGUF 翻譯或指令模型，驗證後設為目前模型。其他已安裝模型保留，可切換或刪除。建議使用小型量化模型，所需記憶體高於檔案大小。</string>
     <string name="translation_native_importing">正在複製並驗證模型，請稍候…</string>
     <string name="translation_native_referencing">正在讀取並驗證外部模型，請稍候…</string>
-    <string name="translation_native_imported">模型已匯入，可點選「試譯一句」查看效果。</string>
+    <string name="translation_native_imported">模型已匯入，可點選「試譯範例」查看效果。</string>
     <string name="translation_native_import_required">漫畫模型已就緒，請另行匯入 GGUF 本機翻譯模型。</string>
     <string name="translation_native_prepare_required">請進入「模型管理」準備漫畫模型及本機 GGUF 翻譯模型。</string>
-    <string name="translation_native_test">試譯一句</string>
+    <string name="translation_native_test">試譯範例</string>
     <string name="translation_native_test_help">將所選來源語言的範例翻譯為目標語言；無需 OCR 模型。</string>
     <string name="translation_native_testing">正在載入模型並翻譯…</string>
     <string name="translation_native_failed">本機模型操作失敗：%1$s</string>

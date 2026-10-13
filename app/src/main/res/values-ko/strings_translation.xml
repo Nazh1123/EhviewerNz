@@ -164,10 +164,10 @@
     <string name="translation_native_model_help">단일 파일 GGUF 번역 또는 지시 모델을 가져옵니다. 검증 후 현재 모델로 설정됩니다. 다른 설치된 모델은 유지되며 전환하거나 삭제할 수 있습니다. 작은 양자화 모델을 권장하며 필요한 메모리는 파일 크기보다 큽니다.</string>
     <string name="translation_native_importing">모델 복사 및 검증 중입니다. 잠시 기다려 주세요…</string>
     <string name="translation_native_referencing">외부 모델을 읽고 검증 중입니다. 잠시 기다려 주세요…</string>
-    <string name="translation_native_imported">모델을 가져왔습니다. “한 문장 시험 번역”을 눌러 결과를 확인하세요.</string>
+    <string name="translation_native_imported">모델을 가져왔습니다. “예문 시험 번역”을 눌러 결과를 확인하세요.</string>
     <string name="translation_native_import_required">만화 모델이 준비되었습니다. GGUF 로컬 번역 모델은 별도로 가져오세요.</string>
     <string name="translation_native_prepare_required">“모델 관리”에서 만화 모델과 GGUF 로컬 번역 모델을 준비하세요.</string>
-    <string name="translation_native_test">한 문장 시험 번역</string>
+    <string name="translation_native_test">예문 시험 번역</string>
     <string name="translation_native_test_help">선택한 원문 언어의 예문을 대상 언어로 번역합니다. OCR 모델은 필요하지 않습니다.</string>
     <string name="translation_native_testing">모델 로드 및 번역 중…</string>
     <string name="translation_native_failed">로컬 모델 작업 실패: %1$s</string>

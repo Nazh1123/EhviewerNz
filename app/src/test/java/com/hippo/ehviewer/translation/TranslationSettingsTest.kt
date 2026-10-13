@@ -103,7 +103,7 @@ class TranslationSettingsTest {
                 assertEquals(options, restored)
                 assertEquals("Japanese", restored.engineConfig().translator.fromLangName)
                 assertEquals("French", restored.engineConfig().translator.toLangName)
-                assertEquals("明日は学校へ行きます。", restored.sampleText())
+                assertEquals("悠太くん、早く起きて、朝ごはんはもう用意できてるよ。", restored.sampleText())
                 assertEquals(options.preparationIdentity(), restored.preparationIdentity())
                 assertEquals(options.cacheIdentity(), restored.cacheIdentity())
                 settings.save(restored)

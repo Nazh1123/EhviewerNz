@@ -177,10 +177,10 @@
     <string name="translation_native_model_help">Import a single-file GGUF translation or instruction model. It becomes the current model after validation. Other installed models are kept and can be switched or deleted. Small quantized models are recommended; required memory exceeds the file size.</string>
     <string name="translation_native_importing">Copying and validating the model. Please wait…</string>
     <string name="translation_native_referencing">Reading and validating the external model. Please wait…</string>
-    <string name="translation_native_imported">Model imported. Tap “Try a sentence” to check the result.</string>
+    <string name="translation_native_imported">Model imported. Tap “Translate sample” to check the result.</string>
     <string name="translation_native_import_required">Manga models are ready. Import a local GGUF translation model separately.</string>
     <string name="translation_native_prepare_required">Prepare manga models and a local GGUF translation model in “Model management”.</string>
-    <string name="translation_native_test">Try a sentence</string>
+    <string name="translation_native_test">Translate sample</string>
     <string name="translation_native_test_help">Translate a sample in the selected source language into the target language. No OCR model required.</string>
     <string name="translation_native_testing">Loading model and translating…</string>
     <string name="translation_native_failed">Local model operation failed: %1$s</string>

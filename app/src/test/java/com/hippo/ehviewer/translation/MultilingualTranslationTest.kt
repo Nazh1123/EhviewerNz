@@ -48,7 +48,9 @@ class MultilingualTranslationTest {
                 assertEquals(source, settings.read().withBackend(TranslationBackend.ML_KIT).source)
                 assertEquals(TranslationLanguages.promptName(source), options.engineConfig().translator.fromLangName)
                 assertFalse(options.sampleText().isBlank())
-                if (source != "ja") assertNotEquals(TranslationOptions().sampleText(), options.sampleText())
+                if (source == "ja" || source == TranslationLanguages.AUTO_SOURCE)
+                    assertEquals(TranslationOptions().sampleText(), options.sampleText())
+                else assertNotEquals(TranslationOptions().sampleText(), options.sampleText())
             }
         }
         assertEquals("zh", TranslationOptions(source = "zh-CN").mlKitSource)

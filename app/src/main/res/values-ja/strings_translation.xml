@@ -164,10 +164,10 @@
     <string name="translation_native_model_help">単一ファイルの GGUF 翻訳モデルまたは指示モデルをインポートします。検証の後で現在のモデルに設定します。他のインストール済みモデルは保持され、切り替えや削除ができます。小型の量子化モデルを推奨します。必要なメモリーはファイルサイズより大きくなります。</string>
     <string name="translation_native_importing">モデルをコピーして検証中です。お待ちください…</string>
     <string name="translation_native_referencing">外部モデルを読み込んで検証中です。お待ちください…</string>
-    <string name="translation_native_imported">モデルをインポートしました。「一文を試訳」で結果を確認できます。</string>
+    <string name="translation_native_imported">モデルをインポートしました。「サンプルを試訳」で結果を確認できます。</string>
     <string name="translation_native_import_required">漫画モデルは準備済みです。GGUF ローカル翻訳モデルを別途インポートしてください。</string>
     <string name="translation_native_prepare_required">「モデル管理」で漫画モデルと GGUF ローカル翻訳モデルを準備してください。</string>
-    <string name="translation_native_test">一文を試訳</string>
+    <string name="translation_native_test">サンプルを試訳</string>
     <string name="translation_native_test_help">選択した元言語の例文を翻訳先の言語に翻訳します。OCR モデルは不要です。</string>
     <string name="translation_native_testing">モデルの読み込みと翻訳中…</string>
     <string name="translation_native_failed">ローカルモデルの操作に失敗しました：%1$s</string>

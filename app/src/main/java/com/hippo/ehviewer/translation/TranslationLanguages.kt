@@ -61,12 +61,12 @@ object TranslationLanguages {
     fun lineSeparator(source: String): String = if (source in setOf("en", "ko", AUTO_SOURCE)) " " else ""
 
     fun sampleText(source: String): String = when (source) {
-        AUTO_SOURCE -> "I will go to school tomorrow."
-        "en" -> "I will go to school tomorrow."
-        "zh-CN" -> "明天我要去学校。"
-        "zh-TW" -> "明天我要去學校。"
-        "ko" -> "내일 학교에 갈 거예요."
-        else -> "明日は学校へ行きます。"
+        AUTO_SOURCE -> sampleText(DEFAULT_SOURCE)
+        "en" -> "Yuta, wake up! Breakfast is ready."
+        "zh-CN" -> "悠太，快起床啦，早餐已经准备好了。"
+        "zh-TW" -> "悠太，快起床啦，早餐已經準備好了。"
+        "ko" -> "유타야, 얼른 일어나, 아침밥 다 준비됐어."
+        else -> "悠太くん、早く起きて、朝ごはんはもう用意できてるよ。"
     }
 
     private fun usesTraditionalChinese(locale: Locale): Boolean = when (locale.script) {
