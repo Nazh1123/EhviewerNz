@@ -34,17 +34,20 @@ public class ReaderPreviewBitmapCacheTest {
         result.persist(context);
         assertNotNull(ReaderPreviewBitmapCache.cached(context, identity, 128));
     }
-    @Test public void boundsLimitLargeAndExtremelyTallImages() {
-        assertEquals(8, ReaderPreviewBitmapCache.sampleSize(2400, 3600, 512));
+    @Test public void samplingKeepsEnoughPixelsForLargeAndExtremelyTallImages() {
+        assertEquals(4, ReaderPreviewBitmapCache.sampleSize(2400, 3600, 512));
         assertEquals(1, ReaderPreviewBitmapCache.sampleSize(100, 150, 512));
         int sample = ReaderPreviewBitmapCache.sampleSize(1000, 100000, 320);
-        assertTrue(100000 / sample <= 320);
+        assertTrue(100000 / sample >= 320);
+        assertTrue(100000 / (sample * 2) < 320);
         assertEquals(0, sample & (sample - 1));
-        assertEquals(4, ReaderPreviewBitmapCache.sampleSize(513, 257, 256));
+        assertEquals(2, ReaderPreviewBitmapCache.sampleSize(513, 257, 256));
+        assertEquals(1, ReaderPreviewBitmapCache.sampleSize(511, 257, 256));
+        assertEquals(2, ReaderPreviewBitmapCache.sampleSize(512, 257, 256));
+        assertEquals(1, ReaderPreviewBitmapCache.sampleSize(500, 300, 330));
         assertEquals(1 << 30, ReaderPreviewBitmapCache.sampleSize(Integer.MAX_VALUE, 1, 1));
-        // On a 3x density device the smaller preview target doubles this sample factor.
-        assertEquals(16, ReaderPreviewBitmapCache.sampleSize(2400, 3600, 330));
-        assertEquals(32, ReaderPreviewBitmapCache.sampleSize(2400, 3600, 216));
+        assertEquals(8, ReaderPreviewBitmapCache.sampleSize(2400, 3600, 330));
+        assertEquals(16, ReaderPreviewBitmapCache.sampleSize(2400, 3600, 216));
     }
 
     @Test public void posterIsReusedFromDiskWithoutOpeningOriginal() throws Exception {
@@ -110,6 +113,7 @@ public class ReaderPreviewBitmapCacheTest {
         assertNotNull(result);
         assertTrue(result.bitmap.getWidth() <= 256);
         assertTrue(result.bitmap.getHeight() <= 256);
+        assertEquals(256, Math.max(result.bitmap.getWidth(), result.bitmap.getHeight()));
     }
 
     @Test public void longImageHeaderDecodesWithIndependentStreams() throws Exception {
@@ -145,6 +149,7 @@ public class ReaderPreviewBitmapCacheTest {
                         UUID.randomUUID().toString(), 128, Uri.fromFile(file),
                         () -> { throw new AssertionError("URI decoder unnecessarily reopened image"); });
                 assertTrue(Math.max(result.bitmap.getWidth(), result.bitmap.getHeight()) <= 128);
+                assertEquals(128, Math.max(result.bitmap.getWidth(), result.bitmap.getHeight()));
                 assertFalse(result.bitmap.getConfig() == Bitmap.Config.HARDWARE);
             } finally { deleteMappedFixture(file); }
         }

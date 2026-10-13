@@ -50,6 +50,7 @@ public final class ReaderPreviewLoader implements AutoCloseable {
             }, "Reader-Preview-Cache"), new ThreadPoolExecutor.DiscardOldestPolicy());
     private int[] pages = new int[0]; // Guarded by lock; ordered with the current target first.
     private int edge;
+    private volatile int generation;
     private int gallerySize;
     private int prepareCenter;
     private int prepareCursor;
@@ -93,6 +94,15 @@ public final class ReaderPreviewLoader implements AutoCloseable {
     public void request(int[] desired, int edge, boolean interactive) {
         if (closed) return;
         synchronized (lock) {
+            if (this.edge != edge) {
+                generation++;
+                posters.evictAll();
+                overview.evictAll();
+                prepared.clear();
+                loading.clear();
+                preparing = 0;
+                prepareCursor = 0;
+            }
             if (!active || this.edge != edge) failed.clear();
             // Keep a miss only while it remains in both windows. An obsolete worker can
             // finish after a jump; its failure must not poison a later visit to that page.
@@ -157,7 +167,7 @@ public final class ReaderPreviewLoader implements AutoCloseable {
             int page = nextPage();
             if (page >= 0) {
                 loading.add(page);
-                return new Work(page, false);
+                return new Work(page, false, edge, generation);
             }
             if (interactive || preparing >= prepareConcurrency || gallerySize <= 0) return null;
             // Alternate forward/backward from the reader page. Never loop over evicted posters
@@ -170,7 +180,7 @@ public final class ReaderPreviewLoader implements AutoCloseable {
                 if (posters.get(candidate) != null) { prepared.set(candidate); continue; }
                 loading.add(candidate);
                 preparing++;
-                return new Work(candidate, true);
+                return new Work(candidate, true, edge, generation);
             }
             return null;
         }
@@ -179,7 +189,12 @@ public final class ReaderPreviewLoader implements AutoCloseable {
     private static final class Work {
         final int page;
         final boolean prepare;
-        Work(int page, boolean prepare) { this.page = page; this.prepare = prepare; }
+        final int edge;
+        final int generation;
+        Work(int page, boolean prepare, int edge, int generation) {
+            this.page = page; this.prepare = prepare;
+            this.edge = edge; this.generation = generation;
+        }
     }
 
     private void remember(int page, Bitmap bitmap) {
@@ -244,16 +259,20 @@ public final class ReaderPreviewLoader implements AutoCloseable {
                             ReaderPreviewBitmapCache.Result result;
                             try {
                                 if (source == null) source = provider.createPreviewSource(context);
-                                result = source.load(page, edge);
+                                result = source.load(page, work.edge);
                             } finally { Trace.endSection(); }
                             if (closed || run != token || Thread.currentThread().isInterrupted()) return;
-                            if (result == null) {
-                                synchronized (lock) { failed.add(page); }
-                                continue;
+                            synchronized (lock) {
+                                // A resize invalidates both cached posters and in-flight decodes.
+                                if (work.generation != generation) continue;
+                                if (result == null) {
+                                    failed.add(page);
+                                    continue;
+                                }
+                                remember(page, result.bitmap);
                             }
-                            remember(page, result.bitmap);
                             if (interactive) handler.post(() -> {
-                                if (!active || closed || !interactive) return;
+                                if (!active || closed || !interactive || work.generation != generation) return;
                                 Trace.beginSection("ReaderPreview.bind");
                                 try { listener.accept(page, result.bitmap); } finally { Trace.endSection(); }
                                 startWorkers();
@@ -263,15 +282,19 @@ public final class ReaderPreviewLoader implements AutoCloseable {
                             if (work.prepare) LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(12));
                         } catch (IOException | RuntimeException failure) {
                             if (!(failure instanceof InterruptedIOException) && !Thread.currentThread().isInterrupted()) {
-                                synchronized (lock) { failed.add(page); }
+                                synchronized (lock) {
+                                    if (work.generation == generation) failed.add(page);
+                                }
                                 Log.w("ReaderPreview", "Unable to load local preview, page=" + (page + 1), failure);
                             }
                         } finally {
                             synchronized (lock) {
-                                loading.remove(page);
-                                if (work.prepare) {
-                                    preparing--;
-                                    if (!Thread.currentThread().isInterrupted()) prepared.set(page);
+                                if (work.generation == generation) {
+                                    loading.remove(page);
+                                    if (work.prepare) {
+                                        preparing--;
+                                        if (!Thread.currentThread().isInterrupted()) prepared.set(page);
+                                    }
                                 }
                             }
                         }

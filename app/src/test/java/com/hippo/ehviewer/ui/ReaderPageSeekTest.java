@@ -147,6 +147,25 @@ public class ReaderPageSeekTest {
     private View page(RecyclerView row, int index) { return row.getLayoutManager().findViewByPosition(index); }
     private ImageView image(View card) { return (ImageView) ((LinearLayout) card).getChildAt(0); }
 
+    @Test @Config(qualifiers = "xxhdpi")
+    public void decodeTargetFollowsActualCardSizeWithoutFixedPixelCap() {
+        RecyclerView row = strip();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+            ReflectionHelpers.callInstanceMethod(preview, "updateDimensions",
+                    ReflectionHelpers.ClassParameter.from(int.class, 2000));
+            int largeEdge = ReflectionHelpers.getField(preview, "edge");
+            int itemWidth = ReflectionHelpers.getField(preview, "itemWidth");
+            int imageHeight = ReflectionHelpers.getField(preview, "imageHeight");
+            int padding = Math.round(4 * row.getResources().getDisplayMetrics().density);
+            assertEquals(Math.max(itemWidth - padding, imageHeight), largeEdge);
+            assertTrue(largeEdge > 384);
+            ReflectionHelpers.callInstanceMethod(preview, "updateDimensions",
+                    ReflectionHelpers.ClassParameter.from(int.class, 1000));
+            int smallEdge = ReflectionHelpers.getField(preview, "edge");
+            assertTrue(smallEdge < largeEdge);
+        }
+    }
+
     @Test public void previewDefaultsToEnabledAndCanBeDisabled() {
         assertTrue(Settings.getReaderPagePreview());
         Settings.putReaderPagePreview(false); assertFalse(Settings.getReaderPagePreview());
@@ -246,6 +265,8 @@ public class ReaderPageSeekTest {
     @Test public void idlePreparedPagesBindSynchronouslyWhenTheCarouselOpens() throws Exception {
         RecyclerView row = strip(); AtomicInteger reads = new AtomicInteger();
         try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(reads))) {
+            // Preparation and display must share a viewport; resizing needs new posters.
+            layout(row);
             preview.prepare(0, 64, false);
             Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(200));
             ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");

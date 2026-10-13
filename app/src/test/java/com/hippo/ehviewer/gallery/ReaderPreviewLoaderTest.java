@@ -27,6 +27,68 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 28, application = Application.class)
 public class ReaderPreviewLoaderTest {
+    @Test public void resizingInvalidatesDetailOverviewAndPreparation() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        byte[] png = poster(1024, 768);
+        String identity = UUID.randomUUID().toString();
+        AtomicInteger reads = new AtomicInteger();
+        DirGalleryProvider provider = new DirGalleryProvider(UniFile.fromFile(context.getCacheDir())) {
+            @Override public ReaderPreviewSource createPreviewSource(Context app) {
+                return (page, edge) -> {
+                    reads.incrementAndGet();
+                    return ReaderPreviewBitmapCache.load(app, identity, edge, () -> new ByteArrayInputStream(png));
+                };
+            }
+        };
+        try (ReaderPreviewLoader loader = new ReaderPreviewLoader(context, provider, (page, bitmap) -> { })) {
+            loader.prepare(new int[] {0}, 128, 1);
+            waitFor(() -> loader.get(0) != null && !loader.isLoading());
+            assertEquals(128, loader.get(0).getWidth());
+            android.util.LruCache<Integer, Bitmap> detailed = org.robolectric.util.ReflectionHelpers.getField(loader, "posters");
+            detailed.evictAll();
+            assertEquals(96, loader.get(0).getWidth());
+            loader.prepare(new int[] {0}, 256, 1);
+            waitFor(() -> loader.get(0) != null && loader.get(0).getWidth() == 256 && !loader.isLoading());
+            assertEquals(2, reads.get());
+            loader.request(new int[] {0}, 128, true);
+            waitFor(() -> loader.get(0) != null && loader.get(0).getWidth() == 128 && !loader.isLoading());
+            assertEquals(3, reads.get());
+        }
+    }
+
+    @Test public void resizeDiscardsInFlightPostersAndCallbacks() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        byte[] png = poster(1024, 768);
+        String identity = UUID.randomUUID().toString();
+        CountDownLatch started = new CountDownLatch(1), finishOldSize = new CountDownLatch(1);
+        AtomicInteger reads = new AtomicInteger();
+        java.util.List<Integer> delivered = new java.util.ArrayList<>();
+        DirGalleryProvider provider = new DirGalleryProvider(UniFile.fromFile(context.getCacheDir())) {
+            @Override public int getPreviewConcurrency() { return 1; }
+            @Override public ReaderPreviewSource createPreviewSource(Context app) {
+                return (page, edge) -> {
+                    if (reads.incrementAndGet() == 1) {
+                        started.countDown();
+                        try { assertTrue(finishOldSize.await(10, TimeUnit.SECONDS)); }
+                        catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new InterruptedIOException(); }
+                    }
+                    return ReaderPreviewBitmapCache.load(app, identity, edge, () -> new ByteArrayInputStream(png));
+                };
+            }
+        };
+        try (ReaderPreviewLoader loader = new ReaderPreviewLoader(context, provider,
+                (page, bitmap) -> delivered.add(bitmap.getWidth()))) {
+            loader.request(new int[] {0}, 128, true);
+            assertTrue(started.await(3, TimeUnit.SECONDS));
+            loader.request(new int[] {0}, 256, true);
+            finishOldSize.countDown();
+            waitFor(() -> !delivered.isEmpty() && !loader.isLoading());
+            assertEquals(java.util.Collections.singletonList(256), delivered);
+            assertEquals(256, loader.get(0).getWidth());
+            assertEquals(2, reads.get());
+        } finally { finishOldSize.countDown(); }
+    }
+
     @Test public void idlePreparationCoversDistantPagesAndOverviewSurvivesDetailEviction() throws Exception {
         Context context = RuntimeEnvironment.getApplication();
         byte[] png = poster(256, 128);

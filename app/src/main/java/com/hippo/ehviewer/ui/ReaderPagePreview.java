@@ -60,7 +60,7 @@ final class ReaderPagePreview implements AutoCloseable {
     private final IntConsumer onBrowsed;
     private final LruCache<String, Long> failures = new LruCache<>(128);
     private final Set<String> downloading = new HashSet<>();
-    private final int edge;
+    private int edge;
     private volatile boolean closed;
     private volatile boolean visible;
     private boolean manualScrolling;
@@ -95,7 +95,6 @@ final class ReaderPagePreview implements AutoCloseable {
         this.onBrowsed = onBrowsed;
         gallery = provider instanceof EhGalleryProvider
                 ? ((EhGalleryProvider) provider).getPreviewGalleryInfo() : null;
-        edge = Math.min(384, Math.max(192, dp(130)));
         layout = new LinearLayoutManager(row.getContext(), RecyclerView.HORIZONTAL, false);
         row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
         row.setLayoutManager(layout);
@@ -204,6 +203,12 @@ final class ReaderPagePreview implements AutoCloseable {
                 Math.round(Math.max(1, nextWidth - dp(4)) * 130f / 91f)));
         if (itemWidth == nextWidth && imageHeight == nextHeight) return false;
         itemWidth = nextWidth; imageHeight = nextHeight;
+        // FIT_CENTER can use either dimension; cover the actual image area in pixels.
+        edge = Math.max(Math.max(1, itemWidth - dp(4)), imageHeight);
+        if (localLoader != null) {
+            if (visible) loadLocal();
+            else if (preparedPages != null) prepareLocal();
+        }
         if (row instanceof ReaderPreviewRecyclerView)
             ((ReaderPreviewRecyclerView) row).setPreviewHeight(imageHeight + dp(30));
         return true;

@@ -38,7 +38,7 @@ public final class ReaderPreviewBitmapCache {
     private static String key(String identity, int edge) {
         try {
             byte[] hash = MessageDigest.getInstance("SHA-256")
-                    .digest(("static-v3:" + identity + ":" + edge).getBytes(StandardCharsets.UTF_8));
+                    .digest(("static-v4:" + identity + ":" + edge).getBytes(StandardCharsets.UTF_8));
             StringBuilder key = new StringBuilder(64);
             for (byte b : hash) {
                 key.append(Character.forDigit((b & 255) >> 4, 16));
@@ -175,7 +175,9 @@ public final class ReaderPreviewBitmapCache {
 
     static int sampleSize(int width, int height, int edge) {
         int sample = 1;
-        while (sample < (1 << 30) && (long) Math.max(width, height) > (long) sample * Math.max(1, edge)) sample *= 2;
+        // Only advance if the next power of two still covers the display target.
+        // decoded() then shrinks to that target instead of requiring UI upscaling.
+        while (sample < (1 << 30) && (long) Math.max(width, height) >= (long) sample * 2 * Math.max(1, edge)) sample *= 2;
         return sample;
     }
 
