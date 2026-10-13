@@ -171,6 +171,9 @@ public final class ReadingHistory {
         entry.filename = intent.getStringExtra(GalleryActivity.KEY_FILENAME);
         Uri uri = intent.getData();
         entry.uri = uri == null ? null : uri.toString();
+        entry.mimeType = intent.getType();
+        Uri selectedImage = intent.getParcelableExtra(GalleryActivity.KEY_LOCAL_SELECTED_IMAGE_URI);
+        entry.selectedImageUri = selectedImage != null ? selectedImage.toString() : null;
         GalleryInfo gallery = intent.getParcelableExtra(GalleryActivity.KEY_GALLERY_INFO);
         if (gallery != null) {
             // Persist a small, stable snapshot rather than a DownloadInfo/GalleryDetail subclass.
@@ -243,6 +246,7 @@ public final class ReadingHistory {
             Uri uri = Uri.parse(entry.uri);
             File file = "file".equals(uri.getScheme()) && uri.getPath() != null
                     ? new File(uri.getPath()) : ExternalImageFileResolver.resolve(context, uri);
+            boolean directlyReadable = file != null;
             // SAF may grant archive access without allowing direct filesystem enumeration.
             if (file == null && "com.android.externalstorage.documents".equals(uri.getAuthority())) {
                 try {
@@ -256,11 +260,18 @@ public final class ReadingHistory {
             }
             if (file != null) {
                 directory = file.getParentFile();
-                if (ExternalImageFileResolver.isImageUri(context, uri) && directory != null) {
-                    entry.action = GalleryActivity.ACTION_DIR;
-                    entry.resumeFilename = file.getName();
-                    entry.progressAt = Math.max(entry.progressAt, entry.readAt);
-                    entry.uri = null;
+                if (ExternalImageFileResolver.isImageUri(context, uri, entry.mimeType)) {
+                    if (directlyReadable && ExternalImageFileResolver.isSupportedImageName(file.getName())
+                            && directory != null && ("file".equals(uri.getScheme())
+                            || ExternalImageFileResolver.isReadableDirectory(directory))) {
+                        entry.action = GalleryActivity.ACTION_DIR;
+                        entry.resumeFilename = file.getName();
+                        entry.progressAt = Math.max(entry.progressAt, entry.readAt);
+                        entry.uri = null;
+                    } else {
+                        // Keep the granted single-image URI so reopening does not require a directory.
+                        directory = null;
+                    }
                 }
             } else if (uri.getPath() != null) {
                 int separator = uri.getPath().lastIndexOf('/');
@@ -303,6 +314,8 @@ public final class ReadingHistory {
         public String action;
         public String filename;
         public String uri;
+        public String mimeType;
+        public String selectedImageUri;
         public String resumeFilename;
         public long progressAt;
         public GalleryInfo gallery;
@@ -335,7 +348,9 @@ public final class ReadingHistory {
             Intent intent = new Intent(context, reader).setAction(action);
             intent.putExtra(KEY_SOURCE, source);
             if (filename != null) intent.putExtra(GalleryActivity.KEY_FILENAME, filename);
-            if (uri != null) intent.setData(Uri.parse(uri));
+            if (uri != null) intent.setDataAndType(Uri.parse(uri), mimeType);
+            if (selectedImageUri != null) intent.putExtra(
+                    GalleryActivity.KEY_LOCAL_SELECTED_IMAGE_URI, Uri.parse(selectedImageUri));
             if (gallery != null) {
                 GalleryInfo info = gallery;
                 if (GalleryActivity.ACTION_LOCAL_FOLDER.equals(action)

@@ -15,6 +15,7 @@
   -->
 
 <resources>
+    <string name="open_image_folder">打开同文件夹图片</string>
     <!--  black list  -->
     <string name="blacklist_id">用户ID</string>
     <string name="blacklist">黑名单</string>

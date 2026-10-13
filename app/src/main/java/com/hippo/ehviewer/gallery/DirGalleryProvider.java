@@ -17,6 +17,7 @@
 package com.hippo.ehviewer.gallery;
 
 import android.content.Context;
+import android.graphics.drawable.BitmapDrawable;
 import android.os.Process;
 import android.util.Log;
 import androidx.annotation.NonNull;
@@ -245,7 +246,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         }
 
         UniFile src = fileList[index];
-        String extension = FileUtils.getExtensionFromFilename(src.getName());
+        String extension = FileUtils.getExtensionFromFilename(getFilename(index));
         SaveResult destination = null;
         try (InputStream input = src.openInputStream()) {
             destination = prepareSaveDestination(dir,
@@ -315,24 +316,17 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
                 continue;
             }
 
-            InputStream is = null;
             try {
-                is = files[index].openInputStream();
-//                Image image = Image.decode(is, true);
-                Image image = Image.decode((FileInputStream) is, false,
-                        getAnimatedWebpDecodeMode(index));
-//                Image1 image1 = Image1.decode((FileInputStream) is, false);
+                Image image = decodeImage(files[index], index);
                 mDecodingIndex.lazySet(GalleryPageView.INVALID_INDEX);
                 if (image != null) {
                     notifyPageSucceed(index, image);
                 } else {
                     notifyPageFailed(index, GetText.getString(R.string.error_decoding_failed));
                 }
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
                 mDecodingIndex.lazySet(GalleryPageView.INVALID_INDEX);
                 notifyPageFailed(index, GetText.getString(R.string.error_reading_failed));
-            } finally {
-                IOUtils.closeQuietly(is);
             }
             mDecodingIndex.lazySet(GalleryPageView.INVALID_INDEX);
         }
@@ -341,6 +335,23 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         mFileList.lazySet(null);
 
         Log.i(TAG, "ImageDecoder end");
+    }
+
+    /** Some URI providers return pipes or generic streams instead of seekable files. */
+    protected Image decodeImage(UniFile file, int index) throws IOException {
+        try (InputStream input = file.openInputStream()) {
+            if (input instanceof FileInputStream) {
+                try {
+                    Image image = Image.decode((FileInputStream) input, false, getAnimatedWebpDecodeMode(index));
+                    if (image != null) return image;
+                } catch (RuntimeException failure) {
+                    if (Thread.currentThread().isInterrupted()) throw new java.io.InterruptedIOException();
+                }
+            }
+        }
+        try (InputStream input = file.openInputStream()) {
+            return Image.decode(BitmapDrawable.createFromStream(input, null), false);
+        }
     }
 
     private static FilenameFilter imageFilter =

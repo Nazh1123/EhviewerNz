@@ -15,6 +15,7 @@
   -->
 
 <resources>
+    <string name="open_image_folder">打开同文件夹图片</string>
 
     <string name="app_name">EhViewerNz</string>
 

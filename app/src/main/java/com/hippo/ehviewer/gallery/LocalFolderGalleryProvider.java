@@ -20,6 +20,7 @@ import android.content.Context;
 import android.graphics.drawable.BitmapDrawable;
 import android.os.ParcelFileDescriptor;
 import android.os.Process;
+import android.net.Uri;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -52,6 +53,9 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
     private final Context context;
     @Nullable
     private final LocalFolderGallerySource source;
+    private final Uri initialUri;
+    private final String initialFilename;
+    private volatile int startPage;
     private final Stack<Integer> requests = new Stack<>();
     private final AtomicInteger decodingIndex =
             new AtomicInteger(GalleryPageView.INVALID_INDEX);
@@ -65,13 +69,21 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
     private String error;
 
     public LocalFolderGalleryProvider(@NonNull Context context, @NonNull String encodedSource) {
+        this(context, encodedSource, null, null);
+    }
+
+    public LocalFolderGalleryProvider(Context context, String encodedSource, Uri initialUri, String initialFilename) {
         this.context = context.getApplicationContext();
         source = LocalFolderGallerySource.parse(encodedSource);
+        this.initialUri = initialUri;
+        this.initialFilename = initialFilename;
     }
+
+    @Override public int getStartPage() { return startPage; }
 
     @Override
     public GalleryProvider2 createTranslationProvider(Context context) {
-        return source != null ? new LocalFolderGalleryProvider(context, source.encode()) : null;
+        return source != null ? new LocalFolderGalleryProvider(context, source.encode(), initialUri, initialFilename) : null;
     }
 
     @Override
@@ -220,7 +232,7 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
 
         LocalFolderGalleryScanner.ScanResult result;
         try {
-            result = LocalFolderGalleryScanner.scan(context, source);
+            result = LocalFolderGalleryScanner.scan(context, source, initialUri == null);
         } catch (LocalFolderGalleryScanner.ScanException e) {
             if (e.reason == LocalFolderGalleryScanner.Reason.CANCELLED) {
                 return;
@@ -236,6 +248,7 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
         }
 
         images.set(result.images);
+        startPage = findStartPage(result.images);
         size = result.images.size();
         notifyDataChanged();
 
@@ -257,6 +270,29 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
             decodingIndex.set(GalleryPageView.INVALID_INDEX);
         }
         images.set(Collections.emptyList());
+    }
+
+    private int findStartPage(List<LocalFolderGalleryScanner.ImageEntry> pages) {
+        Uri localUri = null;
+        if (initialUri != null) {
+            java.io.File file = ExternalImageFileResolver.resolve(context, initialUri);
+            if (file != null) localUri = Uri.fromFile(file);
+            for (int i = 0; i < pages.size(); i++) {
+                Uri uri = pages.get(i).uri;
+                if (uri.equals(initialUri) || uri.equals(localUri)) return i;
+                if (java.util.Objects.equals(uri.getAuthority(), initialUri.getAuthority())) {
+                    try {
+                        if (android.provider.DocumentsContract.getDocumentId(uri).equals(
+                                android.provider.DocumentsContract.getDocumentId(initialUri))) return i;
+                    } catch (RuntimeException ignored) { }
+                }
+            }
+        }
+        if (initialFilename != null) {
+            for (int i = 0; i < pages.size(); i++)
+                if (initialFilename.equals(pages.get(i).filename)) return i;
+        }
+        return 0;
     }
 
     private void decode(int index) {
@@ -307,6 +343,15 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
     }
 
     @Override public int getPreviewConcurrency() { return 4; }
+
+    @Override public ReaderPreviewSource createPreviewSource(Context context) {
+        return (index, edge) -> {
+            LocalFolderGalleryScanner.ImageEntry image = getImage(index);
+            return image == null ? null : ReaderPreviewBitmapCache.load(context, image.previewIdentity,
+                    edge, image.uri, () -> this.context.getContentResolver().openInputStream(image.uri),
+                    () -> getCachedPreview(index, edge));
+        };
+    }
 
     private void fail(int stringId) {
         size = STATE_ERROR;
