@@ -197,4 +197,17 @@
     <string name="translation_source_detected">正在翻譯: %1$s → %2$s</string>
     <string name="translation_source_unknown">無法可靠辨識來源語言，請手動選擇後再使用 ML Kit。</string>
     <string name="translation_source_auto_mlkit_help">自動模式會準備日語、韓語、中文及目標語言包；英語無需獨立包。</string>
+    <string name="translation_ppocr_help">非日語識別使用 PP-OCRv5，需要識別組件和對應語言模型。下載時自動補齊識別組件；也可分別導入組件 ZIP 和官方 inference.onnx 文件。中文模型兼容簡體和繁體，校驗通過後使用。</string>
+    <string name="translation_ppocr_required">非日語識別需要 PP-OCRv5 識別組件和對應語言模型，請在“翻譯設置 → 模型管理 → 漫畫模型”下載或導入。</string>
+    <string name="translation_ppocr_runtime_title">PP-OCRv5 識別組件</string>
+    <string name="translation_ppocr_runtime_help">可選組件，用於中文、英文和韓文 OCR，日語識別無需安裝。在線下載官方 ONNX Runtime 1.24.3（約 41 MB），僅安裝 arm64 運行庫（約 26 MB）；也可導入對應組件 ZIP。安裝前校驗完整性。刪除組件後可重新下載啓用，語言模型保留。</string>
+    <string name="translation_model_import_mode">選擇 GGUF 導入方式</string>
+    <string name="translation_model_import_copy">複製到應用私有目錄</string>
+    <string name="translation_model_import_reference">直接調用外部文件</string>
+    <string name="translation_model_external_badge">外部文件</string>
+    <string name="translation_model_remove_reference">移除引用</string>
+    <string name="translation_model_remove_reference_confirm">移除“%1$s”的引用？原始 GGUF 文件將保留。</string>
+    <string name="translation_model_external_help">直接讀取原始 GGUF，不保留應用私有副本。請勿移動、刪除或修改原文件。再次複製導入可改爲私有副本；再次引用同一模型會移除已有的私有副本。移除引用不會刪除原文件。</string>
+    <string name="translation_model_external_unsupported">該外部文件不支持直接加載，請選擇“複製到應用私有目錄”。</string>
+    <string name="translation_model_external_changed">外部模型文件已改變或不可用，請重新選擇 GGUF 文件。</string>
 </resources>

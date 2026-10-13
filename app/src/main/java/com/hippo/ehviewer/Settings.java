@@ -1957,6 +1957,16 @@ public class Settings {
     public static final String KEY_GALLERY_PREVIEW_IMMEDIATE_JUMP =
             "gallery_preview_immediate_jump";
 
+    public static final String KEY_READER_PAGE_PREVIEW = "reader_page_preview";
+
+    public static boolean getReaderPagePreview() {
+        return getBoolean(KEY_READER_PAGE_PREVIEW, true);
+    }
+
+    public static void putReaderPagePreview(boolean value) {
+        putBoolean(KEY_READER_PAGE_PREVIEW, value);
+    }
+
     private static final boolean DEFAULT_GALLERY_PREVIEW_IMMEDIATE_JUMP = true;
 
     public static boolean getGalleryPreviewImmediateJump() {

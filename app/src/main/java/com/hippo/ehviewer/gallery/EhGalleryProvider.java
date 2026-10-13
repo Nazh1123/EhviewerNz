@@ -17,6 +17,7 @@
 package com.hippo.ehviewer.gallery;
 
 import android.content.Context;
+import android.util.SparseArray;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -25,6 +26,7 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.download.GalleryUpdateRecord;
 import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.spider.SpiderQueen;
+import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.lib.glgallery.GalleryProvider;
 import com.hippo.lib.image.Image;
 //import com.hippo.lib.image.Image1;
@@ -32,8 +34,51 @@ import com.hippo.unifile.UniFile;
 import com.hippo.lib.yorozuya.SimpleHandler;
 import java.util.Locale;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.OnSpiderListener {
+
+    private volatile SparseArray<UniFile> previewFiles;
+    private final Object previewFilesLock = new Object();
+    private final AtomicInteger previewFilesGeneration = new AtomicInteger();
+
+    /** Preview workers only: index the existing download once, including SAF folders. */
+    @Nullable protected UniFile getPreviewDirectory() {
+        return SpiderDen.getExistingGalleryDownloadDir(mGalleryInfo);
+    }
+
+    @Override public int getPreviewConcurrency() { return 4; }
+
+    @Override public UniFile getPreviewFile(int index) {
+        SparseArray<UniFile> files = previewFiles;
+        if (files == null) synchronized (previewFilesLock) {
+            files = previewFiles;
+            if (files == null) {
+                int generation = previewFilesGeneration.get();
+                files = new SparseArray<>();
+                UniFile directory = getPreviewDirectory();
+                UniFile[] entries = directory != null ? directory.listFiles() : null;
+                if (entries != null) for (UniFile entry : entries) {
+                    String name = entry.getName();
+                    if (name == null || name.length() < 10 || name.charAt(8) != '.') continue;
+                    boolean supported = false;
+                    for (String extension : SUPPORT_IMAGE_EXTENSIONS)
+                        if (name.substring(8).equalsIgnoreCase(extension)) { supported = true; break; }
+                    if (!supported) continue;
+                    try {
+                        int page = Integer.parseInt(name.substring(0, 8)) - 1;
+                        if (page >= 0) files.put(page, entry);
+                    } catch (NumberFormatException ignored) { }
+                }
+                if (generation == previewFilesGeneration.get()) {
+                    previewFiles = files;
+                    // Completion may invalidate the index between the check and publication.
+                    if (generation != previewFilesGeneration.get()) previewFiles = null;
+                }
+            }
+        }
+        return files.get(getSourcePage(index));
+    }
 
     private final Context mContext;
     private final GalleryInfo mGalleryInfo;
@@ -291,6 +336,8 @@ public class EhGalleryProvider extends GalleryProvider2 implements SpiderQueen.O
 
     @Override
     public void onPageSuccess(int index, int finished, int downloaded, int total) {
+        previewFilesGeneration.incrementAndGet();
+        previewFiles = null;
         index = readerIndex(index);
         if (index < 0) return;
         notifyDataChanged(index);

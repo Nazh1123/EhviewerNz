@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="popular_show_all_count">Tout afficher (%1$d/%2$d galeries)</string>
+</resources>

@@ -383,7 +383,7 @@
         <item>@string/app_language_zh_tw</item>
     </string-array>
 
-    <string-array name="app_language_entry_values">
+    <string-array name="app_language_entry_values" translatable="false">
         <item>system</item>
         <item>de</item>
         <item>en</item>
@@ -435,7 +435,7 @@
         <item>vietnamese</item>
     </string-array>
 
-    <string-array name="tag_translation_metadata" tools:ignore="InconsistentArrays">
+    <string-array name="tag_translation_metadata" translatable="false" tools:ignore="InconsistentArrays">
 <!--        <item>tag-translations-zh-rCN.sha1</item>-->
 <!--        <item>https://github.com/Mapaler/EhViewer/tree/tag-translations/tag-translations/tag-translations-zh-rCN.sha1</item>-->
 <!--        <item>tag-translations-zh-rCN</item>-->
@@ -446,7 +446,7 @@
         <item>https://raw.githubusercontent.com/Mapaler/EhViewer/tag-translations/tag-translations/tag-translations-zh-rCN</item>
     </string-array>
 
-    <string-array name="proxy_types">
+    <string-array name="proxy_types" translatable="false">
         <item>@string/proxy_direct</item>
         <item>@string/proxy_system</item>
         <item>HTTP</item>

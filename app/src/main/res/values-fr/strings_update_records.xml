@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_update_history_title">Historique des mises à jour des galeries</string>
+    <string name="gallery_update_history_all_empty">Aucun enregistrement de mise à jour sauvegardé</string>
+    <string name="gallery_update_history_load_failed">Impossible de charger l’historique des mises à jour</string>
+    <string name="gallery_update_history_updated">Terminé</string>
+    <string name="gallery_update_history_failed">Échec</string>
+    <string name="gallery_update_history_updated_incomplete">Terminé · informations des pages incomplètes</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">Aucun jeton n’est enregistré pour la galerie GID %1$d ; ses détails ne peuvent pas être chargés.</string>
+    <string name="settings_gallery_update_record_limit">Nombre d’enregistrements de mise à jour</string>
+    <string name="gallery_read_updates">Lire uniquement les ajouts</string>
+    <string name="gallery_update_log">Journal de mise à jour</string>
+    <string name="gallery_update_log_time">Date de mise à jour</string>
+    <string name="gallery_update_log_target">Galerie cible : %1$d</string>
+    <string name="gallery_update_log_legacy_notice">Cet ancien enregistrement ne contient pas les identifiants des pages ; ses ajouts ne peuvent pas être ouverts.</string>
+    <string name="gallery_update_log_no_added">Cette mise à jour ne contient aucune page ajoutée à lire.</string>
+    <string name="gallery_update_log_added">Ajouts :</string>
+    <string name="gallery_update_log_deleted">Suppressions :</string>
+    <string name="gallery_update_log_none">Aucun</string>
+    <string name="gallery_update_log_incomplete">Les informations des pages sont incomplètes ; les ajouts et suppressions ne peuvent pas être déterminés avec fiabilité.</string>
+    <string name="gallery_update_log_versions">Voir l’historique de la chaîne de versions</string>
+    <string name="gallery_update_log_loading">Chargement de l’enregistrement de mise à jour…</string>
+    <string name="gallery_update_log_unavailable">L’enregistrement de mise à jour n’est plus disponible</string>
+    <string name="gallery_update_reader_progress">Ajouts %1$d/%2$d · p. %3$d</string>
+    <string name="gallery_update_finalizing">Finalisation de la mise à jour de la galerie</string>
+    <string name="gallery_update_finalization_failed">Téléchargement terminé, mais la finalisation a échoué. Réessayez depuis les détails de la galerie.</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string name="gallery_update_error_log">Journal des erreurs</string>
+    <string name="gallery_update_error_source">Ancienne galerie sélectionnée pour la mise à jour</string>
+    <string name="gallery_update_error_source_info">GID : %1$d\nTitre : %2$s</string>
+    <string name="gallery_update_error_source_unknown">Aucune ancienne galerie téléchargée n’a pu être identifiée.</string>
+    <string name="gallery_update_error_title_unknown">Titre indisponible</string>
+    <string name="gallery_update_error_reason">Cause de l’échec</string>
+    <string name="gallery_update_error_parents_retained">Les anciennes galeries suivantes ont été conservées ou leur suppression n’a pas pu être confirmée (GID) : %1$s. Réessayez depuis les détails de la galerie.</string>
+    <string name="gallery_update_error_directory">Le dossier de téléchargement est absent ou inaccessible.</string>
+    <string name="gallery_update_error_metadata_missing">Le fichier .ehviewer est absent.</string>
+    <string name="gallery_update_error_metadata_invalid">Le fichier .ehviewer est illisible, corrompu ou appartient à une autre galerie.</string>
+    <string name="gallery_update_error_source_metadata">Ancienne galerie (GID : %1$d) : %2$s La progression de lecture ne peut pas être transférée.</string>
+    <string name="gallery_update_error_target_metadata">Nouvelle galerie (GID : %1$d) : %2$s L’intégrité du téléchargement ne peut pas être vérifiée.</string>
+    <string name="gallery_update_error_target_incomplete">Le téléchargement de la nouvelle galerie est incomplet ou son état a changé avant la finalisation.</string>
+    <string name="gallery_update_error_target_removed">La nouvelle galerie téléchargée a été supprimée ou n’est plus disponible ; la mise à jour a été annulée.</string>
+    <string name="gallery_update_error_image">La page p%1$d de la nouvelle galerie est absente, vide ou illisible.</string>
+    <string name="gallery_update_error_record_stage">Impossible d’enregistrer la comparaison avant de supprimer les anciennes galeries.</string>
+    <string name="gallery_update_error_record_publish">Le nettoyage des anciennes galeries est terminé, mais le journal de mise à jour n’a pas pu être enregistré.</string>
+    <string name="gallery_update_error_progress_checkpoint">La progression de lecture a été traitée, mais son point de contrôle de fin n’a pas pu être enregistré.</string>
+    <string name="gallery_update_error_validation">Impossible de vérifier ou préparer la mise à jour : %1$s</string>
+    <string name="gallery_update_error_delete_parent">Impossible de supprimer le dossier de l’ancienne galerie (GID : %1$d).</string>
+    <string name="gallery_update_error_cleanup">Échec du nettoyage des anciennes galeries : %1$s</string>
+    <string name="gallery_update_error_509">Quota d’images dépassé (509).</string>
+    <string name="gallery_update_error_unknown">Aucune erreur détaillée n’a été renvoyée.</string>
+    <string name="gallery_update_error_download_metadata">Impossible de charger les informations des pages de la nouvelle galerie ; le téléchargement n’a pas pu démarrer.</string>
+    <string name="gallery_update_error_download">Le téléchargement de la nouvelle galerie a échoué ; %1$d pages sont incomplètes.</string>
+    <string name="gallery_update_error_page">p%1$d : %2$s</string>
+    <string name="gallery_update_error_more_pages">Des erreurs se sont aussi produites sur %1$d autres pages.</string>
+    <string name="gallery_update_error_version_lookup">Impossible de déterminer les informations de version de la galerie : %1$s</string>
+    <string name="gallery_update_error_cancelled">La mise à jour a été arrêtée ou annulée.</string>
+    <string name="gallery_update_error_interrupted">La mise à jour précédente a été interrompue avant la fin du téléchargement. Réessayez pour continuer.</string>
+    <string name="gallery_update_error_tokens">Les jetons des pages de la galerie GID %1$d sont incomplets ; aucun repère fiable de progression de lecture ne peut être trouvé.</string>
+    <string name="gallery_update_error_progress_save">Impossible d’enregistrer et vérifier la position de lecture transférée sur le disque et dans le cache local.</string>
+    <string name="gallery_update_log_read">Lire cette mise à jour</string>
+    <string name="gallery_update_log_history">Voir l’historique des enregistrements de mise à jour</string>
+    <string name="gallery_update_history_local_notice">Seules les pages ajoutées encore présentes et lisibles dans la version locale actuelle seront ouvertes, dans leur ordre actuel. Les pages supprimées ultérieurement ou absentes localement sont ignorées. Les nombres ci-dessus décrivent la mise à jour d’origine. Chaque mise à jour possède sa propre progression de lecture.</string>
+    <string name="gallery_update_history_no_local">La galerie locale actuelle est indisponible ou encore en cours de mise à jour.</string>
+    <string name="gallery_update_history_no_pages">Aucune page ajoutée par cette mise à jour n’est encore lisible localement. Elles ont peut-être été supprimées plus tard ou sont absentes localement. Les anciens enregistrements sans instantanés de jetons ne peuvent être lus que dans leur version locale d’origine.</string>
+    <string name="gallery_update_history_incomplete">Informations des pages incomplètes</string>
+    <string name="gallery_update_history_empty">Aucun enregistrement de mise à jour pour cette chaîne de versions. Les anciens ont peut-être été supprimés à cause de la limite du nombre d’enregistrements.</string>
+</resources>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_update_history_title">畫廊更新歷史</string>
+    <string name="gallery_update_history_all_empty">暫無保存的畫廊更新記錄</string>
+    <string name="gallery_update_history_load_failed">無法加載畫廊更新歷史</string>
+    <string name="gallery_update_history_updated">已完成</string>
+    <string name="gallery_update_history_failed">失敗</string>
+    <string name="gallery_update_history_updated_incomplete">已完成 · 頁面信息不完整</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">畫廊 GID %1$d 未保存畫廊 token，無法加載詳情。</string>
+    <string name="settings_gallery_update_record_limit">更新記錄數量</string>
+    <string name="gallery_read_updates">僅閱讀更新</string>
+    <string name="gallery_update_log">更新日誌</string>
+    <string name="gallery_update_log_time">更新時間</string>
+    <string name="gallery_update_log_target">目標畫廊：%1$d</string>
+    <string name="gallery_update_log_legacy_notice">該舊記錄未保存頁面標識，無法閱讀當次新增頁。</string>
+    <string name="gallery_update_log_no_added">當次更新沒有新增頁可供閱讀。</string>
+    <string name="gallery_update_log_added">新增:</string>
+    <string name="gallery_update_log_deleted">刪除:</string>
+    <string name="gallery_update_log_none">無</string>
+    <string name="gallery_update_log_incomplete">頁面信息不完整，無法準確判斷新增和刪除頁。</string>
+    <string name="gallery_update_log_versions">查看版本鏈歷史</string>
+    <string name="gallery_update_log_loading">正在加載更新記錄…</string>
+    <string name="gallery_update_log_unavailable">更新記錄已不可用</string>
+    <string name="gallery_update_reader_progress">更新 %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_finalizing">正在完成畫廊更新</string>
+    <string name="gallery_update_finalization_failed">下載已完成，但更新收尾失敗。請在畫廊詳情頁重試。</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string name="gallery_update_error_log">錯誤日誌</string>
+    <string name="gallery_update_error_source">嘗試更新的舊畫廊</string>
+    <string name="gallery_update_error_source_info">GID: %1$d\n標題: %2$s</string>
+    <string name="gallery_update_error_source_unknown">未能確定可供更新的已下載舊畫廊。</string>
+    <string name="gallery_update_error_title_unknown">標題不可用</string>
+    <string name="gallery_update_error_reason">錯誤原因</string>
+    <string name="gallery_update_error_parents_retained">以下舊畫廊未被刪除，或尚無法確認刪除（GID）：%1$s。可在畫廊詳情頁重試。</string>
+    <string name="gallery_update_error_directory">下載目錄不存在或無法訪問。</string>
+    <string name="gallery_update_error_metadata_missing">缺少 .ehviewer 文件。</string>
+    <string name="gallery_update_error_metadata_invalid">.ehviewer 文件無法讀取、已損壞或畫廊信息不匹配。</string>
+    <string name="gallery_update_error_source_metadata">舊畫廊（GID: %1$d）：%2$s 無法遷移閱讀進度。</string>
+    <string name="gallery_update_error_target_metadata">新畫廊（GID: %1$d）：%2$s 無法驗證下載完整性。</string>
+    <string name="gallery_update_error_target_incomplete">新畫廊下載尚未完成，或在更新收尾前狀態發生變化。</string>
+    <string name="gallery_update_error_target_removed">新畫廊下載已被移除或不可用，更新已取消。</string>
+    <string name="gallery_update_error_image">新畫廊的 p%1$d 圖片缺失、爲空或無法解碼。</string>
+    <string name="gallery_update_error_record_stage">刪除舊畫廊前無法保存更新內容記錄。</string>
+    <string name="gallery_update_error_record_publish">舊畫廊清理已完成，但無法保存更新日誌。</string>
+    <string name="gallery_update_error_progress_checkpoint">閱讀進度已處理，但無法保存遷移完成狀態。</string>
+    <string name="gallery_update_error_validation">更新驗證或準備失敗：%1$s</string>
+    <string name="gallery_update_error_delete_parent">無法刪除舊畫廊目錄（GID: %1$d）。</string>
+    <string name="gallery_update_error_cleanup">舊畫廊清理失敗：%1$s</string>
+    <string name="gallery_update_error_509">圖片配額已用盡（509）。</string>
+    <string name="gallery_update_error_unknown">未返回具體錯誤信息。</string>
+    <string name="gallery_update_error_download_metadata">無法獲取新畫廊頁面信息，下載未能開始。</string>
+    <string name="gallery_update_error_download">新畫廊下載失敗，仍有 %1$d 頁未完成。</string>
+    <string name="gallery_update_error_page">p%1$d：%2$s</string>
+    <string name="gallery_update_error_more_pages">另有 %1$d 頁發生錯誤。</string>
+    <string name="gallery_update_error_version_lookup">無法查詢畫廊版本信息：%1$s</string>
+    <string name="gallery_update_error_cancelled">更新已被停止或取消。</string>
+    <string name="gallery_update_error_interrupted">上次更新在下載完成前中斷，請重試以繼續更新。</string>
+    <string name="gallery_update_error_tokens">畫廊 GID %1$d 的頁面 ptoken 信息不完整，無法找到可靠的閱讀進度對應頁面。</string>
+    <string name="gallery_update_error_progress_save">遷移後的閱讀進度無法保存，或磁盤與本地緩存中的進度校驗失敗。</string>
+    <string name="gallery_update_log_read">閱讀當次更新</string>
+    <string name="gallery_update_log_history">查看更新記錄歷史</string>
+    <string name="gallery_update_history_local_notice">僅閱讀當次新增頁中仍存在於當前本地版本且可讀取的圖片，按當前頁碼排序。後續更新已刪除或本地缺失的頁會跳過；上方增減數量和頁碼仍表示當次原始更新。每條記錄的閱讀進度單獨保存。</string>
+    <string name="gallery_update_history_no_local">當前本地圖集不可用或仍在更新中。</string>
+    <string name="gallery_update_history_no_pages">當次新增頁已無可閱讀的本地圖片，可能已被後續版本刪除或本地文件缺失。未保存頁面 ptoken 快照的舊記錄僅能在原本地版本中閱讀。</string>
+    <string name="gallery_update_history_incomplete">頁面信息不完整</string>
+    <string name="gallery_update_history_empty">該版本鏈暫無保存的更新記錄。較早記錄可能已被保存數量上限清除。</string>
+</resources>

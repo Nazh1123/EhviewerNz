@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_reader_page_preview">페이지 슬라이더 미리보기</string>
+    <string name="settings_reader_page_preview_summary">페이지 슬라이더를 탭하거나 드래그하여 썸네일을 살펴본 뒤 이미지를 탭하여 이동하세요. 끄면 미리보기 없이 페이지 슬라이더를 사용합니다.</string>
+    <string name="reader_page_preview_page">%1$d 페이지</string>
+</resources>

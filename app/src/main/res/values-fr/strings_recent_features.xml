@@ -23,6 +23,6 @@
     <string name="reading_history_clear_all">Effacer tout l’historique de lecture ?</string>
     <string name="reading_history_remove">Supprimer l’entrée</string>
     <string name="reading_history_unavailable">La source de lecture est indisponible. Rétablissez l’accès au fichier ou au dossier, puis réessayez.</string>
-    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="reading_history_metadata">%1$s - %2$s / %3$s</string>
     <string name="settings_fork_category_saving">Enregistrement et historique</string>
 </resources>

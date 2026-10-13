@@ -65,4 +65,18 @@
     <string name="gallery_update_history_no_pages">当次新增页已无可阅读的本地图片，可能已被后续版本删除或本地文件缺失。未保存页面 ptoken 快照的旧记录仅能在原本地版本中阅读。</string>
     <string name="gallery_update_history_incomplete">页面信息不完整</string>
     <string name="gallery_update_history_empty">该版本链暂无保存的更新记录。较早记录可能已被保存数量上限清除。</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
 </resources>

@@ -27,6 +27,70 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 28, application = Application.class)
 public class ReaderPreviewLoaderTest {
+    @Test public void idlePreparationCoversDistantPagesAndOverviewSurvivesDetailEviction() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        byte[] png = poster(256, 128);
+        String identity = UUID.randomUUID().toString();
+        AtomicInteger reads = new AtomicInteger();
+        DirGalleryProvider provider = new DirGalleryProvider(UniFile.fromFile(context.getCacheDir())) {
+            @Override public ReaderPreviewSource createPreviewSource(Context app) {
+                return (page, edge) -> {
+                    reads.incrementAndGet();
+                    return ReaderPreviewBitmapCache.load(app, identity + page, edge,
+                            () -> new ByteArrayInputStream(png));
+                };
+            }
+        };
+        try (ReaderPreviewLoader loader = new ReaderPreviewLoader(context, provider, (page, bitmap) -> { })) {
+            loader.prepare(new int[] {30, 29, 31, 28, 32}, 128, 64);
+            waitFor(() -> loader.get(0) != null && loader.get(63) != null && !loader.isLoading());
+            assertEquals(64, reads.get());
+            android.util.LruCache<Integer, Bitmap> detailed = org.robolectric.util.ReflectionHelpers.getField(loader, "posters");
+            detailed.evictAll();
+            for (int page = 0; page < 64; page++) {
+                assertNotNull("Distant page " + page, loader.get(page));
+                assertTrue(Math.max(loader.get(page).getWidth(), loader.get(page).getHeight()) <= 96);
+            }
+            loader.prepare(new int[] {30, 29, 31, 28, 32}, 128, 64);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertFalse("Completed preparation restarted after LRU eviction", loader.isLoading());
+            assertEquals(64, reads.get());
+        }
+    }
+
+    @Test public void draggingSuspendsGalleryPreparationAndPrioritizesTheNewTarget() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        byte[] png = poster();
+        String identity = UUID.randomUUID().toString();
+        CountDownLatch backgroundStarted = new CountDownLatch(2), resumeBackground = new CountDownLatch(1);
+        Map<Integer, AtomicInteger> calls = new ConcurrentHashMap<>();
+        DirGalleryProvider provider = new DirGalleryProvider(UniFile.fromFile(context.getCacheDir())) {
+            @Override public ReaderPreviewSource createPreviewSource(Context app) {
+                return (page, edge) -> {
+                    calls.computeIfAbsent(page, key -> new AtomicInteger()).incrementAndGet();
+                    if (page == 1 || page == 2) {
+                        backgroundStarted.countDown();
+                        try { assertTrue(resumeBackground.await(10, TimeUnit.SECONDS)); }
+                        catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new InterruptedIOException(); }
+                    }
+                    return ReaderPreviewBitmapCache.load(app, identity + page, edge,
+                            () -> new ByteArrayInputStream(png));
+                };
+            }
+        };
+        try (ReaderPreviewLoader loader = new ReaderPreviewLoader(context, provider, (page, bitmap) -> { })) {
+            loader.prepare(new int[] {0}, 128, 64);
+            assertTrue(backgroundStarted.await(3, TimeUnit.SECONDS));
+            loader.request(new int[] {60}, 128, true);
+            waitFor(() -> loader.get(60) != null);
+            assertEquals(1, resumeBackground.getCount());
+            resumeBackground.countDown();
+            waitFor(() -> !loader.isLoading());
+            assertEquals("Drag kept scanning obsolete pages", 4, calls.size());
+            assertFalse(calls.containsKey(3));
+        } finally { resumeBackground.countDown(); }
+    }
+
     @Test public void slowNeighborDoesNotBlockANewCenterAndSourcesRemainIndependent() throws Exception {
         Context context = RuntimeEnvironment.getApplication();
         byte[] png = poster();
@@ -128,7 +192,11 @@ public class ReaderPreviewLoaderTest {
     }
 
     private static byte[] poster() {
-        Bitmap bitmap = Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888);
+        return poster(64, 48);
+    }
+
+    private static byte[] poster(int width, int height) {
+        Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         ByteArrayOutputStream png = new ByteArrayOutputStream();
         assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, png));
         return png.toByteArray();

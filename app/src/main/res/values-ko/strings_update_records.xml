@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_update_history_title">갤러리 업데이트 기록</string>
+    <string name="gallery_update_history_all_empty">저장된 갤러리 업데이트 기록 없음</string>
+    <string name="gallery_update_history_load_failed">갤러리 업데이트 기록을 불러올 수 없음</string>
+    <string name="gallery_update_history_updated">완료</string>
+    <string name="gallery_update_history_failed">실패</string>
+    <string name="gallery_update_history_updated_incomplete">완료 · 페이지 정보 불완전</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">갤러리 GID %1$d의 토큰이 저장되어 있지 않아 상세 정보를 불러올 수 없습니다.</string>
+    <string name="settings_gallery_update_record_limit">업데이트 기록 수</string>
+    <string name="gallery_read_updates">추가된 페이지만 읽기</string>
+    <string name="gallery_update_log">업데이트 로그</string>
+    <string name="gallery_update_log_time">업데이트 시각</string>
+    <string name="gallery_update_log_target">대상 갤러리: %1$d</string>
+    <string name="gallery_update_log_legacy_notice">이전 기록에 페이지 식별 정보가 저장되어 있지 않아 추가된 페이지를 열 수 없습니다.</string>
+    <string name="gallery_update_log_no_added">이 업데이트에 읽을 수 있는 추가 페이지가 없습니다.</string>
+    <string name="gallery_update_log_added">추가:</string>
+    <string name="gallery_update_log_deleted">삭제:</string>
+    <string name="gallery_update_log_none">없음</string>
+    <string name="gallery_update_log_incomplete">페이지 정보가 불완전하여 추가 및 삭제된 페이지를 정확히 확인할 수 없습니다.</string>
+    <string name="gallery_update_log_versions">버전 계보 기록 보기</string>
+    <string name="gallery_update_log_loading">업데이트 기록 불러오는 중…</string>
+    <string name="gallery_update_log_unavailable">업데이트 기록을 더 이상 사용할 수 없음</string>
+    <string name="gallery_update_reader_progress">추가 %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_finalizing">갤러리 업데이트 마무리 중</string>
+    <string name="gallery_update_finalization_failed">다운로드는 완료되었지만 업데이트 마무리에 실패했습니다. 갤러리 상세 화면에서 다시 시도하세요.</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string name="gallery_update_error_log">오류 로그</string>
+    <string name="gallery_update_error_source">업데이트할 이전 갤러리</string>
+    <string name="gallery_update_error_source_info">GID: %1$d\n제목: %2$s</string>
+    <string name="gallery_update_error_source_unknown">다운로드된 이전 갤러리를 확인할 수 없습니다.</string>
+    <string name="gallery_update_error_title_unknown">제목을 알 수 없음</string>
+    <string name="gallery_update_error_reason">실패 원인</string>
+    <string name="gallery_update_error_parents_retained">다음 이전 갤러리가 유지되었거나 삭제 여부를 확인할 수 없습니다(GID): %1$s. 갤러리 상세 화면에서 다시 시도할 수 있습니다.</string>
+    <string name="gallery_update_error_directory">다운로드 폴더가 없거나 접근할 수 없습니다.</string>
+    <string name="gallery_update_error_metadata_missing">.ehviewer 파일이 없습니다.</string>
+    <string name="gallery_update_error_metadata_invalid">.ehviewer 파일을 읽을 수 없거나 파일이 손상되었거나 다른 갤러리의 파일입니다.</string>
+    <string name="gallery_update_error_source_metadata">이전 갤러리(GID: %1$d): %2$s 읽기 진행 상황을 이전할 수 없습니다.</string>
+    <string name="gallery_update_error_target_metadata">새 갤러리(GID: %1$d): %2$s 다운로드의 무결성을 확인할 수 없습니다.</string>
+    <string name="gallery_update_error_target_incomplete">새 갤러리 다운로드가 불완전하거나 마무리 전에 상태가 변경되었습니다.</string>
+    <string name="gallery_update_error_target_removed">새 갤러리 다운로드가 삭제되었거나 사용할 수 없어 업데이트가 취소되었습니다.</string>
+    <string name="gallery_update_error_image">새 갤러리의 p%1$d 페이지가 없거나 비어 있거나 읽을 수 없습니다.</string>
+    <string name="gallery_update_error_record_stage">이전 갤러리를 삭제하기 전에 업데이트 비교 결과를 저장할 수 없습니다.</string>
+    <string name="gallery_update_error_record_publish">이전 갤러리 정리는 완료되었지만 업데이트 로그를 저장할 수 없습니다.</string>
+    <string name="gallery_update_error_progress_checkpoint">읽기 진행 상황은 처리되었지만 완료 체크포인트를 저장할 수 없습니다.</string>
+    <string name="gallery_update_error_validation">업데이트를 검증하거나 준비할 수 없음: %1$s</string>
+    <string name="gallery_update_error_delete_parent">이전 갤러리 폴더를 삭제할 수 없습니다(GID: %1$d).</string>
+    <string name="gallery_update_error_cleanup">이전 갤러리 정리 실패: %1$s</string>
+    <string name="gallery_update_error_509">이미지 할당량을 초과했습니다(509).</string>
+    <string name="gallery_update_error_unknown">자세한 오류 정보가 반환되지 않았습니다.</string>
+    <string name="gallery_update_error_download_metadata">새 갤러리의 페이지 정보를 불러올 수 없어 다운로드를 시작할 수 없습니다.</string>
+    <string name="gallery_update_error_download">새 갤러리 다운로드 실패. %1$d개 페이지가 불완전합니다.</string>
+    <string name="gallery_update_error_page">p%1$d: %2$s</string>
+    <string name="gallery_update_error_more_pages">추가로 %1$d개 페이지에서 오류가 발생했습니다.</string>
+    <string name="gallery_update_error_version_lookup">갤러리 버전 정보를 확인할 수 없음: %1$s</string>
+    <string name="gallery_update_error_cancelled">업데이트가 중지되거나 취소되었습니다.</string>
+    <string name="gallery_update_error_interrupted">이전 업데이트가 다운로드 완료 전에 중단되었습니다. 다시 시도하여 계속하세요.</string>
+    <string name="gallery_update_error_tokens">갤러리 GID %1$d의 페이지 토큰이 불완전하여 읽기 진행 상황의 기준점을 정확히 찾을 수 없습니다.</string>
+    <string name="gallery_update_error_progress_save">이전된 읽기 위치를 디스크와 로컬 캐시에 저장하고 검증할 수 없습니다.</string>
+    <string name="gallery_update_log_read">이 업데이트 읽기</string>
+    <string name="gallery_update_log_history">업데이트 기록 보기</string>
+    <string name="gallery_update_history_local_notice">현재 로컬 버전에 남아 있고 읽을 수 있는 추가 페이지만 현재 페이지 순서로 엽니다. 이후 업데이트에서 삭제되었거나 로컬에 없는 페이지는 건너뜁니다. 위의 개수와 페이지 번호는 원래 업데이트 내용입니다. 업데이트마다 읽기 진행 상황을 따로 저장합니다.</string>
+    <string name="gallery_update_history_no_local">현재 로컬 갤러리를 사용할 수 없거나 아직 업데이트 중입니다.</string>
+    <string name="gallery_update_history_no_pages">이 업데이트의 추가 페이지 중 로컬에서 읽을 수 있는 페이지가 없습니다. 이후 버전에서 삭제되었거나 로컬에 없을 수 있습니다. 페이지 토큰 스냅샷이 없는 이전 기록은 원래 로컬 버전에서만 읽을 수 있습니다.</string>
+    <string name="gallery_update_history_incomplete">페이지 정보 불완전</string>
+    <string name="gallery_update_history_empty">이 버전 계보에 저장된 업데이트 기록이 없습니다. 기록 수 제한으로 이전 기록이 삭제되었을 수 있습니다.</string>
+</resources>

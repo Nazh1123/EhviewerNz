@@ -7,6 +7,7 @@ import android.graphics.ImageDecoder;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Trace;
+import android.util.Size;
 import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.streampipe.InputStreamPipe;
 import com.hippo.streampipe.OutputStreamPipe;
@@ -86,6 +87,19 @@ public final class ReaderPreviewBitmapCache {
         Bitmap poster;
         try { poster = existingPoster.get(); } finally { Trace.endSection(); }
         if (poster != null) return decoded(identity, edge, poster);
+        // Documents/MediaStore can return a precomputed or embedded thumbnail. Asking the
+        // provider avoids reading a large original over SAF merely to show a tiny preview.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && "content".equals(uri.getScheme())) {
+            Trace.beginSection("ReaderPreview.providerThumbnail");
+            try {
+                Bitmap bitmap = context.getContentResolver().loadThumbnail(uri,
+                        new Size(Math.max(1, edge), Math.max(1, edge)), null);
+                if (bitmap != null) return decoded(identity, edge, bitmap);
+            } catch (IOException | RuntimeException ignored) {
+                if (Thread.currentThread().isInterrupted()) throw new java.io.InterruptedIOException();
+                // Providers without thumbnail support retain the regular static decoder path.
+            } finally { Trace.endSection(); }
+        }
         Exception primaryFailure = null;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             Trace.beginSection("ReaderPreview.decodeBitmap");
@@ -128,6 +142,11 @@ public final class ReaderPreviewBitmapCache {
     }
 
     private static Result decoded(String identity, int edge, Bitmap bitmap) {
+        int longest = Math.max(bitmap.getWidth(), bitmap.getHeight());
+        int limit = Math.max(1, edge);
+        if (longest > limit) bitmap = Bitmap.createScaledBitmap(bitmap,
+                Math.max(1, (int) ((long) bitmap.getWidth() * limit / longest)),
+                Math.max(1, (int) ((long) bitmap.getHeight() * limit / longest)), true);
         return new Result(bitmap, key(identity, edge), true);
     }
 

@@ -23,6 +23,6 @@
     <string name="reading_history_clear_all">¿Borrar todo el historial de lectura?</string>
     <string name="reading_history_remove">Eliminar registro</string>
     <string name="reading_history_unavailable">El origen de lectura no está disponible. Restablece el acceso al archivo o a la carpeta e inténtalo de nuevo.</string>
-    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="reading_history_metadata">%1$s - %2$s / %3$s</string>
     <string name="settings_fork_category_saving">Guardado e historial</string>
 </resources>

@@ -197,4 +197,17 @@
     <string name="translation_source_detected">翻訳中: %1$s → %2$s</string>
     <string name="translation_source_unknown">元の言語を確実に判定できません。ML Kit を使用する前に手動で選択してください。</string>
     <string name="translation_source_auto_mlkit_help">自動モードでは日本語、韓国語、中国語と翻訳先の言語パックを準備します。英語の個別パックは不要です。</string>
+    <string name="translation_ppocr_help">日本語以外の認識には PP-OCRv5 の OCR コンポーネントと対応する言語モデルが必要です。モデルのダウンロード時に必要なコンポーネントもインストールします。コンポーネント ZIP と公式 inference.onnx を個別にインポートすることもできます。中国語モデルは簡体字と繁体字の両方に対応し、検証後に使用します。</string>
+    <string name="translation_ppocr_required">翻訳設定 → モデル管理 → 漫画モデルで PP-OCRv5 コンポーネントと対応する言語モデルをダウンロードまたはインポートしてください。</string>
+    <string name="translation_ppocr_runtime_title">PP-OCRv5 コンポーネント</string>
+    <string name="translation_ppocr_runtime_help">中国語、英語、韓国語の OCR 用の追加コンポーネントです。日本語の認識には不要です。公式 ONNX Runtime 1.24.3（約41 MB）をダウンロードし、arm64 ライブラリ（約26 MB）のみインストールします。対応する ZIP のインポートも可能です。インストール前に検証します。削除しても言語モデルは残り、再ダウンロードすると認識を有効にできます。</string>
+    <string name="translation_model_import_mode">GGUF のインポート方法を選択</string>
+    <string name="translation_model_import_copy">アプリ専用フォルダーにコピー</string>
+    <string name="translation_model_import_reference">外部ファイルを直接使用</string>
+    <string name="translation_model_external_badge">外部ファイル</string>
+    <string name="translation_model_remove_reference">参照を削除</string>
+    <string name="translation_model_remove_reference_confirm">「%1$s」の参照を削除しますか？元の GGUF ファイルは残ります。</string>
+    <string name="translation_model_external_help">元の GGUF を直接読み取り、アプリ内にコピーを保存しません。元のファイルを移動、削除、変更しないでください。コピーで再インポートするとアプリ内のコピーを使用します。同じモデルを参照すると既存のコピーを削除します。参照を削除しても元のファイルは残ります。</string>
+    <string name="translation_model_external_unsupported">この外部ファイルは直接読み込めません。「アプリ専用フォルダーにコピー」を選択してください。</string>
+    <string name="translation_model_external_changed">外部モデルが変更されたか利用できません。GGUF ファイルを選び直してください。</string>
 </resources>

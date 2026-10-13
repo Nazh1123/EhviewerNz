@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_reader_page_preview">閱讀器捲動預覽</string>
+    <string name="settings_reader_page_preview_summary">點選或拖動進度條瀏覽縮圖，點選圖片後跳轉。關閉後恢復不顯示預覽的翻頁方式。</string>
+    <string name="reader_page_preview_page">第 %1$d 頁</string>
+</resources>

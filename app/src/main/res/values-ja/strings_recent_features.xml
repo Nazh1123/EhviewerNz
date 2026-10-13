@@ -23,6 +23,6 @@
     <string name="reading_history_clear_all">閲覧履歴をすべて削除しますか？</string>
     <string name="reading_history_remove">履歴を削除</string>
     <string name="reading_history_unavailable">閲覧元にアクセスできません。ファイルまたはフォルダーへのアクセスを復元してから、もう一度お試しください。</string>
-    <string name="reading_history_metadata">%1$s · %2$s</string>
+    <string name="reading_history_metadata">%1$s - %2$s / %3$s</string>
     <string name="settings_fork_category_saving">保存と履歴</string>
 </resources>

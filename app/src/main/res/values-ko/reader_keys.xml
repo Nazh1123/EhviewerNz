@@ -34,4 +34,71 @@
         <item>번역 켜기 / 끄기</item>
         <item>프로필 전환</item>
     </string-array>
+    <string name="reader_keys_title">키 설정</string>
+    <string name="reader_keys_default_profile">기본</string>
+    <string name="reader_keys_recommended_profile">권장</string>
+    <string name="reader_keys_unified_areas_hint">읽기 방향 간 영역 크기를 동기화합니다. 활성화하면 현재 방향의 크기가 적용됩니다.</string>
+    <string name="reader_keys_boundary_horizontal_percent">왼쪽 가장자리로부터의 위치(%). 선을 드래그하여 조정하거나 탭하여 값을 입력하세요.</string>
+    <string name="reader_keys_boundary_vertical_percent">위쪽 가장자리로부터의 위치(%). 선을 드래그하여 조정하거나 탭하여 값을 입력하세요.</string>
+    <string name="reader_keys_boundary_error">%1$s~%2$s 사이의 백분율을 입력하세요</string>
+    <string name="reader_keys_reset_sizes">기본 영역 크기 복원</string>
+    <string-array name="reader_keys_lines">
+        <item>왼쪽 / 중앙 경계</item>
+        <item>중앙 / 오른쪽 경계</item>
+        <item>왼쪽 위 / 아래 경계</item>
+        <item>오른쪽 위 / 아래 경계</item>
+        <item>상단 중앙 / 메뉴 경계</item>
+        <item>메뉴 / 하단 중앙 경계</item>
+    </string-array>
+    <string name="reader_keys_double_tap_none">동작 없음(빠른 단일 탭 허용)</string>
+    <string name="reader_keys_profile_number">프로필 %1$d</string>
+    <string name="reader_keys_profile_label">%1$d. %2$s</string>
+    <string name="reader_keys_quick_profile">프로필 전환: %1$s</string>
+    <string name="reader_keys_profile_keyword">프로필</string>
+    <string name="reader_keys_switched_named">%1$s(으)로 전환됨</string>
+    <string name="reader_keys_switched_custom">프로필 %1$s(으)로 전환됨</string>
+    <string name="reader_keys_current_profile">사용 중: %1$s</string>
+    <string name="reader_keys_select_profile">프로필 선택</string>
+    <string name="reader_keys_new">새 프로필</string>
+    <string name="reader_keys_manage">프로필 관리</string>
+    <string name="reader_keys_save">저장 후 사용</string>
+    <string name="reader_keys_rename">이름 변경</string>
+    <string name="reader_keys_copy">복제</string>
+    <string name="reader_keys_delete">삭제</string>
+    <string name="reader_keys_recommended">권장 프로필 사용</string>
+    <string name="reader_keys_reset">기본값 복원</string>
+    <string name="reader_keys_keep_one">프로필을 하나 이상 유지하세요</string>
+    <string name="reader_keys_delete_question">이 프로필과 저장하지 않은 변경 사항을 삭제할까요?</string>
+    <string name="reader_keys_reset_question">동작, 영역 크기, 제스처 옵션을 기본값으로 복원할까요? 저장하면 적용됩니다.</string>
+    <string name="reader_keys_saved">프로필이 저장되고 적용됨</string>
+    <string name="reader_keys_unsaved">계속하기 전에 변경 사항을 저장할까요?</string>
+    <string name="reader_keys_discard">변경 사항 취소</string>
+    <string name="reader_keys_back">뒤로</string>
+    <string name="reader_keys_more">더 보기</string>
+    <string name="reader_keys_default_action">%1$s(기본값)</string>
+    <string name="reader_keys_scroll_up">위로 스크롤</string>
+    <string name="reader_keys_scroll_down">아래로 스크롤</string>
+    <string name="reader_keys_edit_actions">동작 설정</string>
+    <string name="reader_keys_animated_area_title">애니메이션 제어 영역</string>
+    <string name="reader_keys_orientation_swipe">화면 방향 제스처 · %1$s</string>
+    <string name="reader_keys_orientation_title">화면 방향 제스처</string>
+    <string-array name="reader_keys_regions">
+        <item>왼쪽 위</item>
+        <item>왼쪽 아래</item>
+        <item>오른쪽 위</item>
+        <item>오른쪽 아래</item>
+        <item>상단 중앙</item>
+        <item>중앙</item>
+        <item>하단 중앙</item>
+    </string-array>
+    <string-array name="reader_keys_gestures">
+        <item>탭</item>
+        <item>두 번 탭</item>
+        <item>길게 누르기</item>
+    </string-array>
+    <string-array name="reader_keys_swipe_choices">
+        <item>끄기</item>
+        <item>위로 스와이프</item>
+        <item>아래로 스와이프</item>
+    </string-array>
 </resources>

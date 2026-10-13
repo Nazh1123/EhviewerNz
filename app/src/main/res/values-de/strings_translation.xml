@@ -197,4 +197,17 @@
     <string name="translation_source_detected">Übersetzung: %1$s → %2$s</string>
     <string name="translation_source_unknown">Sprache nicht sicher erkannt. Vor ML Kit bitte manuell auswählen.</string>
     <string name="translation_source_auto_mlkit_help">Automatisch bereitet Japanisch, Koreanisch, Chinesisch und die Zielsprache vor. Englisch benötigt kein eigenes Paket.</string>
+    <string name="translation_ppocr_help">Für nichtjapanische Texterkennung benötigt PP-OCRv5 die OCR-Komponente und das passende Sprachmodell. Beim Modelldownload wird die Komponente bei Bedarf mitinstalliert. Alternativ die Komponenten-ZIP und die offizielle inference.onnx separat importieren. Das chinesische Modell unterstützt vereinfachte und traditionelle Schrift. Dateien werden vor der Verwendung geprüft.</string>
+    <string name="translation_ppocr_required">PP-OCRv5-Komponente und passendes Sprachmodell unter Übersetzungseinstellungen → Modellverwaltung → Manga-Modelle herunterladen oder importieren.</string>
+    <string name="translation_ppocr_runtime_title">PP-OCRv5-Komponente</string>
+    <string name="translation_ppocr_runtime_help">Optionale OCR-Komponente für Chinesisch, Englisch und Koreanisch. Japanisch benötigt sie nicht. Lädt die offizielle ONNX Runtime 1.24.3 (ca. 41 MB) herunter und installiert nur die arm64-Bibliotheken (ca. 26 MB). Die passende Komponenten-ZIP kann auch importiert werden. Dateien werden vor der Installation geprüft. Beim Löschen bleiben Sprachmodelle erhalten; die Komponente kann erneut heruntergeladen werden.</string>
+    <string name="translation_model_import_mode">GGUF-Importmethode auswählen</string>
+    <string name="translation_model_import_copy">In privaten App-Speicher kopieren</string>
+    <string name="translation_model_import_reference">Externe Datei direkt verwenden</string>
+    <string name="translation_model_external_badge">Externe Datei</string>
+    <string name="translation_model_remove_reference">Verknüpfung entfernen</string>
+    <string name="translation_model_remove_reference_confirm">Verknüpfung zu „%1$s“ entfernen? Die ursprüngliche GGUF-Datei bleibt erhalten.</string>
+    <string name="translation_model_external_help">Liest die ursprüngliche GGUF-Datei ohne private Kopie. Datei nicht verschieben, löschen oder ändern. Durch erneuten Import mit Kopieren wird eine private Kopie verwendet. Eine Verknüpfung zum selben Modell entfernt die vorhandene private Kopie. Beim Entfernen der Verknüpfung bleibt die Originaldatei erhalten.</string>
+    <string name="translation_model_external_unsupported">Diese externe Datei kann nicht direkt geladen werden. „In privaten App-Speicher kopieren“ auswählen.</string>
+    <string name="translation_model_external_changed">Das externe Modell wurde geändert oder ist nicht verfügbar. GGUF-Datei erneut auswählen.</string>
 </resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_reader_page_preview">Reader scroll preview</string>
+    <string name="settings_reader_page_preview_summary">Tap or drag the page slider to browse thumbnails, then tap an image to jump. Turn off to use the page slider without previews.</string>
+    <string name="reader_page_preview_page">Page %1$d</string>
+</resources>

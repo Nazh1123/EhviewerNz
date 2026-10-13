@@ -390,7 +390,7 @@
     <string name="download_remove_dialog_message_2">Retirer %d articles de la liste de téléchargement ?</string>
     <string name="download_remove_dialog_check_text">Supprimer fichiers d\'image</string>
     <string name="stat_download_action_stop_all">Arrêter tout</string>
-    <string name="drawer_download_label_title">Label</string>
+    <string name="drawer_download_label_title">Étiquette</string>
     <string name="default_download_label_name">Défaut</string>
     <string name="download_move_dialog_title">Déplacer</string>
     <string name="download_labels">Labels de téléchargement</string>
@@ -530,7 +530,7 @@
     <string name="settings_read_screen_rotation">Rotation d\'écran</string>
     <string name="settings_read_screen_rotation_default">Par défaut</string>
     <string name="settings_read_screen_rotation_portrait">Portrait</string>
-    <string name="settings_read_screen_rotation_landscape">Landscape</string>
+    <string name="settings_read_screen_rotation_landscape">Paysage</string>
     <string name="settings_read_refresh_rate">Taux de rafraîchissement</string>
     <string name="settings_read_refresh_rate_default">Par défaut</string>
     <string name="settings_read_refresh_rate_60">60 Hz</string>
@@ -693,7 +693,7 @@
     <string name="language">Langue</string>
     <string name="original">Originale</string>
     <string name="translated">Traduction</string>
-    <string name="rewrite">Rewrite</string>
+    <string name="rewrite">Réécrire</string>
     <string name="language_japanese">Japonais</string>
     <string name="language_english">Anglais</string>
     <string name="language_chinese">Chinois</string>
@@ -774,23 +774,23 @@
     <string name="yesterday">Hier</string>
     <string name="some_days_ago">Il y a %d jours</string>
     <plurals name="second">
-        <item quantity="one">%d sec</item>
+        <item quantity="one">sec</item>
         <item quantity="other">secs</item>
     </plurals>
     <plurals name="minute">
-        <item quantity="one">%d min</item>
+        <item quantity="one">min</item>
         <item quantity="other">mins</item>
     </plurals>
     <plurals name="hour">
-        <item quantity="one">%d heure</item>
+        <item quantity="one">heure</item>
         <item quantity="other">heures</item>
     </plurals>
     <plurals name="day">
-        <item quantity="one">%d jour</item>
+        <item quantity="one">jour</item>
         <item quantity="other">jours</item>
     </plurals>
     <plurals name="year">
-        <item quantity="one">%d an</item>
+        <item quantity="one">an</item>
         <item quantity="other">ans</item>
     </plurals>
     <string name="dialog_archive_title">H@H Downloader</string>
@@ -922,7 +922,7 @@
 
     <string name="settings_animated_webp_controls_summary">Active les commandes pour les WebP et GIF animés : pause, barre de progression, vitesse de lecture, etc. Si les images animées sont saccadées pendant la lecture, appuyez sur l’icône d’avertissement jaune ou désactivez cette option.</string>
     <string name="settings_animated_webp_playback_time_summary">Affiche le temps de lecture actuel et la durée totale au-dessus de la barre de progression inférieure</string>
-    <string name="settings_animated_webp_progress_control_summary">Faites glisser dans le quart inférieur de l’écran pour changer la position de lecture</string>
+    <string name="settings_animated_webp_progress_control_summary" formatted="false">Faites glisser dans le quart inférieur de l’écran pour changer la position de lecture</string>
     <string name="settings_animated_webp_sequential_playback_summary">Ouvre automatiquement l’image suivante à la fin de la lecture</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">Affiche le bouton lecture/pause du changement automatique lorsque le curseur de pages est visible</string>
     <string name="settings_animated_webp_long_press_speed_summary">%1$sx – Un appui long dans la zone centrale inférieure de l’écran lance la lecture à %1$sx ; avec 1.0, l’appui long ouvre le menu ; après un appui long, faites glisser horizontalement pour modifier la vitesse</string>
@@ -1165,4 +1165,80 @@
     <string name="settings_test_bookmark_subscription_running">Test des abonnements aux favoris…</string>
     <string name="settings_test_bookmark_subscription_finished">Test des abonnements aux favoris terminé</string>
     <string name="settings_test_bookmark_subscription_failed">Certaines requêtes pour les abonnements aux favoris ont échoué</string>
+    <string name="settings_download_clean_invalid_download_confirm">Supprimer les téléchargements non valides ?</string>
+    <string name="settings_download_cleaning">Nettoyage des téléchargements</string>
+    <string name="settings_download_clean_invalid_done">%d téléchargements nettoyés</string>
+    <string name="settings_download_clean_invalid_no_invalid">Aucun téléchargement à nettoyer</string>
+    <string name="settings_download_restore_download_items_get_gallery_info">Restaurer les téléchargements des galeries</string>
+    <string name="settings_download_export_no_items">Aucun élément à exporter</string>
+    <string name="settings_download_export_failed">Échec de l’exportation des téléchargements</string>
+    <string name="settings_download_export_succeed">Téléchargements exportés vers %s</string>
+    <string name="settings_download_import_items">Importer des téléchargements</string>
+    <string name="settings_download_import_no_items">Aucun élément à importer</string>
+    <string name="settings_download_import_failed">Échec de l’importation des téléchargements</string>
+    <string name="settings_download_import_succeed">%d téléchargements importés</string>
+    <string name="subscription_update_countdown_format">%1$02d:%2$02d</string>
+    <string name="local_gallery_resume_prompt">Touchez ici pour reprendre à votre dernière position de lecture</string>
+    <string name="local_gallery_resume_action">Reprendre</string>
+    <string name="update_dialog_sponsor">Offrir un cadeau à l’auteur</string>
+    <string name="view_local_gallery_size">Voir la taille du stockage local</string>
+    <string name="calculating_local_gallery_size">Calcul de la taille du dossier local…</string>
+    <string name="local_gallery_size_message">Taille du dossier des galeries locales : %1$s</string>
+    <string name="cannot_get_local_gallery_size">Impossible de calculer la taille du dossier des galeries locales</string>
+    <string name="scene_download_title_new">%1$s(%2$s)</string>
+    <string name="download_label_action_rename">Renommer</string>
+    <string name="download_label_action_enter">Ouvrir</string>
+    <string name="download_label_action_expand">Développer l’étiquette</string>
+    <string name="download_label_action_collapse">Réduire l’étiquette</string>
+    <string name="quick_download_undo_description">Téléchargement ajouté. Touchez pour l’annuler.</string>
+    <string name="quick_download_undone">Téléchargement annulé</string>
+    <string name="image_overwritten">Image existante remplacée à %s</string>
+    <string name="image_save_skipped">L’image est déjà le fichier enregistré ; opération ignorée</string>
+    <string name="settings_eh_cover_thumb_size">Taille des miniatures de couverture</string>
+    <string name="settings_eh_preview_thumb_size">Taille des miniatures des pages</string>
+    <string name="settings_eh_thumb_size_description">Ajuste le nombre de miniatures par ligne en mode portrait. Grand / Moyen / Petit conservent les réglages d’origine.</string>
+    <string name="settings_manual_save_custom">Personnalisé</string>
+    <string name="settings_manual_save_default">Par défaut</string>
+    <string name="settings_manual_save_follow_download">Utiliser le dossier de téléchargement</string>
+    <string name="gallery_version_update_background_notice">Les informations de version seront mises à jour en arrière-plan. Les requêtes sont envoyées par lots limités avec des pauses pour éviter un trafic excessif.</string>
+    <string name="gallery_version_update_running">Les informations de version sont déjà en cours de mise à jour</string>
+    <string name="gallery_version_update_done">Versions mises à jour : %1$d ; indisponibles : %2$d ; à réessayer plus tard : %3$d</string>
+    <string name="gallery_version_cleanup_scanning">Analyse des versions des galeries téléchargées…</string>
+    <string name="gallery_version_cleanup_none">Aucune ancienne version de galerie pouvant être supprimée</string>
+    <string name="gallery_version_cleanup_confirm">Supprimer %1$d anciennes galeries de %2$d familles de versions ? La galerie complète et utilisable la plus récente de chaque famille sera conservée.</string>
+    <string name="gallery_version_cleanup_done">%d anciennes versions de galeries supprimées</string>
+    <string name="gallery_version_information_unavailable">Aucune information de version utilisable. Essayez de les actualiser dans Paramètres → Téléchargement.</string>
+    <string name="gallery_update_available">Une version plus récente peut réutiliser cette galerie téléchargée</string>
+    <string name="settings_fork_category_gallery">Galeries et recherche</string>
+    <string name="settings_fork_category_reading">Lecture et enregistrement</string>
+    <string name="settings_fork_category_animated_webp">WebP animé</string>
+    <string name="settings_fork_category_downloads">Gestion des téléchargements</string>
+    <string name="settings_save_image_aliPay">Enregistrer le code QR Alipay</string>
+    <string name="settings_save_image_weChat">Enregistrer le code QR WeChat</string>
+    <string name="dummy_button">Bouton d’exemple</string>
+    <string name="dummy_content">CONTENU\nD’EXEMPLE</string>
+    <string name="appwidget_text">EXEMPLE</string>
+    <string name="add_widget">Ajouter un widget</string>
+    <string name="app_widget_description">Description du widget de l’application</string>
+    <string name="import_local_folder">Importer un dossier local</string>
+    <string name="import_folder_title">Choisir un dossier d’images</string>
+    <string name="import_folder_processing">Analyse du dossier…</string>
+    <string name="import_folder_success">%1$d galeries de dossiers locaux importées</string>
+    <string name="import_folder_already_imported">Les galeries des dossiers sélectionnés sont déjà importées</string>
+    <string name="import_folder_failed">Échec de l’importation du dossier local</string>
+    <string name="import_folder_unsafe_selection">Choisissez un dossier plus précis plutôt que la racine du stockage</string>
+    <string name="local_folder_scan_too_large">Le dossier est trop grand pour une analyse sûre. Choisissez un dossier plus précis (512 dossiers, 20 000 entrées, 10 000 images et 16 niveaux au maximum).</string>
+    <string name="local_folder_no_images">Aucune image prise en charge dans le dossier sélectionné</string>
+    <string name="local_folder_not_accessible">Le dossier local n’est plus accessible. Importez-le à nouveau.</string>
+    <string name="imported_folder_category">Dossier local</string>
+    <string name="animated_webp_progress">Progression de l’image animée</string>
+    <string name="animated_webp_play_pause">Lire ou mettre en pause l’image animée</string>
+    <string name="gallery_detail_back_to_top">Retour en haut</string>
+    <string name="sync_local_folder">Synchroniser</string>
+    <string name="sync_folder_processing">Analyse du dossier local…</string>
+    <string name="sync_folder_success">Synchronisation terminée : %1$d ajouts, %2$d mises à jour</string>
+    <string name="sync_folder_failed">Impossible de synchroniser le dossier local</string>
+    <string name="sync_folder_label_removed">Synchronisation annulée : l’étiquette de téléchargement a été supprimée</string>
+    <string name="settings_show_viewed_galleries">Afficher les galeries consultées</string>
+    <string name="settings_show_viewed_galleries_summary">Enregistre la galerie la plus récente des résultats pour marquer celles déjà consultées lors d’une nouvelle recherche avec les mêmes critères.</string>
 </resources>

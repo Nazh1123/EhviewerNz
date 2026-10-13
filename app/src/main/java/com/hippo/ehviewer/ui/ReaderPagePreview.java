@@ -2,8 +2,7 @@ package com.hippo.ehviewer.ui;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.BitmapDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -11,11 +10,15 @@ import android.util.LruCache;
 import android.util.Pair;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.EhUrl;
@@ -26,63 +29,122 @@ import com.hippo.ehviewer.client.data.PreviewSet;
 import com.hippo.ehviewer.gallery.EhGalleryProvider;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
 import com.hippo.ehviewer.gallery.ReaderPreviewLoader;
+import com.hippo.ehviewer.widget.ReaderPreviewRecyclerView;
 import com.hippo.lib.image.Image;
 import com.hippo.widget.LoadImageView;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntConsumer;
 
-/** A fixed five-card window: work stays bounded regardless of the gallery's page count. */
+/** A recycled, horizontally scrollable gallery. Browsing never commits a reader page. */
 final class ReaderPagePreview implements AutoCloseable {
     private static final ReaderPreviewRequestBudget BUDGET = new ReaderPreviewRequestBudget(8, 5000);
     private static final LruCache<String, PreviewSet> METADATA = new LruCache<>(12);
-    private static final int[] LOAD_ORDER = {2, 1, 3, 0, 4};
     private final Context context;
     private final GalleryProvider2 provider;
     private final GalleryInfo gallery;
-    private final LinearLayout row;
-    private final Card[] cards = new Card[5];
+    private final RecyclerView row;
+    private final LinearLayoutManager layout;
+    private final RecyclerView.OnScrollListener scrollListener;
+    private final View.OnLayoutChangeListener layoutListener;
+    private final PreviewAdapter adapter = new PreviewAdapter();
+    private final Set<Card> attached = ConcurrentHashMap.newKeySet();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ReaderPreviewLoader localLoader;
+    private final IntConsumer onSelected;
+    private final IntConsumer onBrowsed;
     private final LruCache<String, Long> failures = new LruCache<>(128);
     private final Set<String> downloading = new HashSet<>();
     private final int edge;
     private volatile boolean closed;
     private volatile boolean visible;
+    private boolean manualScrolling;
     private boolean dispatchPending;
     private long dispatchAt;
     private int selected;
     private int size;
     private int perPage;
+    private int itemWidth;
+    private int imageHeight;
     private boolean reverse;
     private EhRequest metadataRequest;
     private int[] preparedPages;
+    private int preparedCount;
     private final Runnable prepare = this::prepareLocal;
+    private final Runnable neighbors = this::loadLocalNeighbors;
+    private final Runnable refresh = this::refreshVisible;
     private final Runnable dispatch = () -> {
         dispatchPending = false;
         if (visible && !closed) dispatchOnline();
     };
 
-    ReaderPagePreview(Context context, LinearLayout row, GalleryProvider2 provider) {
+    ReaderPagePreview(Context context, RecyclerView row, GalleryProvider2 provider) {
+        this(context, row, provider, page -> { }, page -> { });
+    }
+
+    ReaderPagePreview(Context context, RecyclerView row, GalleryProvider2 provider,
+                      IntConsumer onSelected, IntConsumer onBrowsed) {
         this.context = context.getApplicationContext();
         this.row = row;
         this.provider = provider;
+        this.onSelected = onSelected;
+        this.onBrowsed = onBrowsed;
         gallery = provider instanceof EhGalleryProvider
                 ? ((EhGalleryProvider) provider).getPreviewGalleryInfo() : null;
-        edge = Math.min(256, Math.max(128, dp(72)));
-        localLoader = gallery == null ? new ReaderPreviewLoader(this.context, provider, (page, bitmap) -> {
-            if (!visible || closed) return;
-            for (Card card : cards) if (card.page == page)
-                card.image.load(new android.graphics.drawable.BitmapDrawable(row.getResources(), bitmap));
-        }) : null;
+        edge = Math.min(384, Math.max(192, dp(130)));
+        layout = new LinearLayoutManager(row.getContext(), RecyclerView.HORIZONTAL, false);
         row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
-        for (int i = 0; i < cards.length; i++) {
-            cards[i] = new Card(context);
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(124), 1);
-            params.setMargins(dp(3), dp(4), dp(3), dp(4));
-            row.addView(cards[i].container, params);
-            cards[i].container.setBackground(background(i == 2));
-            cards[i].container.setSelected(i == 2);
-        }
+        row.setLayoutManager(layout);
+        row.setItemAnimator(null);
+        row.setHasFixedSize(true);
+        row.setItemViewCacheSize(2);
+        adapter.setHasStableIds(true);
+        row.setAdapter(adapter);
+        row.setContentDescription(context.getString(R.string.settings_reader_page_preview));
+        updateDimensions();
+        localLoader = new ReaderPreviewLoader(this.context, provider, (page, bitmap) -> {
+            if (!visible || closed) return;
+            for (Card card : attached) if (card.page == page) bindLocal(card, bitmap);
+            if (page == selected) {
+                handler.removeCallbacks(neighbors);
+                loadLocalNeighbors();
+            }
+        });
+        scrollListener = new RecyclerView.OnScrollListener() {
+            @Override public void onScrolled(@NonNull RecyclerView view, int dx, int dy) {
+                if (!visible || closed) return;
+                if (manualScrolling) browseCenter();
+                refreshVisible();
+            }
+            @Override public void onScrollStateChanged(@NonNull RecyclerView view, int state) {
+                if (!visible || closed) return;
+                if (state == RecyclerView.SCROLL_STATE_DRAGGING) manualScrolling = true;
+                if (state == RecyclerView.SCROLL_STATE_IDLE) {
+                    if (manualScrolling) browseCenter();
+                    manualScrolling = false;
+                    loadLocalNeighbors();
+                }
+            }
+        };
+        row.addOnScrollListener(scrollListener);
+        layoutListener = (view, l, t, r, b, ol, ot, or, ob) -> {
+            if (closed) return;
+            if (updateDimensions()) {
+                for (Card card : attached) card.resize();
+                if (visible && !manualScrolling) positionSelected();
+            }
+            if (visible) scheduleRefresh();
+        };
+        row.addOnLayoutChangeListener(layoutListener);
+        if (row instanceof ReaderPreviewRecyclerView) ((ReaderPreviewRecyclerView) row).setViewportWidthListener(width -> {
+            if (closed || !updateDimensions(width)) return;
+            for (Card card : attached) card.resize();
+            if (visible && !manualScrolling) positionSelected(width);
+        });
         if (gallery != null) {
             PreviewSet cached = METADATA.get(metadataKey(0));
             GalleryDetail detail = EhApplication.getGalleryDetailCache(context).get(gallery.gid);
@@ -90,6 +152,8 @@ final class ReaderPagePreview implements AutoCloseable {
             if (cached != null) remember(cached);
         }
     }
+
+    boolean isVisible() { return visible && !closed; }
 
     void show(int page, int count, boolean rightToLeft) {
         if (closed || count <= 0) return;
@@ -102,96 +166,86 @@ final class ReaderPagePreview implements AutoCloseable {
     void update(int page, int count, boolean rightToLeft) {
         if (!visible || closed || count <= 0) return;
         int target = Math.max(0, Math.min(page, count - 1));
-        selected = target; size = count; reverse = rightToLeft;
-        reuseCards(target, count, rightToLeft);
-        for (int i = 0; i < cards.length; i++) {
-            Card card = cards[i];
-            int index = windowPage(target, count, i, rightToLeft);
-            if (card.page != index) {
-                card.image.unload();
-                card.image.preview = null;
-                card.image.missed = false;
-                card.image.network = false;
-                card.page = index;
-                card.label.setText(index < 0 ? "" : Integer.toString(index + 1));
-            }
-            card.container.setVisibility(index < 0 ? View.INVISIBLE : View.VISIBLE);
-            if (gallery == null && index >= 0 && card.image.getDrawable() == null) {
-                Bitmap bitmap = localLoader.get(index);
-                if (bitmap != null) card.image.load(new android.graphics.drawable.BitmapDrawable(row.getResources(), bitmap));
-            }
-        }
-        // Bind the online center first when a cache miss needs a disk request.
-        if (gallery != null) for (int slot : LOAD_ORDER) if (cards[slot].page >= 0) bindOnline(cards[slot]);
-        Set<String> currentKeys = new HashSet<>();
-        for (Card card : cards) if (card.image.preview != null && card.image.network)
-            currentKeys.add(card.image.preview.getImageKey());
-        downloading.retainAll(currentKeys);
-        if (gallery != null) schedule(75);
-        else loadLocal();
+        boolean changed = selected != target || size != count || reverse != rightToLeft;
+        boolean newItems = size != count;
+        manualScrolling = false;
+        row.stopScroll();
+        selected = target;
+        size = count;
+        reverse = rightToLeft;
+        layout.setReverseLayout(reverse);
+        if (newItems) adapter.notifyDataSetChanged();
+        if (changed || layout.findViewByPosition(target) == null) positionSelected();
+        loadLocal();
+        scheduleRefresh();
     }
 
-    static int windowPage(int target, int size, int slot, boolean reverse) {
-        int index = target + (reverse ? 2 - slot : slot - 2);
-        return index >= 0 && index < size ? index : -1;
+    private void positionSelected() {
+        int width = row.getWidth() > 0 ? row.getWidth() : row.getResources().getDisplayMetrics().widthPixels;
+        positionSelected(width);
+    }
+
+    private void positionSelected(int width) {
+        layout.scrollToPositionWithOffset(selected,
+                Math.max(0, (width - row.getPaddingLeft() - row.getPaddingRight()) / 2));
+    }
+
+    private boolean updateDimensions() {
+        int width = row.getWidth() > 0 ? row.getWidth() : row.getResources().getDisplayMetrics().widthPixels;
+        return updateDimensions(width);
+    }
+
+    private boolean updateDimensions(int width) {
+        int nextWidth = Math.max(1, (width - row.getPaddingLeft() - row.getPaddingRight()) / 4);
+        int nextHeight = Math.min(dp(180), Math.max(dp(96),
+                Math.round(Math.max(1, nextWidth - dp(4)) * 130f / 91f)));
+        if (itemWidth == nextWidth && imageHeight == nextHeight) return false;
+        itemWidth = nextWidth; imageHeight = nextHeight;
+        if (row instanceof ReaderPreviewRecyclerView)
+            ((ReaderPreviewRecyclerView) row).setPreviewHeight(imageHeight + dp(30));
+        return true;
+    }
+
+    private void browseCenter() {
+        int center = (row.getPaddingLeft() + row.getWidth() - row.getPaddingRight()) / 2;
+        int distance = Integer.MAX_VALUE;
+        int page = selected;
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View child = row.getChildAt(i);
+            int position = row.getChildAdapterPosition(child);
+            int delta = Math.abs((layout.getDecoratedLeft(child) + layout.getDecoratedRight(child)) / 2 - center);
+            if (position != RecyclerView.NO_POSITION && delta < distance) { page = position; distance = delta; }
+        }
+        if (selected != page) {
+            selected = page;
+            onBrowsed.accept(page);
+        }
     }
 
     void prepare(int page, int count, boolean rightToLeft) {
-        if (closed || visible || count <= 0 || localLoader == null || provider.getPreviewConcurrency() <= 1) return;
-        int target = Math.max(0, Math.min(page, count - 1));
-        preparedPages = new int[cards.length];
-        for (int i = 0; i < preparedPages.length; i++)
-            preparedPages[i] = windowPage(target, count, LOAD_ORDER[i], rightToLeft);
+        if (closed || visible || count <= 0 || provider.getPreviewConcurrency() <= 1) return;
+        int center = Math.max(0, Math.min(page, count - 1));
+        preparedCount = count;
+        preparedPages = new int[] {center, center > 0 ? center - 1 : -1,
+                center + 1 < count ? center + 1 : -1};
         handler.removeCallbacks(prepare);
-        // Warm only a settled five-page neighborhood, so fast page turns do not start more reads.
         handler.postDelayed(prepare, 150);
     }
 
     private void prepareLocal() {
-        if (!visible && !closed && localLoader != null && preparedPages != null)
-            localLoader.request(preparedPages, edge, false);
-    }
-
-    private void reuseCards(int target, int count, boolean rightToLeft) {
-        Card[] ordered = new Card[cards.length];
-        Set<Card> used = new HashSet<>();
-        for (int slot = 0; slot < ordered.length; slot++) {
-            int page = windowPage(target, count, slot, rightToLeft);
-            if (page < 0) continue;
-            for (Card card : cards) if (card.page == page) {
-                ordered[slot] = card;
-                used.add(card);
-                break;
-            }
-        }
-        for (int slot = 0; slot < ordered.length; slot++) if (ordered[slot] == null) {
-            for (Card card : cards) if (used.add(card)) { ordered[slot] = card; break; }
-        }
-        boolean moved = false;
-        for (int slot = 0; slot < ordered.length; slot++) if (ordered[slot] != cards[slot]) moved = true;
-        if (!moved) return;
-        for (int slot = 0; slot < ordered.length; slot++) {
-            cards[slot] = ordered[slot];
-            // Reorder without detaching views and cancelling their in-flight requests.
-            row.bringChildToFront(cards[slot].container);
-            cards[slot].container.setBackground(background(slot == 2));
-            cards[slot].container.setSelected(slot == 2);
-        }
+        if (!visible && !closed && preparedPages != null) localLoader.prepare(preparedPages, edge, preparedCount);
     }
 
     void hide() {
         visible = false;
+        manualScrolling = false;
+        row.stopScroll();
         handler.removeCallbacksAndMessages(null);
         dispatchPending = false;
         row.setVisibility(View.GONE);
         if (metadataRequest != null) { metadataRequest.cancel(); metadataRequest = null; }
-        if (localLoader != null) localLoader.stop();
-        for (Card card : cards) {
-            card.image.unload();
-            card.image.preview = null;
-            card.image.missed = false;
-            card.page = -1;
-        }
+        localLoader.stop();
+        for (Card card : attached) card.clearImage();
         downloading.clear();
     }
 
@@ -199,13 +253,65 @@ final class ReaderPagePreview implements AutoCloseable {
         if (closed) return;
         hide();
         closed = true;
-        if (localLoader != null) localLoader.close();
+        localLoader.close();
+        row.removeOnScrollListener(scrollListener);
+        row.removeOnLayoutChangeListener(layoutListener);
+        if (row instanceof ReaderPreviewRecyclerView) ((ReaderPreviewRecyclerView) row).setViewportWidthListener(null);
+        row.setAdapter(null);
+        attached.clear();
+    }
+
+    private void scheduleRefresh() {
+        handler.removeCallbacks(refresh);
+        handler.post(refresh);
+    }
+
+    private List<Card> visibleCards() {
+        List<Card> result = new ArrayList<>();
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View child = row.getChildAt(i);
+            if (child.getRight() <= row.getPaddingLeft() || child.getLeft() >= row.getWidth() - row.getPaddingRight()) continue;
+            Card card = (Card) row.getChildViewHolder(child);
+            if (card.page >= 0) result.add(card);
+        }
+        result.sort(Comparator.comparingInt(card -> Math.abs(card.page - selected)));
+        return result;
+    }
+
+    private void refreshVisible() {
+        if (!visible || closed) return;
+        for (Card card : visibleCards()) bindCached(card);
+        loadLocal();
+        if (gallery != null) schedule(75);
+    }
+
+    private void bindCached(Card card) {
+        Bitmap bitmap = localLoader.get(card.page);
+        if (bitmap != null && card.image.preview == null && card.image.getDrawable() == null) bindLocal(card, bitmap);
+        else if (bitmap != null && card.image.preview != null) bindLocal(card, bitmap);
+        if (gallery != null) bindOnline(card);
+    }
+
+    private void bindLocal(Card card, Bitmap bitmap) {
+        if (card.image.preview != null) downloading.remove(card.image.preview.getImageKey());
+        card.image.load(new BitmapDrawable(row.getResources(), bitmap));
+        card.image.preview = null; card.image.network = false; card.image.missed = false;
     }
 
     private void loadLocal() {
-        int[] pages = new int[5];
-        for (int i = 0; i < pages.length; i++) pages[i] = cards[LOAD_ORDER[i]].page;
+        handler.removeCallbacks(neighbors);
+        localLoader.request(localLoader.get(selected) != null ? new int[0] : new int[] {selected}, edge, true);
+        handler.postDelayed(neighbors, 32);
+    }
+
+    private void loadLocalNeighbors() {
+        if (!visible || closed) return;
+        List<Card> cards = visibleCards();
+        int[] pages = new int[cards.size() + 1];
+        pages[0] = selected;
+        for (int i = 0; i < cards.size(); i++) pages[i + 1] = cards.get(i).page;
         localLoader.request(pages, edge, true);
+        if (gallery != null) schedule(75);
     }
 
     private String metadataKey(int page) { return gallery.gid + ":" + gallery.token + ":" + page; }
@@ -221,20 +327,18 @@ final class ReaderPagePreview implements AutoCloseable {
         int sourcePage = provider.getSourcePage(index);
         PreviewSet set = METADATA.get(metadataKey(sourcePage / perPage));
         if (set == null) return null;
-        for (int i = 0; i < set.size(); i++) {
-            if (set.getPosition(i) == sourcePage) return set.getGalleryPreview(gallery.gid, i);
-        }
+        for (int i = 0; i < set.size(); i++) if (set.getPosition(i) == sourcePage)
+            return set.getGalleryPreview(gallery.gid, i);
         return null;
     }
 
     private void bindOnline(Card card) {
-        if (card.image.preview != null) return;
+        if (card.image.preview != null || card.image.getDrawable() != null) return;
         GalleryPreview preview = preview(card.page);
         if (preview == null) return;
         card.image.preview = preview;
-        card.image.network = false;
-        card.image.missed = false;
-        preview.load(card.image, false); // Always try the existing memory/disk caches first.
+        card.image.network = false; card.image.missed = false;
+        preview.load(card.image, false);
     }
 
     private boolean coolingDown(String key) {
@@ -251,17 +355,16 @@ final class ReaderPagePreview implements AutoCloseable {
         long at = SystemClock.uptimeMillis() + Math.max(25, delay);
         if (dispatchPending && dispatchAt <= at) return;
         handler.removeCallbacks(dispatch);
-        dispatchPending = true;
-        dispatchAt = at;
+        dispatchPending = true; dispatchAt = at;
         handler.postAtTime(dispatch, at);
     }
 
     private void dispatchOnline() {
-        for (int slot : LOAD_ORDER) {
-            Card card = cards[slot];
-            if (card.page < 0) continue;
+        for (Card card : visibleCards()) {
             bindOnline(card);
             PreviewImage image = card.image;
+            if (image.getDrawable() != null && !image.missed) continue;
+            if (!localLoader.isUnavailable(card.page)) { schedule(75); continue; }
             if (image.preview == null) {
                 int page = perPage <= 0 ? 0 : provider.getSourcePage(card.page) / perPage;
                 String key = metadataKey(page);
@@ -281,8 +384,7 @@ final class ReaderPagePreview implements AutoCloseable {
                 if (wait > 0) { schedule(wait); return; }
                 downloading.add(key);
             }
-            image.network = true;
-            image.missed = false;
+            image.network = true; image.missed = false;
             image.preview.load(image, true);
         }
     }
@@ -297,7 +399,7 @@ final class ReaderPagePreview implements AutoCloseable {
                 metadataRequest = null;
                 remember(result.first);
                 if (result.first.size() == 0) failures.put(metadataKey(page), SystemClock.uptimeMillis());
-                update(selected, size, reverse);
+                refreshVisible();
             }
             @Override public void onFailure(Exception error) {
                 if (metadataRequest != request) return;
@@ -312,51 +414,90 @@ final class ReaderPagePreview implements AutoCloseable {
 
     private int dp(int value) { return Math.round(value * row.getResources().getDisplayMetrics().density); }
 
-    private GradientDrawable background(boolean selected) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(selected ? 0xE0445555 : 0xC0202020);
-        drawable.setCornerRadius(dp(6));
-        if (selected) drawable.setStroke(dp(2), 0xFF80CBC4);
-        return drawable;
+    private final class PreviewAdapter extends RecyclerView.Adapter<Card> {
+        @Override public int getItemCount() { return size; }
+        @Override public long getItemId(int position) { return position; }
+        @NonNull @Override public Card onCreateViewHolder(@NonNull ViewGroup parent, int type) {
+            return new Card(parent.getContext());
+        }
+        @Override public void onBindViewHolder(@NonNull Card card, int page) {
+            card.clearImage();
+            card.page = page;
+            card.label.setText(Integer.toString(page + 1));
+            card.itemView.setContentDescription(context.getString(R.string.reader_page_preview_page, page + 1));
+            card.resize();
+            if (visible) bindCached(card);
+        }
+        @Override public void onViewAttachedToWindow(@NonNull Card card) {
+            attached.add(card);
+            card.resize();
+            if (visible) { bindCached(card); scheduleRefresh(); }
+        }
+        @Override public void onViewDetachedFromWindow(@NonNull Card card) {
+            attached.remove(card);
+            card.clearImage();
+        }
+        @Override public void onViewRecycled(@NonNull Card card) {
+            attached.remove(card);
+            card.clearImage(); card.page = -1;
+        }
     }
 
-    private final class Card {
+    private final class Card extends RecyclerView.ViewHolder {
         final LinearLayout container;
         final PreviewImage image;
         final TextView label;
         int page = -1;
-        Card(Context context) {
-            container = new LinearLayout(context);
+        Card(Context ui) {
+            super(new LinearLayout(ui));
+            container = (LinearLayout) itemView;
             container.setOrientation(LinearLayout.VERTICAL);
-            container.setPadding(dp(3), dp(3), dp(3), dp(3));
-            image = new PreviewImage(context);
+            container.setPadding(dp(2), dp(4), dp(2), dp(2));
+            container.setClickable(true); container.setFocusable(true);
+            image = new PreviewImage(ui, this);
             image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            container.addView(image, new LinearLayout.LayoutParams(-1, 0, 1));
-            label = new TextView(context);
-            label.setGravity(Gravity.CENTER);
-            label.setTextColor(Color.WHITE);
-            label.setTextSize(12);
-            container.addView(label, new LinearLayout.LayoutParams(-1, dp(22)));
+            container.addView(image, new LinearLayout.LayoutParams(-1, imageHeight));
+            label = new TextView(ui);
+            label.setGravity(Gravity.CENTER); label.setTextColor(0xFFFFFFFF); label.setTextSize(13);
+            container.addView(label, new LinearLayout.LayoutParams(-1, dp(24)));
+            container.setLayoutParams(new RecyclerView.LayoutParams(itemWidth, imageHeight + dp(30)));
+            container.setOnClickListener(view -> {
+                int position = getBindingAdapterPosition();
+                if (visible && !closed && position != RecyclerView.NO_POSITION && position < size)
+                    onSelected.accept(position);
+            });
+        }
+        void resize() {
+            ViewGroup.LayoutParams params = container.getLayoutParams();
+            if (params.width != itemWidth || params.height != imageHeight + dp(30)) {
+                params.width = itemWidth; params.height = imageHeight + dp(30); container.setLayoutParams(params);
+                ViewGroup.LayoutParams imageParams = image.getLayoutParams();
+                imageParams.height = imageHeight; image.setLayoutParams(imageParams);
+            }
+        }
+        void clearImage() {
+            if (image.preview != null) downloading.remove(image.preview.getImageKey());
+            image.unload(); image.preview = null; image.missed = false; image.network = false;
         }
     }
 
     private final class PreviewImage extends LoadImageView {
+        final Card card;
         GalleryPreview preview;
         boolean network;
         boolean missed;
-        PreviewImage(Context context) { super(context); }
+        PreviewImage(Context ui, Card card) { super(ui); this.card = card; }
         @Override protected boolean animateImageChanges() { return false; }
         @Override protected java.util.function.BooleanSupplier networkAdmission() {
-            return ReaderPagePreview.this::admitNetwork;
+            return () -> attached.contains(card) && admitNetwork();
         }
         @Override public void onFailure() {
-            if (preview == null || !visible || closed) return;
+            if (preview == null || !visible || closed || !attached.contains(card)) return;
             missed = true;
             if (network) {
                 downloading.remove(preview.getImageKey());
                 failures.put(preview.getImageKey(), SystemClock.uptimeMillis());
-                network = false;
-                schedule(5000);
+                network = false; schedule(5000);
             }
             schedule(75);
         }
@@ -365,8 +506,7 @@ final class ReaderPagePreview implements AutoCloseable {
             if (accepted) {
                 missed = false;
                 if (preview != null && network) downloading.remove(preview.getImageKey());
-                network = false;
-                schedule(75);
+                network = false; schedule(75);
             }
             return accepted;
         }

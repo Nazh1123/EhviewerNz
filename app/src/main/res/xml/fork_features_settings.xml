@@ -72,6 +72,12 @@
         android:title="@string/settings_fork_category_saving"
         app:allowDividerAbove="true">
 
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="true"
+            android:key="reader_page_preview"
+            android:title="@string/settings_reader_page_preview"
+            android:summary="@string/settings_reader_page_preview_summary" />
+
         <Preference
             android:key="manual_image_save_location"
             android:title="@string/settings_download_manual_save_location"

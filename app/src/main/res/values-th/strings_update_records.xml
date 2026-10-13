@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_update_history_title">ประวัติการอัปเดตแกลเลอรี</string>
+    <string name="gallery_update_history_all_empty">ไม่มีบันทึกการอัปเดตแกลเลอรีที่บันทึกไว้</string>
+    <string name="gallery_update_history_load_failed">โหลดประวัติการอัปเดตแกลเลอรีไม่ได้</string>
+    <string name="gallery_update_history_updated">เสร็จสิ้น</string>
+    <string name="gallery_update_history_failed">ล้มเหลว</string>
+    <string name="gallery_update_history_updated_incomplete">เสร็จสิ้น · ข้อมูลหน้าไม่ครบ</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">แกลเลอรี GID %1$d ไม่มีโทเค็นที่บันทึกไว้ จึงโหลดรายละเอียดไม่ได้</string>
+    <string name="settings_gallery_update_record_limit">จำนวนบันทึกการอัปเดต</string>
+    <string name="gallery_read_updates">อ่านเฉพาะหน้าที่เพิ่ม</string>
+    <string name="gallery_update_log">บันทึกการอัปเดต</string>
+    <string name="gallery_update_log_time">อัปเดตเมื่อ</string>
+    <string name="gallery_update_log_target">แกลเลอรีเป้าหมาย: %1$d</string>
+    <string name="gallery_update_log_legacy_notice">บันทึกเก่านี้ไม่มีข้อมูลระบุหน้า จึงเปิดหน้าที่เพิ่มไม่ได้</string>
+    <string name="gallery_update_log_no_added">การอัปเดตนี้ไม่มีหน้าที่เพิ่มให้อ่าน</string>
+    <string name="gallery_update_log_added">เพิ่ม:</string>
+    <string name="gallery_update_log_deleted">ลบ:</string>
+    <string name="gallery_update_log_none">ไม่มี</string>
+    <string name="gallery_update_log_incomplete">ข้อมูลหน้าไม่ครบ จึงระบุหน้าที่เพิ่มและลบได้ไม่แน่นอน</string>
+    <string name="gallery_update_log_versions">ดูประวัติลำดับเวอร์ชัน</string>
+    <string name="gallery_update_log_loading">กำลังโหลดบันทึกการอัปเดต…</string>
+    <string name="gallery_update_log_unavailable">บันทึกการอัปเดตไม่พร้อมใช้งานแล้ว</string>
+    <string name="gallery_update_reader_progress">หน้าที่เพิ่ม %1$d/%2$d · หน้า %3$d</string>
+    <string name="gallery_update_finalizing">กำลังดำเนินการอัปเดตแกลเลอรีให้เสร็จ</string>
+    <string name="gallery_update_finalization_failed">ดาวน์โหลดเสร็จแล้ว แต่ดำเนินการอัปเดตขั้นสุดท้ายไม่สำเร็จ ลองใหม่จากหน้ารายละเอียดแกลเลอรี</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string name="gallery_update_error_log">บันทึกข้อผิดพลาด</string>
+    <string name="gallery_update_error_source">แกลเลอรีเก่าที่เลือกเพื่ออัปเดต</string>
+    <string name="gallery_update_error_source_info">GID: %1$d\nชื่อ: %2$s</string>
+    <string name="gallery_update_error_source_unknown">ระบุแกลเลอรีเก่าที่ดาวน์โหลดไว้ไม่ได้</string>
+    <string name="gallery_update_error_title_unknown">ไม่มีชื่อ</string>
+    <string name="gallery_update_error_reason">สาเหตุที่ล้มเหลว</string>
+    <string name="gallery_update_error_parents_retained">แกลเลอรีเก่าต่อไปนี้ยังถูกเก็บไว้ หรือยืนยันการลบไม่ได้ (GID): %1$s ลองใหม่จากหน้ารายละเอียดแกลเลอรีได้</string>
+    <string name="gallery_update_error_directory">โฟลเดอร์ดาวน์โหลดไม่มีอยู่หรือเข้าถึงไม่ได้</string>
+    <string name="gallery_update_error_metadata_missing">ไม่พบไฟล์ .ehviewer</string>
+    <string name="gallery_update_error_metadata_invalid">ไฟล์ .ehviewer อ่านไม่ได้ เสียหาย หรือเป็นของแกลเลอรีอื่น</string>
+    <string name="gallery_update_error_source_metadata">แกลเลอรีเก่า (GID: %1$d): %2$s ย้ายความคืบหน้าการอ่านไม่ได้</string>
+    <string name="gallery_update_error_target_metadata">แกลเลอรีใหม่ (GID: %1$d): %2$s ตรวจสอบความสมบูรณ์ของการดาวน์โหลดไม่ได้</string>
+    <string name="gallery_update_error_target_incomplete">ดาวน์โหลดแกลเลอรีใหม่ไม่ครบ หรือสถานะเปลี่ยนก่อนดำเนินการขั้นสุดท้าย</string>
+    <string name="gallery_update_error_target_removed">แกลเลอรีใหม่ที่ดาวน์โหลดถูกลบหรือไม่พร้อมใช้งานแล้ว จึงยกเลิกการอัปเดต</string>
+    <string name="gallery_update_error_image">หน้า p%1$d ของแกลเลอรีใหม่ไม่มีอยู่ ว่างเปล่า หรืออ่านไม่ได้</string>
+    <string name="gallery_update_error_record_stage">บันทึกผลเปรียบเทียบการอัปเดตก่อนลบแกลเลอรีเก่าไม่ได้</string>
+    <string name="gallery_update_error_record_publish">ล้างแกลเลอรีเก่าเสร็จแล้ว แต่บันทึกการอัปเดตไม่ได้</string>
+    <string name="gallery_update_error_progress_checkpoint">ดำเนินการกับความคืบหน้าการอ่านแล้ว แต่บันทึกจุดตรวจสอบการเสร็จสิ้นไม่ได้</string>
+    <string name="gallery_update_error_validation">ตรวจสอบหรือเตรียมการอัปเดตไม่ได้: %1$s</string>
+    <string name="gallery_update_error_delete_parent">ลบโฟลเดอร์แกลเลอรีเก่าไม่ได้ (GID: %1$d)</string>
+    <string name="gallery_update_error_cleanup">ล้างแกลเลอรีเก่าไม่สำเร็จ: %1$s</string>
+    <string name="gallery_update_error_509">เกินโควตารูปภาพ (509)</string>
+    <string name="gallery_update_error_unknown">ไม่มีรายละเอียดข้อผิดพลาดส่งกลับมา</string>
+    <string name="gallery_update_error_download_metadata">โหลดข้อมูลหน้าของแกลเลอรีใหม่ไม่ได้ จึงเริ่มดาวน์โหลดไม่ได้</string>
+    <string name="gallery_update_error_download">ดาวน์โหลดแกลเลอรีใหม่ไม่สำเร็จ มี %1$d หน้าที่ยังไม่ครบ</string>
+    <string name="gallery_update_error_page">p%1$d: %2$s</string>
+    <string name="gallery_update_error_more_pages">เกิดข้อผิดพลาดในอีก %1$d หน้า</string>
+    <string name="gallery_update_error_version_lookup">ตรวจสอบข้อมูลเวอร์ชันแกลเลอรีไม่ได้: %1$s</string>
+    <string name="gallery_update_error_cancelled">การอัปเดตหยุดหรือถูกยกเลิก</string>
+    <string name="gallery_update_error_interrupted">การอัปเดตก่อนหน้าหยุดก่อนดาวน์โหลดเสร็จ ลองใหม่เพื่อดำเนินการต่อ</string>
+    <string name="gallery_update_error_tokens">โทเค็นหน้าของแกลเลอรี GID %1$d ไม่ครบ จึงหาจุดอ้างอิงความคืบหน้าการอ่านที่แน่นอนไม่ได้</string>
+    <string name="gallery_update_error_progress_save">บันทึกและตรวจสอบตำแหน่งการอ่านที่ย้ายมาในดิสก์และแคชภายในไม่ได้</string>
+    <string name="gallery_update_log_read">อ่านการอัปเดตนี้</string>
+    <string name="gallery_update_log_history">ดูประวัติบันทึกการอัปเดต</string>
+    <string name="gallery_update_history_local_notice">จะเปิดเฉพาะหน้าที่เพิ่มซึ่งยังอยู่และอ่านได้ในเวอร์ชันภายในปัจจุบัน ตามลำดับหน้าปัจจุบัน ข้ามหน้าที่ถูกลบในการอัปเดตภายหลังหรือไม่มีอยู่ภายใน จำนวนและหมายเลขหน้าด้านบนอ้างถึงการอัปเดตเดิม แต่ละการอัปเดตมีความคืบหน้าการอ่านแยกกัน</string>
+    <string name="gallery_update_history_no_local">แกลเลอรีภายในปัจจุบันไม่พร้อมใช้งานหรือยังอัปเดตอยู่</string>
+    <string name="gallery_update_history_no_pages">ไม่มีหน้าที่เพิ่มจากการอัปเดตนี้ที่ยังอ่านได้ภายใน อาจถูกลบในเวอร์ชันภายหลังหรือไม่มีอยู่ภายใน บันทึกเก่าที่ไม่มีข้อมูลโทเค็นหน้าสามารถอ่านได้เฉพาะในเวอร์ชันภายในเดิม</string>
+    <string name="gallery_update_history_incomplete">ข้อมูลหน้าไม่ครบ</string>
+    <string name="gallery_update_history_empty">ไม่มีบันทึกการอัปเดตสำหรับลำดับเวอร์ชันนี้ บันทึกเก่าอาจถูกลบเนื่องจากขีดจำกัดจำนวนบันทึก</string>
+</resources>

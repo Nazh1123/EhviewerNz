@@ -34,4 +34,71 @@
         <item>翻訳をオン／オフ</item>
         <item>設定を切り替え</item>
     </string-array>
+    <string name="reader_keys_title">キー設定</string>
+    <string name="reader_keys_default_profile">標準</string>
+    <string name="reader_keys_recommended_profile">推奨</string>
+    <string name="reader_keys_unified_areas_hint">各読書方向の領域サイズを同期します。有効にすると現在の方向のサイズが適用されます。</string>
+    <string name="reader_keys_boundary_horizontal_percent">左端からの位置（%）。線をドラッグして調整するか、タップして値を入力します。</string>
+    <string name="reader_keys_boundary_vertical_percent">上端からの位置（%）。線をドラッグして調整するか、タップして値を入力します。</string>
+    <string name="reader_keys_boundary_error">%1$s から %2$s の間の割合を入力してください</string>
+    <string name="reader_keys_reset_sizes">領域サイズを標準に戻す</string>
+    <string-array name="reader_keys_lines">
+        <item>左／中央の境界</item>
+        <item>中央／右の境界</item>
+        <item>左側の上下境界</item>
+        <item>右側の上下境界</item>
+        <item>上中央／メニューの境界</item>
+        <item>メニュー／下中央の境界</item>
+    </string-array>
+    <string name="reader_keys_double_tap_none">操作なし（素早いシングルタップが可能）</string>
+    <string name="reader_keys_profile_number">設定 %1$d</string>
+    <string name="reader_keys_profile_label">%1$d. %2$s</string>
+    <string name="reader_keys_quick_profile">設定を切り替え：%1$s</string>
+    <string name="reader_keys_profile_keyword">設定</string>
+    <string name="reader_keys_switched_named">%1$s に切り替えました</string>
+    <string name="reader_keys_switched_custom">設定 %1$s に切り替えました</string>
+    <string name="reader_keys_current_profile">使用中：%1$s</string>
+    <string name="reader_keys_select_profile">設定を選択</string>
+    <string name="reader_keys_new">設定を追加</string>
+    <string name="reader_keys_manage">設定を管理</string>
+    <string name="reader_keys_save">保存して使用</string>
+    <string name="reader_keys_rename">名前を変更</string>
+    <string name="reader_keys_copy">複製</string>
+    <string name="reader_keys_delete">削除</string>
+    <string name="reader_keys_recommended">推奨設定を使用</string>
+    <string name="reader_keys_reset">標準設定に戻す</string>
+    <string name="reader_keys_keep_one">少なくとも1つの設定を残してください</string>
+    <string name="reader_keys_delete_question">この設定と未保存の変更を削除しますか？</string>
+    <string name="reader_keys_reset_question">操作、領域サイズ、ジェスチャーを標準設定に戻しますか？保存すると適用されます。</string>
+    <string name="reader_keys_saved">設定を保存して適用しました</string>
+    <string name="reader_keys_unsaved">続行する前に変更を保存しますか？</string>
+    <string name="reader_keys_discard">変更を破棄</string>
+    <string name="reader_keys_back">戻る</string>
+    <string name="reader_keys_more">その他</string>
+    <string name="reader_keys_default_action">%1$s（標準）</string>
+    <string name="reader_keys_scroll_up">上にスクロール</string>
+    <string name="reader_keys_scroll_down">下にスクロール</string>
+    <string name="reader_keys_edit_actions">操作を設定</string>
+    <string name="reader_keys_animated_area_title">アニメーション操作領域</string>
+    <string name="reader_keys_orientation_swipe">画面回転ジェスチャー · %1$s</string>
+    <string name="reader_keys_orientation_title">画面回転ジェスチャー</string>
+    <string-array name="reader_keys_regions">
+        <item>左上</item>
+        <item>左下</item>
+        <item>右上</item>
+        <item>右下</item>
+        <item>上中央</item>
+        <item>中央</item>
+        <item>下中央</item>
+    </string-array>
+    <string-array name="reader_keys_gestures">
+        <item>タップ</item>
+        <item>ダブルタップ</item>
+        <item>長押し</item>
+    </string-array>
+    <string-array name="reader_keys_swipe_choices">
+        <item>オフ</item>
+        <item>上にスワイプ</item>
+        <item>下にスワイプ</item>
+    </string-array>
 </resources>

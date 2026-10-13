@@ -47,13 +47,4 @@ public class ReaderPreviewRequestBudgetTest {
         } finally { workers.shutdownNow(); }
     }
 
-    @Test public void fivePageWindowKeepsTargetCenteredInBothDirections() {
-        for (int i = 0; i < 5; i++) {
-            assertEquals(48 + i, ReaderPagePreview.windowPage(50, 1000, i, false));
-            assertEquals(52 - i, ReaderPagePreview.windowPage(50, 1000, i, true));
-        }
-        assertEquals(-1, ReaderPagePreview.windowPage(0, 1, 0, false));
-        assertEquals(0, ReaderPagePreview.windowPage(0, 1, 2, true));
-        assertEquals(-1, ReaderPagePreview.windowPage(999, 1000, 4, false));
-    }
 }

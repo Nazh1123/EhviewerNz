@@ -197,4 +197,17 @@
     <string name="translation_source_detected">Traduciendo: %1$s → %2$s</string>
     <string name="translation_source_unknown">No se pudo identificar el idioma con seguridad. Selecciónalo manualmente antes de usar ML Kit.</string>
     <string name="translation_source_auto_mlkit_help">El modo automático prepara japonés, coreano, chino y el idioma de destino. Inglés no necesita un paquete separado.</string>
+    <string name="translation_ppocr_help">Para reconocer texto no japonés, PP-OCRv5 necesita el componente OCR y el modelo de idioma correspondiente. La descarga del modelo instala también el componente si hace falta. También puedes importar por separado el ZIP del componente y el archivo oficial inference.onnx. El modelo chino admite escritura simplificada y tradicional. Los archivos se verifican antes de usarlos.</string>
+    <string name="translation_ppocr_required">Instala el componente PP-OCRv5 y el modelo de idioma correspondiente en Ajustes de traducción → Gestión de modelos → Modelos de manga.</string>
+    <string name="translation_ppocr_runtime_title">Componente PP-OCRv5</string>
+    <string name="translation_ppocr_runtime_help">Componente OCR opcional para chino, inglés y coreano. El japonés funciona sin él. Descarga ONNX Runtime 1.24.3 oficial (unos 41 MB) e instala solo las bibliotecas arm64 (unos 26 MB). También puedes importar el ZIP correspondiente. Se verifica antes de instalar. Al eliminar el componente se conservan los modelos de idioma; puedes descargarlo de nuevo para activar el reconocimiento.</string>
+    <string name="translation_model_import_mode">Elegir método de importación de GGUF</string>
+    <string name="translation_model_import_copy">Copiar al almacenamiento privado de la aplicación</string>
+    <string name="translation_model_import_reference">Usar el archivo externo directamente</string>
+    <string name="translation_model_external_badge">Archivo externo</string>
+    <string name="translation_model_remove_reference">Eliminar referencia</string>
+    <string name="translation_model_remove_reference_confirm">¿Eliminar la referencia a «%1$s»? Se conservará el archivo GGUF original.</string>
+    <string name="translation_model_external_help">Lee el GGUF original sin conservar una copia privada. No muevas, elimines ni modifiques el archivo. Vuelve a importar con copia para usar una copia privada; referenciar el mismo modelo elimina su copia privada existente. Eliminar la referencia conserva el archivo original.</string>
+    <string name="translation_model_external_unsupported">Este archivo externo no se puede cargar directamente. Elige «Copiar al almacenamiento privado de la aplicación».</string>
+    <string name="translation_model_external_changed">El modelo externo cambió o no está disponible. Selecciona el archivo GGUF de nuevo.</string>
 </resources>

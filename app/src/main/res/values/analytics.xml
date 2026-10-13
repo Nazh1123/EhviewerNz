@@ -19,6 +19,6 @@
 
     <string name="ga_trackingId" translatable="false">UA-51287788-1</string>
     <bool name="ga_autoActivityTracking">true</bool>
-    <string name="ga_logLevel">error</string>
+    <string name="ga_logLevel" translatable="false">error</string>
 
 </resources>

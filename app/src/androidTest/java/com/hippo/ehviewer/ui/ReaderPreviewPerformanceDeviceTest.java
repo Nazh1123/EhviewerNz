@@ -18,9 +18,14 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.recyclerview.widget.RecyclerView;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache;
+import com.hippo.ehviewer.gallery.ReaderPreviewLoader;
+import com.hippo.ehviewer.gallery.EhGalleryProvider;
+import com.hippo.ehviewer.client.data.GalleryInfo;
+import com.hippo.unifile.UniFile;
 import com.hippo.ehviewer.widget.ReversibleSeekBar;
 import java.io.File;
 import java.io.FileInputStream;
@@ -55,7 +60,9 @@ public class ReaderPreviewPerformanceDeviceTest {
         evidence.mkdirs();
         report = new File(evidence, label + ".json");
         boolean guide = Settings.getGuideGallery();
+        boolean previewEnabled = Settings.getReaderPagePreview();
         Settings.putGuideGallery(false);
+        Settings.putReaderPagePreview(true);
         // Keep an activity resumed between cases: vendor background freezing otherwise suspends
         // the instrumentation thread in native decode, invalidating wall-clock measurements.
         Instrumentation.ActivityMonitor baseMonitor = instrumentation.addMonitor(MainActivity.class.getName(), null, false);
@@ -77,6 +84,7 @@ public class ReaderPreviewPerformanceDeviceTest {
                     benchmarkDecode(name, new File(folder, "000.image." + extension(name)));
                 if ("decode".equals(InstrumentationRegistry.getArguments().getString("mode"))) continue;
                 if (!mode.equals("scrub")) measureReader(name, folder, false);
+                if (mode.endsWith("prepared")) continue;
                 int scrubRuns = Math.max(1, Math.min(5, Integer.parseInt(InstrumentationRegistry.getArguments().getString("scrubRuns", "1"))));
                 for (int run = 0; run < scrubRuns; run++) {
                     File scrubFolder = new File(root, name + "-scrub-" + run);
@@ -89,6 +97,7 @@ public class ReaderPreviewPerformanceDeviceTest {
             }
         } finally {
             Settings.putGuideGallery(guide);
+            Settings.putReaderPagePreview(previewEnabled);
             writeReport();
             deleteFixture(root);
             instrumentation.runOnMainSync(base::finish);
@@ -201,12 +210,55 @@ public class ReaderPreviewPerformanceDeviceTest {
             // Let startup and the already displayed page finish before measuring seek preview.
             SystemClock.sleep(600);
             ReversibleSeekBar seek = reader.findViewById(R.id.seek_bar);
+            String mode = InstrumentationRegistry.getArguments().getString("mode", "full");
+            boolean downloaded = mode.startsWith("downloaded");
+            boolean prepared = mode.endsWith("prepared");
+            if (downloaded) {
+                File download = new File(folder.getParentFile(), folder.getName() + "-download");
+                download.mkdirs();
+                for (int page = 0; page < 64; page++) linkFixture(
+                        new File(folder, String.format(Locale.US, "%03d.image.%s", page, extension(name))),
+                        new File(download, String.format(Locale.US, "%08d.%s", page + 1, extension(name))));
+                GalleryInfo info = new GalleryInfo();
+                info.gid = 1; info.token = "preview-device-fixture";
+                EhGalleryProvider provider = new EhGalleryProvider(reader, info) {
+                    // This harness also compiles against the baseline, which lacks this override point.
+                    protected UniFile getPreviewDirectory() { return UniFile.fromFile(download); }
+                };
+                instrumentation.runOnMainSync(() -> {
+                    ((ReaderPagePreview) field(reader, "mPagePreview")).close();
+                    RecyclerView row = reader.findViewById(R.id.page_preview_strip);
+                    ReaderPagePreview preview = new ReaderPagePreview(reader, row, provider,
+                            reader::onPreviewPageSelected, reader::onPreviewPageBrowsed);
+                    try {
+                        Field field = reader.getClass().getDeclaredField("mPagePreview");
+                        field.setAccessible(true); field.set(reader, preview);
+                    } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+                    preview.prepare(0, 64, false);
+                });
+            }
+            if (prepared) {
+                int idleMs = Math.max(0, Math.min(30000,
+                        Integer.parseInt(InstrumentationRegistry.getArguments().getString("idleMs", "15000"))));
+                SystemClock.sleep(idleMs);
+                ReaderPreviewLoader loader = (ReaderPreviewLoader) field(field(reader, "mPagePreview"), "localLoader");
+                int ready = 0;
+                for (int page = 0; page < 64; page++) if (loader.get(page) != null) ready++;
+                measurements.put(new JSONObject().put("case", name).put("phase", "preparation")
+                        .put("waitMs", idleMs).put("readyPages", ready).put("totalPages", 64));
+                writeReport();
+            }
+            captureShell("dumpsys gfxinfo " + instrumentation.getTargetContext().getPackageName() + " reset", null);
             if (!scrub) {
-                for (int target : new int[] {10, 20, 30, 40, 50}) {
-                    timePreview(name, "cold", reader, seek, target);
-                    timePreview(name, "memory", reader, seek, target);
+                if (prepared) {
+                    for (int target : new int[] {10, 30, 60}) timePreview(name,
+                            downloaded ? "downloaded-idle-prepared" : "idle-prepared", reader, seek, target);
+                } else for (int target : new int[] {10, 20, 30, 40, 50}) {
+                    timePreview(name, downloaded ? "downloaded-cold" : "cold", reader, seek, target);
+                    timePreview(name, downloaded ? "downloaded-memory" : "memory", reader, seek, target);
                 }
-            } else {
+            }
+            if (scrub || prepared) {
                 long began = SystemClock.elapsedRealtimeNanos();
                 DrawProbe probe = new DrawProbe(reader);
                 instrumentation.runOnMainSync(() -> reader.onStartTrackingTouch(seek));
@@ -219,11 +271,13 @@ public class ReaderPreviewPerformanceDeviceTest {
                     SystemClock.sleep(16);
                 }
                 probe.await();
-                measurements.put(new JSONObject().put("case", name).put("phase", "scrub")
+                measurements.put(new JSONObject().put("case", name).put("phase", prepared ? "prepared-scrub" : "scrub")
                         .put("centerAfterReleaseMs", probe.centerMs()).put("windowAfterReleaseMs", probe.windowMs())
                         .put("totalMs", (probe.centerAt - began) / 1e6));
                 writeReport();
             }
+            captureShell("dumpsys gfxinfo " + instrumentation.getTargetContext().getPackageName() + " framestats",
+                    new File(report.getParentFile(), label + "-" + name + (scrub ? "-scrub" : "") + "-gfxinfo.txt"));
             CountDownLatch presented = new CountDownLatch(1);
             instrumentation.runOnMainSync(() -> reader.findViewById(R.id.page_preview_strip).postOnAnimation(
                     () -> reader.findViewById(R.id.page_preview_strip).postOnAnimation(presented::countDown)));
@@ -238,6 +292,16 @@ public class ReaderPreviewPerformanceDeviceTest {
         } finally {
             instrumentation.removeMonitor(monitor);
             if (activity != null) { GalleryActivity reader = activity; instrumentation.runOnMainSync(reader::finish); instrumentation.waitForIdleSync(); }
+        }
+    }
+
+    private void captureShell(String command, File destination) throws Exception {
+        try (ParcelFileDescriptor.AutoCloseInputStream in = new ParcelFileDescriptor.AutoCloseInputStream(
+                instrumentation.getUiAutomation().executeShellCommand(command));
+             java.io.OutputStream out = destination != null ? new FileOutputStream(destination) : null) {
+            byte[] buffer = new byte[8192];
+            int count;
+            while ((count = in.read(buffer)) != -1) if (out != null) out.write(buffer, 0, count);
         }
     }
 
@@ -291,13 +355,20 @@ public class ReaderPreviewPerformanceDeviceTest {
     }
 
     private boolean centerReady(GalleryActivity reader) {
-        LinearLayout row = reader.findViewById(R.id.page_preview_strip);
-        return ((ImageView) ((LinearLayout) row.getChildAt(2)).getChildAt(0)).getDrawable() != null;
+        RecyclerView row = reader.findViewById(R.id.page_preview_strip);
+        int selected = (Integer) field(field(reader, "mPagePreview"), "selected");
+        View card = row.getLayoutManager().findViewByPosition(selected);
+        return card != null && ((ImageView) ((LinearLayout) card).getChildAt(0)).getDrawable() != null;
     }
 
     private boolean allReady(GalleryActivity reader) {
-        LinearLayout row = reader.findViewById(R.id.page_preview_strip);
-        for (int i = 0; i < row.getChildCount(); i++) if (((ImageView) ((LinearLayout) row.getChildAt(i)).getChildAt(0)).getDrawable() == null) return false;
+        RecyclerView row = reader.findViewById(R.id.page_preview_strip);
+        if (row.getChildCount() == 0) return false;
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View child = row.getChildAt(i);
+            if (child.getRight() <= row.getPaddingLeft() || child.getLeft() >= row.getWidth() - row.getPaddingRight()) continue;
+            if (((ImageView) ((LinearLayout) child).getChildAt(0)).getDrawable() == null) return false;
+        }
         return true;
     }
 

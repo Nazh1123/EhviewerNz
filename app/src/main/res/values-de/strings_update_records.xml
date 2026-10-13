@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_update_history_title">Galerie-Aktualisierungsverlauf</string>
+    <string name="gallery_update_history_all_empty">Keine gespeicherten Galerie-Aktualisierungen</string>
+    <string name="gallery_update_history_load_failed">Aktualisierungsverlauf konnte nicht geladen werden</string>
+    <string name="gallery_update_history_updated">Abgeschlossen</string>
+    <string name="gallery_update_history_failed">Fehlgeschlagen</string>
+    <string name="gallery_update_history_updated_incomplete">Abgeschlossen · unvollständige Seiteninformationen</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">Für Galerie GID %1$d ist kein Galerie-Token gespeichert. Ihre Details können nicht geladen werden.</string>
+    <string name="settings_gallery_update_record_limit">Anzahl der Aktualisierungsdatensätze</string>
+    <string name="gallery_read_updates">Nur neue Seiten lesen</string>
+    <string name="gallery_update_log">Aktualisierungsprotokoll</string>
+    <string name="gallery_update_log_time">Aktualisiert am</string>
+    <string name="gallery_update_log_target">Zielgalerie: %1$d</string>
+    <string name="gallery_update_log_legacy_notice">Dieser ältere Datensatz enthält keine Seitenkennungen. Seine hinzugefügten Seiten können nicht geöffnet werden.</string>
+    <string name="gallery_update_log_no_added">Diese Aktualisierung hat keine neuen Seiten zum Lesen.</string>
+    <string name="gallery_update_log_added">Hinzugefügt:</string>
+    <string name="gallery_update_log_deleted">Gelöscht:</string>
+    <string name="gallery_update_log_none">Keine</string>
+    <string name="gallery_update_log_incomplete">Die Seiteninformationen sind unvollständig. Hinzugefügte und gelöschte Seiten können nicht zuverlässig bestimmt werden.</string>
+    <string name="gallery_update_log_versions">Verlauf der Versionskette anzeigen</string>
+    <string name="gallery_update_log_loading">Aktualisierungsdatensatz wird geladen…</string>
+    <string name="gallery_update_log_unavailable">Aktualisierungsdatensatz nicht mehr verfügbar</string>
+    <string name="gallery_update_reader_progress">Neue Seiten %1$d/%2$d · S. %3$d</string>
+    <string name="gallery_update_finalizing">Galerie-Aktualisierung wird abgeschlossen</string>
+    <string name="gallery_update_finalization_failed">Download abgeschlossen, aber Abschluss der Aktualisierung fehlgeschlagen. Auf der Galeriedetailseite erneut versuchen.</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string name="gallery_update_error_log">Fehlerprotokoll</string>
+    <string name="gallery_update_error_source">Zur Aktualisierung ausgewählte alte Galerie</string>
+    <string name="gallery_update_error_source_info">GID: %1$d\nTitel: %2$s</string>
+    <string name="gallery_update_error_source_unknown">Keine heruntergeladene alte Galerie konnte ermittelt werden.</string>
+    <string name="gallery_update_error_title_unknown">Titel nicht verfügbar</string>
+    <string name="gallery_update_error_reason">Fehlerursache</string>
+    <string name="gallery_update_error_parents_retained">Folgende alte Galerien wurden behalten oder ihre Löschung konnte nicht bestätigt werden (GID): %1$s. Auf der Galeriedetailseite erneut versuchen.</string>
+    <string name="gallery_update_error_directory">Downloadverzeichnis fehlt oder ist nicht zugänglich.</string>
+    <string name="gallery_update_error_metadata_missing">Die Datei .ehviewer fehlt.</string>
+    <string name="gallery_update_error_metadata_invalid">Die Datei .ehviewer ist unlesbar, beschädigt oder gehört zu einer anderen Galerie.</string>
+    <string name="gallery_update_error_source_metadata">Alte Galerie (GID: %1$d): %2$s Der Lesefortschritt kann nicht übertragen werden.</string>
+    <string name="gallery_update_error_target_metadata">Neue Galerie (GID: %1$d): %2$s Die Vollständigkeit des Downloads kann nicht überprüft werden.</string>
+    <string name="gallery_update_error_target_incomplete">Der Download der neuen Galerie ist unvollständig oder ihr Status hat sich vor dem Abschluss geändert.</string>
+    <string name="gallery_update_error_target_removed">Die neue Galerie wurde entfernt oder ist nicht mehr verfügbar. Die Aktualisierung wurde abgebrochen.</string>
+    <string name="gallery_update_error_image">Seite p%1$d der neuen Galerie fehlt, ist leer oder unlesbar.</string>
+    <string name="gallery_update_error_record_stage">Aktualisierungsvergleich konnte vor dem Entfernen alter Galerien nicht gespeichert werden.</string>
+    <string name="gallery_update_error_record_publish">Bereinigung alter Galerien abgeschlossen, aber Aktualisierungsprotokoll konnte nicht gespeichert werden.</string>
+    <string name="gallery_update_error_progress_checkpoint">Lesefortschritt verarbeitet, aber Abschlussmarkierung konnte nicht gespeichert werden.</string>
+    <string name="gallery_update_error_validation">Aktualisierung konnte nicht geprüft oder vorbereitet werden: %1$s</string>
+    <string name="gallery_update_error_delete_parent">Altes Galerieverzeichnis konnte nicht gelöscht werden (GID: %1$d).</string>
+    <string name="gallery_update_error_cleanup">Bereinigung alter Galerien fehlgeschlagen: %1$s</string>
+    <string name="gallery_update_error_509">Bildkontingent überschritten (509).</string>
+    <string name="gallery_update_error_unknown">Keine detaillierte Fehlermeldung erhalten.</string>
+    <string name="gallery_update_error_download_metadata">Seiteninformationen der neuen Galerie konnten nicht geladen werden. Der Download konnte nicht starten.</string>
+    <string name="gallery_update_error_download">Download der neuen Galerie fehlgeschlagen. %1$d Seiten sind unvollständig.</string>
+    <string name="gallery_update_error_page">p%1$d: %2$s</string>
+    <string name="gallery_update_error_more_pages">Auf %1$d weiteren Seiten sind ebenfalls Fehler aufgetreten.</string>
+    <string name="gallery_update_error_version_lookup">Galerie-Versionsinformationen konnten nicht ermittelt werden: %1$s</string>
+    <string name="gallery_update_error_cancelled">Die Aktualisierung wurde gestoppt oder abgebrochen.</string>
+    <string name="gallery_update_error_interrupted">Die vorherige Aktualisierung wurde vor Downloadende unterbrochen. Zum Fortsetzen erneut versuchen.</string>
+    <string name="gallery_update_error_tokens">Seitentokens für Galerie GID %1$d sind unvollständig. Kein zuverlässiger Anker für den Lesefortschritt gefunden.</string>
+    <string name="gallery_update_error_progress_save">Übertragene Leseposition konnte auf dem Datenträger und im lokalen Cache nicht gespeichert und überprüft werden.</string>
+    <string name="gallery_update_log_read">Diese Aktualisierung lesen</string>
+    <string name="gallery_update_log_history">Aktualisierungsverlauf anzeigen</string>
+    <string name="gallery_update_history_local_notice">Nur neue Seiten, die in der aktuellen lokalen Version noch vorhanden und lesbar sind, werden in aktueller Seitenreihenfolge geöffnet. Später gelöschte oder lokal fehlende Seiten werden übersprungen. Die Angaben oben beziehen sich auf die ursprüngliche Aktualisierung. Jede Aktualisierung hat ihren eigenen Lesefortschritt.</string>
+    <string name="gallery_update_history_no_local">Die aktuelle lokale Galerie ist nicht verfügbar oder wird noch aktualisiert.</string>
+    <string name="gallery_update_history_no_pages">Keine neuen Seiten dieser Aktualisierung sind lokal noch lesbar. Sie wurden möglicherweise später gelöscht oder fehlen lokal. Ältere Datensätze ohne Seitentoken-Snapshots können nur in ihrer ursprünglichen lokalen Version gelesen werden.</string>
+    <string name="gallery_update_history_incomplete">Unvollständige Seiteninformationen</string>
+    <string name="gallery_update_history_empty">Keine Aktualisierungsdatensätze für diese Versionskette gespeichert. Ältere Datensätze wurden möglicherweise durch die Begrenzung der Datensatzanzahl entfernt.</string>
+</resources>

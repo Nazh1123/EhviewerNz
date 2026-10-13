@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_reader_page_preview">ページスライダーのプレビュー</string>
+    <string name="settings_reader_page_preview_summary">ページスライダーをタップまたはドラッグしてサムネイルを確認し、画像をタップして移動します。無効にするとプレビューなしでスライダーを使用できます。</string>
+    <string name="reader_page_preview_page">%1$d ページ</string>
+</resources>

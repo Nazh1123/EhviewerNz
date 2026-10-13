@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_reader_page_preview">Vorschaubilder beim Blättern</string>
+    <string name="settings_reader_page_preview_summary">Auf den Seitenregler tippen oder ihn ziehen, um Vorschaubilder zu durchsuchen. Zum Öffnen auf ein Bild tippen. Deaktivieren, um den Regler ohne Vorschau zu verwenden.</string>
+    <string name="reader_page_preview_page">Seite %1$d</string>
+</resources>

@@ -34,4 +34,71 @@
         <item>เปิด / ปิดการแปล</item>
         <item>สลับโปรไฟล์</item>
     </string-array>
+    <string name="reader_keys_title">การตั้งค่าปุ่ม</string>
+    <string name="reader_keys_default_profile">ค่าเริ่มต้น</string>
+    <string name="reader_keys_recommended_profile">แนะนำ</string>
+    <string name="reader_keys_unified_areas_hint">ซิงค์ขนาดพื้นที่ระหว่างทิศทางการอ่าน เมื่อเปิดจะใช้ขนาดของทิศทางปัจจุบัน</string>
+    <string name="reader_keys_boundary_horizontal_percent">ตำแหน่งจากขอบซ้าย (%) ลากเส้นเพื่อปรับขนาด หรือแตะเพื่อป้อนค่า</string>
+    <string name="reader_keys_boundary_vertical_percent">ตำแหน่งจากขอบบน (%) ลากเส้นเพื่อปรับขนาด หรือแตะเพื่อป้อนค่า</string>
+    <string name="reader_keys_boundary_error">ป้อนเปอร์เซ็นต์ระหว่าง %1$s ถึง %2$s</string>
+    <string name="reader_keys_reset_sizes">คืนค่าขนาดพื้นที่เริ่มต้น</string>
+    <string-array name="reader_keys_lines">
+        <item>เส้นแบ่งซ้าย / กลาง</item>
+        <item>เส้นแบ่งกลาง / ขวา</item>
+        <item>เส้นแบ่งบน / ล่างด้านซ้าย</item>
+        <item>เส้นแบ่งบน / ล่างด้านขวา</item>
+        <item>เส้นแบ่งกลางบน / เมนู</item>
+        <item>เส้นแบ่งเมนู / กลางล่าง</item>
+    </string-array>
+    <string name="reader_keys_double_tap_none">ไม่ดำเนินการ (อนุญาตให้แตะครั้งเดียวติดกันอย่างรวดเร็ว)</string>
+    <string name="reader_keys_profile_number">โปรไฟล์ %1$d</string>
+    <string name="reader_keys_profile_label">%1$d. %2$s</string>
+    <string name="reader_keys_quick_profile">สลับโปรไฟล์: %1$s</string>
+    <string name="reader_keys_profile_keyword">โปรไฟล์</string>
+    <string name="reader_keys_switched_named">สลับเป็น %1$s แล้ว</string>
+    <string name="reader_keys_switched_custom">สลับเป็นโปรไฟล์ %1$s แล้ว</string>
+    <string name="reader_keys_current_profile">ใช้งานอยู่: %1$s</string>
+    <string name="reader_keys_select_profile">เลือกโปรไฟล์</string>
+    <string name="reader_keys_new">โปรไฟล์ใหม่</string>
+    <string name="reader_keys_manage">จัดการโปรไฟล์</string>
+    <string name="reader_keys_save">บันทึกและใช้งาน</string>
+    <string name="reader_keys_rename">เปลี่ยนชื่อ</string>
+    <string name="reader_keys_copy">ทำสำเนา</string>
+    <string name="reader_keys_delete">ลบ</string>
+    <string name="reader_keys_recommended">ใช้โปรไฟล์ที่แนะนำ</string>
+    <string name="reader_keys_reset">คืนค่าเริ่มต้น</string>
+    <string name="reader_keys_keep_one">ต้องเก็บไว้อย่างน้อยหนึ่งโปรไฟล์</string>
+    <string name="reader_keys_delete_question">ลบโปรไฟล์นี้และการแก้ไขที่ยังไม่ได้บันทึกหรือไม่?</string>
+    <string name="reader_keys_reset_question">คืนค่าการทำงาน ขนาดพื้นที่ และตัวเลือกท่าทางเป็นค่าเริ่มต้นหรือไม่? บันทึกเพื่อใช้การเปลี่ยนแปลง</string>
+    <string name="reader_keys_saved">บันทึกและเปิดใช้โปรไฟล์แล้ว</string>
+    <string name="reader_keys_unsaved">บันทึกการเปลี่ยนแปลงก่อนดำเนินการต่อหรือไม่?</string>
+    <string name="reader_keys_discard">ละทิ้งการเปลี่ยนแปลง</string>
+    <string name="reader_keys_back">ย้อนกลับ</string>
+    <string name="reader_keys_more">เพิ่มเติม</string>
+    <string name="reader_keys_default_action">%1$s (ค่าเริ่มต้น)</string>
+    <string name="reader_keys_scroll_up">เลื่อนขึ้น</string>
+    <string name="reader_keys_scroll_down">เลื่อนลง</string>
+    <string name="reader_keys_edit_actions">ตั้งค่าการทำงาน</string>
+    <string name="reader_keys_animated_area_title">พื้นที่ควบคุมภาพเคลื่อนไหว</string>
+    <string name="reader_keys_orientation_swipe">ท่าทางเปลี่ยนแนวหน้าจอ · %1$s</string>
+    <string name="reader_keys_orientation_title">ท่าทางเปลี่ยนแนวหน้าจอ</string>
+    <string-array name="reader_keys_regions">
+        <item>ซ้ายบน</item>
+        <item>ซ้ายล่าง</item>
+        <item>ขวาบน</item>
+        <item>ขวาล่าง</item>
+        <item>กลางบน</item>
+        <item>กลาง</item>
+        <item>กลางล่าง</item>
+    </string-array>
+    <string-array name="reader_keys_gestures">
+        <item>แตะ</item>
+        <item>แตะสองครั้ง</item>
+        <item>กดค้าง</item>
+    </string-array>
+    <string-array name="reader_keys_swipe_choices">
+        <item>ปิด</item>
+        <item>ปัดขึ้น</item>
+        <item>ปัดลง</item>
+    </string-array>
 </resources>

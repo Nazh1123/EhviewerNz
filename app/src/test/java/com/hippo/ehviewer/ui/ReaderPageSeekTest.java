@@ -2,17 +2,39 @@ package com.hippo.ehviewer.ui;
 
 import android.app.Application;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.view.MotionEvent;
+import android.view.View;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
+import androidx.recyclerview.widget.RecyclerView;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.client.EhRequest;
+import com.hippo.ehviewer.client.data.GalleryInfo;
+import com.hippo.ehviewer.gallery.DirGalleryProvider;
+import com.hippo.ehviewer.gallery.EhGalleryProvider;
+import com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache;
+import com.hippo.ehviewer.gallery.ReaderPreviewLoader;
 import com.hippo.ehviewer.widget.ReversibleSeekBar;
 import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.glgallery.GalleryView;
 import com.hippo.lib.yorozuya.SimpleHandler;
+import com.hippo.unifile.UniFile;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InterruptedIOException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -20,6 +42,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.ConscryptMode;
 import org.robolectric.annotation.Implements;
@@ -35,38 +58,46 @@ public class ReaderPageSeekTest {
     private GalleryActivity activity;
     private GalleryView gallery;
     private ReversibleSeekBar seek;
-    private TextView left;
-    private TextView right;
+    private TextView left, right;
+    private Context context;
     private static com.hippo.conaco.Conaco<com.hippo.lib.image.Image> previewConaco;
     private static final androidx.collection.LruCache<Long, com.hippo.ehviewer.client.data.GalleryDetail> details = new androidx.collection.LruCache<>(2);
-    private static com.hippo.ehviewer.client.EhRequest metadataRequest;
+    private static EhRequest metadataRequest;
 
     @Before public void setup() {
-        Context context = RuntimeEnvironment.getApplication();
-        ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre", context.getSharedPreferences("preview-seek-test", 0));
+        context = RuntimeEnvironment.getApplication();
+        android.content.SharedPreferences preferences = context.getSharedPreferences("preview-seek-test", 0);
+        preferences.edit().clear().commit();
+        ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre", preferences);
         activity = Robolectric.buildActivity(GalleryActivity.class).get();
         gallery = new GalleryView.Builder(context, new GalleryView.Adapter() {
             @Override public void onBind(GalleryPageView page, int index) { }
             @Override public void onUnbind(GalleryPageView page, int index) { }
             @Override public String getError() { return null; }
-            @Override public int size() { return 100; }
+            @Override public int size() { return 1000; }
         }).build();
         seek = new ReversibleSeekBar(context);
-        seek.setMax(99);
-        seek.setProgress(10);
-        seek.setOnSeekBarChangeListener(activity);
-        left = new TextView(context);
-        right = new TextView(context);
+        seek.setMax(999); seek.setProgress(10); seek.setOnSeekBarChangeListener(activity);
+        left = new TextView(context); right = new TextView(context);
         ReflectionHelpers.setField(activity, "mGalleryView", gallery);
         ReflectionHelpers.setField(activity, "mSeekBar", seek);
         ReflectionHelpers.setField(activity, "mLeftText", left);
         ReflectionHelpers.setField(activity, "mRightText", right);
-        ReflectionHelpers.setField(activity, "mSize", 100);
+        ReflectionHelpers.setField(activity, "mSize", 1000);
         ReflectionHelpers.setField(activity, "mCurrentIndex", 10);
         ReflectionHelpers.setField(activity, "mLayoutMode", GalleryView.LAYOUT_LEFT_TO_RIGHT);
+        com.hippo.conaco.Conaco.Builder<com.hippo.lib.image.Image> builder = new com.hippo.conaco.Conaco.Builder<>();
+        builder.hasMemoryCache = true; builder.memoryCacheMaxSize = 1024 * 1024;
+        builder.okHttpClient = new okhttp3.OkHttpClient(); builder.objectHelper = new com.hippo.ehviewer.ImageBitmapHelper();
+        previewConaco = builder.build(); details.evictAll(); metadataRequest = null;
+        ((android.util.LruCache<?, ?>) ReflectionHelpers.getStaticField(ReaderPagePreview.class, "METADATA")).evictAll();
+        Object budget = ReflectionHelpers.getStaticField(ReaderPagePreview.class, "BUDGET");
+        ((ArrayDeque<?>) ReflectionHelpers.getField(budget, "starts")).clear();
     }
 
     @After public void cleanup() {
+        ReaderPagePreview preview = ReflectionHelpers.getField(activity, "mPagePreview");
+        if (preview != null) preview.close();
         SimpleHandler.getInstance().removeCallbacksAndMessages(null);
         ((Handler) ReflectionHelpers.getField(activity, "mAnimatedWebpHandler")).removeCallbacksAndMessages(null);
         ((ExecutorService) ReflectionHelpers.getField(activity, "mImageFileExecutor")).shutdownNow();
@@ -77,27 +108,72 @@ public class ReaderPageSeekTest {
     private List<Integer> methods() { return ReflectionHelpers.getField(gallery, "mMethodList"); }
     private int jumpMethod() { return ReflectionHelpers.getStaticField(GalleryView.class, "METHOD_SET_CURRENT_PAGE"); }
     private void dragTo(int page) {
-        activity.onStartTrackingTouch(seek);
-        seek.setProgress(page);
-        activity.onProgressChanged(seek, page, true);
+        activity.onStartTrackingTouch(seek); seek.setProgress(page); activity.onProgressChanged(seek, page, true);
+    }
+    private byte[] poster() {
+        Bitmap bitmap = Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888);
+        ByteArrayOutputStream encoded = new ByteArrayOutputStream();
+        assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, encoded));
+        return encoded.toByteArray();
+    }
+    private DirGalleryProvider local(AtomicInteger reads) {
+        byte[] encoded = poster(); String identity = UUID.randomUUID().toString();
+        return new DirGalleryProvider(UniFile.fromFile(context.getCacheDir())) {
+            @Override public com.hippo.ehviewer.gallery.ReaderPreviewSource createPreviewSource(Context app) {
+                return (page, edge) -> {
+                    reads.incrementAndGet();
+                    return ReaderPreviewBitmapCache.load(app, identity + page, edge, () -> new ByteArrayInputStream(encoded));
+                };
+            }
+        };
+    }
+    private RecyclerView strip() { return new com.hippo.ehviewer.widget.ReaderPreviewRecyclerView(context); }
+    private void layout(RecyclerView row) {
+        // Apply the width adjustment on the following layout, as ViewRoot does after resize.
+        for (int pass = 0; pass < 3; pass++) {
+            row.measure(View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(700, View.MeasureSpec.AT_MOST));
+            row.layout(0, 0, 1000, row.getMeasuredHeight());
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+        }
+    }
+    private void waitFor(java.util.function.BooleanSupplier ready) throws Exception {
+        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(4);
+        while (!ready.getAsBoolean() && System.nanoTime() < end) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle(); Thread.sleep(10);
+        }
+        assertTrue("Preview did not become ready", ready.getAsBoolean());
+    }
+    private View page(RecyclerView row, int index) { return row.getLayoutManager().findViewByPosition(index); }
+    private ImageView image(View card) { return (ImageView) ((LinearLayout) card).getChildAt(0); }
+
+    @Test public void previewDefaultsToEnabledAndCanBeDisabled() {
+        assertTrue(Settings.getReaderPagePreview());
+        Settings.putReaderPagePreview(false); assertFalse(Settings.getReaderPagePreview());
+        Settings.putReaderPagePreview(true); assertTrue(Settings.getReaderPagePreview());
     }
 
-    @Test public void draggingDoesNotJumpAndReleaseCommitsExactlyOnce() {
-        dragTo(50);
+    @Test public void draggingAndReleaseBrowseWithoutCommitting() {
+        dragTo(50); activity.onStopTrackingTouch(seek);
         assertFalse(methods().contains(jumpMethod()));
+        assertTrue((Boolean) ReflectionHelpers.getField(activity, "mPageSeeking"));
         assertEquals("51", left.getText().toString());
-        activity.onStopTrackingTouch(seek);
+    }
+
+    @Test public void disabledPreviewRestoresReleaseToJumpExactlyOnce() {
+        Settings.putReaderPagePreview(false);
+        dragTo(50); assertFalse(methods().contains(jumpMethod()));
+        activity.onStopTrackingTouch(seek); activity.onStopTrackingTouch(seek);
         assertEquals(1, methods().stream().filter(m -> m == jumpMethod()).count());
         List<Object[]> args = ReflectionHelpers.getField(gallery, "mArgsList");
         assertEquals(50, args.get(methods().indexOf(jumpMethod()))[0]);
     }
 
-    @Test public void currentPageNotificationCannotPullSliderBackDuringDrag() {
-        dragTo(50);
+    @Test public void currentPageNotificationCannotPullBrowsingSliderBack() {
+        dragTo(50); activity.onStopTrackingTouch(seek);
         ReflectionHelpers.setField(activity, "mCurrentIndex", 25);
         ReflectionHelpers.callInstanceMethod(activity, "updateSlider");
-        assertEquals(50, seek.getProgress());
-        assertEquals("51", left.getText().toString());
+        assertEquals(50, seek.getProgress()); assertEquals("51", left.getText().toString());
     }
 
     @Test public void canceledTouchRestoresCurrentPageWithoutJumping() {
@@ -105,324 +181,151 @@ public class ReaderPageSeekTest {
         MotionEvent cancel = MotionEvent.obtain(0, SystemClock.uptimeMillis(), MotionEvent.ACTION_CANCEL, 0, 0, 0);
         try { seek.onTouchEvent(cancel); } finally { cancel.recycle(); }
         activity.onStopTrackingTouch(seek);
-        assertFalse(methods().contains(jumpMethod()));
-        assertEquals(10, seek.getProgress());
+        assertFalse(methods().contains(jumpMethod())); assertEquals(10, seek.getProgress());
+        assertFalse((Boolean) ReflectionHelpers.getField(activity, "mPageSeeking"));
     }
 
-    @Test public void rightToLeftDragUpdatesTheRightPageLabel() {
+    @Test public void rightToLeftBrowseAndThumbnailClickUseTheActualPage() {
         ReflectionHelpers.setField(activity, "mLayoutMode", GalleryView.LAYOUT_RIGHT_TO_LEFT);
-        dragTo(20);
-        assertEquals("21", right.getText().toString());
-        activity.onStopTrackingTouch(seek);
-        assertTrue(methods().contains(jumpMethod()));
+        dragTo(20); activity.onStopTrackingTouch(seek);
+        assertEquals("21", right.getText().toString()); assertFalse(methods().contains(jumpMethod()));
+        activity.onPreviewPageBrowsed(24);
+        assertEquals(24, seek.getProgress()); assertEquals("25", right.getText().toString());
+        activity.onPreviewPageSelected(24); activity.onPreviewPageSelected(24);
+        assertEquals(1, methods().stream().filter(m -> m == jumpMethod()).count());
+        List<Object[]> args = ReflectionHelpers.getField(gallery, "mArgsList");
+        assertEquals(24, args.get(methods().indexOf(jumpMethod()))[0]);
     }
 
-    private void preparePreview() {
-        com.hippo.conaco.Conaco.Builder<com.hippo.lib.image.Image> builder = new com.hippo.conaco.Conaco.Builder<>();
-        builder.hasMemoryCache = true;
-        builder.memoryCacheMaxSize = 1024 * 1024;
-        builder.okHttpClient = new okhttp3.OkHttpClient();
-        builder.objectHelper = new com.hippo.ehviewer.ImageBitmapHelper();
-        previewConaco = builder.build();
-        details.evictAll();
-        metadataRequest = null;
-        android.util.LruCache<?, ?> metadata = ReflectionHelpers.getStaticField(ReaderPagePreview.class, "METADATA");
-        metadata.evictAll();
+    @Test public void accessibilityProgressOpensBrowsingWithoutJumping() {
+        seek.setProgress(30); activity.onProgressChanged(seek, 30, true);
+        assertTrue((Boolean) ReflectionHelpers.getField(activity, "mPageSeeking"));
+        assertFalse(methods().contains(jumpMethod()));
     }
 
-    private void waitFor(java.util.function.BooleanSupplier ready) throws Exception {
-        long end = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
-        while (!ready.getAsBoolean() && System.nanoTime() < end) {
-            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-            Thread.sleep(10);
+    @Test public void carouselRecyclesAGalleryAndOnlyClickCommitsTheBoundPage() throws Exception {
+        RecyclerView row = strip(); List<Integer> chosen = new ArrayList<>();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()), chosen::add, page -> { })) {
+            preview.show(50, 1000, false); layout(row);
+            assertEquals(1000, row.getAdapter().getItemCount());
+            assertTrue("Whole gallery views were inflated", row.getChildCount() <= 6);
+            View first = page(row, 50); assertNotNull(first);
+            assertEquals(250, first.getWidth());
+            preview.update(300, 1000, false); layout(row);
+            View target = page(row, 300); assertNotNull(target);
+            assertEquals("301", ((TextView) ((LinearLayout) target).getChildAt(1)).getText().toString());
+            assertTrue(chosen.isEmpty());
+            target.performClick(); assertEquals(java.util.Collections.singletonList(300), chosen);
         }
-        assertTrue("Preview did not become ready", ready.getAsBoolean());
     }
 
-    @Test public void localPreviewDropsStaleWorkAndClosesItsSource() throws Exception {
-        preparePreview();
-        Context context = RuntimeEnvironment.getApplication();
-        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(64, 48, android.graphics.Bitmap.Config.ARGB_8888);
-        java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
-        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, png);
-        java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.CountDownLatch resume = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.CountDownLatch closed = new java.util.concurrent.CountDownLatch(1);
-        java.util.List<Integer> loaded = new java.util.concurrent.CopyOnWriteArrayList<>();
-        java.util.concurrent.atomic.AtomicBoolean interrupted = new java.util.concurrent.atomic.AtomicBoolean();
-        java.util.concurrent.atomic.AtomicInteger readerRequests = new java.util.concurrent.atomic.AtomicInteger();
-        com.hippo.ehviewer.gallery.DirGalleryProvider provider = new com.hippo.ehviewer.gallery.DirGalleryProvider(
-                com.hippo.unifile.UniFile.fromFile(context.getCacheDir())) {
-            @Override protected void onRequest(int index) { readerRequests.incrementAndGet(); }
-            @Override public int getPreviewConcurrency() { return 1; }
-            @Override public com.hippo.ehviewer.gallery.ReaderPreviewSource createPreviewSource(Context app) {
-                return new com.hippo.ehviewer.gallery.ReaderPreviewSource() {
-                    final String identity = java.util.UUID.randomUUID().toString();
-                    @Override public com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache.Result load(int index, int edge) throws java.io.IOException {
-                        assertNotSame(android.os.Looper.getMainLooper(), android.os.Looper.myLooper());
-                        loaded.add(index);
-                        if (index == 2) {
-                            started.countDown();
-                            try { assertTrue(resume.await(3, java.util.concurrent.TimeUnit.SECONDS)); }
-                            catch (InterruptedException e) {
-                                interrupted.set(true);
-                                Thread.currentThread().interrupt();
-                                throw new java.io.InterruptedIOException();
-                            }
-                        }
-                        return com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache.load(app, identity + index, edge,
-                                () -> new java.io.ByteArrayInputStream(png.toByteArray()));
-                    }
-                    @Override public void close() { closed.countDown(); }
-                };
-            }
-        };
-        android.widget.LinearLayout row = new android.widget.LinearLayout(context);
-        ReaderPagePreview preview = new ReaderPagePreview(context, row, provider);
-        try {
-            preview.show(2, 1000, false);
-            assertTrue(started.await(3, java.util.concurrent.TimeUnit.SECONDS));
-            android.view.View originalCenter = row.getChildAt(2);
-            preview.update(3, 1000, false);
-            assertSame(originalCenter, row.getChildAt(1));
-            preview.update(4, 1000, false);
-            assertSame(originalCenter, row.getChildAt(0));
-            resume.countDown();
-            com.hippo.ehviewer.gallery.ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");
-            waitFor(() -> !loader.isLoading());
-            android.widget.LinearLayout center = (android.widget.LinearLayout) row.getChildAt(2);
-            waitFor(() -> ((android.widget.ImageView) center.getChildAt(0)).getDrawable() != null);
-            assertEquals("5", ((TextView) center.getChildAt(1)).getText().toString());
-            assertEquals(5, row.getChildCount());
-            assertEquals(0, readerRequests.get());
-            assertFalse(interrupted.get());
-            assertEquals(java.util.Arrays.asList(2, 4, 3, 5, 6), loaded);
-            // The completed old center is still in the new window and is not decoded again.
-            assertNotNull(((android.widget.ImageView) ((android.widget.LinearLayout) originalCenter).getChildAt(0)).getDrawable());
-            preview.hide();
-            assertEquals(android.view.View.GONE, row.getVisibility());
-        } finally { resume.countDown(); preview.close(); }
-        assertTrue(closed.await(3, java.util.concurrent.TimeUnit.SECONDS));
+    @Test public void aSinglePageHasNoEmptyPlaceholderCards() {
+        RecyclerView row = strip();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+            preview.show(0, 1, false); layout(row);
+            assertEquals(1, row.getAdapter().getItemCount()); assertEquals(1, row.getChildCount());
+            assertEquals("1", ((TextView) ((LinearLayout) row.getChildAt(0)).getChildAt(1)).getText().toString());
+        }
     }
 
-    @Test public void slowCacheWriteDoesNotDelayTheNextVisibleWindow() throws Exception {
-        preparePreview();
-        Context context = RuntimeEnvironment.getApplication();
-        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(64, 48, android.graphics.Bitmap.Config.ARGB_8888);
-        java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
-        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, png);
-        String identity = java.util.UUID.randomUUID().toString();
-        java.util.List<Integer> loaded = new java.util.concurrent.CopyOnWriteArrayList<>();
-        java.util.concurrent.atomic.AtomicInteger edgeUsed = new java.util.concurrent.atomic.AtomicInteger();
-        java.util.concurrent.CountDownLatch writeStarted = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.CountDownLatch resumeWrite = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.atomic.AtomicBoolean firstWrite = new java.util.concurrent.atomic.AtomicBoolean(true);
-        com.hippo.beerbelly.SimpleDiskCache cache = new com.hippo.beerbelly.SimpleDiskCache(
-                new java.io.File(context.getCacheDir(), identity), 32 * 1024 * 1024) {
-            @Override public com.hippo.streampipe.OutputStreamPipe getOutputStreamPipe(String key) {
-                com.hippo.streampipe.OutputStreamPipe pipe = super.getOutputStreamPipe(key);
-                return new com.hippo.streampipe.OutputStreamPipe() {
-                    @Override public void obtain() { pipe.obtain(); }
-                    @Override public void release() { pipe.release(); }
-                    @Override public void close() { pipe.close(); }
-                    @Override public java.io.OutputStream open() throws java.io.IOException {
-                        if (firstWrite.compareAndSet(true, false)) {
-                            writeStarted.countDown();
-                            try { assertTrue(resumeWrite.await(3, java.util.concurrent.TimeUnit.SECONDS)); }
-                            catch (InterruptedException e) { throw new java.io.InterruptedIOException(); }
-                        }
-                        return pipe.open();
-                    }
-                };
+    @Test public void rightToLeftReversesPhysicalOrderWithoutChangingPageLabels() {
+        RecyclerView row = strip();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+            preview.show(50, 1000, true); layout(row);
+            int leftPage = -1, rightPage = -1, leftX = Integer.MAX_VALUE, rightX = Integer.MIN_VALUE;
+            for (int i = 0; i < row.getChildCount(); i++) {
+                View child = row.getChildAt(i); int page = row.getChildAdapterPosition(child);
+                if (child.getLeft() < leftX) { leftX = child.getLeft(); leftPage = page; }
+                if (child.getLeft() > rightX) { rightX = child.getLeft(); rightPage = page; }
+                assertEquals(Integer.toString(page + 1), ((TextView) ((LinearLayout) child).getChildAt(1)).getText().toString());
             }
-        };
-        ReflectionHelpers.setStaticField(com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache.class, "cache", cache);
-        com.hippo.ehviewer.gallery.DirGalleryProvider provider = new com.hippo.ehviewer.gallery.DirGalleryProvider(
-                com.hippo.unifile.UniFile.fromFile(context.getCacheDir())) {
-            @Override public int getPreviewConcurrency() { return 1; }
-            @Override public com.hippo.ehviewer.gallery.ReaderPreviewSource createPreviewSource(Context app) {
-                return (index, edge) -> {
-                    loaded.add(index);
-                    edgeUsed.set(edge);
-                    return com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache.load(app, identity + index, edge,
-                            () -> new java.io.ByteArrayInputStream(png.toByteArray()));
-                };
-            }
-        };
-        android.widget.LinearLayout row = new android.widget.LinearLayout(context);
-        ReaderPagePreview preview = new ReaderPagePreview(context, row, provider);
-        try {
-            preview.show(50, 1000, false);
-            assertTrue(writeStarted.await(3, java.util.concurrent.TimeUnit.SECONDS));
-            com.hippo.ehviewer.gallery.ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");
-            waitFor(() -> !loader.isLoading());
-            assertEquals(java.util.Arrays.asList(50, 49, 51, 48, 52), loaded);
-            assertTrue(edgeUsed.get() >= 128 && edgeUsed.get() <= 256);
-            preview.update(100, 1000, false);
-            android.widget.LinearLayout center = (android.widget.LinearLayout) row.getChildAt(2);
-            waitFor(() -> ((android.widget.ImageView) center.getChildAt(0)).getDrawable() != null);
-            assertEquals(1, resumeWrite.getCount());
-            assertEquals("101", ((TextView) center.getChildAt(1)).getText().toString());
-            waitFor(() -> !loader.isLoading());
-            resumeWrite.countDown();
-            java.util.concurrent.ThreadPoolExecutor writer = ReflectionHelpers.getField(loader, "writer");
-            writer.submit(() -> { }).get(3, java.util.concurrent.TimeUnit.SECONDS);
-            for (int page : loaded) assertNotNull(com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache.cached(context,
-                    identity + page, edgeUsed.get()));
-        } finally { resumeWrite.countDown(); preview.close(); }
+            assertTrue(leftPage > rightPage); assertNotNull(page(row, 50));
+        }
     }
 
-    @Test public void preparedNeighborhoodAppearsImmediatelyWhenDraggingStarts() throws Exception {
-        preparePreview();
-        Context context = RuntimeEnvironment.getApplication();
-        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(64, 48, android.graphics.Bitmap.Config.ARGB_8888);
-        java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
-        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, png);
-        String identity = java.util.UUID.randomUUID().toString();
-        java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
-        com.hippo.ehviewer.gallery.DirGalleryProvider provider = new com.hippo.ehviewer.gallery.DirGalleryProvider(
-                com.hippo.unifile.UniFile.fromFile(context.getCacheDir())) {
-            @Override public com.hippo.ehviewer.gallery.ReaderPreviewSource createPreviewSource(Context app) {
-                return (index, edge) -> {
-                    reads.incrementAndGet();
-                    return com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache.load(app, identity + index, edge,
-                            () -> new java.io.ByteArrayInputStream(png.toByteArray()));
-                };
-            }
-        };
-        android.widget.LinearLayout row = new android.widget.LinearLayout(context);
-        row.setVisibility(android.view.View.GONE);
-        ReaderPagePreview preview = new ReaderPagePreview(context, row, provider);
-        try {
-            preview.prepare(50, 1000, false);
-            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(150));
-            com.hippo.ehviewer.gallery.ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");
-            waitFor(() -> loader.get(48) != null && loader.get(49) != null && loader.get(50) != null
-                    && loader.get(51) != null && loader.get(52) != null);
-            assertEquals(android.view.View.GONE, row.getVisibility());
-            assertEquals(5, reads.get());
-            preview.show(50, 1000, false);
-            for (int i = 0; i < 5; i++) assertNotNull(
-                    ((android.widget.ImageView) ((android.widget.LinearLayout) row.getChildAt(i)).getChildAt(0)).getDrawable());
-            assertEquals(5, reads.get());
-        } finally { preview.close(); }
+    @Test public void idlePreparedPagesBindSynchronouslyWhenTheCarouselOpens() throws Exception {
+        RecyclerView row = strip(); AtomicInteger reads = new AtomicInteger();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(reads))) {
+            preview.prepare(0, 64, false);
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(200));
+            ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");
+            waitFor(() -> loader.get(63) != null && !loader.isLoading());
+            int preparedReads = reads.get();
+            preview.show(30, 64, false); layout(row);
+            for (int i = 0; i < row.getChildCount(); i++) assertNotNull(image(row.getChildAt(i)).getDrawable());
+            assertEquals(preparedReads, reads.get());
+        }
     }
 
-    @Test public void hidingLocalPreviewInterruptsWorkAndReopeningStartsANewWindow() throws Exception {
-        preparePreview();
-        Context context = RuntimeEnvironment.getApplication();
-        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(64, 48, android.graphics.Bitmap.Config.ARGB_8888);
-        java.io.ByteArrayOutputStream png = new java.io.ByteArrayOutputStream();
-        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, png);
-        java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(1);
-        java.util.concurrent.CountDownLatch interrupted = new java.util.concurrent.CountDownLatch(1);
-        com.hippo.ehviewer.gallery.DirGalleryProvider provider = new com.hippo.ehviewer.gallery.DirGalleryProvider(
-                com.hippo.unifile.UniFile.fromFile(context.getCacheDir())) {
+    @Test public void hideInterruptsOldDecodeAndAllowsANewCarouselTarget() throws Exception {
+        RecyclerView row = strip(); byte[] encoded = poster(); String identity = UUID.randomUUID().toString();
+        CountDownLatch started = new CountDownLatch(1), interrupted = new CountDownLatch(1);
+        DirGalleryProvider provider = new DirGalleryProvider(UniFile.fromFile(context.getCacheDir())) {
             @Override public com.hippo.ehviewer.gallery.ReaderPreviewSource createPreviewSource(Context app) {
-                String identity = java.util.UUID.randomUUID().toString();
                 return (index, edge) -> {
                     if (index == 2) {
                         started.countDown();
-                        try { new java.util.concurrent.CountDownLatch(1).await(3, java.util.concurrent.TimeUnit.SECONDS); }
+                        try { new CountDownLatch(1).await(5, TimeUnit.SECONDS); }
                         catch (InterruptedException e) {
-                            interrupted.countDown();
-                            Thread.currentThread().interrupt();
-                            throw new java.io.InterruptedIOException();
+                            interrupted.countDown(); Thread.currentThread().interrupt(); throw new InterruptedIOException();
                         }
                     }
-                    return com.hippo.ehviewer.gallery.ReaderPreviewBitmapCache.load(app, identity + index, edge,
-                            () -> new java.io.ByteArrayInputStream(png.toByteArray()));
+                    return ReaderPreviewBitmapCache.load(app, identity + index, edge, () -> new ByteArrayInputStream(encoded));
                 };
             }
         };
-        android.widget.LinearLayout row = new android.widget.LinearLayout(context);
-        ReaderPagePreview preview = new ReaderPagePreview(context, row, provider);
-        try {
-            preview.show(2, 1000, false);
-            assertTrue(started.await(3, java.util.concurrent.TimeUnit.SECONDS));
-            preview.update(3, 1000, false);
-            preview.hide();
-            assertTrue(interrupted.await(3, java.util.concurrent.TimeUnit.SECONDS));
-            preview.show(10, 1000, false);
-            android.widget.LinearLayout center = (android.widget.LinearLayout) row.getChildAt(2);
-            waitFor(() -> ((android.widget.ImageView) center.getChildAt(0)).getDrawable() != null);
-            assertEquals("11", ((TextView) center.getChildAt(1)).getText().toString());
-        } finally { preview.close(); }
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, provider)) {
+            preview.show(2, 1000, false); layout(row); assertTrue(started.await(3, TimeUnit.SECONDS));
+            preview.hide(); assertTrue(interrupted.await(3, TimeUnit.SECONDS));
+            assertEquals(View.GONE, row.getVisibility());
+            preview.show(10, 1000, false); layout(row);
+            waitFor(() -> page(row, 10) != null && image(page(row, 10)).getDrawable() != null);
+            assertEquals("11", ((TextView) ((LinearLayout) page(row, 10)).getChildAt(1)).getText().toString());
+        }
     }
 
-    @Test public void onlinePreviewRetainsRequestsForOverlappingCards() {
-        preparePreview();
-        Context context = RuntimeEnvironment.getApplication();
-        com.hippo.ehviewer.client.data.GalleryInfo info = new com.hippo.ehviewer.client.data.GalleryInfo();
-        info.gid = 124; info.token = "preview-reuse";
-        com.hippo.ehviewer.client.data.NormalPreviewSet set = new com.hippo.ehviewer.client.data.NormalPreviewSet();
-        for (int i = 0; i < 40; i++) set.addItem(i, "https://example.invalid/thumb", i * 100, 0, 100, 150, "");
-        com.hippo.ehviewer.client.data.GalleryDetail detail = new com.hippo.ehviewer.client.data.GalleryDetail();
-        detail.token = info.token; detail.previewSet = set;
-        details.put(info.gid, detail);
-        android.widget.LinearLayout row = new android.widget.LinearLayout(context);
-        ReaderPagePreview preview = new ReaderPagePreview(context, row,
-                new com.hippo.ehviewer.gallery.EhGalleryProvider(context, info));
-        try {
-            preview.show(10, 40, false);
-            android.view.View[] original = new android.view.View[5];
-            int[] ids = new int[5];
-            for (int i = 0; i < 5; i++) {
-                original[i] = row.getChildAt(i);
-                ids[i] = ((com.hippo.widget.LoadImageView) ((android.widget.LinearLayout) original[i]).getChildAt(0)).getTaskId();
-            }
-            preview.update(11, 40, false);
-            for (int i = 0; i < 4; i++) {
-                assertSame(original[i + 1], row.getChildAt(i));
-                assertEquals(ids[i + 1], ((com.hippo.widget.LoadImageView) ((android.widget.LinearLayout) row.getChildAt(i)).getChildAt(0)).getTaskId());
-                assertEquals(i == 2, row.getChildAt(i).isSelected());
-            }
-            preview.update(11, 40, true);
-            assertEquals("12", ((TextView) ((android.widget.LinearLayout) row.getChildAt(2)).getChildAt(1)).getText().toString());
-            assertEquals("14", ((TextView) ((android.widget.LinearLayout) row.getChildAt(0)).getChildAt(1)).getText().toString());
-        } finally { preview.close(); }
+    @Test public void backClosesPreviewAndRestoresCurrentProgressWithoutLeavingReader() {
+        RecyclerView row = strip();
+        ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()));
+        ReflectionHelpers.setField(activity, "mPagePreview", preview);
+        dragTo(50); layout(row); activity.onStopTrackingTouch(seek);
+        assertTrue(preview.isVisible());
+        activity.onBackPressed();
+        assertFalse(preview.isVisible()); assertFalse(activity.isFinishing());
+        assertEquals(10, seek.getProgress()); assertFalse(methods().contains(jumpMethod()));
     }
 
-    @Test public void onlinePreviewMapsFilteredPageToWebsiteThumbnailPagination() {
-        preparePreview();
-        Context context = RuntimeEnvironment.getApplication();
-        com.hippo.ehviewer.client.data.GalleryInfo info = new com.hippo.ehviewer.client.data.GalleryInfo();
-        info.gid = 123; info.token = "preview-test";
+    @Test public void onlinePreviewMapsFilteredSourceAndCancelsMetadataOnDismiss() throws Exception {
+        GalleryInfo info = new GalleryInfo(); info.gid = 123; info.token = "preview-test";
         com.hippo.ehviewer.client.data.NormalPreviewSet set = new com.hippo.ehviewer.client.data.NormalPreviewSet();
         for (int i = 0; i < 40; i++) set.addItem(i, "https://example.invalid/thumb", 0, 0, 100, 150, "");
         com.hippo.ehviewer.client.data.GalleryDetail detail = new com.hippo.ehviewer.client.data.GalleryDetail();
-        detail.token = info.token; detail.previewSet = set;
-        details.put(info.gid, detail);
-        com.hippo.ehviewer.gallery.EhGalleryProvider provider = new com.hippo.ehviewer.gallery.EhGalleryProvider(context, info) {
+        detail.token = info.token; detail.previewSet = set; details.put(info.gid, detail);
+        EhGalleryProvider provider = new EhGalleryProvider(context, info) {
             @Override public int getSourcePage(int index) { return 120 + index; }
+            @Override protected UniFile getPreviewDirectory() { return null; }
         };
-        ReaderPagePreview preview = new ReaderPagePreview(context, new android.widget.LinearLayout(context), provider);
-        try {
-            preview.show(0, 3, true);
+        RecyclerView row = strip();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, provider)) {
+            preview.show(0, 3, true); layout(row);
+            ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");
+            waitFor(() -> loader.isUnavailable(0));
             ReflectionHelpers.callInstanceMethod(preview, "dispatchOnline");
-            assertNotNull(metadataRequest);
-            assertTrue(metadataRequest.getArgs()[0].toString().contains("p=3"));
-            preview.hide();
-            assertTrue(metadataRequest.isCancelled());
-        } finally { preview.close(); }
+            assertNotNull(metadataRequest); assertTrue(metadataRequest.getArgs()[0].toString().contains("p=3"));
+            preview.hide(); assertTrue(metadataRequest.isCancelled());
+        }
     }
 
     @Implements(com.hippo.ehviewer.EhApplication.class)
     public static class PreviewAppShadow extends org.robolectric.shadows.ShadowApplication {
-        @Implementation protected static com.hippo.conaco.Conaco<com.hippo.lib.image.Image> getConaco(Context context) {
-            return previewConaco;
-        }
-        @Implementation protected static androidx.collection.LruCache<Long, com.hippo.ehviewer.client.data.GalleryDetail> getGalleryDetailCache(Context context) {
-            return details;
-        }
-        @Implementation protected static com.hippo.ehviewer.client.EhClient getEhClient(Context context) {
-            return new com.hippo.ehviewer.client.EhClient(context);
-        }
+        @Implementation protected static com.hippo.conaco.Conaco<com.hippo.lib.image.Image> getConaco(Context context) { return previewConaco; }
+        @Implementation protected static androidx.collection.LruCache<Long, com.hippo.ehviewer.client.data.GalleryDetail> getGalleryDetailCache(Context context) { return details; }
+        @Implementation protected static com.hippo.ehviewer.client.EhClient getEhClient(Context context) { return new com.hippo.ehviewer.client.EhClient(context); }
     }
 
     @Implements(com.hippo.ehviewer.client.EhClient.class)
     public static class PreviewClientShadow {
         @Implementation protected void __constructor__(Context context) { }
-        @Implementation protected void execute(com.hippo.ehviewer.client.EhRequest request) { metadataRequest = request; }
+        @Implementation protected void execute(EhRequest request) { metadataRequest = request; }
     }
 }

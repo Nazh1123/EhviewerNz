@@ -197,4 +197,17 @@
     <string name="translation_source_detected">กำลังแปล: %1$s → %2$s</string>
     <string name="translation_source_unknown">ไม่สามารถระบุภาษาได้อย่างมั่นใจ โปรดเลือกภาษาเองก่อนใช้ ML Kit</string>
     <string name="translation_source_auto_mlkit_help">โหมดอัตโนมัติเตรียมชุดภาษาญี่ปุ่น เกาหลี จีน และภาษาเป้าหมาย ภาษาอังกฤษไม่ต้องใช้ชุดแยก</string>
+    <string name="translation_ppocr_help">การรู้จำข้อความที่ไม่ใช่ภาษาญี่ปุ่นต้องใช้ส่วนประกอบ OCR ของ PP-OCRv5 และโมเดลภาษาที่ตรงกัน เมื่อดาวน์โหลดโมเดลจะติดตั้งส่วนประกอบที่จำเป็นด้วย หรือนำเข้า ZIP ของส่วนประกอบและไฟล์ inference.onnx ทางการแยกกัน โมเดลภาษาจีนรองรับทั้งตัวย่อและตัวเต็ม โดยตรวจสอบไฟล์ก่อนใช้งาน</string>
+    <string name="translation_ppocr_required">ดาวน์โหลดหรือนำเข้าส่วนประกอบ PP-OCRv5 และโมเดลภาษาที่ตรงกันใน การตั้งค่าการแปล → จัดการโมเดล → โมเดลมังงะ</string>
+    <string name="translation_ppocr_runtime_title">ส่วนประกอบ PP-OCRv5</string>
+    <string name="translation_ppocr_runtime_help">ส่วนประกอบ OCR เสริมสำหรับภาษาจีน อังกฤษ และเกาหลี ภาษาญี่ปุ่นไม่จำเป็นต้องใช้ ดาวน์โหลด ONNX Runtime 1.24.3 ทางการ (ประมาณ 41 MB) และติดตั้งเฉพาะไลบรารี arm64 (ประมาณ 26 MB) หรือนำเข้า ZIP ที่ตรงกัน ตรวจสอบไฟล์ก่อนติดตั้ง เมื่อลบส่วนประกอบจะเก็บโมเดลภาษาไว้ และดาวน์โหลดใหม่เพื่อเปิดการรู้จำได้</string>
+    <string name="translation_model_import_mode">เลือกวิธีนำเข้า GGUF</string>
+    <string name="translation_model_import_copy">คัดลอกไปยังพื้นที่ส่วนตัวของแอป</string>
+    <string name="translation_model_import_reference">ใช้ไฟล์ภายนอกโดยตรง</string>
+    <string name="translation_model_external_badge">ไฟล์ภายนอก</string>
+    <string name="translation_model_remove_reference">ลบการอ้างอิง</string>
+    <string name="translation_model_remove_reference_confirm">ลบการอ้างอิงถึง “%1$s” หรือไม่? ไฟล์ GGUF ต้นฉบับจะยังอยู่</string>
+    <string name="translation_model_external_help">อ่าน GGUF ต้นฉบับโดยไม่เก็บสำเนาส่วนตัว ห้ามย้าย ลบ หรือแก้ไขไฟล์ต้นฉบับ นำเข้าอีกครั้งแบบคัดลอกเพื่อใช้สำเนาส่วนตัว การอ้างอิงโมเดลเดิมจะลบสำเนาส่วนตัวที่มีอยู่ การลบการอ้างอิงจะยังเก็บไฟล์ต้นฉบับไว้</string>
+    <string name="translation_model_external_unsupported">โหลดไฟล์ภายนอกนี้โดยตรงไม่ได้ เลือก “คัดลอกไปยังพื้นที่ส่วนตัวของแอป”</string>
+    <string name="translation_model_external_changed">โมเดลภายนอกเปลี่ยนไปหรือไม่พร้อมใช้งาน เลือกไฟล์ GGUF อีกครั้ง</string>
 </resources>

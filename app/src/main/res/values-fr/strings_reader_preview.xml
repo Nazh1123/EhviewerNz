@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_reader_page_preview">Aperçu des pages lors du défilement</string>
+    <string name="settings_reader_page_preview_summary">Touchez ou faites glisser le curseur de pages pour parcourir les miniatures, puis touchez une image pour l’ouvrir. Désactivez pour utiliser le curseur sans aperçu.</string>
+    <string name="reader_page_preview_page">Page %1$d</string>
+</resources>

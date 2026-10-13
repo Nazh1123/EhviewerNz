@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_update_history_title">Historial de actualizaciones de galerías</string>
+    <string name="gallery_update_history_all_empty">No hay registros de actualizaciones guardados</string>
+    <string name="gallery_update_history_load_failed">No se pudo cargar el historial de actualizaciones</string>
+    <string name="gallery_update_history_updated">Completado</string>
+    <string name="gallery_update_history_failed">Fallido</string>
+    <string name="gallery_update_history_updated_incomplete">Completado · información de páginas incompleta</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">La galería GID %1$d no tiene un token guardado, por lo que no se pueden cargar sus detalles.</string>
+    <string name="settings_gallery_update_record_limit">Número de registros de actualización</string>
+    <string name="gallery_read_updates">Leer solo las páginas añadidas</string>
+    <string name="gallery_update_log">Registro de actualización</string>
+    <string name="gallery_update_log_time">Fecha de actualización</string>
+    <string name="gallery_update_log_target">Galería de destino: %1$d</string>
+    <string name="gallery_update_log_legacy_notice">Este registro antiguo no guarda las identidades de las páginas, por lo que no se pueden abrir las páginas añadidas.</string>
+    <string name="gallery_update_log_no_added">Esta actualización no tiene páginas añadidas para leer.</string>
+    <string name="gallery_update_log_added">Añadidas:</string>
+    <string name="gallery_update_log_deleted">Eliminadas:</string>
+    <string name="gallery_update_log_none">Ninguna</string>
+    <string name="gallery_update_log_incomplete">La información de páginas está incompleta; no se pueden determinar con fiabilidad las adiciones y eliminaciones.</string>
+    <string name="gallery_update_log_versions">Ver historial de la cadena de versiones</string>
+    <string name="gallery_update_log_loading">Cargando registro de actualización…</string>
+    <string name="gallery_update_log_unavailable">El registro de actualización ya no está disponible</string>
+    <string name="gallery_update_reader_progress">Añadidas %1$d/%2$d · p. %3$d</string>
+    <string name="gallery_update_finalizing">Finalizando actualización de la galería</string>
+    <string name="gallery_update_finalization_failed">La descarga terminó, pero no se pudo finalizar la actualización. Reinténtalo desde los detalles de la galería.</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string name="gallery_update_error_log">Registro de errores</string>
+    <string name="gallery_update_error_source">Galería antigua seleccionada para actualizar</string>
+    <string name="gallery_update_error_source_info">GID: %1$d\nTítulo: %2$s</string>
+    <string name="gallery_update_error_source_unknown">No se pudo identificar ninguna galería antigua descargada.</string>
+    <string name="gallery_update_error_title_unknown">Título no disponible</string>
+    <string name="gallery_update_error_reason">Motivo del fallo</string>
+    <string name="gallery_update_error_parents_retained">Las siguientes galerías antiguas se conservaron o no se pudo confirmar su eliminación (GID): %1$s. Puedes reintentarlo desde los detalles de la galería.</string>
+    <string name="gallery_update_error_directory">El directorio de descarga no existe o no es accesible.</string>
+    <string name="gallery_update_error_metadata_missing">Falta el archivo .ehviewer.</string>
+    <string name="gallery_update_error_metadata_invalid">El archivo .ehviewer es ilegible, está dañado o pertenece a otra galería.</string>
+    <string name="gallery_update_error_source_metadata">Galería antigua (GID: %1$d): %2$s No se puede migrar el progreso de lectura.</string>
+    <string name="gallery_update_error_target_metadata">Galería nueva (GID: %1$d): %2$s No se puede verificar la integridad de la descarga.</string>
+    <string name="gallery_update_error_target_incomplete">La descarga de la nueva galería está incompleta o su estado cambió antes de finalizar.</string>
+    <string name="gallery_update_error_target_removed">La descarga de la nueva galería se eliminó o ya no está disponible; se canceló la actualización.</string>
+    <string name="gallery_update_error_image">La página p%1$d de la nueva galería falta, está vacía o es ilegible.</string>
+    <string name="gallery_update_error_record_stage">No se pudo guardar la comparación de la actualización antes de eliminar las galerías antiguas.</string>
+    <string name="gallery_update_error_record_publish">La limpieza de las galerías antiguas terminó, pero no se pudo guardar el registro de actualización.</string>
+    <string name="gallery_update_error_progress_checkpoint">Se procesó el progreso de lectura, pero no se pudo guardar su punto de control de finalización.</string>
+    <string name="gallery_update_error_validation">No se pudo validar o preparar la actualización: %1$s</string>
+    <string name="gallery_update_error_delete_parent">No se pudo eliminar el directorio de la galería antigua (GID: %1$d).</string>
+    <string name="gallery_update_error_cleanup">Falló la limpieza de las galerías antiguas: %1$s</string>
+    <string name="gallery_update_error_509">Se superó la cuota de imágenes (509).</string>
+    <string name="gallery_update_error_unknown">No se recibió un error detallado.</string>
+    <string name="gallery_update_error_download_metadata">No se pudo cargar la información de páginas de la nueva galería; la descarga no pudo comenzar.</string>
+    <string name="gallery_update_error_download">Falló la descarga de la nueva galería; %1$d páginas están incompletas.</string>
+    <string name="gallery_update_error_page">p%1$d: %2$s</string>
+    <string name="gallery_update_error_more_pages">También hubo errores en %1$d páginas adicionales.</string>
+    <string name="gallery_update_error_version_lookup">No se pudo resolver la información de versión de la galería: %1$s</string>
+    <string name="gallery_update_error_cancelled">La actualización se detuvo o canceló.</string>
+    <string name="gallery_update_error_interrupted">La actualización anterior se interrumpió antes de terminar la descarga. Reinténtalo para continuar.</string>
+    <string name="gallery_update_error_tokens">Los tokens de página de la galería GID %1$d están incompletos; no se puede encontrar un punto fiable para el progreso de lectura.</string>
+    <string name="gallery_update_error_progress_save">No se pudo guardar y verificar la posición de lectura migrada en el disco y la caché local.</string>
+    <string name="gallery_update_log_read">Leer esta actualización</string>
+    <string name="gallery_update_log_history">Ver historial de registros de actualización</string>
+    <string name="gallery_update_history_local_notice">Solo se abrirán las páginas añadidas que aún existan y sean legibles en la versión local actual, en su orden actual. Se omiten las páginas eliminadas en actualizaciones posteriores o ausentes localmente. Los recuentos y números de página de arriba describen la actualización original. Cada actualización tiene su propio progreso de lectura.</string>
+    <string name="gallery_update_history_no_local">La galería local actual no está disponible o sigue actualizándose.</string>
+    <string name="gallery_update_history_no_pages">No quedan páginas añadidas de esta actualización que se puedan leer localmente. Es posible que se eliminaran en una versión posterior o falten localmente. Los registros antiguos sin instantáneas de tokens solo se pueden leer en su versión local original.</string>
+    <string name="gallery_update_history_incomplete">Información de páginas incompleta</string>
+    <string name="gallery_update_history_empty">No hay registros de actualización guardados para esta cadena de versiones. Los registros antiguos pueden haberse eliminado por el límite de registros.</string>
+</resources>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_update_history_title">ギャラリー更新履歴</string>
+    <string name="gallery_update_history_all_empty">保存されたギャラリー更新履歴はありません</string>
+    <string name="gallery_update_history_load_failed">ギャラリー更新履歴を読み込めませんでした</string>
+    <string name="gallery_update_history_updated">完了</string>
+    <string name="gallery_update_history_failed">失敗</string>
+    <string name="gallery_update_history_updated_incomplete">完了 · ページ情報が不完全</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">ギャラリー GID %1$d のトークンが保存されていないため、詳細を読み込めません。</string>
+    <string name="settings_gallery_update_record_limit">更新履歴の保存件数</string>
+    <string name="gallery_read_updates">追加ページのみ読む</string>
+    <string name="gallery_update_log">更新ログ</string>
+    <string name="gallery_update_log_time">更新日時</string>
+    <string name="gallery_update_log_target">更新先ギャラリー：%1$d</string>
+    <string name="gallery_update_log_legacy_notice">この古い履歴にはページ識別情報が保存されていないため、追加ページを開けません。</string>
+    <string name="gallery_update_log_no_added">この更新には追加ページがありません。</string>
+    <string name="gallery_update_log_added">追加：</string>
+    <string name="gallery_update_log_deleted">削除：</string>
+    <string name="gallery_update_log_none">なし</string>
+    <string name="gallery_update_log_incomplete">ページ情報が不完全なため、追加と削除を正確に判定できません。</string>
+    <string name="gallery_update_log_versions">バージョン履歴を表示</string>
+    <string name="gallery_update_log_loading">更新履歴を読み込み中…</string>
+    <string name="gallery_update_log_unavailable">更新履歴は利用できなくなりました</string>
+    <string name="gallery_update_reader_progress">追加 %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_finalizing">ギャラリー更新を仕上げ中</string>
+    <string name="gallery_update_finalization_failed">ダウンロードは完了しましたが、更新の仕上げに失敗しました。ギャラリー詳細から再試行してください。</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string name="gallery_update_error_log">エラーログ</string>
+    <string name="gallery_update_error_source">更新対象の旧ギャラリー</string>
+    <string name="gallery_update_error_source_info">GID：%1$d\nタイトル：%2$s</string>
+    <string name="gallery_update_error_source_unknown">ダウンロード済みの旧ギャラリーを特定できませんでした。</string>
+    <string name="gallery_update_error_title_unknown">タイトル不明</string>
+    <string name="gallery_update_error_reason">失敗の原因</string>
+    <string name="gallery_update_error_parents_retained">次の旧ギャラリーは保持されたか、削除を確認できませんでした（GID）：%1$s。ギャラリー詳細から再試行できます。</string>
+    <string name="gallery_update_error_directory">ダウンロード先フォルダーが存在しないか、アクセスできません。</string>
+    <string name="gallery_update_error_metadata_missing">.ehviewer ファイルがありません。</string>
+    <string name="gallery_update_error_metadata_invalid">.ehviewer ファイルが読み取れない、破損している、または別のギャラリーのものです。</string>
+    <string name="gallery_update_error_source_metadata">旧ギャラリー（GID：%1$d）：%2$s 読書位置を引き継げません。</string>
+    <string name="gallery_update_error_target_metadata">新ギャラリー（GID：%1$d）：%2$s ダウンロードの完全性を確認できません。</string>
+    <string name="gallery_update_error_target_incomplete">新ギャラリーのダウンロードが不完全か、仕上げ前に状態が変わりました。</string>
+    <string name="gallery_update_error_target_removed">新ギャラリーのダウンロードが削除されたか利用できなくなったため、更新を中止しました。</string>
+    <string name="gallery_update_error_image">新ギャラリーの p%1$d が存在しない、空、または読み取れません。</string>
+    <string name="gallery_update_error_record_stage">旧ギャラリーの削除前に更新の比較結果を保存できませんでした。</string>
+    <string name="gallery_update_error_record_publish">旧ギャラリーの整理は完了しましたが、更新ログを保存できませんでした。</string>
+    <string name="gallery_update_error_progress_checkpoint">読書位置は処理されましたが、完了チェックポイントを保存できませんでした。</string>
+    <string name="gallery_update_error_validation">更新の検証または準備に失敗しました：%1$s</string>
+    <string name="gallery_update_error_delete_parent">旧ギャラリーのフォルダーを削除できませんでした（GID：%1$d）。</string>
+    <string name="gallery_update_error_cleanup">旧ギャラリーの整理に失敗しました：%1$s</string>
+    <string name="gallery_update_error_509">画像取得の上限を超えました（509）。</string>
+    <string name="gallery_update_error_unknown">エラーの詳細は返されませんでした。</string>
+    <string name="gallery_update_error_download_metadata">新ギャラリーのページ情報を読み込めず、ダウンロードを開始できませんでした。</string>
+    <string name="gallery_update_error_download">新ギャラリーのダウンロードに失敗しました。%1$d ページが未完了です。</string>
+    <string name="gallery_update_error_page">p%1$d：%2$s</string>
+    <string name="gallery_update_error_more_pages">ほかに %1$d ページでもエラーが発生しました。</string>
+    <string name="gallery_update_error_version_lookup">ギャラリーのバージョン情報を取得できませんでした：%1$s</string>
+    <string name="gallery_update_error_cancelled">更新が停止またはキャンセルされました。</string>
+    <string name="gallery_update_error_interrupted">前回の更新はダウンロード完了前に中断されました。再試行して続行してください。</string>
+    <string name="gallery_update_error_tokens">ギャラリー GID %1$d のページトークンが不完全なため、読書位置の基準を正確に特定できません。</string>
+    <string name="gallery_update_error_progress_save">引き継いだ読書位置をディスクとローカルキャッシュに保存・検証できませんでした。</string>
+    <string name="gallery_update_log_read">この更新を読む</string>
+    <string name="gallery_update_log_history">更新履歴を表示</string>
+    <string name="gallery_update_history_local_notice">現在のローカル版に残っていて読み取れる追加ページのみを、現在のページ順で開きます。後の更新で削除されたページやローカルにないページはスキップします。上の件数とページ番号は元の更新内容です。更新ごとに読書位置が保存されます。</string>
+    <string name="gallery_update_history_no_local">現在のローカルギャラリーは利用できないか、更新中です。</string>
+    <string name="gallery_update_history_no_pages">この更新の追加ページはローカルで読めなくなりました。後の版で削除されたか、ローカルにない可能性があります。ページトークンの記録がない古い履歴は、元のローカル版でのみ読めます。</string>
+    <string name="gallery_update_history_incomplete">ページ情報が不完全</string>
+    <string name="gallery_update_history_empty">このバージョン系列の更新履歴はありません。保存件数の制限で古い履歴が削除された可能性があります。</string>
+</resources>

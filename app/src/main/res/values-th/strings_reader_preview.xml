@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_reader_page_preview">ตัวอย่างหน้าขณะเลื่อน</string>
+    <string name="settings_reader_page_preview_summary">แตะหรือลากแถบเลื่อนหน้าเพื่อดูภาพย่อ แล้วแตะรูปภาพเพื่อไปยังหน้านั้น ปิดเพื่อใช้แถบเลื่อนโดยไม่มีตัวอย่าง</string>
+    <string name="reader_page_preview_page">หน้า %1$d</string>
+</resources>

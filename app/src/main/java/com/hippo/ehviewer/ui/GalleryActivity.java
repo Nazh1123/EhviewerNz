@@ -259,6 +259,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private ReversibleSeekBar mSeekBar;
     private ReaderPagePreview mPagePreview;
     private boolean mPageSeeking;
+    private boolean mDismissingPagePreviewTouch;
     @Nullable
     private View mSaveNotice;
     @Nullable
@@ -857,10 +858,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mRightText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.right);
         mSeekBar = (ReversibleSeekBar) ViewUtils.$$(mSeekBarPanel, R.id.seek_bar);
         mSeekBar.setOnSeekBarChangeListener(this);
-        if (mGalleryProvider != null) {
-            mPagePreview = new ReaderPagePreview(this,
-                    (android.widget.LinearLayout) findViewById(R.id.page_preview_strip), mGalleryProvider);
-        }
+        applyPagePreviewSetting();
         mPageSliderDefaultProgressTint = mSeekBar.getProgressTintList();
         mPageSliderDefaultProgressBackgroundTint =
                 mSeekBar.getProgressBackgroundTintList();
@@ -1121,6 +1119,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     public void onBackPressed() {
+        if (mPagePreview != null && mPagePreview.isVisible()) {
+            cancelPagePreview();
+            SimpleHandler.getInstance().postDelayed(mHideSliderRunnable, HIDE_SLIDER_DELAY);
+            return;
+        }
         Intent intent = new Intent();
         intent.putExtra("info", mGalleryInfo);
         setResult(LOCAL_GALLERY_INFO_CHANGE, intent);
@@ -1129,6 +1132,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onPause() {
+        mDismissingPagePreviewTouch = false;
         cancelPagePreview();
         if (mTranslationController != null) mTranslationController.pause(isFinishing());
         if (mOrientationEventListener != null) {
@@ -1153,6 +1157,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onResume() {
         super.onResume();
+        applyPagePreviewSetting();
         applyReaderKeyProfile();
         if (mTranslationController != null) mTranslationController.resume();
         if (mOrientationEventListener != null && mOrientationEventListener.canDetectOrientation()) {
@@ -1342,6 +1347,24 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
+        if (mDismissingPagePreviewTouch) {
+            if (event.getActionMasked() == MotionEvent.ACTION_UP
+                    || event.getActionMasked() == MotionEvent.ACTION_CANCEL) mDismissingPagePreviewTouch = false;
+            return true;
+        }
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN && mPagePreview != null
+                && mPagePreview.isVisible()
+                && !isPointInsideView(event.getRawX(), event.getRawY(), findViewById(R.id.page_preview_strip))
+                && (mSeekBarPanel == null || !isPointInsideView(event.getRawX(), event.getRawY(), mSeekBarPanel))) {
+            cancelPagePreview();
+            SimpleHandler.getInstance().postDelayed(mHideSliderRunnable, HIDE_SLIDER_DELAY);
+            mDismissingPagePreviewTouch = true;
+            return true;
+        }
+        if (mPagePreview != null && mPagePreview.isVisible()) {
+            // Thumbnail gestures belong to the carousel, including over animated reader pages.
+            return super.dispatchTouchEvent(event);
+        }
         if (handleAnimatedWebpLongPressGesture(event)) {
             if (event.getActionMasked() == MotionEvent.ACTION_UP
                     || event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
@@ -1929,9 +1952,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         end.setText(Integer.toString(mSize));
         mSeekBar.setMax(mSize - 1);
         mSeekBar.setProgress(displayedIndex);
-        if (mPageSeeking && mPagePreview != null) {
+        if (Settings.getReaderPagePreview() && mPageSeeking && mPagePreview != null) {
             mPagePreview.update(displayedIndex, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
-        } else if (mPagePreview != null) {
+        } else if (Settings.getReaderPagePreview() && mPagePreview != null) {
             mPagePreview.prepare(displayedIndex, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
         }
     }
@@ -1948,8 +1971,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (fromUser && null != start) {
             start.setText(Integer.toString(progress + 1));
         }
-        if (fromUser && mPageSeeking && mPagePreview != null) {
-            mPagePreview.update(progress, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
+        if (fromUser && Settings.getReaderPagePreview()) {
+            // Keyboard/accessibility changes may arrive without onStartTrackingTouch.
+            if (!mPageSeeking) onStartTrackingTouch(seekBar);
+            if (mPagePreview != null) mPagePreview.update(progress, mSize,
+                    mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
         }
     }
 
@@ -1958,17 +1984,23 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         SimpleHandler.getInstance().removeCallbacks(mHideSliderRunnable);
         mPageSeeking = true;
         if (autoTransferring) autoRead(mAutoTransferPanel);
-        if (mPagePreview != null) mPagePreview.show(seekBar.getProgress(), mSize,
+        if (Settings.getReaderPagePreview() && mPagePreview != null) mPagePreview.show(seekBar.getProgress(), mSize,
                 mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
         updateAnimatedWebpUi();
     }
 
     @Override
     public void onStopTrackingTouch(SeekBar seekBar) {
-        SimpleHandler.getInstance().postDelayed(mHideSliderRunnable, HIDE_SLIDER_DELAY);
         int progress = seekBar.getProgress();
         boolean commit = mPageSeeking && (!(seekBar instanceof ReversibleSeekBar)
                 || !((ReversibleSeekBar) seekBar).wasTouchCancelled());
+        if (Settings.getReaderPagePreview() && commit) {
+            // Keep browsing after release. Only a thumbnail click commits a reader page.
+            if (mPagePreview != null) mPagePreview.update(progress, mSize,
+                    mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
+            return;
+        }
+        SimpleHandler.getInstance().postDelayed(mHideSliderRunnable, HIDE_SLIDER_DELAY);
         mPageSeeking = false;
         if (mPagePreview != null) mPagePreview.hide();
         if (commit && progress != mCurrentIndex && null != mGalleryView) {
@@ -1982,6 +2014,37 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mPagePreview != null) mPagePreview.hide();
         updateSlider();
         updateAnimatedWebpUi();
+    }
+
+    private void applyPagePreviewSetting() {
+        if (!Settings.getReaderPagePreview()) {
+            if (mPagePreview != null) {
+                cancelPagePreview();
+                mPagePreview.close();
+                mPagePreview = null;
+            }
+            return;
+        }
+        androidx.recyclerview.widget.RecyclerView strip = findViewById(R.id.page_preview_strip);
+        if (mPagePreview == null && mGalleryProvider != null && strip != null) {
+            mPagePreview = new ReaderPagePreview(this, strip, mGalleryProvider,
+                    this::onPreviewPageSelected, this::onPreviewPageBrowsed);
+            updateSlider();
+        }
+    }
+
+    void onPreviewPageSelected(int page) {
+        if (!Settings.getReaderPagePreview() || !mPageSeeking || page < 0 || page >= mSize) return;
+        cancelPagePreview();
+        if (mGalleryView != null && page != mCurrentIndex) mGalleryView.setCurrentPage(page);
+        SimpleHandler.getInstance().postDelayed(mHideSliderRunnable, HIDE_SLIDER_DELAY);
+    }
+
+    void onPreviewPageBrowsed(int page) {
+        if (!mPageSeeking || mSeekBar == null) return;
+        mSeekBar.setProgress(page);
+        TextView label = mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT ? mRightText : mLeftText;
+        if (label != null) label.setText(Integer.toString(page + 1));
     }
 
     @Override

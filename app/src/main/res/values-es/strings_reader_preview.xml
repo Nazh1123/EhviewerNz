@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_reader_page_preview">Vista previa al desplazarse por páginas</string>
+    <string name="settings_reader_page_preview_summary">Toca o arrastra el control de páginas para explorar miniaturas y toca una imagen para saltar a ella. Desactiva esta opción para usar el control sin vistas previas.</string>
+    <string name="reader_page_preview_page">Página %1$d</string>
+</resources>

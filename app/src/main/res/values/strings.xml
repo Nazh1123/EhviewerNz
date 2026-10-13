@@ -484,7 +484,7 @@
 
     <!-- Download -->
     <string name="scene_download_title">%1$s Galleries - %2$s</string>
-    <string name="scene_download_title_new">%s(%s)</string>
+    <string name="scene_download_title_new">%1$s(%2$s)</string>
     <string name="scene_download_continuous_title">Downloads (%d)</string>
     <string name="no_download_info">Download items will be shown here</string>
     <string name="download_state_none">Idle</string>
@@ -1293,7 +1293,7 @@
     <string name="settings_animated_webp_playback_time">Playback time</string>
     <string name="settings_animated_webp_playback_time_summary">Show the current playback time and total duration above the bottom progress bar</string>
     <string name="settings_animated_webp_progress_control">Progress bar control</string>
-    <string name="settings_animated_webp_progress_control_summary">Swipe within the bottom 25% of the screen to seek through the animation</string>
+    <string name="settings_animated_webp_progress_control_summary" formatted="false">Swipe within the bottom 25% of the screen to seek through the animation</string>
     <string name="settings_animated_webp_sequential_playback">Sequential playback</string>
     <string name="settings_animated_webp_sequential_playback_summary">Automatically open the next image when playback finishes</string>
     <string name="settings_animated_webp_auto_transfer_button">Auto page-turn button</string>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_update_history_title">Gallery update history</string>
+    <string name="gallery_update_history_all_empty">No saved gallery update records</string>
+    <string name="gallery_update_history_load_failed">Unable to load gallery update history</string>
+    <string name="gallery_update_history_updated">Completed</string>
+    <string name="gallery_update_history_failed">Failed</string>
+    <string name="gallery_update_history_updated_incomplete">Completed · incomplete page info</string>
+    <string name="gallery_update_history_read_progress">%1$d/%2$d</string>
+    <string name="gallery_update_history_missing_token">Gallery GID %1$d has no saved gallery token, so its details cannot be loaded.</string>
+    <string name="settings_gallery_update_record_limit">Update record count</string>
+    <string name="gallery_read_updates">Read updates only</string>
+    <string name="gallery_update_log">Update log</string>
+    <string name="gallery_update_log_time">Updated at</string>
+    <string name="gallery_update_log_target">Target gallery: %1$d</string>
+    <string name="gallery_update_log_legacy_notice">This older record has no saved page identities, so its added pages cannot be opened.</string>
+    <string name="gallery_update_log_no_added">This update has no added pages to read.</string>
+    <string name="gallery_update_log_added">Added:</string>
+    <string name="gallery_update_log_deleted">Deleted:</string>
+    <string name="gallery_update_log_none">None</string>
+    <string name="gallery_update_log_incomplete">Page information is incomplete; additions and deletions cannot be determined reliably.</string>
+    <string name="gallery_update_log_versions">View version chain history</string>
+    <string name="gallery_update_log_loading">Loading update record…</string>
+    <string name="gallery_update_log_unavailable">Update record is no longer available</string>
+    <string name="gallery_update_reader_progress">Updates %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_finalizing">Finishing gallery update</string>
+    <string name="gallery_update_finalization_failed">Download completed, but update finalization failed. Retry from the gallery detail page.</string>
+    <string-array name="gallery_update_record_limit_entries">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string-array name="gallery_update_record_limit_values">
+        <item>50</item>
+        <item>100</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1000</item>
+    </string-array>
+    <string name="gallery_update_error_log">Error log</string>
+    <string name="gallery_update_error_source">Old gallery selected for update</string>
+    <string name="gallery_update_error_source_info">GID: %1$d\nTitle: %2$s</string>
+    <string name="gallery_update_error_source_unknown">No downloaded old gallery could be identified.</string>
+    <string name="gallery_update_error_title_unknown">Title unavailable</string>
+    <string name="gallery_update_error_reason">Failure reason</string>
+    <string name="gallery_update_error_parents_retained">The following old galleries have been retained, or their deletion could not be confirmed (GID): %1$s. You can retry from the gallery detail page.</string>
+    <string name="gallery_update_error_directory">Download directory is missing or inaccessible.</string>
+    <string name="gallery_update_error_metadata_missing">The .ehviewer file is missing.</string>
+    <string name="gallery_update_error_metadata_invalid">The .ehviewer file is unreadable, corrupt, or belongs to another gallery.</string>
+    <string name="gallery_update_error_source_metadata">Old gallery (GID: %1$d): %2$s Reading progress cannot be migrated.</string>
+    <string name="gallery_update_error_target_metadata">New gallery (GID: %1$d): %2$s Download integrity cannot be verified.</string>
+    <string name="gallery_update_error_target_incomplete">The new gallery download is incomplete or its state changed before finalization.</string>
+    <string name="gallery_update_error_target_removed">The new gallery download was removed or is no longer available; the update was cancelled.</string>
+    <string name="gallery_update_error_image">New gallery page p%1$d is missing, empty, or unreadable.</string>
+    <string name="gallery_update_error_record_stage">Unable to save the update comparison before removing old galleries.</string>
+    <string name="gallery_update_error_record_publish">Old gallery cleanup finished, but the update log could not be saved.</string>
+    <string name="gallery_update_error_progress_checkpoint">Reading progress was processed, but its completion checkpoint could not be saved.</string>
+    <string name="gallery_update_error_validation">Unable to validate or prepare the update: %1$s</string>
+    <string name="gallery_update_error_delete_parent">Unable to delete the old gallery directory (GID: %1$d).</string>
+    <string name="gallery_update_error_cleanup">Old gallery cleanup failed: %1$s</string>
+    <string name="gallery_update_error_509">Image quota exceeded (509).</string>
+    <string name="gallery_update_error_unknown">No detailed error was returned.</string>
+    <string name="gallery_update_error_download_metadata">Unable to load the new gallery page information; the download could not start.</string>
+    <string name="gallery_update_error_download">The new gallery download failed; %1$d pages are incomplete.</string>
+    <string name="gallery_update_error_page">p%1$d: %2$s</string>
+    <string name="gallery_update_error_more_pages">Errors also occurred on %1$d additional pages.</string>
+    <string name="gallery_update_error_version_lookup">Unable to resolve the gallery version information: %1$s</string>
+    <string name="gallery_update_error_cancelled">The update was stopped or cancelled.</string>
+    <string name="gallery_update_error_interrupted">The previous update was interrupted before the download finished. Retry to continue.</string>
+    <string name="gallery_update_error_tokens">Page tokens for gallery GID %1$d are incomplete; no reliable reading-progress anchor can be found.</string>
+    <string name="gallery_update_error_progress_save">Unable to save and verify the migrated reading position on disk and in the local cache.</string>
+    <string name="gallery_update_log_read">Read this update</string>
+    <string name="gallery_update_log_history">View update record history</string>
+    <string name="gallery_update_history_local_notice">Only added pages that still exist and are readable in the current local version will be opened, in current page order. Pages deleted by later updates or missing locally are skipped. Counts and page numbers above describe the original update. Each update has its own reading progress.</string>
+    <string name="gallery_update_history_no_local">The current local gallery is unavailable or still updating.</string>
+    <string name="gallery_update_history_no_pages">No added pages from this update remain readable locally. They may have been deleted in a later version or be missing locally. Older records without page-token snapshots can only be read in their original local version.</string>
+    <string name="gallery_update_history_incomplete">Page information incomplete</string>
+    <string name="gallery_update_history_empty">No saved update records for this version chain. Older records may have been removed by the record count limit.</string>
+</resources>

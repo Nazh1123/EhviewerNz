@@ -31,6 +31,7 @@ _build*.bat
 /docs/
 /tools/*
 !/tools/package_ppocr_runtime.py
+!/tools/check_localizations.py
 /translation-engine/build/
 /translation-engine/.cxx/
 /translation-engine/*.md

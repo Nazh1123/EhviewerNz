@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_reader_page_preview">阅读器滚动预览</string>
+    <string name="settings_reader_page_preview_summary">点击或拖动进度条浏览缩略图，点击图片后跳转。关闭后恢复不显示预览的翻页方式。</string>
+    <string name="reader_page_preview_page">第 %1$d 页</string>
+</resources>
