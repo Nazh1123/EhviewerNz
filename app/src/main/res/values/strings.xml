@@ -686,7 +686,7 @@
     <string name="settings_eh_show_thumbnail_download_badge">Show download badge on thumbnails</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">Show the downloaded gallery badge in the lower-right corner in thumbnail mode</string>
     <string name="settings_eh_show_thumbnail_info_bar">Show thumbnail info bar</string>
-    <string name="settings_eh_show_thumbnail_info_bar_summary">In large thumbnail mode, show gallery information below each gallery cover</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">In thumbnail mode(Large), show gallery information below each gallery cover</string>
     <string name="settings_eh_show_thumbnail_info_title">Gallery title</string>
     <string name="settings_eh_show_thumbnail_info_details">Date, rating, censorship type, reading progress</string>
     <string name="settings_eh_show_thumbnail_info_highlight">Color highlighting</string>
