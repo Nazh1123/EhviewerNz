@@ -106,6 +106,17 @@ public class ReaderPreviewPerformanceDeviceTest {
     private File fixture(File root, String name) throws Exception {
         File folder = new File(root, name);
         folder.mkdirs();
+        if (name.equals("actual")) {
+            File original = new File(InstrumentationRegistry.getArguments().getString(
+                    "readerPreviewDirectory", "/sdcard/ArkSailorOne/local"));
+            File[] pages = original.listFiles(file -> file.isFile() && file.getName().endsWith(".webp"));
+            assertNotNull("Actual WebP directory is unreadable", pages);
+            Arrays.sort(pages);
+            assertTrue("Actual directory needs at least 64 WebP files", pages.length >= 64);
+            for (int page = 0; page < 64; page++) java.nio.file.Files.copy(pages[page].toPath(),
+                    new File(folder, String.format(Locale.US, "%03d.image.webp", page)).toPath());
+            return folder;
+        }
         Bitmap page = Bitmap.createBitmap(2400, 3600, Bitmap.Config.ARGB_8888);
         page.eraseColor(Color.WHITE);
         Canvas canvas = new Canvas(page);
@@ -133,7 +144,7 @@ public class ReaderPreviewPerformanceDeviceTest {
         return folder;
     }
 
-    private static String extension(String name) { return name.equals("jpeg") ? "jpg" : name.equals("webp") ? "webp" : "png"; }
+    private static String extension(String name) { return name.equals("jpeg") ? "jpg" : name.equals("webp") || name.equals("actual") ? "webp" : "png"; }
 
     private static void linkFixture(File original, File copy) throws Exception {
         try { Os.symlink(original.getPath(), copy.getPath()); }
@@ -244,17 +255,28 @@ public class ReaderPreviewPerformanceDeviceTest {
             if (scrub) {
                 long began = SystemClock.elapsedRealtimeNanos();
                 DrawProbe probe = new DrawProbe(reader);
+                MovingWindowProbe moving = new MovingWindowProbe(reader);
+                boolean captureMoving = "true".equals(InstrumentationRegistry.getArguments().getString("readerPreviewWindowFrames"));
+                int step = "1".equals(InstrumentationRegistry.getArguments().getString("scrubStep")) ? 1 : 3;
+                int interval = Math.max(1, Integer.parseInt(InstrumentationRegistry.getArguments().getString("scrubIntervalMs", "16")));
                 instrumentation.runOnMainSync(() -> reader.onStartTrackingTouch(seek));
-                for (int target = 3; target <= 60; target += 3) {
-                    int page = target;
-                    instrumentation.runOnMainSync(() -> {
-                        if (page == 60) probe.begin();
-                        seek.setProgress(page); reader.onProgressChanged(seek, page, true);
-                    });
-                    SystemClock.sleep(16);
+                if (captureMoving) instrumentation.runOnMainSync(moving::begin);
+                try {
+                    for (int target = 3; target <= 60; target += step) {
+                        int page = target;
+                        instrumentation.runOnMainSync(() -> {
+                            if (page == 60) probe.begin();
+                            seek.setProgress(page); reader.onProgressChanged(seek, page, true);
+                        });
+                        SystemClock.sleep(interval);
+                    }
+                } finally {
+                    if (captureMoving) instrumentation.runOnMainSync(moving::stop);
                 }
                 probe.await();
                 measurements.put(new JSONObject().put("case", name).put("phase", "scrub")
+                        .put("scrubStep", step).put("scrubIntervalMs", interval)
+                        .put("movingFrames", moving.frames)
                         .put("centerAfterReleaseMs", probe.centerMs()).put("windowAfterReleaseMs", probe.windowMs())
                         .put("totalMs", (probe.centerAt - began) / 1e6));
                 writeReport();
@@ -304,6 +326,43 @@ public class ReaderPreviewPerformanceDeviceTest {
         measurements.put(new JSONObject().put("case", name).put("phase", phase).put("page", target)
                 .put("centerMs", probe.centerMs()).put("windowMs", probe.windowMs()).put("syncBindMs", bound[0] / 1e6));
         writeReport();
+    }
+
+    /** Records incoming-card readiness on UI draws during controlled slider progress events. */
+    private final class MovingWindowProbe implements ViewTreeObserver.OnDrawListener {
+        final GalleryActivity reader;
+        final JSONArray frames = new JSONArray();
+        long began;
+        MovingWindowProbe(GalleryActivity reader) { this.reader = reader; }
+        void begin() {
+            began = SystemClock.elapsedRealtimeNanos();
+            reader.findViewById(R.id.page_preview_strip).getViewTreeObserver().addOnDrawListener(this);
+        }
+        void stop() {
+            reader.findViewById(R.id.page_preview_strip).getViewTreeObserver().removeOnDrawListener(this);
+        }
+        @Override public void onDraw() {
+            RecyclerView row = reader.findViewById(R.id.page_preview_strip);
+            if (!row.isShown()) return;
+            View leading = null;
+            for (int i = 0; i < row.getChildCount(); i++) {
+                View child = row.getChildAt(i);
+                int visibleWidth = Math.min(child.getRight(), row.getWidth() - row.getPaddingRight())
+                        - Math.max(child.getLeft(), row.getPaddingLeft());
+                // Count the last substantial card, rather than a one-pixel clipped neighbor.
+                if (visibleWidth * 2 < child.getWidth()) continue;
+                if (leading == null || child.getLeft() > leading.getLeft()) leading = child;
+            }
+            if (leading == null) return;
+            int selected = (Integer) field(field(reader, "mPagePreview"), "selected");
+            boolean ready = ((ImageView) ((LinearLayout) leading).getChildAt(0)).getDrawable()
+                    instanceof android.graphics.drawable.BitmapDrawable;
+            try {
+                frames.put(new JSONObject().put("ms", (SystemClock.elapsedRealtimeNanos() - began) / 1e6)
+                        .put("selected", selected).put("leadingPage", row.getChildAdapterPosition(leading))
+                        .put("leadingReady", ready));
+            } catch (org.json.JSONException error) { throw new AssertionError(error); }
+        }
     }
 
     /** First draw containing the requested drawable, independent of instrumentation idle waits. */

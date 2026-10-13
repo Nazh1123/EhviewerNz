@@ -240,6 +240,108 @@ public class ReaderPageSeekTest {
         }
     }
 
+    @Test public void sliderStepKeepsTheIncomingEdgeRequestedBeforeLayout() {
+        RecyclerView row = strip();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+            preview.show(50, 1000, false); layout(row);
+            preview.update(51, 1000, false);
+            assertTrue("The new rightmost card waits for the next layout", requestedPages(preview).contains(52));
+            ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");
+            assertEquals("Incoming right edge is not the first neighbor", 52,
+                    ((int[]) ReflectionHelpers.getField(loader, "pages"))[1]);
+            ReflectionHelpers.callInstanceMethod(preview, "refreshVisible");
+            assertTrue("Refreshing old holders dropped the incoming rightmost card", requestedPages(preview).contains(52));
+            preview.update(50, 1000, false);
+            assertTrue("The new leftmost card waits for the next layout", requestedPages(preview).contains(48));
+            assertEquals("Incoming left edge is not the first neighbor", 48,
+                    ((int[]) ReflectionHelpers.getField(loader, "pages"))[1]);
+        }
+    }
+
+    @Test public void directCarouselDraggingRequestsItsActualFractionalViewport() {
+        for (boolean reverse : new boolean[] {false, true}) {
+            RecyclerView row = strip();
+            try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+                preview.show(50, 1000, reverse); layout(row);
+                RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(preview, "scrollListener");
+                listener.onScrollStateChanged(row, RecyclerView.SCROLL_STATE_DRAGGING);
+                row.scrollBy(reverse ? -125 : 125, 0);
+                java.util.Set<Integer> actual = new java.util.HashSet<>();
+                for (int i = 0; i < row.getChildCount(); i++) {
+                    View child = row.getChildAt(i);
+                    if (child.getRight() > row.getPaddingLeft() && child.getLeft() < row.getWidth() - row.getPaddingRight())
+                        actual.add(row.getChildAdapterPosition(child));
+                }
+                assertEquals(actual, requestedPages(preview));
+                listener.onScrollStateChanged(row, RecyclerView.SCROLL_STATE_IDLE);
+                assertEquals("Releasing the carousel replaced its actual viewport with a slider window", actual, requestedPages(preview));
+            }
+        }
+    }
+
+    @Test public void sliderRequestsExactlyTheDestinationViewportIncludingRtlAndGalleryEdges() {
+        for (boolean reverse : new boolean[] {false, true}) {
+            for (int count : new int[] {1, 3, 17}) {
+                RecyclerView row = strip(); row.setPadding(13, 0, 17, 0);
+                try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+                    preview.show(0, count, reverse); layoutAtWidth(row, 1003);
+                    for (int target : new int[] {0, Math.min(1, count - 1), count / 2, count - 1}) {
+                        preview.update(target, count, reverse);
+                        java.util.Set<Integer> requested = requestedPages(preview);
+                        layoutAtWidth(row, 1003);
+                        java.util.Set<Integer> visible = new java.util.HashSet<>();
+                        for (int i = 0; i < row.getChildCount(); i++) {
+                            View child = row.getChildAt(i);
+                            if (child.getRight() > row.getPaddingLeft() && child.getLeft() < row.getWidth() - row.getPaddingRight())
+                                visible.add(row.getChildAdapterPosition(child));
+                        }
+                        assertEquals("Requested pages differ from the actual destination viewport: reverse=" + reverse + ", count=" + count + ", target=" + target,
+                                visible, requested);
+                    }
+                }
+            }
+        }
+    }
+
+    private java.util.Set<Integer> requestedPages(ReaderPagePreview preview) {
+        ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");
+        int[] requested = ReflectionHelpers.getField(loader, "pages");
+        java.util.Set<Integer> result = new java.util.HashSet<>();
+        for (int index : requested) result.add(index);
+        return result;
+    }
+
+    @Test public void smallViewportResizeKeepsPlannedRequestsAlignedWithTheActualCards() {
+        for (boolean reverse : new boolean[] {false, true}) {
+            RecyclerView row = strip();
+            try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+                preview.show(50, 1000, reverse); layout(row);
+                for (int width : new int[] {1001, 1002, 1003, 1000}) {
+                    row.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(700, View.MeasureSpec.AT_MOST));
+                    java.util.Set<Integer> requested = requestedPages(preview);
+                    row.layout(0, 0, width, row.getMeasuredHeight());
+                    java.util.Set<Integer> actual = new java.util.HashSet<>();
+                    for (int i = 0; i < row.getChildCount(); i++) {
+                        View child = row.getChildAt(i);
+                        if (child.getRight() > 0 && child.getLeft() < width)
+                            actual.add(row.getChildAdapterPosition(child));
+                    }
+                    assertEquals("A resize smaller than one card-width step broke viewport prediction", actual, requested);
+                }
+            }
+        }
+    }
+
+    private void layoutAtWidth(RecyclerView row, int width) {
+        for (int pass = 0; pass < 3; pass++) {
+            row.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(700, View.MeasureSpec.AT_MOST));
+            row.layout(0, 0, width, row.getMeasuredHeight());
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+        }
+    }
+
     @Test public void aSinglePageHasNoEmptyPlaceholderCards() {
         RecyclerView row = strip();
         try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
