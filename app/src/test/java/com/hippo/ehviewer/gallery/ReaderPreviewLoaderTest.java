@@ -188,7 +188,43 @@ public class ReaderPreviewLoaderTest {
             Shadows.shadowOf(Looper.getMainLooper()).idle();
             assertEquals(1, attempts.get());
             assertNull(loader.get(0));
+            // The UI first prioritizes the center, then expands to the visible neighborhood.
+            // A failure which stays in both windows must not be retried on every expansion.
+            loader.request(new int[] {0}, 128, true);
+            loader.request(new int[] {0, 1, 2, 3}, 128, true);
+            waitFor(() -> loader.get(3) != null && !loader.isLoading());
+            assertEquals(1, attempts.get());
+            loader.stop();
+            loader.request(new int[] {0}, 128, true);
+            waitFor(() -> attempts.get() == 2 && !loader.isLoading());
         }
+    }
+
+    @Test public void aLateFailureFromAnOldWindowDoesNotPoisonARevisit() throws Exception {
+        Context context = RuntimeEnvironment.getApplication(); byte[] png = poster();
+        String identity = UUID.randomUUID().toString();
+        CountDownLatch started = new CountDownLatch(1), failOldPage = new CountDownLatch(1);
+        AtomicInteger attempts = new AtomicInteger();
+        DirGalleryProvider provider = new DirGalleryProvider(UniFile.fromFile(context.getCacheDir())) {
+            @Override public ReaderPreviewSource createPreviewSource(Context app) {
+                return (page, edge) -> {
+                    if (page == 0 && attempts.incrementAndGet() == 1) {
+                        started.countDown();
+                        try { assertTrue(failOldPage.await(10, TimeUnit.SECONDS)); }
+                        catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new InterruptedIOException(); }
+                        throw new IOException("Transient failure from the previous viewport");
+                    }
+                    return ReaderPreviewBitmapCache.load(app, identity + page, edge, () -> new ByteArrayInputStream(png));
+                };
+            }
+        };
+        try (ReaderPreviewLoader loader = new ReaderPreviewLoader(context, provider, (page, bitmap) -> { })) {
+            loader.request(new int[] {0}, 128, true); assertTrue(started.await(3, TimeUnit.SECONDS));
+            loader.request(new int[] {10}, 128, true); waitFor(() -> loader.get(10) != null);
+            failOldPage.countDown(); waitFor(() -> !loader.isLoading());
+            loader.request(new int[] {0}, 128, true); waitFor(() -> loader.get(0) != null);
+            assertEquals(2, attempts.get());
+        } finally { failOldPage.countDown(); }
     }
 
     private static byte[] poster() {

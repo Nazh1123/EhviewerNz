@@ -295,6 +295,82 @@ public class ReaderPageSeekTest {
         assertEquals(10, seek.getProgress()); assertFalse(methods().contains(jumpMethod()));
     }
 
+    @Test public void pausingDoesNotRestartPreparationThroughProgressUpdates() {
+        RecyclerView row = strip(); AtomicInteger reads = new AtomicInteger();
+        DirGalleryProvider provider = local(reads);
+        ReaderPagePreview preview = new ReaderPagePreview(context, row, provider);
+        ReflectionHelpers.setField(activity, "mPagePreview", preview);
+        ReflectionHelpers.setField(activity, "mGalleryProvider", provider);
+        ReflectionHelpers.setField(activity, "mPagePreviewResumed", true);
+        preview.prepare(10, 1000, false);
+        androidx.savedstate.SavedStateRegistryController savedState = ReflectionHelpers.getField(activity, "mSavedStateRegistryController");
+        savedState.performRestore(null);
+        androidx.fragment.app.FragmentController fragments = ReflectionHelpers.getField(activity, "mFragments");
+        fragments.attachHost(null);
+        androidx.lifecycle.LifecycleRegistry lifecycle = ReflectionHelpers.getField(activity, "mFragmentLifecycleRegistry");
+        lifecycle.setCurrentState(androidx.lifecycle.Lifecycle.State.RESUMED);
+        activity.onPause();
+        // A late reader notification must not rearm the work canceled by onPause.
+        ReflectionHelpers.callInstanceMethod(activity, "updateSlider");
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(300));
+        assertEquals("Paused reader started background thumbnail decoding", 0, reads.get());
+    }
+
+    @Test public void unchangedProgressKeepsHorizontalBrowsingInProgress() {
+        RecyclerView row = strip();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+            preview.show(50, 1000, false); layout(row);
+            RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(preview, "scrollListener");
+            listener.onScrollStateChanged(row, RecyclerView.SCROLL_STATE_DRAGGING);
+            row.scrollBy(125, 0);
+            int selected = ReflectionHelpers.getField(preview, "selected");
+            int leftBefore = page(row, selected).getLeft();
+            preview.update(selected, 1000, false);
+            assertTrue("Unchanged reader notification stopped thumbnail browsing",
+                    (Boolean) ReflectionHelpers.getField(preview, "manualScrolling"));
+            assertEquals(leftBefore, page(row, selected).getLeft());
+        }
+    }
+
+    @Test public void reopeningTheSamePageRebindsClearedImages() throws Exception {
+        RecyclerView row = strip();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+            preview.show(50, 1000, false); layout(row);
+            waitFor(() -> image(page(row, 50)).getDrawable() != null);
+            preview.hide(); assertNull(image(page(row, 50)).getDrawable());
+            preview.show(50, 1000, false);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertNotNull("Reopening the same position left the cleared thumbnail blank", image(page(row, 50)).getDrawable());
+        }
+    }
+
+    @Test public void continuousScrollingLoadsVisibleNeighborsBeforeTheCenterFinishes() throws Exception {
+        RecyclerView row = strip(); byte[] encoded = poster(); String identity = UUID.randomUUID().toString();
+        CountDownLatch centerStarted = new CountDownLatch(1), resumeCenter = new CountDownLatch(1);
+        AtomicInteger neighbors = new AtomicInteger();
+        DirGalleryProvider provider = new DirGalleryProvider(UniFile.fromFile(context.getCacheDir())) {
+            @Override public com.hippo.ehviewer.gallery.ReaderPreviewSource createPreviewSource(Context app) {
+                return (index, edge) -> {
+                    if (index == 50) {
+                        centerStarted.countDown();
+                        try { assertTrue(resumeCenter.await(10, TimeUnit.SECONDS)); }
+                        catch (InterruptedException e) { Thread.currentThread().interrupt(); throw new InterruptedIOException(); }
+                    } else neighbors.incrementAndGet();
+                    return ReaderPreviewBitmapCache.load(app, identity + index, edge, () -> new ByteArrayInputStream(encoded));
+                };
+            }
+        };
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, provider)) {
+            preview.show(50, 1000, false); assertTrue(centerStarted.await(3, TimeUnit.SECONDS)); layout(row);
+            for (int frame = 0; frame < 12; frame++) {
+                row.scrollBy(2, 0);
+                Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(16));
+            }
+            waitFor(() -> neighbors.get() > 0);
+            assertEquals("Neighbor loading waited for the blocked center", 1, resumeCenter.getCount());
+        } finally { resumeCenter.countDown(); }
+    }
+
     @Test public void onlinePreviewMapsFilteredSourceAndCancelsMetadataOnDismiss() throws Exception {
         GalleryInfo info = new GalleryInfo(); info.gid = 123; info.token = "preview-test";
         com.hippo.ehviewer.client.data.NormalPreviewSet set = new com.hippo.ehviewer.client.data.NormalPreviewSet();

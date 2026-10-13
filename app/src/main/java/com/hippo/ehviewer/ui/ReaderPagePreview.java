@@ -33,6 +33,7 @@ import com.hippo.ehviewer.widget.ReaderPreviewRecyclerView;
 import com.hippo.lib.image.Image;
 import com.hippo.widget.LoadImageView;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -75,7 +76,6 @@ final class ReaderPagePreview implements AutoCloseable {
     private int[] preparedPages;
     private int preparedCount;
     private final Runnable prepare = this::prepareLocal;
-    private final Runnable neighbors = this::loadLocalNeighbors;
     private final Runnable refresh = this::refreshVisible;
     private final Runnable dispatch = () -> {
         dispatchPending = false;
@@ -109,10 +109,7 @@ final class ReaderPagePreview implements AutoCloseable {
         localLoader = new ReaderPreviewLoader(this.context, provider, (page, bitmap) -> {
             if (!visible || closed) return;
             for (Card card : attached) if (card.page == page) bindLocal(card, bitmap);
-            if (page == selected) {
-                handler.removeCallbacks(neighbors);
-                loadLocalNeighbors();
-            }
+            if (page == selected) loadLocalNeighbors();
         });
         scrollListener = new RecyclerView.OnScrollListener() {
             @Override public void onScrolled(@NonNull RecyclerView view, int dx, int dy) {
@@ -123,8 +120,8 @@ final class ReaderPagePreview implements AutoCloseable {
             @Override public void onScrollStateChanged(@NonNull RecyclerView view, int state) {
                 if (!visible || closed) return;
                 if (state == RecyclerView.SCROLL_STATE_DRAGGING) manualScrolling = true;
-                if (state == RecyclerView.SCROLL_STATE_IDLE) {
-                    if (manualScrolling) browseCenter();
+                if (state == RecyclerView.SCROLL_STATE_IDLE && manualScrolling) {
+                    browseCenter();
                     manualScrolling = false;
                     loadLocalNeighbors();
                 }
@@ -159,6 +156,8 @@ final class ReaderPagePreview implements AutoCloseable {
         if (closed || count <= 0) return;
         handler.removeCallbacks(prepare);
         visible = true;
+        manualScrolling = false;
+        row.stopScroll();
         row.setVisibility(View.VISIBLE);
         update(page, count, rightToLeft);
     }
@@ -168,6 +167,10 @@ final class ReaderPagePreview implements AutoCloseable {
         int target = Math.max(0, Math.min(page, count - 1));
         boolean changed = selected != target || size != count || reverse != rightToLeft;
         boolean newItems = size != count;
+        if (!changed && layout.findViewByPosition(target) != null) {
+            scheduleRefresh();
+            return;
+        }
         manualScrolling = false;
         row.stopScroll();
         selected = target;
@@ -281,7 +284,7 @@ final class ReaderPagePreview implements AutoCloseable {
     private void refreshVisible() {
         if (!visible || closed) return;
         for (Card card : visibleCards()) bindCached(card);
-        loadLocal();
+        loadLocalNeighbors();
         if (gallery != null) schedule(75);
     }
 
@@ -299,14 +302,14 @@ final class ReaderPagePreview implements AutoCloseable {
     }
 
     private void loadLocal() {
-        handler.removeCallbacks(neighbors);
-        localLoader.request(localLoader.get(selected) != null ? new int[0] : new int[] {selected}, edge, true);
-        handler.postDelayed(neighbors, 32);
+        localLoader.request(new int[] {selected}, edge, true);
     }
 
     private void loadLocalNeighbors() {
         if (!visible || closed) return;
-        List<Card> cards = visibleCards();
+        // A slider jump can precede the next layout. Do not decode the old viewport while
+        // waiting for the new target's holders to be attached.
+        List<Card> cards = layout.findViewByPosition(selected) != null ? visibleCards() : Collections.emptyList();
         int[] pages = new int[cards.size() + 1];
         pages[0] = selected;
         for (int i = 0; i < cards.size(); i++) pages[i + 1] = cards.get(i).page;

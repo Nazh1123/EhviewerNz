@@ -93,7 +93,11 @@ public final class ReaderPreviewLoader implements AutoCloseable {
     public void request(int[] desired, int edge, boolean interactive) {
         if (closed) return;
         synchronized (lock) {
-            if (!active || !Arrays.equals(pages, desired)) failed.clear();
+            if (!active || this.edge != edge) failed.clear();
+            // Keep a miss only while it remains in both windows. An obsolete worker can
+            // finish after a jump; its failure must not poison a later visit to that page.
+            else if (!Arrays.equals(pages, desired))
+                failed.removeIf(page -> !contains(pages, page) || !contains(desired, page));
             pages = desired.clone();
             this.edge = edge;
             this.interactive = interactive;
@@ -104,6 +108,11 @@ public final class ReaderPreviewLoader implements AutoCloseable {
 
     public boolean isLoading() {
         for (Worker worker : workers) if (worker.run != null) return true;
+        return false;
+    }
+
+    private static boolean contains(int[] window, int page) {
+        for (int candidate : window) if (candidate == page) return true;
         return false;
     }
 

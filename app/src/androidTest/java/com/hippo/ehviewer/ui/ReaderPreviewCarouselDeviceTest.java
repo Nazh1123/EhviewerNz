@@ -132,6 +132,16 @@ public class ReaderPreviewCarouselDeviceTest {
     private void setPreferenceThroughForkScreen(GalleryActivity reader, boolean enabled) throws Exception {
         SettingsActivity settings = open(SettingsActivity.class, new Intent(reader, SettingsActivity.class));
         instrumentation.waitForIdleSync();
+        assertFalse("Reader remained active behind Settings", (Boolean) field(reader, "mPagePreviewResumed"));
+        ReaderPagePreview preview = (ReaderPagePreview) field(reader, "mPagePreview");
+        if (preview != null) {
+            assertFalse("Opening Settings restarted thumbnail generation",
+                    (Boolean) field(field(preview, "localLoader"), "active"));
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                android.os.Handler handler = (android.os.Handler) field(preview, "handler");
+                assertFalse("Paused reader queued thumbnail preparation", handler.hasCallbacks((Runnable) field(preview, "prepare")));
+            }
+        }
         instrumentation.runOnMainSync(() -> {
             ForkFeaturesFragment fragment = new ForkFeaturesFragment();
             settings.getSupportFragmentManager().beginTransaction().replace(R.id.settings, fragment).commitNow();
