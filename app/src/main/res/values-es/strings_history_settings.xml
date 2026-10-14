@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_history">Historial</string>
+    <string name="settings_history_category_updates">Registros de actualización</string>
+    <string name="settings_history_category_gallery_info">Información de la galería</string>
+    <string name="settings_view_reading_history">Ver historial de lectura</string>
+    <string name="settings_view_reading_history_summary">Puedes acceder desde el botón «Historial de lectura» de la barra lateral izquierda</string>
+    <string name="settings_view_update_history">Ver registros de actualización</string>
+    <string name="settings_view_update_history_summary">Puedes acceder desde el menú superior derecho de la lista de descargas</string>
+</resources>

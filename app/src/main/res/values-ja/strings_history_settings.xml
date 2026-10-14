@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_history">履歴</string>
+    <string name="settings_history_category_updates">更新履歴</string>
+    <string name="settings_history_category_gallery_info">ギャラリー情報</string>
+    <string name="settings_view_reading_history">閲覧履歴を表示</string>
+    <string name="settings_view_reading_history_summary">左サイドバーの「閲覧履歴」ボタンから開けます</string>
+    <string name="settings_view_update_history">更新履歴を表示</string>
+    <string name="settings_view_update_history_summary">ダウンロード一覧の右上のメニューから開けます</string>
+</resources>

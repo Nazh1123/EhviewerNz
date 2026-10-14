@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_history">History</string>
+    <string name="settings_history_category_updates">Update records</string>
+    <string name="settings_history_category_gallery_info">Gallery information</string>
+    <string name="settings_view_reading_history">View reading history</string>
+    <string name="settings_view_reading_history_summary">Open using the Reading history button in the left sidebar</string>
+    <string name="settings_view_update_history">View update records</string>
+    <string name="settings_view_update_history_summary">Open using the menu in the upper right of the download list</string>
+</resources>

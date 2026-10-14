@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_history">Verlauf</string>
+    <string name="settings_history_category_updates">Aktualisierungsdatensätze</string>
+    <string name="settings_history_category_gallery_info">Galerieinformationen</string>
+    <string name="settings_view_reading_history">Leseverlauf anzeigen</string>
+    <string name="settings_view_reading_history_summary">Über die Schaltfläche „Leseverlauf“ in der linken Seitenleiste erreichbar</string>
+    <string name="settings_view_update_history">Aktualisierungsdatensätze anzeigen</string>
+    <string name="settings_view_update_history_summary">Über das Menü oben rechts in der Downloadliste erreichbar</string>
+</resources>

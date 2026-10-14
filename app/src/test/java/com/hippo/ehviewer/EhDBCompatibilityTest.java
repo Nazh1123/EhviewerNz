@@ -329,4 +329,155 @@ public class EhDBCompatibilityTest {
             ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
         }
     }
+
+    @Test
+    @Config(application = ImportTestApplication.class)
+    public void forkFieldsRoundTripAndCompatibleExportLeavesLiveFieldsIntact() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        initializePreferences(context);
+        for (boolean compatible : new boolean[] {false, true}) {
+            File backup = new File(context.getCacheDir(), "fork-round-trip-" + compatible + ".db");
+            try (SQLiteDatabase source = upstream(8)) {
+                EhDB.prepareImportDatabase(source);
+                source.execSQL("UPDATE QUICK_SEARCH SET SUBSCRIBED = 1");
+                source.execSQL("UPDATE DOWNLOADS SET FIRST_GID = 40");
+                DaoSession sourceSession = new DaoMaster(source).newSession();
+                ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", sourceSession);
+                assertTrue(compatible ? EhDB.exportDBCompatible(context, backup) : EhDB.exportDB(context, backup));
+                // Removing fork columns must apply to the export only.
+                assertEquals(DaoMaster.SCHEMA_VERSION, source.getVersion());
+                assertTrue(sourceSession.getQuickSearchDao().load(1L).subscribed);
+                assertEquals(Long.valueOf(40), sourceSession.getDownloadsDao().load(42L).getFirstGid());
+                assertEquals("beach", sourceSession.getGalleryTagsDao().load(42L).location);
+            }
+            byte[] original = Files.readAllBytes(backup.toPath());
+            try (SQLiteDatabase destination = SQLiteDatabase.create(null)) {
+                DaoMaster.createAllTables(new org.greenrobot.greendao.database.StandardDatabase(destination), false);
+                DaoSession session = new DaoMaster(destination).newSession();
+                ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", session);
+                ReflectionHelpers.setField(context, "mDownloadManager", null);
+                Settings.setGalleryVersionUpdatePromptPending(false);
+                for (int repeat = 0; repeat < 2; repeat++) {
+                    assertNull(EhDB.importDB(context, backup, new Handler(Looper.getMainLooper())));
+                    assertEquals(1, session.getDownloadsDao().count());
+                    assertEquals(1, session.getQuickSearchDao().count());
+                    assertEquals(1, session.getGalleryTagsDao().count());
+                    assertEquals(compatible ? null : Long.valueOf(40), session.getDownloadsDao().load(42L).getFirstGid());
+                    assertEquals(!compatible, session.getQuickSearchDao().loadAll().get(0).subscribed);
+                    assertEquals("file:///test.zip", session.getDownloadsDao().load(42L).getArchiveUri());
+                    assertEquals("beach", session.getGalleryTagsDao().load(42L).location);
+                    assertEquals(compatible, Settings.isGalleryVersionUpdatePromptPending());
+                }
+            } finally {
+                ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
+                ReflectionHelpers.setField(context, "mDownloadManager", null);
+            }
+            assertArrayEquals(original, Files.readAllBytes(backup.toPath()));
+            assertEquals(0, context.getCacheDir().list((dir, name) -> name.startsWith("eh-import-")).length);
+        }
+    }
+
+    private void assertUpstream8Schema(SQLiteDatabase actual) throws Exception {
+        assertEquals(8, actual.getVersion());
+        try (SQLiteDatabase expected = upstream(8)) {
+            for (org.greenrobot.greendao.AbstractDao<?, ?> dao : new DaoMaster(expected).newSession().getAllDaos()) {
+                String query = "PRAGMA table_info(\"" + dao.getTablename() + "\")";
+                try (Cursor expectedColumns = expected.rawQuery(query, null);
+                        Cursor actualColumns = actual.rawQuery(query, null)) {
+                    assertEquals(dao.getTablename(), expectedColumns.getCount(), actualColumns.getCount());
+                    while (expectedColumns.moveToNext()) {
+                        assertTrue(actualColumns.moveToNext());
+                        for (int i = 0; i < expectedColumns.getColumnCount(); i++) {
+                            assertEquals(dao.getTablename() + "." + expectedColumns.getColumnName(i),
+                                    expectedColumns.getString(i), actualColumns.getString(i));
+                        }
+                    }
+                }
+            }
+        }
+        try (Cursor integrity = actual.rawQuery("PRAGMA integrity_check", null)) {
+            assertTrue(integrity.moveToFirst());
+            assertEquals("ok", integrity.getString(0));
+        }
+    }
+
+    @Test
+    public void compatibleExportAfterInstalledForkUpgradesMatchesUpstream8() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        initializePreferences(context);
+        for (int version : new int[] {8, 9, 1_000_009}) {
+            File installed = context.getDatabasePath("eh.db");
+            installed.getParentFile().mkdirs();
+            try (SQLiteDatabase source = upstream(7, installed)) {
+                source.execSQL("ALTER TABLE QUICK_SEARCH ADD COLUMN SUBSCRIBED INTEGER NOT NULL DEFAULT 0");
+                source.execSQL("UPDATE QUICK_SEARCH SET SUBSCRIBED = 1");
+                if (version >= 9) {
+                    source.execSQL("ALTER TABLE DOWNLOADS ADD COLUMN FIRST_GID INTEGER");
+                    source.execSQL("UPDATE DOWNLOADS SET FIRST_GID = 40");
+                }
+                source.setVersion(version);
+            }
+            EhDB.initialize(context);
+            DaoSession session = ReflectionHelpers.getStaticField(EhDB.class, "sDaoSession");
+            try {
+                File backup = new File(context.getCacheDir(), "upgraded-compatible-" + version + ".db");
+                assertTrue(EhDB.exportDBCompatible(context, backup));
+                try (SQLiteDatabase exported = SQLiteDatabase.openDatabase(backup.getPath(), null, 0)) {
+                    assertUpstream8Schema(exported);
+                    assertTrue(EhDB.prepareImportDatabase(exported));
+                    assertImportedRows(exported, false, null);
+                    assertNull(new DaoMaster(exported).newSession().getGalleryTagsDao().load(42L).location);
+                }
+                // Exporting does not downgrade the installed fork database.
+                assertTrue(session.getQuickSearchDao().load(1L).subscribed);
+                assertEquals(version >= 9 ? Long.valueOf(40) : null, session.getDownloadsDao().load(42L).getFirstGid());
+            } finally {
+                session.getDatabase().close();
+                ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
+                context.deleteDatabase("eh.db");
+            }
+        }
+    }
+
+    @Test
+    public void compatibleExportReadsLiveWalRowsAndProducesStandaloneUpstream8File() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        File sourceFile = new File(context.getCacheDir(), "fork-wal-source.db");
+        try (SQLiteDatabase source = upstream(8, sourceFile)) {
+            EhDB.prepareImportDatabase(source);
+            assertTrue(source.enableWriteAheadLogging());
+            source.execSQL("UPDATE DOWNLOADS SET TITLE = 'committed in WAL', FIRST_GID = 40");
+            source.execSQL("UPDATE QUICK_SEARCH SET SUBSCRIBED = 1");
+            ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", new DaoMaster(source).newSession());
+            File backup = new File(context.getCacheDir(), "fork-wal-compatible.db");
+            assertTrue(EhDB.exportDBCompatible(context, backup));
+            assertFalse(new File(backup.getPath() + "-wal").exists());
+            assertFalse(new File(backup.getPath() + "-shm").exists());
+            try (SQLiteDatabase exported = SQLiteDatabase.openDatabase(backup.getPath(), null,
+                    SQLiteDatabase.OPEN_READONLY);
+                    Cursor row = exported.rawQuery("SELECT TITLE, ARCHIVE_URI FROM DOWNLOADS WHERE GID = 42", null)) {
+                assertUpstream8Schema(exported);
+                assertTrue(row.moveToFirst());
+                assertEquals("committed in WAL", row.getString(0));
+                assertEquals("file:///test.zip", row.getString(1));
+            }
+        } finally {
+            ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
+        }
+    }
+
+    @Test
+    public void rejectsFutureForkBackupWithoutRewritingItOrTouchingLiveData() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        File backup = new File(context.getCacheDir(), "future-fork.db");
+        try (SQLiteDatabase source = upstream(8, backup)) {
+            source.setVersion(DaoMaster.SCHEMA_VERSION + 1);
+        }
+        byte[] original = Files.readAllBytes(backup.toPath());
+        // Rejection must occur before obtaining a live DAO session or DownloadManager.
+        ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
+        assertNotNull(EhDB.importDB(context, backup, new Handler(Looper.getMainLooper())));
+        assertArrayEquals(original, Files.readAllBytes(backup.toPath()));
+        assertEquals(0, context.getCacheDir().list((dir, name) -> name.startsWith("eh-import-")).length);
+    }
 }

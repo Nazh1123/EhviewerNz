@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_history">ประวัติ</string>
+    <string name="settings_history_category_updates">บันทึกการอัปเดต</string>
+    <string name="settings_history_category_gallery_info">ข้อมูลแกลเลอรี</string>
+    <string name="settings_view_reading_history">ดูประวัติการอ่าน</string>
+    <string name="settings_view_reading_history_summary">เปิดได้จากปุ่ม «ประวัติการอ่าน» ในแถบด้านซ้าย</string>
+    <string name="settings_view_update_history">ดูบันทึกการอัปเดต</string>
+    <string name="settings_view_update_history_summary">เปิดได้จากเมนูด้านขวาบนของรายการดาวน์โหลด</string>
+</resources>
