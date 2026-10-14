@@ -630,7 +630,17 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
     private int readerKeyAction(float x, float y, int gesture) {
         ReaderKeyMap mapping = mReaderKeyMap;
         int region = mapping.areas(mLayoutMode).region(x, y, getWidth(), getHeight());
-        return mapping.resolvedAction(region, gesture, mLayoutMode, mAnimatedPageControlAreasEnabled);
+        return resolveSequentialSaveAction(mapping.resolvedAction(region, gesture, mLayoutMode,
+                mAnimatedPageControlAreasEnabled), getCurrentIndex());
+    }
+
+    private int resolveSequentialSaveAction(int action, int index) {
+        if (action == ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL
+                && (mListener == null || !mListener.isSequentialPlaybackEnabled()
+                || mLayoutMode == LAYOUT_TOP_TO_BOTTOM || index <= 0)) {
+            return ReaderKeyMap.NONE;
+        }
+        return action;
     }
 
     @RenderThread
@@ -639,8 +649,9 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         ReaderKeyMap mapping = mReaderKeyMap;
         int direction = mLayoutMode;
         int region = mapping.areas(direction).region(x, y, getWidth(), getHeight());
-        int action = mapping.resolvedAction(region, gesture, direction, mAnimatedPageControlAreasEnabled);
         int index = mLayoutManager.getInternalCurrentIndex();
+        int action = resolveSequentialSaveAction(mapping.resolvedAction(region, gesture, direction,
+                mAnimatedPageControlAreasEnabled), index);
         switch (action) {
             case ReaderKeyMap.NONE -> { }
             case ReaderKeyMap.LEFT -> mLayoutManager.onPageLeft();
@@ -1358,6 +1369,9 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
     public interface Listener {
         default void onReaderKeyAction(int action, int index) { }
+
+        /** Current playback setting, queried when choosing tap recognition and dispatching keys. */
+        default boolean isSequentialPlaybackEnabled() { return false; }
 
         @RenderThread
         void onUpdateCurrentIndex(int index);

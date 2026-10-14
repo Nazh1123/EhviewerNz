@@ -18,6 +18,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 import static org.robolectric.Shadows.shadowOf;
 
@@ -116,6 +118,121 @@ public class ReaderKeyGestureTest {
         tap(recognizer, 900, 501);
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(400));
         assertEquals(Arrays.asList("onSingleTapConfirmed", "onSingleTapConfirmed"), callbacks);
+    }
+
+    @Test public void conditionalPreviousSaveEligibilityTracksPlaybackDirectionAndFirstPage() {
+        attachLayout();
+        AtomicBoolean sequential = new AtomicBoolean(false);
+        List<String> callbacks = new ArrayList<>();
+        ReflectionHelpers.setField(view, "mListener", (GalleryView.Listener) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class[]{GalleryView.Listener.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("isSequentialPlaybackEnabled")) return sequential.get();
+                    callbacks.add(method.getName());
+                    return method.getReturnType() == boolean.class ? false : null;
+                }));
+        normal[ReaderKeyMap.RIGHT_TOP * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.NONE;
+        int[] animated = normal.clone();
+        animated[ReaderKeyMap.RIGHT_TOP * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL;
+        view.setReaderKeyMap(new ReaderKeyMap(new int[][]{normal, normal, normal},
+                new int[][]{animated, animated, animated}, null));
+        view.setAnimatedPageControlAreasEnabled(true);
+        AtomicInteger currentIndex = ReflectionHelpers.getField(view, "mCurrentIndex");
+        for (int direction = 0; direction < ReaderKeyMap.DIRECTION_COUNT; direction++) {
+            GalleryView.LayoutManager layout = setDirection(direction);
+            layout.setCurrentIndex(2);
+            currentIndex.set(2);
+            sequential.set(false);
+            assertFalse(view.isDoubleTapRegion(900, 100));
+            gesture(ReaderKeyMap.DOUBLE_TAP, 900, 100);
+            assertTrue(callbacks.isEmpty());
+
+            sequential.set(true);
+            boolean eligible = direction != GalleryView.LAYOUT_TOP_TO_BOTTOM;
+            assertEquals(eligible, view.isDoubleTapRegion(900, 100));
+            gesture(ReaderKeyMap.DOUBLE_TAP, 900, 100);
+            assertEquals(eligible ? Arrays.asList("onReaderKeyAction") : List.of(), callbacks);
+            callbacks.clear();
+
+            layout.setCurrentIndex(0);
+            currentIndex.set(0);
+            assertFalse(view.isDoubleTapRegion(900, 100));
+            gesture(ReaderKeyMap.DOUBLE_TAP, 900, 100);
+            assertTrue(callbacks.isEmpty());
+        }
+        setDirection(GalleryView.LAYOUT_LEFT_TO_RIGHT).setCurrentIndex(2);
+        currentIndex.set(2);
+        sequential.set(false);
+        assertTrue(view.isDoubleTapRegion(900, 900));
+        gesture(ReaderKeyMap.DOUBLE_TAP, 900, 900);
+        assertEquals(Arrays.asList("onDoubleTapSliderArea"), callbacks);
+        view.setAnimatedPageControlAreasEnabled(false);
+        assertFalse(view.isDoubleTapRegion(900, 100));
+    }
+
+    @Test public void inactiveConditionalDoubleTapTurnsPagesImmediatelyAndActiveBindingStillDoubleTaps() {
+        GalleryView.LayoutManager layout = attachLayout();
+        layout.setCurrentIndex(2);
+        AtomicInteger currentIndex = ReflectionHelpers.getField(view, "mCurrentIndex");
+        currentIndex.set(2);
+        AtomicBoolean sequential = new AtomicBoolean(false);
+        List<Integer> actions = new ArrayList<>();
+        ReflectionHelpers.setField(view, "mListener", (GalleryView.Listener) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class[]{GalleryView.Listener.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("isSequentialPlaybackEnabled")) return sequential.get();
+                    if (method.getName().equals("onReaderKeyAction")) actions.add((int) args[0]);
+                    return method.getReturnType() == boolean.class ? false : null;
+                }));
+        normal[ReaderKeyMap.RIGHT_TOP * 3 + ReaderKeyMap.TAP] = ReaderKeyMap.NEXT;
+        normal[ReaderKeyMap.RIGHT_TOP * 3 + ReaderKeyMap.DOUBLE_TAP] = ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL;
+        view.setReaderKeyMap(new ReaderKeyMap(normal));
+        view.setAnimatedPageControlAreasEnabled(true);
+        List<String> taps = new ArrayList<>();
+        GestureRecognizer.Listener listener = (GestureRecognizer.Listener) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class[]{GestureRecognizer.Listener.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("isDoubleTapRegion")) {
+                        return view.isDoubleTapRegion((float) args[0], (float) args[1]);
+                    }
+                    if (method.getName().equals("isSameTapRegion")) {
+                        return view.isSameTapRegion((float) args[0], (float) args[1], (float) args[2], (float) args[3]);
+                    }
+                    switch (method.getName()) {
+                        case "onSingleTapUp", "onSingleTapConfirmed" -> {
+                            taps.add(method.getName());
+                            single((float) args[0], (float) args[1]);
+                        }
+                        case "onDoubleTapConfirmed" -> {
+                            taps.add(method.getName());
+                            gesture(ReaderKeyMap.DOUBLE_TAP, (float) args[0], (float) args[1]);
+                        }
+                    }
+                    return method.getReturnType() == boolean.class ? true : null;
+                });
+        GestureRecognizer recognizer = new GestureRecognizer(RuntimeEnvironment.getApplication(), listener);
+        tap(recognizer, 900, 100);
+        assertEquals(3, layout.getInternalCurrentIndex());
+        assertEquals(Arrays.asList("onSingleTapUp"), taps);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(70));
+        tap(recognizer, 900, 100);
+        assertEquals(4, layout.getInternalCurrentIndex());
+        assertEquals(Arrays.asList("onSingleTapUp", "onSingleTapUp"), taps);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(400));
+        assertEquals(2, taps.size());
+        assertTrue(actions.isEmpty());
+
+        sequential.set(true);
+        layout.setCurrentIndex(2);
+        currentIndex.set(2);
+        taps.clear();
+        tap(recognizer, 900, 100);
+        assertEquals(2, layout.getInternalCurrentIndex());
+        assertTrue(taps.isEmpty());
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(70));
+        tap(recognizer, 900, 100);
+        assertEquals(Arrays.asList("onDoubleTapConfirmed"), taps);
+        assertEquals(Arrays.asList(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL), actions);
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(400));
+        assertEquals(2, layout.getInternalCurrentIndex());
+        assertEquals(1, taps.size());
     }
 
     @Test public void splitAreasDispatchIndependentActionsAndClampPageLimits() {

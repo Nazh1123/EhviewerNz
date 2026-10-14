@@ -419,7 +419,7 @@ public class PopularGalleryRenderingTest {
         assertEquals(Arrays.asList(7L, 8L), visibleIds());
     }
 
-    @Test public void downloadedFilterKeepsBothGroupsInOrderAndHidesAnEmptyBoundary() {
+    @Test public void downloadedFilterKeepsReadBoundaryWhenVisibleUpdatesDisappear() {
         View actions = bindPopularActions();
         refresh(2, 3, 1, 4);
         toggle(PopularGalleryHistory.UPDATES);
@@ -432,7 +432,7 @@ public class PopularGalleryRenderingTest {
         assertCountButtons(actions, 2, 4);
         downloadedGids.remove(3L);
         ReflectionHelpers.callInstanceMethod(scene, "onDownloadMembershipChanged");
-        assertEquals(Arrays.asList(1L), visibleIds());
+        assertEquals(Arrays.asList(null, 1L), visibleIds());
         ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
                 ClassParameter.from(boolean.class, false), ClassParameter.from(boolean.class, false));
         assertEquals(Arrays.asList(3L, 4L, null, 2L, 1L), visibleIds());
@@ -478,7 +478,7 @@ public class PopularGalleryRenderingTest {
         assertEquals(2, helper.getDataPosition(3));
     }
 
-    @Test public void subscriptionDownloadedFilterHidesEmptyGroupsAndNewSearchDropsTheBoundary() {
+    @Test public void subscriptionDownloadedFilterKeepsReadBoundaryAndNewSearchDropsIt() {
         subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 5, 4);
         ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
         refresh(5, 4, 3, 2);
@@ -488,7 +488,7 @@ public class PopularGalleryRenderingTest {
         assertEquals(Arrays.asList(5L, null, 3L), visibleIds());
         downloadedGids.remove(5L);
         ReflectionHelpers.callInstanceMethod(scene, "onDownloadMembershipChanged");
-        assertEquals(Arrays.asList(3L), visibleIds());
+        assertEquals(Arrays.asList(null, 3L), visibleIds());
         ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
                 ClassParameter.from(boolean.class, false), ClassParameter.from(boolean.class, false));
         assertEquals(Arrays.asList(5L, 4L, null, 3L, 2L), visibleIds());
@@ -497,15 +497,59 @@ public class PopularGalleryRenderingTest {
         assertEquals(Arrays.asList(9L, 8L), visibleIds());
     }
 
-    @Test public void subscriptionWithoutUnreadOrWithoutVisibleUpdatesHasNoDivider() {
-        subscriptionManager(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
-        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
-        refresh(5, 4, 3);
-        assertEquals(Arrays.asList(5L, 4L, 3L), visibleIds());
-        subscriptionManager(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION, 9);
-        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
-        refresh(5, 4, 3);
-        assertEquals(Arrays.asList(5L, 4L, 3L), visibleIds());
+    @Test @Config(sdk = 34, qualifiers = "600dpi")
+    public void allSubscriptionModesWithoutVisibleUpdatesRenderDividerAtTop() {
+        for (int mode : new int[]{ListUrlBuilder.MODE_SUBSCRIPTION,
+                ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION, ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION}) {
+            for (long[] unread : new long[][]{new long[0], new long[]{9}}) {
+                subscriptionManager(mode, unread);
+                ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+                refresh(5, 4, 3);
+                assertEquals(Arrays.asList(null, 5L, 4L, 3L), visibleIds());
+                assertEquals(1, helper.getAdapterPosition(0));
+                assertEquals(0, helper.getDataPosition(0));
+                assertEquals(0, helper.getDataPosition(1));
+                for (int type : new int[]{GalleryAdapterNew.TYPE_LIST, GalleryAdapterNew.TYPE_GRID}) {
+                    adapter.setType(type);
+                    layout();
+                    View divider = recycler.findViewHolderForAdapterPosition(0).itemView;
+                    assertTrue(divider instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
+                    assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
+                    assertNotNull(recycler.findViewHolderForAdapterPosition(1).itemView.findViewById(R.id.thumb_new));
+                }
+                refresh();
+                assertEquals(0, adapter.getItemCount());
+            }
+        }
+    }
+
+    @Test public void viewedSearchWithoutUpdatesKeepsTopDividerThroughPaginationAndRestore() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("all-viewed-search");
+        refresh(5, 4);
+        assertEquals(Arrays.asList(5L, 4L), visibleIds());
+        refresh(5, 4);
+        assertEquals(Arrays.asList(null, 5L, 4L), visibleIds());
+        assertEquals(1, helper.getAdapterPosition(0));
+        assertEquals(0, helper.getDataPosition(0));
+        helper.getData().addAll(galleries(3, 2));
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceItemRangeInserted",
+                ClassParameter.from(int.class, 2), ClassParameter.from(int.class, 2));
+        assertEquals(Arrays.asList(null, 5L, 4L, 3L, 2L), visibleIds());
+        android.os.Bundle saved = new android.os.Bundle();
+        scene.onSaveInstanceState(saved);
+        ReflectionHelpers.setField(scene, "mSeenSearch", null);
+        ReflectionHelpers.callInstanceMethod(scene, "onRestore", ClassParameter.from(android.os.Bundle.class, saved));
+        builder = ReflectionHelpers.getField(scene, "mUrlBuilder");
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceDataSetChanged");
+        assertEquals(Arrays.asList(null, 5L, 4L, 3L, 2L), visibleIds());
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, false);
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceDataSetChanged");
+        assertEquals(Arrays.asList(5L, 4L, 3L, 2L), visibleIds());
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        refresh();
+        assertEquals(0, adapter.getItemCount());
     }
 
     @Test public void subscriptionUnreadSnapshotSurvivesSceneStateRestoration() {

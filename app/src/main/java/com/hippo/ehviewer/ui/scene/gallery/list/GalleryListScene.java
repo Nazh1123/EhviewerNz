@@ -3287,7 +3287,7 @@ public class GalleryListScene extends BaseScene
 
         private boolean hasViewedProjection() {
             return Settings.getShowViewedGalleries() && mHelper != null
-                    && ((isSubscriptionMode() && !mSubscriptionNewGids.isEmpty()) || hasSearchBaseline());
+                    && (isSubscriptionMode() || hasSearchBaseline());
         }
 
         private boolean hasSearchBaseline() {
@@ -3336,7 +3336,7 @@ public class GalleryListScene extends BaseScene
             for (GalleryInfo gallery : visible) {
                 if (newGids.contains(gallery.gid)) newCount++;
             }
-            if (newCount > 0 && newCount < visible.size()) mSectionDividerPosition = newCount;
+            if (newCount < visible.size()) mSectionDividerPosition = newCount;
         }
 
         private boolean hasSectionDivider() {

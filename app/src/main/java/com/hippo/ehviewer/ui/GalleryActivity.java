@@ -2147,6 +2147,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     @Override
+    public boolean isSequentialPlaybackEnabled() {
+        return Settings.getExperimentalAnimatedWebpEnabled() && Settings.getAnimatedWebpAutoAdvance();
+    }
+
+    @Override
     public void onReaderKeyAction(int action, int index) {
         int generation = mAnimatedWebpLifecycleGeneration;
         SimpleHandler.getInstance().post(() -> {
@@ -2163,10 +2168,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 case ReaderKeyMap.SAVE_NEXT -> saveImage(index, false, true, true, true);
                 case ReaderKeyMap.SAVE_PREVIOUS -> performPreviousPageSave(index);
                 case ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL -> {
-                    if (Settings.getExperimentalAnimatedWebpEnabled() && Settings.getAnimatedWebpAutoAdvance()
+                    if (isSequentialPlaybackEnabled()
                             && mLayoutMode != GalleryView.LAYOUT_TOP_TO_BOTTOM && index > 0) {
                         performPreviousPageSave(index);
-                    } else showPageDialog(index);
+                    }
                 }
             }
         });

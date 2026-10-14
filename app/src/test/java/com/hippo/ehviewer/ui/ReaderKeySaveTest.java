@@ -145,20 +145,33 @@ public class ReaderKeySaveTest {
         assertEquals(1, provider.calls);
     }
 
-    @Test public void sequentialSaveUsesPreviousPageAndFallsBackToImageMenu() throws Exception {
+    @Test public void sequentialSaveUsesPreviousPageAndOtherwiseDoesNothing() throws Exception {
         Settings.putExperimentalAnimatedWebpEnabled(true);
         Settings.putAnimatedWebpAutoAdvance(true);
         dispatch(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL, 2);
         assertEquals(1, provider.savedPage);
+        assertEquals(1, provider.calls);
+        assertNull(ShadowDialog.getLatestDialog());
         Settings.putAnimatedWebpAutoAdvance(false);
         dispatch(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL, 2);
         assertEquals(1, provider.calls);
-        assertTrue(ShadowDialog.getLatestDialog().isShowing());
-        ShadowDialog.getLatestDialog().dismiss();
+        assertNull(ShadowDialog.getLatestDialog());
         Settings.putAnimatedWebpAutoAdvance(true);
         ReflectionHelpers.setField(activity, "mLayoutMode", GalleryView.LAYOUT_TOP_TO_BOTTOM);
         dispatch(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL, 2);
         assertEquals(1, provider.calls);
+        assertNull(ShadowDialog.getLatestDialog());
+        ReflectionHelpers.setField(activity, "mLayoutMode", GalleryView.LAYOUT_LEFT_TO_RIGHT);
+        Settings.putExperimentalAnimatedWebpEnabled(false);
+        dispatch(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL, 2);
+        assertEquals(1, provider.calls);
+        assertNull(ShadowDialog.getLatestDialog());
+        Settings.putExperimentalAnimatedWebpEnabled(true);
+        ReflectionHelpers.setField(activity, "mCurrentIndex", 0);
+        dispatch(ReaderKeyMap.SAVE_PREVIOUS_SEQUENTIAL, 0);
+        assertEquals(1, provider.calls);
+        assertNull(ShadowDialog.getLatestDialog());
+        dispatch(ReaderKeyMap.PAGE_MENU, 0);
         assertTrue(ShadowDialog.getLatestDialog().isShowing());
     }
 
