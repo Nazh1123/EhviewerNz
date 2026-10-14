@@ -309,7 +309,7 @@ public class PopularGalleryRenderingTest {
     }
 
     @Test @Config(sdk = 34, qualifiers = "600dpi")
-    public void dividerUsesTwelvePixelRoundLineWithFifteenPercentInsetsAndFourPixelGapsAtDeviceDensity() {
+    public void dividerUsesTwoRoundLinesWithOneDpBetweenThemAtDeviceDensity() {
         refresh(2, 3, 4);
         toggle(PopularGalleryHistory.UPDATES);
         adapter.setType(GalleryAdapterNew.TYPE_GRID);
@@ -320,9 +320,9 @@ public class PopularGalleryRenderingTest {
         assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
         assertEquals(recycler.getWidth() - recycler.getPaddingLeft() - recycler.getPaddingRight(),
                 divider.getWidth());
-        assertEquals(4, divider.getPaddingTop());
-        assertEquals(4, divider.getPaddingBottom());
-        assertEquals(20, divider.getHeight());
+        assertEquals(8, divider.getPaddingTop());
+        assertEquals(8, divider.getPaddingBottom());
+        assertEquals(32, divider.getHeight());
         assertTrue(divider instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
     }
 
@@ -457,7 +457,7 @@ public class PopularGalleryRenderingTest {
             adapter.setType(GalleryAdapterNew.TYPE_GRID);
             layout();
             View divider = recycler.findViewHolderForAdapterPosition(2).itemView;
-            assertEquals(20, divider.getHeight());
+            assertEquals(32, divider.getHeight());
             assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
             assertEquals(3, helper.getAdapterPosition(0));
             assertEquals(1, helper.getDataPosition(0));
