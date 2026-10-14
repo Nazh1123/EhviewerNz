@@ -1,5 +1,6 @@
 package com.hippo.ehviewer.ui.fragment;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.*;
@@ -15,6 +16,7 @@ import android.widget.*;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatImageButton;
@@ -193,8 +195,9 @@ public final class ReaderKeysFragment extends Fragment {
         super.onViewCreated(view, state);
         if (requireActivity() instanceof SettingsActivity activity) activity.setSettingsTitle(R.string.reader_keys_title);
         if (requireActivity() instanceof AppCompatActivity activity && activity.getSupportActionBar() != null) {
-            actionBarWasShown = activity.getSupportActionBar().isShowing();
-            activity.getSupportActionBar().hide();
+            ActionBar actionBar = activity.getSupportActionBar();
+            actionBarWasShown = actionBar.isShowing();
+            setActionBarVisible(actionBar, false);
         }
         Window window = requireActivity().getWindow();
         originalWindowFlags = window.getAttributes().flags;
@@ -230,12 +233,23 @@ public final class ReaderKeysFragment extends Fragment {
         window.setFlags(originalWindowFlags, mask);
         window.getDecorView().setSystemUiVisibility(originalSystemUi);
         if (requireActivity() instanceof AppCompatActivity activity && activity.getSupportActionBar() != null) {
-            if (actionBarWasShown) activity.getSupportActionBar().show();
+            if (actionBarWasShown) {
+                setActionBarVisible(activity.getSupportActionBar(), true);
+            }
         }
         zones = null; profileButton = null; saveButton = null; directionButton = null;
         animatedButton = null; helpButton = null; copyButton = null;
         bottomBar = null; backButton = null; moreButton = null; back = null;
         super.onDestroyView();
+    }
+
+    @SuppressLint("RestrictedApi") // AppCompat exposes animation cancellation only through this API.
+    private static void setActionBarVisible(ActionBar actionBar, boolean visible) {
+        // Finish before fullscreen changes AppCompat's content-animation policy, which
+        // can otherwise prevent the hide animation from resetting the content's translation.
+        actionBar.setShowHideAnimationEnabled(false);
+        if (visible) actionBar.show(); else actionBar.hide();
+        actionBar.setShowHideAnimationEnabled(true);
     }
 
     @Override public void onSaveInstanceState(@NonNull Bundle state) {
