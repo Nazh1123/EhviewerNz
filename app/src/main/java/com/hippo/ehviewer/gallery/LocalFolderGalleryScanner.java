@@ -34,6 +34,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.io.File;
+import java.io.IOException;
+import java.util.UUID;
 
 /** Bounded recursive scanner used by local-folder import and viewing. */
 public final class LocalFolderGalleryScanner {
@@ -77,7 +80,24 @@ public final class LocalFolderGalleryScanner {
     public static ScanResult scan(
             @NonNull Context context, @NonNull LocalFolderGallerySource source)
             throws ScanException {
+        return scan(context, source, true);
+    }
+
+    public static ScanResult scan(Context context, LocalFolderGallerySource source, boolean recursive)
+            throws ScanException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(MAX_SCAN_MILLIS);
+        File local = ExternalImageFileResolver.resolveDirectory(context, source.getTreeUri());
+        if (local != null) {
+            try {
+                File root = new File(local, source.relativePath).getCanonicalFile();
+                if (!root.toPath().startsWith(local.toPath())) throw new IOException("Folder escapes source");
+                return scanLocal(root, deadline, recursive);
+            } catch (IOException | SecurityException ignored) {
+                // Direct access can disappear after authorization; retain the SAF route.
+            } catch (ScanException failure) {
+                if (failure.reason != Reason.INACCESSIBLE) throw failure;
+            }
+        }
         ResolvedDirectory root;
         try {
             root = resolveRoot(context, source, deadline);
@@ -112,10 +132,11 @@ public final class LocalFolderGalleryScanner {
                 String[] projection = {
                         DocumentsContract.Document.COLUMN_DOCUMENT_ID,
                         DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                        DocumentsContract.Document.COLUMN_MIME_TYPE
+                        DocumentsContract.Document.COLUMN_MIME_TYPE,
+                        DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+                        DocumentsContract.Document.COLUMN_SIZE
                 };
-                try (Cursor cursor = context.getContentResolver().query(
-                        childrenUri, projection, null, null, null)) {
+                try (Cursor cursor = queryChildren(context, childrenUri, projection)) {
                     if (cursor == null) {
                         throw new ScanException(Reason.INACCESSIBLE);
                     }
@@ -125,6 +146,8 @@ public final class LocalFolderGalleryScanner {
                             DocumentsContract.Document.COLUMN_DISPLAY_NAME);
                     int typeColumn = cursor.getColumnIndexOrThrow(
                             DocumentsContract.Document.COLUMN_MIME_TYPE);
+                    int modifiedColumn = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
+                    int sizeColumn = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_SIZE);
                     while (cursor.moveToNext()) {
                         checkCancelledOrExpired(deadline);
                         if (++entryCount > MAX_ENTRIES) {
@@ -140,7 +163,8 @@ public final class LocalFolderGalleryScanner {
                                 DocumentsContract.buildDocumentUriUsingTree(
                                         directory.uri, documentId),
                                 name,
-                                DocumentsContract.Document.MIME_TYPE_DIR.equals(mimeType)));
+                                DocumentsContract.Document.MIME_TYPE_DIR.equals(mimeType),
+                                optionalLong(cursor, modifiedColumn), optionalLong(cursor, sizeColumn)));
                     }
                 }
             } catch (ScanException e) {
@@ -156,6 +180,7 @@ public final class LocalFolderGalleryScanner {
                 String relativePath = directory.relativePath.isEmpty()
                         ? name : directory.relativePath + '/' + name;
                 if (child.directory) {
+                    if (!recursive) continue;
                     // Persistent translated pages must not become new source pages on rescan.
                     if ("_translated".equalsIgnoreCase(name)) continue;
                     if (directory.depth >= MAX_DEPTH) {
@@ -167,7 +192,7 @@ public final class LocalFolderGalleryScanner {
                     if (images.size() >= MAX_IMAGES) {
                         throw new ScanException(Reason.TOO_LARGE);
                     }
-                    images.add(new ImageEntry(child.uri, relativePath, name));
+                    images.add(new ImageEntry(child.uri, relativePath, name, child.lastModified, child.size));
                     if (directory.depth == 0) {
                         directImageCount++;
                     }
@@ -181,6 +206,61 @@ public final class LocalFolderGalleryScanner {
                 directoryCount, entryCount);
     }
 
+    private static long optionalLong(Cursor cursor, int column) {
+        return column >= 0 && !cursor.isNull(column) ? cursor.getLong(column) : -1L;
+    }
+
+    private static Cursor queryChildren(Context context, Uri uri, String[] projection) {
+        try {
+            return context.getContentResolver().query(uri, projection, null, null, null);
+        } catch (IllegalArgumentException unsupportedMetadata) {
+            return context.getContentResolver().query(uri, new String[] {
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE}, null, null, null);
+        }
+    }
+
+    /** Shares SAF's ordering, limits and translated-page exclusion without provider queries. */
+    static ScanResult scanLocal(File root, long deadline, boolean recursive) throws ScanException, IOException {
+        root = root.getCanonicalFile();
+        ArrayDeque<PendingDirectory> pending = new ArrayDeque<>();
+        pending.add(new PendingDirectory(Uri.fromFile(root), "", 0));
+        Set<String> visited = new HashSet<>();
+        List<ImageEntry> images = new ArrayList<>();
+        int directories = 0, entries = 0, directImages = 0;
+        while (!pending.isEmpty()) {
+            checkCancelledOrExpired(deadline);
+            PendingDirectory current = pending.removeFirst();
+            File directory = new File(current.uri.getPath()).getCanonicalFile();
+            if (!visited.add(directory.getPath())) continue;
+            if (++directories > MAX_DIRECTORIES) throw new ScanException(Reason.TOO_LARGE);
+            File[] children = directory.listFiles();
+            if (children == null) throw new ScanException(Reason.INACCESSIBLE);
+            for (File child : children) {
+                checkCancelledOrExpired(deadline);
+                if (++entries > MAX_ENTRIES) throw new ScanException(Reason.TOO_LARGE);
+                // Do not traverse symlinks: directory authorization has a defined boundary.
+                if (!child.getCanonicalFile().equals(child.getAbsoluteFile())) continue;
+                String name = child.getName();
+                String path = current.relativePath.isEmpty() ? name : current.relativePath + '/' + name;
+                if (child.isDirectory()) {
+                    if (!recursive) continue;
+                    if ("_translated".equalsIgnoreCase(name)) continue;
+                    if (current.depth >= MAX_DEPTH) throw new ScanException(Reason.TOO_LARGE);
+                    pending.add(new PendingDirectory(Uri.fromFile(child), path, current.depth + 1));
+                } else if (child.isFile() && isSupportedImage(name)) {
+                    if (!child.canRead()) throw new ScanException(Reason.INACCESSIBLE);
+                    if (images.size() >= MAX_IMAGES) throw new ScanException(Reason.TOO_LARGE);
+                    images.add(new ImageEntry(Uri.fromFile(child), path, name, child.lastModified(), child.length()));
+                    if (current.depth == 0) directImages++;
+                }
+            }
+        }
+        Collections.sort(images, (left, right) -> PATH_COMPARATOR.compare(left.relativePath, right.relativePath));
+        return new ScanResult(root.getName(), images, directImages, directories, entries);
+    }
+
     @NonNull
     private static ResolvedDirectory resolveRoot(
             @NonNull Context context,
@@ -189,8 +269,7 @@ public final class LocalFolderGalleryScanner {
         Uri treeUri = source.getTreeUri();
         Uri current;
         try {
-            current = DocumentsContract.buildDocumentUriUsingTree(
-                    treeUri, DocumentsContract.getTreeDocumentId(treeUri));
+            current = com.hippo.unifile.UniFile.fromTreeUri(context, treeUri).getUri();
         } catch (RuntimeException e) {
             throw new ScanException(Reason.INACCESSIBLE, e);
         }
@@ -325,12 +404,21 @@ public final class LocalFolderGalleryScanner {
         public final String relativePath;
         @NonNull
         public final String filename;
+        public final long lastModified;
+        public final long size;
+        public final String previewIdentity;
 
         ImageEntry(
-                @NonNull Uri uri, @NonNull String relativePath, @NonNull String filename) {
+                @NonNull Uri uri, @NonNull String relativePath, @NonNull String filename,
+                long lastModified, long size) {
             this.uri = uri;
             this.relativePath = relativePath;
             this.filename = filename;
+            this.lastModified = lastModified;
+            this.size = size;
+            // Unknown timestamps cannot safely identify replacements across future scans.
+            this.previewIdentity = uri + ":" + lastModified + ":" + size
+                    + (lastModified > 0 ? "" : ":" + UUID.randomUUID());
         }
     }
 
@@ -390,11 +478,15 @@ public final class LocalFolderGalleryScanner {
         @NonNull
         final String name;
         final boolean directory;
+        final long lastModified;
+        final long size;
 
-        NamedDocument(@NonNull Uri uri, @NonNull String name, boolean directory) {
+        NamedDocument(@NonNull Uri uri, @NonNull String name, boolean directory, long lastModified, long size) {
             this.uri = uri;
             this.name = name;
             this.directory = directory;
+            this.lastModified = lastModified;
+            this.size = size;
         }
     }
 }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="gallery_update_history_missing_gallery_title">GID: %1$d\nGalerie wurde gelöscht oder aktualisiert</string>
     <string name="gallery_update_history_title">Galerie-Aktualisierungsverlauf</string>
     <string name="gallery_update_history_all_empty">Keine gespeicherten Galerie-Aktualisierungen</string>
     <string name="gallery_update_history_load_failed">Aktualisierungsverlauf konnte nicht geladen werden</string>

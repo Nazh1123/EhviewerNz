@@ -164,10 +164,10 @@
     <string name="translation_native_model_help">Importa un modelo de traducción o de instrucciones GGUF de un solo archivo. Se establece como modelo actual tras validarlo. Los demás modelos se conservan y puedes cambiarlos o eliminarlos. Se recomiendan modelos cuantizados pequeños; la memoria necesaria supera el tamaño del archivo.</string>
     <string name="translation_native_importing">Copiando y validando el modelo. Espera…</string>
     <string name="translation_native_referencing">Leyendo y validando el modelo externo. Espera…</string>
-    <string name="translation_native_imported">Modelo importado. Toca «Probar una frase» para comprobar el resultado.</string>
+    <string name="translation_native_imported">Modelo importado. Toca «Traducir un ejemplo» para comprobar el resultado.</string>
     <string name="translation_native_import_required">Los modelos de manga están listos. Importa por separado un modelo de traducción GGUF local.</string>
     <string name="translation_native_prepare_required">Prepara modelos de manga y un modelo de traducción GGUF local en «Gestión de modelos».</string>
-    <string name="translation_native_test">Probar una frase</string>
+    <string name="translation_native_test">Traducir un ejemplo</string>
     <string name="translation_native_test_help">Traduce un ejemplo en el idioma de origen seleccionado. No requiere modelo OCR.</string>
     <string name="translation_native_testing">Cargando modelo y traduciendo…</string>
     <string name="translation_native_failed">Error en la operación del modelo local: %1$s</string>

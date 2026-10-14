@@ -1154,7 +1154,7 @@
     <string name="settings_eh_show_thumbnail_download_badge">縮圖顯示下載標識</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">縮圖模式下，在右下角顯示畫廊已下載標識</string>
     <string name="settings_eh_show_thumbnail_info_bar">縮圖資訊欄</string>
-    <string name="settings_eh_show_thumbnail_info_bar_summary">以縮圖模式 (大) 瀏覽時，在畫廊封面下方顯示畫廊資訊</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">以縮圖模式(大)瀏覽時，在畫廊封面下方顯示畫廊資訊</string>
     <string name="settings_eh_show_thumbnail_info_title">畫廊標題</string>
     <string name="settings_eh_show_thumbnail_info_details">日期、評分、打碼類型、閱讀進度</string>
     <string name="settings_eh_show_thumbnail_info_highlight">色彩高亮</string>

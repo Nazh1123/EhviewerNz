@@ -103,7 +103,8 @@ public abstract class UniFile {
      * {@code null} when called on earlier platform versions.
      *
      * @param treeUri the {@link Intent#getData()} from a successful
-     *                {@link Intent#ACTION_OPEN_DOCUMENT_TREE} request.
+     *                {@link Intent#ACTION_OPEN_DOCUMENT_TREE} request, or a
+     *                document URI within that tree. Child document IDs are preserved.
      * @return the {@link UniFile} representing the given {@link Uri}.
      */
     public static UniFile fromTreeUri(Context context, Uri treeUri) {

@@ -33,7 +33,6 @@ import com.hippo.ehviewer.widget.ReaderPreviewRecyclerView;
 import com.hippo.lib.image.Image;
 import com.hippo.widget.LoadImageView;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -60,7 +59,7 @@ final class ReaderPagePreview implements AutoCloseable {
     private final IntConsumer onBrowsed;
     private final LruCache<String, Long> failures = new LruCache<>(128);
     private final Set<String> downloading = new HashSet<>();
-    private final int edge;
+    private int edge;
     private volatile boolean closed;
     private volatile boolean visible;
     private boolean manualScrolling;
@@ -71,11 +70,11 @@ final class ReaderPagePreview implements AutoCloseable {
     private int perPage;
     private int itemWidth;
     private int imageHeight;
+    private int viewportWidth;
+    private int browseDirection;
+    private boolean sliderPositioned;
     private boolean reverse;
     private EhRequest metadataRequest;
-    private int[] preparedPages;
-    private int preparedCount;
-    private final Runnable prepare = this::prepareLocal;
     private final Runnable refresh = this::refreshVisible;
     private final Runnable dispatch = () -> {
         dispatchPending = false;
@@ -95,7 +94,6 @@ final class ReaderPagePreview implements AutoCloseable {
         this.onBrowsed = onBrowsed;
         gallery = provider instanceof EhGalleryProvider
                 ? ((EhGalleryProvider) provider).getPreviewGalleryInfo() : null;
-        edge = Math.min(384, Math.max(192, dp(130)));
         layout = new LinearLayoutManager(row.getContext(), RecyclerView.HORIZONTAL, false);
         row.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
         row.setLayoutManager(layout);
@@ -119,7 +117,10 @@ final class ReaderPagePreview implements AutoCloseable {
             }
             @Override public void onScrollStateChanged(@NonNull RecyclerView view, int state) {
                 if (!visible || closed) return;
-                if (state == RecyclerView.SCROLL_STATE_DRAGGING) manualScrolling = true;
+                if (state == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    manualScrolling = true;
+                    sliderPositioned = false;
+                }
                 if (state == RecyclerView.SCROLL_STATE_IDLE && manualScrolling) {
                     browseCenter();
                     manualScrolling = false;
@@ -154,7 +155,6 @@ final class ReaderPagePreview implements AutoCloseable {
 
     void show(int page, int count, boolean rightToLeft) {
         if (closed || count <= 0) return;
-        handler.removeCallbacks(prepare);
         visible = true;
         manualScrolling = false;
         row.stopScroll();
@@ -173,6 +173,7 @@ final class ReaderPagePreview implements AutoCloseable {
         }
         manualScrolling = false;
         row.stopScroll();
+        browseDirection = Integer.compare(target, selected);
         selected = target;
         size = count;
         reverse = rightToLeft;
@@ -189,6 +190,7 @@ final class ReaderPagePreview implements AutoCloseable {
     }
 
     private void positionSelected(int width) {
+        sliderPositioned = true;
         layout.scrollToPositionWithOffset(selected,
                 Math.max(0, (width - row.getPaddingLeft() - row.getPaddingRight()) / 2));
     }
@@ -199,11 +201,19 @@ final class ReaderPagePreview implements AutoCloseable {
     }
 
     private boolean updateDimensions(int width) {
-        int nextWidth = Math.max(1, (width - row.getPaddingLeft() - row.getPaddingRight()) / 4);
+        int nextViewportWidth = Math.max(1, width - row.getPaddingLeft() - row.getPaddingRight());
+        boolean viewportChanged = viewportWidth != nextViewportWidth;
+        viewportWidth = nextViewportWidth;
+        int nextWidth = Math.max(1, viewportWidth / 4);
         int nextHeight = Math.min(dp(180), Math.max(dp(96),
                 Math.round(Math.max(1, nextWidth - dp(4)) * 130f / 91f)));
-        if (itemWidth == nextWidth && imageHeight == nextHeight) return false;
+        if (itemWidth == nextWidth && imageHeight == nextHeight && !viewportChanged) return false;
         itemWidth = nextWidth; imageHeight = nextHeight;
+        // FIT_CENTER can use either dimension; cover the actual image area in pixels.
+        edge = Math.max(Math.max(1, itemWidth - dp(4)), imageHeight);
+        if (localLoader != null) {
+            if (visible) loadLocal();
+        }
         if (row instanceof ReaderPreviewRecyclerView)
             ((ReaderPreviewRecyclerView) row).setPreviewHeight(imageHeight + dp(30));
         return true;
@@ -220,23 +230,10 @@ final class ReaderPagePreview implements AutoCloseable {
             if (position != RecyclerView.NO_POSITION && delta < distance) { page = position; distance = delta; }
         }
         if (selected != page) {
+            browseDirection = Integer.compare(page, selected);
             selected = page;
             onBrowsed.accept(page);
         }
-    }
-
-    void prepare(int page, int count, boolean rightToLeft) {
-        if (closed || visible || count <= 0 || provider.getPreviewConcurrency() <= 1) return;
-        int center = Math.max(0, Math.min(page, count - 1));
-        preparedCount = count;
-        preparedPages = new int[] {center, center > 0 ? center - 1 : -1,
-                center + 1 < count ? center + 1 : -1};
-        handler.removeCallbacks(prepare);
-        handler.postDelayed(prepare, 150);
-    }
-
-    private void prepareLocal() {
-        if (!visible && !closed && preparedPages != null) localLoader.prepare(preparedPages, edge, preparedCount);
     }
 
     void hide() {
@@ -302,19 +299,51 @@ final class ReaderPagePreview implements AutoCloseable {
     }
 
     private void loadLocal() {
-        localLoader.request(new int[] {selected}, edge, true);
+        if (!sliderPositioned) {
+            loadLocalNeighbors();
+            return;
+        }
+        // scrollToPositionWithOffset only takes effect on the next layout. Submit the
+        // entire destination viewport now, so another slider step cannot drop its edge.
+        // These are the cards that will be visible, not pages outside that viewport.
+        int physicalTarget = reverse ? size - 1 - selected : selected;
+        int offset = viewportWidth / 2;
+        int targetLeft = reverse ? viewportWidth - offset - itemWidth : offset;
+        long maxScroll = Math.max(0L, (long) size * itemWidth - viewportWidth);
+        long scroll = Math.max(0L, Math.min(maxScroll, (long) physicalTarget * itemWidth - targetLeft));
+        int first = (int) (scroll / itemWidth);
+        int last = Math.min(size - 1, (int) ((scroll + viewportWidth - 1) / itemWidth));
+        List<Integer> pages = new ArrayList<>();
+        for (int position = first; position <= last; position++)
+            pages.add(reverse ? size - 1 - position : position);
+        requestLocal(pages);
     }
 
     private void loadLocalNeighbors() {
         if (!visible || closed) return;
-        // A slider jump can precede the next layout. Do not decode the old viewport while
-        // waiting for the new target's holders to be attached.
-        List<Card> cards = layout.findViewByPosition(selected) != null ? visibleCards() : Collections.emptyList();
-        int[] pages = new int[cards.size() + 1];
-        pages[0] = selected;
-        for (int i = 0; i < cards.size(); i++) pages[i + 1] = cards.get(i).page;
-        localLoader.request(pages, edge, true);
+        if (sliderPositioned) {
+            loadLocal();
+        } else {
+            List<Integer> pages = new ArrayList<>();
+            for (Card card : visibleCards()) pages.add(card.page);
+            requestLocal(pages);
+        }
         if (gallery != null) schedule(75);
+    }
+
+    private void requestLocal(List<Integer> pages) {
+        pages.remove(Integer.valueOf(selected));
+        int leading = selected;
+        for (int page : pages) {
+            if (browseDirection > 0) leading = Math.max(leading, page);
+            else if (browseDirection < 0) leading = Math.min(leading, page);
+        }
+        final int incoming = leading;
+        pages.sort(Comparator.comparingInt(page -> page == incoming ? -1 : Math.abs(page - selected)));
+        int[] requested = new int[pages.size() + 1];
+        requested[0] = selected;
+        for (int i = 0; i < pages.size(); i++) requested[i + 1] = pages.get(i);
+        localLoader.request(requested, edge);
     }
 
     private String metadataKey(int page) { return gallery.gid + ":" + gallery.token + ":" + page; }
@@ -489,7 +518,7 @@ final class ReaderPagePreview implements AutoCloseable {
         GalleryPreview preview;
         boolean network;
         boolean missed;
-        PreviewImage(Context ui, Card card) { super(ui); this.card = card; }
+        PreviewImage(Context ui, Card card) { super(ui, false); this.card = card; }
         @Override protected boolean animateImageChanges() { return false; }
         @Override protected java.util.function.BooleanSupplier networkAdmission() {
             return () -> attached.contains(card) && admitNetwork();

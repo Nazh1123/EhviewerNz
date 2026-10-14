@@ -525,9 +525,11 @@ public class Settings {
     }
 
     public static boolean isThumbnailInfoBarEffective() {
+        int thumbSize = getThumbSize();
         return getShowThumbnailInfoBar()
                 && (getShowThumbnailInfoTitle() || getShowThumbnailInfoDetails())
-                && getListMode() == 1 && getThumbSize() == 0;
+                && getListMode() == 1
+                && (thumbSize == 0 || thumbSize == 101 || thumbSize == 102);
     }
 
     public static final String KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD =

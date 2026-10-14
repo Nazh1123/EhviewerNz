@@ -55,8 +55,13 @@ final class DocumentsContractApi21 {
     }
 
     public static Uri prepareTreeUri(Uri treeUri) {
-        return DocumentsContract.buildDocumentUriUsingTree(treeUri,
-                DocumentsContract.getTreeDocumentId(treeUri));
+        // A tree URI can already address a child document. Keep that document's ID;
+        // replacing it with the tree ID makes every child resolve to the same root.
+        final List<String> paths = treeUri.getPathSegments();
+        final String documentId = paths.size() >= 4 && PATH_DOCUMENT.equals(paths.get(2))
+                ? DocumentsContract.getDocumentId(treeUri)
+                : DocumentsContract.getTreeDocumentId(treeUri);
+        return DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId);
     }
 
     public static String getTreeDocumentPath(Uri documentUri) {

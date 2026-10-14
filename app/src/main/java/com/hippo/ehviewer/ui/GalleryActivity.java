@@ -105,6 +105,9 @@ import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.gallery.LocalGalleryHistory;
 import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.gallery.LocalFolderGalleryProvider;
+import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
+import com.hippo.ehviewer.gallery.SingleImageGalleryProvider;
+import android.provider.DocumentsContract;
 import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
 import com.hippo.ehviewer.widget.ReversibleSeekBar;
@@ -193,6 +196,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private static final long ORIENTATION_SWIPE_UNDO_WINDOW_MS = 3_000L;
     private static final double ANIMATED_WEBP_RELATIVE_SEEK_GAIN = 2.0;
     private static final int WRITE_REQUEST_CODE = 43;
+    private static final int IMAGE_FOLDER_REQUEST_CODE = 44;
+    public static final String KEY_LOCAL_SELECTED_IMAGE_URI = "selected_image_uri";
 
     private String mAction;
     private String mFilename;
@@ -201,7 +206,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private int mPage;
     private String mCacheFileName;
     private boolean mExternalImage;
-    private boolean mExternalImagePathError;
     private boolean mPendingExternalImageStart;
     @Nullable
     private String mLocalGalleryDirectory;
@@ -259,7 +263,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private ReversibleSeekBar mSeekBar;
     private ReaderPagePreview mPagePreview;
     private boolean mPageSeeking;
-    private boolean mPagePreviewResumed;
     private boolean mDismissingPagePreviewTouch;
     @Nullable
     private View mSaveNotice;
@@ -461,7 +464,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
 
         mExternalImage = false;
-        mExternalImagePathError = false;
         mLocalGalleryDirectory = null;
         mLocalGalleryResumeEntry = null;
 
@@ -475,7 +477,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         } else if (ACTION_LOCAL_FOLDER.equals(mAction)) {
             if (mFilename != null) {
-                mGalleryProvider = new LocalFolderGalleryProvider(this, mFilename);
+                mGalleryProvider = new LocalFolderGalleryProvider(this, mFilename,
+                        getIntent().getParcelableExtra(KEY_LOCAL_SELECTED_IMAGE_URI),
+                        getIntent().getStringExtra(KEY_LOCAL_RESUME_FILENAME));
             }
         } else if (ACTION_EH.equals(mAction)) {
             if (mGalleryInfo != null) {
@@ -486,10 +490,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         } else if (Intent.ACTION_VIEW.equals(mAction)) {
             if (mUri != null) {
-                if (ExternalImageFileResolver.isImageUri(this, mUri)) {
+                if (ExternalImageFileResolver.isImageUri(this, mUri, getIntent().getType())) {
                     File imageFile = ExternalImageFileResolver.resolve(this, mUri);
                     File parent = imageFile != null ? imageFile.getParentFile() : null;
-                    if (imageFile != null && parent != null && parent.isDirectory()) {
+                    if (imageFile != null && ExternalImageFileResolver.isSupportedImageName(imageFile.getName())
+                            && ExternalImageFileResolver.isReadableDirectory(parent)) {
                         mExternalImage = true;
                         mLocalGalleryDirectory = directoryHistoryKey(parent);
                         mLocalGalleryResumeEntry = LocalGalleryHistory.get(
@@ -497,7 +502,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                         mGalleryProvider = new DirGalleryProvider(
                                 UniFile.fromFile(parent), imageFile.getName());
                     } else {
-                        mExternalImagePathError = true;
+                        mGalleryProvider = new SingleImageGalleryProvider(this, mUri, getIntent().getType());
                     }
                 } else {
                     mGalleryProvider = new ArchiveGalleryProvider(this, mUri);
@@ -506,7 +511,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         if (mGalleryProvider != null && !mReadingHistoryRecorded) {
             mReadingHistoryRecorded = true;
-            Intent visit = new Intent(getIntent()).setAction(mAction).setData(mUri);
+            Intent visit = new Intent(getIntent()).setAction(mAction).setDataAndType(mUri, getIntent().getType());
             visit.putExtra(KEY_FILENAME, mFilename);
             visit.putExtra(KEY_GALLERY_INFO, mGalleryInfo);
             visit.putExtra(KEY_PAGE, mPage);
@@ -610,7 +615,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         int page = mGalleryView == null ? mCurrentIndex : mGalleryView.getCurrentIndex();
         if (page < 0) page = mCurrentIndex;
         if (page < 0 || page >= mGalleryProvider.size()) return;
-        Intent visit = new Intent(getIntent()).setAction(mAction).setData(mUri);
+        Intent visit = new Intent(getIntent()).setAction(mAction).setDataAndType(mUri, getIntent().getType());
         visit.putExtra(KEY_FILENAME, mFilename);
         visit.putExtra(KEY_GALLERY_INFO, mGalleryInfo);
         String filename = mGalleryProvider instanceof DirGalleryProvider
@@ -748,16 +753,15 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             if (!canFinish) {
                 return;
             }
-            if (mExternalImagePathError) {
-                Toast.makeText(this, R.string.error_open_image_directory, Toast.LENGTH_LONG).show();
-            }
             finish();
             return;
         }
         boolean deferProviderStart = mGalleryProvider instanceof DirGalleryProvider
                 || mGalleryProvider instanceof LocalFolderGalleryProvider;
         mPendingExternalImageStart = savedInstanceState == null
-                && mGalleryProvider instanceof DirGalleryProvider && mPage < 0;
+                && mPage < 0 && (mGalleryProvider instanceof DirGalleryProvider
+                || (mGalleryProvider instanceof LocalFolderGalleryProvider
+                && getIntent().hasExtra(KEY_LOCAL_SELECTED_IMAGE_URI)));
         if (!deferProviderStart) {
             mGalleryProvider.start();
         }
@@ -1032,7 +1036,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
-        mPagePreviewResumed = false;
         if (mPagePreview != null) { mPagePreview.close(); mPagePreview = null; }
         if (mTranslationController != null) {
             mTranslationController.close(isFinishing());
@@ -1134,7 +1137,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onPause() {
-        mPagePreviewResumed = false;
         mDismissingPagePreviewTouch = false;
         cancelPagePreview();
         if (mTranslationController != null) mTranslationController.pause(isFinishing());
@@ -1160,7 +1162,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onResume() {
         super.onResume();
-        mPagePreviewResumed = true;
         applyPagePreviewSetting();
         applyReaderKeyProfile();
         if (mTranslationController != null) mTranslationController.resume();
@@ -1959,8 +1960,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSeekBar.setProgress(displayedIndex);
         if (Settings.getReaderPagePreview() && mPageSeeking && mPagePreview != null) {
             mPagePreview.update(displayedIndex, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
-        } else if (mPagePreviewResumed && Settings.getReaderPagePreview() && mPagePreview != null) {
-            mPagePreview.prepare(displayedIndex, mSize, mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
         }
     }
 
@@ -2685,6 +2684,26 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent resultData) {
         super.onActivityResult(requestCode, resultCode, resultData);
+        if (requestCode == IMAGE_FOLDER_REQUEST_CODE) {
+            if (resultCode == Activity.RESULT_OK && resultData != null && resultData.getData() != null) {
+                Uri tree = resultData.getData();
+                int flags = resultData.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION;
+                try {
+                    if ((resultData.getFlags() & Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION) != 0)
+                        getContentResolver().takePersistableUriPermission(tree, flags);
+                } catch (SecurityException failure) {
+                    Log.w(TAG, "Folder permission is available only for this visit", failure);
+                }
+                Intent open = new Intent(this, LocalViewerActivity.class).setAction(ACTION_LOCAL_FOLDER)
+                        .setData(tree).addFlags(flags | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+                        .putExtra(KEY_FILENAME, LocalFolderGallerySource.create(tree, "").encode())
+                        .putExtra(KEY_LOCAL_SELECTED_IMAGE_URI, mUri)
+                        .putExtra(KEY_LOCAL_RESUME_FILENAME, ExternalImageFileResolver.queryDisplayName(this, mUri));
+                startActivity(open);
+                finish();
+            }
+            return;
+        }
         if (requestCode == WRITE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
             if (resultData != null) {
                 Uri uri = resultData.getData();
@@ -3738,6 +3757,19 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         private void onTapMenuArea() {
             AlertDialog.Builder builder = new AlertDialog.Builder(GalleryActivity.this);
             GalleryMenuHelper helper = new GalleryMenuHelper(builder.getContext());
+            if (mGalleryProvider instanceof SingleImageGalleryProvider) {
+                builder.setNeutralButton(R.string.open_image_folder, (dialog, which) -> {
+                    Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                                    | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+                    picker.putExtra(DocumentsContract.EXTRA_INITIAL_URI, mUri);
+                    try { startActivityForResult(picker, IMAGE_FOLDER_REQUEST_CODE); }
+                    catch (android.content.ActivityNotFoundException failure) {
+                        Toast.makeText(GalleryActivity.this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
             builder.setTitle(R.string.gallery_menu_title).setView(helper.getView()).setPositiveButton(android.R.string.ok, helper).show();
         }
 

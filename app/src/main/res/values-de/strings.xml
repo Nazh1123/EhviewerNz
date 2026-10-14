@@ -1034,7 +1034,7 @@
     <string name="settings_eh_show_thumbnail_download_badge">Miniaturansicht mit Download-Logo</string>
     <string name="settings_eh_show_thumbnail_download_badge_summary">Im Miniaturbildmodus wird das heruntergeladene Galerie-Logo in der unteren rechten Ecke angezeigt</string>
     <string name="settings_eh_show_thumbnail_info_bar">Miniaturbild-Informationsleiste</string>
-    <string name="settings_eh_show_thumbnail_info_bar_summary">Im Modus mit großen Miniaturbildern Galerieinformationen unter dem Cover anzeigen</string>
+    <string name="settings_eh_show_thumbnail_info_bar_summary">Im Miniaturbildmodus(Groß) Galerieinformationen unter dem Cover anzeigen</string>
     <string name="settings_eh_show_thumbnail_info_title">Galerietitel</string>
     <string name="settings_eh_show_thumbnail_info_details">Datum, Bewertung, Zensurtyp, Lesefortschritt</string>
     <string name="settings_eh_show_thumbnail_info_highlight">Farbliche Hervorhebung</string>

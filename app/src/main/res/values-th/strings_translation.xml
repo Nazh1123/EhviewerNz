@@ -164,10 +164,10 @@
     <string name="translation_native_model_help">นำเข้าโมเดลแปลหรือโมเดลตามคำสั่ง GGUF แบบไฟล์เดียว ตั้งเป็นโมเดลปัจจุบันหลังตรวจสอบ โมเดลอื่นที่ติดตั้งจะยังคงอยู่และสลับหรือลบได้ แนะนำโมเดลควอนไทซ์ขนาดเล็ก หน่วยความจำที่ต้องใช้มากกว่าขนาดไฟล์</string>
     <string name="translation_native_importing">กำลังคัดลอกและตรวจสอบโมเดล โปรดรอสักครู่…</string>
     <string name="translation_native_referencing">กำลังอ่านและตรวจสอบโมเดลภายนอก โปรดรอสักครู่…</string>
-    <string name="translation_native_imported">นำเข้าโมเดลแล้ว แตะ “ลองแปลหนึ่งประโยค” เพื่อดูผล</string>
+    <string name="translation_native_imported">นำเข้าโมเดลแล้ว แตะ “ลองแปลข้อความตัวอย่าง” เพื่อดูผล</string>
     <string name="translation_native_import_required">โมเดลมังงะพร้อมแล้ว โปรดนำเข้าโมเดลแปล GGUF ในเครื่องแยกต่างหาก</string>
     <string name="translation_native_prepare_required">เตรียมโมเดลมังงะและโมเดลแปล GGUF ในเครื่องใน “จัดการโมเดล”</string>
-    <string name="translation_native_test">ลองแปลหนึ่งประโยค</string>
+    <string name="translation_native_test">ลองแปลข้อความตัวอย่าง</string>
     <string name="translation_native_test_help">แปลตัวอย่างของภาษาต้นทางที่เลือก ไม่ต้องใช้โมเดล OCR</string>
     <string name="translation_native_testing">กำลังโหลดโมเดลและแปล…</string>
     <string name="translation_native_failed">ดำเนินการกับโมเดลในเครื่องไม่สำเร็จ: %1$s</string>

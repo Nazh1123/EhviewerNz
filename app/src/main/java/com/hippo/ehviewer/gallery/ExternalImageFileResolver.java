@@ -24,11 +24,14 @@ import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import com.hippo.unifile.UniFile;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.Locale;
 
 /** Resolves an externally opened image to a local file whose parent can be enumerated. */
@@ -39,6 +42,11 @@ public final class ExternalImageFileResolver {
     private static final String MEDIA_DOCUMENTS = "com.android.providers.media.documents";
 
     private ExternalImageFileResolver() {}
+
+    public static boolean isImageUri(Context context, Uri uri, String mimeType) {
+        return mimeType != null && mimeType.toLowerCase(Locale.ROOT).startsWith("image/")
+                || isImageUri(context, uri);
+    }
 
     public static boolean isImageUri(@NonNull Context context, @NonNull Uri uri) {
         String type = null;
@@ -106,6 +114,11 @@ public final class ExternalImageFileResolver {
     @Nullable
     private static File resolveExternalStorageDocument(
             @NonNull Context context, @NonNull String documentId) {
+        return existingFile(externalStoragePath(context, documentId));
+    }
+
+    @Nullable
+    private static File externalStoragePath(@NonNull Context context, @NonNull String documentId) {
         String[] parts = documentId.split(":", 2);
         if (parts.length != 2) {
             return null;
@@ -114,7 +127,7 @@ public final class ExternalImageFileResolver {
         String volume = parts[0];
         String relativePath = parts[1];
         if ("primary".equalsIgnoreCase(volume)) {
-            return existingFile(new File(Environment.getExternalStorageDirectory(), relativePath));
+            return new File(Environment.getExternalStorageDirectory(), relativePath);
         }
 
         File[] externalDirs = context.getExternalFilesDirs(null);
@@ -122,11 +135,34 @@ public final class ExternalImageFileResolver {
             for (File externalDir : externalDirs) {
                 File volumeRoot = findVolumeRoot(externalDir);
                 if (volumeRoot != null && volume.equalsIgnoreCase(volumeRoot.getName())) {
-                    return existingFile(new File(volumeRoot, relativePath));
+                    return new File(volumeRoot, relativePath);
                 }
             }
         }
-        return existingFile(new File(new File("/storage", volume), relativePath));
+        return new File(new File("/storage", volume), relativePath);
+    }
+
+    /** Only map the platform's local storage provider, never an arbitrary provider URI. */
+    @Nullable
+    public static File resolveDirectory(@NonNull Context context, @NonNull Uri uri) {
+        try {
+            File directory;
+            if (ContentResolver.SCHEME_FILE.equals(uri.getScheme())) {
+                directory = uri.getPath() != null ? new File(uri.getPath()) : null;
+            } else if (EXTERNAL_STORAGE_DOCUMENTS.equals(uri.getAuthority())) {
+                String id = UniFile.isTreeUri(uri) && uri.getPathSegments().size() == 2
+                        ? DocumentsContract.getTreeDocumentId(uri) : DocumentsContract.getDocumentId(uri);
+                directory = externalStoragePath(context, id);
+            } else return null;
+            return isReadableDirectory(directory) ? directory.getCanonicalFile() : null;
+        } catch (IOException | RuntimeException ignored) { return null; }
+    }
+
+    public static boolean isReadableDirectory(@Nullable File directory) {
+        try {
+            return directory != null && directory.isDirectory() && directory.canRead()
+                    && directory.list() != null;
+        } catch (RuntimeException ignored) { return false; }
     }
 
     @Nullable
@@ -158,7 +194,7 @@ public final class ExternalImageFileResolver {
     }
 
     @Nullable
-    private static String queryDisplayName(@NonNull Context context, @NonNull Uri uri) {
+    public static String queryDisplayName(@NonNull Context context, @NonNull Uri uri) {
         try (Cursor cursor = context.getContentResolver().query(
                 uri, new String[]{OpenableColumns.DISPLAY_NAME}, null, null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
@@ -202,7 +238,10 @@ public final class ExternalImageFileResolver {
     }
 
     @Nullable
-    private static File existingFile(@NonNull File file) {
-        return file.isFile() ? file : null;
+    private static File existingFile(@Nullable File file) {
+        try {
+            if (file == null || !file.isFile() || !file.canRead()) return null;
+            try (FileInputStream ignored = new FileInputStream(file)) { return file; }
+        } catch (IOException | RuntimeException ignored) { return null; }
     }
 }

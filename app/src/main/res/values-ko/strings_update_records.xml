@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="gallery_update_history_missing_gallery_title">GID: %1$d\n갤러리가 삭제되거나 업데이트되었습니다</string>
     <string name="gallery_update_history_title">갤러리 업데이트 기록</string>
     <string name="gallery_update_history_all_empty">저장된 갤러리 업데이트 기록 없음</string>
     <string name="gallery_update_history_load_failed">갤러리 업데이트 기록을 불러올 수 없음</string>

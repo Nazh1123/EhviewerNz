@@ -86,26 +86,31 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     private int mRequestId = IntIdGenerator.INVALID_ID;
 
     public LoadImageView(Context context) {
+        this(context, true);
+    }
+
+    /** Drawable-only users can defer the shared thumbnail loader until a URL is requested. */
+    protected LoadImageView(Context context, boolean initializeLoader) {
         super(context);
-        init(context, null, 0);
+        init(context, null, 0, initializeLoader);
     }
 
     public LoadImageView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        init(context, attrs, 0);
+        init(context, attrs, 0, true);
     }
 
     public LoadImageView(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
-        init(context, attrs, defStyle);
+        init(context, attrs, defStyle, true);
     }
 
-    private void init(Context context, AttributeSet attrs, int defStyleAttr) {
+    private void init(Context context, AttributeSet attrs, int defStyleAttr, boolean initializeLoader) {
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.LoadImageView, defStyleAttr, 0);
         setRetryType(a.getInt(R.styleable.LoadImageView_retryType, 0));
         a.recycle();
         setFocusable(false);
-        if (!isInEditMode()) {
+        if (initializeLoader && !isInEditMode()) {
             mConaco = EhApplication.getConaco(context);
         }
 //        setScaleType(ScaleType.FIT_CENTER);
@@ -141,7 +146,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
         if (!mLoadFromDrawable) {
             try {
                 // Cancel
-                mConaco.cancel(this);
+                if (mConaco != null) mConaco.cancel(this);
             } catch (Exception e) {
                 // Ignore
             }
@@ -261,6 +266,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
             builder.setDataContainer(dataContainer);
         }
 
+        if (mConaco == null) mConaco = EhApplication.getConaco(getContext());
         mConaco.load(builder);
     }
 
@@ -284,7 +290,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     }
 
     public void unload() {
-        mConaco.cancel(this);
+        if (mConaco != null) mConaco.cancel(this);
         mKey = null;
         mUrl = null;
         mDataContainer = null;
