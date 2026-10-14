@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translation_image_import_mode">Choose model import method</string>
+    <string name="translation_image_importing">Copying and validating models. Please wait…</string>
+    <string name="translation_image_external_help">Reads external models without keeping private copies. Keep source files in place and do not modify them. Import with copy mode to use private copies; reference mode removes existing private copies. Removing references preserves source files. The PP-OCR runtime component still needs installation in app-private storage.</string>
+    <string name="translation_image_external_unsupported">The external model has the wrong size or does not support direct reading/mapping. Select a compatible file or use “Copy to app-private storage”.</string>
+    <string name="translation_image_external_changed">An external model changed, its permission expired, or it is unavailable. Select the model files again.</string>
+    <string name="translation_image_remove_reference_confirm">Remove the reference to “%1$s”? External source files will be kept.</string>
+    <string name="translation_image_import_manga_help">Select all the files below at once. Names and versions must match. After all files pass validation, they are copied or referenced using the selected method. Source files are kept.\n\n%1$s</string>
+    <string name="translation_image_external_invalid">Reference unavailable</string>
+</resources>

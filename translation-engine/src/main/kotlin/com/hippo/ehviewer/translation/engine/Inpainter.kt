@@ -4,13 +4,14 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import kotlin.math.*
 
-class Inpainter(private val modelPath: String, private val cfg: InpainterConfig = InpainterConfig()) : AutoCloseable {
+class Inpainter @JvmOverloads constructor(modelPath: String, private val cfg: InpainterConfig = InpainterConfig(),
+                private val files: NcnnModelFiles = NcnnModelFiles.local(modelPath)) : AutoCloseable {
     private var model: ImageModel? = null
     @Volatile private var closed = false
     init { require(cfg.method in setOf("boxfill", "aot")) }
     @Synchronized private fun model(): ImageModel {
         check(!closed) { "Text removal is closed" }
-        return model ?: ImageModel(modelPath, 4, true).also { model = it }
+        return model ?: ImageModel(files, 4, true).also { model = it }
     }
 
     suspend fun inpaint(page: Bitmap, regions: List<TextRegion>, textMask: Bitmap): Bitmap {

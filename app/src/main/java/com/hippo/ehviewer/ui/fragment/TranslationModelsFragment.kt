@@ -27,6 +27,9 @@ class TranslationModelsFragment : Fragment() {
     private lateinit var ppModels: PpOcrModels
     private var ppImportLanguage = "en"
     private var nativeImportMode = NativeModelStore.ImportMode.COPY
+    private var mangaImportMode = TranslationModels.ImportMode.COPY
+    private var ppImportMode = TranslationModels.ImportMode.COPY
+    private var ppReadyByLanguage: Map<String, Boolean> = emptyMap()
     private lateinit var store: NativeModelStore
     private lateinit var palette: ModelPalette
     private lateinit var cards: LinearLayout
@@ -64,12 +67,20 @@ class TranslationModelsFragment : Fragment() {
         }
     }
     private val importManga = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isNotEmpty()) operate(getString(R.string.translation_model_import_manga)) { locked { models.import(uris, ::reportProgress) } }
+        val mode = mangaImportMode
+        if (uris.isNotEmpty()) operate(getString(if (mode == TranslationModels.ImportMode.REFERENCE)
+            R.string.translation_native_referencing else R.string.translation_image_importing)) {
+            locked { models.import(uris, mode, ::reportProgress) }
+        }
     }
     private val importPp = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val language = ppImportLanguage
-            operate("PP-OCRv5") { locked { ppModels.import(language, uri, ::reportProgress) } }
+            val mode = ppImportMode
+            operate(getString(if (mode == TranslationModels.ImportMode.REFERENCE)
+                R.string.translation_native_referencing else R.string.translation_image_importing)) {
+                locked { ppModels.import(language, uri, mode, ::reportProgress) }
+            }
         }
     }
     private val importPpRuntime = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -83,6 +94,11 @@ class TranslationModelsFragment : Fragment() {
         models = TranslationModels(requireContext().applicationContext)
         ppModels = PpOcrModels(requireContext().applicationContext)
         ppImportLanguage = savedInstanceState?.getString("pp_import_language") ?: "en"
+        fun imageMode(key: String) = savedInstanceState?.getString(key)?.let {
+            runCatching { TranslationModels.ImportMode.valueOf(it) }.getOrNull()
+        } ?: TranslationModels.ImportMode.COPY
+        mangaImportMode = imageMode("manga_import_mode")
+        ppImportMode = imageMode("pp_import_mode")
         nativeImportMode = savedInstanceState?.getString("native_import_mode")?.let {
             runCatching { NativeModelStore.ImportMode.valueOf(it) }.getOrNull()
         } ?: NativeModelStore.ImportMode.COPY
@@ -179,7 +195,7 @@ class TranslationModelsFragment : Fragment() {
 
     private fun render() {
         val context = requireContext()
-        countText.text = (installed.size + ppModels.entries.count { ppModels.store(it.language).ready() } +
+        countText.text = (installed.size + ppReadyByLanguage.values.count { it } +
             (if (mangaReady == true) 1 else 0) + (if (ppModels.runtime.ready()) 1 else 0)).toString()
         storageText.text = size(models.storedBytes() + installed.sumOf { it.privateBytes } +
             ppModels.entries.sumOf { ppModels.store(it.language).storedBytes() } + ppModels.runtime.store.storedBytes())
@@ -204,6 +220,7 @@ class TranslationModelsFragment : Fragment() {
 
     private fun renderManga() {
         val ready = mangaReady == true
+        val external = models.hasReferences()
         val download = if (ready) emptyList() else listOf(action(R.string.translation_model_download, ModelButtonKind.PRIMARY) {
             operate(getString(R.string.translation_model_manga_card_title)) {
                 notifyModelDownloadNetwork(requireContext().applicationContext)
@@ -214,16 +231,22 @@ class TranslationModelsFragment : Fragment() {
             }
         })
         card("translation_manga_bundle", getString(R.string.translation_model_manga_card_title), getString(R.string.translation_model_manga_card_description),
-            R.drawable.v_translate_x24, getString(if (mangaReady == null) R.string.translation_checking_models else if (ready) R.string.translation_model_installed else R.string.translation_model_missing),
-            ready, listOf("${size(models.storedBytes())} / ${size(models.totalBytes)}", getString(R.string.translation_model_file_count, models.requiredNames.size)),
+            R.drawable.v_translate_x24, getString(if (mangaReady == null) R.string.translation_checking_models else if (ready) R.string.translation_model_installed
+                else if (external) R.string.translation_image_external_invalid else R.string.translation_model_missing),
+            ready, listOf(size(models.totalBytes), getString(R.string.translation_model_file_count, models.requiredNames.size)) +
+                if (external) listOf(getString(R.string.translation_model_external_badge)) else emptyList(),
             download + listOf(action(R.string.translation_model_import) {
-                showDialog(AlertDialog.Builder(requireContext()).setTitle(R.string.translation_model_import_manga)
-                    .setMessage(getString(R.string.translation_model_import_manga_help, models.requiredNames.joinToString("\n")))
+                chooseImageImportMode { mode ->
+                    mangaImportMode = mode
+                    showDialog(AlertDialog.Builder(requireContext()).setTitle(R.string.translation_model_import_manga)
+                    .setMessage(getString(R.string.translation_image_import_manga_help, models.requiredNames.joinToString("\n")))
                     .setPositiveButton(R.string.translation_model_choose_files) { _, _ -> importManga.launch(arrayOf("*/*")) }
                     .setNegativeButton(android.R.string.cancel, null))
-            }) + if (models.storedBytes() > 0) listOf(action(R.string.translation_model_delete, ModelButtonKind.DELETE) {
-                confirmDelete(getString(R.string.translation_model_manga_title)) { locked { models.delete() } }
-            }) else emptyList(), getString(R.string.translation_model_manga_help) + "\n\n" + models.requiredNames.joinToString("\n"))
+                }
+            }) + if (external || models.storedBytes() > 0) listOf(action(if (external) R.string.translation_model_remove_reference else R.string.translation_model_delete, ModelButtonKind.DELETE) {
+                confirmImageDelete(getString(R.string.translation_model_manga_title), models)
+            }) else emptyList(), getString(R.string.translation_model_manga_help) + "\n\n" + models.requiredNames.joinToString("\n") +
+                if (external) "\n\n${getString(if (ready) R.string.translation_image_external_help else R.string.translation_image_external_changed)}" else "")
         cards.addView(modelText(requireContext(), getString(R.string.translation_model_manga_footnote), 13f, palette.secondary))
         val runtime = ppModels.runtime
         val runtimeReady = runtime.ready()
@@ -243,11 +266,13 @@ class TranslationModelsFragment : Fragment() {
                 }) else emptyList(), getString(R.string.translation_ppocr_runtime_help))
         for (entry in ppModels.entries) {
             val ppStore = ppModels.store(entry.language)
-            val ppReady = ppStore.ready() && runtimeReady
+            val ppReady = ppReadyByLanguage[entry.language] == true && runtimeReady
+            val ppExternal = ppStore.hasReferences()
             val title = "PP-OCRv5 · ${TranslationLanguages.displayName(entry.language, resources.configuration.locales[0])}"
             card("translation_ppocr_${entry.language}", title, getString(R.string.translation_ppocr_help),
-                R.drawable.v_translate_x24, getString(if (ppReady) R.string.translation_model_installed else R.string.translation_model_missing),
-                ppReady, listOf(size(entry.size)),
+                R.drawable.v_translate_x24, getString(if (ppReady) R.string.translation_model_installed
+                    else if (ppExternal && ppReadyByLanguage[entry.language] == false) R.string.translation_image_external_invalid else R.string.translation_model_missing),
+                ppReady, listOf(size(entry.size)) + if (ppExternal) listOf(getString(R.string.translation_model_external_badge)) else emptyList(),
                 (if (ppReady) emptyList() else listOf(action(R.string.translation_model_download, ModelButtonKind.PRIMARY) {
                     operate(title) {
                         notifyModelDownloadNetwork(requireContext().applicationContext)
@@ -255,10 +280,13 @@ class TranslationModelsFragment : Fragment() {
                         if (!ppStore.ready()) ppModels.download(entry.language, ::reportProgress)
                     }
                 })) + listOf(action(R.string.translation_model_import) {
-                    ppImportLanguage = entry.language; importPp.launch(arrayOf("*/*"))
-                }) + if (ppStore.storedBytes() > 0) listOf(action(R.string.translation_model_delete, ModelButtonKind.DELETE) {
-                    confirmDelete(title) { locked { ppStore.delete() } }
-                }) else emptyList(), getString(R.string.translation_ppocr_help))
+                    chooseImageImportMode { mode ->
+                        ppImportLanguage = entry.language; ppImportMode = mode; importPp.launch(arrayOf("*/*"))
+                    }
+                }) + if (ppExternal || ppStore.storedBytes() > 0) listOf(action(if (ppExternal) R.string.translation_model_remove_reference else R.string.translation_model_delete, ModelButtonKind.DELETE) {
+                    confirmImageDelete(title, ppStore)
+                }) else emptyList(), getString(R.string.translation_ppocr_help) +
+                    if (ppExternal) "\n\n${getString(if (ppReadyByLanguage[entry.language] == true) R.string.translation_image_external_help else R.string.translation_image_external_changed)}" else "")
         }
     }
 
@@ -325,6 +353,27 @@ class TranslationModelsFragment : Fragment() {
             }.setNegativeButton(android.R.string.cancel, null))
     }
 
+    private fun chooseImageImportMode(selected: (TranslationModels.ImportMode) -> Unit) {
+        val options = listOf(R.string.translation_model_import_copy, R.string.translation_model_import_reference)
+        val adapter = object : ArrayAdapter<String>(requireContext(), android.R.layout.simple_list_item_1, options.map { getString(it) }) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                super.getView(position, convertView, parent).also { (it as TextView).setTextColor(palette.text) }
+        }
+        showDialog(AlertDialog.Builder(requireContext()).setTitle(R.string.translation_image_import_mode)
+            .setAdapter(adapter) { dialog, which ->
+                dialog.dismiss()
+                selected(if (which == 0) TranslationModels.ImportMode.COPY else TranslationModels.ImportMode.REFERENCE)
+            }.setNegativeButton(android.R.string.cancel, null))
+    }
+
+    private fun confirmImageDelete(title: String, modelStore: TranslationModels) {
+        if (!modelStore.hasReferences()) { confirmDelete(title) { locked { modelStore.delete() } }; return }
+        showDialog(AlertDialog.Builder(requireContext()).setTitle(R.string.translation_model_remove_reference)
+            .setMessage(getString(R.string.translation_image_remove_reference_confirm, title))
+            .setPositiveButton(R.string.translation_model_remove_reference) { _, _ -> operate(title, false) { locked { modelStore.delete() } } }
+            .setNegativeButton(android.R.string.cancel, null), true)
+    }
+
     private fun renderLanguages() {
         val locale = resources.configuration.locales[0]
         val name = TranslationLanguages.displayName(languageTarget, locale)
@@ -385,6 +434,7 @@ class TranslationModelsFragment : Fragment() {
         status = scope?.launch {
             installed = withContext(Dispatchers.IO) { store.installed() }
             mangaReady = withContext(Dispatchers.IO) { models.ready() }
+            ppReadyByLanguage = withContext(Dispatchers.IO) { ppModels.entries.associate { it.language to ppModels.store(it.language).ready() } }
             if (isAdded && view != null) render()
             languages = try { withContext(Dispatchers.IO) { OfflineTranslator.downloadedLanguages() } }
                 catch (cancel: CancellationException) { throw cancel } catch (_: Exception) { null }
@@ -446,6 +496,8 @@ class TranslationModelsFragment : Fragment() {
         outState.putString("language_target", languageTarget); outState.putInt("section", section)
         outState.putString("pp_import_language", ppImportLanguage)
         outState.putString("native_import_mode", nativeImportMode.name)
+        outState.putString("manga_import_mode", mangaImportMode.name)
+        outState.putString("pp_import_mode", ppImportMode.name)
         super.onSaveInstanceState(outState)
     }
     override fun onResume() { super.onResume(); (activity as? SettingsActivity)?.setSettingsTitle(R.string.translation_model_management) }

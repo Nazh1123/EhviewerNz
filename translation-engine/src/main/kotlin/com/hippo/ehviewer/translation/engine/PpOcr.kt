@@ -3,16 +3,32 @@ package com.hippo.ehviewer.translation.engine
 import android.graphics.*
 import ai.onnxruntime.*
 import java.nio.FloatBuffer
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import android.os.ParcelFileDescriptor
 import kotlinx.coroutines.*
 import kotlin.math.*
 
 /** Official PP-OCRv5 recognition graphs: BGR NCHW [-1,1], zero right padding, greedy CTC. */
-class PpOcr(path: String, private val alphabet: List<String>, private val cfg: OcrConfig = OcrConfig()) : PageOcr {
+class PpOcr(source: ModelFile, private val alphabet: List<String>, private val cfg: OcrConfig = OcrConfig()) : PageOcr {
+    constructor(path: String, alphabet: List<String>, cfg: OcrConfig = OcrConfig()) : this(ModelFile.local(path), alphabet, cfg)
     private val environment = OrtEnvironment.getEnvironment()
+    // Keep the mapping reachable until session disposal, including runtimes that retain model bytes.
+    private var modelBuffer: ByteBuffer? = null
     private val session = OrtSession.SessionOptions().use {
         it.setIntraOpNumThreads(2); it.setInterOpNumThreads(1)
         it.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-        environment.createSession(path, it)
+        val options = it
+        source.read { path, descriptor ->
+            if (descriptor == null) environment.createSession(checkNotNull(path), options)
+            else {
+                val buffer = ParcelFileDescriptor.AutoCloseInputStream(ParcelFileDescriptor.dup(descriptor.fileDescriptor)).use { input ->
+                    input.channel.map(FileChannel.MapMode.READ_ONLY, 0, descriptor.statSize)
+                }
+                modelBuffer = buffer
+                environment.createSession(buffer, options)
+            }
+        }
     }
     private val inputName = session.inputNames.single()
     private var closed = false
@@ -62,7 +78,7 @@ class PpOcr(path: String, private val alphabet: List<String>, private val cfg: O
         }
     }
 
-    @Synchronized override fun close() { if (!closed) { closed = true; session.close() } }
+    @Synchronized override fun close() { if (!closed) { closed = true; session.close(); modelBuffer = null } }
 
     companion object {
         /** Call only after verifying both native files against the pinned component manifest. */

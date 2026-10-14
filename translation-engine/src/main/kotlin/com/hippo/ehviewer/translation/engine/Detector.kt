@@ -3,8 +3,9 @@ package com.hippo.ehviewer.translation.engine
 import android.graphics.Bitmap
 import kotlin.math.*
 
-class Detector(modelPath: String, private val cfg: DetectorConfig = DetectorConfig()) : AutoCloseable {
-    private val net = ImageModel(modelPath, 4, true)
+class Detector @JvmOverloads constructor(modelPath: String, private val cfg: DetectorConfig = DetectorConfig(),
+               files: NcnnModelFiles = NcnnModelFiles.local(modelPath)) : AutoCloseable {
+    private val net = ImageModel(files, 4, true)
 
     fun detect(page: Bitmap): Detection = detect(page) {}
 

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translation_image_import_mode">Modellimport wählen</string>
+    <string name="translation_image_importing">Modelle werden kopiert und geprüft. Bitte warten…</string>
+    <string name="translation_image_external_help">Externe Modelle werden ohne private Kopie gelesen. Originaldateien nicht verschieben oder ändern. Ein Import mit Kopieren erstellt private Kopien; ein Import als Verknüpfung entfernt bestehende private Kopien. Entfernen einer Verknüpfung behält die Originale. Die PP-OCR-Laufzeit wird weiterhin im privaten App-Speicher installiert.</string>
+    <string name="translation_image_external_unsupported">Falsche Modellgröße oder direktes Lesen/Mapping nicht unterstützt. Kompatible Datei auswählen oder in privaten App-Speicher kopieren.</string>
+    <string name="translation_image_external_changed">Externes Modell geändert, Berechtigung verloren oder Datei nicht verfügbar. Modelldateien erneut auswählen.</string>
+    <string name="translation_image_remove_reference_confirm">Verknüpfung zu „%1$s“ entfernen? Externe Originaldateien bleiben erhalten.</string>
+    <string name="translation_image_import_manga_help">Alle folgenden Dateien gleichzeitig auswählen. Namen und Versionen müssen übereinstimmen. Nach vollständiger Prüfung werden sie entsprechend der Auswahl kopiert oder verknüpft. Originale bleiben erhalten.\n\n%1$s</string>
+    <string name="translation_image_external_invalid">Verknüpfung ungültig</string>
+</resources>

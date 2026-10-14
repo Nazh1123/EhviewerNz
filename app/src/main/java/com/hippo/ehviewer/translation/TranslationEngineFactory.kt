@@ -31,17 +31,17 @@ object TranslationEngineFactory {
             }
         }
         fun recognizer(): PageOcr = LanguageOcr({ resolvedOptions().source }, onRecognized, ppModels::ready) { key ->
-            if (key == "ja") Ocr(models.ocr, alphabet, config.ocr) else {
+            if (key == "ja") Ocr(models.ocr, alphabet, config.ocr, models.imageFiles(models.ocr)) else {
                 if (!ppModels.ready(key)) throw MissingPpOcrModel()
                 ppModels.runtime.prepare()
                 val dictionary = org.json.JSONArray(context.assets.open("ppocr-$key.json").bufferedReader().use { it.readText() })
-                PpOcr(ppModels.path(key), (0 until dictionary.length()).map { dictionary.getString(it) }, config.ocr)
+                PpOcr(ppModels.source(key), (0 until dictionary.length()).map { dictionary.getString(it) }, config.ocr)
             }
         }
         if (options.backend == TranslationBackend.NATIVE_LLM) {
-            val detector = TranslationStageModel { Detector(models.detectorNcnn, config.detector) }
+            val detector = TranslationStageModel { Detector(models.detectorNcnn, config.detector, models.imageFiles(models.detectorNcnn)) }
             val ocr = TranslationStageModel(::recognizer)
-            val inpainter = TranslationStageModel { Inpainter(models.aotInpainterNcnn, config.inpainter) }
+            val inpainter = TranslationStageModel { Inpainter(models.aotInpainterNcnn, config.inpainter, models.imageFiles(models.aotInpainterNcnn)) }
             fun releaseImages() {
                 try { detector.close() } finally { try { ocr.close() } finally { inpainter.close() } }
             }
@@ -80,11 +80,11 @@ object TranslationEngineFactory {
                 translationIdentityProvider = { resolvedOptions().cacheIdentity() },
             )
         }
-        val detector = Detector(models.detectorNcnn, config.detector)
+        val detector = Detector(models.detectorNcnn, config.detector, models.imageFiles(models.detectorNcnn))
         var ocr: PageOcr? = null
         try {
             ocr = recognizer()
-            val inpainter = Inpainter(models.aotInpainterNcnn, config.inpainter)
+            val inpainter = Inpainter(models.aotInpainterNcnn, config.inpainter, models.imageFiles(models.aotInpainterNcnn))
             val recognizer = ocr
             return ResumablePipeline({ page -> detectPage(detector, page) }, recognizer::recognize,
                 inpainter::inpaint, translator, config,

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translation_image_import_mode">Elegir método de importación</string>
+    <string name="translation_image_importing">Copiando y verificando modelos. Espera…</string>
+    <string name="translation_image_external_help">Lee modelos externos sin copias privadas. No muevas ni modifiques los originales. Importar con copia crea copias privadas; usar referencias elimina las copias privadas existentes. Eliminar referencias conserva los originales. El componente de ejecución PP-OCR sigue instalándose en el almacenamiento privado.</string>
+    <string name="translation_image_external_unsupported">Tamaño de modelo incorrecto o lectura/mapeo directo no compatible. Selecciona un archivo compatible o copia al almacenamiento privado.</string>
+    <string name="translation_image_external_changed">El modelo externo cambió, perdió el permiso o no está disponible. Selecciona los archivos de nuevo.</string>
+    <string name="translation_image_remove_reference_confirm">¿Eliminar la referencia a «%1$s»? Se conservarán los archivos externos originales.</string>
+    <string name="translation_image_import_manga_help">Selecciona todos los archivos siguientes a la vez. Nombres y versiones deben coincidir. Tras verificarlos todos, se copiarán o referenciarán según el método elegido. Se conservan los originales.\n\n%1$s</string>
+    <string name="translation_image_external_invalid">Referencia no disponible</string>
+</resources>

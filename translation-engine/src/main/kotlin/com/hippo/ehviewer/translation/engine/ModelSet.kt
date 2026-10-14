@@ -3,7 +3,14 @@ package com.hippo.ehviewer.translation.engine
 import java.io.File
 import java.security.MessageDigest
 
-data class ModelSet(val ocr: String, val detectorNcnn: String, val aotInpainterNcnn: String) {
+data class ModelSet(val ocr: String, val detectorNcnn: String, val aotInpainterNcnn: String,
+                    val sources: Map<String, ModelFile> = emptyMap()) {
+    fun imageFiles(param: String): NcnnModelFiles {
+        if (sources.isEmpty()) return NcnnModelFiles.local(param)
+        val name = File(param).name
+        return NcnnModelFiles(sources.getValue(name), sources.getValue(name.removeSuffix(".param") + ".bin"),
+            sources[name.removeSuffix(".ncnn.param") + "_mixed.ncnn.param"])
+    }
     companion object {
         fun resolve(files: List<Pair<String, String>>): ModelSet? {
             val parameters = files.filter { it.first.endsWith(".param", true) }

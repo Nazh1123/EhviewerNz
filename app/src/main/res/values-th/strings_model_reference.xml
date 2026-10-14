@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translation_image_import_mode">เลือกวิธีนำเข้าโมเดล</string>
+    <string name="translation_image_importing">กำลังคัดลอกและตรวจสอบโมเดล โปรดรอ…</string>
+    <string name="translation_image_external_help">อ่านโมเดลภายนอกโดยไม่เก็บสำเนาส่วนตัว อย่าย้ายหรืแก้ไขต้นฉบับ การนำเข้าแบบคัดลอกจะสร้างสำเนาส่วนตัว ส่วนแบบอ้างอิงจะลบสำเนาส่วนตัวเดิม การลบการอ้างอิงจะเก็บต้นฉบับไว้ ส่วนรันไทม์ PP-OCR ยังคงติดตั้งในพื้นที่ส่วนตัวของแอป</string>
+    <string name="translation_image_external_unsupported">ขนาดโมเดลไม่ถูกต้อง หรือไม่รองรับการอ่าน/แมปโดยตรง เลือกไฟล์ที่รองรับหรือคัดลอกไปยังพื้นที่ส่วนตัวของแอป</string>
+    <string name="translation_image_external_changed">โมเดลภายนอกเปลี่ยนไป สิทธิ์หมดอายุ หรือเข้าถึงไม่ได้ โปรดเลือกไฟล์โมเดลอีกครั้ง</string>
+    <string name="translation_image_remove_reference_confirm">ลบการอ้างอิง “%1$s” หรือไม่? ไฟล์ต้นฉบับภายนอกจะยังคงอยู่</string>
+    <string name="translation_image_import_manga_help">เลือกไฟล์ทั้งหมดด้านล่างพร้อมกัน ชื่อและเวอร์ชันต้องตรงกัน เมื่อตรวจสอบครบแล้วจะคัดลอกหรืออ้างอิงตามวิธีที่เลือก โดยเก็บต้นฉบับไว้\n\n%1$s</string>
+    <string name="translation_image_external_invalid">การอ้างอิงใช้ไม่ได้</string>
+</resources>

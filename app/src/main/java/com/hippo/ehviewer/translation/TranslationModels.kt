@@ -1,9 +1,16 @@
 package com.hippo.ehviewer.translation
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
+import android.system.Os
+import android.system.OsConstants
+import com.hippo.ehviewer.R
 import com.hippo.ehviewer.translation.engine.ModelChecksum
+import com.hippo.ehviewer.translation.engine.ModelFile
 import com.hippo.ehviewer.translation.engine.ModelSet
 import java.io.File
 import java.io.InputStream
@@ -31,14 +38,23 @@ class TranslationModels internal constructor(private val context: Context, manif
     internal val downloadUrl: String get() = manifest.getJSONObject("bundle").getString("url")
     private data class Stamp(val size: Long, val modified: FileTime, val key: Any?)
     private var verifiedStamps: List<Stamp>? = null
+    private val references = ImageModelReferences(context, directoryName)
+    enum class ImportMode { COPY, REFERENCE }
+    fun hasReferences(): Boolean = references.all().isNotEmpty()
 
-    fun ready(): Boolean = files.all { File(dir, it.name).length() == it.size }
+    fun ready(): Boolean = runCatching {
+        val external = references.all()
+        files.all { entry ->
+            external[entry.name]?.let { reference -> openReference(entry, reference).use { true } }
+                ?: (File(dir, entry.name).length() == entry.size)
+        }
+    }.getOrDefault(false)
     val requiredNames: List<String> = files.map { it.name }
     val totalBytes: Long = files.sumOf { it.size }
     fun storedBytes(): Long = requiredNames.sumOf { File(dir, it).length() }
 
     /** Caller holds TranslationRuntime.lock; verify the whole set before publication. */
-    suspend fun import(uris: List<Uri>, progress: (String, Long, Long) -> Unit) {
+    suspend fun import(uris: List<Uri>, mode: ImportMode = ImportMode.COPY, progress: (String, Long, Long) -> Unit) {
         val resolver = context.contentResolver
         val sources = uris.associateBy { uri ->
             runCatching { resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
@@ -48,6 +64,7 @@ class TranslationModels internal constructor(private val context: Context, manif
         require(sources.keys == requiredNames.toSet() && uris.size == requiredNames.size) {
             "Please select all required manga model files"
         }
+        if (mode == ImportMode.REFERENCE) { importReferences(sources, progress); return }
         val staged = mutableListOf<Pair<File, File>>()
         try {
             for (entry in files) {
@@ -125,7 +142,10 @@ class TranslationModels internal constructor(private val context: Context, manif
         // Every replacement has the same pinned hash, so partial publication is retryable.
         for ((temp, target) in staged) Files.move(temp.toPath(), target.toPath(),
             StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        verifiedStamps = stamps()
+        val old = references.all()
+        references.replace(old.filterKeys { name -> staged.none { it.second.name == name } })
+        old.values.forEach { references.releaseUnused(it.uri) }
+        if (!hasReferences()) verifiedStamps = stamps()
     }
 
     internal suspend fun installFile(name: String, input: InputStream, progress: (String, Long, Long) -> Unit) {
@@ -137,7 +157,8 @@ class TranslationModels internal constructor(private val context: Context, manif
         } finally { staged.forEach { it.first.delete() } }
     }
 
-    internal suspend fun importSingle(uri: Uri, progress: (String, Long, Long) -> Unit) {
+    internal suspend fun importSingle(uri: Uri, mode: ImportMode = ImportMode.COPY, progress: (String, Long, Long) -> Unit) {
+        if (mode == ImportMode.REFERENCE) { importReferences(mapOf(files.single().name to uri), progress); return }
         requireNotNull(context.contentResolver.openInputStream(uri)).use {
             // Import is already under the maintenance lock; do not acquire it twice.
             val staged = mutableListOf<Pair<File, File>>()
@@ -157,6 +178,97 @@ class TranslationModels internal constructor(private val context: Context, manif
             val partial = File(dir, "$name.part")
             check(!partial.exists() || partial.delete()) { "Cannot delete partial model: $name" }
         }
+        val old = references.all()
+        references.replace(emptyMap())
+        old.values.forEach { references.releaseUnused(it.uri) }
+    }
+
+    private fun externalStamp(descriptor: ParcelFileDescriptor, entry: Entry): String {
+        val stat = Os.fstat(descriptor.fileDescriptor)
+        require(OsConstants.S_ISREG(stat.st_mode) && stat.st_size == entry.size) {
+            context.getString(R.string.translation_image_external_unsupported)
+        }
+        Os.lseek(descriptor.fileDescriptor, 0, OsConstants.SEEK_SET)
+        val nanos = if (Build.VERSION.SDK_INT >= 27) stat.st_mtim.tv_nsec else 0L
+        return "${stat.st_size}:${stat.st_mtime}:$nanos"
+    }
+
+    private fun openReference(entry: Entry, reference: ImageModelReferences.Reference): ParcelFileDescriptor {
+        val descriptor = requireNotNull(context.contentResolver.openFileDescriptor(reference.uri, "r")) {
+            context.getString(R.string.translation_image_external_changed)
+        }
+        try {
+            check(externalStamp(descriptor, entry) == reference.stamp) { context.getString(R.string.translation_image_external_changed) }
+            return descriptor
+        } catch (error: Throwable) { descriptor.close(); throw error }
+    }
+
+    private suspend fun verifyExternal(descriptor: ParcelFileDescriptor, entry: Entry, progress: (Long) -> Unit) {
+        val before = externalStamp(descriptor, entry)
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(65536)
+        var read = 0L
+        var reported = 0L
+        progress(0)
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val count = Os.read(descriptor.fileDescriptor, buffer, 0, buffer.size)
+            if (count == 0) break
+            read += count
+            check(read <= entry.size) { "Model larger than manifest: ${entry.name}" }
+            digest.update(buffer, 0, count)
+            if (read - reported >= 1048576) { progress(read); reported = read }
+        }
+        check(read == entry.size && digest.digest().joinToString("") { "%02x".format(it) } == entry.sha256) {
+            "Model checksum mismatch: ${entry.name}"
+        }
+        check(externalStamp(descriptor, entry) == before) { context.getString(R.string.translation_image_external_changed) }
+        progress(read)
+    }
+
+    /** Verify all sources and grants before atomically publishing the entire set. Never stage a copy. */
+    private suspend fun importReferences(sources: Map<String, Uri>, progress: (String, Long, Long) -> Unit) {
+        require(!readOnly) { "Executable OCR components must be installed in private storage" }
+        val resolver = context.contentResolver
+        val old = references.all()
+        val granted = mutableListOf<Uri>()
+        val verified = linkedMapOf<String, ImageModelReferences.Reference>()
+        try {
+            for (entry in files) {
+                currentCoroutineContext().ensureActive()
+                val uri = sources.getValue(entry.name)
+                require(uri.scheme != "file" || File(uri.path.orEmpty()).canonicalFile.parentFile != dir.canonicalFile) {
+                    "Choose an external source, not a managed private model file"
+                }
+                if (uri.scheme == "content") {
+                    val held = resolver.persistedUriPermissions.any { it.uri == uri && it.isReadPermission }
+                    resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    if (!held) granted.add(uri)
+                }
+                requireNotNull(resolver.openFileDescriptor(uri, "r")).use { descriptor ->
+                    val stamp = externalStamp(descriptor, entry)
+                    verifyExternal(descriptor, entry) { progress(entry.name, it, entry.size) }
+                    // ONNX uses a read-only memory map when creating its session.
+                    if (entry.name.endsWith(".onnx")) {
+                        val address = Os.mmap(0, entry.size, OsConstants.PROT_READ, OsConstants.MAP_PRIVATE, descriptor.fileDescriptor, 0)
+                        Os.munmap(address, entry.size)
+                    }
+                    check(externalStamp(descriptor, entry) == stamp) { context.getString(R.string.translation_image_external_changed) }
+                    verified[entry.name] = ImageModelReferences.Reference(uri, stamp)
+                }
+            }
+            currentCoroutineContext().ensureActive()
+            // Recheck every source after the last hash; an earlier file may have changed meanwhile.
+            files.forEach { entry -> openReference(entry, verified.getValue(entry.name)).close() }
+            references.replace(verified)
+            verifiedStamps = null
+            try {
+                for (entry in files) {
+                    val copy = File(dir, entry.name)
+                    check(!copy.exists() || copy.delete()) { "Cannot remove private model copy: ${entry.name}" }
+                }
+            } finally { old.values.forEach { references.releaseUnused(it.uri) } }
+        } finally { granted.forEach { references.releaseUnused(it) } }
     }
 
     private fun stamps() = files.map { entry ->
@@ -167,11 +279,25 @@ class TranslationModels internal constructor(private val context: Context, manif
 
     /** Private immutable files are hashed once per session, again if replaced or modified. */
     suspend fun verified(): ModelSet {
-        return requireNotNull(ModelSet.resolve(verifiedFiles().toList()))
+        if (!hasReferences()) return requireNotNull(ModelSet.resolve(verifiedFiles().toList()))
+        val sources = verifiedSources()
+        val paths = requiredNames.map { it to File(dir, it).absolutePath }
+        return requireNotNull(ModelSet.resolve(paths)).copy(sources = sources)
+    }
+
+    internal suspend fun verifiedSources(): Map<String, ModelFile> {
+        val external = references.all()
+        if (external.isEmpty()) return verifiedFiles().mapValues { ModelFile.local(it.value) }
+        return files.associate { entry ->
+            val reference = external.getValue(entry.name)
+            openReference(entry, reference).use { verifyExternal(it, entry) { } }
+            entry.name to ModelFile.external { openReference(entry, reference) }
+        }
     }
 
     internal suspend fun verifiedFiles(): Map<String, String> {
         currentCoroutineContext().ensureActive()
+        check(!hasReferences()) { "External models require descriptor-based loading" }
         val current = stamps()
         // Providers without file identities cannot distinguish same-size replacements.
         if (current.any { it.key == null } || current != verifiedStamps) {

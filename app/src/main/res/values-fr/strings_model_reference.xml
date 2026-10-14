@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translation_image_import_mode">Choisir le mode d’importation</string>
+    <string name="translation_image_importing">Copie et vérification des modèles en cours…</string>
+    <string name="translation_image_external_help">Lit les modèles externes sans copie privée. Ne déplacez ni ne modifiez les originaux. Le mode copie crée des copies privées ; le mode référence supprime les copies privées existantes. Supprimer une référence conserve les originaux. Le composant d’exécution PP-OCR reste installé dans le stockage privé.</string>
+    <string name="translation_image_external_unsupported">Taille incorrecte ou lecture/mappage direct non pris en charge. Choisissez un fichier compatible ou copiez-le dans le stockage privé.</string>
+    <string name="translation_image_external_changed">Le modèle externe a changé, son autorisation a expiré ou il est inaccessible. Sélectionnez à nouveau les fichiers.</string>
+    <string name="translation_image_remove_reference_confirm">Supprimer la référence à « %1$s » ? Les fichiers externes d’origine seront conservés.</string>
+    <string name="translation_image_import_manga_help">Sélectionnez tous les fichiers suivants ensemble. Les noms et versions doivent correspondre. Après validation complète, ils seront copiés ou référencés selon le mode choisi. Les originaux sont conservés.\n\n%1$s</string>
+    <string name="translation_image_external_invalid">Référence indisponible</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translation_image_import_mode">选择模型导入方式</string>
+    <string name="translation_image_importing">正在复制并校验模型，请稍候…</string>
+    <string name="translation_image_external_help">直接读取外部模型，不保留应用私有副本。请勿移动、删除或修改原文件。复制导入可改为私有副本；引用导入会移除已有的私有副本。移除引用不会删除原文件。PP-OCR 运行组件仍需安装到应用私有目录。</string>
+    <string name="translation_image_external_unsupported">该外部模型大小不符，或不支持直接读取／映射。请选择兼容文件，或使用“复制到应用私有目录”。</string>
+    <string name="translation_image_external_changed">外部模型已更改、授权失效或无法访问，请重新选择模型文件。</string>
+    <string name="translation_image_remove_reference_confirm">移除“%1$s”的引用？外部源文件将保留。</string>
+    <string name="translation_image_import_manga_help">同时选择以下全部文件，文件名和版本必须一致。全部校验通过后，按照所选方式复制或引用；原文件会保留。\n\n%1$s</string>
+    <string name="translation_image_external_invalid">引用失效</string>
+</resources>

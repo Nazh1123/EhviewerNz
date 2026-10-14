@@ -3,6 +3,8 @@
 #include <cmath>
 #include <memory>
 #include <vector>
+#include <cstdio>
+#include <unistd.h>
 #include "net.h"
 #include "cpu.h"
 #include "ctc_decode.h"
@@ -35,6 +37,27 @@ bool floatOutput(const ncnn::Mat& tensor, int channels) {
     return !tensor.empty() && tensor.elempack == 1 && tensor.elemsize == sizeof(float) && tensor.c >= channels;
 }
 
+std::unique_ptr<ncnn::Net> imageNet(int threads, bool half) {
+    auto net = std::make_unique<ncnn::Net>();
+    net->opt.num_threads = std::clamp(threads, 1, 4);
+    net->opt.use_vulkan_compute = false;
+    net->opt.use_fp16_storage = half;
+    net->opt.use_fp16_packed = half;
+    net->opt.use_fp16_arithmetic = half;
+    net->opt.use_bf16_storage = false;
+    return net;
+}
+
+using ReadFile = std::unique_ptr<FILE, decltype(&fclose)>;
+ReadFile descriptorFile(int source) {
+    int fd = dup(source);
+    if (fd < 0) return ReadFile(nullptr, fclose);
+    if (lseek(fd, 0, SEEK_SET) < 0) { close(fd); return ReadFile(nullptr, fclose); }
+    FILE* file = fdopen(fd, "rb");
+    if (!file) close(fd);
+    return ReadFile(file, fclose);
+}
+
 const std::vector<float>& positions() {
     static const std::vector<float> table = [] {
         std::vector<float> values(2048 * 320);
@@ -56,14 +79,19 @@ Java_com_hippo_ehviewer_translation_engine_ImageInference_open(JNIEnv* env, jobj
         jstring param, jstring weights, jint threads, jboolean half) {
     UtfPath graph(env, param), binary(env, weights);
     if (!graph.text || !binary.text) return 0;
-    auto net = std::make_unique<ncnn::Net>();
-    net->opt.num_threads = std::clamp(static_cast<int>(threads), 1, 4);
-    net->opt.use_vulkan_compute = false;
-    net->opt.use_fp16_storage = half;
-    net->opt.use_fp16_packed = half;
-    net->opt.use_fp16_arithmetic = half;
-    net->opt.use_bf16_storage = false;
+    auto net = imageNet(threads, half);
     if (net->load_param(graph.text) != 0 || net->load_model(binary.text) != 0) return 0;
+    return reinterpret_cast<jlong>(net.release());
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_hippo_ehviewer_translation_engine_ImageInference_openDescriptors(JNIEnv*, jobject,
+        jint paramFd, jint weightsFd, jint threads, jboolean half) {
+    auto graph = descriptorFile(paramFd);
+    auto binary = descriptorFile(weightsFd);
+    if (!graph || !binary) return 0;
+    auto net = imageNet(threads, half);
+    if (net->load_param(graph.get()) != 0 || net->load_model(binary.get()) != 0) return 0;
     return reinterpret_cast<jlong>(net.release());
 }
 

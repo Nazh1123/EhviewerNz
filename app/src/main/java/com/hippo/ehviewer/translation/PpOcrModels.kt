@@ -22,7 +22,9 @@ class PpOcrModels(context: Context) {
     fun store(language: String): TranslationModels = stores.getValue(language)
     fun ready(source: String): Boolean = key(source)?.let { runtime.ready() && store(it).ready() } ?: true
     suspend fun path(language: String): String = store(language).verifiedFiles().getValue(entries.single { it.language == language }.name)
-    suspend fun import(language: String, uri: Uri, progress: (String, Long, Long) -> Unit) = store(language).importSingle(uri, progress)
+    suspend fun source(language: String) = store(language).verifiedSources().getValue(entries.single { it.language == language }.name)
+    suspend fun import(language: String, uri: Uri, mode: TranslationModels.ImportMode = TranslationModels.ImportMode.COPY,
+                       progress: (String, Long, Long) -> Unit) = store(language).importSingle(uri, mode, progress)
 
     suspend fun download(language: String, progress: (String, Long, Long) -> Unit) {
         val entry = entries.single { it.language == language }

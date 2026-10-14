@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="translation_image_import_mode">モデルのインポート方法を選択</string>
+    <string name="translation_image_importing">モデルをコピーして検証しています…</string>
+    <string name="translation_image_external_help">外部モデルを直接読み込み、アプリ内のコピーを保持しません。元のファイルを移動・削除・変更しないでください。コピーでの再インポートはアプリ内コピーに切り替え、参照でのインポートは既存のコピーを削除します。参照を解除しても元のファイルは残ります。PP-OCR 実行コンポーネントは引き続きアプリ専用領域にインストールします。</string>
+    <string name="translation_image_external_unsupported">外部モデルのサイズが不正、または直接読み込み・マッピングに非対応です。対応するファイルを選ぶか、アプリ専用領域へのコピーを選択してください。</string>
+    <string name="translation_image_external_changed">外部モデルの変更、権限の失効、またはアクセス不能を検出しました。モデルファイルを選び直してください。</string>
+    <string name="translation_image_remove_reference_confirm">「%1$s」の参照を解除しますか？外部の元ファイルは保持されます。</string>
+    <string name="translation_image_import_manga_help">以下の全ファイルを同時に選択してください。名前とバージョンは一致する必要があります。すべての検証後、選択した方法でコピーまたは参照します。元ファイルは保持されます。\n\n%1$s</string>
+    <string name="translation_image_external_invalid">参照が無効</string>
+</resources>

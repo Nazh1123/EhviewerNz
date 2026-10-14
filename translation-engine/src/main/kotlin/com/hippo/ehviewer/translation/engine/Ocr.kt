@@ -5,15 +5,13 @@ import android.graphics.Matrix
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.*
 
-class Ocr(modelPath: String, private val alphabet: List<String>, private val cfg: OcrConfig = OcrConfig()) : PageOcr {
-    private val base = modelPath.replace("_mixed.ncnn.param", ".ncnn.param")
-    private val mixed = base.removeSuffix(".ncnn.param") + "_mixed.ncnn.param"
-    private val useMixed = File(mixed).isFile && ImageInference.supportsFp16()
-    private val net = ImageModel(if (useMixed) mixed else base, 1, useMixed, base.removeSuffix(".param") + ".bin")
+class Ocr @JvmOverloads constructor(modelPath: String, private val alphabet: List<String>, private val cfg: OcrConfig = OcrConfig(),
+          files: NcnnModelFiles = NcnnModelFiles.local(modelPath.replace("_mixed.ncnn.param", ".ncnn.param"))) : PageOcr {
+    private val useMixed = files.mixedParam != null && ImageInference.supportsFp16()
+    private val net = ImageModel(if (useMixed) files.copy(param = checkNotNull(files.mixedParam)) else files, 1, useMixed)
     // The same permits apply across pages; page concurrency cannot multiply OCR CPU usage.
     private val permits = Semaphore(if (cfg.concurrent) cfg.concurrency.coerceIn(1, 4) else 1)
 

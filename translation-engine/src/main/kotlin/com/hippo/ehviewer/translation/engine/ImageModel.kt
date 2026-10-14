@@ -6,13 +6,24 @@ import kotlin.concurrent.read
 import kotlin.concurrent.write
 
 /** A read lease keeps model disposal behind every admitted native inference. */
-internal class ImageModel(param: String, threads: Int, halfPrecision: Boolean, bin: String = param.removeSuffix(".param") + ".bin") : AutoCloseable {
+internal class ImageModel(files: NcnnModelFiles, threads: Int, halfPrecision: Boolean) : AutoCloseable {
     private val lifecycle = ReentrantReadWriteLock()
     private var handle: Long
     @Volatile private var ocrReady = false
     init {
-        require(param.endsWith(".param") && File(param).isFile && File(bin).isFile) { "Image model files are missing" }
-        handle = ImageInference.open(param, bin, threads, halfPrecision)
+        handle = files.param.read { param, graph ->
+            files.weights.read { bin, weights ->
+                if (graph == null && weights == null) {
+                    require(checkNotNull(param).endsWith(".param") && File(param).isFile && File(checkNotNull(bin)).isFile) {
+                        "Image model files are missing"
+                    }
+                    ImageInference.open(param, bin, threads, halfPrecision)
+                } else {
+                    require(graph != null && weights != null) { "Image model sources must use the same storage mode" }
+                    ImageInference.openDescriptors(graph.fd, weights.fd, threads, halfPrecision)
+                }
+            }
+        }
         check(handle != 0L) { "Image model could not be loaded" }
     }
     private fun <T> use(block: (Long) -> T): T = lifecycle.read {
@@ -52,6 +63,7 @@ internal object ImageInference {
     init { System.loadLibrary("ehnz_image") }
     val parallelLock = Any()
     external fun open(param: String, bin: String, threads: Int, halfPrecision: Boolean): Long
+    external fun openDescriptors(paramFd: Int, weightsFd: Int, threads: Int, halfPrecision: Boolean): Long
     external fun close(handle: Long)
     external fun supportsFp16(): Boolean
     external fun detect(handle: Long, input: FloatArray, width: Int, height: Int,

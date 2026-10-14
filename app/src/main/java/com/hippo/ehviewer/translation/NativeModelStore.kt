@@ -138,7 +138,7 @@ class NativeModelStore internal constructor(private val context: Context,
     }
 
     private fun releaseUnusedPermission(uri: Uri?) {
-        if (uri?.scheme != "content" || names.all.values.any { it == uri.toString() }) return
+        if (uri?.scheme != "content" || names.all.values.any { it == uri.toString() } || ImageModelReferences.uses(context, uri)) return
         runCatching { context.contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
     }
 
