@@ -24,5 +24,5 @@
     <string name="reading_history_remove">ลบบันทึก</string>
     <string name="reading_history_unavailable">ไม่สามารถเข้าถึงแหล่งอ่านได้ โปรดคืนสิทธิ์การเข้าถึงไฟล์หรือโฟลเดอร์แล้วลองอีกครั้ง</string>
     <string name="reading_history_metadata">%1$s - %2$s / %3$s</string>
-    <string name="settings_fork_category_saving">การบันทึกและประวัติ</string>
+    <string name="settings_fork_category_read">การอ่าน</string>
 </resources>

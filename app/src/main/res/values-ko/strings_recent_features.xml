@@ -24,5 +24,5 @@
     <string name="reading_history_remove">기록 삭제</string>
     <string name="reading_history_unavailable">읽기 원본에 접근할 수 없습니다. 파일 또는 폴더 접근 권한을 복원한 후 다시 시도하세요.</string>
     <string name="reading_history_metadata">%1$s - %2$s / %3$s</string>
-    <string name="settings_fork_category_saving">저장 및 기록</string>
+    <string name="settings_fork_category_read">읽기</string>
 </resources>

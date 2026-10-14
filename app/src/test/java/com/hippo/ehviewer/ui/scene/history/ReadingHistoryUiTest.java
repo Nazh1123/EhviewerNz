@@ -79,7 +79,7 @@ public class ReadingHistoryUiTest {
         assertTrue(navigation.getMenu().findItem(R.id.nav_reading_history).isVisible());
     }
 
-    @Test public void preferenceDefaultsOnInRenamedSavingAndHistoryGroupAndPersistsToggle() {
+    @Test public void preferenceDefaultsOnInHistorySettingsAndPersistsToggle() {
         org.robolectric.android.controller.ActivityController<FragmentActivity> controller =
                 Robolectric.buildActivity(FragmentActivity.class);
         FragmentActivity host = controller.get();
@@ -90,7 +90,7 @@ public class ReadingHistoryUiTest {
         TwoStatePreference toggle = preferences.findPreference(Settings.KEY_RECORD_READING_HISTORY);
         assertNotNull(toggle);
         assertTrue(toggle.isChecked());
-        assertEquals("保存与历史", toggle.getParent().getTitle().toString());
+        assertEquals("阅读历史", toggle.getParent().getTitle().toString());
         com.hippo.preference.ListPreference limit = preferences.findPreference(Settings.KEY_READING_HISTORY_SIZE);
         assertNotNull(limit);
         assertEquals("阅读历史记录数量", limit.getTitle().toString());
@@ -191,7 +191,7 @@ public class ReadingHistoryUiTest {
 
     public static class Harness extends PreferenceFragmentCompat {
         @Override public void onCreatePreferences(Bundle state, String rootKey) {
-            setPreferencesFromResource(R.xml.fork_features_settings, rootKey);
+            setPreferencesFromResource(R.xml.history_settings, rootKey);
             com.hippo.ehviewer.ui.fragment.ReadingHistoryPreferences.bind(this);
         }
     }

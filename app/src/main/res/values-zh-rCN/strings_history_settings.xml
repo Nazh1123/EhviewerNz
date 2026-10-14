@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_history">历史</string>
+    <string name="settings_history_category_updates">更新记录</string>
+    <string name="settings_history_category_gallery_info">画廊信息</string>
+    <string name="settings_view_reading_history">查看阅读历史</string>
+    <string name="settings_view_reading_history_summary">可在左侧边栏“阅读历史”按钮进入</string>
+    <string name="settings_view_update_history">查看更新记录</string>
+    <string name="settings_view_update_history_summary">可在下载列表右上角菜单中按钮进入</string>
+</resources>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/reading_history">
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="true"
+            android:key="record_reading_history"
+            android:title="@string/settings_record_reading_history"
+            android:summary="@string/settings_record_reading_history_summary"
+            app:allowDividerAbove="false" />
+
+        <Preference
+            android:key="view_reading_history"
+            android:title="@string/settings_view_reading_history"
+            android:summary="@string/settings_view_reading_history_summary" />
+
+        <com.hippo.preference.ListPreference
+            android:defaultValue="100"
+            android:key="reading_history_size"
+            android:summary="%s"
+            android:title="@string/settings_reading_history_size"
+            app:entries="@array/history_info_size_entries"
+            app:entryValues="@array/history_info_size_entry_values" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_history_category_updates">
+        <Preference
+            android:key="view_gallery_update_history"
+            android:title="@string/settings_view_update_history"
+            android:summary="@string/settings_view_update_history_summary"
+            app:allowDividerAbove="false" />
+
+        <com.hippo.preference.ListPreference
+            android:defaultValue="50"
+            android:key="gallery_update_record_limit"
+            android:summary="%s"
+            android:title="@string/settings_gallery_update_record_limit"
+            app:entries="@array/gallery_update_record_limit_entries"
+            app:entryValues="@array/gallery_update_record_limit_values" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/settings_history_category_gallery_info">
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="true"
+            android:key="show_viewed_galleries"
+            android:title="@string/settings_show_viewed_galleries"
+            android:summary="@string/settings_show_viewed_galleries_summary"
+            app:allowDividerAbove="false" />
+
+        <Preference
+            android:key="update_gallery_versions"
+            android:summary="@string/settings_update_downloaded_gallery_versions_summary"
+            android:title="@string/settings_update_downloaded_gallery_versions"
+            app:allowDividerAbove="true" />
+
+        <com.hippo.ehviewer.preference.DeleteOldGalleryVersionsPreference
+            android:key="delete_old_gallery_versions"
+            android:summary="@string/settings_delete_old_gallery_versions_summary"
+            android:title="@string/settings_delete_old_gallery_versions"
+            app:allowDividerAbove="true" />
+    </PreferenceCategory>
+</PreferenceScreen>

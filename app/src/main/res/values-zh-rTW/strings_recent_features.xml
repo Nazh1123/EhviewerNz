@@ -24,5 +24,5 @@
     <string name="reading_history_remove">刪除紀錄</string>
     <string name="reading_history_unavailable">無法存取閱讀來源，請恢復檔案或資料夾的存取權限後重試。</string>
     <string name="reading_history_metadata">%1$s - %2$s / %3$s</string>
-    <string name="settings_fork_category_saving">儲存與歷史</string>
+    <string name="settings_fork_category_read">閱讀</string>
 </resources>

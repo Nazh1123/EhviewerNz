@@ -24,5 +24,5 @@
     <string name="reading_history_remove">Eintrag entfernen</string>
     <string name="reading_history_unavailable">Die Lesequelle ist nicht verfügbar. Stelle den Zugriff auf die Datei oder den Ordner wieder her und versuche es erneut.</string>
     <string name="reading_history_metadata">%1$s - %2$s / %3$s</string>
-    <string name="settings_fork_category_saving">Speichern und Verlauf</string>
+    <string name="settings_fork_category_read">Lesen</string>
 </resources>

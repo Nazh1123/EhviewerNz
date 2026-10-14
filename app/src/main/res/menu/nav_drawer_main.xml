@@ -67,7 +67,7 @@
         <item
             android:id="@+id/nav_reading_history"
             android:title="@string/reading_history"
-            android:icon="@drawable/v_book_open_x24"/>
+            android:icon="@drawable/v_book_open_black_x24"/>
 
         <item
             android:id="@+id/nav_search_language"

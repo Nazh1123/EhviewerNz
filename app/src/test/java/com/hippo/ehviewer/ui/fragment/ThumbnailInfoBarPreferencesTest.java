@@ -59,8 +59,9 @@ public class ThumbnailInfoBarPreferencesTest {
         }
         assertEquals(eh.indexOf(Settings.KEY_HISTORY_INFO_SIZE) + 1,
                 eh.indexOf(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));
-        assertEquals(fork.indexOf("manual_image_save_location") + 1,
-                fork.indexOf(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));
+        assertFalse(fork.contains(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));
+        List<String> history = keys(R.xml.history_settings);
+        assertTrue(history.contains(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));
         assertFalse(fork.contains("launch_page"));
         assertFalse(fork.contains("start_transfer_time"));
         assertArrayEquals(new String[]{"50", "100", "200", "500", "1000"},

@@ -89,7 +89,6 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         Preference importDownloadItems = findPreference(KEY_IMPORT_DOWNLOAD_ITEMS);
         Preference cleanInvalidDownload = findPreference(KEY_CLEAN_INVALID_DOWNLOAD);
         Preference deleteMissingGalleries = findPreference(KEY_DELETE_MISSING_GALLERIES);
-        Preference updateGalleryVersions = findPreference(KEY_UPDATE_GALLERY_VERSIONS);
         Preference preloadImage = findPreference("preload_image");
         Preference imageResolutionPref = findPreference(Settings.KEY_IMAGE_RESOLUTION);
 
@@ -142,9 +141,6 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         }
         if (deleteMissingGalleries != null) {
             deleteMissingGalleries.setOnPreferenceClickListener(this);
-        }
-        if (updateGalleryVersions != null) {
-            updateGalleryVersions.setOnPreferenceClickListener(this);
         }
     }
 
@@ -202,9 +198,6 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
         } else if (KEY_DELETE_MISSING_GALLERIES.equals(key)) {
             MissingGalleryCleaner.showConfirmation(requireActivity(),
                     R.string.settings_download_delete_missing_galleries);
-            return true;
-        } else if (KEY_UPDATE_GALLERY_VERSIONS.equals(key)) {
-            GalleryVersionMaintenance.showUpdateConfirmation(requireActivity());
             return true;
         }
         return false;
