@@ -14,7 +14,7 @@
     <string name="translation_model_short_intro">Mobile data supported · Copy or reference GGUF files</string>
     <string name="translation_model_tab_manga">Manga models</string>
     <string name="translation_model_tab_native">Local AI</string>
-    <string name="translation_model_tab_language">Language packs</string>
+    <string name="translation_model_tab_language">ML Kit</string>
     <string name="translation_model_details_for">%1$s · View details</string>
     <string name="translation_model_manga_card_title">Manga recognition toolkit</string>
     <string name="translation_model_manga_card_description">Text detection · Multilingual OCR · Background restoration</string>

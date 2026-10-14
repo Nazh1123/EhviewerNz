@@ -10,7 +10,7 @@
     <string name="translation_model_short_intro">모바일 데이터 다운로드 지원 · 모델은 앱에 저장</string>
     <string name="translation_model_tab_manga">만화 모델</string>
     <string name="translation_model_tab_native">로컬 AI</string>
-    <string name="translation_model_tab_language">언어 팩</string>
+    <string name="translation_model_tab_language">ML Kit</string>
     <string name="translation_model_details_for">%1$s · 자세히 보기</string>
     <string name="translation_model_manga_card_title">만화 인식 도구</string>
     <string name="translation_model_manga_card_description">텍스트 감지 · 다국어 OCR · 배경 복원</string>

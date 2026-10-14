@@ -10,7 +10,7 @@
     <string name="translation_model_short_intro">รองรับข้อมูลมือถือ · เก็บโมเดลไว้ในแอป</string>
     <string name="translation_model_tab_manga">โมเดลมังงะ</string>
     <string name="translation_model_tab_native">AI ในเครื่อง</string>
-    <string name="translation_model_tab_language">ชุดภาษา</string>
+    <string name="translation_model_tab_language">ML Kit</string>
     <string name="translation_model_details_for">%1$s · ดูรายละเอียด</string>
     <string name="translation_model_manga_card_title">ชุดรู้จำข้อความมังงะ</string>
     <string name="translation_model_manga_card_description">ตรวจจับข้อความ · OCR หลายภาษา · ฟื้นฟูพื้นหลัง</string>

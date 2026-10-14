@@ -10,7 +10,7 @@
     <string name="translation_model_short_intro">Datos móviles permitidos · Modelos guardados en la aplicación</string>
     <string name="translation_model_tab_manga">Modelos de manga</string>
     <string name="translation_model_tab_native">IA local</string>
-    <string name="translation_model_tab_language">Paquetes de idiomas</string>
+    <string name="translation_model_tab_language">ML Kit</string>
     <string name="translation_model_details_for">%1$s · Ver detalles</string>
     <string name="translation_model_manga_card_title">Kit de reconocimiento de manga</string>
     <string name="translation_model_manga_card_description">Detección de texto · OCR multilingüe · Restauración de fondo</string>

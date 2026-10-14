@@ -10,7 +10,7 @@
     <string name="translation_model_short_intro">モバイル通信でダウンロード可能 · モデルはアプリ内に保存</string>
     <string name="translation_model_tab_manga">漫画モデル</string>
     <string name="translation_model_tab_native">ローカル AI</string>
-    <string name="translation_model_tab_language">言語パック</string>
+    <string name="translation_model_tab_language">ML Kit</string>
     <string name="translation_model_details_for">%1$s · 詳細を見る</string>
     <string name="translation_model_manga_card_title">漫画認識キット</string>
     <string name="translation_model_manga_card_description">文字検出 · 多言語 OCR · 背景修復</string>

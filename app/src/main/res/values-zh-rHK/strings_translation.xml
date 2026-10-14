@@ -10,7 +10,7 @@
     <string name="translation_model_short_intro">支援流動網絡下載 · 模型保存在應用內</string>
     <string name="translation_model_tab_manga">漫畫模型</string>
     <string name="translation_model_tab_native">本機 AI</string>
-    <string name="translation_model_tab_language">語言包</string>
+    <string name="translation_model_tab_language">ML Kit</string>
     <string name="translation_model_details_for">%1$s · 查看詳情</string>
     <string name="translation_model_manga_card_title">漫畫辨識套件</string>
     <string name="translation_model_manga_card_description">文字偵測 · 多語言 OCR · 背景修復</string>

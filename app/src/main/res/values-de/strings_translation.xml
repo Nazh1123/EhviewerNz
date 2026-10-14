@@ -10,7 +10,7 @@
     <string name="translation_model_short_intro">Mobile Downloads möglich · Modelle in der App gespeichert</string>
     <string name="translation_model_tab_manga">Manga-Modelle</string>
     <string name="translation_model_tab_native">Lokale KI</string>
-    <string name="translation_model_tab_language">Sprachpakete</string>
+    <string name="translation_model_tab_language">ML Kit</string>
     <string name="translation_model_details_for">%1$s · Details ansehen</string>
     <string name="translation_model_manga_card_title">Manga-Erkennungspaket</string>
     <string name="translation_model_manga_card_description">Texterkennung · Mehrsprachige OCR · Hintergrundrestaurierung</string>

@@ -10,7 +10,7 @@
     <string name="translation_model_short_intro">支持移动网络下载 · GGUF 可复制导入或引用外部文件</string>
     <string name="translation_model_tab_manga">漫画模型</string>
     <string name="translation_model_tab_native">本地 AI</string>
-    <string name="translation_model_tab_language">语言包</string>
+    <string name="translation_model_tab_language">ML Kit</string>
     <string name="translation_model_details_for">%1$s · 查看详情</string>
     <string name="translation_model_manga_card_title">漫画识别套件</string>
     <string name="translation_model_manga_card_description">文字检测 · 多语言 OCR · 背景修复</string>
