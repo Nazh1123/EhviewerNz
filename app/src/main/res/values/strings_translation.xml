@@ -49,6 +49,7 @@
     <string name="translation_model_use_short">使用</string>
     <string name="translation_model_selected_button">已选择</string>
     <string name="translation_model_import">导入</string>
+    <string name="translation_model_reimport">重新导入</string>
     <string name="translation_model_delete">删除</string>
     <string name="translation_model_use">使用此模型</string>
     <string name="translation_model_refresh">刷新状态</string>

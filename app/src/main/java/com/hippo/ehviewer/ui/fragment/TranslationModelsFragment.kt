@@ -235,7 +235,8 @@ class TranslationModelsFragment : Fragment() {
                 else if (external) R.string.translation_image_external_invalid else R.string.translation_model_missing),
             ready, listOf(size(models.totalBytes), getString(R.string.translation_model_file_count, models.requiredNames.size)) +
                 if (external) listOf(getString(R.string.translation_model_external_badge)) else emptyList(),
-            download + listOf(action(R.string.translation_model_import) {
+            download + listOf(action(if (ready || external || models.storedBytes() > 0)
+                R.string.translation_model_reimport else R.string.translation_model_import) {
                 chooseImageImportMode { mode ->
                     mangaImportMode = mode
                     showDialog(AlertDialog.Builder(requireContext()).setTitle(R.string.translation_model_import_manga)
@@ -260,7 +261,8 @@ class TranslationModelsFragment : Fragment() {
                     notifyModelDownloadNetwork(requireContext().applicationContext)
                     runtime.download(::reportProgress)
                 }
-            })) + listOf(action(R.string.translation_model_import) { importPpRuntime.launch(arrayOf("*/*")) }) +
+            })) + listOf(action(if (runtimeReady || runtime.store.storedBytes() > 0)
+                R.string.translation_model_reimport else R.string.translation_model_import) { importPpRuntime.launch(arrayOf("*/*")) }) +
                 if (runtime.store.storedBytes() > 0) listOf(action(R.string.translation_model_delete, ModelButtonKind.DELETE) {
                     confirmDelete(runtimeTitle) { locked { runtime.store.delete() } }
                 }) else emptyList(), getString(R.string.translation_ppocr_runtime_help))
@@ -279,7 +281,8 @@ class TranslationModelsFragment : Fragment() {
                         if (!runtime.ready()) runtime.download(::reportProgress)
                         if (!ppStore.ready()) ppModels.download(entry.language, ::reportProgress)
                     }
-                })) + listOf(action(R.string.translation_model_import) {
+                })) + listOf(action(if (ppReadyByLanguage[entry.language] == true || ppExternal || ppStore.storedBytes() > 0)
+                    R.string.translation_model_reimport else R.string.translation_model_import) {
                     chooseImageImportMode { mode ->
                         ppImportLanguage = entry.language; ppImportMode = mode; importPp.launch(arrayOf("*/*"))
                     }

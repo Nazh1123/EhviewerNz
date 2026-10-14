@@ -45,6 +45,7 @@
     <string name="translation_model_use_short">Verwenden</string>
     <string name="translation_model_selected_button">Ausgewählt</string>
     <string name="translation_model_import">Importieren</string>
+    <string name="translation_model_reimport">Erneut importieren</string>
     <string name="translation_model_delete">Löschen</string>
     <string name="translation_model_use">Dieses Modell verwenden</string>
     <string name="translation_model_refresh">Status aktualisieren</string>

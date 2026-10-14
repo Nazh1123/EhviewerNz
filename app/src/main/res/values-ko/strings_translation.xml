@@ -45,6 +45,7 @@
     <string name="translation_model_use_short">사용</string>
     <string name="translation_model_selected_button">선택됨</string>
     <string name="translation_model_import">가져오기</string>
+    <string name="translation_model_reimport">다시 가져오기</string>
     <string name="translation_model_delete">삭제</string>
     <string name="translation_model_use">이 모델 사용</string>
     <string name="translation_model_refresh">상태 새로고침</string>
