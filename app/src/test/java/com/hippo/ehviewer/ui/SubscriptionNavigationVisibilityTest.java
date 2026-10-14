@@ -32,7 +32,7 @@ public class SubscriptionNavigationVisibilityTest {
 
     @Before public void setUp() {
         PreferenceManager.getDefaultSharedPreferences(RuntimeEnvironment.getApplication())
-                .edit().clear().commit();
+                .edit().clear().putBoolean("show_subscription_buttons", false).commit();
         Settings.initialize(RuntimeEnvironment.getApplication());
         Settings.putBoolean(Settings.KEY_SHOW_BOOKMARK_SUBSCRIPTION, true);
         activity = Robolectric.buildActivity(MainActivity.class).get();
@@ -92,23 +92,49 @@ public class SubscriptionNavigationVisibilityTest {
         assertSame(countdown, row.findViewById(R.id.subscription_update_countdown));
     }
 
-    @Test public void masterOffRemovesAllSubscriptionActionViewsAndLeavesEhBadge() {
+    @Test public void hidingEhRemovesItsBadgeAndLeavesOtherRowsVisible() {
+        NavigationMenuItemView row = bindRow(R.id.nav_subscription, "42");
+        View ehBadge = item(R.id.nav_subscription).getActionView();
         int[] ids = {R.id.nav_bookmark_subscription, R.id.nav_global_subscription,
                 R.id.nav_update_subscription};
-        for (int id : ids) bindRow(id, "42");
-        View ehBadge = item(R.id.nav_subscription).getActionView();
-        Settings.putSubscriptionButtonVisibility(Settings.KEY_SHOW_SUBSCRIPTION_BUTTONS, false);
+        View[] actions = new View[ids.length];
+        for (int i = 0; i < ids.length; i++) actions[i] = item(ids[i]).getActionView();
+        Settings.putSubscriptionButtonVisibility(Settings.KEY_SHOW_EH_SUBSCRIPTION, false);
+        render();
+        assertFalse(item(R.id.nav_subscription).isVisible());
+        assertNull(item(R.id.nav_subscription).getActionView());
+        assertNull(ReflectionHelpers.getField(activity, "mEhSubscriptionBadge"));
+        assertEquals(View.GONE, ehBadge.getVisibility());
+        assertNull(ehBadge.getParent());
+        for (int i = 0; i < ids.length; i++) {
+            assertTrue(item(ids[i]).isVisible());
+            assertSame(actions[i], item(ids[i]).getActionView());
+        }
+        row.initialize((MenuItemImpl) item(R.id.nav_whats_hot), 0);
+        assertNull(row.findViewById(R.id.subscription_update_badge));
+        Settings.putSubscriptionButtonVisibility(Settings.KEY_SHOW_EH_SUBSCRIPTION, true);
+        render();
+        assertTrue(item(R.id.nav_subscription).isVisible());
+        assertNotSame(ehBadge, item(R.id.nav_subscription).getActionView());
+        row.initialize((MenuItemImpl) item(R.id.nav_subscription), 0);
+        assertNotNull(row.findViewById(R.id.subscription_update_badge));
+    }
+
+    @Test public void reenablingOnlyUpdateLeavesOtherSubscriptionsHidden() {
+        String[] keys = {Settings.KEY_SHOW_EH_SUBSCRIPTION, Settings.KEY_SHOW_BOOKMARK_SUBSCRIPTION,
+                Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION, Settings.KEY_SHOW_UPDATE_SUBSCRIPTION};
+        int[] ids = {R.id.nav_subscription, R.id.nav_bookmark_subscription,
+                R.id.nav_global_subscription, R.id.nav_update_subscription};
+        for (String key : keys) Settings.putSubscriptionButtonVisibility(key, false);
         render();
         for (int id : ids) {
             assertFalse(item(id).isVisible());
             assertNull(item(id).getActionView());
         }
-        assertSame(ehBadge, item(R.id.nav_subscription).getActionView());
-        Settings.putSubscriptionButtonVisibility(Settings.KEY_SHOW_SUBSCRIPTION_BUTTONS, true);
+        Settings.putSubscriptionButtonVisibility(Settings.KEY_SHOW_UPDATE_SUBSCRIPTION, true);
         render();
-        for (int id : ids) {
-            assertTrue(item(id).isVisible());
-            assertNotNull(item(id).getActionView());
-        }
+        assertTrue(item(R.id.nav_update_subscription).isVisible());
+        assertNotNull(item(R.id.nav_update_subscription).getActionView());
+        for (int i = 0; i < ids.length - 1; i++) assertFalse(item(ids[i]).isVisible());
     }
 }

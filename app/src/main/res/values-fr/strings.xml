@@ -1159,6 +1159,7 @@
     <string name="settings_fork_category_subscriptions">Abonnements</string>
     <string name="settings_bookmark_subscription_management">Gérer les abonnements aux favoris</string>
     <string name="settings_subscription_sidebar_buttons">Afficher les boutons de la barre latérale</string>
+    <string name="settings_subscription_sidebar_eh">Abonnement EH</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">Mettre à jour automatiquement les abonnements aux favoris</string>
     <string name="settings_test_bookmark_subscription">Tester les abonnements aux favoris</string>
     <string name="settings_test_bookmark_subscription_summary">Exécuter un cycle de requêtes réelles pour les abonnements aux favoris\nFavoris abonnés : %1$s, Requêtes au site : %2$s, Durée : %3$s s</string>

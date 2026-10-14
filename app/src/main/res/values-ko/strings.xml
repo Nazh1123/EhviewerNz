@@ -1187,6 +1187,7 @@
     <string name="settings_fork_category_subscriptions">구독</string>
     <string name="settings_bookmark_subscription_management">북마크 구독 관리</string>
     <string name="settings_subscription_sidebar_buttons">사이드바 버튼 표시</string>
+    <string name="settings_subscription_sidebar_eh">EH 구독</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">북마크 구독 자동 업데이트</string>
     <string name="settings_test_bookmark_subscription">북마크 구독 테스트</string>
     <string name="settings_test_bookmark_subscription_summary">실제 북마크 구독 요청을 한 차례 실행\n구독 중인 북마크 수: %1$s, 사이트 요청 수: %2$s, 소요 시간: %3$s초</string>

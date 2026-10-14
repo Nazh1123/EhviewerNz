@@ -1102,6 +1102,7 @@
     <string name="settings_fork_category_subscriptions">Abonnements</string>
     <string name="settings_bookmark_subscription_management">Lesezeichen-Abonnements verwalten</string>
     <string name="settings_subscription_sidebar_buttons">Schaltflächen in der Seitenleiste anzeigen</string>
+    <string name="settings_subscription_sidebar_eh">EH-Abonnement</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">Lesezeichen-Abonnements automatisch aktualisieren</string>
     <string name="settings_test_bookmark_subscription">Lesezeichen-Abonnements testen</string>
     <string name="settings_test_bookmark_subscription_summary">Einen Durchlauf echter Lesezeichen-Abonnementanfragen ausführen\nAbonnierte Lesezeichen: %1$s, Website-Anfragen: %2$s, Dauer: %3$s s</string>

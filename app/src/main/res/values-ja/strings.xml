@@ -1111,6 +1111,7 @@
     <string name="settings_fork_category_subscriptions">購読</string>
     <string name="settings_bookmark_subscription_management">ブックマーク購読の管理</string>
     <string name="settings_subscription_sidebar_buttons">サイドバーのボタンを表示</string>
+    <string name="settings_subscription_sidebar_eh">EH 購読</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">ブックマーク購読を自動更新</string>
     <string name="settings_test_bookmark_subscription">ブックマーク購読をテスト</string>
     <string name="settings_test_bookmark_subscription_summary">実際のブックマーク購読リクエストを1回実行\n購読ブックマーク数: %1$s、サイトへのリクエスト数: %2$s、所要時間: %3$s秒</string>

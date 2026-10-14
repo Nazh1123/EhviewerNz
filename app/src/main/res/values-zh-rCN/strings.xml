@@ -1226,6 +1226,7 @@
     <string name="offline_gallery_saved_rating">已保存的评分</string>
     <string name="settings_bookmark_subscription_management">书签订阅管理</string>
     <string name="settings_subscription_sidebar_buttons">侧边栏按钮显示</string>
+    <string name="settings_subscription_sidebar_eh">EH 订阅</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">自动更新 书签订阅</string>
     <string name="settings_test_bookmark_subscription">测试书签订阅</string>
     <string name="settings_test_bookmark_subscription_summary">进行一轮实际书签订阅请求\n书签订阅数: %1$s, 网站请求数: %2$s, 单轮耗时: %3$ss</string>

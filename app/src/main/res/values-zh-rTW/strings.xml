@@ -1213,6 +1213,7 @@
     <string name="offline_gallery_saved_rating">已儲存的評分</string>
     <string name="settings_bookmark_subscription_management">書籤訂閱管理</string>
     <string name="settings_subscription_sidebar_buttons">側邊欄按鈕顯示</string>
+    <string name="settings_subscription_sidebar_eh">EH 訂閱</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">自動更新 書籤訂閱</string>
     <string name="settings_test_bookmark_subscription">測試書籤訂閱</string>
     <string name="settings_test_bookmark_subscription_summary">進行一輪實際書籤訂閱請求\n書籤訂閱數: %1$s, 網站請求數: %2$s, 單輪耗時: %3$ss</string>

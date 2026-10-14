@@ -1173,6 +1173,7 @@
     <string name="settings_fork_category_subscriptions">การสมัครรับข้อมูล</string>
     <string name="settings_bookmark_subscription_management">จัดการการสมัครรับข้อมูลบุ๊กมาร์ก</string>
     <string name="settings_subscription_sidebar_buttons">แสดงปุ่มในแถบด้านข้าง</string>
+    <string name="settings_subscription_sidebar_eh">การสมัครรับข้อมูล EH</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">อัปเดตการสมัครรับข้อมูลบุ๊กมาร์กอัตโนมัติ</string>
     <string name="settings_test_bookmark_subscription">ทดสอบการสมัครรับข้อมูลบุ๊กมาร์ก</string>
     <string name="settings_test_bookmark_subscription_summary">ส่งคำขอการสมัครรับข้อมูลบุ๊กมาร์กจริงหนึ่งรอบ\nบุ๊กมาร์กที่สมัครรับข้อมูล: %1$s, คำขอไปยังเว็บไซต์: %2$s, เวลาที่ใช้: %3$s วินาที</string>

@@ -6,6 +6,7 @@ import android.preference.PreferenceManager;
 
 import androidx.fragment.app.FragmentActivity;
 import androidx.preference.PreferenceFragmentCompat;
+import androidx.preference.PreferenceCategory;
 import androidx.preference.TwoStatePreference;
 
 import com.hippo.ehviewer.R;
@@ -28,7 +29,7 @@ public class SubscriptionSidebarPreferencesTest {
 
     @Before public void setUp() {
         PreferenceManager.getDefaultSharedPreferences(RuntimeEnvironment.getApplication())
-                .edit().clear().commit();
+                .edit().clear().putBoolean("show_subscription_buttons", false).commit();
         Settings.initialize(RuntimeEnvironment.getApplication());
         FragmentActivity host = Robolectric.buildActivity(FragmentActivity.class).setup().get();
         host.setTheme(R.style.AppTheme);
@@ -39,51 +40,61 @@ public class SubscriptionSidebarPreferencesTest {
     private TwoStatePreference preference(String key) { return fragment.findPreference(key); }
     private void change(String key, boolean value) { preference(key).callChangeListener(value); }
 
-    @Test public void defaultsAndMasterOffPreserveChildChoices() {
-        assertTrue(Settings.getShowSubscriptionButtons());
+    @Test public void headingIsNotASwitchAndDefaultsIgnoreRetiredMaster() {
+        PreferenceCategory heading = fragment.findPreference("subscription_sidebar_buttons");
+        assertNotNull(heading);
+        assertFalse(heading.isSelectable());
+        assertEquals(Settings.KEY_SHOW_EH_SUBSCRIPTION, heading.getPreference(0).getKey());
+        assertNull(fragment.findPreference("show_subscription_buttons"));
+        assertTrue(Settings.getShowEhSubscription());
+        assertTrue(preference(Settings.KEY_SHOW_EH_SUBSCRIPTION).isChecked());
         assertFalse(Settings.getShowBookmarkSubscription());
         assertTrue(Settings.getShowGlobalSubscription());
         assertTrue(Settings.getShowUpdateSubscription());
-        change(Settings.KEY_SHOW_SUBSCRIPTION_BUTTONS, false);
-        assertFalse(Settings.getShowSubscriptionButtons());
-        assertFalse(preference(Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION).isEnabled());
-        assertTrue(Settings.getShowGlobalSubscription());
-        change(Settings.KEY_SHOW_SUBSCRIPTION_BUTTONS, true);
-        assertTrue(preference(Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION).isEnabled());
-        assertFalse(Settings.getShowBookmarkSubscription());
+        for (int i = 0; i < heading.getPreferenceCount(); i++) {
+            assertTrue(heading.getPreference(i).isEnabled());
+        }
     }
 
-    @Test public void disablingLastChildDisablesMasterAndReenablingRestoresGlobalAndUpdate() {
+    @Test public void turningAllButtonsOffAndOneOnKeepsOthersOff() {
+        change(Settings.KEY_SHOW_EH_SUBSCRIPTION, false);
         change(Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION, false);
-        assertTrue(Settings.getShowSubscriptionButtons());
         change(Settings.KEY_SHOW_UPDATE_SUBSCRIPTION, false);
-        assertFalse(Settings.getShowSubscriptionButtons());
-        assertFalse(preference(Settings.KEY_SHOW_SUBSCRIPTION_BUTTONS).isChecked());
         Settings.initialize(RuntimeEnvironment.getApplication());
-        assertFalse(Settings.getShowSubscriptionButtons());
-        change(Settings.KEY_SHOW_SUBSCRIPTION_BUTTONS, true);
-        assertTrue(Settings.getShowSubscriptionButtons());
-        assertFalse(preference(Settings.KEY_SHOW_BOOKMARK_SUBSCRIPTION).isChecked());
-        assertTrue(preference(Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION).isChecked());
-        assertTrue(preference(Settings.KEY_SHOW_UPDATE_SUBSCRIPTION).isChecked());
-    }
-
-    @Test public void reenablingMasterRetainsBookmarkOnlyChoice() {
-        change(Settings.KEY_SHOW_BOOKMARK_SUBSCRIPTION, true);
-        change(Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION, false);
-        change(Settings.KEY_SHOW_UPDATE_SUBSCRIPTION, false);
-        assertTrue(Settings.getShowSubscriptionButtons());
-        change(Settings.KEY_SHOW_SUBSCRIPTION_BUTTONS, false);
-        change(Settings.KEY_SHOW_SUBSCRIPTION_BUTTONS, true);
-        assertTrue(Settings.getShowBookmarkSubscription());
+        assertFalse(Settings.getShowEhSubscription());
         assertFalse(Settings.getShowGlobalSubscription());
         assertFalse(Settings.getShowUpdateSubscription());
+        change(Settings.KEY_SHOW_EH_SUBSCRIPTION, true);
+        assertTrue(Settings.getShowEhSubscription());
+        assertFalse(preference(Settings.KEY_SHOW_BOOKMARK_SUBSCRIPTION).isChecked());
+        assertFalse(preference(Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION).isChecked());
+        assertFalse(preference(Settings.KEY_SHOW_UPDATE_SUBSCRIPTION).isChecked());
+    }
+
+    @Test public void changingEhPreservesOtherChoicesAndNotifiesRefresh() {
+        change(Settings.KEY_SHOW_BOOKMARK_SUBSCRIPTION, true);
+        change(Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION, false);
+        int changes = fragment.changes;
+        change(Settings.KEY_SHOW_EH_SUBSCRIPTION, false);
+        assertEquals(changes + 1, fragment.changes);
+        assertFalse(Settings.getShowEhSubscription());
+        assertTrue(Settings.getShowBookmarkSubscription());
+        assertFalse(Settings.getShowGlobalSubscription());
+        assertTrue(Settings.getShowUpdateSubscription());
+        assertTrue(preference(Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION).isEnabled());
+        Settings.initialize(RuntimeEnvironment.getApplication());
+        assertFalse(Settings.getShowEhSubscription());
+        change(Settings.KEY_SHOW_EH_SUBSCRIPTION, true);
+        assertTrue(Settings.getShowBookmarkSubscription());
+        assertFalse(Settings.getShowGlobalSubscription());
+        assertTrue(Settings.getShowUpdateSubscription());
     }
 
     public static class Harness extends PreferenceFragmentCompat {
+        int changes;
         @Override public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
             setPreferencesFromResource(R.xml.subscription_settings, rootKey);
-            SubscriptionSidebarPreferences.bind(this, () -> {});
+            SubscriptionSidebarPreferences.bind(this, () -> changes++);
         }
     }
 }

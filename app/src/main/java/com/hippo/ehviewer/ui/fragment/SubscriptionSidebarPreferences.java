@@ -7,7 +7,7 @@ import com.hippo.ehviewer.Settings;
 
 public final class SubscriptionSidebarPreferences {
     private static final String[] KEYS = {
-            Settings.KEY_SHOW_SUBSCRIPTION_BUTTONS,
+            Settings.KEY_SHOW_EH_SUBSCRIPTION,
             Settings.KEY_SHOW_BOOKMARK_SUBSCRIPTION,
             Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION,
             Settings.KEY_SHOW_UPDATE_SUBSCRIPTION
@@ -30,7 +30,7 @@ public final class SubscriptionSidebarPreferences {
     }
 
     private static void sync(PreferenceFragmentCompat fragment) {
-        boolean[] values = {Settings.getShowSubscriptionButtons(),
+        boolean[] values = {Settings.getShowEhSubscription(),
                 Settings.getShowBookmarkSubscription(), Settings.getShowGlobalSubscription(),
                 Settings.getShowUpdateSubscription()};
         for (int i = 0; i < KEYS.length; i++) {

@@ -541,7 +541,7 @@ public class Settings {
                 DEFAULT_GALLERY_LONG_PRESS_QUICK_DOWNLOAD);
     }
 
-    public static final String KEY_SHOW_SUBSCRIPTION_BUTTONS = "show_subscription_buttons";
+    public static final String KEY_SHOW_EH_SUBSCRIPTION = "show_eh_subscription";
     public static final String KEY_SHOW_BOOKMARK_SUBSCRIPTION = "show_bookmark_subscription";
     public static final String KEY_SHOW_GLOBAL_SUBSCRIPTION = "show_global_subscription";
     public static final String KEY_SHOW_UPDATE_SUBSCRIPTION = "show_update_subscription";
@@ -558,36 +558,20 @@ public class Settings {
         return getBoolean(KEY_SHOW_UPDATE_SUBSCRIPTION, true);
     }
 
-    public static boolean getShowSubscriptionButtons() {
-        return getBoolean(KEY_SHOW_SUBSCRIPTION_BUTTONS, true)
-                && (getShowBookmarkSubscription() || getShowGlobalSubscription()
-                || getShowUpdateSubscription());
+    public static boolean getShowEhSubscription() {
+        return getBoolean(KEY_SHOW_EH_SUBSCRIPTION, true);
     }
 
     public static void putSubscriptionButtonVisibility(String key, boolean enabled) {
-        boolean bookmark = getShowBookmarkSubscription();
-        boolean global = getShowGlobalSubscription();
-        boolean update = getShowUpdateSubscription();
-        boolean parent = getShowSubscriptionButtons();
         switch (key) {
-            case KEY_SHOW_SUBSCRIPTION_BUTTONS:
-                parent = enabled;
-                if (enabled && !bookmark && !global && !update) {
-                    global = true;
-                    update = true;
-                }
+            case KEY_SHOW_EH_SUBSCRIPTION:
+            case KEY_SHOW_BOOKMARK_SUBSCRIPTION:
+            case KEY_SHOW_GLOBAL_SUBSCRIPTION:
+            case KEY_SHOW_UPDATE_SUBSCRIPTION:
+                putBoolean(key, enabled);
                 break;
-            case KEY_SHOW_BOOKMARK_SUBSCRIPTION: bookmark = enabled; break;
-            case KEY_SHOW_GLOBAL_SUBSCRIPTION: global = enabled; break;
-            case KEY_SHOW_UPDATE_SUBSCRIPTION: update = enabled; break;
             default: throw new IllegalArgumentException("Unknown subscription button: " + key);
         }
-        sSettingsPre.edit()
-                .putBoolean(KEY_SHOW_SUBSCRIPTION_BUTTONS, parent && (bookmark || global || update))
-                .putBoolean(KEY_SHOW_BOOKMARK_SUBSCRIPTION, bookmark)
-                .putBoolean(KEY_SHOW_GLOBAL_SUBSCRIPTION, global)
-                .putBoolean(KEY_SHOW_UPDATE_SUBSCRIPTION, update)
-                .apply();
     }
 
     public static final String KEY_AUTO_SUBSCRIPTION_UPDATES =

@@ -1165,6 +1165,7 @@
     <string name="settings_fork_category_subscriptions">Suscripciones</string>
     <string name="settings_bookmark_subscription_management">Administrar suscripciones a marcadores</string>
     <string name="settings_subscription_sidebar_buttons">Mostrar botones en la barra lateral</string>
+    <string name="settings_subscription_sidebar_eh">Suscripción de EH</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">Actualizar automáticamente las suscripciones a marcadores</string>
     <string name="settings_test_bookmark_subscription">Probar suscripciones a marcadores</string>
     <string name="settings_test_bookmark_subscription_summary">Ejecutar una ronda de solicitudes reales de suscripciones a marcadores\nMarcadores suscritos: %1$s, Solicitudes al sitio: %2$s, Duración: %3$s s</string>

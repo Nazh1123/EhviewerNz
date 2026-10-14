@@ -1208,15 +1208,17 @@ public final class MainActivity extends StageActivity
 
     private void renderSubscriptionUpdateState() {
         if (mNavView != null) {
-            boolean visible = Settings.getShowSubscriptionButtons();
+            mEhSubscriptionBadge = updateSubscriptionNavigationItem(
+                    R.id.nav_subscription, Settings.getShowEhSubscription(),
+                    R.layout.nav_subscription_badge, R.id.subscription_update_badge);
             mBookmarkSubscriptionBadge = updateSubscriptionNavigationItem(
-                    R.id.nav_bookmark_subscription, visible && Settings.getShowBookmarkSubscription(),
+                    R.id.nav_bookmark_subscription, Settings.getShowBookmarkSubscription(),
                     R.layout.nav_subscription_badge, R.id.subscription_update_badge);
             mGlobalSubscriptionBadge = updateSubscriptionNavigationItem(
-                    R.id.nav_global_subscription, visible && Settings.getShowGlobalSubscription(),
+                    R.id.nav_global_subscription, Settings.getShowGlobalSubscription(),
                     R.layout.nav_subscription_badge, R.id.subscription_update_badge);
             mSubscriptionUpdateCountdown = updateSubscriptionNavigationItem(
-                    R.id.nav_update_subscription, visible && Settings.getShowUpdateSubscription(),
+                    R.id.nav_update_subscription, Settings.getShowUpdateSubscription(),
                     R.layout.nav_subscription_countdown, R.id.subscription_update_countdown);
             if (mSubscriptionUpdateCountdown == null) {
                 mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionCountdownRunnable);
@@ -1292,7 +1294,7 @@ public final class MainActivity extends StageActivity
         boolean hasEnabledSource = Settings.getAutoSubscriptionUpdatesEh()
                 || Settings.getAutoSubscriptionUpdatesBookmark();
         if (countdown == null || manager == null
-                || !Settings.getShowSubscriptionButtons() || !Settings.getShowUpdateSubscription()
+                || !Settings.getShowUpdateSubscription()
                 || !Settings.getAutoSubscriptionUpdates()
                 || !hasEnabledSource) {
             if (countdown != null) {
