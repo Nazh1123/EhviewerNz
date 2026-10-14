@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="translation_backend_entries">
+        <item>@string/translation_backend_native</item>
+        <item>@string/translation_backend_mlkit</item>
+        <item>@string/translation_backend_api</item>
+    </string-array>
+    <string-array name="translation_backend_values" translatable="false">
+        <item>NATIVE_LLM</item>
+        <item>ML_KIT</item>
+        <item>LLM_API</item>
+    </string-array>
+</resources>

@@ -3,7 +3,8 @@ package com.hippo.ehviewer.translation
 import android.content.Context
 import android.content.Intent
 import androidx.preference.EditTextPreference
-import androidx.preference.ListPreference
+import com.hippo.preference.ListPreference
+import com.hippo.preference.SwitchPreference
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.Settings
@@ -28,6 +29,59 @@ class TranslationNavigationTest {
             // Settings UI needs preferences, not production networking / native image initialization.
             ReflectionHelpers.setStaticField(Settings::class.java, "sSettingsPre",
                 getSharedPreferences("navigation-test", Context.MODE_PRIVATE))
+        }
+    }
+
+    @Test fun xmlPreferencesKeepTranslationStorageAndRestoreSavedValues() {
+        val context = RuntimeEnvironment.getApplication()
+        val saved = TranslationOptions(backend = TranslationBackend.LLM_API, source = "ko", target = "fr",
+            ahead = 4, inpaint = false, persistDownloaded = true, cacheSizeMb = 512,
+            apiUrl = "https://example.com/v1/chat/completions", apiModel = "saved-model", apiKey = "saved-key")
+        TranslationSettings(context).save(saved)
+        val defaults = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+        defaults.edit().putString("translation_backend", "NATIVE_LLM")
+            .putString("translation_source", "ja").putString("translation_target", "en")
+            .putString("translation_ahead", "9").putString("translation_cache_size", "128")
+            .putBoolean("translation_inpaint", true).putBoolean("translation_persist_downloaded", false)
+            .putString("translation_api_key", "unrelated-key").commit()
+        val unrelated = defaults.all.filterKeys { it.startsWith("translation_") }
+        val intent = Intent(context, SettingsActivity::class.java)
+            .putExtra(SettingsActivity.EXTRA_TRANSLATION, true)
+        Robolectric.buildActivity(SettingsActivity::class.java, intent).setup().use { controller ->
+            fun screen(): TranslationFragment {
+                val manager = controller.get().supportFragmentManager
+                manager.executePendingTransactions()
+                return manager.findFragmentById(R.id.settings) as TranslationFragment
+            }
+            fun assertValues(fragment: TranslationFragment, expected: TranslationOptions) {
+                fun list(key: String) = requireNotNull(fragment.findPreference<ListPreference>(key))
+                fun text(key: String) = requireNotNull(fragment.findPreference<EditTextPreference>(key))
+                fun switch(key: String) = requireNotNull(fragment.findPreference<SwitchPreference>(key))
+                assertEquals(expected.backend.name, list("translation_backend").value)
+                assertEquals(expected.source, list("translation_source").value)
+                assertEquals(expected.target, list("translation_target").value)
+                assertEquals(expected.ahead.toString(), text("translation_ahead").text)
+                assertEquals(expected.cacheSizeMb.toString(), list("translation_cache_size").value)
+                assertEquals(expected.inpaint, switch("translation_inpaint").isChecked)
+                assertEquals(expected.persistDownloaded, switch("translation_persist_downloaded").isChecked)
+                assertEquals(expected.apiUrl, text("translation_api_url").text)
+                assertEquals(expected.apiModel, text("translation_api_model").text)
+                assertEquals(expected.apiKey, text("translation_api_key").text)
+                assertFalse(text("translation_api_key").summary.toString().contains(expected.apiKey))
+                assertTrue(text("translation_api_url").isVisible)
+                assertFalse(requireNotNull(fragment.findPreference<androidx.preference.Preference>(
+                    "translation_native_model")).isVisible)
+            }
+            val fragment = screen()
+            assertValues(fragment, saved)
+            requireNotNull(fragment.findPreference<SwitchPreference>("translation_inpaint")).performClick()
+            requireNotNull(fragment.findPreference<SwitchPreference>("translation_persist_downloaded")).performClick()
+            val updated = saved.copy(inpaint = true, persistDownloaded = false)
+            assertEquals(updated, TranslationSettings(context).read())
+            controller.recreate()
+            assertValues(screen(), updated)
+            assertEquals(updated, TranslationSettings(context).read())
+            assertEquals(unrelated, defaults.all.filterKeys { it.startsWith("translation_") })
         }
     }
 
@@ -65,6 +119,9 @@ class TranslationNavigationTest {
             assertNotNull(button("translation_ppocr_runtime/action/${R.string.translation_model_download}"))
             assertNotNull(button("translation_ppocr_runtime/action/${R.string.translation_model_import}"))
             button("translation_manga_bundle/action/${R.string.translation_model_import}").performClick()
+            val importMode = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
+            val modes = requireNotNull(importMode.listView)
+            modes.performItemClick(android.view.View(activity), 0, modes.adapter.getItemId(0))
             val dialog = ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
             assertTrue(dialog.isShowing)
             assertTrue(dialog.findViewById<android.widget.TextView>(android.R.id.message)!!.text.toString().contains("ocr_48px_ctc.ncnn.bin"))
@@ -128,7 +185,9 @@ class TranslationNavigationTest {
             }
             choose(source, "ja")
             for (mode in listOf("NATIVE_LLM", "LLM_API")) {
-                assertTrue(backend.callChangeListener(mode))
+                choose(backend, mode)
+                assertEquals(mode, TranslationSettings(activity).read().backend.name)
+                assertEquals(backend.entry.toString(), backend.summary.toString())
                 for (code in listOf("fr", "zh-HK", "zh-TW", "zh-CN")) {
                     choose(target, code)
                     assertEquals(code, TranslationSettings(activity).read().target)
@@ -202,7 +261,7 @@ class TranslationNavigationTest {
                 (0 until fragment.preferenceScreen.preferenceCount).map {
                     fragment.preferenceScreen.getPreference(it).title.toString()
                 })
-            val persistence = requireNotNull(fragment.findPreference<androidx.preference.SwitchPreferenceCompat>("translation_persist_downloaded"))
+            val persistence = requireNotNull(fragment.findPreference<SwitchPreference>("translation_persist_downloaded"))
             assertFalse(persistence.isChecked)
             assertTrue(persistence.callChangeListener(true))
             assertTrue(TranslationSettings(activity).read().persistDownloaded)

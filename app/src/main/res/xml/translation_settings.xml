@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- TranslationSettings owns persistence in the manga_translation preferences. -->
+    <PreferenceCategory android:title="@string/translation_category_engine">
+
+        <Preference
+            android:key="translation_model_management"
+            android:persistent="false"
+            android:summary="@string/translation_model_management_help"
+            android:title="@string/translation_model_management"
+            app:fragment="com.hippo.ehviewer.ui.fragment.TranslationModelsFragment" />
+
+        <com.hippo.preference.ListPreference
+            android:key="translation_backend"
+            android:persistent="false"
+            android:summary="%s"
+            android:title="@string/translation_backend"
+            app:entries="@array/translation_backend_entries"
+            app:entryValues="@array/translation_backend_values"
+            app:allowDividerAbove="true" />
+
+        <Preference
+            android:key="translation_native_model"
+            android:persistent="false"
+            android:selectable="false"
+            android:title="@string/translation_native_current"
+            app:allowDividerAbove="true" />
+
+        <Preference
+            android:key="translation_native_test"
+            android:persistent="false"
+            android:summary="@string/translation_native_test_help"
+            android:title="@string/translation_native_test"
+            app:allowDividerAbove="true" />
+
+        <androidx.preference.EditTextPreference
+            android:dialogMessage="@string/translation_api_url_help"
+            android:key="translation_api_url"
+            android:persistent="false"
+            android:title="@string/translation_api_url"
+            app:allowDividerAbove="true" />
+
+        <androidx.preference.EditTextPreference
+            android:dialogMessage="@string/translation_api_model_help"
+            android:key="translation_api_model"
+            android:persistent="false"
+            android:title="@string/translation_api_model"
+            app:allowDividerAbove="true" />
+
+        <androidx.preference.EditTextPreference
+            android:dialogMessage="@string/translation_api_key_help"
+            android:key="translation_api_key"
+            android:persistent="false"
+            android:title="@string/translation_api_key"
+            app:allowDividerAbove="true" />
+
+        <Preference
+            android:key="translation_api_test"
+            android:persistent="false"
+            android:summary="@string/translation_api_test_help"
+            android:title="@string/translation_api_test"
+            app:allowDividerAbove="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/translation_category_reading">
+
+        <com.hippo.preference.ListPreference
+            android:key="translation_source"
+            android:persistent="false"
+            android:title="@string/translation_source" />
+
+        <com.hippo.preference.ListPreference
+            android:key="translation_target"
+            android:persistent="false"
+            android:title="@string/translation_target"
+            app:allowDividerAbove="true" />
+
+        <androidx.preference.EditTextPreference
+            android:dialogMessage="@string/translation_ahead_help"
+            android:dialogTitle="@string/translation_ahead"
+            android:key="translation_ahead"
+            android:persistent="false"
+            android:title="@string/translation_ahead"
+            app:allowDividerAbove="true" />
+
+        <com.hippo.preference.SwitchPreference
+            android:key="translation_inpaint"
+            android:persistent="false"
+            android:summary="@string/translation_inpaint_help"
+            android:title="@string/translation_inpaint"
+            app:allowDividerAbove="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/translation_category_storage">
+
+        <com.hippo.preference.SwitchPreference
+            android:key="translation_persist_downloaded"
+            android:persistent="false"
+            android:summary="@string/translation_persist_downloaded_help"
+            android:title="@string/translation_persist_downloaded"
+            app:allowDividerAbove="false" />
+
+        <com.hippo.preference.ListPreference
+            android:key="translation_cache_size"
+            android:persistent="false"
+            android:summary="%s"
+            android:title="@string/translation_cache_size"
+            app:allowDividerAbove="true" />
+
+        <Preference
+            android:key="translation_clear"
+            android:persistent="false"
+            android:summary="@string/translation_cache_description"
+            android:title="@string/translation_clear_cache"
+            app:allowDividerAbove="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/translation_category_about">
+
+        <Preference
+            android:persistent="false"
+            android:selectable="false"
+            android:summary="@string/translation_explanation"
+            android:title="@string/translation_title" />
+    </PreferenceCategory>
+</PreferenceScreen>

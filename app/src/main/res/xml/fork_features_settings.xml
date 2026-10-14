@@ -3,21 +3,22 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory
-        android:title="@string/settings_fork_category_gallery"
-        app:allowDividerAbove="true">
+        android:title="@string/settings_fork_category_gallery">
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
             android:key="popular_updates_only"
             android:title="@string/settings_popular_updates_only"
-            android:summary="@string/settings_popular_updates_only_summary" />
+            android:summary="@string/settings_popular_updates_only_summary"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.ListPreference
             android:key="search_language"
             android:summary="%s"
             android:title="@string/settings_search_language"
             app:entries="@array/search_language_entries"
-            app:entryValues="@array/search_language_entry_values" />
+            app:entryValues="@array/search_language_entry_values"
+            app:allowDividerAbove="true" />
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
@@ -63,25 +64,24 @@
             android:defaultValue="true"
             android:key="gallery_preview_immediate_jump"
             android:summary="@string/settings_eh_gallery_preview_immediate_jump_summary"
-            android:title="@string/settings_fork_gallery_immediate_jump"
-            app:allowDividerAbove="false" />
+            android:title="@string/settings_fork_gallery_immediate_jump" />
 
     </PreferenceCategory>
 
     <PreferenceCategory
-        android:title="@string/settings_fork_category_saving"
-        app:allowDividerAbove="true">
+        android:title="@string/settings_fork_category_saving">
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="true"
             android:key="reader_page_preview"
             android:title="@string/settings_reader_page_preview"
-            android:summary="@string/settings_reader_page_preview_summary" />
+            android:summary="@string/settings_reader_page_preview_summary"
+            app:allowDividerAbove="false" />
 
         <Preference
             android:key="manual_image_save_location"
             android:title="@string/settings_download_manual_save_location"
-            app:iconSpaceReserved="false" />
+            app:allowDividerAbove="true" />
 
         <com.hippo.preference.ThumbnailSizePreference
             android:defaultValue="1"
@@ -89,23 +89,23 @@
             android:summary="%s"
             android:title="@string/settings_eh_cover_thumb_size"
             app:entries="@array/cover_thumb_size_entries"
-            app:entryValues="@array/cover_thumb_size_entry_values" />
+            app:entryValues="@array/cover_thumb_size_entry_values"
+            app:allowDividerAbove="true" />
 
         <com.hippo.preference.ThumbnailSizePreference
             android:defaultValue="1"
             android:key="preview_thumb_size"
             android:summary="%s"
             android:title="@string/settings_eh_preview_thumb_size"
-            app:allowDividerAbove="false"
             app:entries="@array/preview_thumb_size_entries"
-            app:entryValues="@array/preview_thumb_size_entry_values" />
+            app:entryValues="@array/preview_thumb_size_entry_values"
+            app:allowDividerAbove="false" />
             
         <com.hippo.preference.SwitchPreference
             android:defaultValue="true"
             android:key="record_reading_history"
             android:title="@string/settings_record_reading_history"
-            android:summary="@string/settings_record_reading_history_summary"
-            app:iconSpaceReserved="false" />
+            android:summary="@string/settings_record_reading_history_summary" />
 
         <com.hippo.preference.ListPreference
             android:defaultValue="100"
@@ -161,7 +161,8 @@
             android:defaultValue="true"
             android:key="experimental_animated_webp"
             android:summary="@string/settings_animated_webp_controls_summary"
-            android:title="@string/settings_animated_webp_controls" />
+            android:title="@string/settings_animated_webp_controls"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="true"
@@ -206,32 +207,32 @@
     </PreferenceCategory>
 
     <PreferenceCategory
-        android:title="@string/settings_fork_category_downloads"
-        app:allowDividerAbove="true">
+        android:title="@string/settings_fork_category_downloads">
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
             android:key="download_label_continuous_browse"
             android:summary="@string/settings_fork_download_label_continuous_browse_summary"
-            android:title="@string/settings_fork_download_label_continuous_browse" />
+            android:title="@string/settings_fork_download_label_continuous_browse"
+            app:allowDividerAbove="false" />
 
         <Preference
             android:key="fork_delete_empty_galleries"
             android:summary="@string/settings_download_delete_missing_galleries_summary"
             android:title="@string/settings_fork_delete_empty_galleries"
-            app:iconSpaceReserved="false" />
+            app:allowDividerAbove="true" />
 
         <Preference
             android:key="update_gallery_versions"
             android:summary="@string/settings_update_downloaded_gallery_versions_summary"
             android:title="@string/settings_update_downloaded_gallery_versions"
-            app:iconSpaceReserved="false" />
+            app:allowDividerAbove="true" />
 
         <com.hippo.ehviewer.preference.DeleteOldGalleryVersionsPreference
             android:key="delete_old_gallery_versions"
             android:summary="@string/settings_delete_old_gallery_versions_summary"
             android:title="@string/settings_delete_old_gallery_versions"
-            app:iconSpaceReserved="false" />
+            app:allowDividerAbove="true" />
 
     </PreferenceCategory>
 

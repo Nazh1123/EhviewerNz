@@ -7,11 +7,14 @@ import android.widget.SeekBar
 import android.widget.Toast
 import androidx.appcompat.widget.AppCompatSeekBar
 import androidx.core.widget.doAfterTextChanged
-import androidx.preference.*
+import androidx.preference.EditTextPreference
+import androidx.preference.Preference
 import androidx.appcompat.app.AlertDialog
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.translation.*
 import com.hippo.ehviewer.ui.SettingsActivity
+import com.hippo.preference.ListPreference
+import com.hippo.preference.SwitchPreference
 import java.io.File
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
@@ -31,26 +34,10 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
         nativePreferences.clear()
         settings = TranslationSettings(requireContext())
         val context = requireContext()
-        val screen = preferenceManager.createPreferenceScreen(context)
+        setPreferencesFromResource(R.xml.translation_settings, rootKey)
         val options = settings.read()
-        var group: PreferenceGroup = screen
-        fun category(title: Int) {
-            group = PreferenceCategory(context).apply {
-                setTitle(title)
-                order = screen.preferenceCount
-                screen.addPreference(this)
-            }
-        }
-        fun add(preference: Preference) { preference.isPersistent = false; group.addPreference(preference) }
-        category(R.string.translation_category_engine)
-        add(ListPreference(context).apply {
-            key = "translation_backend"
-            setTitle(R.string.translation_backend)
-            entries = arrayOf(getString(R.string.translation_backend_native),
-                getString(R.string.translation_backend_mlkit), getString(R.string.translation_backend_api))
-            entryValues = TranslationBackend.entries.map { it.name }.toTypedArray()
+        requirePreference<ListPreference>("translation_backend").apply {
             value = options.backend.name
-            summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
             setOnPreferenceChangeListener { _, value ->
                 val backend = TranslationBackend.valueOf(value.toString())
                 val previous = settings.read()
@@ -66,24 +53,10 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 refreshStatus()
                 true
             }
-        })
-        add(Preference(context).apply {
-            key = "translation_model_management"
-            setTitle(R.string.translation_model_management)
-            setSummary(R.string.translation_model_management_help)
-            fragment = TranslationModelsFragment::class.java.name
-        })
-        nativeModel = Preference(context).apply {
-            key = "translation_native_model"
-            setTitle(R.string.translation_native_current)
-            isSelectable = false
         }
+        nativeModel = requirePreference("translation_native_model")
         nativePreferences.add(nativeModel)
-        add(nativeModel)
-        val nativeTest = Preference(context).apply {
-            key = "translation_native_test"
-            setTitle(R.string.translation_native_test)
-            setSummary(R.string.translation_native_test_help)
+        val nativeTest = requirePreference<Preference>("translation_native_test").apply {
             setOnPreferenceClickListener {
                 if (nativeWork?.isCompleted != false) nativeWork = scope?.launch {
                     nativePreferences.forEach { it.isEnabled = false }
@@ -116,17 +89,13 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
             }
         }
         nativePreferences.add(nativeTest)
-        add(nativeTest)
         nativePreferences.forEach {
             it.isVisible = options.backend == TranslationBackend.NATIVE_LLM
             it.isEnabled = nativeWork?.isCompleted != false
         }
-        fun apiField(keyName: String, title: Int, help: Int, initial: String, secret: Boolean = false,
+        fun apiField(keyName: String, help: Int, initial: String, secret: Boolean = false,
                      save: (TranslationOptions, String) -> TranslationOptions) {
-            val field = EditTextPreference(context).apply {
-                key = keyName
-                setTitle(title)
-                setDialogMessage(help)
+            val field = requirePreference<EditTextPreference>(keyName).apply {
                 text = initial
                 summaryProvider = Preference.SummaryProvider<EditTextPreference> {
                     if (secret && !it.text.isNullOrEmpty()) getString(R.string.translation_key_saved)
@@ -146,18 +115,14 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 }
             }
             apiPreferences.add(field)
-            add(field)
         }
-        apiField("translation_api_url", R.string.translation_api_url, R.string.translation_api_url_help,
+        apiField("translation_api_url", R.string.translation_api_url_help,
             options.apiUrl) { current, value -> current.copy(apiUrl = value) }
-        apiField("translation_api_model", R.string.translation_api_model, R.string.translation_api_model_help,
+        apiField("translation_api_model", R.string.translation_api_model_help,
             options.apiModel) { current, value -> current.copy(apiModel = value) }
-        apiField("translation_api_key", R.string.translation_api_key, R.string.translation_api_key_help,
+        apiField("translation_api_key", R.string.translation_api_key_help,
             options.apiKey, secret = true) { current, value -> current.copy(apiKey = value) }
-        val test = Preference(context).apply {
-            key = "translation_api_test"
-            setTitle(R.string.translation_api_test)
-            setSummary(R.string.translation_api_test_help)
+        val test = requirePreference<Preference>("translation_api_test").apply {
             setOnPreferenceClickListener {
                 if (apiTest?.isActive != true) apiTest = scope?.launch {
                     isEnabled = false
@@ -186,13 +151,8 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
             }
         }
         apiPreferences.add(test)
-        add(test)
         apiPreferences.forEach { it.isVisible = options.backend == TranslationBackend.LLM_API }
-        category(R.string.translation_category_reading)
-        sourceLanguage = ListPreference(context).apply {
-            key = "translation_source"
-            setTitle(R.string.translation_source)
-            setDialogTitle(R.string.translation_source)
+        sourceLanguage = requirePreference<ListPreference>("translation_source").apply {
             summaryProvider = Preference.SummaryProvider<ListPreference> {
                 "${it.entry}\n${getString(if (it.value == TranslationLanguages.AUTO_SOURCE)
                     R.string.translation_source_auto_help else R.string.translation_source_help)}"
@@ -207,11 +167,7 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 }
             }
         }
-        add(sourceLanguage)
-        targetLanguage = ListPreference(context).apply {
-            key = "translation_target"
-            setTitle(R.string.translation_target)
-            setDialogTitle(R.string.translation_target)
+        targetLanguage = requirePreference<ListPreference>("translation_target").apply {
             summaryProvider = Preference.SummaryProvider<ListPreference> {
                 val current = settings.read()
                 val name = it.entry?.toString().orEmpty()
@@ -230,13 +186,8 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 }
             }
         }
-        add(targetLanguage)
         refreshLanguages()
-        add(EditTextPreference(context).apply {
-            key = "translation_ahead"
-            setTitle(R.string.translation_ahead)
-            setDialogTitle(R.string.translation_ahead)
-            setDialogMessage(R.string.translation_ahead_help)
+        requirePreference<EditTextPreference>("translation_ahead").apply {
             text = options.ahead.toString()
             summaryProvider = Preference.SummaryProvider<EditTextPreference> {
                 val count = it.text?.toIntOrNull() ?: 2
@@ -278,32 +229,21 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                     false
                 } else { settings.save(settings.read().copy(ahead = count)); true }
             }
-        })
-        add(SwitchPreferenceCompat(context).apply {
-            key = "translation_inpaint"
-            setTitle(R.string.translation_inpaint)
-            setSummary(R.string.translation_inpaint_help)
+        }
+        requirePreference<SwitchPreference>("translation_inpaint").apply {
             isChecked = options.inpaint
             setOnPreferenceChangeListener { _, value -> settings.save(settings.read().copy(inpaint = value as Boolean)); true }
-        })
-        category(R.string.translation_category_storage)
-        add(SwitchPreferenceCompat(context).apply {
-            key = "translation_persist_downloaded"
-            setTitle(R.string.translation_persist_downloaded)
-            setSummary(R.string.translation_persist_downloaded_help)
+        }
+        requirePreference<SwitchPreference>("translation_persist_downloaded").apply {
             isChecked = options.persistDownloaded
             setOnPreferenceChangeListener { _, value ->
                 settings.save(settings.read().copy(persistDownloaded = value as Boolean)); true
             }
-        })
-        add(com.hippo.preference.ListPreference(context).apply {
-            key = "translation_cache_size"
-            setTitle(R.string.translation_cache_size)
-            dialogTitle = getString(R.string.translation_cache_size)
+        }
+        requirePreference<ListPreference>("translation_cache_size").apply {
             entries = TranslationSettings.CACHE_SIZES_MB.map { "$it MiB" }.toTypedArray()
             setEntryValues(TranslationSettings.CACHE_SIZES_MB.map { it.toString() }.toTypedArray())
             value = options.cacheSizeMb.toString()
-            summary = "%s"
             setOnPreferenceChangeListener { _, value ->
                 val size = value.toString().toIntOrNull()
                 if (size !in TranslationSettings.CACHE_SIZES_MB) false
@@ -313,11 +253,8 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                     true
                 }
             }
-        })
-        add(Preference(context).apply {
-            key = "translation_clear"
-            setTitle(R.string.translation_clear_cache)
-            setSummary(R.string.translation_cache_description)
+        }
+        requirePreference<Preference>("translation_clear").apply {
             setOnPreferenceClickListener {
                 val app = context.applicationContext
                 scope?.launch {
@@ -331,15 +268,10 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 }
                 true
             }
-        })
-        category(R.string.translation_category_about)
-        add(Preference(context).apply {
-            setTitle(R.string.translation_title)
-            setSummary(R.string.translation_explanation)
-            isSelectable = false
-        })
-        preferenceScreen = screen
+        }
     }
+
+    private fun <T : Preference> requirePreference(key: String): T = requireNotNull(findPreference<T>(key))
 
     override fun onViewCreated(view: android.view.View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -356,7 +288,7 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
             if (it == TranslationLanguages.AUTO_SOURCE) getString(R.string.translation_source_auto)
             else TranslationLanguages.displayName(it, locale)
         }.toTypedArray()
-        sourceLanguage.entryValues = TranslationLanguages.sources.toTypedArray()
+        sourceLanguage.setEntryValues(TranslationLanguages.sources.toTypedArray())
         sourceLanguage.value = options.source
         targetLanguage.entries = if (!mlKit) resources.getStringArray(R.array.translation_llm_target_entries) else codes.map { code ->
             when (code) {
@@ -366,7 +298,7 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 else -> TranslationLanguages.displayName(code, locale)
             }
         }.toTypedArray()
-        targetLanguage.entryValues = codes.toTypedArray()
+        targetLanguage.setEntryValues(codes.toTypedArray())
         targetLanguage.value = options.target
     }
 
