@@ -2,9 +2,9 @@
 <resources>
     <string name="sr_title">超分辨率</string>
     <string name="sr_settings">超分辨率设置与模型</string>
-    <string name="sr_settings_summary">waifu2x 2× · 支持与翻译覆盖层同时使用</string>
-    <string name="sr_description">画质优先保持灰阶准确，速度优先可能略微改变灰阶。waifu2x 2×（动漫 RGB，不降噪）。优先使用 Vulkan GPU 加速，不可用或失败时自动回退 CPU，也可手动选择仅 CPU。翻译继续识别原图，译文覆盖在超分底图上；保留缩放与滚动位置。按可用内存自动调整预算，翻页后回收上一页的超分结果。跳过动画。原始文件及分享、保存行为保持不变。</string>
-    <string name="sr_automatic">自动超分当前页</string>
+    <string name="sr_settings_summary">2× 放大 · 预处理页面 · 保存结果 · 与翻译兼容</string>
+    <string name="sr_description">waifu2x 将静态图片放大至 2×。默认速度优先，画质优先更接近原有灰阶。点击阅读器超分按钮开启，长按可处理完整画廊、重试本页或对比原图。翻译优先运行，两条流程都读取原图。内存只保留当前页结果，动画及超出内存预算的图片会跳过。</string>
+    <string name="sr_automatic">阅读时自动超分</string>
     <string name="sr_auto_on">自动超分：已开启（点击关闭）</string>
     <string name="sr_auto_off">自动超分：已关闭（点击开启）</string>
     <string name="sr_current">重新超分本页</string>
@@ -28,4 +28,26 @@
     <string name="sr_memory_budget">当前超分输出上限：%1$d MiB（自动调整）</string>
     <string name="sr_memory_unavailable">处理时可用内存不足，继续显示原图。可在其他图片任务结束后重试。</string>
     <string name="sr_failed">超分失败：%1$s</string>
+    <string name="sr_automatic_help">处理当前页及设定数量的后续页面。关闭后保留已保存的结果。</string>
+    <string name="sr_category_reading">阅读与处理</string>
+    <string name="sr_category_storage">结果与存储</string>
+    <string name="sr_category_models">模型管理</string>
+    <string name="sr_ahead">预处理后续页数</string>
+    <string name="sr_ahead_help">当前页 + 后续 %1$d 页（0～10）。长按阅读器超分按钮可处理完整画廊。</string>
+    <string name="sr_persist">持久保存超分结果</string>
+    <string name="sr_persist_help">将无损 PNG 保存在应用私有存储，重新打开画廊时复用。清理临时缓存不会删除这些结果；会额外占用磁盘，清除应用数据时删除。保留原始文件。</string>
+    <string name="sr_cache_limit">临时缓存上限</string>
+    <string name="sr_clear_cache">清理超分临时缓存</string>
+    <string name="sr_clear_saved">删除已保存的超分结果</string>
+    <string name="sr_clear_saved_help">删除所有画廊已保存的超分图片？原图和翻译结果会保留。</string>
+    <string name="sr_full_gallery">超分完整画廊</string>
+    <string name="sr_stop_full">停止完整画廊超分</string>
+    <string name="sr_stop_all">停止超分任务</string>
+    <string name="sr_wait_translation">等待翻译任务（翻译优先）</string>
+    <string name="sr_done">超分完成</string>
+    <string name="sr_failed_short">处理失败</string>
+    <string name="sr_source_unavailable">无法读取画廊原图</string>
+    <string name="sr_queue_progress">超分：%1$d / %2$d 页</string>
+    <string name="sr_page_progress">第 %1$d 页：%2$d%%</string>
+    <string name="sr_gallery_done">画廊超分完成：%1$d 页，失败 %2$d 页</string>
 </resources>

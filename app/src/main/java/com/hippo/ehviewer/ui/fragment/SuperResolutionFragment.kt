@@ -4,12 +4,15 @@ import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.preference.Preference
-import androidx.preference.PreferenceScreen
+import androidx.preference.PreferenceGroup
+import androidx.preference.PreferenceCategory
 import androidx.preference.ListPreference
 import androidx.preference.SwitchPreferenceCompat
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.superresolution.SuperResolutionModels
 import com.hippo.ehviewer.superresolution.SuperResolutionMemoryBudget
+import com.hippo.ehviewer.superresolution.SuperResolutionSettings
+import com.hippo.ehviewer.superresolution.SuperResolutionStore
 import com.hippo.ehviewer.translation.TranslationModels
 import com.hippo.ehviewer.translation.notifyModelDownloadNetwork
 import com.hippo.ehviewer.ui.SettingsActivity
@@ -47,9 +50,15 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
             isSelectable = false
         }
         screen.addPreference(info)
+        fun category(title: Int) = PreferenceCategory(requireContext()).apply {
+            setTitle(title)
+            screen.addPreference(this)
+        }
+        val reading = category(R.string.sr_category_reading)
         automatic = SwitchPreferenceCompat(requireContext()).apply {
             key = SuperResolutionModels.ENABLED
             setTitle(R.string.sr_automatic)
+            setSummary(R.string.sr_automatic_help)
             setDefaultValue(false)
             setOnPreferenceChangeListener { _, value ->
                 if (value == true && !models.store.ready()) {
@@ -59,7 +68,7 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
                 } else true
             }
         }
-        screen.addPreference(automatic)
+        reading.addPreference(automatic)
         acceleration = ListPreference(requireContext()).apply {
             key = SuperResolutionModels.BACKEND
             setTitle(R.string.sr_backend)
@@ -68,14 +77,50 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
             setDefaultValue(SuperResolutionModels.DEFAULT_BACKEND)
             summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
         }
-        screen.addPreference(acceleration)
-        action(screen, R.string.sr_download) {
+        reading.addPreference(acceleration)
+        reading.addPreference(ListPreference(requireContext()).apply {
+            key = SuperResolutionSettings.AHEAD
+            setTitle(R.string.sr_ahead)
+            entries = (0..10).map(Int::toString).toTypedArray()
+            entryValues = entries
+            setDefaultValue("2")
+            summaryProvider = Preference.SummaryProvider<ListPreference> {
+                getString(R.string.sr_ahead_help, it.value?.toIntOrNull() ?: 2)
+            }
+        })
+        val storage = category(R.string.sr_category_storage)
+        storage.addPreference(SwitchPreferenceCompat(requireContext()).apply {
+            key = SuperResolutionSettings.PERSIST
+            setTitle(R.string.sr_persist)
+            setSummary(R.string.sr_persist_help)
+            setDefaultValue(true)
+        })
+        storage.addPreference(ListPreference(requireContext()).apply {
+            key = SuperResolutionSettings.CACHE
+            setTitle(R.string.sr_cache_limit)
+            entryValues = arrayOf("64", "128", "256", "512", "1024", "2048", "4096", "8192")
+            entries = entryValues.map { "$it MiB" }.toTypedArray()
+            setDefaultValue("512")
+            summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
+        })
+        action(storage, R.string.sr_clear_cache) {
+            operate(getString(R.string.sr_clear_cache)) { SuperResolutionStore.clear(requireContext().applicationContext) }
+        }
+        action(storage, R.string.sr_clear_saved) {
+            AlertDialog.Builder(requireContext()).setMessage(R.string.sr_clear_saved_help)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    operate(getString(R.string.sr_clear_saved)) { SuperResolutionStore.clear(requireContext().applicationContext, persistent = true) }
+                }.show()
+        }
+        val modelSettings = category(R.string.sr_category_models)
+        action(modelSettings, R.string.sr_download) {
             operate(getString(R.string.sr_download)) {
                 notifyModelDownloadNetwork(requireContext().applicationContext)
                 models.download(::progress)
             }
         }
-        action(screen, R.string.sr_import) {
+        action(modelSettings, R.string.sr_import) {
             AlertDialog.Builder(requireContext()).setTitle(R.string.translation_image_import_mode)
                 .setItems(arrayOf(getString(R.string.translation_model_import_copy),
                     getString(R.string.translation_model_import_reference))) { _, which ->
@@ -83,10 +128,10 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
                     picker.launch(arrayOf("*/*"))
                 }.show()
         }
-        action(screen, R.string.sr_remove) {
+        action(modelSettings, R.string.sr_remove) {
             operate(getString(R.string.sr_remove)) { models.store.delete() }
         }
-        action(screen, R.string.sr_license) {
+        action(modelSettings, R.string.sr_license) {
             val license = requireContext().assets.open("super-resolution-notices.txt")
                 .bufferedReader().use { it.readText() } + "\n\n" +
                 requireContext().assets.open("super-resolution-vulkan-notices.txt")
@@ -94,11 +139,11 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
             AlertDialog.Builder(requireContext()).setTitle(R.string.sr_license).setMessage(license)
                 .setPositiveButton(android.R.string.ok, null).show()
         }
-        action(screen, android.R.string.cancel) { work?.cancel() }
+        action(modelSettings, android.R.string.cancel) { work?.cancel() }
         refresh()
     }
 
-    private fun action(screen: PreferenceScreen, title: Int, block: () -> Unit) {
+    private fun action(screen: PreferenceGroup, title: Int, block: () -> Unit) {
         val preference = Preference(requireContext()).apply {
             setTitle(title)
             setOnPreferenceClickListener { block(); true }

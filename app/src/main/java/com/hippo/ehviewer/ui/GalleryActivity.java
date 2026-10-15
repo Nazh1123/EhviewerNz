@@ -792,7 +792,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mTranslationController = new ReaderTranslationController(
                 this, mGalleryProvider, findViewById(R.id.quick_translation), mGalleryInfo);
         mSuperResolutionController = new com.hippo.ehviewer.superresolution.ReaderSuperResolutionController(
-                this, mGalleryProvider, findViewById(R.id.quick_super_resolution));
+                this, mGalleryProvider, findViewById(R.id.quick_super_resolution), mGalleryInfo);
         mGLRootView = (GLRootView) ViewUtils.$$(this, R.id.gl_root_view);
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();
@@ -1041,7 +1041,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     protected void onDestroy() {
         if (mSuperResolutionController != null) {
-            mSuperResolutionController.close();
+            mSuperResolutionController.close(isFinishing());
             mSuperResolutionController = null;
         }
         if (mPagePreview != null) { mPagePreview.close(); mPagePreview = null; }
@@ -1148,7 +1148,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mDismissingPagePreviewTouch = false;
         cancelPagePreview();
         if (mTranslationController != null) mTranslationController.pause(isFinishing());
-        if (mSuperResolutionController != null) mSuperResolutionController.pause();
+        if (mSuperResolutionController != null) mSuperResolutionController.pause(isFinishing());
         if (mOrientationEventListener != null) {
             mOrientationEventListener.disable();
         }

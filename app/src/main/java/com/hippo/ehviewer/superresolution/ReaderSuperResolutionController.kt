@@ -1,250 +1,115 @@
 package com.hippo.ehviewer.superresolution
 
 import android.content.Intent
-import android.graphics.Bitmap
 import android.view.View
 import android.widget.ImageButton
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.preference.PreferenceManager
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.hippo.ehviewer.R
+import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
-import com.hippo.ehviewer.translation.engine.SuperResolution
-import com.hippo.ehviewer.translation.engine.SuperResolutionBackend
-import com.hippo.ehviewer.translation.engine.SuperResolutionPipeline
 import com.hippo.ehviewer.ui.SettingsActivity
 import com.hippo.lib.image.Image
-import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.withLock
 
-/** Foreground, current-page-only work; translation continues to read the original source. */
-class ReaderSuperResolutionController(
+/** Detachable controls. Enhancement and translation always read source-provider originals. */
+class ReaderSuperResolutionController @JvmOverloads constructor(
     private val activity: AppCompatActivity,
     private val provider: GalleryProvider2,
     private val button: ImageButton,
+    galleryInfo: GalleryInfo? = null,
 ) : AutoCloseable {
-    private val context = activity.applicationContext
-    private val preferences = PreferenceManager.getDefaultSharedPreferences(context)
-    private val models = SuperResolutionModels(context)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    internal val session = SuperResolutionTasks.acquire(activity.applicationContext, provider, galleryInfo)
+    private val panel = activity.findViewById<View>(R.id.super_resolution_progress_panel)
     private val status = activity.findViewById<TextView>(R.id.super_resolution_progress)
-    private var job: Job? = null
-    private var current = -1
-    private var generation = 0
-    private var paused = false
+    private val pageBar = activity.findViewById<ProgressBar>(R.id.super_resolution_page_progress_bar)
+    private val queueBar = activity.findViewById<ProgressBar>(R.id.super_resolution_queue_progress_bar)
     private var closed = false
-    private var failedPage = -1
-    private var enabled = preferences.getBoolean(SuperResolutionModels.ENABLED, false)
-    private var session = SuperResolutionSessionCache<SuperResolution>()
-
+    private val observer = object : GallerySuperResolutionSession.Reader {
+        override fun changed() { if (!closed) update() }
+        override fun display(page: Int, image: Image) {
+            provider.setSuperResolutionCacheLimit(image.width.toLong() * image.height * 4)
+            provider.setEnhancedPage(page, image)
+        }
+        override fun hasPage(page: Int) = provider.hasEnhancedPage(page)
+        override fun clear() { provider.clearEnhancedPages() }
+    }
     init {
         button.setOnClickListener { toggle() }
-        button.setOnLongClickListener { showMenu(current); true }
-        status.setOnClickListener { showMenu(current) }
-        updateButton()
-    }
-
-    private fun updateButton() {
-        button.isSelected = enabled
-        button.alpha = if (enabled) 1f else 0.65f
-        button.contentDescription = activity.getString(if (enabled) R.string.sr_auto_on else R.string.sr_auto_off)
-    }
-
-    private fun cancel() { generation++; job?.cancel(); job = null }
-
-    fun onPageChanged(page: Int) {
-        if (closed || current == page) return
-        cancel()
-        current = page
-        provider.retainEnhancedPage(page)
-        failedPage = -1
-        status.visibility = View.GONE
-        if (enabled) enqueue(page)
-    }
-
-    fun onPageReady(page: Int) {
-        if (!closed && page == current && enabled && failedPage != page) enqueue(page)
-    }
-
-    fun onPageReload(page: Int) {
-        cancel()
-        failedPage = -1
-        provider.removeEnhancedPage(page)
-        status.visibility = View.GONE
-    }
-
-    fun pause() { paused = true; cancel(); retireSession(); status.visibility = View.GONE }
-
-    private fun retireSession() {
-        val retired = session
-        session = SuperResolutionSessionCache()
-        // Disposal must survive activity-scope cancellation, and wait for the
-        // canceled native tile on IO. Never block the UI or close a newer session.
-        scope.launch(NonCancellable + Dispatchers.IO) {
-            SuperResolutionModels.lock.withLock { retired.close() }
+        button.setOnLongClickListener { showMenu(session.current); true }
+        panel.setOnClickListener { showMenu(session.current) }
+        ViewCompat.setOnApplyWindowInsetsListener(panel) { view, insets ->
+            val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+            view.translationY = -safe.bottom.toFloat()
+            insets
         }
+        ViewCompat.requestApplyInsets(panel)
+        session.attach(observer)
+        update()
     }
-    fun resume() {
-        if (closed) return
-        paused = false
-        val setting = preferences.getBoolean(SuperResolutionModels.ENABLED, false)
-        if (enabled && !setting) provider.clearEnhancedPages()
-        enabled = setting
-        failedPage = -1
-        updateButton()
-        if (enabled) enqueue(current)
+    private fun update() {
+        button.isSelected = session.enabled
+        button.alpha = if (session.enabled) 1f else 0.65f
+        button.contentDescription = activity.getString(if (session.enabled) R.string.sr_auto_on else R.string.sr_auto_off)
+        val message = session.message ?: if (session.enabled) session.states[session.current]?.let { activity.getString(it) } else null
+        panel.visibility = if (session.enabled || message != null) View.VISIBLE else View.GONE
+        status.text = buildString {
+            append(activity.getString(R.string.sr_queue_progress, session.completed, session.total))
+            session.activePage?.let { append(" · "); append(activity.getString(R.string.sr_page_progress, it + 1, session.progress)) }
+            message?.let { append('\n'); append(it) }
+        }
+        pageBar.progress = session.progress
+        pageBar.contentDescription = session.activePage?.let { activity.getString(R.string.sr_page_progress, it + 1, session.progress) }
+        queueBar.max = session.total.coerceAtLeast(1)
+        queueBar.progress = session.completed
+        queueBar.contentDescription = activity.getString(R.string.sr_queue_progress, session.completed, session.total)
     }
-
-    private fun showStatus(message: String) {
-        status.text = message
-        status.visibility = View.VISIBLE
-    }
-
     private fun toggle() {
         if (closed) return
-        if (!enabled && !models.store.ready()) { showSettings(); return }
-        enabled = !enabled
-        preferences.edit().putBoolean(SuperResolutionModels.ENABLED, enabled).apply()
-        cancel()
-        if (!enabled) retireSession()
-        failedPage = -1
-        provider.clearEnhancedPages()
-        status.visibility = View.GONE
-        updateButton()
-        if (enabled) enqueue(current)
+        if (session.enabled) { session.settings.automatic = false; session.disable() }
+        else if (session.enable()) session.settings.automatic = true
+        else showSettings()
     }
-
+    fun onPageChanged(page: Int) {
+        if (closed) return
+        provider.retainEnhancedPage(page)
+        session.pageChanged(page)
+    }
+    fun onPageReady(page: Int) { if (!closed && page == session.current) session.pageChanged(page) }
+    fun onPageReload(page: Int) { if (!closed) session.invalidate(page) }
+    @JvmOverloads fun pause(leavingGallery: Boolean = false) { if (!closed) session.pause(leavingGallery) }
+    fun resume() { if (!closed) session.resume() }
     fun showMenu(page: Int) {
         if (closed || page < 0) return
-        val items = arrayOf(
-            activity.getString(if (enabled) R.string.sr_auto_on else R.string.sr_auto_off),
+        AlertDialog.Builder(activity).setTitle(R.string.sr_title).setItems(arrayOf(
+            activity.getString(if (session.enabled) R.string.sr_auto_on else R.string.sr_auto_off),
             activity.getString(R.string.sr_current),
+            activity.getString(if (session.fullGallery) R.string.sr_stop_full else R.string.sr_full_gallery),
             activity.getString(R.string.sr_compare),
-            activity.getString(R.string.sr_settings))
-        AlertDialog.Builder(activity).setTitle(R.string.sr_title).setItems(items) { _, which ->
+            activity.getString(R.string.sr_settings),
+        )) { _, which ->
             when (which) {
                 0 -> toggle()
-                1 -> { cancel(); failedPage = -1; provider.removeEnhancedPage(page); enqueue(page, manual = true) }
-                2 -> provider.toggleEnhancedPage(page)
-                3 -> showSettings()
+                1 -> session.retry(page)
+                2 -> if (session.fullGallery) session.disable() else session.full()
+                3 -> provider.toggleEnhancedPage(page)
+                4 -> showSettings()
             }
         }.show()
     }
-
     private fun showSettings() {
-        activity.startActivity(Intent(activity, SettingsActivity::class.java)
-            .putExtra(SettingsActivity.EXTRA_SUPER_RESOLUTION, true))
+        activity.startActivity(Intent(activity, SettingsActivity::class.java).putExtra(SettingsActivity.EXTRA_SUPER_RESOLUTION, true))
     }
-
-    private fun enqueue(page: Int, manual: Boolean = false) {
-        if (closed || paused || page < 0 || (!manual && page != current) || job?.isActive == true) return
-        if (provider.hasEnhancedPage(page)) { status.visibility = View.GONE; return }
-        if (!models.store.ready()) { showStatus(activity.getString(R.string.sr_models_required)); return }
-        val admittedBudget = SuperResolutionMemoryBudget.current(context)
-        when (provider.getSuperResolutionStatus(page, admittedBudget)) {
-            -1 -> { showStatus(activity.getString(R.string.sr_animation)); return }
-            -2 -> { showBudgetExceeded(page, admittedBudget); return }
-            0 -> return // onPageReady will retry when the reader's decode has arrived.
-        }
-        val ticket = generation
-        val admittedSession = session
-        job = scope.launch {
-            var output: Bitmap? = null
-            try {
-                delay(250) // Fast navigation should not admit inference on transient pages.
-                showStatus(activity.getString(R.string.sr_preparing))
-                withContext(Dispatchers.IO) {
-                    SuperResolutionModels.lock.withLock {
-                        ensureActive()
-                        val budget = minOf(admittedBudget, SuperResolutionMemoryBudget.current(context))
-                        if (provider.getSuperResolutionStatus(page, budget) == -2) throw BudgetExceeded(budget)
-                        provider.setSuperResolutionCacheLimit(budget)
-                        val source = provider.getSuperResolutionInput(page, budget) ?: return@withLock
-                        try {
-                            val mode = preferences.getString(SuperResolutionModels.BACKEND,
-                                SuperResolutionModels.DEFAULT_BACKEND)
-                            val backend = if (mode == "cpu")
-                                SuperResolutionBackend.CPU else SuperResolutionBackend.AUTO
-                            val pipeline = if (mode == "auto_fast") SuperResolutionPipeline.GPU_FP16
-                                else SuperResolutionPipeline.GPU_FP32
-                            val verifiedFiles = models.files() // Revalidate external model leases on every page.
-                            val engine = admittedSession.acquire("$backend:$pipeline") {
-                                SuperResolution(verifiedFiles, backend, pipeline)
-                            }
-                            try {
-                                output = engine.upscale(source, budget) { done, total ->
-                                    activity.runOnUiThread {
-                                        if (!closed && generation == ticket && (manual || current == page) && !paused)
-                                            showStatus(activity.getString(when {
-                                                engine.usingVulkan -> R.string.sr_progress_gpu
-                                                engine.fellBack -> R.string.sr_progress_fallback
-                                                else -> R.string.sr_progress
-                                            }, done * 100 / total))
-                                    }
-                                }
-                            } catch (error: CancellationException) {
-                                throw error // Keep weights/shaders for the next foreground page.
-                            } catch (error: Throwable) {
-                                admittedSession.clear()
-                                throw error
-                            }
-                        } finally { source.recycle() }
-                    }
-                }
-                ensureActive()
-                if (generation == ticket && (manual || current == page) && !closed) {
-                    output?.let { bitmap ->
-                        val image = checkNotNull(Image.create(bitmap)) { "Cannot create enhanced reader image" }
-                        provider.setEnhancedPage(page, image)
-                        output = null // Cache now owns the bitmap; GL callbacks take their own leases.
-                    }
-                    status.visibility = View.GONE
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: BudgetExceeded) {
-                if (!closed && generation == ticket) {
-                    failedPage = page
-                    showBudgetExceeded(page, error.budget)
-                }
-            } catch (error: Exception) {
-                if (!closed && generation == ticket) {
-                    failedPage = page
-                    showStatus(activity.getString(R.string.sr_failed, error.message.orEmpty()))
-                }
-            } catch (error: LinkageError) {
-                if (!closed && generation == ticket) {
-                    failedPage = page
-                    showStatus(activity.getString(R.string.sr_failed, error.message.orEmpty()))
-                }
-            } catch (error: OutOfMemoryError) {
-                if (!closed && generation == ticket) {
-                    failedPage = page
-                    showStatus(activity.getString(R.string.sr_memory_unavailable))
-                }
-            } finally {
-                output?.recycle()
-            }
-        }
-    }
-
-    private class BudgetExceeded(val budget: Long) : RuntimeException()
-
-    private fun showBudgetExceeded(page: Int, budget: Long) {
-        val size = provider.getSuperResolutionDimensions(page)
-        val required = (size[0].toLong() * size[1] * 16 + SuperResolutionMemoryBudget.MIB - 1) /
-            SuperResolutionMemoryBudget.MIB
-        showStatus(activity.getString(R.string.sr_large, size[0], size[1], required,
-            budget / SuperResolutionMemoryBudget.MIB))
-    }
-
-    override fun close() {
+    override fun close() = close(true)
+    fun close(leavingGallery: Boolean) {
+        if (closed) return
         closed = true
-        cancel()
-        retireSession()
-        scope.cancel()
-        status.visibility = View.GONE
+        session.detach(observer, leavingGallery)
+        if (!session.fullGallery && leavingGallery) SuperResolutionTasks.release(session)
+        panel.visibility = View.GONE
         provider.clearEnhancedPages()
     }
 }

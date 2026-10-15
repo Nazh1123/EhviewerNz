@@ -298,7 +298,7 @@ internal class GalleryTranslationSession(
                 withContext(Dispatchers.Main) {
                     turn = TranslationTasks.scheduler.acquire { schedulingPriority() }
                 }
-                TranslationRuntime.lock.withLock {
+                TranslationRuntime.withTranslationWork {
                     TranslationRuntime.closeIdleModels(this@GalleryTranslationSession)
                     withContext(Dispatchers.Main) {
                         if (!sourceStarted) {

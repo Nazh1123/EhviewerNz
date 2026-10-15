@@ -17,12 +17,6 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <Preference
-        android:key="super_resolution_settings"
-        android:title="@string/sr_title"
-        android:summary="@string/sr_settings_summary"
-        android:fragment="com.hippo.ehviewer.ui.fragment.SuperResolutionFragment" />
-
 <!--    <com.hippo.preference.ListPreference-->
 <!--        android:defaultValue="0"-->
 <!--        android:key="screen_rotation"-->

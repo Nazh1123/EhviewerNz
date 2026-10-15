@@ -296,6 +296,13 @@
             android:foregroundServiceType="dataSync"
             android:label="@string/translation_service_label" />
 
+        <service
+            android:name=".superresolution.SuperResolutionService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="dataSync"
+            android:label="@string/sr_title" />
+
         <provider
             android:name="com.hippo.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
