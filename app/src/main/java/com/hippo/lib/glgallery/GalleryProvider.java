@@ -45,6 +45,10 @@ public abstract class GalleryProvider {
 
     private final ImageCache mImageCache = new ImageCache();
     private final ImageCache mTranslatedCache = new ImageCache();
+    private final ImageCache mEnhancedCache = new ImageCache(
+            (int) com.hippo.ehviewer.translation.engine.SuperResolution.DEFAULT_OUTPUT_BYTES);
+    private final java.util.Set<Integer> mUnenhancedPages = ConcurrentHashMap.newKeySet();
+    private final java.util.Set<Integer> mSuperResolutionAnimations = ConcurrentHashMap.newKeySet();
     private volatile boolean mShowTranslations;
     private final java.util.Set<Integer> mOriginalPages = ConcurrentHashMap.newKeySet();
     private final ConcurrentHashMap<Integer, Integer> mAnimatedWebpDecodeModes =
@@ -67,6 +71,9 @@ public abstract class GalleryProvider {
         OSUtils.checkMainLoop();
         mImageCache.evictAll();
         mTranslatedCache.evictAll();
+        mEnhancedCache.evictAll();
+        mUnenhancedPages.clear();
+        mSuperResolutionAnimations.clear();
         mOriginalPages.clear();
     }
 
@@ -98,7 +105,93 @@ public abstract class GalleryProvider {
     }
 
     public void removeCache(int index) {
+        removeEnhancedPage(index);
+        mSuperResolutionAnimations.remove(index);
         mImageCache.remove(index);
+    }
+
+    /** Full-size independent source copy. Never reads translations or enhanced display pixels. */
+    public android.graphics.Bitmap getSuperResolutionInput(int index) {
+        return getSuperResolutionInput(index,
+                com.hippo.ehviewer.translation.engine.SuperResolution.DEFAULT_OUTPUT_BYTES);
+    }
+
+    public android.graphics.Bitmap getSuperResolutionInput(int index, long maxOutputBytes) {
+        ImageWrapper image;
+        synchronized (mImageCache) {
+            image = mImageCache.getLive(index);
+            if (image == null || image.getAnimated() || image.isControllableAnimationSource() ||
+                    !com.hippo.ehviewer.translation.engine.SuperResolution.Companion.accepts(
+                            image.getWidth(), image.getHeight(), maxOutputBytes) || !image.obtain()) return null;
+        }
+        try { return image.createPreview(Math.max(image.getWidth(), image.getHeight())); }
+        finally { image.release(); }
+    }
+
+    public boolean hasEnhancedPage(int index) { return mEnhancedCache.getLive(index) != null; }
+
+    /** 0 = source pending, 1 = ready, -1 = animation, -2 = over memory budget. */
+    public int getSuperResolutionStatus(int index) {
+        return getSuperResolutionStatus(index,
+                com.hippo.ehviewer.translation.engine.SuperResolution.DEFAULT_OUTPUT_BYTES);
+    }
+
+    public int getSuperResolutionStatus(int index, long maxOutputBytes) {
+        if (mSuperResolutionAnimations.contains(index)) return -1;
+        synchronized (mImageCache) {
+            ImageWrapper image = mImageCache.getLive(index);
+            if (image == null) return 0;
+            return com.hippo.ehviewer.translation.engine.SuperResolution.Companion.accepts(
+                    image.getWidth(), image.getHeight(), maxOutputBytes) ? 1 : -2;
+        }
+    }
+
+    public int[] getSuperResolutionDimensions(int index) {
+        synchronized (mImageCache) {
+            ImageWrapper image = mImageCache.getLive(index);
+            return image == null ? new int[]{0, 0} : new int[]{image.getWidth(), image.getHeight()};
+        }
+    }
+
+    public void setSuperResolutionCacheLimit(long bytes) {
+        mEnhancedCache.resize((int) Math.max(1, Math.min(bytes,
+                com.hippo.ehviewer.translation.engine.SuperResolution.MAX_OUTPUT_BYTES)));
+    }
+
+    /** Reclaim previous enhanced pages before allocating another full-size result. */
+    public void retainEnhancedPage(int index) {
+        for (Integer page : mEnhancedCache.snapshot().keySet()) {
+            if (page != index) removeEnhancedPage(page);
+        }
+    }
+
+    public void setEnhancedPage(int index, Image image) {
+        mUnenhancedPages.remove(index);
+        mEnhancedCache.add(index, new ImageWrapper(image));
+        notifyOverlayChanged(index);
+    }
+
+    public ImageWrapper getEnhancedPage(int index) {
+        return mUnenhancedPages.contains(index) ? null : mEnhancedCache.getLive(index);
+    }
+
+    public void toggleEnhancedPage(int index) {
+        if (!hasEnhancedPage(index)) return;
+        if (!mUnenhancedPages.add(index)) mUnenhancedPages.remove(index);
+        notifyOverlayChanged(index);
+    }
+
+    public void removeEnhancedPage(int index) {
+        mEnhancedCache.remove(index);
+        mUnenhancedPages.remove(index);
+        notifyOverlayChanged(index);
+    }
+
+    public void clearEnhancedPages() {
+        java.util.Set<Integer> pages = mEnhancedCache.snapshot().keySet();
+        mEnhancedCache.evictAll();
+        mUnenhancedPages.clear();
+        for (Integer index : pages) notifyOverlayChanged(index);
     }
 
     /** Preview worker only: borrow a cached original without requesting another reader decode. */
@@ -158,6 +251,8 @@ public abstract class GalleryProvider {
     }
 
     public void notifyPageSucceed(int index, Image image) {
+        if (image.getAnimated() || image.getControllableAnimationSource()) mSuperResolutionAnimations.add(index);
+        else mSuperResolutionAnimations.remove(index);
         ImageWrapper imageWrapper = new ImageWrapper(image);
         mImageCache.add(index, imageWrapper);
         notifyPageSucceed(index, imageWrapper);
@@ -324,6 +419,8 @@ public abstract class GalleryProvider {
         public ImageCache() {
             super((int) MathUtils.clamp(OSUtils.getTotalMemory() / 16, MIN_CACHE_SIZE, MAX_CACHE_SIZE));
         }
+
+        public ImageCache(int bytes) { super(bytes); }
 
         public synchronized ImageWrapper getLive(Integer key) {
             ImageWrapper image = get(key);

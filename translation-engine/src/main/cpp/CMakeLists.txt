@@ -13,7 +13,10 @@ set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O2")
 
 set(NCNN_SHARED_LIB OFF CACHE BOOL "" FORCE)
-set(NCNN_VULKAN OFF CACHE BOOL "" FORCE)
+set(NCNN_VULKAN ON CACHE BOOL "" FORCE)
+# Load the system Vulkan driver dynamically so CPU-only devices can still load OCR.
+set(NCNN_SIMPLEVK ON CACHE BOOL "" FORCE)
+set(NCNN_SYSTEM_GLSLANG OFF CACHE BOOL "" FORCE)
 set(NCNN_SIMPLEOMP ON CACHE BOOL "" FORCE)
 set(NCNN_OPENMP ON CACHE BOOL "" FORCE)
 set(NCNN_RUNTIME_CPU ON CACHE BOOL "" FORCE)
@@ -29,15 +32,33 @@ set(NCNN_INSTALL_SDK OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(ncnn
     URL https://codeload.github.com/Tencent/ncnn/tar.gz/refs/tags/20260526
     URL_HASH SHA256=da1ade826bc22858a9fb87ae052789bbd614d042b3ec2c22e6544ca83db6bc04)
-FetchContent_MakeAvailable(ncnn)
+FetchContent_GetProperties(ncnn)
+if(NOT ncnn_POPULATED)
+    FetchContent_Populate(ncnn)
+endif()
+# GitHub source archives omit submodules. Pin ncnn 20260526's exact glslang commit.
+FetchContent_Declare(ehnz_glslang
+    URL https://codeload.github.com/nihui/glslang/tar.gz/fe88f421038e1bb0a25cd5c1b2dfe505db82d08f
+    URL_HASH SHA256=dc78c7f2c479779db66c60582bf8c4173b75b89f689b7edaff3a97d8820dbecd
+    SOURCE_DIR ${ncnn_SOURCE_DIR}/glslang)
+FetchContent_GetProperties(ehnz_glslang)
+if(NOT ehnz_glslang_POPULATED)
+    FetchContent_Populate(ehnz_glslang)
+endif()
+add_subdirectory(${ncnn_SOURCE_DIR} ${ncnn_BINARY_DIR})
 # Android provides pthread entry points in libc.
 foreach(property LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
     get_target_property(ncnn_links ncnn ${property})
     list(REMOVE_ITEM ncnn_links pthread)
     set_target_properties(ncnn PROPERTIES ${property} "${ncnn_links}")
 endforeach()
-add_library(ehnz_image SHARED image_jni.cpp)
-target_link_libraries(ehnz_image PRIVATE ncnn log)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sr_preproc.comp" SR_PREPROC)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/sr_postproc.comp" SR_POSTPROC)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS sr_preproc.comp sr_postproc.comp)
+configure_file(sr_shaders.h.in "${CMAKE_CURRENT_BINARY_DIR}/sr_shaders.h" @ONLY)
+add_library(ehnz_image SHARED image_jni.cpp sr_vulkan.cpp)
+target_include_directories(ehnz_image PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(ehnz_image PRIVATE ncnn log jnigraphics)
 target_link_options(ehnz_image PRIVATE "-Wl,-z,max-page-size=16384")
 
 set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
@@ -79,6 +100,17 @@ target_link_libraries(ehnz_llama PRIVATE llama log dl)
 target_link_options(ehnz_llama PRIVATE "-Wl,-z,max-page-size=16384")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # Independent pinned upstream implementation for same-device comparison only.
+    # No reference implementation or TTA shaders are compiled into release builds.
+    set(SR_REFERENCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../androidTest/cpp/upstream")
+    foreach(shader waifu2x_preproc waifu2x_postproc waifu2x_preproc_tta waifu2x_postproc_tta)
+        file(READ "${SR_REFERENCE_DIR}/${shader}.comp" REFERENCE_SHADER HEX)
+        string(REGEX REPLACE "(..)" "0x\\1," REFERENCE_SHADER_BYTES "${REFERENCE_SHADER}")
+        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${shader}.comp.hex.h"
+            "static const char ${shader}_comp_data[] = {${REFERENCE_SHADER_BYTES}};")
+    endforeach()
+    target_sources(ehnz_image PRIVATE "${SR_REFERENCE_DIR}/waifu2x.cpp" ../../androidTest/cpp/sr_reference_jni.cpp)
+    target_include_directories(ehnz_image PRIVATE "${SR_REFERENCE_DIR}")
     add_library(ehnz_translation_test SHARED ../../test/cpp/cpu_affinity_jni.cpp)
     target_link_libraries(ehnz_translation_test PRIVATE dl)
     target_link_options(ehnz_translation_test PRIVATE "-Wl,-z,max-page-size=16384")

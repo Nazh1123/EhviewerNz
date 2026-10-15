@@ -19,5 +19,8 @@
 # JNI exports use the class and native method names.
 -keep class com.hippo.ehviewer.translation.engine.NativeLlm { *; }
 -keep class com.hippo.ehviewer.translation.engine.ImageInference { *; }
+-keep class com.hippo.ehviewer.translation.engine.SuperResolutionInference { *; }
+-keep interface com.hippo.ehviewer.translation.engine.SuperResolutionProgress { *; }
+-keepclassmembers class * implements com.hippo.ehviewer.translation.engine.SuperResolutionProgress { public boolean onProgress(int, int); }
 -keep class com.hippo.ehviewer.translation.engine.NativePrefixCache { *; }
 -keep class com.hippo.ehviewer.translation.engine.TranslationOutputLimitException { *; }

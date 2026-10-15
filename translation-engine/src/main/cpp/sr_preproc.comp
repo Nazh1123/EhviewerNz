@@ -1,0 +1,26 @@
+// Adapted from nihui/waifu2x-ncnn-vulkan (MIT), revision 64914665.
+// Packed Android RGBA input, white alpha composition, replicated seven-pixel border.
+#version 450
+layout(binding = 0) readonly buffer Source { uint pixels[]; };
+layout(binding = 1) writeonly buffer Tensor { sfp values[]; };
+layout(push_constant) uniform Params {
+    int width; int height; int outWidth; int outHeight; int outStep;
+    int cropX; int cropY; int premultiplied;
+} p;
+void main() {
+    int x = int(gl_GlobalInvocationID.x);
+    int y = int(gl_GlobalInvocationID.y);
+    int c = int(gl_GlobalInvocationID.z);
+    if (x >= p.outWidth || y >= p.outHeight || c >= 3) return;
+    int sx = clamp(x + p.cropX, 0, p.width - 1);
+    int sy = clamp(y + p.cropY, 0, p.height - 1);
+    uint rgba = pixels[sy * p.width + sx];
+    float alpha = float(rgba >> 24) * (1.0 / 255.0);
+    float value = float((rgba >> (c * 8)) & 255u) * (1.0 / 255.0);
+    // Bitmap.getPixels() exposes rounded, unpremultiplied 8-bit channels. Match
+    // that quantization before white composition instead of multiplying twice.
+    if (p.premultiplied != 0 && alpha > 0.0 && alpha < 1.0)
+        value = clamp(floor(value / alpha * 255.0 + 0.5), 0.0, 255.0) * (1.0 / 255.0);
+    float composed = value * alpha + 1.0 - alpha;
+    buffer_st1(values, c * p.outStep + y * p.outWidth + x, composed);
+}

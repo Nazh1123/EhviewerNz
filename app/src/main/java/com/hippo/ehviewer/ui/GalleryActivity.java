@@ -222,6 +222,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private GalleryProvider2 mGalleryProvider;
     private ReaderTranslationController mTranslationController;
+    private com.hippo.ehviewer.superresolution.ReaderSuperResolutionController mSuperResolutionController;
     @Nullable
     private GalleryAdapter mGalleryAdapter;
 
@@ -790,6 +791,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         setContentView(R.layout.activity_gallery);
         mTranslationController = new ReaderTranslationController(
                 this, mGalleryProvider, findViewById(R.id.quick_translation), mGalleryInfo);
+        mSuperResolutionController = new com.hippo.ehviewer.superresolution.ReaderSuperResolutionController(
+                this, mGalleryProvider, findViewById(R.id.quick_super_resolution));
         mGLRootView = (GLRootView) ViewUtils.$$(this, R.id.gl_root_view);
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();
@@ -949,6 +952,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSize = mGalleryProvider.size();
         mCurrentIndex = startPage;
         if (mTranslationController != null) mTranslationController.onPageChanged(startPage);
+        if (mSuperResolutionController != null) mSuperResolutionController.onPageChanged(startPage);
         if (mGalleryView != null) {
             mLayoutMode = mGalleryView.getLayoutMode();
         }
@@ -1036,6 +1040,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        if (mSuperResolutionController != null) {
+            mSuperResolutionController.close();
+            mSuperResolutionController = null;
+        }
         if (mPagePreview != null) { mPagePreview.close(); mPagePreview = null; }
         if (mTranslationController != null) {
             mTranslationController.close(isFinishing());
@@ -1140,6 +1148,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mDismissingPagePreviewTouch = false;
         cancelPagePreview();
         if (mTranslationController != null) mTranslationController.pause(isFinishing());
+        if (mSuperResolutionController != null) mSuperResolutionController.pause();
         if (mOrientationEventListener != null) {
             mOrientationEventListener.disable();
         }
@@ -1165,6 +1174,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         applyPagePreviewSetting();
         applyReaderKeyProfile();
         if (mTranslationController != null) mTranslationController.resume();
+        if (mSuperResolutionController != null) mSuperResolutionController.resume();
         if (mOrientationEventListener != null && mOrientationEventListener.canDetectOrientation()) {
             mOrientationEventListener.enable();
         }
@@ -2069,6 +2079,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public void onPageImageReady(int index) {
         SimpleHandler.getInstance().post(() -> {
             if (mTranslationController != null) mTranslationController.onPageReady(index);
+            if (mSuperResolutionController != null) mSuperResolutionController.onPageReady(index);
         });
         boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
         int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
@@ -2785,7 +2796,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         builder.setTitle(resources.getString(R.string.page_menu_title, page + 1));
 
         final CharSequence[] items;
-        items = new CharSequence[]{getString(R.string.page_menu_refresh), getString(R.string.page_menu_share), getString(R.string.page_menu_save), getString(R.string.page_menu_save_to), getString(R.string.translation_title)};
+        items = new CharSequence[]{getString(R.string.page_menu_refresh), getString(R.string.page_menu_share), getString(R.string.page_menu_save), getString(R.string.page_menu_save_to), getString(R.string.translation_title), getString(R.string.sr_title)};
         pageDialogListener(builder, items, page);
         builder.show();
     }
@@ -2799,6 +2810,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             switch (which) {
                 case 0: // Refresh
                     if (mTranslationController != null) mTranslationController.onPageReload(page);
+                    if (mSuperResolutionController != null) mSuperResolutionController.onPageReload(page);
                     mGalleryProvider.removeCache(page);
                     mGalleryProvider.forceRequest(page);
                     break;
@@ -2813,6 +2825,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case 4:
                     if (mTranslationController != null) mTranslationController.showMenu(page);
+                    break;
+                case 5:
+                    if (mSuperResolutionController != null) mSuperResolutionController.showMenu(page);
                     break;
             }
         });
@@ -3850,6 +3865,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 case KEY_CURRENT_INDEX:
                     GalleryActivity.this.mCurrentIndex = mValue;
                     if (mTranslationController != null) mTranslationController.onPageChanged(mValue);
+                    if (mSuperResolutionController != null) mSuperResolutionController.onPageChanged(mValue);
                     updateLocalGalleryHistoryPage(mValue);
                     updateSlider();
                     updateProgress();

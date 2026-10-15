@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/nihui/waifu2x-ncnn-vulkan",
+  "revision": "64914665c45893135c9e50c1c296170a121b9f77",
+  "model": "models-upconv_7_anime_style_art_rgb/scale2.0x_model",
+  "models": [
+    {"name": "scale2.0x_model.param", "size": 1047, "sha256": "413195ffde05b4d43807792c6c020c916cecdf25dcf002ee83f5e28d5cc246c6"},
+    {"name": "scale2.0x_model.bin", "size": 1106248, "sha256": "27d880903ff81390a3b4a900b67af3381c465279e34297546c9a58781855f7ef"}
+  ]
+}

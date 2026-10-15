@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sr_title">超解析度</string>
+    <string name="sr_settings">超解析度設定與模型</string>
+    <string name="sr_settings_summary">waifu2x 2× · 可與翻譯覆蓋層同時使用</string>
+    <string name="sr_description">畫質優先保持灰階準確，速度優先可能略微改變灰階。waifu2x 2×（動漫 RGB，不降噪）。優先使用 Vulkan GPU 加速，無法使用或失敗時自動改用 CPU，也可手動選擇僅 CPU。翻譯繼續辨識原圖，譯文覆蓋在超解析度底圖上；保留縮放與捲動位置。依可用記憶體自動調整預算，翻頁後回收上一頁的處理結果。略過動畫。原始檔案及分享、儲存行為保持不變。</string>
+    <string name="sr_automatic">自動提升目前頁面的解析度</string>
+    <string name="sr_auto_on">自動超解析度：已開啟（點擊關閉）</string>
+    <string name="sr_auto_off">自動超解析度：已關閉（點擊開啟）</string>
+    <string name="sr_current">重新處理本頁</string>
+    <string name="sr_compare">切換原圖 / 超解析度圖片比較</string>
+    <string name="sr_download">下載 waifu2x 模型（1.06 MiB）</string>
+    <string name="sr_import">匯入 .param 與 .bin 模型檔案</string>
+    <string name="sr_license">模型來源與授權條款</string>
+    <string name="sr_remove">移除模型 / 外部參照</string>
+    <string name="sr_models_ready">模型已就緒</string>
+    <string name="sr_models_required">請先下載或匯入 waifu2x 模型</string>
+    <string name="sr_progress">CPU 超解析度：%1$d%%</string>
+    <string name="sr_backend">超解析度加速方式</string>
+    <string name="sr_backend_auto">自動（GPU，畫質優先）</string>
+    <string name="sr_backend_fast">自動（GPU，速度優先）</string>
+    <string name="sr_backend_cpu">僅 CPU</string>
+    <string name="sr_preparing">正在準備超解析度元件…</string>
+    <string name="sr_progress_gpu">GPU / Vulkan 超解析度：%1$d%%</string>
+    <string name="sr_progress_fallback">GPU 無法使用或失敗，已改用 CPU：%1$d%%</string>
+    <string name="sr_animation">動畫圖片暫不提升解析度</string>
+    <string name="sr_large">%1$d×%2$d 圖片的 2× 輸出需要 %3$d MiB，目前預算為 %4$d MiB，繼續顯示原圖。</string>
+    <string name="sr_memory_budget">目前輸出記憶體上限：%1$d MiB（自動調整）</string>
+    <string name="sr_memory_unavailable">處理時可用記憶體不足，繼續顯示原圖。可在其他圖片工作結束後重試。</string>
+    <string name="sr_failed">超解析度處理失敗：%1$s</string>
+</resources>

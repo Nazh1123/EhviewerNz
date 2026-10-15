@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sr_title">超分辨率</string>
+    <string name="sr_settings">超分辨率设置与模型</string>
+    <string name="sr_settings_summary">waifu2x 2× · 支持与翻译覆盖层同时使用</string>
+    <string name="sr_description">画质优先保持灰阶准确，速度优先可能略微改变灰阶。waifu2x 2×（动漫 RGB，不降噪）。优先使用 Vulkan GPU 加速，不可用或失败时自动回退 CPU，也可手动选择仅 CPU。翻译继续识别原图，译文覆盖在超分底图上；保留缩放与滚动位置。按可用内存自动调整预算，翻页后回收上一页的超分结果。跳过动画。原始文件及分享、保存行为保持不变。</string>
+    <string name="sr_automatic">自动超分当前页</string>
+    <string name="sr_auto_on">自动超分：已开启（点击关闭）</string>
+    <string name="sr_auto_off">自动超分：已关闭（点击开启）</string>
+    <string name="sr_current">重新超分本页</string>
+    <string name="sr_compare">切换原图 / 超分图对比</string>
+    <string name="sr_download">下载 waifu2x 模型（1.06 MiB）</string>
+    <string name="sr_import">导入 .param 与 .bin 模型文件</string>
+    <string name="sr_license">模型来源与许可证</string>
+    <string name="sr_remove">移除模型 / 外部引用</string>
+    <string name="sr_models_ready">模型已就绪</string>
+    <string name="sr_models_required">请先下载或导入 waifu2x 模型</string>
+    <string name="sr_progress">CPU 超分：%1$d%%</string>
+    <string name="sr_backend">超分加速方式</string>
+    <string name="sr_backend_auto">自动（GPU，画质优先）</string>
+    <string name="sr_backend_fast">自动（GPU，速度优先）</string>
+    <string name="sr_backend_cpu">仅 CPU</string>
+    <string name="sr_preparing">正在准备超分组件…</string>
+    <string name="sr_progress_gpu">GPU / Vulkan 超分：%1$d%%</string>
+    <string name="sr_progress_fallback">GPU 不可用或失败，已回退 CPU：%1$d%%</string>
+    <string name="sr_animation">动画图片暂不进行超分</string>
+    <string name="sr_large">%1$d×%2$d 图片的 2× 输出需要 %3$d MiB，当前预算为 %4$d MiB，继续显示原图。</string>
+    <string name="sr_memory_budget">当前超分输出上限：%1$d MiB（自动调整）</string>
+    <string name="sr_memory_unavailable">处理时可用内存不足，继续显示原图。可在其他图片任务结束后重试。</string>
+    <string name="sr_failed">超分失败：%1$s</string>
+</resources>

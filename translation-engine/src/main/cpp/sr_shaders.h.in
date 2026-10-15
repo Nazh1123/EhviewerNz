@@ -1,0 +1,3 @@
+#pragma once
+static const char sr_preproc[] = R"SR_SHADER(@SR_PREPROC@)SR_SHADER";
+static const char sr_postproc[] = R"SR_SHADER(@SR_POSTPROC@)SR_SHADER";

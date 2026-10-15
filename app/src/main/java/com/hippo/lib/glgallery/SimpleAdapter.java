@@ -169,6 +169,13 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     }
 
     private void bindOverlay(GalleryPageView page, int index) {
+        ImageWrapper enhanced = mProvider.getEnhancedPage(index);
+        ImageTexture enhancedTexture = null;
+        if (enhanced != null && enhanced.obtain()) {
+            enhancedTexture = new ImageTexture(enhanced);
+            mUploader.addTexture(enhancedTexture);
+        }
+        page.setEnhanced(enhancedTexture);
         ImageWrapper overlay = mProvider.getTranslationOverlay(index);
         ImageTexture texture = null;
         if (overlay != null && overlay.obtain()) {

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="sr_title">Super-resolution</string>
+    <string name="sr_settings">Super-resolution settings and models</string>
+    <string name="sr_settings_summary">waifu2x 2× • works with translation overlays</string>
+    <string name="sr_description">Quality mode preserves grayscale fidelity; speed mode may slightly shift grayscale. waifu2x 2× (anime RGB, no denoising). Prefers Vulkan GPU acceleration, with automatic CPU fallback when unavailable or on failure. CPU mode can also be selected. Translation reads the original image and draws its overlay on top. Zoom and scroll position are preserved. The memory limit adapts to available memory. Previous enhanced pages are released when turning pages. Animated images are skipped. Original files, sharing and saving are unchanged.</string>
+    <string name="sr_automatic">Automatically enhance the current page</string>
+    <string name="sr_auto_on">Automatic super-resolution: on (tap to disable)</string>
+    <string name="sr_auto_off">Automatic super-resolution: off (tap to enable)</string>
+    <string name="sr_current">Enhance this page again</string>
+    <string name="sr_compare">Compare original / enhanced image</string>
+    <string name="sr_download">Download waifu2x model (1.06 MiB)</string>
+    <string name="sr_import">Import .param and .bin model files</string>
+    <string name="sr_license">Model source and license</string>
+    <string name="sr_remove">Remove model / external reference</string>
+    <string name="sr_models_ready">Model ready</string>
+    <string name="sr_models_required">Download or import the waifu2x model first</string>
+    <string name="sr_progress">CPU super-resolution: %1$d%%</string>
+    <string name="sr_backend">Super-resolution acceleration</string>
+    <string name="sr_backend_auto">Automatic (GPU, quality first)</string>
+    <string name="sr_backend_fast">Automatic (GPU, speed first)</string>
+    <string name="sr_backend_cpu">CPU only</string>
+    <string name="sr_preparing">Preparing super-resolution…</string>
+    <string name="sr_progress_gpu">GPU / Vulkan super-resolution: %1$d%%</string>
+    <string name="sr_progress_fallback">GPU unavailable or failed, using CPU: %1$d%%</string>
+    <string name="sr_animation">Animated images are not enhanced</string>
+    <string name="sr_large">%1$d×%2$d needs %3$d MiB for 2× output; currently available budget: %4$d MiB. Displaying the original.</string>
+    <string name="sr_memory_budget">Current output memory limit: %1$d MiB (automatic)</string>
+    <string name="sr_memory_unavailable">Not enough memory to finish super-resolution; displaying the original. Try again after other image tasks finish.</string>
+    <string name="sr_failed">Super-resolution failed: %1$s</string>
+</resources>

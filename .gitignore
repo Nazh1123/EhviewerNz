@@ -30,6 +30,7 @@ _build*.bat
 /artifacts/
 /docs/
 /tools/*
+/logNz/
 !/tools/package_ppocr_runtime.py
 !/tools/check_localizations.py
 /translation-engine/build/

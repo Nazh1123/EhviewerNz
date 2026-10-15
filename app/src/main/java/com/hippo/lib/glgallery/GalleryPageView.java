@@ -126,6 +126,7 @@ public class GalleryPageView extends GLFrameLayout {
 
     private void unbindImage() {
         setOverlay(null);
+        setEnhanced(null);
         ImageTexture texture = mImage.getImageTexture();
         if (texture != null) {
             mImage.setImageTexture(null);
@@ -148,6 +149,12 @@ public class GalleryPageView extends GLFrameLayout {
     public void setOverlay(ImageTexture overlay) {
         ImageTexture previous = mImage.getOverlayTexture();
         mImage.setOverlayTexture(overlay);
+        if (previous != null) previous.recycle();
+    }
+
+    public void setEnhanced(ImageTexture enhanced) {
+        ImageTexture previous = mImage.getEnhancedTexture();
+        mImage.setEnhancedTexture(enhanced);
         if (previous != null) previous.recycle();
     }
 

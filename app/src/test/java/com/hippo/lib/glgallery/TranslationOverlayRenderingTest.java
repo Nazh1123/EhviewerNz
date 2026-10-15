@@ -20,6 +20,48 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = 28, manifest = Config.NONE)
 public class TranslationOverlayRenderingTest {
+    @Test public void superResolutionAndTranslationUseOriginalGeometryAndIndependentComparison() {
+        List<String> draws = new ArrayList<>();
+        RecordingTexture original = texture(400, 600, "original", draws);
+        RecordingTexture enhanced = texture(800, 1200, "enhanced", draws);
+        RecordingTexture overlay = texture(200, 300, "overlay", draws);
+        ImageView view = new ImageView();
+        view.setImageTexture(original);
+        RectF source = ReflectionHelpers.getField(view, "mSrcActual");
+        RectF destination = ReflectionHelpers.getField(view, "mDstActual");
+        source.set(40, 60, 360, 540);
+        destination.set(0, 20, 640, 980);
+        ReflectionHelpers.setField(view, "mScaleOffsetDirty", false);
+        ReflectionHelpers.setField(view, "mPositionInRootDirty", false);
+        try {
+            view.setEnhancedTexture(enhanced);
+            view.setOverlayTexture(overlay);
+            view.onRender(null);
+            assertEquals(Arrays.asList("enhanced", "overlay"), draws);
+            assertEquals(new RectF(80, 120, 720, 1080), enhanced.source);
+            assertEquals(new RectF(20, 30, 180, 270), overlay.source);
+            assertEquals(enhanced.destination, overlay.destination);
+            assertSame(original, view.getImageTexture());
+            assertFalse(ReflectionHelpers.<Boolean>getField(view, "mScaleOffsetDirty"));
+            draws.clear();
+            view.setEnhancedTexture(null);
+            view.onRender(null);
+            assertEquals(Arrays.asList("original", "overlay"), draws);
+            assertEquals(new RectF(40, 60, 360, 540), source);
+            assertEquals(new RectF(0, 20, 640, 980), destination);
+            draws.clear();
+            view.setEnhancedTexture(enhanced);
+            view.setOverlayTexture(null);
+            view.onRender(null);
+            assertEquals(Arrays.asList("enhanced"), draws);
+        } finally {
+            view.setEnhancedTexture(null);
+            view.setOverlayTexture(null);
+            view.setImageTexture(null);
+            original.recycle(); enhanced.recycle(); overlay.recycle();
+        }
+    }
+
     @Test public void overlaySharesDestinationAndScaledCropWhileHidingKeepsSourceAndViewport() {
         List<String> draws = new ArrayList<>();
         RecordingTexture original = texture(400, 600, "original", draws);
