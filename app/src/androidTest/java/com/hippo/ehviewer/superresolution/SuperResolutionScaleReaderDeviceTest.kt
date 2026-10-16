@@ -33,7 +33,7 @@ class SuperResolutionScaleReaderDeviceTest {
         val context = instrumentation.targetContext
         val settings = SuperResolutionSettings(context)
         val keys = listOf(SuperResolutionSettings.SCALE, SuperResolutionSettings.AHEAD, SuperResolutionSettings.PERSIST,
-            SuperResolutionModels.BACKEND, SuperResolutionModels.ENABLED)
+            SuperResolutionModels.BACKEND, SuperResolutionSettings.AUTO_ENABLE)
         val previous = settings.preferences.all.filterKeys { it in keys }
         val output = File(context.getExternalFilesDir(null), "sr-scale-validation").apply { mkdirs() }
         val directory = File(context.cacheDir, "sr-scale-reader-${System.nanoTime()}").apply { mkdirs() }
@@ -50,7 +50,7 @@ class SuperResolutionScaleReaderDeviceTest {
         }
         settings.preferences.edit().putString(SuperResolutionSettings.SCALE, "auto")
             .putString(SuperResolutionSettings.AHEAD, "0").putBoolean(SuperResolutionSettings.PERSIST, false)
-            .putString(SuperResolutionModels.BACKEND, "auto_fast").putBoolean(SuperResolutionModels.ENABLED, false).commit()
+            .putString(SuperResolutionModels.BACKEND, "auto_fast").putBoolean(SuperResolutionSettings.AUTO_ENABLE, false).commit()
         var activity: GalleryActivity? = null
         var controller: ReaderSuperResolutionController? = null
         val report = JSONObject(); val pages = JSONArray(); report.put("pages", pages)

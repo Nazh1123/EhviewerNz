@@ -15,7 +15,9 @@ class ReaderProgressLayout(activity: AppCompatActivity) {
     private val translation = activity.findViewById<View>(R.id.translation_progress_panel)
     private val enhancement = activity.findViewById<View>(R.id.super_resolution_progress_panel)
     private val density = activity.resources.displayMetrics.density
-    private val iconSpace = (32 * density).roundToInt()
+    private val iconSpace = (28 * density).roundToInt() // 24dp icon + 4dp gap.
+    private val iconPadding = (4 * density).roundToInt()
+    private val innerPadding = (8 * density).roundToInt()
     private val gap = 8 * density
     private val screen = DisplayMetrics().also { activity.windowManager.defaultDisplay.getRealMetrics(it) }
     private val width = (minOf(screen.widthPixels, screen.heightPixels) * 0.35f).roundToInt()
@@ -24,6 +26,7 @@ class ReaderProgressLayout(activity: AppCompatActivity) {
     private var quickSettingsVisible = false
     private var quickSettingsBottom = 0f
     private val panels = listOfNotNull(translation, enhancement)
+    private val paddings = panels.associateWith { it.paddingLeft to it.paddingRight }
 
     init {
         panels.forEach { panel ->
@@ -72,7 +75,16 @@ class ReaderProgressLayout(activity: AppCompatActivity) {
         panels.forEach { panel ->
             val params = panel.layoutParams as FrameLayout.LayoutParams
             val gravity = Gravity.TOP or if (both && panel === enhancement) Gravity.RIGHT else Gravity.LEFT
-            var targetWidth = width + if (both) iconSpace else 0
+            val (leftPadding, rightPadding) = paddings.getValue(panel)
+            panel.setPadding(
+                if (both) { if (panel === translation) iconPadding else innerPadding } else leftPadding,
+                panel.paddingTop,
+                if (both) { if (panel === enhancement) iconPadding else innerPadding } else rightPadding,
+                panel.paddingBottom,
+            )
+            // Reclaim horizontal padding while preserving the original bar length and height.
+            val savedPadding = leftPadding + rightPadding - panel.paddingLeft - panel.paddingRight
+            var targetWidth = width + if (both) iconSpace - savedPadding else 0
             if (both) {
                 // Keep the two controls separate in narrow windows and beside display cutouts.
                 val available = (panel.parent as? View)?.width?.takeIf { it > 0 } ?: screen.widthPixels

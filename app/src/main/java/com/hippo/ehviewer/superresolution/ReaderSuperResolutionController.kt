@@ -6,6 +6,7 @@ import android.widget.ImageButton
 import android.widget.ProgressBar
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.hippo.android.resource.AttrResources
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
@@ -47,6 +48,9 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
     }
     private fun update() {
         progressLayout.setEnhancementEnabled(session.enabled && !closed)
+        button.imageTintList = android.content.res.ColorStateList.valueOf(
+            AttrResources.getAttrColor(activity,
+                if (session.enabled) R.attr.drawableColorPrimary else android.R.attr.textColorSecondary))
         button.isSelected = session.enabled
         button.alpha = if (session.enabled) 1f else 0.65f
         button.contentDescription = activity.getString(if (session.enabled) R.string.sr_auto_on else R.string.sr_auto_off)
@@ -61,9 +65,8 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
     }
     private fun toggle() {
         if (closed) return
-        if (session.enabled) { session.settings.automatic = false; session.disable() }
-        else if (session.enable()) session.settings.automatic = true
-        else showSettings()
+        if (session.enabled) session.disable()
+        else if (!session.enable()) showSettings()
     }
     fun onPageChanged(page: Int) {
         if (closed) return

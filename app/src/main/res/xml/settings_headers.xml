@@ -48,7 +48,7 @@
         app:fragment="com.hippo.ehviewer.ui.fragment.TranslationFragment" />
 
     <com.hippo.ehviewer.ui.fragment.BasePreference
-        android:icon="@drawable/v_super_resolution_x24"
+        android:icon="@drawable/v_super_resolution_primary_x24"
         android:title="@string/sr_title"
         android:summary="@string/sr_settings_summary"
         app:allowDividerAbove="true"

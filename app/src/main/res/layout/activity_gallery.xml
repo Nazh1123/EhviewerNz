@@ -99,7 +99,6 @@
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/sr_title"
             android:padding="12dp"
-            android:tint="?android:attr/textColorSecondary"
             android:src="@drawable/v_super_resolution_x24" />
 
         <ImageButton

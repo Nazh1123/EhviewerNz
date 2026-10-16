@@ -29,10 +29,12 @@ internal class SuperResolutionSettings(context: Context) {
         scale = SuperResolutionScale.fromValue(preferences.getString(SCALE, "2")),
     )
     var automatic: Boolean
-        get() = preferences.getBoolean(SuperResolutionModels.ENABLED, false)
-        set(value) { preferences.edit().putBoolean(SuperResolutionModels.ENABLED, value).apply() }
+        get() = preferences.getBoolean(AUTO_ENABLE, false)
+        set(value) { preferences.edit().putBoolean(AUTO_ENABLE, value).apply() }
 
     companion object {
+        // The old enabled key was also written by reader clicks; do not inherit that state.
+        const val AUTO_ENABLE = "super_resolution_auto_enable_on_entry"
         const val AHEAD = "super_resolution_ahead"
         const val PERSIST = "super_resolution_persist"
         const val CACHE = "super_resolution_cache_mib"

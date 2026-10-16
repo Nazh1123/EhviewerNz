@@ -53,11 +53,22 @@ class ReaderSuperResolutionControllerTest {
             assertEquals(View.GONE, rightIcon.visibility)
             measure(host, 1000)
             val singleBarWidth = right.findViewById<View>(R.id.super_resolution_page_progress_bar).width
+            val singleHeight = right.height
             enable(translation)
             measure(host, 1000)
-            val expandedWidth = baseWidth + (32 * activity.resources.displayMetrics.density).toInt()
+            val expandedWidth = baseWidth + (16 * activity.resources.displayMetrics.density).toInt()
             assertEquals(expandedWidth, left.width)
             assertEquals(expandedWidth, right.width)
+            assertEquals(singleHeight, left.height)
+            assertEquals(singleHeight, right.height)
+            val iconSize = (24 * activity.resources.displayMetrics.density).toInt()
+            for (icon in listOf(leftIcon, rightIcon)) {
+                assertEquals(iconSize, icon.width)
+                assertEquals(iconSize, icon.height - icon.paddingTop - icon.paddingBottom)
+            }
+            val innerPadding = (8 * activity.resources.displayMetrics.density).toInt()
+            assertEquals(innerPadding, left.paddingRight)
+            assertEquals(innerPadding, right.paddingLeft)
             assertEquals(Gravity.TOP or Gravity.LEFT, params(left).gravity)
             assertEquals(Gravity.TOP or Gravity.RIGHT, params(right).gravity)
             assertEquals(left.top, right.top)
@@ -72,6 +83,7 @@ class ReaderSuperResolutionControllerTest {
             translation.toggle()
             assertEquals(Gravity.TOP or Gravity.LEFT, params(right).gravity)
             assertEquals(baseWidth, right.layoutParams.width)
+            assertEquals(left.paddingRight, right.paddingLeft)
             assertEquals(View.GONE, rightIcon.visibility)
             enable(translation)
             enhancement.session.disable()
@@ -80,6 +92,55 @@ class ReaderSuperResolutionControllerTest {
             enable(enhancement)
             measure(host, 500)
             assertTrue("left=${left.left}..${left.right}, right=${right.left}..${right.right}", left.right < right.left)
+        }
+    }
+
+    @Test fun superResolutionButtonMatchesTranslationTintAndAlphaAcrossReaderThemes() {
+        for (theme in listOf(R.style.AppTheme_Gallery, R.style.AppTheme_Gallery_Dark, R.style.AppTheme_Gallery_Black)) {
+            withReader(theme = theme) { _, _, translation, enhancement, _ ->
+                val left = ReflectionHelpers.getField<ImageButton>(translation, "button")
+                val right = ReflectionHelpers.getField<ImageButton>(enhancement, "button")
+                fun compare() {
+                    assertEquals(left.alpha, right.alpha, 0f)
+                    assertEquals(left.imageTintList?.defaultColor, right.imageTintList?.defaultColor)
+                }
+                compare()
+                enable(translation)
+                enable(enhancement)
+                compare()
+                translation.toggle()
+                enhancement.session.disable()
+                compare()
+            }
+        }
+    }
+
+    @Test fun readerStartsDisabledDespiteLegacyPreferenceAndToggleOnlyLastsForCurrentGallery() {
+        withReader(configure = { activity ->
+            SuperResolutionSettings(activity).preferences.edit()
+                .putBoolean(SuperResolutionModels.ENABLED, true).commit()
+        }) { _, _, _, enhancement, _ ->
+            val button = ReflectionHelpers.getField<ImageButton>(enhancement, "button")
+            enhancement.onPageChanged(0)
+            enhancement.resume()
+            assertFalse(enhancement.session.enabled)
+            assertFalse(button.isSelected)
+            button.performClick()
+            assertTrue(enhancement.session.enabled)
+            assertFalse(enhancement.session.settings.automatic)
+            enhancement.pause()
+            enhancement.resume()
+            assertTrue(enhancement.session.enabled)
+        }
+        withReader { _, _, _, enhancement, _ ->
+            enhancement.onPageChanged(0)
+            enhancement.resume()
+            assertFalse(enhancement.session.enabled)
+            val button = ReflectionHelpers.getField<ImageButton>(enhancement, "button")
+            button.performClick()
+            button.performClick()
+            enhancement.resume()
+            assertFalse(enhancement.session.enabled)
         }
     }
 
@@ -159,12 +220,15 @@ class ReaderSuperResolutionControllerTest {
         }
     }
 
-    private fun withReader(block: (AppCompatActivity, Provider, ReaderTranslationController,
+    private fun withReader(theme: Int = R.style.AppTheme_Gallery,
+                           configure: (AppCompatActivity) -> Unit = {},
+                           block: (AppCompatActivity, Provider, ReaderTranslationController,
                                   ReaderSuperResolutionController, FrameLayout) -> Unit) {
         Robolectric.buildActivity(AppCompatActivity::class.java).use { controller ->
             val activity = controller.get()
-            activity.setTheme(R.style.AppTheme_Gallery)
+            activity.setTheme(theme)
             controller.setup()
+            configure(activity)
             shadowOf(activity.windowManager.defaultDisplay).apply { setRealWidth(1000); setRealHeight(1800) }
             val host = FrameLayout(activity)
             activity.layoutInflater.inflate(R.layout.reader_translation_progress, host)

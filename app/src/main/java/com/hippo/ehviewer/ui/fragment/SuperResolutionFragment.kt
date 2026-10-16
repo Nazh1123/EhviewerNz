@@ -57,7 +57,7 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
         }
         val reading = category(R.string.sr_category_reading)
         automatic = SwitchPreferenceCompat(requireContext()).apply {
-            key = SuperResolutionModels.ENABLED
+            key = SuperResolutionSettings.AUTO_ENABLE
             setTitle(R.string.sr_automatic)
             setSummary(R.string.sr_automatic_help)
             setDefaultValue(false)

@@ -34,7 +34,7 @@ class PairedPageWorkflowDeviceTest {
         val translationSettings = TranslationSettings(context)
         val previous = translationSettings.read()
         val srSettings = SuperResolutionSettings(context)
-        val keys = listOf(SuperResolutionModels.ENABLED, SuperResolutionSettings.AHEAD, SuperResolutionModels.BACKEND)
+        val keys = listOf(SuperResolutionSettings.AUTO_ENABLE, SuperResolutionSettings.AHEAD, SuperResolutionModels.BACKEND)
         val saved = srSettings.preferences.all.filterKeys { it in keys }
         val report = File(context.getExternalFilesDir(null), "sr-tiles-validation/paired-workflow.txt").apply { parentFile!!.mkdirs(); writeText("Cached translation overlays + real GPU SR; independent original readers.\n") }
         try {
@@ -52,7 +52,7 @@ class PairedPageWorkflowDeviceTest {
                     backend = TranslationBackend.LLM_API, apiUrl = "http://127.0.0.1:1/v1/chat/completions",
                     apiModel = "cached-pair-test", apiKey = "")
                 translationSettings.save(options)
-                srSettings.preferences.edit().putBoolean(SuperResolutionModels.ENABLED, false)
+                srSettings.preferences.edit().putBoolean(SuperResolutionSettings.AUTO_ENABLE, false)
                     .putString(SuperResolutionSettings.AHEAD, srAhead.toString()).putString(SuperResolutionModels.BACKEND, "auto_fast").commit()
                 val store = TranslationResultStore(TranslationStorage.cacheDir(context), null, options, null, false)
                 for (source in sources) {

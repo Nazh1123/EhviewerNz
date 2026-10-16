@@ -68,9 +68,9 @@ class SuperResolutionWorkflowDeviceTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val settings = SuperResolutionSettings(context)
-        val keys = listOf(SuperResolutionModels.ENABLED, SuperResolutionModels.BACKEND, SuperResolutionSettings.AHEAD, SuperResolutionSettings.PERSIST)
+        val keys = listOf(SuperResolutionSettings.AUTO_ENABLE, SuperResolutionModels.BACKEND, SuperResolutionSettings.AHEAD, SuperResolutionSettings.PERSIST)
         val previous = settings.preferences.all.filterKeys { it in keys }
-        settings.preferences.edit().putBoolean(SuperResolutionModels.ENABLED, false)
+        settings.preferences.edit().putBoolean(SuperResolutionSettings.AUTO_ENABLE, false)
             .putString(SuperResolutionModels.BACKEND, "auto_fast")
             .putString(SuperResolutionSettings.AHEAD, "1").putBoolean(SuperResolutionSettings.PERSIST, true).commit()
         val directory = File(context.cacheDir, "sr-workflow-${System.currentTimeMillis()}").apply { mkdirs() }

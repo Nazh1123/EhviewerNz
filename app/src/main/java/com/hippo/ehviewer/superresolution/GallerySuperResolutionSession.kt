@@ -50,6 +50,7 @@ internal class GallerySuperResolutionSession(
     @Volatile private var generation = 0
     private var closed = false
     private var options = settings.read()
+    private var automaticPreference = settings.automatic
     private var singlePage: Int? = null
     private val results = mutableMapOf<Int, EnhancedTilePage>()
     internal val metrics = mutableMapOf<Int, SuperResolutionPageMetrics>()
@@ -58,7 +59,7 @@ internal class GallerySuperResolutionSession(
         private set
     var size = readerSource.size()
         private set
-    var enabled = settings.automatic
+    var enabled = automaticPreference
         private set
     var fullGallery = false
         private set
@@ -117,7 +118,13 @@ internal class GallerySuperResolutionSession(
             options = updated
             states.clear(); results.clear(); reader?.clear()
         }
-        if (singlePage == null && !fullGallery) enabled = settings.automatic
+        val automatic = settings.automatic
+        if (automatic != automaticPreference) {
+            automaticPreference = automatic
+            if (singlePage == null && !fullGallery) {
+                if (automatic) enable() else disable()
+            }
+        }
         restore(); changed(); start()
     }
 
@@ -149,10 +156,11 @@ internal class GallerySuperResolutionSession(
     }
 
     fun retry(page: Int) {
+        val automatic = enabled && singlePage == null
         generation++; worker?.cancel(); loader?.cancel()
         states.remove(page); results.remove(page)
         enabled = true
-        singlePage = if (settings.automatic || fullGallery) null else page
+        singlePage = if (automatic || fullGallery) null else page
         message = null
         forced.add(page)
         reader?.clear(); start(); changed()
