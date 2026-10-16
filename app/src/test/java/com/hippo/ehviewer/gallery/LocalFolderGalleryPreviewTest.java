@@ -137,6 +137,9 @@ public class LocalFolderGalleryPreviewTest {
         File translated = new File(root, "_translated");
         assertTrue(translated.mkdir());
         java.nio.file.Files.copy(documents.first.toPath(), new File(translated, "1.png").toPath());
+        File enhanced = new File(root, "_suepr_resolution");
+        assertTrue(enhanced.mkdir());
+        java.nio.file.Files.copy(documents.first.toPath(), new File(enhanced, "1_sr.png").toPath());
         org.robolectric.shadows.ShadowEnvironment.setExternalStorageDirectory(root.getParentFile().toPath());
         LocalFolderGallerySource folder = LocalFolderGallerySource.create(DocumentsContract.buildTreeDocumentUri(
                 "com.android.externalstorage.documents", "primary:" + root.getName()), "");

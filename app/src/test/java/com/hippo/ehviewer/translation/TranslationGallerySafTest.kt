@@ -82,6 +82,25 @@ class TranslationGallerySafTest {
     private fun store(enabled: Boolean = true, name: String = "001") = TranslationResultStore(cacheDir, book,
         TranslationOptions(persistDownloaded = enabled), source.stableGalleryId(), true, name)
 
+    @Test fun superResolutionExportsUseOpaqueSafRenamesAndKeepOriginals() = kotlinx.coroutines.runBlocking {
+        val exporter = com.hippo.ehviewer.superresolution.SuperResolutionExport
+        val original = requireNotNull(book.createFile("001.png"))
+        original.openOutputStream().use { it.write("original".toByteArray()) }
+        val first = exporter.publish(book, "Chapter/001") { it.write("first".toByteArray()) }
+        val second = exporter.publish(book, "Chapter/001") { it.write("second".toByteArray()) }
+        assertNotEquals(first.uri, second.uri)
+        assertEquals("content", second.uri.scheme)
+        val directory = book.findFile("_suepr_resolution")!!.findFile("Chapter")!!
+        assertEquals(listOf("001_sr.png"), directory.listFiles()!!.map { it.name })
+        assertEquals("second", directory.findFile("001_sr.png")!!.openInputStream().bufferedReader().use { it.readText() })
+        try {
+            exporter.publish(book, "Chapter/001") { it.write(1); error("failed") }
+            fail("Expected failed write")
+        } catch (_: IllegalStateException) { }
+        assertEquals(listOf("001_sr.png"), directory.listFiles()!!.map { it.name })
+        assertEquals("original", original.openInputStream().bufferedReader().use { it.readText() })
+    }
+
     @Test fun namedSafOverlaysAdoptCacheReopenAndDeleteWithOpaqueDocumentIds() {
         val gid = source.stableGalleryId()
         val key = "g${gid}_named"
@@ -144,6 +163,8 @@ class TranslationGallerySafTest {
         for (directory in listOf(book, chapter)) {
             val translated = requireNotNull(directory.createDirectory("_translated"))
             requireNotNull(translated.createFile("g1_result.png"))
+            val enhanced = requireNotNull(directory.createDirectory("_suepr_resolution"))
+            requireNotNull(enhanced.createFile("001_sr.png"))
         }
         val scan = LocalFolderGalleryScanner.scan(context, LocalFolderGallerySource.create(tree, ""))
         assertEquals(listOf("Book A/01.png", "Book A/Chapter/02.jpg"), scan.images.map { it.relativePath })

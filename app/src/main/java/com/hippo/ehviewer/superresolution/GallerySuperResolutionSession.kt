@@ -1,8 +1,10 @@
 package com.hippo.ehviewer.superresolution
 
 import android.content.Context
+import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.client.data.GalleryInfo
+import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.ehviewer.translation.ImageProcessingPriority
 import com.hippo.ehviewer.translation.GalleryPageWork
@@ -10,6 +12,7 @@ import com.hippo.ehviewer.translation.GalleryPageWorkRegistry
 import com.hippo.ehviewer.translation.NativeMemoryPolicy
 import com.hippo.ehviewer.translation.TranslationRuntime
 import com.hippo.ehviewer.translation.TranslationWindow
+import com.hippo.ehviewer.translation.TranslationStorage
 import com.hippo.ehviewer.translation.engine.SuperResolution
 import com.hippo.ehviewer.translation.engine.SuperResolutionBackend
 import com.hippo.ehviewer.translation.engine.SuperResolutionPipeline
@@ -315,7 +318,16 @@ internal class GallerySuperResolutionSession(
                                     true
                                 } else false
                             }
-                        }, grouped = true)
+                        }, grouped = true).also { (tiles, _) ->
+                            if (selected.persist) {
+                                val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
+                                val directory = download?.let { TranslationStorage.galleryDir(context, it) }
+                                    ?: provider.translationDirectory
+                                if (download?.state == DownloadInfo.STATE_FINISH && TranslationStorage.hasGalleryDirectory(download))
+                                    checkNotNull(directory) { "Gallery download directory unavailable" }
+                                if (directory != null) SuperResolutionExport.save(tiles, directory, provider.getTranslationFilename(page))
+                            }
+                        }
                 }
             }
         } finally { source.delete() }

@@ -181,8 +181,8 @@ public final class LocalFolderGalleryScanner {
                         ? name : directory.relativePath + '/' + name;
                 if (child.directory) {
                     if (!recursive) continue;
-                    // Persistent translated pages must not become new source pages on rescan.
-                    if ("_translated".equalsIgnoreCase(name)) continue;
+                    // Exported results must not become new source pages on rescan.
+                    if (isResultDirectory(name)) continue;
                     if (directory.depth >= MAX_DEPTH) {
                         throw new ScanException(Reason.TOO_LARGE);
                     }
@@ -246,7 +246,7 @@ public final class LocalFolderGalleryScanner {
                 String path = current.relativePath.isEmpty() ? name : current.relativePath + '/' + name;
                 if (child.isDirectory()) {
                     if (!recursive) continue;
-                    if ("_translated".equalsIgnoreCase(name)) continue;
+                    if (isResultDirectory(name)) continue;
                     if (current.depth >= MAX_DEPTH) throw new ScanException(Reason.TOO_LARGE);
                     pending.add(new PendingDirectory(Uri.fromFile(child), path, current.depth + 1));
                 } else if (child.isFile() && isSupportedImage(name)) {
@@ -259,6 +259,10 @@ public final class LocalFolderGalleryScanner {
         }
         Collections.sort(images, (left, right) -> PATH_COMPARATOR.compare(left.relativePath, right.relativePath));
         return new ScanResult(root.getName(), images, directImages, directories, entries);
+    }
+
+    private static boolean isResultDirectory(String name) {
+        return "_translated".equalsIgnoreCase(name) || "_suepr_resolution".equalsIgnoreCase(name);
     }
 
     @NonNull

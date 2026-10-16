@@ -38,11 +38,11 @@
     <string name="sr_ahead">预处理后续页数</string>
     <string name="sr_ahead_help">当前页 + 后续 %1$d 页（0～10）。长按阅读器超分按钮可处理完整画廊。</string>
     <string name="sr_persist">持久保存超分结果</string>
-    <string name="sr_persist_help">将无损 PNG 保存在应用私有存储，重新打开画廊时复用。清理临时缓存不会删除这些结果；会额外占用磁盘，清除应用数据时删除。保留原始文件。</string>
+    <string name="sr_persist_help">在应用私有存储保留可复用的分块结果。画廊有本地目录时，同时合成为完整无损 PNG，保存到画廊的 _suepr_resolution 子文件夹。已有分块再次处理时会直接导出，无需重新运行模型。保留原始文件。</string>
     <string name="sr_cache_limit">临时缓存上限</string>
     <string name="sr_clear_cache">清理超分临时缓存</string>
     <string name="sr_clear_saved">删除已保存的超分结果</string>
-    <string name="sr_clear_saved_help">删除所有画廊已保存的超分图片？原图和翻译结果会保留。</string>
+    <string name="sr_clear_saved_help">删除所有画廊在应用私有存储中的超分结果？_suepr_resolution 中导出的 PNG、原图和翻译结果会保留。</string>
     <string name="sr_full_gallery">超分完整画廊</string>
     <string name="sr_stop_full">停止完整画廊超分</string>
     <string name="sr_stop_all">停止超分任务</string>

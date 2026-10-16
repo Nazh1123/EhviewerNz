@@ -77,6 +77,32 @@ class GallerySuperResolutionSessionTest {
         } finally { close(session) }
     }
 
+    @Test fun persistentCachedPagesAreExportedWithoutModelsWhenTheGalleryIsReopened() {
+        val gallery = File(context.cacheDir, "sr-export-gallery").apply { deleteRecursively(); mkdirs() }
+        val provider = Provider(sources, checkNotNull(UniFile.fromFile(gallery)))
+        val session = GallerySuperResolutionSession(context, provider, identity, null)
+        try {
+            session.pageChanged(0); session.enable()
+            await { !session.working && session.states.size == 2 }
+            assertTrue(session.states.values.all { it == R.string.sr_done })
+            assertTrue(File(gallery, "_suepr_resolution/0_sr.png").isFile)
+            assertTrue(File(gallery, "_suepr_resolution/1_sr.png").isFile)
+            assertEquals((0..3).map { "original source $it" }, sources.map { it.readText() })
+        } finally { close(session) }
+    }
+
+    @Test fun temporaryPagesDoNotExportIntoTheGallery() {
+        SuperResolutionSettings(context).preferences.edit().putBoolean(SuperResolutionSettings.PERSIST, false).commit()
+        val gallery = File(context.cacheDir, "sr-temporary-gallery").apply { deleteRecursively(); mkdirs() }
+        val session = GallerySuperResolutionSession(context, Provider(sources, checkNotNull(UniFile.fromFile(gallery))), identity, null)
+        try {
+            session.pageChanged(0); session.enable()
+            await { !session.working && session.states.size == 2 }
+            assertTrue(session.states.values.all { it == R.string.sr_done })
+            assertFalse(File(gallery, "_suepr_resolution").exists())
+        } finally { close(session) }
+    }
+
     private fun close(session: GallerySuperResolutionSession) { session.close(); await { !session.working } }
     private fun await(predicate: () -> Boolean) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
@@ -86,8 +112,9 @@ class GallerySuperResolutionSessionTest {
             Thread.sleep(5)
         }
     }
-    private class Provider(private val files: List<File>) : GalleryProvider2() {
-        override fun createTranslationProvider(context: Context) = Provider(files)
+    private class Provider(private val files: List<File>, private val directory: UniFile? = null) : GalleryProvider2() {
+        override fun createTranslationProvider(context: Context) = Provider(files, directory)
+        override fun getTranslationDirectory() = directory
         override fun size() = files.size
         override fun getError(): String? = null
         override fun onRequest(index: Int) = Unit
