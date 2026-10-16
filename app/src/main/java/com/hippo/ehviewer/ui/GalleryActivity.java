@@ -313,6 +313,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private boolean mAnimatedWebpLongPressTouchDown;
     private boolean mAnimatedWebpLongPressCaptured;
     private float mAnimatedWebpLongPressTouchX;
+    private float mAnimatedWebpLongPressTouchY;
     private volatile boolean mAnimatedWebpLifecycleResumed;
     private volatile int mAnimatedWebpLifecycleGeneration;
     private volatile boolean mAnimatedWebpSeeking;
@@ -1408,9 +1409,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpLongPressTouchDown = true;
             mAnimatedWebpLongPressCaptured = false;
             mAnimatedWebpLongPressTouchX = event.getX();
+            mAnimatedWebpLongPressTouchY = event.getY();
             return false;
         }
         mAnimatedWebpLongPressTouchX = event.getX();
+        mAnimatedWebpLongPressTouchY = event.getY();
         boolean captured = mAnimatedWebpLongPressCaptured;
         if (captured) {
             clearAnimatedWebpTouchGesture();
@@ -1419,7 +1422,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     && mAnimatedWebpLongPressActive
                     && mAnimatedWebpLongPressSpeedSelection != null
                     && mAnimatedWebpLongPressSpeedSelection.move(
-                            event.getX(), SystemClock.uptimeMillis())) {
+                            event.getX(), event.getY(), SystemClock.uptimeMillis())) {
                 if (mAnimatedWebpLongPressTexture != null) {
                     mAnimatedWebpLongPressTexture.setPlaybackSpeed(
                             mAnimatedWebpLongPressSpeedSelection.getSpeed());
@@ -3626,7 +3629,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     speed, getResources().getDisplayMetrics().density);
         }
         mAnimatedWebpLongPressSpeedSelection.begin(
-                mAnimatedWebpLongPressTouchX, SystemClock.uptimeMillis());
+                mAnimatedWebpLongPressTouchX, mAnimatedWebpLongPressTouchY,
+                SystemClock.uptimeMillis());
         mAnimatedWebpLongPressActive = true;
         mAnimatedWebpLongPressCaptured = true;
         applyAnimatedWebpLongPressPlayback(texture,

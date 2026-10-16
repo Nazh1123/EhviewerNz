@@ -50,7 +50,7 @@ public class AnimatedWebpLongPressGestureTest {
         activity = Robolectric.buildActivity(GalleryActivity.class).get();
         notice = new TextView(activity);
         selection = new AnimatedWebpLongPressSpeed(2.2f, 1f);
-        selection.begin(100, SystemClock.uptimeMillis());
+        selection.begin(100, 900, SystemClock.uptimeMillis());
         ReflectionHelpers.setField(activity, "mAnimatedWebpLongPressNotice", notice);
         ReflectionHelpers.setField(activity, "mAnimatedWebpLongPressSpeedSelection", selection);
         ReflectionHelpers.setField(activity, "mAnimatedWebpLongPressActive", true);
@@ -72,6 +72,46 @@ public class AnimatedWebpLongPressGestureTest {
                     .shutdownNow();
         }
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre", null);
+    }
+
+    @Test
+    public void upwardSwipeImmediatelyLocksCurrentSpeedAndReleaseHidesNotice() {
+        dispatch(MotionEvent.ACTION_MOVE, 132);
+        dispatch(MotionEvent.ACTION_MOVE, 164, 868);
+        assertFalse(selection.isAdjustable(SystemClock.uptimeMillis()));
+        assertEquals(2.5f, selection.getSpeed(), 0f);
+        assertEquals("2.5x", notice.getText().toString());
+        assertTrue(ReflectionHelpers.getField(activity, "mAnimatedWebpLongPressActive"));
+        dispatch(MotionEvent.ACTION_MOVE, 260, 900);
+        assertEquals(2.5f, selection.getSpeed(), 0f);
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpTouchDragging"));
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpSeeking"));
+        assertFalse(ReflectionHelpers.getField(activity, "mOrientationSwipeActive"));
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(3));
+        assertEquals("2.5x", notice.getText().toString());
+        // Call the touch handler directly: this test has no window for the GL cancel event.
+        MotionEvent release = MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, 260, 900, 0);
+        try {
+            assertTrue(ReflectionHelpers.callInstanceMethod(activity,
+                    "handleAnimatedWebpLongPressGesture",
+                    ReflectionHelpers.ClassParameter.from(MotionEvent.class, release)));
+        } finally {
+            release.recycle();
+        }
+        assertEquals(View.GONE, notice.getVisibility());
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpLongPressActive"));
+    }
+
+    @Test
+    public void verticalJitterAndDownwardSwipeKeepAdjustmentOpen() {
+        dispatch(MotionEvent.ACTION_MOVE, 100, 869);
+        assertTrue(selection.isAdjustable(SystemClock.uptimeMillis()));
+        dispatch(MotionEvent.ACTION_MOVE, 100, 1000);
+        assertTrue(selection.isAdjustable(SystemClock.uptimeMillis()));
+        dispatch(MotionEvent.ACTION_MOVE, 132, 900);
+        assertEquals(2.5f, selection.getSpeed(), 0f);
+        assertEquals(activity.getString(R.string.animated_webp_long_press_speed_hint, "2.5"),
+                notice.getText().toString());
     }
 
     @Test
@@ -119,8 +159,12 @@ public class AnimatedWebpLongPressGestureTest {
     }
 
     private void dispatch(int action, float x) {
+        dispatch(action, x, 900);
+    }
+
+    private void dispatch(int action, float x, float y) {
         long now = SystemClock.uptimeMillis();
-        MotionEvent event = MotionEvent.obtain(now, now, action, x, 900, 0);
+        MotionEvent event = MotionEvent.obtain(now, now, action, x, y, 0);
         try {
             assertTrue(activity.dispatchTouchEvent(event));
         } finally {
