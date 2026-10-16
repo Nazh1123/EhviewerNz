@@ -21,9 +21,14 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
     private val cache get() = File(cacheRoot, gallery)
     private val persistent get() = File(persistentRoot, gallery)
 
+    fun scaleFor(width: Int, height: Int) = options.scale.resolve(width, height)
+    val acceptsLegacy get() = options.scale == SuperResolutionScale.X2
+
     suspend fun key(source: File): String {
         val hash = MessageDigest.getInstance("SHA-256")
         hash.update(options.modelIdentity.toByteArray())
+        // Preserve existing 2x results; isolate other scales and the automatic policy.
+        if (!acceptsLegacy) hash.update(":scale-${options.scale.value}-v1".toByteArray())
         source.inputStream().use { input ->
             val buffer = ByteArray(64 * 1024)
             while (true) {
@@ -78,11 +83,14 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
     }
 
     fun checkpoint(key: String, width: Int, height: Int): EnhancedTilePage {
+        val scale = scaleFor(width, height)
         val directory = File(if (options.persist) persistent else cache, "$key.tiles")
-        readPage(directory, completed = false)?.takeIf { it.sourceWidth == width && it.sourceHeight == height }?.let { return it }
+        readPage(directory, completed = false)?.takeIf {
+            it.sourceWidth == width && it.sourceHeight == height && it.scale == scale
+        }?.let { return it }
         check(!directory.exists() || directory.deleteRecursively())
         check(directory.mkdirs())
-        val page = EnhancedTilePage(directory, width, height)
+        val page = EnhancedTilePage(directory, width, height, scale)
         writePage(page, false)
         return page
     }
@@ -125,17 +133,20 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
 
     private fun readPage(directory: File, completed: Boolean): EnhancedTilePage? = runCatching {
         val json = JSONObject(File(directory, "page.json").readText())
-        if (json.getInt("version") != 1 || (completed && !json.getBoolean("complete"))) return@runCatching null
+        val version = json.getInt("version")
+        if (version !in 1..2 || (completed && !json.getBoolean("complete"))) return@runCatching null
         val w = json.getInt("width"); val h = json.getInt("height")
         if (w !in 1..32768 || h !in 1..32768) return@runCatching null
-        EnhancedTilePage(directory, w, h)
+        val scale = if (version == 1) 2 else json.getInt("scale")
+        if (scale != scaleFor(w, h)) return@runCatching null
+        EnhancedTilePage(directory, w, h, scale)
     }.getOrNull()
 
     private fun writePage(page: EnhancedTilePage, complete: Boolean) {
         val temporary = File.createTempFile("page-", ".tmp", page.directory)
         try {
-            temporary.writeText(JSONObject().put("version", 1).put("width", page.sourceWidth)
-                .put("height", page.sourceHeight).put("complete", complete).toString())
+            temporary.writeText(JSONObject().put("version", 2).put("width", page.sourceWidth)
+                .put("height", page.sourceHeight).put("scale", page.scale).put("complete", complete).toString())
             atomicPublish(temporary, File(page.directory, "page.json"))
         } finally { temporary.delete() }
     }

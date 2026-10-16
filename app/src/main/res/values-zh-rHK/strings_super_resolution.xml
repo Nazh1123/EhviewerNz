@@ -2,8 +2,11 @@
 <resources>
     <string name="sr_title">超解析度</string>
     <string name="sr_settings">超解析度設定與模型</string>
-    <string name="sr_settings_summary">2× 放大 · 預處理頁面 · 儲存結果 · 與翻譯相容</string>
-    <string name="sr_description">waifu2x 將靜態圖片放大至 2×。預設速度優先，畫質優先更接近原有灰階。點擊閱讀器超分按鈕開啟，長按可處理完整畫廊、重試本頁或對比原圖。同一頁需要兩條流程時，先翻譯、再超分，完成後才處理下一頁。兩邊的預處理範圍獨立，均讀取原圖。結果分塊儲存，中斷後從已儲存的區塊繼續。動畫及處理記憶體不足的圖片會略過。</string>
+    <string name="sr_settings_summary">可選倍率 · 預處理頁面 · 儲存結果 · 與翻譯相容</string>
+    <string name="sr_description">waifu2x 依所選倍率放大靜態圖片，4× 與 8× 透過多輪 2× 超分實現。預設速度優先，畫質優先更接近原有灰階。點擊閱讀器超分按鈕開啟，長按可處理完整畫廊、重試本頁或對比原圖。同一頁需要兩條流程時，先翻譯、再超分，完成後才處理下一頁。兩邊的預處理範圍獨立，均讀取原圖。結果分塊儲存，中斷後從已儲存的區塊繼續。動畫及處理記憶體不足的圖片會略過。</string>
+    <string name="sr_scale">超分放大倍率</string>
+    <string name="sr_scale_auto">自動（短邊 ≥ 1200px，2×～8×）</string>
+    <string name="sr_scale_help">自動從 2×、4×、8× 中選擇使短邊達到 1200px 的最小倍率，最高 8×；極小圖片可能仍不足 1200px。高倍率需要更多時間與儲存空間。修改後返回閱讀器生效。</string>
     <string name="sr_automatic">閱讀時自動超分</string>
     <string name="sr_auto_on">自動超解析度：已開啟（點擊關閉）</string>
     <string name="sr_auto_off">自動超解析度：已關閉（點擊開啟）</string>

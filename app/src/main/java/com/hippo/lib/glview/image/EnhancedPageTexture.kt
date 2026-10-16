@@ -52,13 +52,13 @@ class EnhancedPageTexture(private val page: EnhancedTilePage, private val root: 
         var sample = 1
         val ratio = minOf(source.width() / target.width(), source.height() / target.height())
         while (sample * 2 <= ratio) sample *= 2
-        val edge = EnhancedTilePage.EDGE * 2
+        val edge = page.outputEdge
         val x0 = (source.left / edge).toInt().coerceIn(0, page.columns - 1)
         val x1 = ((source.right - .01f) / edge).toInt().coerceIn(0, page.columns - 1)
         val y0 = (source.top / edge).toInt().coerceIn(0, page.rows - 1)
         val y1 = ((source.bottom - .01f) / edge).toInt().coerceIn(0, page.rows - 1)
         val count = (x1 - x0 + 1L) * (y1 - y0 + 1)
-        while (count * (edge + 4) * (edge + 4) * 4 / sample / sample > GL_CACHE_BYTES) sample *= 2
+        while (count * (edge + page.scale * 2) * (edge + page.scale * 2) * 4 / sample / sample > GL_CACHE_BYTES) sample *= 2
         desired = (y0..y1).flatMap { y -> (x0..x1).map { x -> "${y * page.columns + x}:$sample" } }.toSet()
         val unused = textures.entries.iterator()
         while (unused.hasNext()) {

@@ -4,6 +4,7 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
+import com.hippo.ehviewer.translation.engine.SuperResolution
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Before
@@ -115,5 +116,74 @@ class SuperResolutionPageProcessorTest {
             assertEquals(Color.BLACK, pixels.bitmap.getPixel(1024 - region.left, 1024 - region.top))
             assertEquals(Color.WHITE, pixels.bitmap.getPixel(0, 0))
         } finally { pixels.close(); page.trim() }
+    }
+
+    @Test fun higherAndAutomaticScalesKeepTilesBoundedAndReopenWithoutInference() = runBlocking {
+        val source = source(255, 151)
+        for (mode in listOf(SuperResolutionScale.X4, SuperResolutionScale.X8, SuperResolutionScale.AUTO)) {
+            val options = SuperResolutionOptions(scale = mode, persist = false)
+            val store = SuperResolutionStore(context, "scale-${mode.value}", options)
+            val key = store.key(source)
+            val (page, metrics) = SuperResolutionPageProcessor(context).process(source, store, key, 1024L * 1024,
+                {}, ::render, {}, { false }, grouped = true)
+            val scale = mode.resolve(255, 151)
+            assertEquals(255 * scale, page.width); assertEquals(151 * scale, page.height)
+            assertEquals(scale, page.scale)
+            assertTrue(metrics.maxOutputBitmapBytes <= SuperResolutionPageProcessor.BAND_BYTES)
+            for (index in 0 until page.count) {
+                assertTrue(page.complete(index))
+                assertTrue(page.region(index).width() <= 512 && page.region(index).height() <= 512)
+            }
+            val region = page.region(0)
+            val pixels = checkNotNull(page.acquire(0, 1))
+            try { assertEquals(Color.WHITE, pixels.bitmap.getPixel(0, 0)) }
+            finally { pixels.close(); page.trim() }
+            val persistent = SuperResolutionStore(context, "scale-${mode.value}", options.copy(persist = true))
+            val (retained, reused) = SuperResolutionPageProcessor(context).process(source, persistent, key, 1024L * 1024,
+                {}, { _, _, _ -> error("Cached page must not load model") }, {}, { false })
+            assertEquals(0, reused.computedTiles)
+            assertEquals(page.count, reused.reusedTiles)
+            assertEquals(region, retained.region(0))
+            assertEquals(scale, retained.scale)
+            SuperResolutionStore.clear(context)
+            assertNotNull(persistent.findTiles(key))
+        }
+    }
+
+    @Test fun interruptedEightTimesPageResumesSavedTiles() = runBlocking {
+        val source = source(127, 129)
+        val store = SuperResolutionStore(context, "resume-eight", SuperResolutionOptions(scale = SuperResolutionScale.X8))
+        val key = store.key(source)
+        var calls = 0
+        try {
+            SuperResolutionPageProcessor(context).process(source, store, key, 1024L * 1024, {},
+                { bitmap, rect, callback ->
+                    if (++calls == 7) throw CancellationException("translation")
+                    render(bitmap, rect, callback)
+                }, {}, { fail("Incomplete page must not publish"); false })
+            fail("Expected cancellation")
+        } catch (_: CancellationException) { }
+        assertNull(store.findTiles(key))
+        val partial = store.checkpoint(key, 127, 129)
+        val saved = (0 until partial.count).count(partial::complete)
+        assertTrue(saved > 0)
+        val (page, stats) = SuperResolutionPageProcessor(context).process(source, store, key, 1024L * 1024,
+            {}, ::render, {}, { false })
+        assertEquals(saved, stats.reusedTiles)
+        assertEquals(page.count - saved, stats.computedTiles)
+        assertEquals(8, page.scale)
+    }
+
+    @Test fun veryWideEightTimesBandsRespectNativeInputDimensions() = runBlocking {
+        val source = source(16385, 1)
+        val store = SuperResolutionStore(context, "wide-eight", SuperResolutionOptions(scale = SuperResolutionScale.X8))
+        val (page, _) = SuperResolutionPageProcessor(context).process(source, store, store.key(source), 1024L * 1024, {},
+            { bitmap, rect, callback ->
+                assertTrue("Every pass must fit the native dimension and byte limits",
+                    SuperResolution.accepts(rect.width(), rect.height(), SuperResolutionPageProcessor.BAND_BYTES))
+                render(bitmap, rect, callback)
+            }, {}, { false }, grouped = true)
+        assertEquals(131080, page.width)
+        assertEquals(8, page.height)
     }
 }

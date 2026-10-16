@@ -40,7 +40,7 @@ internal class SuperResolutionPageProcessor(private val context: Context) {
             return page to metrics
         }
         checkPriority()
-        val legacy = store.find(key)
+        val legacy = if (store.acceptsLegacy) store.find(key) else null
         val decoder = legacy?.let { BitmapRegionDecoder.newInstance(it.path, false) }
         var original: Bitmap? = null
         var page: EnhancedTilePage? = null
@@ -53,6 +53,8 @@ internal class SuperResolutionPageProcessor(private val context: Context) {
             val height = decoder?.height?.div(2) ?: checkNotNull(original).height
             page = store.checkpoint(key, width, height)
             val tiles = page
+            val scale = tiles.scale
+            val upscaler = SuperResolutionUpscaler(render)
             val missing = (0 until tiles.count).filterNot(tiles::complete)
             metrics.reusedTiles = tiles.count - missing.size
             progress(metrics.reusedTiles * 100 / tiles.count)
@@ -81,18 +83,26 @@ internal class SuperResolutionPageProcessor(private val context: Context) {
                                 if (grouped) {
                                     // Share strip uploads/JNI dispatch across neighbouring tiles.
                                     // The temporary band stays <=8 MiB, independent of page height.
-                                    val maxWidth = (BAND_BYTES / region.height() / 4).toInt() / 2 * 2
+                                    // A 2x pass also limits its input region to 32768px per side.
+                                    val maxWidth = minOf(65536L, BAND_BYTES / region.height() / 4).toInt() / scale * scale
                                     bandRegion.right = minOf(tiles.width, region.left + maxWidth)
                                 }
-                                band = render(input, Rect(bandRegion.left / 2, bandRegion.top / 2,
-                                    bandRegion.right / 2, bandRegion.bottom / 2)) { done, total ->
+                                band = upscaler.upscale(input, Rect(bandRegion.left / scale, bandRegion.top / scale,
+                                    bandRegion.right / scale, bandRegion.bottom / scale), scale) { done, total ->
                                     progress(((metrics.reusedTiles + position + done.toDouble() / total.coerceAtLeast(1)) * 100 / tiles.count).toInt())
                                 }
                                 metrics.maxOutputBitmapBytes = maxOf(metrics.maxOutputBitmapBytes, checkNotNull(band).allocationByteCount)
                             }
                             Bitmap.createBitmap(region.width(), region.height(), Bitmap.Config.ARGB_8888).also { tile ->
-                                Canvas(tile).drawBitmap(checkNotNull(band), Rect(region.left - bandRegion.left, region.top - bandRegion.top,
-                                    region.right - bandRegion.left, region.bottom - bandRegion.top), Rect(0, 0, tile.width, tile.height), null)
+                                val canvas = Canvas(tile)
+                                try {
+                                    canvas.drawBitmap(checkNotNull(band), Rect(region.left - bandRegion.left, region.top - bandRegion.top,
+                                        region.right - bandRegion.left, region.bottom - bandRegion.top), Rect(0, 0, tile.width, tile.height), null)
+                                } finally {
+                                    // Native Canvas retains the pixel buffer even after Bitmap.recycle().
+                                    // Detach it now instead of retaining an entire page's tiles until GC.
+                                    canvas.setBitmap(null)
+                                }
                             }
                         }
                         metrics.inferenceMs += SystemClock.elapsedRealtime() - inferenceStart

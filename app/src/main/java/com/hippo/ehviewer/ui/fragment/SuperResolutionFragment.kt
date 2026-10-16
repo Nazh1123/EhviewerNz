@@ -12,6 +12,7 @@ import com.hippo.ehviewer.R
 import com.hippo.ehviewer.superresolution.SuperResolutionModels
 import com.hippo.ehviewer.superresolution.SuperResolutionMemoryBudget
 import com.hippo.ehviewer.superresolution.SuperResolutionSettings
+import com.hippo.ehviewer.superresolution.SuperResolutionScale
 import com.hippo.ehviewer.superresolution.SuperResolutionStore
 import com.hippo.ehviewer.translation.TranslationModels
 import com.hippo.ehviewer.translation.notifyModelDownloadNetwork
@@ -69,6 +70,16 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
             }
         }
         reading.addPreference(automatic)
+        reading.addPreference(ListPreference(requireContext()).apply {
+            key = SuperResolutionSettings.SCALE
+            setTitle(R.string.sr_scale)
+            entries = arrayOf(getString(R.string.sr_scale_auto), "2×", "4×", "8×")
+            entryValues = SuperResolutionScale.entries.map { it.value }.toTypedArray()
+            setDefaultValue("2")
+            summaryProvider = Preference.SummaryProvider<ListPreference> {
+                "${it.entry ?: "2×"}\n${getString(R.string.sr_scale_help)}"
+            }
+        })
         acceleration = ListPreference(requireContext()).apply {
             key = SuperResolutionModels.BACKEND
             setTitle(R.string.sr_backend)

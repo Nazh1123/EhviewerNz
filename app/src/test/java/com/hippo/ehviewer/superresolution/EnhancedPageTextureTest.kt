@@ -22,8 +22,12 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class EnhancedPageTextureTest {
     @Test fun crossTileCropFillsViewportAndPanEvictsPreviousTextures() = runBlocking {
+        for (scale in listOf(2, 4, 8)) verifyCropAndPan(scale)
+    }
+
+    private suspend fun verifyCropAndPan(scale: Int) {
         val context = RuntimeEnvironment.getApplication()
-        val page = EnhancedTilePage(File(context.cacheDir, "texture-${System.nanoTime()}").apply { mkdirs() }, 600, 600)
+        val page = EnhancedTilePage(File(context.cacheDir, "texture-${System.nanoTime()}").apply { mkdirs() }, 1200 / scale, 1200 / scale, scale)
         val store = SuperResolutionStore(context, "texture-test", SuperResolutionOptions(persist = false))
         for (index in 0 until page.count) {
             val rect = page.region(index)

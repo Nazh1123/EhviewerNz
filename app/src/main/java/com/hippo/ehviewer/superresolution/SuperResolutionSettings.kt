@@ -10,6 +10,7 @@ internal data class SuperResolutionOptions(
     val cacheMiB: Int = 512,
     val halfArithmetic: Boolean = false,
     val batchTiles: Int = 1,
+    val scale: SuperResolutionScale = SuperResolutionScale.X2,
 ) {
     // Changes to the model/padding/quantization require a new identity.
     val modelIdentity get() = "upconv7-64914665-v2:$mode" + if (mode == "auto_fast" && halfArithmetic) ":fp16-arithmetic" else ""
@@ -25,6 +26,7 @@ internal class SuperResolutionSettings(context: Context) {
         cacheMiB = preferences.getString(CACHE, "512")?.toIntOrNull()?.coerceIn(64, 8192) ?: 512,
         halfArithmetic = preferences.getBoolean("sr_validated_fp16_arithmetic", false),
         batchTiles = preferences.getInt("sr_validated_gpu_batch", 1).coerceIn(1, 4),
+        scale = SuperResolutionScale.fromValue(preferences.getString(SCALE, "2")),
     )
     var automatic: Boolean
         get() = preferences.getBoolean(SuperResolutionModels.ENABLED, false)
@@ -34,5 +36,6 @@ internal class SuperResolutionSettings(context: Context) {
         const val AHEAD = "super_resolution_ahead"
         const val PERSIST = "super_resolution_persist"
         const val CACHE = "super_resolution_cache_mib"
+        const val SCALE = "super_resolution_scale"
     }
 }

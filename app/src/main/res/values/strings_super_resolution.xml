@@ -2,8 +2,11 @@
 <resources>
     <string name="sr_title">Super-resolution</string>
     <string name="sr_settings">Super-resolution settings and models</string>
-    <string name="sr_settings_summary">2× enlargement · Preprocess pages · Save results · Works with translation</string>
-    <string name="sr_description">waifu2x enlarges still images to 2×. Speed mode is the default; quality mode preserves grayscale more closely. Tap the reader SR button to enable, or hold it to process the whole gallery, retry a page, or compare images. When both features need a page, translation finishes first, then super-resolution, before the next page starts. Each feature keeps its own preprocessing range and reads the original. Results are saved in tiles; interrupted work resumes from saved tiles. Animations and images that cannot fit the working memory budget are skipped.</string>
+    <string name="sr_settings_summary">Selectable scale · Preprocess pages · Save results · Works with translation</string>
+    <string name="sr_description">waifu2x enlarges still images at the selected scale; 4× and 8× use repeated 2× enhancement. Speed mode is the default; quality mode preserves grayscale more closely. Tap the reader SR button to enable, or hold it to process the whole gallery, retry a page, or compare images. When both features need a page, translation finishes first, then super-resolution, before the next page starts. Each feature keeps its own preprocessing range and reads the original. Results are saved in tiles; interrupted work resumes from saved tiles. Animations and images that cannot fit the working memory budget are skipped.</string>
+    <string name="sr_scale">Enlargement scale</string>
+    <string name="sr_scale_auto">Automatic (short side ≥ 1200px, 2×–8×)</string>
+    <string name="sr_scale_help">Automatic chooses the smallest of 2×, 4× and 8× that makes the short side at least 1200px, capped at 8×. Very small images may remain below 1200px. Higher scales take more time and storage. Changes apply when you return to the reader.</string>
     <string name="sr_automatic">Automatically enhance while reading</string>
     <string name="sr_auto_on">Automatic super-resolution: on (tap to disable)</string>
     <string name="sr_auto_off">Automatic super-resolution: off (tap to enable)</string>

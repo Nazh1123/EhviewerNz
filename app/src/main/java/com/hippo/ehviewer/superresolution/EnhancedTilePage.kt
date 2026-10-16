@@ -9,11 +9,16 @@ import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.atomic.AtomicIntegerArray
 
 /** Immutable geometry, atomically written PNG tiles, bounded shared CPU cache. No full output Bitmap. */
-class EnhancedTilePage internal constructor(val directory: File, val sourceWidth: Int, val sourceHeight: Int) {
-    val width = sourceWidth * 2
-    val height = sourceHeight * 2
-    val columns = (sourceWidth + EDGE - 1) / EDGE
-    val rows = (sourceHeight + EDGE - 1) / EDGE
+class EnhancedTilePage internal constructor(val directory: File, val sourceWidth: Int, val sourceHeight: Int,
+                                           val scale: Int = 2) {
+    init { require(scale in listOf(2, 4, 8)) }
+    val width = sourceWidth * scale
+    val height = sourceHeight * scale
+    // Keep output tiles around 504px at every scale, with source-aligned gutters.
+    val sourceEdge = minOf(EDGE * 2 / scale, 512 / scale - 2)
+    val outputEdge = sourceEdge * scale
+    val columns = (sourceWidth + sourceEdge - 1) / sourceEdge
+    val rows = (sourceHeight + sourceEdge - 1) / sourceEdge
     val count = columns * rows
     private val cache = LinkedHashMap<String, Pixels>(16, .75f, true)
     private var bytes = 0L
@@ -33,14 +38,14 @@ class EnhancedTilePage internal constructor(val directory: File, val sourceWidth
     }
     fun core(index: Int): Rect {
         require(index in 0 until count)
-        val x = index % columns * EDGE * 2
-        val y = index / columns * EDGE * 2
-        return Rect(x, y, minOf(width, x + EDGE * 2), minOf(height, y + EDGE * 2))
+        val x = index % columns * outputEdge
+        val y = index / columns * outputEdge
+        return Rect(x, y, minOf(width, x + outputEdge), minOf(height, y + outputEdge))
     }
-    /** Two output-pixel gutters allow bilinear filtering across tile boundaries. */
+    /** One source-pixel gutter keeps crops aligned at every scale and covers bilinear filtering. */
     fun region(index: Int): Rect = core(index).apply {
-        left = maxOf(0, left - 2); top = maxOf(0, top - 2)
-        right = minOf(width, right + 2); bottom = minOf(height, bottom + 2)
+        left = maxOf(0, left - scale); top = maxOf(0, top - scale)
+        right = minOf(width, right + scale); bottom = minOf(height, bottom + scale)
     }
     fun file(index: Int) = File(directory, "$index.png")
     fun complete(index: Int): Boolean {

@@ -12,6 +12,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.File
+import java.security.MessageDigest
+import org.json.JSONObject
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [26, 34])
@@ -70,5 +72,30 @@ class SuperResolutionStoreTest {
         assertTrue(canceled.isCancelled)
         assertNull(store.find(key))
         assertTrue(File(context.noBackupFilesDir, "super-resolution-pages").walkTopDown().none { it.isFile })
+    }
+
+    @Test fun scalesHaveSeparateCacheKeysAndTwoTimesKeepsItsExistingKey() = runBlocking {
+        val source = source("original")
+        val legacyHash = MessageDigest.getInstance("SHA-256").apply {
+            update(SuperResolutionOptions().modelIdentity.toByteArray()); update(source.readBytes())
+        }.digest().joinToString("") { "%02x".format(it) }
+        val keys = SuperResolutionScale.entries.map { scale ->
+            SuperResolutionStore(context, "one", SuperResolutionOptions(scale = scale)).key(source)
+        }
+        assertEquals(4, keys.toSet().size)
+        assertEquals(legacyHash, keys[SuperResolutionScale.X2.ordinal])
+    }
+
+    @Test fun originalTileMetadataReopensAndScaleMismatchIsRejected() {
+        val store = SuperResolutionStore(context, "one", SuperResolutionOptions())
+        val page = store.checkpoint("legacy", 17, 13)
+        val metadata = File(page.directory, "page.json")
+        metadata.writeText(JSONObject().put("version", 1).put("width", 17).put("height", 13)
+            .put("complete", true).toString())
+        assertEquals(2, checkNotNull(store.findTiles("legacy")).scale)
+        metadata.writeText(JSONObject().put("version", 2).put("width", 17).put("height", 13)
+            .put("scale", 4).put("complete", true).toString())
+        assertNull(store.findTiles("legacy"))
+        assertEquals(2, store.checkpoint("legacy", 17, 13).scale)
     }
 }
