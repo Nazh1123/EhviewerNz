@@ -47,6 +47,7 @@ public abstract class GalleryProvider {
     private final ImageCache mTranslatedCache = new ImageCache();
     private final ImageCache mEnhancedCache = new ImageCache(
             (int) com.hippo.ehviewer.translation.engine.SuperResolution.DEFAULT_OUTPUT_BYTES);
+    private final ConcurrentHashMap<Integer, com.hippo.ehviewer.superresolution.EnhancedTilePage> mEnhancedTiles = new ConcurrentHashMap<>();
     private final java.util.Set<Integer> mUnenhancedPages = ConcurrentHashMap.newKeySet();
     private final java.util.Set<Integer> mSuperResolutionAnimations = ConcurrentHashMap.newKeySet();
     private volatile boolean mShowTranslations;
@@ -72,6 +73,8 @@ public abstract class GalleryProvider {
         mImageCache.evictAll();
         mTranslatedCache.evictAll();
         mEnhancedCache.evictAll();
+        mEnhancedTiles.values().forEach(com.hippo.ehviewer.superresolution.EnhancedTilePage::trim);
+        mEnhancedTiles.clear();
         mUnenhancedPages.clear();
         mSuperResolutionAnimations.clear();
         mOriginalPages.clear();
@@ -128,7 +131,21 @@ public abstract class GalleryProvider {
         finally { image.release(); }
     }
 
-    public boolean hasEnhancedPage(int index) { return mEnhancedCache.getLive(index) != null; }
+    public boolean hasEnhancedPage(int index) { return mEnhancedTiles.containsKey(index) || mEnhancedCache.getLive(index) != null; }
+
+    public void setEnhancedTiles(int index, com.hippo.ehviewer.superresolution.EnhancedTilePage page) {
+        page.activate();
+        if (mEnhancedTiles.get(index) == page) return;
+        mEnhancedCache.remove(index);
+        com.hippo.ehviewer.superresolution.EnhancedTilePage previous = mEnhancedTiles.put(index, page);
+        if (previous != null) previous.trim();
+        mUnenhancedPages.remove(index);
+        notifyOverlayChanged(index);
+    }
+
+    public com.hippo.ehviewer.superresolution.EnhancedTilePage getEnhancedTiles(int index) {
+        return mUnenhancedPages.contains(index) ? null : mEnhancedTiles.get(index);
+    }
 
     /** 0 = source pending, 1 = ready, -1 = animation, -2 = over memory budget. */
     public int getSuperResolutionStatus(int index) {
@@ -160,12 +177,15 @@ public abstract class GalleryProvider {
 
     /** Reclaim previous enhanced pages before allocating another full-size result. */
     public void retainEnhancedPage(int index) {
+        for (Integer page : mEnhancedTiles.keySet()) if (page != index) removeEnhancedPage(page);
         for (Integer page : mEnhancedCache.snapshot().keySet()) {
             if (page != index) removeEnhancedPage(page);
         }
     }
 
     public void setEnhancedPage(int index, Image image) {
+        com.hippo.ehviewer.superresolution.EnhancedTilePage previous = mEnhancedTiles.remove(index);
+        if (previous != null) previous.trim();
         mUnenhancedPages.remove(index);
         mEnhancedCache.add(index, new ImageWrapper(image));
         notifyOverlayChanged(index);
@@ -182,13 +202,19 @@ public abstract class GalleryProvider {
     }
 
     public void removeEnhancedPage(int index) {
+        com.hippo.ehviewer.superresolution.EnhancedTilePage tiles = mEnhancedTiles.remove(index);
+        if (tiles != null) tiles.trim();
+        boolean changed = tiles != null || mEnhancedCache.get(index) != null;
         mEnhancedCache.remove(index);
         mUnenhancedPages.remove(index);
-        notifyOverlayChanged(index);
+        if (changed) notifyOverlayChanged(index);
     }
 
     public void clearEnhancedPages() {
-        java.util.Set<Integer> pages = mEnhancedCache.snapshot().keySet();
+        java.util.Set<Integer> pages = new java.util.HashSet<>(mEnhancedCache.snapshot().keySet());
+        pages.addAll(mEnhancedTiles.keySet());
+        mEnhancedTiles.values().forEach(com.hippo.ehviewer.superresolution.EnhancedTilePage::trim);
+        mEnhancedTiles.clear();
         mEnhancedCache.evictAll();
         mUnenhancedPages.clear();
         for (Integer index : pages) notifyOverlayChanged(index);

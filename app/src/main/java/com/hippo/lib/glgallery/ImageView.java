@@ -50,6 +50,7 @@ class ImageView extends GLView implements ImageTexture.Callback {
     private ImageTexture mImageTexture;
     private ImageTexture mOverlayTexture;
     private ImageTexture mEnhancedTexture;
+    private com.hippo.lib.glview.image.EnhancedPageTexture mEnhancedTiles;
     private final RectF mEnhancedSrc = new RectF();
     private final RectF mOverlaySrc = new RectF();
     private int mTextureWidth;
@@ -248,6 +249,13 @@ class ImageView extends GLView implements ImageTexture.Callback {
     public ImageTexture getOverlayTexture() { return mOverlayTexture; }
 
     public ImageTexture getEnhancedTexture() { return mEnhancedTexture; }
+
+    public void setEnhancedTiles(com.hippo.lib.glview.image.EnhancedPageTexture texture) {
+        if (mEnhancedTiles != null) { mEnhancedTiles.setCallback(null); mEnhancedTiles.recycle(); }
+        mEnhancedTiles = texture;
+        if (texture != null) texture.setCallback(this::invalidate);
+        invalidate();
+    }
 
     /** Keep source geometry, zoom and scroll offsets while changing the displayed pixels. */
     public void setEnhancedTexture(ImageTexture texture) {
@@ -638,7 +646,14 @@ class ImageView extends GLView implements ImageTexture.Callback {
         }
 
         if (!mSrcActual.isEmpty()) {
-            if (mEnhancedTexture != null) {
+            if (mEnhancedTiles != null) {
+                texture.draw(canvas, mSrcActual, mDstActual);
+                float sx = (float) mEnhancedTiles.getWidth() / texture.getWidth();
+                float sy = (float) mEnhancedTiles.getHeight() / texture.getHeight();
+                mEnhancedSrc.set(mSrcActual.left * sx, mSrcActual.top * sy,
+                        mSrcActual.right * sx, mSrcActual.bottom * sy);
+                mEnhancedTiles.draw(canvas, mEnhancedSrc, mDstActual);
+            } else if (mEnhancedTexture != null) {
                 float sx = (float) mEnhancedTexture.getWidth() / texture.getWidth();
                 float sy = (float) mEnhancedTexture.getHeight() / texture.getHeight();
                 mEnhancedSrc.set(mSrcActual.left * sx, mSrcActual.top * sy,

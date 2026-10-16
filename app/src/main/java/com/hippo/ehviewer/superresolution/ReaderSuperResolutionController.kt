@@ -35,6 +35,7 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
             provider.setEnhancedPage(page, image)
         }
         override fun hasPage(page: Int) = provider.hasEnhancedPage(page)
+        override fun displayTiles(page: Int, tiles: EnhancedTilePage) { provider.setEnhancedTiles(page, tiles) }
         override fun clear() { provider.clearEnhancedPages() }
     }
     init {

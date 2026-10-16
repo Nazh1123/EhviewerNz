@@ -22,5 +22,5 @@ void main() {
     if (p.premultiplied != 0 && alpha > 0.0 && alpha < 1.0)
         value = clamp(floor(value / alpha * 255.0 + 0.5), 0.0, 255.0) * (1.0 / 255.0);
     float composed = value * alpha + 1.0 - alpha;
-    buffer_st1(values, c * p.outStep + y * p.outWidth + x, composed);
+    buffer_st1(values, c * p.outStep + y * p.outWidth + x, afp(composed));
 }

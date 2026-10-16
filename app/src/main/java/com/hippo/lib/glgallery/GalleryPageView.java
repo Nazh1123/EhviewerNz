@@ -45,6 +45,7 @@ public class GalleryPageView extends GLFrameLayout {
     private final int mMinHeight;
 
     private int mIndex = INVALID_INDEX;
+    private com.hippo.ehviewer.superresolution.EnhancedTilePage mEnhancedTilePage;
 
     public GalleryPageView(ImageMovableTextTexture pageTextTexture,
             int progressColor, int progressBgColor, int progressSize,
@@ -127,6 +128,7 @@ public class GalleryPageView extends GLFrameLayout {
     private void unbindImage() {
         setOverlay(null);
         setEnhanced(null);
+        setEnhancedTiles(null);
         ImageTexture texture = mImage.getImageTexture();
         if (texture != null) {
             mImage.setImageTexture(null);
@@ -156,6 +158,12 @@ public class GalleryPageView extends GLFrameLayout {
         ImageTexture previous = mImage.getEnhancedTexture();
         mImage.setEnhancedTexture(enhanced);
         if (previous != null) previous.recycle();
+    }
+
+    public void setEnhancedTiles(com.hippo.ehviewer.superresolution.EnhancedTilePage page) {
+        if (mEnhancedTilePage == page) return;
+        mEnhancedTilePage = page;
+        mImage.setEnhancedTiles(page == null ? null : new com.hippo.lib.glview.image.EnhancedPageTexture(page, getGLRoot()));
     }
 
     public void setPage(int page) {

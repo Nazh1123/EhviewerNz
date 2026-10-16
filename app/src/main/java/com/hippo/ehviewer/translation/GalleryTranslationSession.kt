@@ -104,6 +104,12 @@ internal class GalleryTranslationSession(
     private val imageReads = TranslationImageWork()
     private val preparationWork = TranslationImageWork()
     private val navigationSettler = TranslationNavigationSettler()
+    private val pageWork = GalleryPageWorkRegistry.acquire(identity)
+    private val pageQueue = GalleryPageWork.Queue(
+        active = { enabled && (readerOpen || fullGallery) },
+        pages = { pendingPages() }, settled = { isPageSettled(it) },
+        ready = { size > 0 },
+    ).also { pageWork.register(GalleryPageWork.Stage.TRANSLATION, it) }
     private class NativeModels(
         val epoch: Int, val identity: String,
         val engine: ResumablePipeline, val translator: AutoCloseable,
@@ -294,6 +300,12 @@ internal class GalleryTranslationSession(
             val yielded = AtomicBoolean(false)
             var turn: TranslationScheduler.Turn? = null
             try {
+                // A paired SR stage must finish outside both the scheduler turn and
+                // the high-priority inference gate, otherwise SR could never enter.
+                val nextPage = withContext(Dispatchers.Main) {
+                    if (size > 0) pageWork.await(GalleryPageWork.Stage.TRANSLATION) else -1
+                }
+                if (nextPage == null && size > 0) return@launch
                 // Assign on Main: cancellation returning to IO must not lose an admitted turn.
                 withContext(Dispatchers.Main) {
                     turn = TranslationTasks.scheduler.acquire { schedulingPriority() }
@@ -314,7 +326,7 @@ internal class GalleryTranslationSession(
                         ensureActive()
                     }
                     check(size > 0) { "Gallery source unavailable" }
-                    withContext(Dispatchers.Main) { knownSize = size }
+                    withContext(Dispatchers.Main) { knownSize = size; changed() }
                     // A foreground native lease can survive queue turns without holding this lock idle.
                     retainCompletedResults(epoch, options)
                     resultStore(options).prune()
@@ -632,7 +644,7 @@ internal class GalleryTranslationSession(
                             }
                         }
                         runTranslationPages(options.pageConcurrency, parallelReady = {
-                            engine != null && (options.source != TranslationLanguages.AUTO_SOURCE || sourceLanguage.language != null)
+                            !pageWork.coupled && engine != null && (options.source != TranslationLanguages.AUTO_SOURCE || sourceLanguage.language != null)
                         }, next = {
                             ensureActive()
                             navigationSettler.await {
@@ -643,7 +655,12 @@ internal class GalleryTranslationSession(
                                 }) {
                                 yielded.set(true)
                                 null
-                            } else withContext(Dispatchers.Main) { nextRequest() }
+                            } else withContext(Dispatchers.Main) {
+                                if (pageWork.coupled && pageWork.next(GalleryPageWork.Stage.TRANSLATION) == null) {
+                                    yielded.set(true)
+                                    null
+                                } else nextRequest(if (pageWork.coupled) pageWork.next(GalleryPageWork.Stage.TRANSLATION) else null)
+                            }
                         }, process = ::process)
                     } catch (cancel: CancellationException) {
                         throw cancel
@@ -750,7 +767,9 @@ internal class GalleryTranslationSession(
             (states[page] !in imageStates || !browsing || reader == null ||
                 if (fullGallery) page !in restorePages else page != current))
 
-    private fun nextRequest(): TranslationPageRequest? {
+    private fun nextRequest(): TranslationPageRequest? = nextRequest(null)
+
+    private fun nextRequest(selectedPage: Int?): TranslationPageRequest? {
         if (!enabled) return null
         val pages = pendingPages()
         if (fullGallery) {
@@ -759,7 +778,8 @@ internal class GalleryTranslationSession(
                 .forEach { states[it] = completedFiles[it]?.let(::imageState) ?: R.string.translation_done }
         }
         val concurrent = activeOptions.backend == TranslationBackend.LLM_API
-        val page = pages.firstOrNull { (!concurrent || it !in activeRequests) && !isPageSettled(it) } ?: return null
+        val page = pages.firstOrNull { (selectedPage == null || selectedPage == it) &&
+            (!concurrent || it !in activeRequests) && !isPageSettled(it) } ?: return null
         val restoring = states[page] in imageStates && restorePages.remove(page)
         val request = TranslationPageRequest(page, forced.remove(page), restoring, partialRetries.remove(page))
         if (!concurrent) activeRequests.clear()
@@ -983,6 +1003,8 @@ internal class GalleryTranslationSession(
 
     fun close() {
         disable()
+        pageWork.remove(GalleryPageWork.Stage.TRANSLATION, pageQueue)
+        GalleryPageWorkRegistry.release(identity, pageWork)
         reader = null
         scope.cancel()
         completedFiles.clear()
@@ -1096,6 +1118,7 @@ internal class GalleryTranslationSession(
     private class YieldTranslationTurn : Exception()
 
     private fun changed() {
+        pageWork.changed()
         reader?.changed()
         TranslationTasks.changed()
     }

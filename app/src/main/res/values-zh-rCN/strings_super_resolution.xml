@@ -3,7 +3,7 @@
     <string name="sr_title">超分辨率</string>
     <string name="sr_settings">超分辨率设置与模型</string>
     <string name="sr_settings_summary">2× 放大 · 预处理页面 · 保存结果 · 与翻译兼容</string>
-    <string name="sr_description">waifu2x 将静态图片放大至 2×。默认速度优先，画质优先更接近原有灰阶。点击阅读器超分按钮开启，长按可处理完整画廊、重试本页或对比原图。翻译优先运行，两条流程都读取原图。内存只保留当前页结果，动画及超出内存预算的图片会跳过。</string>
+    <string name="sr_description">waifu2x 将静态图片放大至 2×。默认速度优先，画质优先更接近原有灰阶。点击阅读器超分按钮开启，长按可处理完整画廊、重试本页或对比原图。同一页需要两条流程时，先翻译、再超分，完成后再处理下一页。两边的预处理范围独立，均读取原图。结果分块保存，中断后从已保存的块继续。动画及处理内存不足的图片会跳过。</string>
     <string name="sr_automatic">阅读时自动超分</string>
     <string name="sr_auto_on">自动超分：已开启（点击关闭）</string>
     <string name="sr_auto_off">自动超分：已关闭（点击开启）</string>
@@ -25,7 +25,7 @@
     <string name="sr_progress_fallback">GPU 不可用或失败，已回退 CPU：%1$d%%</string>
     <string name="sr_animation">动画图片暂不进行超分</string>
     <string name="sr_large">%1$d×%2$d 图片的 2× 输出需要 %3$d MiB，当前预算为 %4$d MiB，继续显示原图。</string>
-    <string name="sr_memory_budget">当前超分输出上限：%1$d MiB（自动调整）</string>
+    <string name="sr_memory_budget">当前原图内存预算：%1$d MiB（自动调整，超分结果分块处理）</string>
     <string name="sr_memory_unavailable">处理时可用内存不足，继续显示原图。可在其他图片任务结束后重试。</string>
     <string name="sr_failed">超分失败：%1$s</string>
     <string name="sr_automatic_help">处理当前页及设定数量的后续页面。关闭后保留已保存的结果。</string>

@@ -145,7 +145,7 @@ class SuperResolutionWorkflowDeviceTest {
             report.append("originalBytesUnchanged=PASS\n")
             val saved = withContext(Dispatchers.IO) {
                 val store = SuperResolutionStore(context, queue.identity, settings.read())
-                sources.map { checkNotNull(store.find(store.key(it))) }
+                sources.map { checkNotNull(store.findTiles(store.key(it))).directory }
             }
             assertEquals(5, saved.size)
             withContext(Dispatchers.Main) { SuperResolutionTasks.release(queue) }
@@ -159,7 +159,7 @@ class SuperResolutionWorkflowDeviceTest {
             val loaded = SuperResolutionSessionCache::class.java.getDeclaredField("value").apply { isAccessible = true }.get(engines)
             assertNull("Restoring saved images must not load NCNN", loaded)
             report.append("reopenWithoutInferenceMs=${SystemClock.elapsedRealtime() - reopenStart}\n")
-            assertTrue(saved.all { it.isFile })
+            assertTrue(saved.all { it.isDirectory })
             report.append("PASS\n")
         } finally {
             releaseTranslation.complete(Unit); translation?.cancelAndJoin()

@@ -62,14 +62,14 @@ struct Monitor {
 }
 
 namespace ehnz {
-SuperResolutionVulkan::SuperResolutionVulkan(int gpu, bool halfStorage) {
+SuperResolutionVulkan::SuperResolutionVulkan(int gpu, bool halfStorage, bool halfArithmetic, int batch) : batchTiles(std::clamp(batch, 1, 4)) {
     net.set_vulkan_device(gpu);
     halfStorage = halfStorage && net.vulkan_device()->info.support_fp16_storage();
     net.opt.num_threads = 1;
     net.opt.use_vulkan_compute = true;
     net.opt.use_fp16_packed = halfStorage;
     net.opt.use_fp16_storage = halfStorage;
-    net.opt.use_fp16_arithmetic = false;
+    net.opt.use_fp16_arithmetic = halfStorage && halfArithmetic && net.vulkan_device()->info.support_fp16_arithmetic();
     net.opt.use_bf16_storage = false;
     // Packed RGBA uint32 buffers avoid requiring the optional 8-bit storage extension.
     net.opt.use_int8_storage = false;
@@ -97,15 +97,20 @@ bool SuperResolutionVulkan::initializeShaders() {
 
 bool SuperResolutionVulkan::render(JNIEnv* env, jobject source, jobject destination,
                                    jobject progress, jobject parallelLock) {
+    return renderRegion(env, source, destination, 0, 0, progress, parallelLock);
+}
+bool SuperResolutionVulkan::renderRegion(JNIEnv* env, jobject source, jobject destination,
+                                        int left, int top, jobject progress, jobject parallelLock) {
     DeferredException errors(env);
     BitmapPixels input(env, source, errors), output(env, destination, errors);
     if (errors.value) return false;
     if (!input.data || !output.data || input.info.width == 0 || input.info.height == 0 ||
-        output.info.width != input.info.width * 2 || output.info.height != input.info.height * 2) return false;
+        left < 0 || top < 0 || output.info.width % 2 || output.info.height % 2 ||
+        left + output.info.width / 2 > input.info.width || top + output.info.height / 2 > input.info.height) return false;
     const auto method = env->GetMethodID(env->GetObjectClass(progress), "onProgress", "(II)Z");
     if (!method) { errors.capture(); return false; }
     constexpr int tile = 128;
-    const int width = input.info.width, height = input.info.height;
+    const int width = output.info.width / 2, height = output.info.height / 2;
     const int total = ((width + tile - 1) / tile) * ((height + tile - 1) / tile);
     int completed = 0;
     auto active = [&]() {
@@ -120,17 +125,19 @@ bool SuperResolutionVulkan::render(JNIEnv* env, jobject source, jobject destinat
     opt.blob_vkallocator = opt.workspace_vkallocator = allocators.blob;
     opt.staging_vkallocator = allocators.staging;
     const size_t tensorBytes = (opt.use_fp16_storage || opt.use_fp16_packed) ? 2u : 4u;
-    for (int y = 0; y < height; y += tile) {
+    for (int y = top; y < top + height; y += tile) {
         if (!active()) return false;
-        const int coreHeight = std::min(tile, height - y);
+        const int coreHeight = std::min(tile, top + height - y);
         const int paddedHeight = (coreHeight + 1) / 2 * 2 + 14;
         const int sourceTop = std::max(0, y - 7);
-        const int sourceBottom = std::min(height, y - 7 + paddedHeight);
-        ncnn::Mat strip(width, sourceBottom - sourceTop, (size_t)4u, 1);
+        const int sourceBottom = std::min((int)input.info.height, y - 7 + paddedHeight);
+        const int sourceLeft = std::max(0, left - 7);
+        const int sourceRight = std::min((int)input.info.width, left + width + 8);
+        ncnn::Mat strip(sourceRight - sourceLeft, sourceBottom - sourceTop, (size_t)4u, 1);
         if (strip.empty()) return false;
         for (int row = 0; row < strip.h; ++row)
             memcpy(strip.row<unsigned char>(row), static_cast<unsigned char*>(input.data) +
-                (sourceTop + row) * input.info.stride, width * 4);
+                (sourceTop + row) * input.info.stride + sourceLeft * 4, strip.w * 4);
         ncnn::VkCompute cmd(device);
         ncnn::VkMat inputGpu, outputGpu;
         cmd.record_clone(strip, inputGpu, opt);
@@ -138,7 +145,7 @@ bool SuperResolutionVulkan::render(JNIEnv* env, jobject source, jobject destinat
         cmd.reset();
         outputGpu.create(width * 2, coreHeight * 2, (size_t)4u, 1, allocators.blob);
         if (outputGpu.empty()) return false;
-        for (int x = 0; x < width; x += tile) {
+        for (int startX = left; startX < left + width; startX += tile * batchTiles) {
             // Same admission lock as CPU detection/inpainting, released after each tile.
             // A canceled page waiting behind a translator never submits another GPU tile.
             if (!active()) return false;
@@ -146,14 +153,17 @@ bool SuperResolutionVulkan::render(JNIEnv* env, jobject source, jobject destinat
                 Monitor admission(env, parallelLock);
                 if (!admission.entered) { errors.capture(); return false; }
                 if (!active()) return false;
-                const int coreWidth = std::min(tile, width - x);
+                std::vector<ncnn::VkMat> retained;
+                int submitted = 0;
+                for (int x = startX; x < std::min(left + width, startX + tile * batchTiles); x += tile) {
+                const int coreWidth = std::min(tile, left + width - x);
                 const int paddedWidth = (coreWidth + 1) / 2 * 2 + 14;
                 ncnn::VkMat tensor(paddedWidth, paddedHeight, 3, tensorBytes, 1, allocators.blob);
                 if (tensor.empty()) return false;
                 std::vector<ncnn::vk_constant_type> pre(8);
                 pre[0].i = inputGpu.w; pre[1].i = inputGpu.h;
                 pre[2].i = tensor.w; pre[3].i = tensor.h; pre[4].i = tensor.cstep;
-                pre[5].i = x - 7; pre[6].i = y - sourceTop - 7;
+                pre[5].i = x - sourceLeft - 7; pre[6].i = y - sourceTop - 7;
                 pre[7].i = (input.info.flags & ANDROID_BITMAP_FLAGS_ALPHA_MASK) == ANDROID_BITMAP_FLAGS_ALPHA_PREMUL;
                 cmd.record_pipeline(preproc.get(), {inputGpu, tensor}, pre, tensor);
                 auto extractor = net.create_extractor();
@@ -168,14 +178,17 @@ bool SuperResolutionVulkan::render(JNIEnv* env, jobject source, jobject destinat
                 std::vector<ncnn::vk_constant_type> post(6);
                 post[0].i = restored.w; post[1].i = restored.cstep;
                 post[2].i = outputGpu.w; post[3].i = outputGpu.h;
-                post[4].i = x * 2; post[5].i = coreWidth * 2;
+                post[4].i = (x - left) * 2; post[5].i = coreWidth * 2;
                 ncnn::VkMat dispatcher;
                 dispatcher.w = coreWidth * 2; dispatcher.h = coreHeight * 2; dispatcher.c = 1;
                 cmd.record_pipeline(postproc.get(), {restored, outputGpu}, post, dispatcher);
+                retained.push_back(tensor); retained.push_back(restored);
+                ++submitted;
+                }
                 if (cmd.submit_and_wait()) return false;
                 cmd.reset();
+                completed += submitted;
             }
-            ++completed;
             if (!active()) return false;
         }
         ncnn::Mat downloaded;
@@ -184,7 +197,7 @@ bool SuperResolutionVulkan::render(JNIEnv* env, jobject source, jobject destinat
         for (int row = 0; row < downloaded.h; ++row) {
             const auto* rgba = downloaded.row<uint32_t>(row);
             for (int x = 0; x < downloaded.w; ++x) if ((rgba[x] >> 24) != 255u) return false;
-            memcpy(static_cast<unsigned char*>(output.data) + (y * 2 + row) * output.info.stride,
+            memcpy(static_cast<unsigned char*>(output.data) + ((y - top) * 2 + row) * output.info.stride,
                 rgba, downloaded.w * 4);
         }
     }

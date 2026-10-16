@@ -148,23 +148,23 @@ Java_com_hippo_ehviewer_translation_engine_ImageInference_vulkanDeviceName(JNIEn
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_hippo_ehviewer_translation_engine_SuperResolutionInference_open(JNIEnv* env, jobject,
-        jstring param, jstring weights, jboolean halfStorage) {
+        jstring param, jstring weights, jboolean halfStorage, jboolean halfArithmetic, jint batchTiles) {
     const int gpu = superResolutionGpu();
     if (gpu < 0) return 0;
     UtfPath graph(env, param), binary(env, weights);
     if (!graph.text || !binary.text) return 0;
-    auto model = std::make_unique<ehnz::SuperResolutionVulkan>(gpu, halfStorage);
+    auto model = std::make_unique<ehnz::SuperResolutionVulkan>(gpu, halfStorage, halfArithmetic, batchTiles);
     return model->load(graph.text, binary.text) == 0 ? reinterpret_cast<jlong>(model.release()) : 0;
 }
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_hippo_ehviewer_translation_engine_SuperResolutionInference_openDescriptors(JNIEnv*, jobject,
-        jint paramFd, jint weightsFd, jboolean halfStorage) {
+        jint paramFd, jint weightsFd, jboolean halfStorage, jboolean halfArithmetic, jint batchTiles) {
     const int gpu = superResolutionGpu();
     if (gpu < 0) return 0;
     auto graph = descriptorFile(paramFd), binary = descriptorFile(weightsFd);
     if (!graph || !binary) return 0;
-    auto model = std::make_unique<ehnz::SuperResolutionVulkan>(gpu, halfStorage);
+    auto model = std::make_unique<ehnz::SuperResolutionVulkan>(gpu, halfStorage, halfArithmetic, batchTiles);
     return model->load(graph.get(), binary.get()) == 0 ? reinterpret_cast<jlong>(model.release()) : 0;
 }
 
@@ -178,6 +178,13 @@ Java_com_hippo_ehviewer_translation_engine_SuperResolutionInference_render(JNIEn
 extern "C" JNIEXPORT void JNICALL
 Java_com_hippo_ehviewer_translation_engine_SuperResolutionInference_close(JNIEnv*, jobject, jlong handle) {
     delete reinterpret_cast<ehnz::SuperResolutionVulkan*>(handle);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_hippo_ehviewer_translation_engine_SuperResolutionInference_renderRegion(JNIEnv* env, jobject,
+        jlong handle, jobject source, jobject destination, jint left, jint top, jobject progress, jobject parallelLock) {
+    return handle && source && destination && source != destination && progress && parallelLock &&
+        reinterpret_cast<ehnz::SuperResolutionVulkan*>(handle)->renderRegion(env, source, destination, left, top, progress, parallelLock);
 }
 
 extern "C" JNIEXPORT jlong JNICALL

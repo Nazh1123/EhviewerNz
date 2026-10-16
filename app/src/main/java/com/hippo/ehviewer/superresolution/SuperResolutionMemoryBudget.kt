@@ -4,7 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import com.hippo.ehviewer.translation.engine.SuperResolution
 
-/** Output pixels are only part of the cost: leave room for the source copy and native tile tensors. */
+/** Bound the decoded source, reserving room for native tensors, bounded output bands and textures. */
 internal object SuperResolutionMemoryBudget {
     const val MIB = 1024L * 1024
     private const val WORKSPACE_RESERVE = 64 * MIB
@@ -21,7 +21,7 @@ internal object SuperResolutionMemoryBudget {
     internal fun calculate(heapLimit: Long, usedHeap: Long, availableSystem: Long, lowMemory: Boolean): Long {
         if (lowMemory) return 0
         val headroom = (heapLimit - usedHeap.coerceAtLeast(0)).coerceAtLeast(0)
-        // An output plus its independent input copy costs 1.25x output bytes; allow 1.5x.
+        // Keep the conservative headroom policy; output bands and caches have separate fixed caps.
         val allocationLimit = (headroom - WORKSPACE_RESERVE).coerceAtLeast(0) / 3 * 2
         val systemLimit = (availableSystem - WORKSPACE_RESERVE).coerceAtLeast(0) / 3
         return minOf(SuperResolution.MAX_OUTPUT_BYTES, heapLimit.coerceAtLeast(0) / 3,

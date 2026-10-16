@@ -3,7 +3,7 @@
     <string name="sr_title">超解析度</string>
     <string name="sr_settings">超解析度設定與模型</string>
     <string name="sr_settings_summary">2× 放大 · 預處理頁面 · 儲存結果 · 與翻譯相容</string>
-    <string name="sr_description">waifu2x 將靜態圖片放大至 2×。預設速度優先，畫質優先更接近原有灰階。點擊閱讀器超分按鈕開啟，長按可處理完整畫廊、重試本頁或對比原圖。翻譯優先執行，兩條流程都讀取原圖。記憶體只保留目前頁面結果，動畫及超出記憶體預算的圖片會略過。</string>
+    <string name="sr_description">waifu2x 將靜態圖片放大至 2×。預設速度優先，畫質優先更接近原有灰階。點擊閱讀器超分按鈕開啟，長按可處理完整畫廊、重試本頁或對比原圖。同一頁需要兩條流程時，先翻譯、再超分，完成後才處理下一頁。兩邊的預處理範圍獨立，均讀取原圖。結果分塊儲存，中斷後從已儲存的區塊繼續。動畫及處理記憶體不足的圖片會略過。</string>
     <string name="sr_automatic">閱讀時自動超分</string>
     <string name="sr_auto_on">自動超解析度：已開啟（點擊關閉）</string>
     <string name="sr_auto_off">自動超解析度：已關閉（點擊開啟）</string>
@@ -25,7 +25,7 @@
     <string name="sr_progress_fallback">GPU 無法使用或失敗，已改用 CPU：%1$d%%</string>
     <string name="sr_animation">動畫圖片暫不提升解析度</string>
     <string name="sr_large">%1$d×%2$d 圖片的 2× 輸出需要 %3$d MiB，目前預算為 %4$d MiB，繼續顯示原圖。</string>
-    <string name="sr_memory_budget">目前輸出記憶體上限：%1$d MiB（自動調整）</string>
+    <string name="sr_memory_budget">目前原圖記憶體預算：%1$d MiB（自動調整，超分結果分塊處理）</string>
     <string name="sr_memory_unavailable">處理時可用記憶體不足，繼續顯示原圖。可在其他圖片工作結束後重試。</string>
     <string name="sr_failed">超解析度處理失敗：%1$s</string>
     <string name="sr_automatic_help">處理目前頁面及設定數量的後續頁面。關閉後保留已儲存的結果。</string>

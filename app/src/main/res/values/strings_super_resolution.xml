@@ -3,7 +3,7 @@
     <string name="sr_title">Super-resolution</string>
     <string name="sr_settings">Super-resolution settings and models</string>
     <string name="sr_settings_summary">2× enlargement · Preprocess pages · Save results · Works with translation</string>
-    <string name="sr_description">waifu2x enlarges still images to 2×. Speed mode is the default; quality mode preserves grayscale more closely. Tap the reader SR button to enable, or hold it to process the whole gallery, retry a page, or compare images. Translation has priority; both features read the original image. Only the visible result stays in memory. Animations and images above the memory budget are skipped.</string>
+    <string name="sr_description">waifu2x enlarges still images to 2×. Speed mode is the default; quality mode preserves grayscale more closely. Tap the reader SR button to enable, or hold it to process the whole gallery, retry a page, or compare images. When both features need a page, translation finishes first, then super-resolution, before the next page starts. Each feature keeps its own preprocessing range and reads the original. Results are saved in tiles; interrupted work resumes from saved tiles. Animations and images that cannot fit the working memory budget are skipped.</string>
     <string name="sr_automatic">Automatically enhance while reading</string>
     <string name="sr_auto_on">Automatic super-resolution: on (tap to disable)</string>
     <string name="sr_auto_off">Automatic super-resolution: off (tap to enable)</string>
@@ -25,7 +25,7 @@
     <string name="sr_progress_fallback">GPU unavailable or failed, using CPU: %1$d%%</string>
     <string name="sr_animation">Animated images are not enhanced</string>
     <string name="sr_large">%1$d×%2$d needs %3$d MiB for 2× output; currently available budget: %4$d MiB. Displaying the original.</string>
-    <string name="sr_memory_budget">Current output memory limit: %1$d MiB (automatic)</string>
+    <string name="sr_memory_budget">Current source image memory budget: %1$d MiB (automatic; output is tiled)</string>
     <string name="sr_memory_unavailable">Not enough memory to finish super-resolution; displaying the original. Try again after other image tasks finish.</string>
     <string name="sr_failed">Super-resolution failed: %1$s</string>
     <string name="sr_automatic_help">Process the current page and the configured number of pages ahead. Turning this off keeps saved results.</string>

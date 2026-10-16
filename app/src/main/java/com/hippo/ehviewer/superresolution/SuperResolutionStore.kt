@@ -5,6 +5,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import java.io.File
 import java.io.RandomAccessFile
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import org.json.JSONObject
 import java.security.MessageDigest
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -69,19 +72,89 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
 
     fun invalidate(key: String) { File(cache, "$key.png").delete(); File(persistent, "$key.png").delete() }
 
+    fun findTiles(key: String): EnhancedTilePage? = listOf(persistent, cache).firstNotNullOfOrNull { root ->
+        val directory = File(root, "$key.tiles")
+        readPage(directory, completed = true)?.also { directory.setLastModified(System.currentTimeMillis()) }
+    }
+
+    fun checkpoint(key: String, width: Int, height: Int): EnhancedTilePage {
+        val directory = File(if (options.persist) persistent else cache, "$key.tiles")
+        readPage(directory, completed = false)?.takeIf { it.sourceWidth == width && it.sourceHeight == height }?.let { return it }
+        check(!directory.exists() || directory.deleteRecursively())
+        check(directory.mkdirs())
+        val page = EnhancedTilePage(directory, width, height)
+        writePage(page, false)
+        return page
+    }
+
+    suspend fun saveTile(page: EnhancedTilePage, index: Int, bitmap: Bitmap) {
+        val temporary = File.createTempFile("tile-", ".tmp", page.directory)
+        try {
+            temporary.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            currentCoroutineContext().ensureActive()
+            atomicPublish(temporary, page.file(index))
+            page.saved(index)
+        } finally { temporary.delete() }
+    }
+
+    fun finish(page: EnhancedTilePage) {
+        check((0 until page.count).all(page::complete)) { "Incomplete SR checkpoint" }
+        writePage(page, true)
+        prune(page.directory)
+    }
+
+    fun retainTiles(page: EnhancedTilePage): EnhancedTilePage {
+        if (!options.persist || page.directory.parentFile == persistent) return page
+        val key = page.directory.name.removeSuffix(".tiles")
+        val target = checkpoint(key, page.sourceWidth, page.sourceHeight)
+        for (index in 0 until page.count) if (!target.complete(index)) {
+            val temporary = File.createTempFile("retain-", ".tmp", target.directory)
+            try { page.file(index).copyTo(temporary, overwrite = true); atomicPublish(temporary, target.file(index)) }
+            finally { temporary.delete() }
+        }
+        finish(target)
+        return target
+    }
+
+    fun invalidateTiles(key: String) {
+        listOf(cache, persistent).forEach { root ->
+            val directory = File(root, "$key.tiles")
+            check(!directory.exists() || directory.deleteRecursively())
+        }
+    }
+
+    private fun readPage(directory: File, completed: Boolean): EnhancedTilePage? = runCatching {
+        val json = JSONObject(File(directory, "page.json").readText())
+        if (json.getInt("version") != 1 || (completed && !json.getBoolean("complete"))) return@runCatching null
+        val w = json.getInt("width"); val h = json.getInt("height")
+        if (w !in 1..32768 || h !in 1..32768) return@runCatching null
+        EnhancedTilePage(directory, w, h)
+    }.getOrNull()
+
+    private fun writePage(page: EnhancedTilePage, complete: Boolean) {
+        val temporary = File.createTempFile("page-", ".tmp", page.directory)
+        try {
+            temporary.writeText(JSONObject().put("version", 1).put("width", page.sourceWidth)
+                .put("height", page.sourceHeight).put("complete", complete).toString())
+            atomicPublish(temporary, File(page.directory, "page.json"))
+        } finally { temporary.delete() }
+    }
+
     private fun prune(keep: File) {
-        val files = cacheRoot.walkTopDown().filter { it.isFile }.toList().sortedBy { it.lastModified() }
-        var size = files.sumOf { it.length() }
+        val files = cacheRoot.listFiles().orEmpty().flatMap { it.listFiles().orEmpty().toList() }
+            .sortedBy { it.lastModified() }
+        fun bytes(file: File) = if (file.isDirectory) file.walkTopDown().filter { it.isFile }.sumOf { it.length() } else file.length()
+        var size = files.sumOf(::bytes)
         val limit = options.cacheMiB * 1024L * 1024
         for (file in files) if (size > limit && file != keep) {
-            val bytes = file.length()
-            if (file.delete()) size -= bytes
+            val bytes = bytes(file)
+            if (file.deleteRecursively()) size -= bytes
         }
     }
 
     companion object {
         // Decoder bounds alone can accept a truncated file. Require the PNG envelope as well.
-        private fun completePng(file: File): Boolean = runCatching {
+        internal fun completePng(file: File): Boolean = runCatching {
             RandomAccessFile(file, "r").use {
                 if (it.length() < 45) return@use false
                 val signature = ByteArray(8).also(it::readFully)
@@ -91,6 +164,9 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
                     ending.contentEquals(byteArrayOf(0, 0, 0, 0, 73, 69, 78, 68, -82, 66, 96, -126))
             }
         }.getOrDefault(false)
+        private fun atomicPublish(temporary: File, target: File) {
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        }
         private fun digest(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it) }
         fun clear(context: Context, persistent: Boolean = false) {

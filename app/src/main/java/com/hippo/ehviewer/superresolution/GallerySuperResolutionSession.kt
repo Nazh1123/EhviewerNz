@@ -1,14 +1,13 @@
 package com.hippo.ehviewer.superresolution
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.ImageDecoder
-import android.os.Build
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.ehviewer.translation.ImageProcessingPriority
+import com.hippo.ehviewer.translation.GalleryPageWork
+import com.hippo.ehviewer.translation.GalleryPageWorkRegistry
+import com.hippo.ehviewer.translation.NativeMemoryPolicy
 import com.hippo.ehviewer.translation.TranslationRuntime
 import com.hippo.ehviewer.translation.TranslationWindow
 import com.hippo.ehviewer.translation.engine.SuperResolution
@@ -32,6 +31,7 @@ internal class GallerySuperResolutionSession(
         fun display(page: Int, image: Image)
         fun hasPage(page: Int): Boolean
         fun clear()
+        fun displayTiles(page: Int, tiles: EnhancedTilePage) = Unit
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     val settings = SuperResolutionSettings(context)
@@ -48,7 +48,8 @@ internal class GallerySuperResolutionSession(
     private var closed = false
     private var options = settings.read()
     private var singlePage: Int? = null
-    private val results = mutableMapOf<Int, File>()
+    private val results = mutableMapOf<Int, EnhancedTilePage>()
+    internal val metrics = mutableMapOf<Int, SuperResolutionPageMetrics>()
     val states = mutableMapOf<Int, Int>()
     var current = -1
         private set
@@ -75,6 +76,12 @@ internal class GallerySuperResolutionSession(
     val completed get() = pages().count { it in states }
     val failed get() = pages().count { states[it] == R.string.sr_failed_short }
     val total get() = pages().size
+    private val pageWork = GalleryPageWorkRegistry.acquire(identity)
+    private val pageQueue = GalleryPageWork.Queue(
+        active = { !closed && enabled && (browsing || fullGallery) },
+        pages = { pages() }, settled = { it in states },
+        ready = { size > 0 },
+    ).also { pageWork.register(GalleryPageWork.Stage.SUPER_RESOLUTION, it) }
 
     fun attach(observer: Reader) { reader = observer; browsing = true; restore(); changed(); start() }
     fun detach(observer: Reader, leaving: Boolean) {
@@ -117,6 +124,7 @@ internal class GallerySuperResolutionSession(
         if (leaving && !fullGallery) disable()
         else if (!fullGallery) worker?.cancel()
         if (worker == null && !fullGallery) releaseModels()
+        changed()
     }
 
     fun enable(): Boolean {
@@ -154,7 +162,7 @@ internal class GallerySuperResolutionSession(
         reader?.clear(); start(); changed()
     }
 
-    private fun changed() { reader?.changed(); SuperResolutionTasks.changed() }
+    private fun changed() { pageWork.changed(); reader?.changed(); SuperResolutionTasks.changed() }
     private fun releaseModels() {
         scope.launch(Dispatchers.IO) { SuperResolutionModels.lock.withLock { engines.clear() } }
     }
@@ -183,15 +191,19 @@ internal class GallerySuperResolutionSession(
                 while (provider.size() == GalleryProvider2.STATE_WAIT && attempts++ < 30) delay(200)
                 check(provider.size() > 0) { context.getString(R.string.sr_source_unavailable) }
                 size = provider.size()
+                changed()
                 delay(250)
                 while (enabled && generation == epoch && (browsing || fullGallery)) {
-                    val page = pages().firstOrNull { it !in states } ?: break
+                    message = context.getString(R.string.sr_wait_translation)
+                    changed()
+                    val page = pageWork.await(GalleryPageWork.Stage.SUPER_RESOLUTION) ?: break
                     activePage = page; progress = 0; message = context.getString(R.string.sr_preparing); changed()
                     try {
-                        val file = withContext(Dispatchers.IO) { process(provider, page, epoch) }
+                        val (tiles, stats) = withContext(Dispatchers.IO) { process(provider, page, epoch) }
                         ensureActive()
                         if (generation != epoch) break
-                        results[page] = file
+                        results[page] = tiles
+                        metrics[page] = stats
                         states[page] = R.string.sr_done
                         forced.remove(page)
                         progress = 100; message = null
@@ -201,11 +213,11 @@ internal class GallerySuperResolutionSession(
                         // The next admission waits behind all translation tickets.
                         yield()
                     } catch (cancel: CancellationException) { throw cancel
-                    } catch (_: AnimatedPage) { states[page] = R.string.sr_animation
+                    } catch (_: SuperResolutionPageProcessor.Animation) { states[page] = R.string.sr_animation
                     } catch (_: MissingModels) {
                         states[page] = R.string.sr_models_required
                         message = context.getString(R.string.sr_models_required)
-                    } catch (_: PageOverBudget) { states[page] = R.string.sr_memory_unavailable
+                    } catch (_: SuperResolutionPageProcessor.MemoryBudget) { states[page] = R.string.sr_memory_unavailable
                     } catch (error: Exception) {
                         states[page] = R.string.sr_failed_short
                         message = context.getString(R.string.sr_failed, error.message.orEmpty())
@@ -234,12 +246,11 @@ internal class GallerySuperResolutionSession(
     }
 
     private class YieldToTranslation : CancellationException()
-    private class AnimatedPage : RuntimeException()
-    private class PageOverBudget : RuntimeException()
     private class MissingModels : RuntimeException()
 
-    private suspend fun process(provider: GalleryProvider2, page: Int, epoch: Int): File {
+    private suspend fun process(provider: GalleryProvider2, page: Int, epoch: Int): Pair<EnhancedTilePage, SuperResolutionPageMetrics> {
         val source = File.createTempFile("sr-original-", ".image", context.cacheDir)
+        val selected = options
         try {
             var saved = false
             for (attempt in 0 until 30) {
@@ -253,107 +264,74 @@ internal class GallerySuperResolutionSession(
                 if (generation == epoch) { message = context.getString(R.string.sr_wait_translation); changed() }
             }
             return ImageProcessingPriority.work.run(translation = false) {
-                TranslationRuntime.lock.withLock { TranslationRuntime.closeIdleModels() }
+                TranslationRuntime.lock.withLock {
+                    // Keep a warm translator across a paired page boundary when Android
+                    // reports enough headroom; low-memory devices still release it first.
+                    if (!NativeMemoryPolicy(context).canRetain()) TranslationRuntime.closeIdleModels()
+                }
                 SuperResolutionModels.lock.withLock {
-                    val store = SuperResolutionStore(context, identity, options)
+                    val store = SuperResolutionStore(context, identity, selected)
                     val key = store.key(source)
-                    val force = withContext(Dispatchers.Main) { page in forced }
-                    if (force) store.invalidate(key)
-                    if (!force) store.find(key)?.let { return@withLock store.retain(it) }
-                    if (!models.store.ready()) throw MissingModels()
+                    val force = withContext(NonCancellable + Dispatchers.Main) { forced.remove(page) }
+                    if (force) { store.invalidate(key); store.invalidateTiles(key) }
+                    var engine: SuperResolution? = null
                     fun checkPriority() {
                         if (ImageProcessingPriority.work.translationPending) throw YieldToTranslation()
                     }
-                    checkPriority()
-                    val budget = SuperResolutionMemoryBudget.current(context)
-                    val bitmap = decodeOriginal(source, budget)
-                    try {
-                        val files = models.files()
-                        val engine = engines.acquire(options.mode) {
-                            SuperResolution(files,
-                                if (options.mode == "cpu") SuperResolutionBackend.CPU else SuperResolutionBackend.AUTO,
-                                if (options.mode == "auto_fast") SuperResolutionPipeline.GPU_FP16 else SuperResolutionPipeline.GPU_FP32)
-                        }
-                        val result = engine.upscale(bitmap, budget) { done, total ->
-                            checkPriority()
-                            val value = done * 100 / total.coerceAtLeast(1)
-                            scope.launch {
-                                if (generation == epoch && activePage == page) {
-                                    progress = value
-                                    message = context.getString(when {
-                                        engine.usingVulkan -> R.string.sr_progress_gpu
-                                        engine.fellBack -> R.string.sr_progress_fallback
-                                        else -> R.string.sr_progress
-                                    }, value)
-                                    changed()
-                                }
+                    fun report(value: Int) {
+                        scope.launch {
+                            if (generation == epoch && activePage == page) {
+                                progress = value
+                                message = context.getString(when {
+                                    engine?.usingVulkan == true -> R.string.sr_progress_gpu
+                                    engine?.fellBack == true -> R.string.sr_progress_fallback
+                                    else -> R.string.sr_progress
+                                }, value)
+                                changed()
                             }
                         }
-                        try { checkPriority(); store.save(key, result) }
-                        finally { result.recycle() }
-                    } finally { bitmap.recycle() }
+                    }
+                    SuperResolutionPageProcessor(context).process(source, store, key,
+                        SuperResolutionMemoryBudget.current(context), ::checkPriority,
+                        render = { bitmap, region, callback ->
+                            if (engine == null) {
+                                if (!models.store.ready()) throw MissingModels()
+                                val files = models.files()
+                                engine = engines.acquire("${selected.mode}:${selected.halfArithmetic}:${selected.batchTiles}") {
+                                    SuperResolution(files,
+                                        if (selected.mode == "cpu") SuperResolutionBackend.CPU else SuperResolutionBackend.AUTO,
+                                        if (selected.mode == "auto_fast") SuperResolutionPipeline.GPU_FP16 else SuperResolutionPipeline.GPU_FP32,
+                                        halfArithmetic = selected.halfArithmetic, batchTiles = selected.batchTiles)
+                                }
+                            }
+                            checkNotNull(engine).upscaleRegion(bitmap, region.left, region.top, region.width(), region.height(),
+                                8L * 1024 * 1024) { done, total -> checkPriority(); callback(done, total) }
+                        }, progress = ::report,
+                        ready = { tiles ->
+                            withContext(Dispatchers.Main) {
+                                ensureActive()
+                                if (generation == epoch && enabled && browsing && current == page && reader != null) {
+                                    reader?.displayTiles(page, tiles)
+                                    true
+                                } else false
+                            }
+                        }, grouped = true)
                 }
             }
         } finally { source.delete() }
     }
 
-    private fun decodeOriginal(source: File, budget: Long): Bitmap {
-        val header = ByteArray(21)
-        val count = source.inputStream().use { it.read(header) }
-        if ((count >= 3 && String(header, 0, 3, Charsets.US_ASCII) == "GIF") ||
-            (count >= 21 && String(header, 8, 4, Charsets.US_ASCII) == "WEBP" &&
-                String(header, 12, 4, Charsets.US_ASCII) == "VP8X" && header[20].toInt() and 2 != 0)) throw AnimatedPage()
-        if (Build.VERSION.SDK_INT >= 28) return ImageDecoder.decodeBitmap(ImageDecoder.createSource(source)) { decoder, info, _ ->
-            if (info.isAnimated) throw AnimatedPage()
-            if (!SuperResolution.accepts(info.size.width, info.size.height, budget)) throw PageOverBudget()
-            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-            decoder.isMutableRequired = true
-        }
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(source.path, bounds)
-        if (!SuperResolution.accepts(bounds.outWidth, bounds.outHeight, budget)) throw PageOverBudget()
-        return checkNotNull(BitmapFactory.decodeFile(source.path, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }))
-    }
-
     private fun restore() {
-        loader?.cancel()
         if (!enabled || !browsing || reader?.hasPage(current) != false) return
-        val file = results[current] ?: return
-        val page = current
-        val epoch = generation
-        loader = scope.launch {
-            var bitmap: Bitmap? = null
-            var overBudget = false
-            try {
-                withContext(Dispatchers.IO) {
-                    SuperResolutionModels.lock.withLock {
-                        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                        BitmapFactory.decodeFile(file.path, bounds)
-                        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) error("Saved SR image unavailable")
-                        if (bounds.outWidth.toLong() * bounds.outHeight * 4 > SuperResolutionMemoryBudget.current(context)) {
-                            overBudget = true
-                            return@withLock
-                        }
-                        bitmap = checkNotNull(BitmapFactory.decodeFile(file.path))
-                    }
-                }
-                ensureActive()
-                if (overBudget && generation == epoch) { message = context.getString(R.string.sr_memory_unavailable); changed() }
-                if (enabled && current == page && generation == epoch && browsing) bitmap?.let {
-                    val image = checkNotNull(Image.create(it))
-                    bitmap = null
-                    reader?.display(page, image) ?: image.recycle()
-                }
-            } catch (cancel: CancellationException) { throw cancel
-            } catch (_: Exception) {
-                if (generation == epoch) { states.remove(page); results.remove(page); start() }
-            } catch (_: OutOfMemoryError) { message = context.getString(R.string.sr_memory_unavailable)
-            } finally { bitmap?.recycle() }
-        }
+        val tiles = results[current] ?: return
+        if (tiles.directory.isDirectory) reader?.displayTiles(current, tiles)
+        else { states.remove(current); results.remove(current); start() }
     }
 
     fun close() {
         closed = true; disable(); reader = null
+        pageWork.remove(GalleryPageWork.Stage.SUPER_RESOLUTION, pageQueue)
+        GalleryPageWorkRegistry.release(identity, pageWork)
         // Disposal is independent of the canceled worker, and holds the same model lock.
         scope.launch { worker?.join(); withContext(Dispatchers.IO) { SuperResolutionModels.lock.withLock { engines.close() } }; scope.cancel() }
     }
