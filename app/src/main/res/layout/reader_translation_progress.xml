@@ -12,45 +12,64 @@
     android:background="@drawable/bg_reader_translation_progress"
     android:clickable="true"
     android:focusable="true"
-    android:orientation="vertical"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:layoutDirection="ltr"
     android:padding="12dp"
     android:visibility="gone"
     tools:ignore="RtlHardcoded">
 
-    <TextView
-        android:id="@+id/translation_result_status"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="6dp"
-        android:textColor="@android:color/white"
-        android:textSize="12sp"
+    <ImageView
+        android:id="@+id/translation_progress_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginRight="8dp"
+        android:importantForAccessibility="no"
+        android:src="@drawable/v_translate_x24"
+        android:tint="@android:color/white"
         android:visibility="gone" />
 
-    <ProgressBar
-        android:id="@+id/translation_page_progress_bar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="4dp"
-        android:contentDescription="@string/translation_title"
-        android:importantForAccessibility="yes"
-        android:indeterminate="false"
-        android:layoutDirection="ltr"
-        android:max="1000"
-        android:progressBackgroundTint="#44FFFFFF"
-        android:progressTint="@android:color/white"
-        tools:progress="350" />
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
 
-    <ProgressBar
-        android:id="@+id/translation_progress_bar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="4dp"
-        android:layout_marginTop="8dp"
-        android:importantForAccessibility="yes"
-        android:indeterminate="false"
-        android:layoutDirection="ltr"
-        android:progressBackgroundTint="#44FFFFFF"
-        android:progressTint="@android:color/white"
-        tools:progress="33" />
+        <TextView
+            android:id="@+id/translation_result_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:visibility="gone" />
 
+        <ProgressBar
+            android:id="@+id/translation_page_progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:contentDescription="@string/translation_title"
+            android:importantForAccessibility="yes"
+            android:indeterminate="false"
+            android:layoutDirection="ltr"
+            android:max="1000"
+            android:progressBackgroundTint="#44FFFFFF"
+            android:progressTint="@android:color/white"
+            tools:progress="350" />
+
+        <ProgressBar
+            android:id="@+id/translation_progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_marginTop="8dp"
+            android:importantForAccessibility="yes"
+            android:indeterminate="false"
+            android:layoutDirection="ltr"
+            android:progressBackgroundTint="#44FFFFFF"
+            android:progressTint="@android:color/white"
+            tools:progress="33" />
+
+    </LinearLayout>
 </LinearLayout>

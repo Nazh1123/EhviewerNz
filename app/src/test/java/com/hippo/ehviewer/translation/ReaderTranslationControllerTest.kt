@@ -701,9 +701,12 @@ class ReaderTranslationControllerTest {
             assertTrue(panel.isClickable)
             assertTrue(panel.isFocusable)
             assertEquals(0.45f, panel.alpha, 0f)
-            assertEquals(3, (panel as ViewGroup).childCount)
+            assertEquals(2, (panel as ViewGroup).childCount)
+            assertEquals(View.GONE, panel.findViewById<View>(R.id.translation_progress_icon).visibility)
             assertEquals(View.GONE, panel.findViewById<View>(R.id.translation_result_status).visibility)
-            (1 until panel.childCount).forEach { assertTrue(panel.getChildAt(it) is ProgressBar) }
+            val bars = panel.getChildAt(1) as ViewGroup
+            assertEquals(3, bars.childCount)
+            (1 until bars.childCount).forEach { assertTrue(bars.getChildAt(it) is ProgressBar) }
             val left = params.leftMargin
             val top = params.topMargin
             assertEquals(panel.resources.getDimensionPixelSize(R.dimen.gallery_notice_margin_top), top)

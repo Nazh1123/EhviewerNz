@@ -4,15 +4,13 @@ import android.content.Intent
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ProgressBar
-import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.ehviewer.ui.SettingsActivity
+import com.hippo.ehviewer.widget.ReaderProgressLayout
 import com.hippo.lib.image.Image
 
 /** Detachable controls. Enhancement and translation always read source-provider originals. */
@@ -21,10 +19,10 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
     private val provider: GalleryProvider2,
     private val button: ImageButton,
     galleryInfo: GalleryInfo? = null,
+    private val progressLayout: ReaderProgressLayout = ReaderProgressLayout(activity),
 ) : AutoCloseable {
     internal val session = SuperResolutionTasks.acquire(activity.applicationContext, provider, galleryInfo)
     private val panel = activity.findViewById<View>(R.id.super_resolution_progress_panel)
-    private val status = activity.findViewById<TextView>(R.id.super_resolution_progress)
     private val pageBar = activity.findViewById<ProgressBar>(R.id.super_resolution_page_progress_bar)
     private val queueBar = activity.findViewById<ProgressBar>(R.id.super_resolution_queue_progress_bar)
     private var closed = false
@@ -41,27 +39,20 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
     init {
         button.setOnClickListener { toggle() }
         button.setOnLongClickListener { showMenu(session.current); true }
-        panel.setOnClickListener { showMenu(session.current) }
-        ViewCompat.setOnApplyWindowInsetsListener(panel) { view, insets ->
-            val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            view.translationY = -safe.bottom.toFloat()
-            insets
+        panel.setOnClickListener {
+            if (!closed && session.current >= 0) provider.toggleEnhancedPage(session.current)
         }
-        ViewCompat.requestApplyInsets(panel)
         session.attach(observer)
         update()
     }
     private fun update() {
+        progressLayout.setEnhancementEnabled(session.enabled && !closed)
         button.isSelected = session.enabled
         button.alpha = if (session.enabled) 1f else 0.65f
         button.contentDescription = activity.getString(if (session.enabled) R.string.sr_auto_on else R.string.sr_auto_off)
         val message = session.message ?: if (session.enabled) session.states[session.current]?.let { activity.getString(it) } else null
-        panel.visibility = if (session.enabled || message != null) View.VISIBLE else View.GONE
-        status.text = buildString {
-            append(activity.getString(R.string.sr_queue_progress, session.completed, session.total))
-            session.activePage?.let { append(" · "); append(activity.getString(R.string.sr_page_progress, it + 1, session.progress)) }
-            message?.let { append('\n'); append(it) }
-        }
+        panel.visibility = if (session.enabled && !closed) View.VISIBLE else View.GONE
+        panel.contentDescription = listOfNotNull(activity.getString(R.string.sr_compare), message).joinToString(". ")
         pageBar.progress = session.progress
         pageBar.contentDescription = session.activePage?.let { activity.getString(R.string.sr_page_progress, it + 1, session.progress) }
         queueBar.max = session.total.coerceAtLeast(1)
@@ -108,6 +99,7 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
     fun close(leavingGallery: Boolean) {
         if (closed) return
         closed = true
+        progressLayout.setEnhancementEnabled(false)
         session.detach(observer, leavingGallery)
         if (!session.fullGallery && leavingGallery) SuperResolutionTasks.release(session)
         panel.visibility = View.GONE

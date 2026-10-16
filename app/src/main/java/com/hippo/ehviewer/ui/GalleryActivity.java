@@ -790,10 +790,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
 
         setContentView(R.layout.activity_gallery);
+        com.hippo.ehviewer.widget.ReaderProgressLayout progressLayout =
+                new com.hippo.ehviewer.widget.ReaderProgressLayout(this);
         mTranslationController = new ReaderTranslationController(
-                this, mGalleryProvider, findViewById(R.id.quick_translation), mGalleryInfo);
+                this, mGalleryProvider, findViewById(R.id.quick_translation), mGalleryInfo, progressLayout);
         mSuperResolutionController = new com.hippo.ehviewer.superresolution.ReaderSuperResolutionController(
-                this, mGalleryProvider, findViewById(R.id.quick_super_resolution), mGalleryInfo);
+                this, mGalleryProvider, findViewById(R.id.quick_super_resolution), mGalleryInfo, progressLayout);
         mGLRootView = (GLRootView) ViewUtils.$$(this, R.id.gl_root_view);
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();

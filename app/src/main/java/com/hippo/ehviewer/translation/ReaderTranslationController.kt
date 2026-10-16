@@ -1,20 +1,17 @@
 package com.hippo.ehviewer.translation
 
-import android.util.DisplayMetrics
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.hippo.android.resource.AttrResources
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.BuildConfig
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
+import com.hippo.ehviewer.widget.ReaderProgressLayout
 import com.hippo.lib.image.Image
 import java.io.File
-import kotlin.math.roundToInt
 
 /** Detachable reader controls and progress for an application-owned translation session. */
 class ReaderTranslationController @JvmOverloads constructor(
@@ -22,6 +19,7 @@ class ReaderTranslationController @JvmOverloads constructor(
     private val provider: GalleryProvider2,
     private val button: ImageButton,
     private val galleryInfo: GalleryInfo? = null,
+    private val progressLayout: ReaderProgressLayout = ReaderProgressLayout(activity),
 ) : AutoCloseable {
     private val context = activity.applicationContext
     internal val session = TranslationTasks.acquire(context, provider, galleryInfo)
@@ -33,8 +31,6 @@ class ReaderTranslationController @JvmOverloads constructor(
     private val progressBar = progressPanel?.findViewById<ProgressBar>(R.id.translation_progress_bar)
     private val resultStatus = progressPanel?.findViewById<TextView>(R.id.translation_result_status)
     private val pageProgress get() = session.pageProgress
-    private var quickSettingsVisible = false
-    private var quickSettingsBottom = 0f
     private val current get() = session.current
     private val enabled get() = session.enabled
     private val activeRequest get() = session.activePage
@@ -63,25 +59,6 @@ class ReaderTranslationController @JvmOverloads constructor(
             panel.setOnClickListener {
                 if (enabled && !closed) provider.toggleTranslationOverlay(current)
             }
-            val margins = panel.layoutParams as FrameLayout.LayoutParams
-            val left = margins.leftMargin
-            val top = margins.topMargin
-            val right = margins.rightMargin
-            val screen = DisplayMetrics()
-            activity.windowManager.defaultDisplay.getRealMetrics(screen)
-            margins.width = (minOf(screen.widthPixels, screen.heightPixels) * 0.35f).roundToInt()
-            panel.layoutParams = margins
-            ViewCompat.setOnApplyWindowInsetsListener(panel) { view, insets ->
-                val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-                val params = view.layoutParams as FrameLayout.LayoutParams
-                params.leftMargin = left + safe.left
-                params.topMargin = maxOf(top, safe.top)
-                params.rightMargin = right + safe.right
-                view.layoutParams = params
-                updateProgressPosition()
-                insets
-            }
-            ViewCompat.requestApplyInsets(panel)
         }
         updateUi()
     }
@@ -100,17 +77,7 @@ class ReaderTranslationController @JvmOverloads constructor(
 
     fun onQuickSettingsPositionChanged(visible: Boolean, bottom: Float) {
         if (closed) return
-        quickSettingsVisible = visible
-        quickSettingsBottom = bottom
-        updateProgressPosition()
-    }
-
-    private fun updateProgressPosition() {
-        progressPanel?.let { panel ->
-            val top = (panel.layoutParams as FrameLayout.LayoutParams).topMargin
-            val gap = 8f * activity.resources.displayMetrics.density
-            panel.translationY = if (quickSettingsVisible) maxOf(0f, quickSettingsBottom + gap - top) else 0f
-        }
+        progressLayout.onQuickSettingsPositionChanged(visible, bottom)
     }
 
     fun onPageReload(page: Int) {
@@ -152,6 +119,7 @@ class ReaderTranslationController @JvmOverloads constructor(
     private fun isPageSettled(page: Int) = session.isPageSettled(page)
 
     private fun updateUi() {
+        progressLayout.setTranslationEnabled(enabled && !closed)
         if (button.isSelected != enabled) provider.setShowTranslations(enabled)
         // textColorSecondary is a ColorStateList in reader themes, not a raw color.
         button.imageTintList = android.content.res.ColorStateList.valueOf(
@@ -306,6 +274,7 @@ class ReaderTranslationController @JvmOverloads constructor(
     fun close(leavingGallery: Boolean) {
         if (closed) return
         closed = true
+        progressLayout.setTranslationEnabled(false)
         session.detach(observer, leavingGallery)
         if (!enabled && session.reader == null) TranslationTasks.release(session)
         progressPanel?.visibility = View.GONE
