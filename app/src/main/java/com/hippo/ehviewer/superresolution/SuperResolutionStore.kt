@@ -3,6 +3,8 @@ package com.hippo.ehviewer.superresolution
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
+import com.hippo.ehviewer.gallery.GalleryProcessingProgress
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.file.Files
@@ -15,6 +17,7 @@ import kotlinx.coroutines.ensureActive
 /** Content-addressed PNGs. All calls hold SuperResolutionModels.lock on IO. */
 internal class SuperResolutionStore(context: Context, private val identity: String,
                                     private val options: SuperResolutionOptions) {
+    private val app = context.applicationContext
     private val cacheRoot = File(context.cacheDir, "super-resolution-pages")
     private val persistentRoot = File(context.noBackupFilesDir, "super-resolution-pages")
     private val gallery = digest(identity.toByteArray())
@@ -43,11 +46,11 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
 
     fun find(key: String): File? = listOf(File(persistent, "$key.png"), File(cache, "$key.png"))
         .firstOrNull { file ->
-            if (!file.isFile) false else if (!completePng(file)) { file.delete(); false } else {
+            if (!file.isFile) false else if (!completePng(file)) { deleteResult(file); false } else {
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 BitmapFactory.decodeFile(file.path, bounds)
                 if (bounds.outWidth > 0 && bounds.outHeight > 0) { file.setLastModified(System.currentTimeMillis()); true }
-                else { file.delete(); false }
+                else { deleteResult(file); false }
             }
         }
 
@@ -75,7 +78,11 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
         return target
     }
 
-    fun invalidate(key: String) { File(cache, "$key.png").delete(); File(persistent, "$key.png").delete() }
+    private fun deleteResult(file: File) {
+        if (file.delete()) GalleryProcessingProgress.forget(app, listOf(Uri.fromFile(file)))
+    }
+
+    fun invalidate(key: String) { deleteResult(File(cache, "$key.png")); deleteResult(File(persistent, "$key.png")) }
 
     fun findTiles(key: String): EnhancedTilePage? = listOf(persistent, cache).firstNotNullOfOrNull { root ->
         val directory = File(root, "$key.tiles")
@@ -88,7 +95,10 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
         readPage(directory, completed = false)?.takeIf {
             it.sourceWidth == width && it.sourceHeight == height && it.scale == scale
         }?.let { return it }
-        check(!directory.exists() || directory.deleteRecursively())
+        if (directory.exists()) {
+            check(directory.deleteRecursively())
+            GalleryProcessingProgress.forgetUnder(app, Uri.fromFile(directory))
+        }
         check(directory.mkdirs())
         val page = EnhancedTilePage(directory, width, height, scale)
         writePage(page, false)
@@ -128,6 +138,7 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
         listOf(cache, persistent).forEach { root ->
             val directory = File(root, "$key.tiles")
             check(!directory.exists() || directory.deleteRecursively())
+            GalleryProcessingProgress.forgetUnder(app, Uri.fromFile(directory))
         }
     }
 
@@ -159,11 +170,18 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
         val limit = options.cacheMiB * 1024L * 1024
         for (file in files) if (size > limit && file != keep) {
             val bytes = bytes(file)
-            if (file.deleteRecursively()) size -= bytes
+            if (file.deleteRecursively()) {
+                size -= bytes
+                GalleryProcessingProgress.forgetUnder(app, Uri.fromFile(file))
+            }
         }
     }
 
     companion object {
+        internal fun galleryRoots(context: Context, galleryId: Long): List<File> =
+            listOf(context.cacheDir, context.noBackupFilesDir).map {
+                File(File(it, "super-resolution-pages"), digest("gallery:$galleryId".toByteArray()))
+            }
         // Decoder bounds alone can accept a truncated file. Require the PNG envelope as well.
         internal fun completePng(file: File): Boolean = runCatching {
             RandomAccessFile(file, "r").use {
@@ -183,6 +201,7 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
         fun clear(context: Context, persistent: Boolean = false) {
             val root = File(if (persistent) context.noBackupFilesDir else context.cacheDir, "super-resolution-pages")
             check(!root.exists() || root.deleteRecursively()) { "Cannot remove super-resolution results" }
+            GalleryProcessingProgress.forgetUnder(context, Uri.fromFile(root))
         }
     }
 }

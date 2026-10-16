@@ -53,6 +53,7 @@ import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.gallery.A7ZipArchive;
 import com.hippo.ehviewer.gallery.LocalFolderCoverStore;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
+import com.hippo.ehviewer.gallery.GalleryProcessingProgress;
 import com.hippo.ehviewer.gallery.Pipe;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
@@ -105,6 +106,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     private final DownloadAdapterCallback mCallback;
     private long mActionHeaderId = RecyclerView.NO_ID;
     private LabelHeaderHolder mActiveActionHolder;
+    private final GalleryProcessingProgress.Listener mProcessingProgressListener = this::onProcessingProgressChanged;
+    private boolean mObservingProcessingProgress;
 
     private View movedItem = null;
 
@@ -194,6 +197,54 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             return 0;
         }
         return list.get(posInList).gid;
+    }
+
+    public void startObservingProcessingProgress() {
+        if (mObservingProcessingProgress) return;
+        mObservingProcessingProgress = true;
+        GalleryProcessingProgress.addListener(mProcessingProgressListener);
+        RecyclerView recycler = mCallback.getRecyclerView();
+        if (recycler == null) return;
+        for (int i = 0; i < recycler.getChildCount(); i++) {
+            RecyclerView.ViewHolder raw = recycler.getChildViewHolder(recycler.getChildAt(i));
+            if (raw instanceof DownloadHolder) {
+                DownloadHolder holder = (DownloadHolder) raw;
+                bindReadProgress(holder, holder.boundGid);
+            }
+        }
+    }
+
+    public void stopObservingProcessingProgress() {
+        mObservingProcessingProgress = false;
+        GalleryProcessingProgress.removeListener(mProcessingProgressListener);
+    }
+
+    private void bindReadProgress(DownloadHolder holder, long gid) {
+        SpiderInfo spiderInfo = mCallback.getSpiderInfoMap().get(gid);
+        GalleryProcessingProgress.Counts counts = GalleryProcessingProgress.get(mInflater.getContext(), gid);
+        holder.readProgress.setText(spiderInfo == null ? null : (spiderInfo.startPage + 1) + "/" + spiderInfo.pages);
+        holder.processingProgress.setText(spiderInfo == null ? null : counts.primary(spiderInfo.pages));
+        holder.srProgress.setText(spiderInfo == null ? null : counts.secondary(spiderInfo.pages));
+        bindProcessingVisibility(holder, holder.readProgress.getVisibility() == View.VISIBLE);
+    }
+
+    private void bindProcessingVisibility(DownloadHolder holder, boolean visible) {
+        boolean primary = visible && holder.processingProgress.length() > 0;
+        holder.processingSeparator.setVisibility(primary ? View.VISIBLE : View.GONE);
+        holder.processingProgress.setVisibility(primary ? View.VISIBLE : View.GONE);
+        holder.srProgress.setVisibility(visible && holder.srProgress.length() > 0 ? View.VISIBLE : View.GONE);
+    }
+
+    private void onProcessingProgressChanged(long gid) {
+        if (!mObservingProcessingProgress) return;
+        RecyclerView recycler = mCallback.getRecyclerView();
+        if (recycler == null) return;
+        for (int i = 0; i < recycler.getChildCount(); i++) {
+            RecyclerView.ViewHolder raw = recycler.getChildViewHolder(recycler.getChildAt(i));
+            if (raw instanceof DownloadHolder && ((DownloadHolder) raw).boundGid == gid) {
+                bindReadProgress((DownloadHolder) raw, gid);
+            }
+        }
     }
 
     @Override
@@ -311,15 +362,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                 holder.rating.setRating(info.rating);
             }
 
-            SpiderInfo spiderInfo = mCallback.getSpiderInfoMap().get(info.gid);
-
-            if (spiderInfo != null) {
-                int startPage = spiderInfo.startPage + 1;
-                String readText = startPage + "/" + spiderInfo.pages;
-                holder.readProgress.setText(readText);
-            } else {
-                holder.readProgress.setText(null);
-            }
+            bindReadProgress(holder, info.gid);
 
             TextView category = holder.category;
             String newCategoryText = EhUtils.getCategory(info.category);
@@ -408,6 +451,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         holder.rating.setVisibility(View.VISIBLE);
         holder.category.setVisibility(View.VISIBLE);
         holder.readProgress.setVisibility(View.VISIBLE);
+        bindProcessingVisibility(holder, true);
         holder.state.setVisibility(View.VISIBLE);
         holder.progressBar.setVisibility(View.GONE);
         holder.percent.setVisibility(View.GONE);
@@ -429,6 +473,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         holder.rating.setVisibility(View.GONE);
         holder.category.setVisibility(View.GONE);
         holder.readProgress.setVisibility(View.GONE);
+        bindProcessingVisibility(holder, false);
         holder.state.setVisibility(View.GONE);
         holder.progressBar.setVisibility(View.VISIBLE);
         holder.percent.setVisibility(View.VISIBLE);
@@ -1061,6 +1106,9 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         public final SimpleRatingView rating;
         public final TextView category;
         public final TextView readProgress;
+        public final TextView processingSeparator;
+        public final TextView processingProgress;
+        public final TextView srProgress;
         public final View start;
         public final View stop;
         public final TextView state;
@@ -1077,6 +1125,9 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             rating = itemView.findViewById(R.id.rating);
             category = itemView.findViewById(R.id.category);
             readProgress = itemView.findViewById(R.id.read_progress);
+            processingSeparator = itemView.findViewById(R.id.processing_separator);
+            processingProgress = itemView.findViewById(R.id.processing_progress);
+            srProgress = itemView.findViewById(R.id.sr_progress);
             start = itemView.findViewById(R.id.start);
             stop = itemView.findViewById(R.id.stop);
             state = itemView.findViewById(R.id.state);

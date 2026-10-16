@@ -15,7 +15,6 @@ import com.hippo.ehviewer.translation.*
 import com.hippo.ehviewer.ui.SettingsActivity
 import com.hippo.preference.ListPreference
 import com.hippo.preference.SwitchPreference
-import java.io.File
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
 
@@ -260,7 +259,7 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                 scope?.launch {
                     withContext(Dispatchers.IO) {
                         TranslationRuntime.lock.withLock {
-                            TranslationCache(File(app.cacheDir, "translated-pages")).clear()
+                            TranslationStorage.cache(app).clear()
                             TranslationRuntime.preparedPages.clear()
                         }
                     }

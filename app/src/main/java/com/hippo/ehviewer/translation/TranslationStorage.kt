@@ -8,6 +8,7 @@ import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource
+import com.hippo.ehviewer.gallery.GalleryProcessingProgress
 import com.hippo.ehviewer.spider.SpiderDen
 import com.hippo.unifile.UniFile
 import java.io.File
@@ -18,6 +19,11 @@ object TranslationStorage {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     internal fun cacheDir(context: Context) = File(context.cacheDir, "translated-pages")
     internal fun legacyPersistentDir(context: Context) = File(context.noBackupFilesDir, "translated-galleries")
+
+    internal fun cache(context: Context, limit: Long = 256L * 1024 * 1024) =
+        TranslationCache(cacheDir(context), limit) { files ->
+            GalleryProcessingProgress.forget(context, files.map { android.net.Uri.fromFile(it) })
+        }
 
     internal fun hasGalleryDirectory(info: DownloadInfo) = info.archiveUri.isNullOrEmpty() ||
         LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
@@ -51,7 +57,7 @@ object TranslationStorage {
         val app = context.applicationContext
         scope.launch {
             TranslationRuntime.lock.withLock {
-                runCatching { TranslationCache(cacheDir(app), TranslationSettings(app).read().cacheLimitBytes).prune() }
+                runCatching { cache(app, TranslationSettings(app).read().cacheLimitBytes).prune() }
             }
         }
     }
@@ -75,6 +81,7 @@ object TranslationStorage {
                         directoriesAccessible
                 }
             }.getOrDefault(false)
+            GalleryProcessingProgress.removeMissing(app, ids, GalleryProcessingProgress.Kind.TRANSLATION)
             withContext(Dispatchers.Main) {
                 Toast.makeText(app, if (success) R.string.translation_results_deleted
                     else R.string.translation_results_delete_failed, Toast.LENGTH_LONG).show()

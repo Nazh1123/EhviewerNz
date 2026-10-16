@@ -8,6 +8,7 @@ import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
+import com.hippo.ehviewer.gallery.GalleryProcessingProgress
 import com.hippo.lib.image.Image
 import com.hippo.unifile.UniFile
 import java.io.File
@@ -233,7 +234,14 @@ internal class GalleryTranslationSession(
         }
         return TranslationResultStore(TranslationStorage.cacheDir(context),
             directory, options, galleryInfo?.gid, downloaded,
-            sourceName, TranslationStorage.legacyPersistentDir(context))
+            sourceName, TranslationStorage.legacyPersistentDir(context), filesRemoved = { files ->
+                GalleryProcessingProgress.forget(context, files.map { it.uri })
+            }) { result ->
+                galleryInfo?.gid?.let { gid ->
+                    if (sourceName != null) GalleryProcessingProgress.record(context, gid,
+                        GalleryProcessingProgress.Kind.TRANSLATION, sourceName, result)
+                }
+            }
     }
 
     /** Settled reader pages bypass inference; still adopt them after persistence is enabled. */
@@ -957,6 +965,16 @@ internal class GalleryTranslationSession(
         } finally { if (!transferred) bitmap?.recycle() }
     }
 
+    suspend fun stopForResultDeletion() {
+        val pending = listOfNotNull(worker, retentionJob, resultLoader)
+        disable()
+        pending.joinAll()
+        clearRememberedResults()
+        states.clear()
+        reader?.clearTranslations()
+        changed()
+    }
+
     fun disable() {
         enabled = false
         fullGallery = false
@@ -1084,7 +1102,10 @@ internal class GalleryTranslationSession(
     private fun forgetUnavailableResult(page: Int, file: UniFile) {
         if (completedFiles[page] !== file) return
         completedFiles.remove(page)
-        completedNames.remove(page)
+        completedNames.remove(page)?.let { name ->
+            galleryInfo?.gid?.let { GalleryProcessingProgress.record(context, it,
+                GalleryProcessingProgress.Kind.TRANSLATION, name, null) }
+        }
         completedKeys.remove(page)?.let { retainedKeys.remove(it) }
         if (page == current) {
             states.remove(page)

@@ -29,6 +29,42 @@ class TranslationResultStoreTest {
     private fun configured(options: TranslationOptions, name: String = "001") =
         TranslationResultStore(cacheDir, UniFile.fromFile(galleryDir), options, 1, true, name)
 
+    @Test fun existingNamedResultIsRegisteredWhenItIsActuallyLookedUp() {
+        store(enabled = true).writeImage("key") { it.write("existing".toByteArray()) }
+        val changes = mutableListOf<UniFile?>()
+        val reopened = TranslationResultStore(cacheDir, UniFile.fromFile(galleryDir),
+            TranslationOptions(persistDownloaded = true), 1, true, "001", resultChanged = { changes.add(it) })
+        assertTrue(changes.isEmpty())
+        val hit = reopened.findSavedResult()!!
+        assertEquals(hit.image, changes.single())
+        reopened.writePartialPreview("key", { it.write("partial".toByteArray()) })
+        changes.clear()
+        assertNotNull(reopened.findSavedResult())
+        assertEquals(listOf<UniFile?>(null), changes)
+    }
+
+    @Test fun progressChangesOnlyAfterPublicationAndDoesNotCountPartialOrSkippedPages() {
+        val changes = mutableListOf<UniFile?>()
+        val results = TranslationResultStore(cacheDir, UniFile.fromFile(galleryDir),
+            TranslationOptions(persistDownloaded = true), 1, true, "001", resultChanged = { changes.add(it) })
+        results.writeImage("key") { it.write("complete".toByteArray()) }
+        assertEquals("001_tl.png", changes.single()!!.name)
+        try {
+            results.writeImage("key") { error("encoder failed") }
+            fail("Publication should fail")
+        } catch (_: IllegalStateException) { }
+        assertEquals(1, changes.size)
+        results.writePartialPreview("key", { it.write("partial".toByteArray()) })
+        assertNull(changes.last())
+        results.writeImage("key") { it.write("complete".toByteArray()) }
+        results.recordSkipped("key")
+        assertNull(changes.last())
+        results.writeImage("key") { it.write("complete".toByteArray()) }
+        results.invalidate("key")
+        assertNull(changes.last())
+        assertEquals(6, changes.size)
+    }
+
     @Test fun automaticModeReopensResolvedCachesWithoutAnotherOcrOrTranslation() {
         val source = temp.newFile().apply { writeText("original pixels") }
         val auto = TranslationOptions(source = "auto", target = "fr")

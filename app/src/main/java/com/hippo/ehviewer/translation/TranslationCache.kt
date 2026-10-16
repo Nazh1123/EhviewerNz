@@ -3,7 +3,8 @@ package com.hippo.ehviewer.translation
 import java.io.File
 import java.security.MessageDigest
 
-class TranslationCache(private val dir: File, private val limit: Long = 256L * 1024 * 1024) {
+class TranslationCache(private val dir: File, private val limit: Long = 256L * 1024 * 1024,
+                       private val filesRemoved: (List<File>) -> Unit = {}) {
     init { check(dir.isDirectory || dir.mkdirs()) }
     // Invalidate renders from bubble grouping while retaining reuse across translation settings.
     @Suppress("UNUSED_PARAMETER")
@@ -26,20 +27,28 @@ class TranslationCache(private val dir: File, private val limit: Long = 256L * 1
     fun image(key: String) = File(dir, "${key}_tl.png")
     fun skipped(key: String) = File(dir, "${key}_tl.skip")
     fun touch(file: File) { file.setLastModified(System.currentTimeMillis()) }
-    fun invalidate(key: String) { extensions.forEach { File(dir, "${key}_tl.$it").delete() } }
+    fun invalidate(key: String) {
+        remove(extensions.map { File(dir, "${key}_tl.$it") })
+    }
+    private fun remove(files: List<File>) {
+        val removed = files.filter { it.delete() }
+        if (removed.isNotEmpty()) filesRemoved(removed)
+    }
     fun prune() {
         val files = dir.listFiles()?.filter { it.extension in extensions } ?: return
         var size = files.sumOf { it.length() }
         // Keep a partial preview and its text checkpoint in the same eviction unit.
         val groups = files.groupBy { it.nameWithoutExtension }.values.sortedBy { group -> group.maxOf { it.lastModified() } }
+        val removed = mutableListOf<File>()
         for (group in groups) {
             if (size <= limit) break
             for (file in group) {
                 val bytes = file.length()
-                if (file.delete()) size -= bytes
+                if (file.delete()) { size -= bytes; removed += file }
             }
         }
+        if (removed.isNotEmpty()) filesRemoved(removed)
     }
-    fun clear() { dir.listFiles()?.filter { it.extension in extensions || it.extension == "part" }?.forEach { it.delete() } }
+    fun clear() { remove(dir.listFiles().orEmpty().filter { it.extension in extensions || it.extension == "part" }) }
     private companion object { val extensions = setOf("png", "skip", "partial", "regions") }
 }

@@ -6,6 +6,7 @@ import com.hippo.ehviewer.R
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
+import com.hippo.ehviewer.gallery.GalleryProcessingProgress
 import com.hippo.ehviewer.translation.ImageProcessingPriority
 import com.hippo.ehviewer.translation.GalleryPageWork
 import com.hippo.ehviewer.translation.GalleryPageWorkRegistry
@@ -141,6 +142,14 @@ internal class GallerySuperResolutionSession(
         enabled = true; singlePage = null; message = null
         restore(); start(); changed()
         return true
+    }
+
+    suspend fun stopForResultDeletion() {
+        val pending = listOfNotNull(worker, loader)
+        disable()
+        pending.joinAll()
+        states.clear(); results.clear(); metrics.clear(); forced.clear()
+        changed()
     }
 
     fun disable() {
@@ -284,7 +293,14 @@ internal class GallerySuperResolutionSession(
                     val store = SuperResolutionStore(context, identity, selected)
                     val key = store.key(source)
                     val force = withContext(NonCancellable + Dispatchers.Main) { forced.remove(page) }
-                    if (force) { store.invalidate(key); store.invalidateTiles(key) }
+                    val sourceName = provider.getTranslationFilename(page)
+                    fun recordResult(result: UniFile?) {
+                        galleryInfo?.gid?.let { GalleryProcessingProgress.record(context, it,
+                            GalleryProcessingProgress.Kind.SUPER_RESOLUTION, sourceName, result) }
+                    }
+                    if (force) {
+                        store.invalidate(key); store.invalidateTiles(key)
+                    }
                     var engine: SuperResolution? = null
                     fun checkPriority() {
                         if (ImageProcessingPriority.work.translationPending) throw YieldToTranslation()
@@ -327,13 +343,14 @@ internal class GallerySuperResolutionSession(
                                 } else false
                             }
                         }, grouped = true).also { (tiles, _) ->
+                            recordResult(UniFile.fromFile(File(tiles.directory, "page.json")))
                             if (selected.persist) {
                                 val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
                                 val directory = download?.let { TranslationStorage.galleryDir(context, it) }
                                     ?: provider.translationDirectory
                                 if (download?.state == DownloadInfo.STATE_FINISH && TranslationStorage.hasGalleryDirectory(download))
                                     checkNotNull(directory) { "Gallery download directory unavailable" }
-                                if (directory != null) SuperResolutionExport.save(tiles, directory, provider.getTranslationFilename(page))
+                                if (directory != null) recordResult(SuperResolutionExport.save(tiles, directory, sourceName))
                             }
                         }
                 }
@@ -345,7 +362,10 @@ internal class GallerySuperResolutionSession(
         if (!enabled || !browsing || reader?.hasPage(current) != false) return
         val tiles = results[current] ?: return
         if (tiles.directory.isDirectory) reader?.displayTiles(current, tiles)
-        else { states.remove(current); results.remove(current); start() }
+        else {
+            GalleryProcessingProgress.forgetUnder(context, android.net.Uri.fromFile(tiles.directory))
+            states.remove(current); results.remove(current); start()
+        }
     }
 
     fun close() {

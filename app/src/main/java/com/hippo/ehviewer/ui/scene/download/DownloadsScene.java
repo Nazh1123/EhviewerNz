@@ -811,6 +811,7 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onDestroyView() {
+        if (mOriginalAdapter != null) mOriginalAdapter.stopObservingProcessingProgress();
         super.onDestroyView();
         mSyncFolderMenuItem = null;
         mStartAllMenuItem = null;
@@ -1297,6 +1298,13 @@ public class DownloadsScene extends ToolbarScene
             applyDownloadListMode(continuousLabelBrowse);
         }
         restoreContinuousScrollPosition();
+        if (mOriginalAdapter != null) mOriginalAdapter.startObservingProcessingProgress();
+    }
+
+    @Override
+    public void onPause() {
+        if (mOriginalAdapter != null) mOriginalAdapter.stopObservingProcessingProgress();
+        super.onPause();
     }
 
     private void applyDownloadListMode(boolean continuousLabelBrowse) {

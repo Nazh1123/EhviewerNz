@@ -91,11 +91,53 @@
                 android:layout_alignBottom="@id/thumb"
                 android:layout_toRightOf="@id/category"
                 android:layout_marginBottom="8dp"
+                android:textDirection="ltr"
+                android:ellipsize="none"
+                android:singleLine="true"
+                android:maxLines="1"
                 android:paddingLeft="8dp"
                 android:paddingTop="2dp"
-                android:paddingRight="8dp"
+                android:paddingRight="0dp"
                 android:paddingBottom="2dp"
                 android:textAllCaps="true" />
+
+            <TextView
+                android:id="@+id/processing_separator"
+                style="@style/ReadProgress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_toRightOf="@id/read_progress"
+                android:layout_alignBottom="@id/read_progress"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:text="  -  "
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/processing_progress"
+                style="@style/ReadProgress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_toRightOf="@id/processing_separator"
+                android:layout_alignBottom="@id/read_progress"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:paddingRight="8dp"
+                android:textDirection="ltr"
+                android:ellipsize="none"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/sr_progress"
+                style="@style/ReadProgress"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignLeft="@id/processing_progress"
+                android:layout_alignTop="@id/rating"
+                android:paddingRight="8dp"
+                android:textDirection="ltr"
+                android:ellipsize="none"
+                android:visibility="gone" />
 
             <FrameLayout
                 android:id="@+id/actions"
@@ -103,6 +145,7 @@
                 android:layout_height="wrap_content"
                 android:layout_alignBottom="@+id/thumb"
                 android:layout_alignParentRight="true"
+                android:translationZ="1dp"
                 android:paddingRight="8dp">
 
                 <ImageView

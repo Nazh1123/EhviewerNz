@@ -248,16 +248,8 @@ public class DownloadBatchActions {
                     if (downloadInfoList.isEmpty()) {
                         break;
                     }
-                    long[] galleryIds = downloadInfoList.stream().mapToLong(info -> info.gid).toArray();
-                    new AlertDialog.Builder(context)
-                            .setTitle(R.string.translation_delete_results)
-                            .setMessage(mHost.getString(R.string.translation_delete_results_confirm, galleryIds.length))
-                            .setNegativeButton(android.R.string.cancel, null)
-                            .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                                recyclerView.outOfCustomChoiceMode();
-                                com.hippo.ehviewer.translation.TranslationStorage.deleteGalleries(context, galleryIds);
-                            })
-                            .show();
+                    com.hippo.ehviewer.gallery.GalleryResultStorage.showDeleteDialog(context,
+                            new ArrayList<>(downloadInfoList), recyclerView::outOfCustomChoiceMode);
                     break;
                 }
                 case FAB_QUICK_ORGANIZE:

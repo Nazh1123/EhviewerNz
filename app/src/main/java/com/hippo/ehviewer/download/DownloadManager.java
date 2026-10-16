@@ -38,6 +38,7 @@ import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
 import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
+import com.hippo.ehviewer.gallery.GalleryProcessingProgress;
 import com.hippo.ehviewer.gallery.LocalFolderCoverStore;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.spider.SpiderDen;
@@ -966,6 +967,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         // unconditional even if the database record is already incomplete.
         LocalFolderCoverStore.delete(mContext, gid);
         ImportedGalleryProgress.remove(mContext, gid);
+        GalleryProcessingProgress.remove(mContext, gid);
         DownloadInfo info = mAllInfoMap.get(gid);
         if (info != null) {
             // Remove from DB
@@ -1008,6 +1010,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             long gid = gidList.get(i);
             LocalFolderCoverStore.delete(mContext, gid);
             ImportedGalleryProgress.remove(mContext, gid);
+            GalleryProcessingProgress.remove(mContext, gid);
             DownloadInfo info = mAllInfoMap.get(gid);
             if (null == info) {
                 Log.d(TAG, "Can't get download info with gid: " + gid);

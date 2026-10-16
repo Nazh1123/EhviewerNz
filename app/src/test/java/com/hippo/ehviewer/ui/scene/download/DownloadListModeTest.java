@@ -247,9 +247,16 @@ public class DownloadListModeTest {
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
         assertNotNull(dialog);
         TextView message = dialog.findViewById(android.R.id.message);
-        assertEquals(scene.getContext().getString(
-                R.string.translation_delete_results_confirm, 20), message.getText().toString());
-        dialog.getButton(DialogInterface.BUTTON_NEGATIVE).performClick();
+        assertEquals(scene.getContext().getString(R.string.gallery_results_calculating),
+                message.getText().toString());
+        assertEquals(scene.getContext().getString(R.string.translation_delete_results),
+                dialog.getButton(DialogInterface.BUTTON_POSITIVE).getText().toString());
+        assertEquals(scene.getContext().getString(R.string.gallery_results_delete_sr),
+                dialog.getButton(DialogInterface.BUTTON_NEGATIVE).getText().toString());
+        assertFalse(dialog.getButton(DialogInterface.BUTTON_POSITIVE).isEnabled());
+        assertFalse(dialog.getButton(DialogInterface.BUTTON_NEGATIVE).isEnabled());
+        dialog.getButton(DialogInterface.BUTTON_NEUTRAL).performClick();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertTrue(scene.getDownloadManager().containDownloadInfo(1));
         assertTrue(scene.getDownloadManager().containDownloadInfo(20));
     }

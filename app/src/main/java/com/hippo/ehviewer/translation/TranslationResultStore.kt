@@ -17,8 +17,12 @@ internal class TranslationResultStore(
     downloaded: Boolean,
     private val sourceName: String? = null,
     private val legacyDir: File? = null,
+    private val filesRemoved: (List<UniFile>) -> Unit = {},
+    private val resultChanged: (UniFile?) -> Unit = {},
 ) {
-    private val cache = TranslationCache(cacheDir, options.cacheLimitBytes)
+    private val cache = TranslationCache(cacheDir, options.cacheLimitBytes) { files ->
+        filesRemoved(files.mapNotNull { UniFile.fromFile(it) })
+    }
     private val cacheDirectory = requireNotNull(UniFile.fromFile(cacheDir))
     val persists = options.persistDownloaded && downloaded && galleryId != null && galleryDir != null
 
@@ -44,7 +48,11 @@ internal class TranslationResultStore(
         // A complete result wins over a partial preview from another compatible identity.
         for (extension in listOf("png", "partial")) for (key in keys)
             existing(key, extension)?.let { return Hit(key, it) }
-        for (key in keys) if (isSkipped(key)) return Hit(key, null)
+        for (key in keys) if (isSkipped(key)) {
+            resultChanged(null)
+            return Hit(key, null)
+        }
+        resultChanged(null)
         return null
     }
 
@@ -52,8 +60,14 @@ internal class TranslationResultStore(
     fun findSavedResult(): Hit? {
         if (sourceName == null) return null
         val key = (galleryId?.let { "g${it}_" } ?: "") + "named"
-        for (extension in listOf("png", "partial")) saved(key, extension)?.let { return Hit(key, it) }
-        return if (saved(key, "skip") != null) Hit(key, null) else null
+        for (extension in listOf("png", "partial")) saved(key, extension)?.let {
+            resultChanged(it.takeUnless(::isPartial))
+            return Hit(key, it)
+        }
+        return if (saved(key, "skip") != null) {
+            resultChanged(null)
+            Hit(key, null)
+        } else null
     }
 
     private fun legacyKeys(source: File): List<String> {
@@ -108,6 +122,10 @@ internal class TranslationResultStore(
         cacheDirectory.findFile("${key}_tl.$extension")?.takeIf { it.isFile }
     private fun existing(key: String, extension: String): UniFile? =
         saved(key, extension) ?: cached(key, extension)
+
+    private fun deleteResult(file: UniFile?) {
+        if (file != null && file.delete()) filesRemoved(listOf(file))
+    }
 
     fun existingImage(key: String): UniFile? = existing(key, "png") ?: existing(key, "partial")
 
@@ -164,13 +182,14 @@ internal class TranslationResultStore(
     fun writePartialPreview(key: String, writer: (OutputStream) -> Unit, keepCheckpoint: Boolean = false): UniFile {
         val result = write(key, "partial", writer)
         for (extension in listOf("png", "skip") + if (keepCheckpoint) emptyList() else listOf("regions")) {
-            cached(key, extension)?.delete()
-            saved(key, extension)?.delete()
+            deleteResult(cached(key, extension))
+            deleteResult(saved(key, extension))
         }
         if (persists) {
             cached(key, "partial")?.delete()
             cached(key, "regions")?.delete()
         }
+        resultChanged(null)
         return result
     }
 
@@ -182,11 +201,12 @@ internal class TranslationResultStore(
     }
 
     fun writeImage(key: String, writer: (OutputStream) -> Unit): UniFile = write(key, "png", writer).also {
-        if (persists) cached(key, "png")?.delete()
+        if (persists) deleteResult(cached(key, "png"))
         for (extension in listOf("partial", "regions", "skip")) {
-            cached(key, extension)?.delete()
-            saved(key, extension)?.delete()
+            deleteResult(cached(key, extension))
+            deleteResult(saved(key, extension))
         }
+        resultChanged(it)
     }
 
     /** Adopt current overlay-cache hits when persistent saving is enabled. */
@@ -204,9 +224,10 @@ internal class TranslationResultStore(
         } else file
         if (retained.uri != file.uri && file.parentFile?.uri == cacheDirectory.uri) {
             checkpoint(file)?.delete()
-            file.delete()
+            if (file.delete()) filesRemoved(listOf(file))
         }
         touch(retained)
+        resultChanged(retained.takeUnless(::isPartial))
         return retained
     }
 
@@ -222,23 +243,30 @@ internal class TranslationResultStore(
         write(key, "skip") { it.write("skipped".toByteArray(Charsets.UTF_8)) }
         if (persists) cached(key, "skip")?.delete()
         for (extension in listOf("png", "partial", "regions")) {
-            cached(key, extension)?.delete()
-            saved(key, extension)?.delete()
+            deleteResult(cached(key, extension))
+            deleteResult(saved(key, extension))
         }
         if (!persists) cache.prune()
+        resultChanged(null)
     }
 
     fun invalidate(key: String) {
         cache.invalidate(key)
         for (extension in listOf("png", "skip", "partial", "regions")) {
-            saved(key, extension)?.let { check(it.delete()) { "Cannot delete translation overlay" } }
+            saved(key, extension)?.let {
+                check(it.delete()) { "Cannot delete translation overlay" }
+                filesRemoved(listOf(it))
+            }
         }
+        resultChanged(null)
     }
 
     fun prune() = cache.prune()
 
     companion object {
         const val DIRECTORY_NAME = "_translated"
+        internal fun isResultFile(name: String) = name.matches(Regex(
+            "(.*_tl|g-?\\d+_[a-f0-9]{64})\\.(png|partial|regions|skip)(\\.part)?"))
         fun isPartial(file: UniFile) = file.name?.endsWith(".partial") == true
 
         fun touch(file: UniFile) {
@@ -263,8 +291,7 @@ internal class TranslationResultStore(
             for (file in files) {
                 if (file.isDirectory) {
                     if (!deleteNamedOverlays(file)) success = false
-                } else if (file.isFile && file.name?.matches(Regex(
-                        "(.*_tl|g-?\\d+_[a-f0-9]{64})\\.(png|partial|regions|skip)(\\.part)?")) == true) {
+                } else if (file.isFile && file.name?.let(::isResultFile) == true) {
                     if (!file.delete()) success = false
                 }
             }

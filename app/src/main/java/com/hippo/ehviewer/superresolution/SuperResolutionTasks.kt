@@ -20,6 +20,10 @@ internal object SuperResolutionTasks {
     fun changed() { listener?.invoke() }
     fun stop(identity: String) { sessions[identity]?.disable() }
     fun stopAll() { sessions.values.toList().forEach { it.disable() } }
+    suspend fun stopForResultDeletion(galleryIds: Set<Long>) {
+        sessions.values.toList().filter { it.galleryInfo?.gid in galleryIds }
+            .forEach { it.stopForResultDeletion() }
+    }
     fun leaveReaders() {
         sessions.values.toList().filter { !it.fullGallery }.forEach(::release)
     }

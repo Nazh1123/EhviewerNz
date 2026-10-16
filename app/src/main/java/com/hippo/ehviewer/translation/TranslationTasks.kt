@@ -49,6 +49,10 @@ internal object TranslationTasks {
     }
 
     fun stopAll() = sessions.keys.toList().forEach(::stop)
+    suspend fun stopForResultDeletion(galleryIds: Set<Long>) {
+        sessions.values.toList().filter { it.galleryInfo?.gid in galleryIds }
+            .forEach { it.stopForResultDeletion() }
+    }
     fun stopActive() = active().map { it.identity }.forEach(::stop)
     fun releaseIdleModels() = sessions.values.forEach { it.releaseIdleModels() }
     internal fun takeIdleModels(except: GalleryTranslationSession?) = sessions.values
