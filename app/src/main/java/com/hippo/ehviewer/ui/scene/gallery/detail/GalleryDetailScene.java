@@ -2746,7 +2746,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @Nullable
     private static String getLocalGalleryPath(Context context, Uri uri) {
         if ("file".equals(uri.getScheme())) {
-            return useSdcardAlias(uri.getPath());
+            return usePrimaryStoragePath(uri.getPath());
         }
         if ("com.android.externalstorage.documents".equals(uri.getAuthority())
                 && DocumentsContract.isDocumentUri(context, uri)) {
@@ -2756,7 +2756,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 String volume = colon >= 0 ? documentId.substring(0, colon) : documentId;
                 String relative = colon >= 0 ? documentId.substring(colon + 1) : "";
                 String root = "primary".equalsIgnoreCase(volume)
-                        ? "/sdcard"
+                        ? Environment.getExternalStorageDirectory().getAbsolutePath()
                         : "/storage/" + volume;
                 return relative.isEmpty() ? root : root + "/" + relative;
             } catch (IllegalArgumentException ignored) {
@@ -2767,16 +2767,16 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     @Nullable
-    private static String useSdcardAlias(@Nullable String path) {
+    private static String usePrimaryStoragePath(@Nullable String path) {
         if (path == null) {
             return null;
         }
         String externalPath = Environment.getExternalStorageDirectory().getAbsolutePath();
-        if (path.equals(externalPath)) {
-            return "/sdcard";
+        if (path.equals("/sdcard")) {
+            return externalPath;
         }
-        if (path.startsWith(externalPath + File.separator)) {
-            return "/sdcard" + path.substring(externalPath.length())
+        if (path.startsWith("/sdcard/")) {
+            return externalPath + path.substring("/sdcard".length())
                     .replace(File.separatorChar, '/');
         }
         return path.replace(File.separatorChar, '/');
