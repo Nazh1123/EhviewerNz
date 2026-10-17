@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">Etiqueta de búsqueda predefinida 1</string>
+    <string name="settings_search_preset_tag_2">Etiqueta de búsqueda predefinida 2</string>
+    <string name="settings_search_preset_tag_hint">Introduce un espacio de nombres:etiqueta, como l:\"chinese$\", o:\"ai generated$\" o f:\"stockings\". Usa comillas si contiene espacios.</string>
+    <string name="settings_search_preset_tag_invalid">Introduce un espacio de nombres:etiqueta válido. Usa comillas si contiene espacios.</string>
+    <string name="search_preset_ai_generated">Generado por IA</string>
+    <string name="search_preset_exclude">Excluir</string>
+    <string name="search_preset_normal">Normal</string>
+    <string name="search_preset_include">Incluir</string>
+</resources>

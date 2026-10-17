@@ -6,9 +6,12 @@ import android.os.Bundle;
 
 import androidx.annotation.Nullable;
 import androidx.preference.Preference;
+import androidx.preference.EditTextPreference;
+import android.widget.Toast;
 
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.client.SearchPresetQuery;
 
 public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
 
@@ -26,6 +29,8 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
     public void onCreatePreferences(@Nullable Bundle savedInstanceState,
                                     @Nullable String rootKey) {
         addPreferencesFromResource(R.xml.fork_features_settings);
+        bindSearchPreset(Settings.KEY_SEARCH_PRESET_TAG_1, Settings.getSearchPresetTag1());
+        bindSearchPreset(Settings.KEY_SEARCH_PRESET_TAG_2, Settings.getSearchPresetTag2());
         mManualImageSaveLocation = findPreference(KEY_MANUAL_IMAGE_SAVE_LOCATION);
         Preference showThumbnailDownloadBadge =
                 findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
@@ -108,6 +113,26 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
 
     private void updateManualSaveLocationSummary() {
         ManualImageSaveLocationPreferences.updateSummary(this, mManualImageSaveLocation);
+    }
+
+    private void bindSearchPreset(String key, String value) {
+        EditTextPreference preference = findPreference(key);
+        if (preference == null) return;
+        preference.setText(value);
+        preference.setOnBindEditTextListener(editText -> {
+            editText.setSingleLine(true);
+            editText.setSelectAllOnFocus(true);
+            editText.setInputType(android.text.InputType.TYPE_CLASS_TEXT
+                    | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        });
+        preference.setOnPreferenceChangeListener((ignored, newValue) -> {
+            if (!SearchPresetQuery.isValid((String) newValue)) {
+                Toast.makeText(requireContext(), R.string.settings_search_preset_tag_invalid,
+                        Toast.LENGTH_LONG).show();
+                return false;
+            }
+            return true;
+        });
     }
 
 }

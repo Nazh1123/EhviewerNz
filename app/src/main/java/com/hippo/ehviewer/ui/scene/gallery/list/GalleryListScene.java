@@ -91,7 +91,6 @@ import com.hippo.ehviewer.callBack.SubscriptionCallback;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
-import com.hippo.ehviewer.client.SearchLanguageQuery;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.SeenGalleryHistory;
 import com.hippo.ehviewer.client.EhTagDatabase;
@@ -1436,6 +1435,9 @@ public class GalleryListScene extends BaseScene
     @Override
     public void onResume() {
         super.onResume();
+        if (mSearchLayout != null && mSearchBar != null) {
+            mSearchLayout.syncPresetTags(mSearchBar.getText());
+        }
         if (mAdapter != null) mAdapter.invalidateReadingProgress();
         if (mAdapter != null && mHelper != null) mAdapter.onSourceDataSetChanged();
         if (isBookmarkSubscriptionMode() && mBookmarkSubscriptionCoordinator != null
@@ -2764,6 +2766,9 @@ public class GalleryListScene extends BaseScene
                     break;
             }
         }
+        if (state == STATE_SEARCH || state == STATE_SEARCH_SHOW_LIST) {
+            mSearchLayout.syncPresetTags(mSearchBar.getText());
+        }
         updatePopularActions();
     }
 
@@ -2855,23 +2860,6 @@ public class GalleryListScene extends BaseScene
         setState(STATE_NORMAL);
     }
 
-    public void toggleSearchLanguage(@NonNull String language) {
-        if (mUrlBuilder == null || mHelper == null) {
-            return;
-        }
-
-        String query = (mSearchBar != null && mState != STATE_NORMAL)
-                ? mSearchBar.getText()
-                : mUrlBuilder.getKeyword();
-        String updatedQuery = SearchLanguageQuery.toggle(query, language);
-
-        if (mSearchBar != null) {
-            mSearchBar.setText(updatedQuery);
-            mSearchBar.cursorToEnd();
-        }
-        onApplySearch(updatedQuery);
-    }
-
     @Override
     public void onSearchEditTextBackPressed() {
         onBackPressed();
@@ -2928,6 +2916,19 @@ public class GalleryListScene extends BaseScene
         } else {
             setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED, Gravity.LEFT);
             setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED, Gravity.RIGHT);
+        }
+    }
+
+    @Override
+    public void onSearchQueryChanged(String query) {
+        if (mSearchLayout != null) mSearchLayout.syncPresetTags(query);
+    }
+
+    @Override
+    public void onSearchPresetQueryChanged(String query) {
+        if (mSearchBar != null) {
+            mSearchBar.setText(query);
+            mSearchBar.cursorToEnd();
         }
     }
 

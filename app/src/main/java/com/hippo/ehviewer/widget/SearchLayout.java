@@ -41,6 +41,8 @@ import com.hippo.android.resource.AttrResources;
 import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.easyrecyclerview.MarginItemDecoration;
 import com.hippo.ehviewer.R;
+import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.client.SearchPresetQuery;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.exception.EhException;
 import com.hippo.ripple.Ripple;
@@ -87,6 +89,9 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     private RadioGridGroup mNormalSearchMode;
     private ImageView mNormalSearchModeHelp;
     private SwitchCompat mEnableAdvanceSwitch;
+    private SearchPresetSwitch mPresetTag1;
+    private SearchPresetSwitch mPresetTag2;
+    private String mSearchQuery = "";
 
     private View mAdvanceView;
     private AdvanceSearchTable mTableAdvanceSearch;
@@ -136,6 +141,11 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
         View normalView = mInflater.inflate(R.layout.search_normal, null);
         mNormalView = normalView;
         mCategoryTable = (CategoryTable) normalView.findViewById(R.id.search_category_table);
+        mPresetTag1 = normalView.findViewById(R.id.search_preset_tag_1);
+        mPresetTag2 = normalView.findViewById(R.id.search_preset_tag_2);
+        mPresetTag1.setOnStateChangedListener(state -> changePreset(Settings.getSearchPresetTag1(), state));
+        mPresetTag2.setOnStateChangedListener(state -> changePreset(Settings.getSearchPresetTag2(), state));
+        syncPresetTags("");
         mNormalSearchMode = (RadioGridGroup) normalView.findViewById(R.id.normal_search_mode);
         mNormalSearchModeHelp = (ImageView) normalView.findViewById(R.id.normal_search_mode_help);
         mEnableAdvanceSwitch = (SwitchCompat) normalView.findViewById(R.id.search_enable_advance);
@@ -180,6 +190,23 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
 
     public void setHelper(Helper helper) {
         mHelper = helper;
+    }
+
+    public void syncPresetTags(String query) {
+        mSearchQuery = query == null ? "" : query;
+        syncPreset(mPresetTag1, Settings.getSearchPresetTag1());
+        syncPreset(mPresetTag2, Settings.getSearchPresetTag2());
+    }
+
+    private void syncPreset(SearchPresetSwitch button, String preset) {
+        button.setLabel(SearchPresetSwitch.labelFor(getContext(), preset));
+        button.setState(SearchPresetQuery.getState(mSearchQuery, preset));
+    }
+
+    private void changePreset(String preset, int state) {
+        String updated = SearchPresetQuery.setState(mSearchQuery, preset, state);
+        syncPresetTags(updated);
+        if (mHelper != null) mHelper.onSearchPresetQueryChanged(updated);
     }
 
     public void scrollSearchContainerToTop() {
@@ -444,6 +471,7 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     }
 
     public interface Helper {
+        void onSearchPresetQueryChanged(String query);
         void onChangeSearchMode();
         void onSelectImage();
         void onOpenTagSelector();

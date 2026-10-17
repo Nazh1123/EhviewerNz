@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">検索プリセットタグ1</string>
+    <string name="settings_search_preset_tag_2">検索プリセットタグ2</string>
+    <string name="settings_search_preset_tag_hint">名前空間:タグ を1つ入力してください。例：l:\"chinese$\"、o:\"ai generated$\"、f:\"stockings\"。空白を含むタグは二重引用符で囲んでください。</string>
+    <string name="settings_search_preset_tag_invalid">有効な 名前空間:タグ を1つ入力してください。空白を含むタグは二重引用符で囲んでください。</string>
+    <string name="search_preset_ai_generated">AI生成</string>
+    <string name="search_preset_exclude">除外</string>
+    <string name="search_preset_normal">通常</string>
+    <string name="search_preset_include">含める</string>
+</resources>

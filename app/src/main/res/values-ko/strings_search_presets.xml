@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">검색 사전 설정 태그 1</string>
+    <string name="settings_search_preset_tag_2">검색 사전 설정 태그 2</string>
+    <string name="settings_search_preset_tag_hint">네임스페이스:태그 하나를 입력하세요. 예: l:\"chinese$\", o:\"ai generated$\", f:\"stockings\". 공백이 있는 태그는 큰따옴표로 묶으세요.</string>
+    <string name="settings_search_preset_tag_invalid">올바른 네임스페이스:태그 하나를 입력하세요. 공백이 있는 태그는 큰따옴표로 묶으세요.</string>
+    <string name="search_preset_ai_generated">AI 생성</string>
+    <string name="search_preset_exclude">제외</string>
+    <string name="search_preset_normal">보통</string>
+    <string name="search_preset_include">포함</string>
+</resources>

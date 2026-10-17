@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">搜尋預設標籤1</string>
+    <string name="settings_search_preset_tag_2">搜尋預設標籤2</string>
+    <string name="settings_search_preset_tag_hint">請輸入一個 命名空間:標籤，如 l:\"chinese$\"、o:\"ai generated$\" 或 f:\"stockings\"。含空格的標籤需加雙引號。</string>
+    <string name="settings_search_preset_tag_invalid">請輸入有效的 命名空間:標籤，含空格的標籤需加雙引號。</string>
+    <string name="search_preset_ai_generated">AI 生成</string>
+    <string name="search_preset_exclude">關閉（排除）</string>
+    <string name="search_preset_normal">普通</string>
+    <string name="search_preset_include">開啟（包含）</string>
+</resources>

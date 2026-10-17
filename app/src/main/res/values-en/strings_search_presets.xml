@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">Search preset tag 1</string>
+    <string name="settings_search_preset_tag_2">Search preset tag 2</string>
+    <string name="settings_search_preset_tag_hint">Enter one namespace:tag, for example l:\"chinese$\", o:\"ai generated$\" or f:\"stockings\".</string>
+    <string name="settings_search_preset_tag_invalid">Enter one valid namespace:tag. Quote tags containing spaces.</string>
+    <string name="search_preset_ai_generated">AI generated</string>
+    <string name="search_preset_exclude">Exclude</string>
+    <string name="search_preset_normal">Normal</string>
+    <string name="search_preset_include">Include</string>
+</resources>

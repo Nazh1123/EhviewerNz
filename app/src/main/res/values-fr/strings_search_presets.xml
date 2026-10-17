@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">Étiquette de recherche prédéfinie 1</string>
+    <string name="settings_search_preset_tag_2">Étiquette de recherche prédéfinie 2</string>
+    <string name="settings_search_preset_tag_hint">Saisissez un espace de noms:étiquette, par exemple l:\"chinese$\", o:\"ai generated$\" ou f:\"stockings\". Entourez de guillemets les étiquettes contenant des espaces.</string>
+    <string name="settings_search_preset_tag_invalid">Saisissez un espace de noms:étiquette valide. Utilisez des guillemets pour les espaces.</string>
+    <string name="search_preset_ai_generated">Généré par IA</string>
+    <string name="search_preset_exclude">Exclure</string>
+    <string name="search_preset_normal">Normal</string>
+    <string name="search_preset_include">Inclure</string>
+</resources>

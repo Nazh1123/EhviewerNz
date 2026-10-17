@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">แท็กค้นหาที่ตั้งไว้ 1</string>
+    <string name="settings_search_preset_tag_2">แท็กค้นหาที่ตั้งไว้ 2</string>
+    <string name="settings_search_preset_tag_hint">ป้อน เนมสเปซ:แท็ก หนึ่งรายการ เช่น l:\"chinese$\", o:\"ai generated$\" หรือ f:\"stockings\" ใช้เครื่องหมายคำพูดครอบแท็กที่มีช่องว่าง</string>
+    <string name="settings_search_preset_tag_invalid">ป้อน เนมสเปซ:แท็ก ที่ถูกต้องหนึ่งรายการ ใช้เครื่องหมายคำพูดครอบแท็กที่มีช่องว่าง</string>
+    <string name="search_preset_ai_generated">สร้างโดย AI</string>
+    <string name="search_preset_exclude">ยกเว้น</string>
+    <string name="search_preset_normal">ปกติ</string>
+    <string name="search_preset_include">รวม</string>
+</resources>

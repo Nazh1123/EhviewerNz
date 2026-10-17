@@ -91,8 +91,11 @@ public class Settings {
                 putDF(true);
             }
         }
-        if (!sSettingsPre.contains(KEY_SEARCH_LANGUAGE)) {
-            putString(KEY_SEARCH_LANGUAGE, getInitialSearchLanguage());
+        if (!sSettingsPre.contains(KEY_SEARCH_PRESET_TAG_1)) {
+            putString(KEY_SEARCH_PRESET_TAG_1, "l:\"" + getInitialSearchLanguage() + "$\"");
+        }
+        if (!sSettingsPre.contains(KEY_SEARCH_PRESET_TAG_2)) {
+            putString(KEY_SEARCH_PRESET_TAG_2, "o:\"ai generated$\"");
         }
         // migrateQuickPageTurnSetting(); // Legacy switches migrate into ReaderKeyProfiles instead.
         migrateThumbnailInfoBarSetting();
@@ -1021,17 +1024,17 @@ public class Settings {
     }
     */
 
-    public static final String KEY_SEARCH_LANGUAGE = "search_language";
-    public static final String SEARCH_LANGUAGE_DISABLED = "disabled";
+    public static final String KEY_SEARCH_PRESET_TAG_1 = "search_preset_tag_1";
+    public static final String KEY_SEARCH_PRESET_TAG_2 = "search_preset_tag_2";
 
-    public static boolean isSearchLanguageEnabled() {
-        return !SEARCH_LANGUAGE_DISABLED.equals(getSearchLanguage());
+    @NonNull
+    public static String getSearchPresetTag1() {
+        return getString(KEY_SEARCH_PRESET_TAG_1, "l:\"" + getInitialSearchLanguage() + "$\"");
     }
 
     @NonNull
-    public static String getSearchLanguage() {
-        String language = getString(KEY_SEARCH_LANGUAGE, null);
-        return TextUtils.isEmpty(language) ? getInitialSearchLanguage() : language;
+    public static String getSearchPresetTag2() {
+        return getString(KEY_SEARCH_PRESET_TAG_2, "o:\"ai generated$\"");
     }
 
     @NonNull

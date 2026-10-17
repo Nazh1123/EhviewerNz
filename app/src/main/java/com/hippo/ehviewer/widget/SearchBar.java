@@ -545,6 +545,7 @@ public class SearchBar extends CardView implements View.OnClickListener,
     @Override
     public void afterTextChanged(Editable s) {
         updateSuggestions();
+        if (mHelper != null) mHelper.onSearchQueryChanged(s.toString());
     }
 
     @Override
@@ -575,6 +576,8 @@ public class SearchBar extends CardView implements View.OnClickListener,
     }
 
     public interface Helper {
+        default void onSearchQueryChanged(String query) {}
+
         void onClickTitle();
 
         void onClickLeftIcon();

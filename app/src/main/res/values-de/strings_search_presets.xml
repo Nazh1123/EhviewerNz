@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">Suchvorlage-Tag 1</string>
+    <string name="settings_search_preset_tag_2">Suchvorlage-Tag 2</string>
+    <string name="settings_search_preset_tag_hint">Ein Namespace:Tag eingeben, z. B. l:\"chinese$\", o:\"ai generated$\" oder f:\"stockings\". Tags mit Leerzeichen in Anführungszeichen setzen.</string>
+    <string name="settings_search_preset_tag_invalid">Ein gültiges Namespace:Tag eingeben. Tags mit Leerzeichen in Anführungszeichen setzen.</string>
+    <string name="search_preset_ai_generated">KI-generiert</string>
+    <string name="search_preset_exclude">Ausschließen</string>
+    <string name="search_preset_normal">Normal</string>
+    <string name="search_preset_include">Einschließen</string>
+</resources>

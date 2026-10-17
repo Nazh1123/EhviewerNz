@@ -78,7 +78,6 @@ import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUrlOpener;
 import com.hippo.ehviewer.client.EhUtils;
-import com.hippo.ehviewer.client.SearchLanguageQuery;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.ui.fragment.GalleryVersionMaintenance;
@@ -117,7 +116,6 @@ import com.hippo.ehviewer.widget.EhDrawerLayout;
 import com.hippo.ehviewer.widget.LimitsCountView;
 import com.hippo.io.UniFileInputStreamPipe;
 import com.hippo.network.Network;
-import com.hippo.preference.ListPreference;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.SceneFragment;
 import com.hippo.scene.StageActivity;
@@ -182,8 +180,6 @@ public final class MainActivity extends StageActivity
     private TextView mSubscriptionUpdateCountdown;
     @Nullable
     private AlertDialog mGalleryVersionUpdatePrompt;
-    @Nullable
-    private ListPreference mSearchLanguagePreference;
     @Nullable
     private AlertDialog mSubscriptionUpdateSettingsDialog;
     private boolean mSubscriptionUpdatesStarted;
@@ -610,9 +606,6 @@ public final class MainActivity extends StageActivity
             case R.id.nav_update_subscription:
                 showSubscriptionUpdateSettings();
                 return true;
-            case R.id.nav_search_language:
-                showSearchLanguageSettings();
-                return true;
             default:
                 return false;
         }
@@ -628,36 +621,6 @@ public final class MainActivity extends StageActivity
         });
         mSubscriptionUpdateSettingsDialog = dialog;
         dialog.setOnDismissListener(ignored -> mSubscriptionUpdateSettingsDialog = null);
-    }
-
-    private void showSearchLanguageSettings() {
-        if (mSearchLanguagePreference == null) {
-            // Use the same preference dialog and resources as the settings screen.
-            ListPreference preference = new ListPreference(this);
-            preference.setKey(Settings.KEY_SEARCH_LANGUAGE);
-            preference.setPersistent(false);
-            preference.setTitle(R.string.settings_search_language);
-            preference.setDialogTitle(R.string.settings_search_language);
-            preference.setEntries(R.array.search_language_entries);
-            preference.setEntryValues(R.array.search_language_entry_values);
-            preference.setOnPreferenceChangeListener((ignored, newValue) -> {
-                Settings.putString(Settings.KEY_SEARCH_LANGUAGE, (String) newValue);
-                updateSearchLanguageNavigationItem();
-                return true;
-            });
-            mSearchLanguagePreference = preference;
-        }
-        mSearchLanguagePreference.setValue(Settings.getSearchLanguage());
-        mSearchLanguagePreference.showDialog();
-    }
-
-    private void updateSearchLanguageNavigationItem() {
-        if (mNavView != null) {
-            MenuItem item = mNavView.getMenu().findItem(R.id.nav_search_language);
-            if (item != null) {
-                item.setVisible(Settings.isSearchLanguageEnabled());
-            }
-        }
     }
 
     private void updateReadingHistoryNavigationItem() {
@@ -842,10 +805,6 @@ public final class MainActivity extends StageActivity
             mSubscriptionUpdateSettingsDialog.dismiss();
             mSubscriptionUpdateSettingsDialog = null;
         }
-        if (mSearchLanguagePreference != null) {
-            mSearchLanguagePreference.onDetached();
-            mSearchLanguagePreference = null;
-        }
         if (mGalleryVersionUpdatePrompt != null) {
             mGalleryVersionUpdatePrompt.dismiss();
             mGalleryVersionUpdatePrompt = null;
@@ -873,7 +832,6 @@ public final class MainActivity extends StageActivity
         super.onResume();
 
         setNavCheckedItem(mNavCheckedItem);
-        updateSearchLanguageNavigationItem();
         updateReadingHistoryNavigationItem();
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
@@ -1128,25 +1086,6 @@ public final class MainActivity extends StageActivity
             return mDrawerLayout.isDrawersVisible();
         } else {
             return false;
-        }
-    }
-
-    private void toggleSearchLanguage() {
-        if (!Settings.isSearchLanguageEnabled()) {
-            return;
-        }
-        String language = Settings.getSearchLanguage();
-        SceneFragment topScene = getTopScene();
-        if (topScene instanceof GalleryListScene) {
-            ((GalleryListScene) topScene).toggleSearchLanguage(language);
-        } else {
-            ListUrlBuilder builder = new ListUrlBuilder();
-            builder.setKeyword(SearchLanguageQuery.token(language));
-            Bundle args = new Bundle();
-            args.putString(GalleryListScene.KEY_ACTION,
-                    GalleryListScene.ACTION_LIST_URL_BUILDER);
-            args.putParcelable(GalleryListScene.KEY_LIST_URL_BUILDER, builder);
-            startSceneFirstly(new Announcer(GalleryListScene.class).setArgs(args));
         }
     }
 
@@ -1538,9 +1477,6 @@ public final class MainActivity extends StageActivity
                 if (Settings.isReadingHistoryEnabled()) {
                     startScene(new Announcer(ReadingHistoryScene.class));
                 }
-                break;
-            case R.id.nav_search_language:
-                toggleSearchLanguage();
                 break;
             case R.id.nav_downloads:
                 startScene(new Announcer(DownloadsScene.class));

@@ -12,13 +12,19 @@
             android:summary="@string/settings_popular_updates_only_summary"
             app:allowDividerAbove="false" />
 
-        <com.hippo.preference.ListPreference
-            android:key="search_language"
-            android:summary="%s"
-            android:title="@string/settings_search_language"
-            app:entries="@array/search_language_entries"
-            app:entryValues="@array/search_language_entry_values"
+        <androidx.preference.EditTextPreference
+            android:key="search_preset_tag_1"
+            android:title="@string/settings_search_preset_tag_1"
+            android:dialogMessage="@string/settings_search_preset_tag_hint"
+            app:useSimpleSummaryProvider="true"
             app:allowDividerAbove="true" />
+
+        <androidx.preference.EditTextPreference
+            android:key="search_preset_tag_2"
+            android:title="@string/settings_search_preset_tag_2"
+            android:dialogMessage="@string/settings_search_preset_tag_hint"
+            app:useSimpleSummaryProvider="true"
+            app:allowDividerAbove="false" />
 
         <com.hippo.preference.ThumbnailSizePreference
             android:defaultValue="1"
