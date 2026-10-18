@@ -343,15 +343,15 @@ internal class GallerySuperResolutionSession(
                                 } else false
                             }
                         }, grouped = true).also { (tiles, _) ->
-                            recordResult(UniFile.fromFile(File(tiles.directory, "page.json")))
-                            if (selected.persist) {
+                            val directory = if (selected.persist) {
                                 val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
                                 val directory = download?.let { TranslationStorage.galleryDir(context, it) }
                                     ?: provider.translationDirectory
                                 if (download?.state == DownloadInfo.STATE_FINISH && TranslationStorage.hasGalleryDirectory(download))
                                     checkNotNull(directory) { "Gallery download directory unavailable" }
-                                if (directory != null) recordResult(SuperResolutionExport.save(tiles, directory, sourceName))
-                            }
+                                directory
+                            } else null
+                            recordResult(store.compact(key, tiles, directory, sourceName))
                         }
                 }
             }
@@ -361,7 +361,7 @@ internal class GallerySuperResolutionSession(
     private fun restore() {
         if (!enabled || !browsing || reader?.hasPage(current) != false) return
         val tiles = results[current] ?: return
-        if (tiles.directory.isDirectory) reader?.displayTiles(current, tiles)
+        if (tiles.available) reader?.displayTiles(current, tiles)
         else {
             GalleryProcessingProgress.forgetUnder(context, android.net.Uri.fromFile(tiles.directory))
             states.remove(current); results.remove(current); start()

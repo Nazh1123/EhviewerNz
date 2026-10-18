@@ -15,7 +15,7 @@ internal data class SuperResolutionPageMetrics(
     var maxOutputBitmapBytes: Int = 0,
 )
 
-/** A one-element encoding queue overlaps bounded PNG work with inference, never full-page allocation. */
+/** A one-element encoding queue overlaps lossless checkpoint writes with inference. */
 internal class SuperResolutionPageProcessor(private val context: Context) {
     internal class Animation : RuntimeException()
     internal class MemoryBudget : RuntimeException()
@@ -112,7 +112,7 @@ internal class SuperResolutionPageProcessor(private val context: Context) {
                         try {
                             if (position == missing.lastIndex) {
                                 currentCoroutineContext().ensureActive(); checkPriority()
-                                // The last pixels are still in the shared cache: do not wait for PNG or read it back.
+                                // Publish shared pixels before the last checkpoint or final-image encoding.
                                 displayed = ready(tiles)
                                 metrics.displayMs = SystemClock.elapsedRealtime() - start
                             }

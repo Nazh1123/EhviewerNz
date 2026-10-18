@@ -1,13 +1,10 @@
 package com.hippo.ehviewer.superresolution
 
-import android.graphics.BitmapFactory
 import java.io.DataOutputStream
 import java.io.OutputStream
 import java.util.zip.CRC32
 import java.util.zip.Deflater
 import java.util.zip.DeflaterOutputStream
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 
 /** Streams tile cores into one PNG, with an 8 MiB pixel band and one decoded tile. */
 internal object SuperResolutionPng {
@@ -30,46 +27,22 @@ internal object SuperResolutionPng {
         val deflater = Deflater()
         try {
             val compressed = DeflaterOutputStream(chunks, deflater, 64 * 1024)
-            val bandHeight = minOf(page.outputEdge, (BAND_BYTES / 4 / page.width).coerceAtLeast(1))
-            val pixels = IntArray(page.width * bandHeight)
             val scanline = ByteArray(1 + page.width * 4)
-            for (tileRow in 0 until page.rows) {
-                val top = tileRow * page.outputEdge
-                val bottom = minOf(page.height, top + page.outputEdge)
-                var y = top
-                while (y < bottom) {
-                    currentCoroutineContext().ensureActive()
-                    val height = minOf(bandHeight, bottom - y)
-                    for (column in 0 until page.columns) {
-                        currentCoroutineContext().ensureActive()
-                        val index = tileRow * page.columns + column
-                        val core = page.core(index)
-                        val region = page.region(index)
-                        val bitmap = checkNotNull(BitmapFactory.decodeFile(page.file(index).path)) { "Missing SR tile" }
-                        try {
-                            check(bitmap.width == region.width() && bitmap.height == region.height()) { "Invalid SR tile" }
-                            // Discard overlapping gutters; each output pixel is written exactly once.
-                            bitmap.getPixels(pixels, core.left, page.width, core.left - region.left,
-                                y - region.top, core.width(), height)
-                        } finally { bitmap.recycle() }
+            SuperResolutionBands.read(page) { pixels, height ->
+                for (row in 0 until height) {
+                    // PNG Sub filter improves compression without keeping a previous scanline.
+                    var previous = 0
+                    for (x in 0 until page.width) {
+                        val color = pixels[row * page.width + x]
+                        val offset = 1 + x * 4
+                        scanline[offset] = ((color shr 16 and 255) - (previous shr 16 and 255)).toByte()
+                        scanline[offset + 1] = ((color shr 8 and 255) - (previous shr 8 and 255)).toByte()
+                        scanline[offset + 2] = ((color and 255) - (previous and 255)).toByte()
+                        scanline[offset + 3] = ((color ushr 24) - (previous ushr 24)).toByte()
+                        previous = color
                     }
-                    for (row in 0 until height) {
-                        currentCoroutineContext().ensureActive()
-                        // PNG Sub filter improves compression without keeping a previous scanline.
-                        var previous = 0
-                        for (x in 0 until page.width) {
-                            val color = pixels[row * page.width + x]
-                            val offset = 1 + x * 4
-                            scanline[offset] = ((color shr 16 and 255) - (previous shr 16 and 255)).toByte()
-                            scanline[offset + 1] = ((color shr 8 and 255) - (previous shr 8 and 255)).toByte()
-                            scanline[offset + 2] = ((color and 255) - (previous and 255)).toByte()
-                            scanline[offset + 3] = ((color ushr 24) - (previous ushr 24)).toByte()
-                            previous = color
-                        }
-                        scanline[0] = 1
-                        compressed.write(scanline)
-                    }
-                    y += height
+                    scanline[0] = 1
+                    compressed.write(scanline)
                 }
             }
             compressed.finish()
@@ -84,6 +57,4 @@ internal object SuperResolutionPng {
         val crc = CRC32().apply { update(name); update(bytes, offset, length) }
         output.writeInt(crc.value.toInt())
     }
-
-    private const val BAND_BYTES = 8 * 1024 * 1024
 }

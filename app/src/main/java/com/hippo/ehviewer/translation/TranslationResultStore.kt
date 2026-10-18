@@ -46,7 +46,7 @@ internal class TranslationResultStore(
 
     fun findResult(keys: List<String>): Hit? {
         // A complete result wins over a partial preview from another compatible identity.
-        for (extension in listOf("png", "partial")) for (key in keys)
+        for (extension in listOf("webp", "png", "partial")) for (key in keys)
             existing(key, extension)?.let { return Hit(key, it) }
         for (key in keys) if (isSkipped(key)) {
             resultChanged(null)
@@ -60,7 +60,7 @@ internal class TranslationResultStore(
     fun findSavedResult(): Hit? {
         if (sourceName == null) return null
         val key = (galleryId?.let { "g${it}_" } ?: "") + "named"
-        for (extension in listOf("png", "partial")) saved(key, extension)?.let {
+        for (extension in listOf("webp", "png", "partial")) saved(key, extension)?.let {
             resultChanged(it.takeUnless(::isPartial))
             return Hit(key, it)
         }
@@ -127,7 +127,7 @@ internal class TranslationResultStore(
         if (file != null && file.delete()) filesRemoved(listOf(file))
     }
 
-    fun existingImage(key: String): UniFile? = existing(key, "png") ?: existing(key, "partial")
+    fun existingImage(key: String): UniFile? = existing(key, "webp") ?: existing(key, "png") ?: existing(key, "partial")
 
     private fun checkpoint(image: UniFile): UniFile? = image.name?.let {
         image.parentFile?.findFile("${it.substringBeforeLast('.')}.regions")
@@ -181,7 +181,7 @@ internal class TranslationResultStore(
 
     fun writePartialPreview(key: String, writer: (OutputStream) -> Unit, keepCheckpoint: Boolean = false): UniFile {
         val result = write(key, "partial", writer)
-        for (extension in listOf("png", "skip") + if (keepCheckpoint) emptyList() else listOf("regions")) {
+        for (extension in listOf("webp", "png", "skip") + if (keepCheckpoint) emptyList() else listOf("regions")) {
             deleteResult(cached(key, extension))
             deleteResult(saved(key, extension))
         }
@@ -200,18 +200,23 @@ internal class TranslationResultStore(
         return publish(dir, name, writer)
     }
 
-    fun writeImage(key: String, writer: (OutputStream) -> Unit): UniFile = write(key, "png", writer).also {
-        if (persists) deleteResult(cached(key, "png"))
-        for (extension in listOf("partial", "regions", "skip")) {
-            deleteResult(cached(key, extension))
-            deleteResult(saved(key, extension))
+    fun writeImage(key: String, writer: (OutputStream) -> Unit): UniFile = writeImage(key, "png", writer)
+
+    fun writeImage(key: String, format: String, writer: (OutputStream) -> Unit): UniFile {
+        require(format in listOf("png", "webp"))
+        return write(key, format, writer).also {
+            if (persists) deleteResult(cached(key, format))
+            for (extension in listOf("partial", "regions", "skip") + listOf("png", "webp").filter { it != format }) {
+                deleteResult(cached(key, extension))
+                deleteResult(saved(key, extension))
+            }
+            resultChanged(it)
         }
-        resultChanged(it)
     }
 
     /** Adopt current overlay-cache hits when persistent saving is enabled. */
     fun retain(key: String, file: UniFile): UniFile {
-        val extension = if (isPartial(file)) "partial" else "png"
+        val extension = if (isPartial(file)) "partial" else file.name?.substringAfterLast('.')?.takeIf { it in listOf("png", "webp") } ?: "png"
         val destination = if (persists) saved(key, extension) else cached(key, extension)
         val retained = if (file.uri != destination?.uri && (persists || file.parentFile?.uri == cacheDirectory.uri)) {
             if (isPartial(file)) {
@@ -242,7 +247,7 @@ internal class TranslationResultStore(
     fun recordSkipped(key: String) {
         write(key, "skip") { it.write("skipped".toByteArray(Charsets.UTF_8)) }
         if (persists) cached(key, "skip")?.delete()
-        for (extension in listOf("png", "partial", "regions")) {
+        for (extension in listOf("webp", "png", "partial", "regions")) {
             deleteResult(cached(key, extension))
             deleteResult(saved(key, extension))
         }
@@ -252,7 +257,7 @@ internal class TranslationResultStore(
 
     fun invalidate(key: String) {
         cache.invalidate(key)
-        for (extension in listOf("png", "skip", "partial", "regions")) {
+        for (extension in listOf("webp", "png", "skip", "partial", "regions")) {
             saved(key, extension)?.let {
                 check(it.delete()) { "Cannot delete translation overlay" }
                 filesRemoved(listOf(it))
@@ -266,7 +271,7 @@ internal class TranslationResultStore(
     companion object {
         const val DIRECTORY_NAME = "_translated"
         internal fun isResultFile(name: String) = name.matches(Regex(
-            "(.*_tl|g-?\\d+_[a-f0-9]{64})\\.(png|partial|regions|skip)(\\.part)?"))
+            "(.*_tl|g-?\\d+_[a-f0-9]{64})\\.(png|webp|partial|regions|skip)(\\.part)?"))
         fun isPartial(file: UniFile) = file.name?.endsWith(".partial") == true
 
         fun touch(file: UniFile) {
@@ -308,7 +313,7 @@ internal class TranslationResultStore(
                 for (file in files) {
                     val gid = file.name.substringBefore('_').removePrefix("g").toLongOrNull()
                     if (file.name.startsWith("g") && gid in galleryIds && file.isFile &&
-                        file.extension in listOf("png", "skip", "partial", "regions", "part")) {
+                        file.extension in listOf("webp", "png", "skip", "partial", "regions", "part")) {
                         if (!file.delete()) success = false
                     }
                 }

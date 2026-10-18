@@ -2,13 +2,15 @@ package com.hippo.ehviewer.superresolution
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.BitmapRegionDecoder
 import android.graphics.Rect
+import com.hippo.unifile.UniFile
 import java.io.File
 import java.util.LinkedHashMap
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.atomic.AtomicIntegerArray
 
-/** Immutable geometry, atomically written PNG tiles, bounded shared CPU cache. No full output Bitmap. */
+/** Immutable geometry, temporary lossless tiles and one final image; bounded shared pixel cache. */
 class EnhancedTilePage internal constructor(val directory: File, val sourceWidth: Int, val sourceHeight: Int,
                                            val scale: Int = 2) {
     init { require(scale in listOf(2, 4, 8)) }
@@ -23,6 +25,23 @@ class EnhancedTilePage internal constructor(val directory: File, val sourceWidth
     private val cache = LinkedHashMap<String, Pixels>(16, .75f, true)
     private var bytes = 0L
     private var caching = true
+    @Volatile internal var finalImage: UniFile? = null
+        private set
+    private var decoder: BitmapRegionDecoder? = null
+    // Used on the UI thread: remote SAF availability is validated by the IO reader/store.
+    internal val available get() = directory.isDirectory
+
+    @Synchronized internal fun useFinalImage(image: UniFile) {
+        decoder?.recycle(); decoder = null
+        finalImage = image
+    }
+
+    /** Switch the backing source before deleting checkpoints, excluding concurrent region reads. */
+    @Synchronized internal fun removeTileImages() {
+        check(finalImage != null)
+        directory.listFiles().orEmpty().filter { it.extension in listOf("png", "webp") &&
+            it.nameWithoutExtension.toIntOrNull() != null }.forEach { check(it.delete()) }
+    }
     private val versions = AtomicIntegerArray(count)
     private val listeners = CopyOnWriteArraySet<(Int) -> Unit>()
     internal fun version(index: Int) = versions.get(index)
@@ -47,10 +66,12 @@ class EnhancedTilePage internal constructor(val directory: File, val sourceWidth
         left = maxOf(0, left - scale); top = maxOf(0, top - scale)
         right = minOf(width, right + scale); bottom = minOf(height, bottom + scale)
     }
-    fun file(index: Int) = File(directory, "$index.png")
+    fun file(index: Int): File = File(directory, "$index.webp").takeIf { it.isFile }
+        ?: File(directory, "$index.png").takeIf { it.isFile } ?: File(directory, "$index.webp")
     fun complete(index: Int): Boolean {
+        if (finalImage != null) return true // The store validated the complete image once when opening it.
         val file = file(index)
-        if (!SuperResolutionStore.completePng(file)) return false
+        if (!SuperResolutionStore.completeImage(file)) return false
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
         val region = region(index)
@@ -70,13 +91,26 @@ class EnhancedTilePage internal constructor(val directory: File, val sourceWidth
     /** IO only. The caller owns one reference, including when the cache evicts the tile. */
     fun acquire(index: Int, sample: Int): Pixels? {
         synchronized(this) { cache["$index:$sample"]?.let { return it.retain() } }
-        val bitmap = BitmapFactory.decodeFile(file(index).path, BitmapFactory.Options().apply {
-            inPreferredConfig = Bitmap.Config.ARGB_8888; inSampleSize = sample
-        }) ?: return null
+        val bitmap = synchronized(this) {
+            val options = BitmapFactory.Options().apply {
+                inPreferredConfig = Bitmap.Config.ARGB_8888; inSampleSize = sample
+            }
+            val final = finalImage
+            if (final == null) BitmapFactory.decodeFile(file(index).path, options)
+            else {
+                val source = decoder ?: final.openInputStream().use {
+                    BitmapRegionDecoder.newInstance(it, false)
+                }?.also { decoder = it } ?: return null
+                source.decodeRegion(region(index), options)
+            }
+        } ?: return null
         return Pixels(bitmap).also { cache("$index:$sample", it) }
     }
     @Synchronized fun activate() { caching = true }
-    @Synchronized fun trim() { caching = false; cache.values.forEach { it.close() }; cache.clear(); bytes = 0 }
+    @Synchronized fun trim() {
+        caching = false; cache.values.forEach { it.close() }; cache.clear(); bytes = 0
+        decoder?.recycle(); decoder = null
+    }
     @Synchronized fun cachedBytes() = bytes
     companion object {
         // Guttered regions fit into two 128-pixel inference blocks and a 512-pixel GL texture.

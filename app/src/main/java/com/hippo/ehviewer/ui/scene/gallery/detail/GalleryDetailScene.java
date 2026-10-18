@@ -2032,6 +2032,12 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     private void initPreviewPull(RefreshLayout refreshLayout) {
         mPreviewPullLayout = refreshLayout;
+        if (refreshLayout instanceof GalleryDetailRefreshLayout detailRefreshLayout) {
+            detailRefreshLayout.setAllPreviewsDisplayedSupplier(() ->
+                    mOffline && mOfflineDetail != null
+                            ? !mOfflineDetail.previews.isEmpty() && mOfflineDetail.previews.size() <= 27
+                            : mGalleryDetail != null && mGalleryDetail.previewPages == 1);
+        }
         refreshLayout.setFooterColorSchemeResources(
                 R.color.loading_indicator_red,
                 R.color.loading_indicator_blue,

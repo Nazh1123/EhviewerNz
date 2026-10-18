@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import com.hippo.ehviewer.gallery.GalleryProcessingProgress
+import com.hippo.ehviewer.image.WebpEncoder
+import com.hippo.unifile.UniFile
 import java.io.File
 import java.io.RandomAccessFile
 import java.nio.file.Files
@@ -14,7 +16,7 @@ import java.security.MessageDigest
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
-/** Content-addressed PNGs. All calls hold SuperResolutionModels.lock on IO. */
+/** Lossless resumable checkpoints compacted into one final image. Calls hold the model lock on IO. */
 internal class SuperResolutionStore(context: Context, private val identity: String,
                                     private val options: SuperResolutionOptions) {
     private val app = context.applicationContext
@@ -108,9 +110,11 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
     suspend fun saveTile(page: EnhancedTilePage, index: Int, bitmap: Bitmap) {
         val temporary = File.createTempFile("tile-", ".tmp", page.directory)
         try {
-            temporary.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            val extension = WebpEncoder.losslessExtension(bitmap)
+            temporary.outputStream().use { WebpEncoder.writeLossless(bitmap, it) }
             currentCoroutineContext().ensureActive()
-            atomicPublish(temporary, page.file(index))
+            atomicPublish(temporary, File(page.directory, "$index.$extension"))
+            File(page.directory, "$index.${if (extension == "webp") "png" else "webp"}").delete()
             page.saved(index)
         } finally { temporary.delete() }
     }
@@ -125,13 +129,71 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
         if (!options.persist || page.directory.parentFile == persistent) return page
         val key = page.directory.name.removeSuffix(".tiles")
         val target = checkpoint(key, page.sourceWidth, page.sourceHeight)
+        page.finalImage?.let { image ->
+            val retained = if (localFile(image)?.parentFile == page.directory) {
+                val file = File(target.directory, checkNotNull(image.name))
+                val temporary = File.createTempFile("retain-", ".tmp", target.directory)
+                try {
+                    image.openInputStream().use { input -> temporary.outputStream().use { input.copyTo(it) } }
+                    atomicPublish(temporary, file)
+                } finally { temporary.delete() }
+                checkNotNull(UniFile.fromFile(file))
+            } else image
+            target.useFinalImage(retained)
+            writePage(target, true)
+            page.useFinalImage(retained)
+            page.directory.deleteRecursively()
+            return target
+        }
         for (index in 0 until page.count) if (!target.complete(index)) {
             val temporary = File.createTempFile("retain-", ".tmp", target.directory)
-            try { page.file(index).copyTo(temporary, overwrite = true); atomicPublish(temporary, target.file(index)) }
+            try {
+                val file = page.file(index)
+                file.copyTo(temporary, overwrite = true)
+                atomicPublish(temporary, File(target.directory, file.name))
+            }
             finally { temporary.delete() }
         }
         finish(target)
         return target
+    }
+
+    /** Persist a final image/locator before removing any pixels required for recovery. */
+    suspend fun compact(key: String, page: EnhancedTilePage, gallery: UniFile?, sourceName: String): UniFile {
+        val previous = page.finalImage
+        val workspace = SuperResolutionWebp.budget(app)
+        val image = if (gallery != null) SuperResolutionExport.save(page, gallery, sourceName, workspace)
+        else previous ?: SuperResolutionExport.encode(page, workspace) { extension, writer ->
+            val target = File(page.directory, "result.$extension")
+            val temporary = File.createTempFile("final-", ".tmp", page.directory)
+            try {
+                temporary.outputStream().use { writer(it) }
+                currentCoroutineContext().ensureActive()
+                atomicPublish(temporary, target)
+                checkNotNull(UniFile.fromFile(target))
+            } finally { temporary.delete() }
+        }
+        // A corrupt/unreadable export must never replace usable checkpoints.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        image.openInputStream().use { BitmapFactory.decodeStream(it, null, bounds) }
+        check(bounds.outWidth == page.width && bounds.outHeight == page.height) { "Invalid SR final image" }
+        // Commit metadata first; on failure the current page and checkpoints remain usable.
+        writePage(page, true, image)
+        page.useFinalImage(image)
+        page.removeTileImages()
+        for (extension in listOf("png", "webp")) {
+            val obsolete = File(page.directory, "result.$extension")
+            if (obsolete.isFile && localFile(image) != obsolete) check(obsolete.delete())
+        }
+        if (previous != null && previous.uri != image.uri && localFile(previous)?.parentFile == page.directory) previous.delete()
+        // Old monolithic 2x images are superseded as well.
+        invalidate(key)
+        for (root in listOf(cache, persistent)) {
+            val obsolete = File(root, "$key.tiles")
+            if (obsolete != page.directory && obsolete.exists()) obsolete.deleteRecursively()
+        }
+        prune(page.directory)
+        return image
     }
 
     fun invalidateTiles(key: String) {
@@ -145,19 +207,38 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
     private fun readPage(directory: File, completed: Boolean): EnhancedTilePage? = runCatching {
         val json = JSONObject(File(directory, "page.json").readText())
         val version = json.getInt("version")
-        if (version !in 1..2 || (completed && !json.getBoolean("complete"))) return@runCatching null
+        if (version !in 1..3 || (completed && !json.getBoolean("complete"))) return@runCatching null
         val w = json.getInt("width"); val h = json.getInt("height")
         if (w !in 1..32768 || h !in 1..32768) return@runCatching null
         val scale = if (version == 1) 2 else json.getInt("scale")
         if (scale != scaleFor(w, h)) return@runCatching null
-        EnhancedTilePage(directory, w, h, scale)
+        EnhancedTilePage(directory, w, h, scale).also { page ->
+            if (version == 3 && json.has("result")) {
+                val uri = Uri.parse(json.getString("result"))
+                val image = checkNotNull(if (uri.scheme == "file") UniFile.fromFile(localFile(uri))
+                    else UniFile.fromUri(app, uri))
+                check(image.isFile)
+                if (json.has("resultSize")) check(image.length() == json.getLong("resultSize"))
+                if (json.optLong("resultModified") > 0) check(image.lastModified() == json.getLong("resultModified"))
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                image.openInputStream().use { BitmapFactory.decodeStream(it, null, bounds) }
+                check(bounds.outWidth == page.width && bounds.outHeight == page.height)
+                localFile(image)?.let { check(completeImage(it)) }
+                page.useFinalImage(image)
+            }
+        }
     }.getOrNull()
 
-    private fun writePage(page: EnhancedTilePage, complete: Boolean) {
+    private fun writePage(page: EnhancedTilePage, complete: Boolean, result: UniFile? = page.finalImage) {
         val temporary = File.createTempFile("page-", ".tmp", page.directory)
         try {
-            temporary.writeText(JSONObject().put("version", 2).put("width", page.sourceWidth)
-                .put("height", page.sourceHeight).put("scale", page.scale).put("complete", complete).toString())
+            temporary.writeText(JSONObject().put("version", if (result == null) 2 else 3).put("width", page.sourceWidth)
+                .put("height", page.sourceHeight).put("scale", page.scale).put("complete", complete)
+                .apply { if (result != null) {
+                    put("result", result.uri.toString())
+                    put("resultSize", result.length())
+                    put("resultModified", result.lastModified())
+                } }.toString())
             atomicPublish(temporary, File(page.directory, "page.json"))
         } finally { temporary.delete() }
     }
@@ -178,6 +259,12 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
     }
 
     companion object {
+        private fun localFile(image: UniFile): File? = if (image.uri.scheme == "file") localFile(image.uri) else null
+        private fun localFile(uri: Uri): File {
+            // Android file URIs use absolute paths; host-side Android tests can also use drive letters.
+            val path = checkNotNull(uri.schemeSpecificPart).removePrefix("//")
+            return File(if (path.matches(Regex("^/[A-Za-z]:.*"))) path.drop(1) else path)
+        }
         internal fun galleryRoots(context: Context, galleryId: Long): List<File> =
             listOf(context.cacheDir, context.noBackupFilesDir).map {
                 File(File(it, "super-resolution-pages"), digest("gallery:$galleryId".toByteArray()))
@@ -193,6 +280,18 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
                     ending.contentEquals(byteArrayOf(0, 0, 0, 0, 73, 69, 78, 68, -82, 66, 96, -126))
             }
         }.getOrDefault(false)
+        internal fun completeImage(file: File): Boolean {
+            if (completePng(file)) return true
+            return runCatching {
+                RandomAccessFile(file, "r").use { input ->
+                    if (input.length() < 20) return@use false
+                    val header = ByteArray(12).also(input::readFully)
+                    val size = (0..3).fold(0L) { result, i -> result or ((header[4 + i].toLong() and 255) shl (8 * i)) }
+                    String(header, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+                        String(header, 8, 4, Charsets.US_ASCII) == "WEBP" && size + 8 == input.length()
+                }
+            }.getOrDefault(false)
+        }
         private fun atomicPublish(temporary: File, target: File) {
             Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         }

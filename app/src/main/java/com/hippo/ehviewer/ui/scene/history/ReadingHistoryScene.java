@@ -2,6 +2,7 @@ package com.hippo.ehviewer.ui.scene.history;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.MenuItem;
 import android.view.View;
@@ -12,6 +13,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -22,7 +24,12 @@ import com.hippo.easyrecyclerview.MarginItemDecoration;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.gallery.ReadingHistory;
+import com.hippo.ehviewer.ui.GalleryActivity;
+import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
+import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
+import com.hippo.ehviewer.ui.scene.gallery.list.EnterGalleryDetailTransaction;
+import com.hippo.scene.Announcer;
 import com.hippo.view.ViewTransition;
 import com.hippo.lib.yorozuya.ViewUtils;
 import com.hippo.widget.LoadImageView;
@@ -130,6 +137,22 @@ public class ReadingHistoryScene extends ToolbarScene {
         }
     }
 
+    private void openDetail(ReadingHistory.Entry entry, View cover) {
+        // Imported/local readers can carry synthetic gallery metadata without an online detail page.
+        if (!GalleryActivity.ACTION_EH.equals(entry.action) || entry.gallery == null
+                || entry.gallery.gid <= 0 || TextUtils.isEmpty(entry.gallery.token)) {
+            open(entry);
+            return;
+        }
+        Bundle args = new Bundle();
+        args.putString(GalleryDetailScene.KEY_ACTION, GalleryDetailScene.ACTION_GALLERY_INFO);
+        args.putParcelable(GalleryDetailScene.KEY_GALLERY_INFO, entry.gallery);
+        ViewCompat.setTransitionName(cover, TransitionNameFactory.getThumbTransitionName(entry.gallery.gid));
+        Announcer announcer = new Announcer(GalleryDetailScene.class).setArgs(args);
+        announcer.setTranHelper(new EnterGalleryDetailTransaction(cover));
+        startScene(announcer);
+    }
+
     private class ReadingAdapter extends RecyclerView.Adapter<ReadingHolder> {
         private final int coverHeight;
 
@@ -165,6 +188,7 @@ public class ReadingHistoryScene extends ToolbarScene {
             holder.time.setText(new SimpleDateFormat("yyyy-MM-dd hh:mm", Locale.ROOT)
                     .format(new Date(entry.readAt)));
             holder.itemView.setOnClickListener(view -> open(entry));
+            holder.cover.setOnClickListener(view -> openDetail(entry, holder.cover));
             holder.itemView.setOnLongClickListener(view -> {
                 new AlertDialog.Builder(context).setTitle(entry.title)
                         .setItems(new String[]{context.getString(R.string.reading_history_remove)},
@@ -180,6 +204,9 @@ public class ReadingHistoryScene extends ToolbarScene {
 
         @Override public void onViewRecycled(@NonNull ReadingHolder holder) {
             ReadingHistoryCoverLoader.clear(holder.cover);
+            holder.cover.setOnClickListener(null);
+            holder.itemView.setOnClickListener(null);
+            holder.itemView.setOnLongClickListener(null);
             super.onViewRecycled(holder);
         }
     }

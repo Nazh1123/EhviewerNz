@@ -1,6 +1,7 @@
 package com.hippo.ehviewer.ui.scene.history;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.os.Handler;
@@ -36,6 +37,8 @@ import com.hippo.ehviewer.download.GalleryUpdateRecord;
 import com.hippo.ehviewer.download.GalleryUpdateManager;
 import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.download.GalleryUpdateRecordStore.Summary;
+import com.hippo.ehviewer.gallery.ReadingHistory;
+import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.ehviewer.ui.scene.ProgressScene;
 import com.hippo.ehviewer.ui.scene.download.part.ThumbDataContainer;
@@ -130,6 +133,10 @@ public class GalleryUpdateHistoryScene extends ToolbarScene implements GalleryUp
         return EhApplication.getDownloadManager(getEHContext()).getDownloadInfo(gid);
     }
 
+    @Nullable protected GalleryUpdateRecord loadRecord(Context context, long gid) {
+        return GalleryUpdateRecordStore.get(context).find(gid);
+    }
+
     private void reload() {
         Context context = getEHContext();
         if (adapter == null || context == null) return;
@@ -158,7 +165,62 @@ public class GalleryUpdateHistoryScene extends ToolbarScene implements GalleryUp
         });
     }
 
-    private void open(Summary entry) {
+    private void readUpdates(Summary entry) {
+        int request = ++openGeneration;
+        Context context = getEHContext();
+        if (context == null || adapter == null) return;
+        if (findDownload(entry.targetGid()) == null) {
+            openDetail(entry);
+            return;
+        }
+        Context application = context.getApplicationContext();
+        executor(application).execute(() -> {
+            GalleryUpdateRecord loaded = null;
+            int failure = 0;
+            try {
+                loaded = loadRecord(application, entry.targetGid());
+                if (loaded == null || loaded.completedAt != entry.completedAt() || loaded.isFailure()) {
+                    failure = R.string.gallery_update_log_unavailable;
+                } else if (!loaded.complete) {
+                    failure = R.string.gallery_update_log_incomplete;
+                } else if (!loaded.hasTokenSnapshot()) {
+                    failure = R.string.gallery_update_log_legacy_notice;
+                } else if (loaded.addedPages.length == 0) {
+                    failure = R.string.gallery_update_log_no_added;
+                }
+            } catch (RuntimeException e) {
+                Log.w("GalleryUpdateHistory", "Unable to load update for reading", e);
+                failure = R.string.gallery_update_log_unavailable;
+            }
+            GalleryUpdateRecord record = loaded;
+            int error = failure;
+            main.post(() -> {
+                if (request != openGeneration || adapter == null || !isResumed()) return;
+                if (error != 0) {
+                    showTip(error, LENGTH_SHORT);
+                    return;
+                }
+                DownloadInfo local = findDownload(record.targetGid);
+                if (local == null) {
+                    openDetail(entry);
+                    return;
+                }
+                if (local.state != DownloadInfo.STATE_FINISH || local.archiveUri != null
+                        || TextUtils.isEmpty(local.token) || GalleryUpdateManager.getPlan(local.gid) != null) {
+                    showTip(R.string.gallery_update_history_no_local, LENGTH_SHORT);
+                    return;
+                }
+                Intent intent = new Intent(context, GalleryActivity.class).setAction(GalleryActivity.ACTION_EH);
+                intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.UPDATE);
+                intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, local);
+                intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_GID, record.targetGid);
+                intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_TIME, record.completedAt);
+                startActivity(intent);
+            });
+        });
+    }
+
+    private void openDetail(Summary entry) {
         // Supersede a previous legacy-token lookup even when this card can open immediately.
         int request = ++openGeneration;
         Context context = getEHContext();
@@ -300,7 +362,8 @@ public class GalleryUpdateHistoryScene extends ToolbarScene implements GalleryUp
                     : AttrResources.getAttrColor(context, R.attr.textColorThemeAccent));
             holder.progress.setText(known ? context.getString(R.string.gallery_update_history_read_progress,
                     entry.addedPages() > 0 ? entry.readingPage() + 1 : 0, entry.addedPages()) : "—");
-            holder.itemView.setOnClickListener(view -> open(entry));
+            holder.itemView.setOnClickListener(view -> readUpdates(entry));
+            holder.cover.setOnClickListener(view -> openDetail(entry));
         }
 
         @Override public int getItemCount() { return entries.size(); }
@@ -308,6 +371,7 @@ public class GalleryUpdateHistoryScene extends ToolbarScene implements GalleryUp
         @Override public void onViewRecycled(@NonNull HistoryHolder holder) {
             holder.cover.unload();
             holder.cover.setImageDrawable(null);
+            holder.cover.setOnClickListener(null);
             holder.itemView.setOnClickListener(null);
             super.onViewRecycled(holder);
         }

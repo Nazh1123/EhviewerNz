@@ -36,6 +36,19 @@ class GalleryResultStorageTest {
         parentFile!!.mkdirs(); writeText(text)
     }
 
+    @Test fun inventoryIncludesWebpResultsAndTemporaryWebpExports() = runBlocking {
+        val gallery = temp.newFolder()
+        val overlay = write(gallery, "_translated/001_tl.webp")
+        val image = write(gallery, "_suepr_resolution/001_sr.webp")
+        val partial = write(gallery, "_suepr_resolution/002_sr.webp.part")
+        write(gallery, "_suepr_resolution/keep.webp")
+        val directories = listOf(checkNotNull(UniFile.fromFile(gallery)))
+        assertEquals(setOf(overlay.name), GalleryResultStorage.collect(context, setOf(9876), directories,
+            Kind.TRANSLATION).map { it.name }.toSet())
+        assertEquals(setOf(image.name, partial.name), GalleryResultStorage.collect(context, setOf(9876), directories,
+            Kind.SUPER_RESOLUTION).map { it.name }.toSet())
+    }
+
     @Test fun inventoryScopesByGalleryAndTypeAndIncludesPartialStorage() = runBlocking {
         val gallery = temp.newFolder()
         val translated = write(gallery, "_translated/chapter/001_tl.png")

@@ -1,9 +1,12 @@
 package com.hippo.ehviewer.translation
 
 import android.app.Application
+import android.os.Build
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
+import com.hippo.lib.image.Image
 import android.net.Uri
 import android.os.Looper
 import com.hippo.ehviewer.EhApplication
@@ -50,6 +53,7 @@ class TranslationPersistenceLifecycleTest {
     private val jobs = CoroutineScope(Dispatchers.IO + CoroutineExceptionHandler { _, error -> errors.add(error) })
     private val stats = PageStats(0, 0, 0, 0, 0, 0, 0, 0)
     private val options = TranslationOptions(ahead = 2, persistDownloaded = true)
+    private val renderedExtension get() = if (Build.VERSION.SDK_INT >= 29) "webp" else "png"
     private val savedDir get() = File(gallery, TranslationResultStore.DIRECTORY_NAME)
 
     @Before fun setUp() {
@@ -92,7 +96,7 @@ class TranslationPersistenceLifecycleTest {
             session.onPageChanged(0)
             await { !session.working && session.states[0] == R.string.translation_done }
             assertFalse(legacy.exists())
-            assertEquals(setOf("0_tl.png"), savedDir.list()!!.toSet())
+            assertEquals(setOf("0_tl.$renderedExtension"), savedDir.list()!!.toSet())
             assertTrue(TranslationStorage.cacheDir(context).list()!!.isEmpty())
         }
     }
@@ -164,7 +168,7 @@ class TranslationPersistenceLifecycleTest {
             await { complete.isCompleted }
             assertEquals(R.string.translation_done, reopened.states[0])
             assertEquals(0, reopened.partial)
-            assertTrue(File(savedDir, "0_tl.png").isFile)
+            assertTrue(File(savedDir, "0_tl.$renderedExtension").isFile)
             assertFalse(File(savedDir, "0_tl.partial").exists())
             assertNull(store(selected).readResume(key))
         }
@@ -199,11 +203,43 @@ class TranslationPersistenceLifecycleTest {
         completeAfterCancellation(session, key, PageResult.Translated(bitmap, stats)) {
             session.leaveReader()
         }
-        assertTrue(File(savedDir, "0_tl.png").isFile)
+        assertTrue(File(savedDir, "0_tl.$renderedExtension").isFile)
         assertTrue(bitmap.isRecycled)
         assertNull(session.states[0])
         TranslationCache(TranslationStorage.cacheDir(context)).clear()
         assertNotNull(store(options.copy(persistDownloaded = false)).existingImage(key))
+    }
+
+    @Test fun freshRenderIsDisplayedBeforePublicationWithoutCopyingAndEncodingLeaseProtectsItsPixels() = withSession { session ->
+        val bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)
+        val key = store().key(provider.sources[0])
+        var displayed: Image? = null
+        session.reader = object : GalleryTranslationSession.Reader {
+            override fun changed() = Unit
+            override fun hasTranslatedPage(page: Int) = displayed != null
+            override fun display(page: Int, image: Image) {
+                assertNull("Reader should see pixels before disk publication", store().existingImage(key))
+                val drawable = image.getDrawable()
+                try { assertSame(bitmap, (drawable as BitmapDrawable).bitmap) }
+                finally { image.release() }
+                assertTrue(image.obtain())
+                displayed = image
+            }
+        }
+        try {
+            val job = jobs.launch {
+                session.finishWithSource(0, TranslationPageRequest(0, false), key, options) {
+                    PageResult.Translated(bitmap, stats)
+                }
+            }
+            await { job.isCompleted }
+            assertNotNull(displayed)
+            assertNotNull(store().existingImage(key))
+            assertFalse(bitmap.isRecycled)
+            displayed!!.release()
+            displayed = null
+            assertTrue(bitmap.isRecycled)
+        } finally { displayed?.release(); session.reader = null }
     }
 
     @Test fun pageSupersededAfterRenderingSavesWithoutDisplayingAnObsoletePage() = withSession { session ->
@@ -217,7 +253,7 @@ class TranslationPersistenceLifecycleTest {
             }
         }
         await { job.isCompleted }
-        assertTrue(File(savedDir, "0_tl.png").isFile)
+        assertTrue(File(savedDir, "0_tl.$renderedExtension").isFile)
         assertTrue(bitmap.isRecycled)
         assertNull(session.states[0])
     }

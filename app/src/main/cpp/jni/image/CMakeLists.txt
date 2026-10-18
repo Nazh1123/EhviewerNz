@@ -23,6 +23,7 @@ set(IMAGE_SOURCES
         image_png.c
         image_gif.c
         image_webp.c
+        webp_encoder.c
         filter/clahe.c
         filter/gray.c
         java_wrapper.c

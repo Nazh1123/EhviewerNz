@@ -28,6 +28,8 @@ import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
+import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
+import com.hippo.scene.Announcer;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -144,6 +146,14 @@ public class ReadingHistoryUiTest {
         assertFooterLayout(row.itemView, "Long title\nSecond line\nThird line\nFourth line\nFifth line", "long");
         ((TextView) row.itemView.findViewById(R.id.title)).setTextSize(24);
         assertFooterLayout(row.itemView, "Long title\nSecond line\nThird line\nFourth line\nFifth line", "large-text");
+        row.itemView.findViewById(R.id.reading_cover).performClick();
+        assertNull(scene.launched);
+        assertEquals(GalleryDetailScene.class, scene.detail.getClazz());
+        assertEquals(GalleryDetailScene.ACTION_GALLERY_INFO,
+                scene.detail.getArgs().getString(GalleryDetailScene.KEY_ACTION));
+        GalleryInfo detail = scene.detail.getArgs().getParcelable(GalleryDetailScene.KEY_GALLERY_INFO);
+        assertEquals(21, detail.gid);
+        assertEquals("token21", detail.token);
         row.itemView.performClick();
         assertNotNull(scene.launched);
         assertEquals(GalleryActivity.class.getName(), scene.launched.getComponent().getClassName());
@@ -154,6 +164,48 @@ public class ReadingHistoryUiTest {
         assertEquals(0, adapter.getItemCount());
         assertEquals(View.VISIBLE, root.findViewById(R.id.tip).getVisibility());
         assertEquals("进入阅读器的画廊将在这里显示", ((TextView) root.findViewById(R.id.tip)).getText().toString());
+    }
+
+    @Test public void recycledCoverOpensLocalReaderInsteadOfPreviousGalleryDetail() {
+        GalleryInfo gallery = new GalleryInfo();
+        gallery.gid = 21;
+        gallery.token = "token21";
+        gallery.thumb = "https://example.com/cover.jpg";
+        ReadingHistory.record(context, new Intent(GalleryActivity.ACTION_EH)
+                .putExtra(GalleryActivity.KEY_GALLERY_INFO, gallery));
+        TestScene scene = new TestScene(context);
+        View root = scene.onCreateView3(LayoutInflater.from(context), null, null);
+        RecyclerView recycler = root.findViewById(R.id.recycler_view);
+        RecyclerView.Adapter adapter = recycler.getAdapter();
+        RecyclerView.ViewHolder row = adapter.createViewHolder(recycler, 0);
+        adapter.bindViewHolder(row, 0);
+        row.itemView.findViewById(R.id.reading_cover).performClick();
+        assertNotNull(scene.detail);
+
+        // A local record may have no gallery, a synthetic gid, or imported online metadata.
+        for (GalleryInfo local : new GalleryInfo[]{null, new GalleryInfo(), gallery}) {
+            if (local != null && local != gallery) {
+                local.gid = -42;
+                local.token = "local-token";
+                local.thumb = gallery.thumb;
+            }
+            ReadingHistory.clear(context);
+            ReadingHistory.record(context, new Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(android.net.Uri.parse("content://example.com/local.zip"), "application/zip")
+                    .putExtra(GalleryActivity.KEY_GALLERY_INFO, local)
+                    .putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.DOWNLOAD));
+            ReflectionHelpers.callInstanceMethod(scene, "reload");
+            adapter.bindViewHolder(row, 0);
+            scene.detail = null;
+            scene.launched = null;
+            row.itemView.findViewById(R.id.reading_cover).performClick();
+            assertNull(scene.detail);
+            assertNotNull(scene.launched);
+            assertEquals(Intent.ACTION_VIEW, scene.launched.getAction());
+            assertEquals("content://example.com/local.zip", scene.launched.getDataString());
+        }
+        adapter.onViewRecycled(row);
+        assertFalse(row.itemView.findViewById(R.id.reading_cover).hasOnClickListeners());
     }
 
     private void assertFooterLayout(View card, String titleText, String name) throws Exception {
@@ -200,11 +252,13 @@ public class ReadingHistoryUiTest {
         private final Context context;
         private final MainActivity activity = Robolectric.buildActivity(MainActivity.class).get();
         private Intent launched;
+        private Announcer detail;
         TestScene(Context context) { this.context = context; }
         @Override public Context getContext() { return context; }
         @Override public Context getEHContext() { return context; }
         @Override public MainActivity getActivity2() { return activity; }
         @Override public void startActivity(Intent intent) { launched = intent; }
+        @Override public void startScene(Announcer announcer) { detail = announcer; }
     }
 
     @Implements(EhApplication.class)

@@ -1,6 +1,7 @@
 package com.hippo.ehviewer.translation
 
 import android.content.Context
+import com.hippo.ehviewer.image.WebpEncoder
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.hippo.ehviewer.R
@@ -454,14 +455,14 @@ internal class GalleryTranslationSession(
                                             TranslationOverlay.extract(original, rendered)
                                         } finally { original.recycle() }
                                         val writer: (java.io.OutputStream) -> Unit = {
-                                            check(rendered.compress(Bitmap.CompressFormat.PNG, 100, it))
+                                            WebpEncoder.writeLossless(rendered, it)
                                         }
                                         val checkpoint = results.readResume(legacy.key, legacy.image)
                                         // A partial without a valid checkpoint keeps its partial status.
                                         val migrated = if (TranslationResultStore.isPartial(legacy.image)) {
                                             if (checkpoint != null) results.writePartial(key, checkpoint, writer)
                                             else results.writePartialPreview(key, writer)
-                                        } else results.writeImage(key, writer)
+                                        } else results.writeImage(key, WebpEncoder.losslessExtension(rendered), writer)
                                         results.invalidateLegacy(source)
                                         display(epoch, page, migrated, key, results.persists)
                                     } finally { rendered.recycle() }
@@ -877,6 +878,7 @@ internal class GalleryTranslationSession(
                                           resume: () -> TranslationResume? = { null },
                                           translate: suspend () -> PageResult): Boolean = withContext(NonCancellable) {
         val result = translate()
+        var renderedImage: Image? = null
         try {
             when (result) {
                 is PageResult.Translated -> {
@@ -886,8 +888,19 @@ internal class GalleryTranslationSession(
                         val results = resultStore(options, sourceName)
                         val checkpoint = resume()
                         TranslationOverlay.extract(original, result.page)
-                        val writer: (java.io.OutputStream) -> Unit = { check(result.page.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-                        val output = if (checkpoint == null) results.writeImage(key, writer)
+                        // Hold one encoding lease even if navigation releases the reader's lease.
+                        // Image.create wraps this exact Bitmap; it does not copy the full page.
+                        val image = checkNotNull(Image.create(result.page))
+                        check(image.obtain())
+                        renderedImage = image
+                        val previewReader = withContext(Dispatchers.Main) {
+                            if (enabled && generation == epoch && !request.isObsolete && browsing &&
+                                (!fullGallery || kotlin.math.abs(request.page.toLong() - current) <= activeOptions.ahead))
+                                reader?.also { it.display(request.page, image) }
+                            else null
+                        }
+                        val writer: (java.io.OutputStream) -> Unit = { WebpEncoder.writeLossless(result.page, it) }
+                        val output = if (checkpoint == null) results.writeImage(key, WebpEncoder.losslessExtension(result.page), writer)
                             else results.writePartial(key, checkpoint, writer)
                         val relevant = withContext(Dispatchers.Main) {
                             enabled && generation == epoch && !request.isObsolete
@@ -899,7 +912,9 @@ internal class GalleryTranslationSession(
                                     completedNames[request.page] = sourceName
                                 }
                             }
-                            check(display(epoch, request.page, output, key, results.persists)) { "Cannot decode translated page" }
+                            check(display(epoch, request.page, output, key, results.persists, image, previewReader)) {
+                                "Cannot display translated page"
+                            }
                         }
                         results.prune()
                     }
@@ -928,12 +943,13 @@ internal class GalleryTranslationSession(
             }
         } finally {
             if (result is PageResult.Translated) {
-                result.page.recycle()
+                if (renderedImage != null) renderedImage?.release() else result.page.recycle()
             }
         }
     }
 
-    private suspend fun display(epoch: Int, page: Int, file: UniFile, key: String, persistent: Boolean): Boolean {
+    private suspend fun display(epoch: Int, page: Int, file: UniFile, key: String, persistent: Boolean,
+                                rendered: Image? = null, previewReader: Reader? = null): Boolean {
         // Background work saves files only; never accumulate gallery bitmaps in memory.
         val needsImage = withContext(Dispatchers.Main) {
             browsing && reader != null && (!fullGallery ||
@@ -942,12 +958,15 @@ internal class GalleryTranslationSession(
         var bitmap: Bitmap? = null
         var transferred = false
         try {
-            if (needsImage) imageReads.run {
+            if (needsImage && rendered == null) imageReads.run {
                 bitmap = file.openInputStream().use { BitmapFactory.decodeStream(it) }
             }
-            if (needsImage && bitmap == null) return false
+            if (needsImage && rendered == null && bitmap == null) return false
             return withContext(Dispatchers.Main) {
                 if (!enabled || generation != epoch || activeRequests[page]?.isObsolete == true) return@withContext false
+                if (rendered != null && needsImage && browsing) reader?.let {
+                    if (it !== previewReader) it.display(page, rendered)
+                }
                 if (bitmap != null && browsing) reader?.let {
                     val image = Image.create(checkNotNull(bitmap)) ?: return@withContext false
                     it.display(page, image)

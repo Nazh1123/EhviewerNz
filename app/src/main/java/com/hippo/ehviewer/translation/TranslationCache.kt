@@ -50,5 +50,5 @@ class TranslationCache(private val dir: File, private val limit: Long = 256L * 1
         if (removed.isNotEmpty()) filesRemoved(removed)
     }
     fun clear() { remove(dir.listFiles().orEmpty().filter { it.extension in extensions || it.extension == "part" }) }
-    private companion object { val extensions = setOf("png", "skip", "partial", "regions") }
+    private companion object { val extensions = setOf("webp", "png", "skip", "partial", "regions") }
 }

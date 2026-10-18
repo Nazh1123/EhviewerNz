@@ -108,6 +108,26 @@ public class GalleryDetailPreviewPullTest {
         assertEquals(1, scene.launched.getArgs().getInt(GalleryPreviewsScene.KEY_INITIAL_PAGE, -1));
     }
 
+    @Test public void oldThresholdNoLongerOpensPreviews() {
+        float threshold = beginPull();
+        float distance = threshold * 0.9f;
+        touch(MotionEvent.ACTION_MOVE, 240, 700 - distance);
+        assertTrue(progress() > 0f && progress() < 1f);
+        touch(MotionEvent.ACTION_UP, 240, 700 - distance);
+        assertEquals(0, scene.launches);
+    }
+
+    @Test public void singlePreviewPageRequiresTwiceTheNormalPull() {
+        float normalThreshold = ReflectionHelpers.<Float>getField(pullLayout,
+                "mFooterDistanceToTriggerSync") * 4f / 3f;
+        ReflectionHelpers.<GalleryDetail>getField(scene, "mGalleryDetail").previewPages = 1;
+        beginPull();
+        touch(MotionEvent.ACTION_MOVE, 240, 700 - normalThreshold * 1.5f);
+        assertTrue(progress() > 0f && progress() < 1f);
+        touch(MotionEvent.ACTION_UP, 240, 700 - normalThreshold * 1.5f);
+        assertEquals(0, scene.launches);
+    }
+
     @Test public void singlePreviewPageStartsOnFirstPageEvenWithSettingEnabled() {
         Settings.putGalleryPreviewImmediateJump(true);
         ReflectionHelpers.<GalleryDetail>getField(scene, "mGalleryDetail").previewPages = 1;
@@ -181,8 +201,10 @@ public class GalleryDetailPreviewPullTest {
         touch(MotionEvent.ACTION_DOWN, 240, 700);
         float threshold = ReflectionHelpers.getField(pullLayout, "mFooterDistanceToTriggerSync");
         assertTrue(threshold > 0);
-        touch(MotionEvent.ACTION_MOVE, 240, 680);
-        return threshold;
+        float multiplier = ReflectionHelpers.<GalleryDetail>getField(scene, "mGalleryDetail").previewPages == 1
+                ? 8f / 3f : 4f / 3f;
+        touch(MotionEvent.ACTION_MOVE, 240, 700 - 20 * multiplier);
+        return threshold * multiplier;
     }
 
     private void completePull() {

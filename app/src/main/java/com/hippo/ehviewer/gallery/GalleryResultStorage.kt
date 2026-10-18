@@ -193,7 +193,7 @@ object GalleryResultStorage {
                     currentCoroutineContext().ensureActive()
                     val gid = file.name.substringBefore('_').removePrefix("g").toLongOrNull()
                     if (file.isFile && file.name.startsWith("g") && gid in ids &&
-                        file.extension in setOf("png", "partial", "regions", "skip", "part")) {
+                        file.extension in setOf("webp", "png", "partial", "regions", "skip", "part")) {
                         val entry = checkNotNull(UniFile.fromFile(file))
                         files[entry.uri.toString()] = entry
                     }
@@ -208,7 +208,8 @@ object GalleryResultStorage {
                 addTree(checkNotNull(UniFile.fromFile(root))) { true }
             for (gallery in galleries) gallery.findFile(SuperResolutionExport.DIRECTORY_NAME)?.let {
                 check(it.isDirectory)
-                addTree(it) { name -> name.endsWith("_sr.png") || name.endsWith("_sr.png.part") }
+                addTree(it) { name -> name.endsWith("_sr.png") || name.endsWith("_sr.png.part") ||
+                    name.endsWith("_sr.webp") || name.endsWith("_sr.webp.part") }
             }
         }
         return files.values.toList()
