@@ -198,6 +198,7 @@
 
     <string name="search_normal">일반 검색</string>
     <string name="search_advance">고급 옵션</string>
+    <string name="search_more_options">추가 검색 조건</string>
     <string name="search_image">이미지 검색</string>
     <string name="search_normal_search">일반 검색</string>
     <string name="search_subscription_search">구독 검색</string>

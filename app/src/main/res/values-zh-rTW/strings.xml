@@ -176,6 +176,7 @@
 
     <string name="search_normal">一般搜尋</string>
     <string name="search_advance">進階選項</string>
+    <string name="search_more_options">更多搜尋條件</string>
     <string name="search_image">圖片搜尋</string>
     <string name="search_normal_search">一般搜尋</string>
     <string name="search_subscription_search">訂閱搜尋</string>

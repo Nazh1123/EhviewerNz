@@ -198,6 +198,7 @@
 
     <string name="search_normal">ค้นหาแบบธรรมดา</string>
     <string name="search_advance">ตัวเลือกขั้นสูง</string>
+    <string name="search_more_options">เงื่อนไขการค้นหาเพิ่มเติม</string>
     <string name="search_image">ค้นหาด้วยรูปภาพ</string>
     <string name="search_normal_search">ค้นหาแบบธรรมดา</string>
     <string name="search_subscription_search">ค้นหาการสมัครสมาชิก</string>

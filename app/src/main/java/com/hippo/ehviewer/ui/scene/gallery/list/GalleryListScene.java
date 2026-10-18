@@ -246,6 +246,8 @@ public class GalleryListScene extends BaseScene
     @Nullable
     private View mSearchFab;
     @Nullable
+    private View mSearchOptionsFab;
+    @Nullable
     private FabLayout mFabLayout;
     @Nullable
     private FloatingActionButton mFloatingActionButton;
@@ -306,16 +308,6 @@ public class GalleryListScene extends BaseScene
         public void onAnimationEnd(Animator animation) {
             if (null != mFabLayout && !mShowActionFab) {
                 mFabLayout.getPrimaryFab().setVisibility(View.INVISIBLE);
-            }
-        }
-    };
-
-    @Nullable
-    private final Animator.AnimatorListener mSearchFabAnimatorListener = new SimpleAnimatorListener() {
-        @Override
-        public void onAnimationEnd(Animator animation) {
-            if (null != mSearchFab) {
-                mSearchFab.setVisibility(View.INVISIBLE);
             }
         }
     };
@@ -836,6 +828,7 @@ public class GalleryListScene extends BaseScene
         onFilter(filterOpen, filterTagList.size());
 
         mSearchFab = ViewUtils.$$(mainLayout, R.id.search_fab);
+        mSearchOptionsFab = ViewUtils.$$(mainLayout, R.id.search_options_fab);
 
         int paddingTopSB = resources.getDimensionPixelOffset(R.dimen.gallery_padding_top_search_bar);
         int paddingBottomFab = resources.getDimensionPixelOffset(R.dimen.gallery_padding_bottom_fab);
@@ -902,6 +895,7 @@ public class GalleryListScene extends BaseScene
         updateDownloadedOnlyFabState();
 
         mSearchFab.setOnClickListener(this);
+        mSearchOptionsFab.setOnClickListener(v -> setState(STATE_SEARCH));
 
         mSearchBarMover = new SearchBarMover(this, mSearchBar, mRecyclerView, mSearchLayout);
 
@@ -1179,6 +1173,8 @@ public class GalleryListScene extends BaseScene
         mSearchLayout = null;
         mSearchBar = null;
         mSearchFab = null;
+        if (mSearchOptionsFab != null) mSearchOptionsFab.animate().cancel();
+        mSearchOptionsFab = null;
         mFloatingActionButton = null;
         mMultiSelectFab = null;
         mDownloadedOnlyFab = null;
@@ -2624,20 +2620,14 @@ public class GalleryListScene extends BaseScene
                         .setDuration(ANIMATE_TIME).setStartDelay(0L)
                         .setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR).start();
             }
-            mSearchFab.setVisibility(View.VISIBLE);
-            mSearchFab.setRotation(-45.0f);
-            mSearchFab.animate().scaleX(1.0f).scaleY(1.0f).rotation(0.0f).setListener(null)
-                    .setDuration(ANIMATE_TIME).setStartDelay(delay)
-                    .setInterpolator(AnimationUtils.FAST_SLOW_INTERPOLATOR).start();
+            setSearchFabsVisible(true, true, delay);
         } else {
             mFabLayout.setExpanded(false, false);
             View fab = mFabLayout.getPrimaryFab();
             fab.setVisibility(View.INVISIBLE);
             fab.setScaleX(0.0f);
             fab.setScaleY(0.0f);
-            mSearchFab.setVisibility(View.VISIBLE);
-            mSearchFab.setScaleX(1.0f);
-            mSearchFab.setScaleY(1.0f);
+            setSearchFabsVisible(true, false, 0L);
         }
     }
 
@@ -2654,10 +2644,8 @@ public class GalleryListScene extends BaseScene
                 delay = 0L;
             } else {
                 delay = ANIMATE_TIME;
-                mSearchFab.animate().scaleX(0.0f).scaleY(0.0f).setListener(mSearchFabAnimatorListener)
-                        .setDuration(ANIMATE_TIME).setStartDelay(0L)
-                        .setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR).start();
             }
+            setSearchFabsVisible(false, true, 0L);
             View fab = mFabLayout.getPrimaryFab();
             delay = Math.max(delay, mPopularActions != null ? mPopularActions.primaryShowDelay() : 0L);
             fab.animate().setListener(null);
@@ -2677,9 +2665,37 @@ public class GalleryListScene extends BaseScene
             if (mPopularActions != null) mPopularActions.snapAbovePrimary();
             fab.setScaleX(1.0f);
             fab.setScaleY(1.0f);
-            mSearchFab.setVisibility(View.INVISIBLE);
-            mSearchFab.setScaleX(0.0f);
-            mSearchFab.setScaleY(0.0f);
+            setSearchFabsVisible(false, false, 0L);
+        }
+    }
+
+    private void setSearchFabsVisible(boolean visible, boolean animation, long delay) {
+        for (View fab : new View[]{mSearchFab, mSearchOptionsFab}) {
+            if (fab == null) continue;
+            fab.animate().setListener(null);
+            fab.animate().cancel();
+            float scale = visible ? 1.0f : 0.0f;
+            if (!animation) {
+                fab.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                fab.setScaleX(scale);
+                fab.setScaleY(scale);
+                fab.setRotation(0.0f);
+                continue;
+            }
+            if (visible) {
+                fab.setVisibility(View.VISIBLE);
+                fab.setRotation(-45.0f);
+            }
+            fab.animate().scaleX(scale).scaleY(scale).rotation(0.0f)
+                    .setDuration(ANIMATE_TIME).setStartDelay(delay)
+                    .setInterpolator(visible ? AnimationUtils.FAST_SLOW_INTERPOLATOR
+                            : AnimationUtils.SLOW_FAST_INTERPOLATOR)
+                    .setListener(visible ? null : new SimpleAnimatorListener() {
+                        @Override
+                        public void onAnimationEnd(Animator animator) {
+                            fab.setVisibility(View.INVISIBLE);
+                        }
+                    }).start();
         }
     }
 

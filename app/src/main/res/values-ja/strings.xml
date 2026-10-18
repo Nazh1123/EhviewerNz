@@ -176,6 +176,7 @@
     <string name="image_search">画像で検索</string>
     <string name="search_normal">検索</string>
     <string name="search_advance">その他のオプション</string>
+    <string name="search_more_options">その他の検索条件</string>
     <string name="search_image">画像検索</string>
     <string name="search_normal_search">一般検索</string>
     <string name="search_subscription_search">購読検索</string>
