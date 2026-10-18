@@ -67,7 +67,9 @@ public class GalleryUpdateHistoryScene extends ToolbarScene implements GalleryUp
     private int generation;
     private int openGeneration;
 
-    @Override public int getNavCheckedItem() { return R.id.nav_downloads; }
+    @Override public int getNavCheckedItem() {
+        return Settings.getShowUpdateHistoryInSidebar() ? R.id.nav_update_history : R.id.nav_downloads;
+    }
 
     @Nullable
     @Override public View onCreateView3(LayoutInflater inflater, @Nullable ViewGroup container,

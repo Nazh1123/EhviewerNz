@@ -630,6 +630,13 @@ public final class MainActivity extends StageActivity
         }
     }
 
+    private void updateGalleryUpdateHistoryNavigationItem() {
+        if (mNavView != null) {
+            MenuItem item = mNavView.getMenu().findItem(R.id.nav_update_history);
+            if (item != null) item.setVisible(Settings.getShowUpdateHistoryInSidebar());
+        }
+    }
+
     @Override
     protected void onStart() {
         super.onStart();
@@ -833,6 +840,7 @@ public final class MainActivity extends StageActivity
 
         setNavCheckedItem(mNavCheckedItem);
         updateReadingHistoryNavigationItem();
+        updateGalleryUpdateHistoryNavigationItem();
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
 
@@ -1476,6 +1484,11 @@ public final class MainActivity extends StageActivity
             case R.id.nav_reading_history:
                 if (Settings.isReadingHistoryEnabled()) {
                     startScene(new Announcer(ReadingHistoryScene.class));
+                }
+                break;
+            case R.id.nav_update_history:
+                if (Settings.getShowUpdateHistoryInSidebar()) {
+                    startScene(new Announcer(GalleryUpdateHistoryScene.class));
                 }
                 break;
             case R.id.nav_downloads:

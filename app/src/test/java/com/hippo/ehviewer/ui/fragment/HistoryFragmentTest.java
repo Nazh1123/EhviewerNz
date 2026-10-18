@@ -79,6 +79,20 @@ public class HistoryFragmentTest {
         assertHistoryIntent(GalleryUpdateHistoryScene.class);
     }
 
+    @Test public void updateSidebarSwitchIsFirstDefaultsOffAndPersists() {
+        TwoStatePreference toggle = fragment.findPreference(Settings.KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR);
+        assertNotNull(toggle);
+        assertSame(toggle, toggle.getParent().getPreference(0));
+        assertEquals("在侧边栏显示按钮", toggle.getTitle().toString());
+        assertEquals("开启后在左侧边栏显示“更新记录”按钮", toggle.getSummary().toString());
+        assertFalse(toggle.isChecked());
+        assertFalse(Settings.getShowUpdateHistoryInSidebar());
+        assertTrue(toggle.callChangeListener(true));
+        toggle.setChecked(true);
+        assertTrue(Settings.getShowUpdateHistoryInSidebar());
+        assertEquals(Activity.RESULT_OK, shadowOf(host).getResultCode());
+    }
+
     private void assertHistoryIntent(Class<?> scene) {
         Intent intent = shadowOf(host).getNextStartedActivity();
         assertNotNull(intent);

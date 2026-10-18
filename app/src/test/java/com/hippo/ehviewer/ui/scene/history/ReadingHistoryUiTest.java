@@ -30,6 +30,7 @@ import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
 import com.hippo.scene.Announcer;
+import com.hippo.scene.StageActivity;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -109,6 +110,31 @@ public class ReadingHistoryUiTest {
         toggle.setChecked(true);
         assertTrue(Settings.isReadingHistoryEnabled());
         controller.pause().stop().destroy();
+    }
+
+    @Test
+    @Config(shadows = NavigationShadow.class, instrumentedPackages = "com.hippo.scene")
+    public void updateHistorySidebarTracksSettingAndOpensUpdateRecords() {
+        MainActivity main = Robolectric.buildActivity(MainActivity.class).get();
+        NavigationShadow.launched = null;
+        NavigationView navigation = new NavigationView(context);
+        navigation.inflateMenu(R.menu.nav_drawer_main);
+        ReflectionHelpers.setField(main, "mNavView", navigation);
+        android.view.MenuItem item = navigation.getMenu().findItem(R.id.nav_update_history);
+        assertFalse(item.isVisible());
+        ReflectionHelpers.callInstanceMethod(main, "updateGalleryUpdateHistoryNavigationItem");
+        assertFalse(item.isVisible());
+        settings.edit().putBoolean(Settings.KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR, true).apply();
+        ReflectionHelpers.callInstanceMethod(main, "updateGalleryUpdateHistoryNavigationItem");
+        assertTrue(item.isVisible());
+        assertEquals("更新记录", item.getTitle().toString());
+        assertTrue(main.onNavigationItemSelected(item));
+        assertEquals(GalleryUpdateHistoryScene.class, NavigationShadow.launched.getClazz());
+        assertEquals(R.id.nav_update_history, new GalleryUpdateHistoryScene().getNavCheckedItem());
+        settings.edit().putBoolean(Settings.KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR, false).apply();
+        ReflectionHelpers.callInstanceMethod(main, "updateGalleryUpdateHistoryNavigationItem");
+        assertFalse(item.isVisible());
+        assertEquals(R.id.nav_downloads, new GalleryUpdateHistoryScene().getNavCheckedItem());
     }
 
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -246,6 +272,12 @@ public class ReadingHistoryUiTest {
             setPreferencesFromResource(R.xml.history_settings, rootKey);
             com.hippo.ehviewer.ui.fragment.ReadingHistoryPreferences.bind(this);
         }
+    }
+
+    @Implements(value = StageActivity.class, isInAndroidSdk = false)
+    public static class NavigationShadow extends org.robolectric.shadows.ShadowActivity {
+        static Announcer launched;
+        @Implementation protected void startScene(Announcer announcer) { launched = announcer; }
     }
 
     private static class TestScene extends ReadingHistoryScene {

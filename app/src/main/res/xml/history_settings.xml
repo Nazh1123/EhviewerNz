@@ -25,6 +25,13 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/settings_history_category_updates">
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="false"
+            android:key="show_update_history_in_sidebar"
+            android:title="@string/settings_show_update_history_in_sidebar"
+            android:summary="@string/settings_show_update_history_in_sidebar_summary"
+            app:allowDividerAbove="false" />
+
         <Preference
             android:key="view_gallery_update_history"
             android:title="@string/settings_view_update_history"

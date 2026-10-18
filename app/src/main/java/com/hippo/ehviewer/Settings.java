@@ -709,7 +709,12 @@ public class Settings {
     }
 
     public static final String KEY_GALLERY_UPDATE_RECORD_LIMIT = "gallery_update_record_limit";
+    public static final String KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR = "show_update_history_in_sidebar";
     public static final int DEFAULT_GALLERY_UPDATE_RECORD_LIMIT = 200;
+
+    public static boolean getShowUpdateHistoryInSidebar() {
+        return getBoolean(KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR, false);
+    }
 
     public static int getGalleryUpdateRecordLimit() {
         int value = getIntFromStr(KEY_GALLERY_UPDATE_RECORD_LIMIT, DEFAULT_GALLERY_UPDATE_RECORD_LIMIT);

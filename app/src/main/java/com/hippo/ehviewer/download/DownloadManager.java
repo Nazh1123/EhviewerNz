@@ -1676,6 +1676,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
         if (gids.size() > 0) {
             try {
+                inheritGalleryUpdatePosition(targetInfo, plan.sourceGid);
                 deleteRangeDownload(gids);
             } catch (RuntimeException e) {
                 GalleryUpdateManager.finishCleanup(targetGid, false);
@@ -1731,6 +1732,27 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 else GalleryUpdateManager.reportFailureAsync(mContext, plan, reason);
             });
         });
+    }
+
+    private void inheritGalleryUpdatePosition(DownloadInfo target, long sourceGid) {
+        DownloadInfo source = getDownloadInfo(sourceGid);
+        if (source == null || source == target) return;
+        // Persist before deleting the source so cleanup retries and restarts retain its slot.
+        target.time = source.time;
+        EhDB.putDownloadInfo(target);
+        mAllInfoList.remove(target);
+        mAllInfoList.add(mAllInfoList.indexOf(source), target);
+        LinkedList<DownloadInfo> labelList = getInfoListForLabel(target.label);
+        if (labelList != null) {
+            labelList.remove(target);
+            if (ObjectUtils.equal(target.label, source.label)) {
+                labelList.add(labelList.indexOf(source), target);
+            } else {
+                // Keep an explicitly changed target label, using the source's ordering time.
+                labelList.add(target);
+                labelList.sort(DATE_DESC_COMPARATOR);
+            }
+        }
     }
 
     boolean isIdle() {

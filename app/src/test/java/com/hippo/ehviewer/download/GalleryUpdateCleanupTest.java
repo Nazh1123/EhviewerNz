@@ -193,6 +193,50 @@ public class GalleryUpdateCleanupTest {
         assertArrayEquals(new int[]{2}, GalleryUpdateRecordStore.get(context).find(200).addedPages);
     }
 
+    @Test public void completedUpdateReplacesReuseSourcePositionInLabelAndAfterRestart() throws Exception {
+        assertUpdatePosition("saved");
+    }
+
+    @Test public void completedUpdateReplacesReuseSourcePositionInDefaultLabel() throws Exception {
+        assertUpdatePosition(null);
+    }
+
+    private void assertUpdatePosition(String label) throws Exception {
+        if (label != null) EhDB.addDownloadLabel(label);
+        EhDB.addDownloadLabel("other");
+        DownloadInfo source = manager.getDownloadInfo(100);
+        DownloadInfo target = manager.getDownloadInfo(200);
+        source.time = 300; source.label = label;
+        target.time = 600; target.label = label;
+        EhDB.putDownloadInfo(source); EhDB.putDownloadInfo(target);
+        for (long[] row : new long[][]{{300, 500}, {250, 400}, {50, 100}, {80, 200}, {900, 350}}) {
+            DownloadInfo info = download(row[0], 2);
+            info.time = row[1];
+            info.label = info.gid == 900 ? "other" : label;
+            EhDB.putDownloadInfo(info);
+        }
+        manager = new DownloadManager(context);
+        ReflectionHelpers.setField(context, "mDownloadManager", manager);
+        disk(sourceDir, metadata(100, 0, "1111111111", "2222222222"));
+        disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
+        GalleryUpdateManager.register(200, 100, List.of(80L, 100L));
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
+        assertEquals(300, manager.getDownloadInfo(200).time);
+        assertEquals(List.of(300L, 250L, 200L, 50L), (label == null
+                ? manager.getDefaultDownloadInfoList() : manager.getLabelDownloadInfoList(label))
+                .stream().map(info -> info.gid).toList());
+        assertEquals(List.of(300L, 250L, 900L, 200L, 50L), manager.getAllDownloadInfoList()
+                .stream().map(info -> info.gid).toList());
+        DownloadManager restarted = new DownloadManager(context);
+        assertEquals(300, restarted.getDownloadInfo(200).time);
+        assertEquals(List.of(300L, 250L, 200L, 50L), (label == null
+                ? restarted.getDefaultDownloadInfoList() : restarted.getLabelDownloadInfoList(label))
+                .stream().map(info -> info.gid).toList());
+        assertEquals(List.of(300L, 250L, 900L, 200L, 50L), restarted.getAllDownloadInfoList()
+                .stream().map(info -> info.gid).toList());
+    }
+
     @Test public void cachedTargetCannotReplaceMissingDiskMetadata() throws Exception {
         disk(sourceDir, metadata(100, 0, "1111111111", "2222222222"));
         cache(metadata(200, 0, "1111111111", "2222222222", "3333333333"));

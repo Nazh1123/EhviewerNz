@@ -70,6 +70,12 @@
             android:icon="@drawable/v_book_open_black_x24"/>
 
         <item
+            android:id="@+id/nav_update_history"
+            android:title="@string/settings_history_category_updates"
+            android:icon="@drawable/v_update_history_black_x24"
+            android:visible="false"/>
+
+        <item
             android:id="@+id/nav_downloads"
             android:title="@string/downloads"
             android:icon="@drawable/v_download_black_x24"/>

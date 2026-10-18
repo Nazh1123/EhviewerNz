@@ -2,6 +2,8 @@
 <resources>
     <string name="settings_history">历史</string>
     <string name="settings_history_category_updates">更新记录</string>
+    <string name="settings_show_update_history_in_sidebar">在侧边栏显示按钮</string>
+    <string name="settings_show_update_history_in_sidebar_summary">开启后在左侧边栏显示“更新记录”按钮</string>
     <string name="settings_history_category_gallery_info">画廊信息</string>
     <string name="settings_view_reading_history">查看阅读历史</string>
     <string name="settings_view_reading_history_summary">可在左侧边栏“阅读历史”按钮进入</string>

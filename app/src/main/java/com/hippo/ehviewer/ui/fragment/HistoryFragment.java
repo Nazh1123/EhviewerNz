@@ -19,6 +19,11 @@ public class HistoryFragment extends BasePreferenceFragmentCompat {
         setPreferencesFromResource(R.xml.history_settings, rootKey);
         ReadingHistoryPreferences.bind(this);
         GalleryUpdateRecordPreferences.bind(this);
+        findPreference(Settings.KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR).setOnPreferenceChangeListener(
+                (preference, value) -> {
+                    requireActivity().setResult(Activity.RESULT_OK);
+                    return true;
+                });
         findPreference(Settings.KEY_RECORD_READING_HISTORY).setOnPreferenceChangeListener(
                 (preference, value) -> {
                     requireActivity().setResult(Activity.RESULT_OK);
