@@ -2,6 +2,13 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="collapse_history_in_sidebar"
+        android:title="@string/settings_collapse_history_in_sidebar"
+        android:summary="@string/settings_collapse_history_in_sidebar_summary"
+        app:allowDividerAbove="false" />
+
     <PreferenceCategory android:title="@string/reading_history">
         <com.hippo.preference.SwitchPreference
             android:defaultValue="true"

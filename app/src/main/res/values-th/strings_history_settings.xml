@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_collapse_history_in_sidebar">รวมรายการประวัติในเมนูพับได้</string>
+    <string name="settings_collapse_history_in_sidebar_summary">เมื่อเปิดใช้งาน จะรวมประวัติเข้าชม ประวัติการอ่าน และบันทึกการอัปเดตไว้ในเมนูพับได้ในแถบด้านซ้าย</string>
+    <string name="browsing_history">ประวัติเข้าชม</string>
+    <string name="history_sidebar_expand">ขยายเมนูประวัติ</string>
+    <string name="history_sidebar_collapse">ยุบเมนูประวัติ</string>
+    <string name="settings_show_update_history_in_sidebar">แสดงปุ่มในแถบด้านข้าง</string>
+    <string name="settings_show_update_history_in_sidebar_summary">เมื่อเปิดใช้งาน จะแสดงปุ่มบันทึกการอัปเดตในแถบด้านซ้าย</string>
     <string name="settings_history">ประวัติ</string>
     <string name="settings_history_category_updates">บันทึกการอัปเดต</string>
     <string name="settings_history_category_gallery_info">ข้อมูลแกลเลอรี</string>

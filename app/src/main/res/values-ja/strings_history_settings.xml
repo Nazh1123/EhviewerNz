@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_collapse_history_in_sidebar">履歴の項目をまとめる</string>
+    <string name="settings_collapse_history_in_sidebar_summary">有効にすると、左サイドバーの履歴、閲覧履歴、更新履歴を折りたたみメニューにまとめます</string>
+    <string name="browsing_history">ギャラリー閲覧履歴</string>
+    <string name="history_sidebar_expand">履歴メニューを展開</string>
+    <string name="history_sidebar_collapse">履歴メニューを折りたたむ</string>
+    <string name="settings_show_update_history_in_sidebar">サイドバーにボタンを表示</string>
+    <string name="settings_show_update_history_in_sidebar_summary">有効にすると、左サイドバーに「更新履歴」ボタンを表示します</string>
     <string name="settings_history">履歴</string>
     <string name="settings_history_category_updates">更新履歴</string>
     <string name="settings_history_category_gallery_info">ギャラリー情報</string>

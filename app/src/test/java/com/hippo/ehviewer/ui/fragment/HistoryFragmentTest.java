@@ -93,6 +93,20 @@ public class HistoryFragmentTest {
         assertEquals(Activity.RESULT_OK, shadowOf(host).getResultCode());
     }
 
+    @Test public void collapseHistorySwitchIsAtTopDefaultsOffAndPersists() {
+        TwoStatePreference toggle = fragment.findPreference(Settings.KEY_COLLAPSE_HISTORY_IN_SIDEBAR);
+        assertSame(toggle, fragment.getPreferenceScreen().getPreference(0));
+        assertEquals("折叠显示历史入口", toggle.getTitle().toString());
+        assertEquals("开启时将左侧边栏中的“历史”“阅读历史”“更新记录”放到折叠菜单中",
+                toggle.getSummary().toString());
+        assertFalse(toggle.isChecked());
+        assertFalse(Settings.getCollapseHistoryInSidebar());
+        assertTrue(toggle.callChangeListener(true));
+        toggle.setChecked(true);
+        assertTrue(Settings.getCollapseHistoryInSidebar());
+        assertEquals(Activity.RESULT_OK, shadowOf(host).getResultCode());
+    }
+
     private void assertHistoryIntent(Class<?> scene) {
         Intent intent = shadowOf(host).getNextStartedActivity();
         assertNotNull(intent);

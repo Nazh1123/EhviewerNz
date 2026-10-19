@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_collapse_history_in_sidebar">Regrouper les entrées de l’historique</string>
+    <string name="settings_collapse_history_in_sidebar_summary">Regroupe Historique, Historique de lecture et Enregistrements de mise à jour dans un menu repliable de la barre latérale gauche lorsque cette option est activée</string>
+    <string name="browsing_history">Historique de navigation</string>
+    <string name="history_sidebar_expand">Déplier le menu de l’historique</string>
+    <string name="history_sidebar_collapse">Replier le menu de l’historique</string>
+    <string name="settings_show_update_history_in_sidebar">Afficher le bouton dans la barre latérale</string>
+    <string name="settings_show_update_history_in_sidebar_summary">Affiche un bouton Enregistrements de mise à jour dans la barre latérale gauche lorsque cette option est activée</string>
     <string name="settings_history">Historique</string>
     <string name="settings_history_category_updates">Enregistrements de mise à jour</string>
     <string name="settings_history_category_gallery_info">Informations sur les galeries</string>

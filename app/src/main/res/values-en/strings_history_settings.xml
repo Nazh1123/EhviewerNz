@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_show_update_history_in_sidebar">Show button in sidebar</string>
+    <string name="settings_show_update_history_in_sidebar_summary">Show an Update records button in the left sidebar when enabled</string>
+    <string name="settings_collapse_history_in_sidebar">Group history entries</string>
+    <string name="settings_collapse_history_in_sidebar_summary">Put History, Reading history and Update records in a collapsible menu in the left sidebar when enabled</string>
+    <string name="browsing_history">Browsing history</string>
+    <string name="history_sidebar_expand">Expand History</string>
+    <string name="history_sidebar_collapse">Collapse History</string>
     <string name="settings_history">History</string>
     <string name="settings_history_category_updates">Update records</string>
     <string name="settings_history_category_gallery_info">Gallery information</string>

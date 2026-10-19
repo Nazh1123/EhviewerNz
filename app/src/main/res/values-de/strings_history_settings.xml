@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_collapse_history_in_sidebar">Verlaufseinträge gruppieren</string>
+    <string name="settings_collapse_history_in_sidebar_summary">Wenn aktiviert, werden Verlauf, Leseverlauf und Aktualisierungsdatensätze in einem aufklappbaren Menü in der linken Seitenleiste zusammengefasst</string>
+    <string name="browsing_history">Browserverlauf</string>
+    <string name="history_sidebar_expand">Verlaufsmenü aufklappen</string>
+    <string name="history_sidebar_collapse">Verlaufsmenü zuklappen</string>
+    <string name="settings_show_update_history_in_sidebar">Schaltfläche in der Seitenleiste anzeigen</string>
+    <string name="settings_show_update_history_in_sidebar_summary">Wenn aktiviert, wird eine Schaltfläche für Aktualisierungsdatensätze in der linken Seitenleiste angezeigt</string>
     <string name="settings_history">Verlauf</string>
     <string name="settings_history_category_updates">Aktualisierungsdatensätze</string>
     <string name="settings_history_category_gallery_info">Galerieinformationen</string>

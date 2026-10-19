@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_show_update_history_in_sidebar">在側邊欄顯示按鈕</string>
+    <string name="settings_show_update_history_in_sidebar_summary">開啟後在左側邊欄顯示「更新記錄」按鈕</string>
+    <string name="settings_collapse_history_in_sidebar">摺疊顯示歷史入口</string>
+    <string name="settings_collapse_history_in_sidebar_summary">開啟時將左側邊欄中的「歷史」「閱讀歷史」「更新記錄」放入摺疊選單</string>
+    <string name="browsing_history">瀏覽歷史</string>
+    <string name="history_sidebar_expand">展開歷史選單</string>
+    <string name="history_sidebar_collapse">收起歷史選單</string>
     <string name="settings_history">歷史</string>
     <string name="settings_history_category_updates">更新記錄</string>
     <string name="settings_history_category_gallery_info">畫廊資訊</string>

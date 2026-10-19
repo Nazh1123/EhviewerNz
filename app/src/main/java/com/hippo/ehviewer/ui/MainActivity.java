@@ -223,6 +223,7 @@ public final class MainActivity extends StageActivity
             };
 
     private int mNavCheckedItem = 0;
+    private boolean mHistorySidebarExpanded;
 
     GifHandler gifHandler;
 
@@ -587,11 +588,28 @@ public final class MainActivity extends StageActivity
         for (int i = 0; i < menuView.getChildCount(); i++) {
             bindNavigationLongPress(menuView.getChildAt(i));
         }
+        // Menu rows can be rebound without being detached. Apply indentation after
+        // layout too, once the presenter has restored its default row padding.
+        menuView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            for (int i = 0; i < menuView.getChildCount(); i++) {
+                updateHistoryNavigationIndent(menuView.getChildAt(i));
+            }
+        });
     }
 
     private void bindNavigationLongPress(View view) {
         // Read the current ID on each gesture because menu rows are recycled.
         view.setOnLongClickListener(v -> onNavigationItemLongClick(v.getId()));
+        updateHistoryNavigationIndent(view);
+    }
+
+    private void updateHistoryNavigationIndent(View view) {
+        if (mNavView == null || mNavView.getMenu().findItem(view.getId()) == null) return;
+        int padding = mNavView.getItemHorizontalPadding();
+        int indent = isHistoryNavigationGrouped() && isHistoryNavigationItem(view.getId())
+                ? Math.round(24 * getResources().getDisplayMetrics().density) : 0;
+        view.setPaddingRelative(padding + indent, view.getPaddingTop(),
+                padding, view.getPaddingBottom());
     }
 
     private boolean onNavigationItemLongClick(@IdRes int itemId) {
@@ -623,18 +641,40 @@ public final class MainActivity extends StageActivity
         dialog.setOnDismissListener(ignored -> mSubscriptionUpdateSettingsDialog = null);
     }
 
-    private void updateReadingHistoryNavigationItem() {
-        if (mNavView != null) {
-            MenuItem item = mNavView.getMenu().findItem(R.id.nav_reading_history);
-            if (item != null) item.setVisible(Settings.isReadingHistoryEnabled());
-        }
+    private boolean isHistoryNavigationGrouped() {
+        return Settings.getCollapseHistoryInSidebar()
+                && (Settings.isReadingHistoryEnabled() || Settings.getShowUpdateHistoryInSidebar());
     }
 
-    private void updateGalleryUpdateHistoryNavigationItem() {
-        if (mNavView != null) {
-            MenuItem item = mNavView.getMenu().findItem(R.id.nav_update_history);
-            if (item != null) item.setVisible(Settings.getShowUpdateHistoryInSidebar());
-        }
+    private static boolean isHistoryNavigationItem(@IdRes int itemId) {
+        return itemId == R.id.nav_history || itemId == R.id.nav_reading_history
+                || itemId == R.id.nav_update_history;
+    }
+
+    private void updateHistoryNavigationItems() {
+        if (mNavView == null) return;
+        boolean grouped = isHistoryNavigationGrouped();
+        boolean expanded = mHistorySidebarExpanded;
+        boolean showChildren = !grouped || expanded;
+        MenuItem group = mNavView.getMenu().findItem(R.id.nav_history_group);
+        group.setContentDescription(grouped ? getString(expanded
+                ? R.string.history_sidebar_collapse : R.string.history_sidebar_expand) : null);
+        group.setVisible(grouped);
+        MenuItem history = mNavView.getMenu().findItem(R.id.nav_history);
+        history.setTitle(grouped ? R.string.browsing_history : R.string.history);
+        history.setVisible(showChildren);
+        mNavView.getMenu().findItem(R.id.nav_reading_history)
+                .setVisible(showChildren && Settings.isReadingHistoryEnabled());
+        mNavView.getMenu().findItem(R.id.nav_update_history)
+                .setVisible(showChildren && Settings.getShowUpdateHistoryInSidebar());
+
+        boolean historySelected = mNavCheckedItem == R.id.nav_history
+                || (mNavCheckedItem == R.id.nav_reading_history && Settings.isReadingHistoryEnabled())
+                || (mNavCheckedItem == R.id.nav_update_history && Settings.getShowUpdateHistoryInSidebar());
+        int checkedId = grouped && !expanded && historySelected
+                ? R.id.nav_history_group : mNavCheckedItem;
+        MenuItem checked = mNavView.getMenu().findItem(checkedId);
+        mNavView.setCheckedItem(checked != null && checked.isVisible() ? checkedId : R.id.nav_stub);
     }
 
     @Override
@@ -839,8 +879,6 @@ public final class MainActivity extends StageActivity
         super.onResume();
 
         setNavCheckedItem(mNavCheckedItem);
-        updateReadingHistoryNavigationItem();
-        updateGalleryUpdateHistoryNavigationItem();
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
 
@@ -1099,13 +1137,7 @@ public final class MainActivity extends StageActivity
 
     public void setNavCheckedItem(@IdRes int resId) {
         mNavCheckedItem = resId;
-        if (mNavView != null) {
-            if (resId == 0) {
-                mNavView.setCheckedItem(R.id.nav_stub);
-            } else {
-                mNavView.setCheckedItem(resId);
-            }
-        }
+        updateHistoryNavigationItems();
     }
 
     private void initSubscriptionUpdateBadges() {
@@ -1415,6 +1447,17 @@ public final class MainActivity extends StageActivity
     public boolean onNavigationItemSelected(MenuItem item) {
         int id = item.getItemId();
 
+        if (id == R.id.nav_history_group) {
+            if (isHistoryNavigationGrouped()) {
+                mHistorySidebarExpanded = !mHistorySidebarExpanded;
+                // NavigationView suspends adapter updates during its row-click callback.
+                // Refresh after it resumes, while preserving the current scene selection.
+                if (mNavView != null) mNavView.post(this::updateHistoryNavigationItems);
+            }
+            // This is a disclosure control: keep the drawer open and the scene selected.
+            return false;
+        }
+
         // Selecting the current gallery-list destination again is an explicit refresh. Running
         // its normal navigation branch below delivers fresh arguments to GalleryListScene, which
         // resets that destination's query and calls GalleryListHelper.refresh().
@@ -1563,6 +1606,11 @@ public final class MainActivity extends StageActivity
             limitsCountView.hide();
         }
         if (mNavView != null && drawerView.findViewById(R.id.nav_view) == mNavView) {
+            // Reset while hidden so the next opening starts collapsed without a layout jump.
+            if (mHistorySidebarExpanded) {
+                mHistorySidebarExpanded = false;
+                updateHistoryNavigationItems();
+            }
             RecyclerView menuView = findRecyclerView(mNavView);
             if (menuView != null) {
                 menuView.stopScroll();

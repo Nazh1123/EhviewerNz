@@ -71,14 +71,14 @@ public class ReadingHistoryUiTest {
         NavigationView navigation = new NavigationView(context);
         navigation.inflateMenu(R.menu.nav_drawer_main);
         ReflectionHelpers.setField(main, "mNavView", navigation);
-        ReflectionHelpers.callInstanceMethod(main, "updateReadingHistoryNavigationItem");
+        ReflectionHelpers.callInstanceMethod(main, "updateHistoryNavigationItems");
         assertTrue(navigation.getMenu().findItem(R.id.nav_reading_history).isVisible());
         settings.edit().putBoolean(Settings.KEY_RECORD_READING_HISTORY, false).apply();
-        ReflectionHelpers.callInstanceMethod(main, "updateReadingHistoryNavigationItem");
+        ReflectionHelpers.callInstanceMethod(main, "updateHistoryNavigationItems");
         assertFalse(navigation.getMenu().findItem(R.id.nav_reading_history).isVisible());
         assertTrue(navigation.getMenu().findItem(R.id.nav_history).isVisible());
         settings.edit().putBoolean(Settings.KEY_RECORD_READING_HISTORY, true).apply();
-        ReflectionHelpers.callInstanceMethod(main, "updateReadingHistoryNavigationItem");
+        ReflectionHelpers.callInstanceMethod(main, "updateHistoryNavigationItems");
         assertTrue(navigation.getMenu().findItem(R.id.nav_reading_history).isVisible());
     }
 
@@ -122,17 +122,17 @@ public class ReadingHistoryUiTest {
         ReflectionHelpers.setField(main, "mNavView", navigation);
         android.view.MenuItem item = navigation.getMenu().findItem(R.id.nav_update_history);
         assertFalse(item.isVisible());
-        ReflectionHelpers.callInstanceMethod(main, "updateGalleryUpdateHistoryNavigationItem");
+        ReflectionHelpers.callInstanceMethod(main, "updateHistoryNavigationItems");
         assertFalse(item.isVisible());
         settings.edit().putBoolean(Settings.KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR, true).apply();
-        ReflectionHelpers.callInstanceMethod(main, "updateGalleryUpdateHistoryNavigationItem");
+        ReflectionHelpers.callInstanceMethod(main, "updateHistoryNavigationItems");
         assertTrue(item.isVisible());
         assertEquals("更新记录", item.getTitle().toString());
         assertTrue(main.onNavigationItemSelected(item));
         assertEquals(GalleryUpdateHistoryScene.class, NavigationShadow.launched.getClazz());
         assertEquals(R.id.nav_update_history, new GalleryUpdateHistoryScene().getNavCheckedItem());
         settings.edit().putBoolean(Settings.KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR, false).apply();
-        ReflectionHelpers.callInstanceMethod(main, "updateGalleryUpdateHistoryNavigationItem");
+        ReflectionHelpers.callInstanceMethod(main, "updateHistoryNavigationItems");
         assertFalse(item.isVisible());
         assertEquals(R.id.nav_downloads, new GalleryUpdateHistoryScene().getNavCheckedItem());
     }

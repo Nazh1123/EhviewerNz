@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_collapse_history_in_sidebar">Agrupar entradas del historial</string>
+    <string name="settings_collapse_history_in_sidebar_summary">Agrupa Historial, Historial de lectura y Registros de actualización en un menú plegable en la barra lateral izquierda al activar esta opción</string>
+    <string name="browsing_history">Historial de navegación</string>
+    <string name="history_sidebar_expand">Expandir el menú del historial</string>
+    <string name="history_sidebar_collapse">Contraer el menú del historial</string>
+    <string name="settings_show_update_history_in_sidebar">Mostrar botón en la barra lateral</string>
+    <string name="settings_show_update_history_in_sidebar_summary">Muestra un botón de Registros de actualización en la barra lateral izquierda al activar esta opción</string>
     <string name="settings_history">Historial</string>
     <string name="settings_history_category_updates">Registros de actualización</string>
     <string name="settings_history_category_gallery_info">Información de la galería</string>

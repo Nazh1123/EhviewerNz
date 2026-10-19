@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_collapse_history_in_sidebar">折叠显示历史入口</string>
+    <string name="settings_collapse_history_in_sidebar_summary">开启时将左侧边栏中的“历史”“阅读历史”“更新记录”放到折叠菜单中</string>
+    <string name="browsing_history">浏览历史</string>
+    <string name="history_sidebar_expand">展开历史菜单</string>
+    <string name="history_sidebar_collapse">收起历史菜单</string>
     <string name="settings_history">历史</string>
     <string name="settings_history_category_updates">更新记录</string>
     <string name="settings_show_update_history_in_sidebar">在侧边栏显示按钮</string>

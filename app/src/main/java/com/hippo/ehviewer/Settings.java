@@ -710,7 +710,12 @@ public class Settings {
 
     public static final String KEY_GALLERY_UPDATE_RECORD_LIMIT = "gallery_update_record_limit";
     public static final String KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR = "show_update_history_in_sidebar";
+    public static final String KEY_COLLAPSE_HISTORY_IN_SIDEBAR = "collapse_history_in_sidebar";
     public static final int DEFAULT_GALLERY_UPDATE_RECORD_LIMIT = 200;
+
+    public static boolean getCollapseHistoryInSidebar() {
+        return getBoolean(KEY_COLLAPSE_HISTORY_IN_SIDEBAR, false);
+    }
 
     public static boolean getShowUpdateHistoryInSidebar() {
         return getBoolean(KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR, false);
