@@ -54,6 +54,7 @@ import com.hippo.ehviewer.client.exception.EhException;
 import com.hippo.ehviewer.event.GalleryActivityEvent;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
+import com.hippo.ehviewer.widget.HoldThumbnailPreview;
 import com.hippo.scene.SceneFragment;
 import com.hippo.widget.ContentLayout;
 import com.hippo.widget.LoadImageView;
@@ -104,6 +105,7 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
     private ScaleGestureDetector mScaleGestureDetector;
     @Nullable
     private RecyclerView.OnItemTouchListener mScaleTouchListener;
+    private final HoldThumbnailPreview mThumbnailPreview = new HoldThumbnailPreview();
 
     private int mPreviewColumnWidth = COLUMN_WIDTH_UNSET;
     private float mPreviewColumnWidthExact = COLUMN_WIDTH_UNSET;
@@ -214,6 +216,11 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
         mRecyclerView.setLayoutManager(mLayoutManager);
         mRecyclerView.setClipToPadding(false);
         mRecyclerView.setOnItemClickListener(this);
+        mThumbnailPreview.attachToRecyclerView(mRecyclerView);
+        mRecyclerView.setOnItemLongClickListener((parent, view, position, id) -> {
+            LoadImageView image = view.findViewById(R.id.image);
+            return image != null && !image.mFailed && mThumbnailPreview.show(image);
+        });
         int padding = LayoutUtils.dp2pix(context, 4);
         MarginItemDecoration decoration = new MarginItemDecoration(
                 padding, padding, padding, padding, padding);
@@ -272,6 +279,7 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
 
     @Override
     public void onDestroyView() {
+        mThumbnailPreview.dispose();
         super.onDestroyView();
 
         if (null != mHelper) {
@@ -293,6 +301,11 @@ public class GalleryPreviewsScene extends ToolbarScene implements EasyRecyclerVi
         mScaleGestureDetector = null;
         mLayoutManager = null;
         mAdapter = null;
+    }
+
+    @Override public void onPause() {
+        mThumbnailPreview.dismiss();
+        super.onPause();
     }
 
     private boolean updatePreviewColumnWidth(float scaleFactor) {

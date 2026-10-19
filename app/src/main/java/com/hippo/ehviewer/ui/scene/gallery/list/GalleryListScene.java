@@ -84,6 +84,7 @@ import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.FavouriteStatusRouter;
 import com.hippo.ehviewer.R;
+import com.hippo.ehviewer.widget.HoldThumbnailPreview;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.widget.PopularGalleryActions;
 import com.hippo.ehviewer.gallery.ReadingHistory;
@@ -170,6 +171,7 @@ public class GalleryListScene extends BaseScene
         BookmarkSubscriptionCoordinator.Listener {
 
     private static final String TAG = "GalleryListScene";
+    private final HoldThumbnailPreview mThumbnailPreview = new HoldThumbnailPreview();
 
     @IntDef({STATE_NORMAL, STATE_SIMPLE_SEARCH, STATE_SEARCH, STATE_SEARCH_SHOW_LIST})
     @Retention(RetentionPolicy.SOURCE)
@@ -875,6 +877,7 @@ public class GalleryListScene extends BaseScene
         mRecyclerView.setClipToPadding(false);
         mRecyclerView.setOnItemClickListener(this);
         mRecyclerView.setOnItemLongClickListener(this);
+        mThumbnailPreview.attachToRecyclerView(mRecyclerView);
         assert mOnScrollListener != null;
         mRecyclerView.addOnScrollListener(mOnScrollListener);
         mRecyclerView.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
@@ -1150,8 +1153,14 @@ public class GalleryListScene extends BaseScene
                 }).build();
     }
 
+    @Override public void onPause() {
+        mThumbnailPreview.dismiss();
+        super.onPause();
+    }
+
     @Override
     public void onDestroyView() {
+        mThumbnailPreview.dispose();
         super.onDestroyView();
         cancelPopularNoUpdatesNotice();
         if (isPopularMode() && mPopularRequestInFlight) {
@@ -1573,6 +1582,16 @@ public class GalleryListScene extends BaseScene
     @Override
     public boolean onItemLongClick(EasyRecyclerView parent, View view, int position, long id) {
         GalleryInfo galleryInfo = mAdapter != null ? mAdapter.getDataAt(position) : null;
+        if (Settings.getGalleryLongPressQuickDownload()
+                && !mMultiSelectMode && galleryInfo != null && mAdapter != null
+                && mAdapter.getType() == GalleryAdapterNew.TYPE_GRID
+                && Settings.isThumbnailInfoBarEffective()
+                && isInThumbnailActionZone(parent, view, true)) {
+            LoadImageViewNew cover = view.findViewById(R.id.thumb_new);
+            // Reserve this area for preview even if its image has not loaded yet.
+            if (cover != null && !cover.mFailed) mThumbnailPreview.show(cover);
+            return true;
+        }
         if (tryStartDownloadFromLongPress(parent, view, galleryInfo)) {
             return true;
         }
@@ -1611,25 +1630,41 @@ public class GalleryListScene extends BaseScene
             return insideCover && startGalleryDownload(galleryInfo);
         }
 
-        boolean insideCoverDownloadZone = insideCover
-                && touchX >= coverBounds.left + coverBounds.width() * 0.5f
-                && touchY >= coverBounds.top + coverBounds.height() * 0.82f;
+        return isInThumbnailActionZone(parent, itemView, false)
+                && startGalleryDownload(galleryInfo);
+    }
 
+    // The bottom 18% of the cover and the entire information bar each split at the midpoint.
+    private static boolean isInThumbnailActionZone(EasyRecyclerView parent, View itemView,
+                                                    boolean leftHalf) {
+        if (itemView == null) return false;
+        float touchX = parent.getTouchStartX();
+        float touchY = parent.getTouchStartY();
+        View cover = itemView.findViewById(R.id.thumb_new);
+        if (cover != null && cover.getWidth() > 0 && cover.getHeight() > 0) {
+            Rect bounds = new Rect();
+            cover.getDrawingRect(bounds);
+            parent.offsetDescendantRectToMyCoords(cover, bounds);
+            if (insideHorizontalHalf(bounds, touchX, leftHalf)
+                    && touchY >= bounds.top + bounds.height() * 0.82f
+                    && touchY < bounds.bottom) return true;
+        }
         View infoBar = itemView.findViewById(R.id.thumbnail_info_bar);
-        boolean insideInfoBarDownloadZone = false;
         if (infoBar != null && infoBar.getVisibility() == View.VISIBLE
                 && infoBar.getWidth() > 0 && infoBar.getHeight() > 0) {
             Rect infoBarBounds = new Rect();
             infoBar.getDrawingRect(infoBarBounds);
             parent.offsetDescendantRectToMyCoords(infoBar, infoBarBounds);
-            insideInfoBarDownloadZone = touchX >= infoBarBounds.left
-                    + infoBarBounds.width() * 0.5f
-                    && touchX < infoBarBounds.right
+            return insideHorizontalHalf(infoBarBounds, touchX, leftHalf)
                     && touchY >= infoBarBounds.top && touchY < infoBarBounds.bottom;
         }
+        return false;
+    }
 
-        return (insideCoverDownloadZone || insideInfoBarDownloadZone)
-                && startGalleryDownload(galleryInfo);
+    private static boolean insideHorizontalHalf(Rect bounds, float x, boolean leftHalf) {
+        float midpoint = bounds.left + bounds.width() * 0.5f;
+        return x >= bounds.left && x < bounds.right
+                && (leftHalf ? x < midpoint : x >= midpoint);
     }
 
     private boolean startGalleryDownload(@Nullable GalleryInfo galleryInfo) {

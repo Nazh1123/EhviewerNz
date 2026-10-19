@@ -601,7 +601,7 @@
     <string name="settings_eh_show_thumbnail_info_details">日期、评分、打码类型、阅读进度</string>
     <string name="settings_eh_show_thumbnail_info_highlight">色彩高亮</string>
     <string name="settings_gallery_long_press_quick_download">画廊长按快速下载</string>
-    <string name="settings_gallery_long_press_quick_download_summary">长按画廊项目的指定区域即可快速开始下载</string>
+    <string name="settings_gallery_long_press_quick_download_summary">开启后，列表模式长按封面快速下载；缩略图模式启用额外信息栏时，按住封面左下角或信息栏左半区预览，长按封面右下角或信息栏右半区快速下载。关闭后恢复原来的长按行为</string>
     <string name="settings_eh_list_show_read_progress">显示阅读进度</string>
     <string name="settings_eh_list_show_read_progress_summary">在详情列表模式下显示每个画廊的阅读进度</string>
     <string name="settings_eh_detail_size">详情大小</string>

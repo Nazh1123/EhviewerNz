@@ -3,6 +3,7 @@ package com.hippo.ehviewer.ui.scene.gallery.list;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
+import android.graphics.Rect;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -14,6 +15,7 @@ import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.hippo.conaco.Conaco;
+import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.drawable.GalleryCountDrawable;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
@@ -122,6 +124,43 @@ public class PopularGalleryRenderingTest {
         ReflectionHelpers.setField(scene, "mAdapter", adapter);
         refresh(1, 2);
         assertRendered(2);
+    }
+
+    @Test @Config(sdk = 34)
+    public void leftCoverAndInfoBarPreviewFollowQuickDownloadSwitchAndRestoreLongPress() {
+        Settings.putString(Settings.KEY_LIST_MODE, "1");
+        Settings.putString(Settings.KEY_THUMB_SIZE, "0");
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        assertTrue(Settings.isThumbnailInfoBarEffective());
+        adapter.setType(GalleryAdapterNew.TYPE_GRID);
+        layout();
+        EasyRecyclerView parent = (EasyRecyclerView) recycler;
+        View item = recycler.findViewHolderForAdapterPosition(0).itemView;
+        GalleryInfo gallery = adapter.getDataAt(0);
+        for (int targetId : new int[]{R.id.thumb_new, R.id.thumbnail_info_bar}) {
+            View target = item.findViewById(targetId);
+            assertEquals(View.VISIBLE, target.getVisibility());
+            assertTrue(target.getWidth() > 0 && target.getHeight() > 0);
+            Rect bounds = new Rect();
+            target.getDrawingRect(bounds);
+            parent.offsetDescendantRectToMyCoords(target, bounds);
+            ReflectionHelpers.setField(parent, "mStartX", bounds.left + bounds.width() * 0.25f);
+            ReflectionHelpers.setField(parent, "mStartY", bounds.top + bounds.height() * 0.9f);
+            for (boolean enabled : new boolean[]{false, true, false}) {
+                Settings.putBoolean(Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD, enabled);
+                int before = scene.originalLongPresses;
+                assertTrue(scene.onItemLongClick(parent, item, 0, gallery.gid));
+                assertEquals(before + (enabled ? 0 : 1), scene.originalLongPresses);
+                if (!enabled) assertSame(gallery, scene.lastLongPressedGallery);
+            }
+            Settings.putBoolean(Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD, true);
+            ReflectionHelpers.setField(scene, "mMultiSelectMode", true);
+            int before = scene.originalLongPresses;
+            assertTrue(scene.onItemLongClick(parent, item, 0, gallery.gid));
+            assertEquals(before + 1, scene.originalLongPresses);
+            ReflectionHelpers.setField(scene, "mMultiSelectMode", false);
+        }
     }
 
     @Test public void noUpdatesActionsShowTipAndCurrentRefreshAndNewSearchAllRender() {
@@ -888,10 +927,17 @@ public class PopularGalleryRenderingTest {
     private static class TestScene extends GalleryListScene {
         private final Context context;
         int lastTip;
+        int originalLongPresses;
+        GalleryInfo lastLongPressedGallery;
         TestScene(Context context) { this.context = context; }
         @Override public Context getContext() { return context; }
         @Override public Context getEHContext() { return context; }
         @Override public void showTip(int id, int length) { lastTip = id; }
+        @Override public boolean onItemLongClick(GalleryInfo gallery, View view) {
+            originalLongPresses++;
+            lastLongPressedGallery = gallery;
+            return true;
+        }
     }
 
     @Implements(EhApplication.class)

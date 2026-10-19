@@ -1158,7 +1158,7 @@
     <string name="settings_eh_show_thumbnail_info_details">日期、評分、打碼類型、閱讀進度</string>
     <string name="settings_eh_show_thumbnail_info_highlight">色彩高亮</string>
     <string name="settings_gallery_long_press_quick_download">畫廊長按快速下載</string>
-    <string name="settings_gallery_long_press_quick_download_summary">長按畫廊項目的指定區域即可快速開始下載</string>
+    <string name="settings_gallery_long_press_quick_download_summary">開啟後，列表模式長按封面快速下載；縮圖模式啟用額外資訊列時，按住封面左下角或資訊列左半區預覽，長按封面右下角或資訊列右半區快速下載。關閉後恢復原本的長按行為</string>
     <string name="settings_eh_system_theme">系統主題</string>
     <string name="settings_fork_auto_subscription_updates">自動獲取訂閱更新</string>
     <string name="settings_fork_auto_subscription_updates_eh">自動更新 EH訂閱</string>

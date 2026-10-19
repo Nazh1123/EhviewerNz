@@ -126,6 +126,7 @@ import com.hippo.ehviewer.ui.scene.GalleryCommentsScene;
 import com.hippo.ehviewer.ui.scene.GalleryInfoScene;
 import com.hippo.ehviewer.ui.scene.GalleryParentChainDialog;
 import com.hippo.ehviewer.ui.scene.GalleryPreviewsScene;
+import com.hippo.ehviewer.widget.HoldThumbnailPreview;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
 import com.hippo.ehviewer.ui.scene.download.DownloadsScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.FavoritesScene;
@@ -244,6 +245,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private View mColorBg;
     @Nullable
     private LoadImageView mThumb;
+    private final HoldThumbnailPreview mThumbnailPreview = new HoldThumbnailPreview();
     @Nullable
     private TextView mTitle;
     @Nullable
@@ -762,6 +764,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Ripple.addRipple(mUpdateGallery, isDarkTheme);
         Ripple.addRipple(mGalleryHistory, isDarkTheme);
         mThumb.setOnClickListener(this);
+        mThumbnailPreview.bind(mThumb);
         mUploader.setOnClickListener(this);
         mCategory.setOnClickListener(this);
         mOtherActions.setOnClickListener(this);
@@ -908,8 +911,14 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         updateGalleryVersionActionsVisibility();
     }
 
+    @Override public void onPause() {
+        mThumbnailPreview.dismiss();
+        super.onPause();
+    }
+
     @Override
     public void onDestroyView() {
+        mThumbnailPreview.dismiss();
         super.onDestroyView();
         mOfflineGeneration++;
 
@@ -1473,6 +1482,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             LoadImageView image = view.findViewById(R.id.image);
             image.setTag(R.id.index, preview.getPosition());
             image.setOnClickListener(this);
+            mThumbnailPreview.bind(image);
             ((TextView) view.findViewById(R.id.text)).setText(Integer.toString(preview.getPosition() + 1));
             mGridLayout.addView(view);
             preview.load(image);
@@ -1655,6 +1665,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             LoadImageView image = view.findViewById(R.id.image);
             image.setTag(R.id.index, i);
             image.setOnClickListener(this);
+            mThumbnailPreview.bind(image);
             TextView text = view.findViewById(R.id.text);
             text.setText(Integer.toString(previewSet.getPosition(i) + 1));
             mGridLayout.addView(view);
