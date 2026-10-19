@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_results_delete_title">処理結果を削除</string>
+    <string name="gallery_results_delete_sr">超解像の結果を削除</string>
+    <string name="gallery_results_calculating">選択したギャラリーの使用容量を計算中…</string>
+    <string name="gallery_results_delete_summary">選択したギャラリー：%1$d 件\n\n%6$s\n翻訳：%2$d 枚、%3$s\n超解像：%4$d 枚、%5$s\n\n翻訳と超解像の枚数は記録済みの完全な結果のみを含み、使用容量にはキャッシュと未完了の結果も含まれます。アーカイブはファイル全体の容量で計算します。選択した種類の結果をすべて削除し、原画像ともう一方の種類の結果は保持します。</string>
+    <string name="gallery_results_originals">原画像：%1$d 枚、%2$s</string>
+    <string name="gallery_results_originals_unavailable">原画像：一部の原画像にアクセスできません</string>
+    <string name="gallery_results_inspect_failed">一部の結果を確認できませんでした。ストレージへのアクセスを確認するか、後で再試行してください。</string>
+    <string name="gallery_results_deleted">選択した種類の結果を削除しました</string>
+    <string name="gallery_results_delete_failed">一部の結果を削除できませんでした。ストレージへのアクセスを確認するか、再試行してください。</string>
+</resources>

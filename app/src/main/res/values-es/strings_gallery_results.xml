@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_results_delete_title">Eliminar resultados procesados</string>
+    <string name="gallery_results_delete_sr">Eliminar resultados de SR</string>
+    <string name="gallery_results_calculating">Calculando el espacio de las galerías seleccionadas…</string>
+    <string name="gallery_results_delete_summary">%1$d galerías seleccionadas\n\n%6$s\nTraducciones: %2$d imágenes, %3$s\nSuperresolución: %4$d imágenes, %5$s\n\nLos recuentos de traducción y SR solo incluyen resultados completos registrados; el espacio incluye cachés y resultados incompletos. Los archivos comprimidos se contabilizan por su tamaño total. Elimina todos los resultados del tipo elegido y conserva los originales y los resultados del otro tipo.</string>
+    <string name="gallery_results_originals">Originales: %1$d imágenes, %2$s</string>
+    <string name="gallery_results_originals_unavailable">Originales: no se pudo acceder a algunas imágenes originales</string>
+    <string name="gallery_results_inspect_failed">No se pudieron examinar algunos resultados. Comprueba el acceso al almacenamiento o inténtalo más tarde.</string>
+    <string name="gallery_results_deleted">Se eliminaron los resultados del tipo seleccionado</string>
+    <string name="gallery_results_delete_failed">No se pudieron eliminar algunos resultados. Comprueba el acceso al almacenamiento o reinténtalo.</string>
+</resources>
