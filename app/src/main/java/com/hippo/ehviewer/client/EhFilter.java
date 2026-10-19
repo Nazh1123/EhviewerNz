@@ -148,6 +148,15 @@ public final class EhFilter {
         return 0 != mTagFilterList.size() || 0 != mTagNamespaceFilterList.size();
     }
 
+    public synchronized boolean needUploader() {
+        return mUploaderFilterList.stream().anyMatch(filter -> filter.enable);
+    }
+
+    public synchronized boolean needSubscriptionTags() {
+        return mTagFilterList.stream().anyMatch(filter -> filter.enable)
+                || mTagNamespaceFilterList.stream().anyMatch(filter -> filter.enable);
+    }
+
     public synchronized boolean filterTitle(GalleryInfo info) {
         if (null == info) {
             return false;

@@ -88,6 +88,8 @@ public class GalleryListParser {
         public String rawTailPosted;
         public long rawTailGid;
         public List<GalleryInfo> galleryInfoList = new ArrayList<>();
+        // Background checks filter only new candidates; retain the full page for later browsing.
+        public List<GalleryInfo> subscriptionRawGalleries;
         public List<GalleryInfo> ratingMetadata;
     }
 

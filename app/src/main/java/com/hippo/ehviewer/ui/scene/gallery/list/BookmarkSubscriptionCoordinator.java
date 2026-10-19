@@ -85,6 +85,7 @@ final class BookmarkSubscriptionCoordinator {
         @Nullable EhRequest request;
         int retries;
         @Nullable String retryUrl;
+        @Nullable SubscriptionUpdateManager.RecentCheckSource cachedCheck;
 
         Source(int id, BookmarkSubscriptionPlanner.Source plan) {
             this.id = id;
@@ -380,9 +381,10 @@ final class BookmarkSubscriptionCoordinator {
         for (Source source : mSources) {
             SubscriptionUpdateManager.RecentCheckSource cachedSource =
                     findCachedSource(recentResult, source);
-            if (cachedSource != null) {
+            if (cachedSource != null && !cachedSource.requiresDisplayPreparation) {
                 applyCachedSource(source, cachedSource);
             } else {
+                source.cachedCheck = cachedSource;
                 mInitialRequestsRemaining++;
                 enqueue(source, true);
             }
@@ -444,7 +446,8 @@ final class BookmarkSubscriptionCoordinator {
         }
         for (SubscriptionUpdateManager.RecentCheckSource cachedSource
                 : recentResult.sources) {
-            if (!cachedSource.isFresh() || cachedSource.ratingMinimumHundredths != sourceRatingMinimum(source)) continue;
+            if (!cachedSource.isFresh() || (!cachedSource.requiresDisplayPreparation
+                    && cachedSource.ratingMinimumHundredths != sourceRatingMinimum(source))) continue;
             if (source.plan == null
                     ? cachedSource.isEhSubscription()
                     : cachedSource.matchesBookmarkSource(source.plan)) {
@@ -534,6 +537,12 @@ final class BookmarkSubscriptionCoordinator {
                             // Explicit cancellation increments the generation first.
                         }
                     });
+            if (source.cachedCheck != null) {
+                request.setMethod(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST)
+                        .setArgs(url, source.cachedCheck.galleryInfoList,
+                                source.plan != null && source.plan.isMergedUploaderSearch(),
+                                sourceRatingMinimum(source));
+            }
             source.request = request;
             mActiveRequests++;
             mClient.execute(request);
@@ -546,6 +555,17 @@ final class BookmarkSubscriptionCoordinator {
             return;
         }
         Source source = mSources.get(sourceId);
+        if (source.cachedCheck != null) {
+            SubscriptionUpdateManager.RecentCheckSource cached = source.cachedCheck;
+            source.pageIndex = cached.pageIndex;
+            result.rawResultCount = cached.initialResultCount;
+            result.rawSeenState = cached.observed;
+            result.rawTailPosted = cached.boundaryPosted;
+            result.rawTailGid = cached.boundaryGid;
+            result.nextHref = cached.nextHref;
+            result.pages = cached.exhausted ? 0 : cached.pageIndex + 2;
+            source.cachedCheck = null;
+        }
         finishRequest(source, initial);
         source.retries = 0;
         source.retryUrl = null;

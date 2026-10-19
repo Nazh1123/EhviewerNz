@@ -74,6 +74,7 @@ public class EhClient {
     public static final int METHOD_GET_EDIT_COMMENT = 29;
     public static final int METHOD_GET_GALLERY_CHAIN_METADATA = 30;
     public static final int METHOD_VERIFY_BOOKMARK = 31;
+    public static final int METHOD_PREPARE_SUBSCRIPTION_LIST = 32;
 
     private final ThreadPoolExecutor mRequestThreadPool;
     private final OkHttpClient mOkHttpClient;
@@ -167,7 +168,12 @@ public class EhClient {
                                 params.length > 3 && Boolean.TRUE.equals(params[3]),
                                 params.length > 4 ? (int) params[4] : com.hippo.ehviewer.Settings.getPersistentMinRatingHundredths(),
                                 params.length > 5 && Boolean.TRUE.equals(params[5]),
-                                params.length > 6 ? (List<GalleryInfo>) params[6] : null);
+                                params.length > 6 ? (List<GalleryInfo>) params[6] : null,
+                                params.length > 7 ? (GallerySeenState) params[7] : null);
+                    case METHOD_PREPARE_SUBSCRIPTION_LIST:
+                        return EhEngine.prepareSubscriptionList(this, mOkHttpClient,
+                                (String) params[0], (List<GalleryInfo>) params[1],
+                                (boolean) params[2], (int) params[3]);
                     case METHOD_VERIFY_BOOKMARK:
                         return EhEngine.verifyBookmark(this, mOkHttpClient,
                                 (String) params[0], (int) params[1], (long) params[2]);

@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import androidx.preference.PreferenceManager;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.dao.DaoMaster;
@@ -39,6 +40,8 @@ public class SearchRatingLoadingTest {
     private String apiPosted = "1";
     private final AtomicInteger listRequests = new AtomicInteger();
     private final AtomicInteger apiRequests = new AtomicInteger();
+    private final java.util.Set<Long> apiGids = new java.util.HashSet<>();
+    private JSONArray apiTags = new JSONArray();
     private final java.util.List<String> requestedUrls = new java.util.ArrayList<>();
     private static final String FIRST = "https://e-hentai.org/?f_sr=on&f_srdd=4";
     private static final String NEXT = FIRST + "&next=123";
@@ -82,12 +85,13 @@ public class SearchRatingLoadingTest {
                     JSONArray ids = new JSONObject(buffer.readUtf8()).getJSONArray("gidlist");
                     JSONArray metadata = new JSONArray();
                     for (int i = 0; i < ids.length(); i++) {
+                        apiGids.add(ids.getJSONArray(i).getLong(0));
                         metadata.put(new JSONObject().put("gid", ids.getJSONArray(i).getLong(0))
                                 .put("title", "gallery").put("title_jpn", "")
                                 .put("category", "Manga").put("thumb", "https://example.org/thumb.jpg")
                                 .put("uploader", "tester").put("posted", apiPosted).put("filecount", "10")
                                 .put("rating", secondPageMatches && listRequests.get() > 1 ? "4.51" : "4.50")
-                                .put("tags", new JSONArray()));
+                                .put("tags", apiTags));
                     }
                     body = new JSONObject().put("gmetadata", metadata).toString();
                 } catch (Exception e) { throw new java.io.IOException(e); }
@@ -174,6 +178,99 @@ public class SearchRatingLoadingTest {
         }
         assertFalse(result.galleryInfoList.isEmpty());
         assertEquals(4.51f, result.galleryInfoList.get(0).rating, 0f);
+    }
+
+    private static GallerySeenState cursorAt(String posted) {
+        GalleryInfo seen = new GalleryInfo();
+        seen.gid = 1;
+        seen.posted = posted;
+        return GallerySeenState.empty().observe(java.util.List.of(seen));
+    }
+
+    private GalleryListParser.Result check(GallerySeenState cursor, int minimum) throws Throwable {
+        // Even a caller accidentally enabling extra pages must not bypass the scanner's cursor.
+        return EhEngine.getGalleryList(null, client(false), FIRST, ListUrlBuilder.MODE_NORMAL,
+                true, true, minimum, true, null, cursor);
+    }
+
+    @Test public void subscriptionCheckDoesNotFetchExtraPageAfterRatingRejection() throws Throwable {
+        GalleryListParser.Result result = check(cursorAt("2020-01-01 00:00"), 451);
+        assertTrue(result.galleryInfoList.isEmpty());
+        assertTrue(result.ratingFilteredAll);
+        assertEquals(1, listRequests.get());
+        assertEquals(NEXT, result.nextHref);
+        assertTrue(result.rawResultCount > 0);
+        assertEquals(result.rawResultCount, result.subscriptionRawGalleries.size());
+    }
+
+    @Test public void unchangedAndInitialChecksSkipAllMetadataIncludingDisplayRequirements() throws Throwable {
+        Settings.putBoolean("show_gallery_pages", true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        for (GallerySeenState cursor : java.util.List.of(cursorAt("2030-01-01 00:00"), GallerySeenState.empty())) {
+            GalleryListParser.Result result = check(cursor, 451);
+            assertTrue(result.galleryInfoList.isEmpty());
+            assertFalse(result.subscriptionRawGalleries.isEmpty());
+            assertEquals(GallerySeenState.postedMinute("2023-01-06 16:58"), result.rawSeenState.minute());
+        }
+        assertEquals(2, listRequests.get());
+        assertEquals(0, apiRequests.get());
+    }
+
+    @Test public void checkFetchesExactMetadataOnlyForUnseenCandidates() throws Throwable {
+        var raw = GalleryListParser.parseMergedUploaderSearch(html, ListUrlBuilder.MODE_NORMAL);
+        GallerySeenState cursor = GallerySeenState.empty().observe(raw.galleryInfoList.subList(1,
+                raw.galleryInfoList.size()));
+        long candidate = raw.galleryInfoList.get(0).gid;
+        GalleryListParser.Result result = check(cursor, 450);
+        assertEquals(java.util.Set.of(candidate), apiGids);
+        assertEquals(1, apiRequests.get());
+        assertEquals(1, result.galleryInfoList.size());
+        assertEquals(4.50f, result.galleryInfoList.get(0).rating, 0f);
+        assertEquals(raw.rawResultCount, result.subscriptionRawGalleries.size());
+    }
+
+    @Test public void checkDefersDisplayMetadataAndUploaderAttributionUntilBrowsing() throws Throwable {
+        var doc = org.jsoup.Jsoup.parse(html);
+        doc.select(".glhide a, .gl3e a").remove();
+        html = doc.outerHtml();
+        Settings.putBoolean("show_gallery_pages", true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        GalleryListParser.Result checked = check(cursorAt("2020-01-01 00:00"), 0);
+        assertFalse(checked.galleryInfoList.isEmpty());
+        assertTrue(checked.galleryInfoList.stream().allMatch(g -> g.uploader == null));
+        assertEquals(0, apiRequests.get());
+        var displayed = EhEngine.prepareSubscriptionList(null, client(false), FIRST,
+                checked.subscriptionRawGalleries, true, 450);
+        assertEquals(1, listRequests.get());
+        assertTrue(apiRequests.get() > 0);
+        assertEquals(checked.rawResultCount, displayed.galleryInfoList.size());
+        assertTrue(displayed.galleryInfoList.stream().allMatch(g -> "tester".equals(g.uploader)
+                && g.pages == 10 && g.simpleTags != null && g.firstGid != null));
+        assertTrue(checked.subscriptionRawGalleries.stream().allMatch(g -> g.uploader == null));
+    }
+
+    @Test public void checkStillResolvesMissingUploadersForEnabledBlockFilter() throws Throwable {
+        var doc = org.jsoup.Jsoup.parse(html);
+        doc.select(".glhide a, .gl3e a").remove();
+        html = doc.outerHtml();
+        EhEngine.sEhFilter.addFilter(new com.hippo.ehviewer.dao.Filter(null, EhFilter.MODE_UPLOADER, "tester", true));
+        GalleryListParser.Result result = check(cursorAt("2020-01-01 00:00"), 0);
+        assertTrue(apiRequests.get() > 0);
+        assertTrue(result.galleryInfoList.isEmpty());
+        assertFalse(result.subscriptionRawGalleries.isEmpty());
+    }
+
+    @Test public void checkStillLoadsMissingTagsForEnabledBlockFilter() throws Throwable {
+        var doc = org.jsoup.Jsoup.parse(html);
+        doc.select(".glname table").remove();
+        html = doc.outerHtml();
+        apiTags.put("female:blocked");
+        EhEngine.sEhFilter.addFilter(new com.hippo.ehviewer.dao.Filter(null, EhFilter.MODE_TAG, "female:blocked", true));
+        GalleryListParser.Result result = check(cursorAt("2020-01-01 00:00"), 0);
+        assertTrue(apiRequests.get() > 0);
+        assertTrue(result.galleryInfoList.isEmpty());
     }
 
     @Test public void utcApiMetadataKeepsTheUnfilteredPublicationBoundary() throws Throwable {

@@ -120,6 +120,7 @@ public final class SubscriptionUpdateManager {
      */
     public static final class RecentCheckSource {
         public final int ratingMinimumHundredths;
+        public final boolean requiresDisplayPreparation;
         @NonNull public final List<GalleryInfo> galleryInfoList;
         public final GallerySeenState observed;
         public final int initialResultCount;
@@ -137,6 +138,7 @@ public final class SubscriptionUpdateManager {
         RecentCheckSource(@NonNull Source source) {
             observed = source.observed;
             ratingMinimumHundredths = source.ratingMinimumHundredths;
+            requiresDisplayPreparation = source.requiresDisplayPreparation;
             mBuilder.set(source.builder);
             mBookmarkSourceKey = source.plan != null ? source.plan.getCacheKey() : null;
             galleryInfoList = Collections.unmodifiableList(
@@ -190,6 +192,7 @@ public final class SubscriptionUpdateManager {
 
     private static final class Source {
         int ratingMinimumHundredths;
+        boolean requiresDisplayPreparation;
         final Group group;
         @Nullable final BookmarkSubscriptionPlanner.Source plan;
         final ListUrlBuilder builder = new ListUrlBuilder();
@@ -596,7 +599,7 @@ public final class SubscriptionUpdateManager {
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
                     .setArgs(SearchRating.withoutServerFilter(url), source.builder.getMode(), true,
                             source.plan != null && source.plan.isMergedUploaderSearch(),
-                            source.ratingMinimumHundredths, true)
+                            source.ratingMinimumHundredths, false, null, source.cursor)
                     .setCallback(new EhClient.Callback<GalleryListParser.Result>() {
                         @Override
                         public void onSuccess(GalleryListParser.Result result) {
@@ -631,7 +634,9 @@ public final class SubscriptionUpdateManager {
         if (source.pageIndex == 0) {
             source.initialResultCount = result.rawResultCount;
         }
-        source.galleryInfoList.addAll(result.galleryInfoList);
+        source.requiresDisplayPreparation |= result.subscriptionRawGalleries != null;
+        source.galleryInfoList.addAll(result.subscriptionRawGalleries != null
+                ? result.subscriptionRawGalleries : result.galleryInfoList);
         if (result.customErrorString != null) {
             completeSource(source, false);
             pumpRequests(generation);

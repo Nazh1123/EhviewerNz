@@ -222,6 +222,12 @@ public class EhEngine {
     private static void fillGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
             List<GalleryInfo> list, String url, boolean filter, @Nullable String subscriptionScope,
             boolean preciseRating) throws Throwable {
+        fillGalleryList(task, okHttpClient, list, url, filter, subscriptionScope, preciseRating, false);
+    }
+
+    private static void fillGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
+            List<GalleryInfo> list, String url, boolean filter, @Nullable String subscriptionScope,
+            boolean preciseRating, boolean checkOnly) throws Throwable {
         // Filter title and uploader
         if (filter) {
             for (int i = 0, n = list.size(); i < n; i++) {
@@ -262,7 +268,20 @@ public class EhEngine {
                 (Settings.getShowGalleryPages() && !hasPages) ||
                 hasRated ||
                 needThumbnailInfo;
-        if (needApi) {
+        if (checkOnly) {
+            // Display settings must not make an unread check fetch metadata for the whole page.
+            boolean needTags = sEhFilter.needSubscriptionTags();
+            boolean needUploader = sEhFilter.needUploader();
+            List<GalleryInfo> missing = new ArrayList<>();
+            for (GalleryInfo gallery : list) {
+                if (preciseRating || (needTags && gallery.simpleTags == null)
+                        || (needUploader && TextUtils.isEmpty(gallery.uploader))) missing.add(gallery);
+            }
+            if (!missing.isEmpty()) {
+                SUBSCRIPTION_METADATA.fill(subscriptionScope, missing,
+                        items -> fillGalleryListByApi(task, okHttpClient, items, url));
+            }
+        } else if (needApi) {
             if (subscriptionScope != null) {
                 SUBSCRIPTION_METADATA.fill(subscriptionScope, list,
                         items -> fillGalleryListByApi(task, okHttpClient, items, url));
@@ -312,8 +331,16 @@ public class EhEngine {
             OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
             boolean requireUploader, int minRatingHundredths, boolean allowExtraPage,
             @Nullable List<GalleryInfo> previousPopular) throws Throwable {
+        return getGalleryList(task, okHttpClient, url, mode, subscriptionSearch, requireUploader,
+                minRatingHundredths, allowExtraPage, previousPopular, null);
+    }
+
+    public static GalleryListParser.Result getGalleryList(@Nullable EhClient.Task task,
+            OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
+            boolean requireUploader, int minRatingHundredths, boolean allowExtraPage,
+            @Nullable List<GalleryInfo> previousPopular, @Nullable GallerySeenState checkCursor) throws Throwable {
         GalleryListParser.Result result = getGalleryListPage(task, okHttpClient, url, mode,
-                subscriptionSearch, requireUploader, minRatingHundredths);
+                subscriptionSearch, requireUploader, minRatingHundredths, checkCursor);
         if (mode == ListUrlBuilder.MODE_WHATS_HOT
                 && minRatingHundredths > 0 && previousPopular != null && !previousPopular.isEmpty()) {
             fillGalleryListByApi(task, okHttpClient, previousPopular, url);
@@ -321,10 +348,10 @@ public class EhEngine {
         }
         String next = result.nextHref;
         // Bound this to one extra page per user request, even if that page is also empty.
-        if (allowExtraPage && result.ratingFilteredAll && result.customErrorString == null
+        if (checkCursor == null && allowExtraPage && result.ratingFilteredAll && result.customErrorString == null
                 && next != null && !next.isEmpty() && !next.equals(url)) {
             GalleryListParser.Result extra = getGalleryListPage(task, okHttpClient, next, mode,
-                    subscriptionSearch, requireUploader, minRatingHundredths);
+                    subscriptionSearch, requireUploader, minRatingHundredths, null);
             extra.firstHref = result.firstHref;
             extra.prevHref = result.prevHref;
             extra.rawHeadGid = Math.max(result.rawHeadGid, extra.rawHeadGid);
@@ -336,7 +363,7 @@ public class EhEngine {
 
     private static GalleryListParser.Result getGalleryListPage(@Nullable EhClient.Task task,
             OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
-            boolean requireUploader, int minRatingHundredths) throws Throwable {
+            boolean requireUploader, int minRatingHundredths, @Nullable GallerySeenState checkCursor) throws Throwable {
         if (subscriptionSearch || SearchRating.isClientOnlyMode(mode)) {
             url = SearchRating.withoutServerFilter(url);
         }
@@ -374,6 +401,34 @@ public class EhEngine {
             throw e;
         }
 
+        if (checkCursor != null) {
+            result.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
+            result.galleryInfoList.removeIf(gallery -> !checkCursor.isNew(gallery));
+        }
+        prepareGalleryList(task, okHttpClient, requestUrl, mode, result, subscriptionScope,
+                requireUploader && checkCursor == null, minRatingHundredths, checkCursor != null);
+
+        if (code == 200 && url.equals("https://exhentai.org/") && body.isEmpty()) {
+            result.customErrorString = GetText.getString(R.string.error_igneous_wrong);
+        }
+
+        return result;
+    }
+
+    /** Enrich a retained search response without repeating the HTML request. */
+    public static GalleryListParser.Result prepareSubscriptionList(@Nullable EhClient.Task task,
+            OkHttpClient client, String url, List<GalleryInfo> rawGalleries,
+            boolean requireUploader, int minRatingHundredths) throws Throwable {
+        GalleryListParser.Result result = new GalleryListParser.Result();
+        result.galleryInfoList = SubscriptionGallerySnapshot.copy(rawGalleries);
+        prepareGalleryList(task, client, url, ListUrlBuilder.MODE_NORMAL, result, SubscriptionSearchContext.key(),
+                requireUploader, minRatingHundredths, false);
+        return result;
+    }
+
+    private static void prepareGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
+            String requestUrl, int mode, GalleryListParser.Result result, @Nullable String subscriptionScope,
+            boolean requireUploader, int minRatingHundredths, boolean checkOnly) throws Throwable {
         if (requireUploader) {
             // Some list display modes omit uploaders. Resolve only missing metadata so
             // bookmark attribution stays exact, including when automatic results are reused.
@@ -391,8 +446,8 @@ public class EhEngine {
                 }
             }
         }
-        fillGalleryList(task, okHttpClient, result.galleryInfoList, url, true, subscriptionScope,
-                minRatingHundredths > 0);
+        fillGalleryList(task, okHttpClient, result.galleryInfoList, requestUrl, true, subscriptionScope,
+                minRatingHundredths > 0, checkOnly);
         // Popular history must retain the entire snapshot; its UI projection applies the threshold.
         if (minRatingHundredths > 0 && mode != ListUrlBuilder.MODE_WHATS_HOT) {
             boolean hadGalleries = !result.galleryInfoList.isEmpty();
@@ -401,11 +456,6 @@ public class EhEngine {
             result.ratingFilteredAll = hadGalleries && result.galleryInfoList.isEmpty();
         }
 
-        if (code == 200 && url.equals("https://exhentai.org/") && body.isEmpty()) {
-            result.customErrorString = GetText.getString(R.string.error_igneous_wrong);
-        }
-
-        return result;
     }
 
     /** Verify an ambiguous tag match only when the user requests its source bookmark. */

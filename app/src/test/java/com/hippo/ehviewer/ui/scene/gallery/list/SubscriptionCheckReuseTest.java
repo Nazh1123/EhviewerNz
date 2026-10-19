@@ -12,6 +12,7 @@ import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.SubscriptionSearchContext;
+import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
@@ -283,6 +284,81 @@ public class SubscriptionCheckReuseTest {
         shadowOf(Looper.getMainLooper()).idle();
     }
 
+    @Test public void scannerDisablesAutomaticExtraPagesAndPassesItsPublicationCursor() {
+        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        start(true);
+        Object[] args = requests.get(0).getArgs();
+        assertEquals(false, args[5]);
+        assertTrue(args[7] instanceof GallerySeenState);
+        assertTrue(((GallerySeenState) args[7]).initialized());
+    }
+
+    private SubscriptionUpdateManager.RecentCheckResult lightweightCheck() {
+        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        start(true);
+        var checked = datedPage(200, "2026-09-21 00:00", "https://e-hentai.org/watched?next=90");
+        checked.galleryInfoList.addAll(datedPage(90, "2026-09-19 00:00", null).galleryInfoList);
+        checked.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(checked.galleryInfoList);
+        checked.rawSeenState = GallerySeenState.empty().observe(checked.subscriptionRawGalleries);
+        checked.rawResultCount = 2;
+        checked.rawTailPosted = "2026-09-19 00:00";
+        checked.rawTailGid = 90;
+        checked.galleryInfoList.clear();
+        succeed(0, checked);
+        assertFalse(manager.isChecking());
+        return manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+    }
+
+    @Test public void lightweightCachePreparesFullPageWithoutRepeatingSearchAndRetainsPagination() {
+        var cached = lightweightCheck();
+        assertTrue(cached.sources.get(0).requiresDisplayPreparation);
+        assertEquals(2, cached.sources.get(0).galleryInfoList.size());
+        List<Long> displayed = new ArrayList<>();
+        BookmarkSubscriptionCoordinator coordinator = new BookmarkSubscriptionCoordinator(client,
+                new BookmarkSubscriptionCoordinator.Listener() {
+                    @Override public void onBookmarkSubscriptionBatch(int taskId, List<GalleryInfo> data,
+                            boolean hasMore, boolean refresh, boolean noSubscriptions, boolean partialFailure) {
+                        assertFalse(partialFailure);
+                        assertTrue(hasMore);
+                        for (GalleryInfo gallery : data) displayed.add(gallery.gid);
+                    }
+                    @Override public void onBookmarkSubscriptionFailure(int taskId, Exception error) {
+                        throw new AssertionError(error);
+                    }
+                });
+        coordinator.refresh(1, bookmarks, true, cached, 0);
+        assertEquals(2, requests.size());
+        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(1).getMethod());
+        assertEquals(2, ((List<?>) requests.get(1).getArgs()[1]).size());
+        var prepared = new GalleryListParser.Result();
+        prepared.galleryInfoList = SubscriptionGallerySnapshot.copy(cached.sources.get(0).galleryInfoList);
+        succeed(1, prepared);
+        assertEquals(java.util.Arrays.asList(200L, 90L), displayed);
+        assertEquals(2, requests.size());
+        coordinator.loadMore(2);
+        assertEquals(3, requests.size());
+        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(2).getMethod());
+        assertEquals("https://e-hentai.org/watched?next=90", requests.get(2).getArgs()[0]);
+        coordinator.cancel();
+    }
+
+    @Test public void lightweightPreparationRetriesAndCanBeCancelledWithoutLosingRawCache() {
+        var cached = lightweightCheck();
+        var coordinator = refresh(true, cached);
+        requests.get(1).getCallback().onFailure(new java.io.IOException("offline"));
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
+        assertEquals(3, requests.size());
+        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(2).getMethod());
+        assertEquals(2, ((List<?>) requests.get(2).getArgs()[1]).size());
+        coordinator.cancel();
+        assertTrue(requests.get(2).isCancelled());
+        succeed(2, new GalleryListParser.Result());
+        // Opening again starts a separate consumer and keeps the retained raw page intact.
+        refresh(true, cached);
+        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(3).getMethod());
+        assertEquals(2, cached.sources.get(0).galleryInfoList.size());
+    }
+
     @Test public void scannerUsesPublicationTimeAndScansAcrossSameMinuteAndLowGidTail() {
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
         manager.recordEhPageViewed(page(100, null).galleryInfoList);
@@ -386,8 +462,8 @@ public class SubscriptionCheckReuseTest {
         requests.get(index).getCallback().onSuccess(page);
     }
 
-    private void refresh(boolean includeEh, SubscriptionUpdateManager.RecentCheckResult cached) {
-        new BookmarkSubscriptionCoordinator(client, new BookmarkSubscriptionCoordinator.Listener() {
+    private BookmarkSubscriptionCoordinator refresh(boolean includeEh, SubscriptionUpdateManager.RecentCheckResult cached) {
+        var coordinator = new BookmarkSubscriptionCoordinator(client, new BookmarkSubscriptionCoordinator.Listener() {
             @Override public void onBookmarkSubscriptionBatch(int taskId, List<GalleryInfo> data,
                     boolean hasMore, boolean refresh, boolean noSubscriptions, boolean partialFailure) {
                 assertFalse(partialFailure);
@@ -395,7 +471,9 @@ public class SubscriptionCheckReuseTest {
             @Override public void onBookmarkSubscriptionFailure(int taskId, Exception error) {
                 throw new AssertionError(error);
             }
-        }).refresh(1, bookmarks, includeEh, cached);
+        });
+        coordinator.refresh(1, bookmarks, includeEh, cached);
+        return coordinator;
     }
 
     @Implements(EhApplication.class)
