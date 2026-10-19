@@ -107,12 +107,8 @@ public class AdvanceSearchTable extends LinearLayout {
 //        mSh = (CheckBox) row3.getChildAt(1);
         mSdt2 = (CheckBox) findViewById(R.id.search_downvoted_tags);
         mSh = (CheckBox) findViewById(R.id.search_expunged_galleries);
-
-//        ViewGroup row4 = (ViewGroup) getChildAt(4);
-//        mSr = (CheckBox) row4.getChildAt(0);
-//        mMinRating = (Spinner) row4.getChildAt(1);
-        mSr = (CheckBox) findViewById(R.id.minimum_rating);
-        mMinRating = (Spinner)findViewById(R.id.search_min_rating);
+        mSr = findViewById(R.id.minimum_rating);
+        mMinRating = findViewById(R.id.search_min_rating);
 
 //        ViewGroup row5 = (ViewGroup) getChildAt(5);
 //        mSp = (CheckBox) row5.getChildAt(0);
@@ -158,11 +154,16 @@ public class AdvanceSearchTable extends LinearLayout {
 
     public int getMinRating() {
         int position = mMinRating.getSelectedItemPosition();
-        if (mSr.isChecked() && position >= 0) {
-            return position + 2;
-        } else {
-            return -1;
-        }
+        return mSr.isChecked() && position >= 0 ? position + 2 : -1;
+    }
+
+    public void setMinRating(int minRating) {
+        mSr.setChecked(minRating >= 2 && minRating <= 5);
+        if (mSr.isChecked()) mMinRating.setSelection(minRating - 2);
+    }
+
+    public void setPreciseRatingEnabled(boolean enabled) {
+        ((View) mSr.getParent()).setVisibility(enabled ? View.GONE : View.VISIBLE);
     }
 
     public int getPageFrom() {
@@ -191,15 +192,6 @@ public class AdvanceSearchTable extends LinearLayout {
         mSfl.setChecked(NumberUtils.int2boolean(advanceSearch & SFL));
         mSfu.setChecked(NumberUtils.int2boolean(advanceSearch & SFU));
         mSft.setChecked(NumberUtils.int2boolean(advanceSearch & SFT));
-    }
-
-    public void setMinRating(int minRating) {
-        if (minRating >= 2 && minRating <= 5) {
-            mSr.setChecked(true);
-            mMinRating.setSelection(minRating - 2);
-        } else {
-            mSr.setChecked(false);
-        }
     }
 
     public void setPageFrom(int pageFrom) {
@@ -243,7 +235,7 @@ public class AdvanceSearchTable extends LinearLayout {
             final Bundle savedState = (Bundle) state;
             super.onRestoreInstanceState(savedState.getParcelable(STATE_KEY_SUPER));
             setAdvanceSearch(savedState.getInt(STATE_KEY_ADVANCE_SEARCH));
-            setMinRating(savedState.getInt(STATE_KEY_MIN_RATING));
+            setMinRating(savedState.getInt(STATE_KEY_MIN_RATING, -1));
             setPageFrom(savedState.getInt(STATE_KEY_PAGE_FROM));
             setPageTo(savedState.getInt(STATE_KEY_PAGE_TO));
         }

@@ -30,7 +30,9 @@ public final class SeenGalleryHistory {
         first.setPageIndex(0);
         URI url = URI.create(first.build());
         return SubscriptionProgressStore.key("search", url.getRawPath()
-                + (url.getRawQuery() == null ? "" : "?" + url.getRawQuery()));
+                + (url.getRawQuery() == null ? "" : "?" + url.getRawQuery())
+                + (first.getEffectiveMinRatingHundredths() > 0
+                ? "#rating=" + first.getEffectiveMinRatingHundredths() : ""));
     }
 
     public static Search open(ListUrlBuilder builder) {

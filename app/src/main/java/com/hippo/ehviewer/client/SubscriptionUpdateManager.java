@@ -50,6 +50,7 @@ public final class SubscriptionUpdateManager {
 
     private static final int MAX_CONCURRENT_REQUESTS = 8;
     private static final String KEY_SOURCE_PROGRESS = "subscription_source_progress_v1";
+    private static final String KEY_UNREAD_RATING_POLICY = "subscription_unread_rating_policy";
 
     private static final String KEY_LAST_CHECK_TIME =
             "subscription_updates_last_check_time";
@@ -126,6 +127,7 @@ public final class SubscriptionUpdateManager {
      * represent either the EH subscription or a planned group of bookmark searches.
      */
     public static final class RecentCheckSource {
+        public final int ratingMinimumHundredths;
         @NonNull public final List<GalleryInfo> galleryInfoList;
         public final int initialResultCount;
         public final int pageIndex;
@@ -140,6 +142,7 @@ public final class SubscriptionUpdateManager {
         @Nullable private final String mBookmarkSourceKey;
 
         RecentCheckSource(@NonNull Source source) {
+            ratingMinimumHundredths = source.ratingMinimumHundredths;
             mBuilder.set(source.builder);
             mBookmarkSourceKey = source.plan != null ? source.plan.getCacheKey() : null;
             galleryInfoList = Collections.unmodifiableList(
@@ -192,6 +195,7 @@ public final class SubscriptionUpdateManager {
     }
 
     private static final class Source {
+        int ratingMinimumHundredths;
         final Group group;
         @Nullable final BookmarkSubscriptionPlanner.Source plan;
         final ListUrlBuilder builder = new ListUrlBuilder();
@@ -252,6 +256,7 @@ public final class SubscriptionUpdateManager {
     @Nullable private Listener mListener;
     @Nullable private RecentCheckResult mRecentCheckResult;
     private long mRecentCheckCompletedRealtime;
+    private String mRatingPolicy;
     private int mGeneration;
     private int mActiveRequests;
     private int mCompletedSources;
@@ -279,6 +284,21 @@ public final class SubscriptionUpdateManager {
         mBookmarkUnreadGids = parseGids(
                 Settings.getString(KEY_UNREAD_BOOKMARK_GIDS, ""));
         mProgress = new SubscriptionProgressStore(Settings.getString(KEY_SOURCE_PROGRESS, ""));
+        mRatingPolicy = Settings.getString(KEY_UNREAD_RATING_POLICY, "true:0");
+        syncRatingPolicy();
+    }
+
+    private void syncRatingPolicy() {
+        String policy = Settings.getEnablePreciseRatingFilter() + ":" + Settings.getPersistentMinRatingHundredths();
+        if (policy.equals(mRatingPolicy)) return;
+        mRatingPolicy = policy;
+        clearEhUnread();
+        clearBookmarkUnread();
+        Settings.putString(KEY_UNREAD_RATING_POLICY, policy);
+        cancelCheck();
+        mRecentCheckResult = null;
+        mRecentCheckCompletedRealtime = 0L;
+        notifyStateChanged();
     }
 
     public void setListener(@Nullable Listener listener) {
@@ -286,6 +306,7 @@ public final class SubscriptionUpdateManager {
     }
 
     public boolean isChecking() {
+        syncRatingPolicy();
         return mChecking;
     }
 
@@ -303,6 +324,7 @@ public final class SubscriptionUpdateManager {
      */
     @Nullable
     public RecentCheckResult getRecentCheckResult(int mode) {
+        syncRatingPolicy();
         RecentCheckResult result = mRecentCheckResult;
         if (result == null) {
             return null;
@@ -336,6 +358,7 @@ public final class SubscriptionUpdateManager {
     /** Copies the same GIDs counted by the sidebar before opening clears its badge. */
     @NonNull
     public Set<Long> getUnreadGalleryGids(int mode) {
+        syncRatingPolicy();
         Set<Long> gids = new HashSet<>();
         switch (mode) {
             case ListUrlBuilder.MODE_SUBSCRIPTION:
@@ -357,6 +380,7 @@ public final class SubscriptionUpdateManager {
 
     /** Returns false when another check is active or no source is enabled. */
     public boolean checkForUpdates(boolean manual) {
+        syncRatingPolicy();
         if (mChecking) {
             return false;
         }
@@ -561,12 +585,12 @@ public final class SubscriptionUpdateManager {
             String url;
             if (source.pageIndex == 0) {
                 source.builder.setPageIndex(0);
-                url = source.builder.build();
+                url = source.builder.buildWithoutRatingFilter();
             } else if (!TextUtils.isEmpty(source.nextHref)) {
                 url = source.nextHref;
             } else {
                 source.builder.setPageIndex(source.pageIndex);
-                url = source.builder.build();
+                url = source.builder.buildWithoutRatingFilter();
             }
 
             if (TextUtils.isEmpty(url)) {
@@ -574,10 +598,13 @@ public final class SubscriptionUpdateManager {
                 continue;
             }
 
+            source.ratingMinimumHundredths = Math.max(Settings.getPersistentMinRatingHundredths(),
+                    source.builder.getSubscriptionMinRatingHundredths());
             EhRequest request = new EhRequest()
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
-                    .setArgs(url, source.builder.getMode(), true,
-                            source.plan != null && source.plan.isMergedUploaderSearch())
+                    .setArgs(SearchRating.withoutServerFilter(url), source.builder.getMode(), true,
+                            source.plan != null && source.plan.isMergedUploaderSearch(),
+                            source.ratingMinimumHundredths, true)
                     .setCallback(new EhClient.Callback<GalleryListParser.Result>() {
                         @Override
                         public void onSuccess(GalleryListParser.Result result) {

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search">搜尋</string>
+    <string name="settings_enable_search_preset_tags">啟用搜尋預設標籤</string>
+    <string name="settings_enable_precise_rating_filter">啟用精確評分篩選</string>
+    <string name="settings_persistent_min_rating">常駐篩選評分</string>
+    <string name="settings_persistent_min_rating_description">設定常駐的篩選評分，每次搜尋都預設不顯示該評分以下的畫廊</string>
+    <string name="settings_persistent_min_rating_value">目前：%1$s（0.00 為不限制）</string>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search">Search</string>
+    <string name="settings_enable_search_preset_tags">Enable search preset tags</string>
+    <string name="settings_enable_precise_rating_filter">Enable precise rating filter</string>
+    <string name="settings_persistent_min_rating">Persistent rating filter</string>
+    <string name="settings_persistent_min_rating_description">Set the default minimum rating for every search. Galleries below it are hidden by default.</string>
+    <string name="settings_persistent_min_rating_value">Current: %1$s (0.00 disables the filter)</string>
+</resources>

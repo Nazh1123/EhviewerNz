@@ -161,6 +161,8 @@ public final class BookmarkSubscriptionPlanner {
         if (terms != null && q.mode != ListUrlBuilder.MODE_NORMAL) {
             builder.reset();
             builder.setMode(ListUrlBuilder.MODE_NORMAL);
+            builder.setMinRatingHundredths(q.minRatingHundredths);
+            if (!q.ratingOverride && q.minRatingHundredths == 0) builder.clearRatingOverride();
         }
         if (terms != null) {
             List<String> words = new ArrayList<>();
@@ -221,6 +223,7 @@ public final class BookmarkSubscriptionPlanner {
     }
     private static String queryKey(ListUrlBuilder b, boolean includeQuery) {
         String filters = b.getMode() + ":" + b.getAdvanceSearch() + ":" + b.getMinRating()
+                + ":" + b.getRequestedMinRatingHundredths()
                 + ":" + b.getPageFrom() + ":" + b.getPageTo();
         String keyword = b.getKeyword();
         return includeQuery ? filters + ":" + b.getCategory() + ":"

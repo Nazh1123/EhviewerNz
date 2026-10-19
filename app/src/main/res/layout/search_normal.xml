@@ -32,6 +32,7 @@
 
 
     <LinearLayout
+        android:id="@+id/search_preset_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -51,13 +52,61 @@
             android:layout_weight="1" />
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/search_rating_row"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:gravity="start|center_vertical"
+        android:paddingStart="2dp"
+        android:orientation="horizontal">
+
+        <androidx.appcompat.widget.AppCompatRatingBar
+            android:id="@+id/search_rating_stars"
+            style="?android:attr/ratingBarStyleIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:theme="@style/RatingBarTheme"
+            android:contentDescription="@string/search_rating_title"
+            android:isIndicator="false"
+            android:numStars="5"
+            android:stepSize="0.5" />
+
+        <Space
+            android:layout_width="16dp"
+            android:layout_height="1dp" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/search_rating_value"
+            style="?attr/radioButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:minWidth="48dp"
+            android:minHeight="0dp"
+            android:gravity="center"
+            android:padding="4dp"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="@string/search_rating_title"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            style="?attr/radioButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="0dp"
+            android:minWidth="0dp"
+            android:padding="4dp"
+            android:text="@string/search_rating_label" />
+    </LinearLayout>
+
     <!-- 2. 中间的搜索模式单选框 -->
     <com.hippo.widget.RadioGridGroup
         android:id="@+id/normal_search_mode"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingTop="@dimen/search_item_interval"
+        android:paddingTop="4dp"
         android:checkedButton="@+id/search_normal_search"
         app:columnCount="2">
 

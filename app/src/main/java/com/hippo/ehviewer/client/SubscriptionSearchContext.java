@@ -17,6 +17,8 @@ public final class SubscriptionSearchContext {
         parts.add(EhUrl.getHost());
         parts.add(Settings.getEhConfig().uconfig());
         parts.add("gallery-pages:" + Settings.getShowGalleryPages());
+        parts.add("default-rating:" + Settings.getPersistentMinRatingHundredths());
+        parts.add("precise-rating:" + Settings.getEnablePreciseRatingFilter());
         parts.add("thumbnail-info-details:" + (Settings.isThumbnailInfoBarEffective()
                 && Settings.getShowThumbnailInfoDetails()));
         for (Cookie cookie : EhApplication.getEhCookieStore(EhApplication.getInstance())

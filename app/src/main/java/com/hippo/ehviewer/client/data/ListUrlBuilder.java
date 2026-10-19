@@ -31,6 +31,8 @@ import androidx.annotation.Nullable;
 import com.hippo.ehviewer.client.EhConfig;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUtils;
+import com.hippo.ehviewer.client.SearchRating;
+import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.widget.AdvanceSearchTable;
 import com.hippo.ehviewer.widget.GalleryInfoContentHelper;
@@ -83,6 +85,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
 
     private int mAdvanceSearch = -1;
     private int mMinRating = -1;
+    private int mMinRatingHundredths;
+    private boolean mRatingOverride;
     private int mPageFrom = -1;
     private int mPageTo = -1;
 
@@ -95,6 +99,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
      * Make this ListUrlBuilder point to homepage
      */
     public void reset() {
+        mMinRatingHundredths = 0;
+        mRatingOverride = false;
         mMode = MODE_NORMAL;
         mPageIndex = 0;
         mCategory = EhUtils.NONE;
@@ -171,6 +177,63 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         mMinRating = minRating;
     }
 
+    public int getMinRatingHundredths() {
+        return mMinRatingHundredths;
+    }
+
+    public void setMinRatingHundredths(int hundredths) {
+        mMinRatingHundredths = Math.max(0, Math.min(500, hundredths));
+        mRatingOverride = true;
+    }
+
+    public boolean hasRatingOverride() {
+        return mRatingOverride;
+    }
+
+    public void clearRatingOverride() {
+        mRatingOverride = false;
+        mMinRatingHundredths = 0;
+    }
+
+    public int getRequestedMinRatingHundredths() {
+        return mRatingOverride ? mMinRatingHundredths : -1;
+    }
+
+    private int getServerMinRating() {
+        if (SearchRating.isClientOnlyMode(mMode)) return -1;
+        int legacyMinimum = mAdvanceSearch != -1
+                && (mMode == MODE_NORMAL || mMode == MODE_SUBSCRIPTION) ? mMinRating : -1;
+        return Settings.getEnablePreciseRatingFilter()
+                ? SearchRating.serverMinimum(getEffectiveMinRatingHundredths()) : legacyMinimum;
+    }
+
+    public int getSearchMinRatingHundredths() {
+        // Older bookmarks store the native site option, whose boundary is N - 0.25.
+        return mRatingOverride ? mMinRatingHundredths : getLegacyMinRatingHundredths();
+    }
+
+    private int getLegacyMinRatingHundredths() {
+        return mAdvanceSearch != -1 && mMinRating >= 2 && mMinRating <= 5
+                && (mMode == MODE_NORMAL || mMode == MODE_SUBSCRIPTION) ? mMinRating * 100 - 25 : 0;
+    }
+
+    public int getSubscriptionMinRatingHundredths() {
+        // Merged feeds omit the site filter, so preserve a bookmark's native rating condition
+        // locally even when the precise-rating control is disabled.
+        return Settings.getEnablePreciseRatingFilter()
+                ? getSearchMinRatingHundredths() : getLegacyMinRatingHundredths();
+    }
+
+    public int getEffectiveMinRatingHundredths() {
+        if (!Settings.getEnablePreciseRatingFilter()) return 0;
+        int requested = getSearchMinRatingHundredths();
+        return mRatingOverride || requested > 0 ? requested : Settings.getPersistentMinRatingHundredths();
+    }
+
+    public String buildWithoutRatingFilter() {
+        return build(false);
+    }
+
     public int getPageFrom() {
         return mPageFrom;
     }
@@ -232,6 +295,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         mFollow = lub.mFollow;
         mAdvanceSearch = lub.mAdvanceSearch;
         mMinRating = lub.mMinRating;
+        mMinRatingHundredths = lub.mMinRatingHundredths;
+        mRatingOverride = lub.mRatingOverride;
         mPageFrom = lub.mPageFrom;
         mPageTo = lub.mPageTo;
         mImagePath = lub.mImagePath;
@@ -246,6 +311,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         mKeyword = q.keyword;
         mAdvanceSearch = q.advanceSearch;
         mMinRating = q.minRating;
+        setMinRatingHundredths(q.minRatingHundredths);
+        mRatingOverride = q.ratingOverride || q.minRatingHundredths > 0;
         mPageFrom = q.pageFrom;
         mPageTo = q.pageTo;
         mImagePath = null;
@@ -255,6 +322,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
     }
 
     public void set(String q,int mode) {
+        mMinRatingHundredths = 0;
+        mRatingOverride = false;
         mMode = mode;
         mCategory = -1;
         mKeyword = q;
@@ -269,6 +338,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
     }
 
     public void set(String q) {
+        mMinRatingHundredths = 0;
+        mRatingOverride = false;
         mMode = ListUrlBuilder.MODE_TAG;
         mCategory = -1;
         mKeyword = q;
@@ -289,6 +360,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         q.keyword = mKeyword;
         q.advanceSearch = mAdvanceSearch;
         q.minRating = mMinRating;
+        q.minRatingHundredths = mMinRatingHundredths;
+        q.ratingOverride = mRatingOverride;
         q.pageFrom = mPageFrom;
         q.pageTo = mPageTo;
         return q;
@@ -314,6 +387,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         if (q.minRating != mMinRating) {
             return false;
         }
+        if (q.minRatingHundredths != mMinRatingHundredths) return false;
+        if ((q.ratingOverride || q.minRatingHundredths > 0) != mRatingOverride) return false;
         if (q.pageFrom != mPageFrom) {
             return false;
         }
@@ -555,6 +630,11 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
     }
 
     public String build() {
+        return build(true);
+    }
+
+    private String build(boolean allowRatingFilter) {
+        int serverMinimum = allowRatingFilter ? getServerMinRating() : -1;
         switch (mMode) {
             default:
             case MODE_NORMAL:
@@ -586,23 +666,24 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
                     ub.addQuery("page", mPageIndex);
                 }
                 // Advance search
-                if (mAdvanceSearch != -1) {
+                if (mAdvanceSearch != -1 || serverMinimum != -1) {
                     ub.addQuery("advsearch", "1");
-                    if((mAdvanceSearch & AdvanceSearchTable.SNAME) != 0) ub.addQuery("f_sname", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.STAGS) != 0) ub.addQuery("f_stags", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.SDESC) != 0) ub.addQuery("f_sdesc", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.STORR) != 0) ub.addQuery("f_storr", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.STO) != 0) ub.addQuery("f_sto", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.SDT1) != 0) ub.addQuery("f_sdt1", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.SDT2) != 0) ub.addQuery("f_sdt2", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.SH) != 0) ub.addQuery("f_sh", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.SFL) != 0) ub.addQuery("f_sfl", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.SFU) != 0) ub.addQuery("f_sfu", "on");
-                    if((mAdvanceSearch & AdvanceSearchTable.SFT) != 0) ub.addQuery("f_sft", "on");
+                    int advanceSearch = mAdvanceSearch == -1 ? DEFAULT_ADVANCE : mAdvanceSearch;
+                    if((advanceSearch & AdvanceSearchTable.SNAME) != 0) ub.addQuery("f_sname", "on");
+                    if((advanceSearch & AdvanceSearchTable.STAGS) != 0) ub.addQuery("f_stags", "on");
+                    if((advanceSearch & AdvanceSearchTable.SDESC) != 0) ub.addQuery("f_sdesc", "on");
+                    if((advanceSearch & AdvanceSearchTable.STORR) != 0) ub.addQuery("f_storr", "on");
+                    if((advanceSearch & AdvanceSearchTable.STO) != 0) ub.addQuery("f_sto", "on");
+                    if((advanceSearch & AdvanceSearchTable.SDT1) != 0) ub.addQuery("f_sdt1", "on");
+                    if((advanceSearch & AdvanceSearchTable.SDT2) != 0) ub.addQuery("f_sdt2", "on");
+                    if((advanceSearch & AdvanceSearchTable.SH) != 0) ub.addQuery("f_sh", "on");
+                    if((advanceSearch & AdvanceSearchTable.SFL) != 0) ub.addQuery("f_sfl", "on");
+                    if((advanceSearch & AdvanceSearchTable.SFU) != 0) ub.addQuery("f_sfu", "on");
+                    if((advanceSearch & AdvanceSearchTable.SFT) != 0) ub.addQuery("f_sft", "on");
                     // Set min star
-                    if (mMinRating != -1) {
+                    if (serverMinimum != -1) {
                         ub.addQuery("f_sr", "on");
-                        ub.addQuery("f_srdd", mMinRating);
+                        ub.addQuery("f_srdd", serverMinimum);
                     }
                     // Pages
                     if (mPageFrom != -1 || mPageTo != -1) {
@@ -624,7 +705,7 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
                 if (mPageIndex != 0) {
                     sb.append('/').append(mPageIndex);
                 }
-                return sb.toString();
+                return withRatingFilter(sb.toString(), serverMinimum);
             }
             case MODE_TAG: {
                 StringBuilder sb = new StringBuilder(EhUrl.getHost());
@@ -637,7 +718,7 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
                 if (mPageIndex != 0) {
                     sb.append('/').append(mPageIndex);
                 }
-                return sb.toString();
+                return withRatingFilter(sb.toString(), serverMinimum);
             }
             case MODE_FILTER: {
                 StringBuilder sb = new StringBuilder(EhUrl.getHost());
@@ -653,7 +734,7 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
                     // Empty
                 }
 
-                return sb.toString();
+                return withRatingFilter(sb.toString(), serverMinimum);
             }
             case MODE_WHATS_HOT:
                 return EhUrl.getPopularUrl();
@@ -684,6 +765,12 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         return 0;
     }
 
+    private String withRatingFilter(String url, int minimum) {
+        if (minimum < 0) return url;
+        return url + (url.contains("?") ? "&" : "?")
+                + "advsearch=1&f_sr=on&f_srdd=" + minimum;
+    }
+
     @Override
     public void writeToParcel(Parcel dest, int flags) {
         dest.writeInt(this.mMode);
@@ -698,6 +785,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         dest.writeByte(mUseSimilarityScan ? (byte) 1 : (byte) 0);
         dest.writeByte(mOnlySearchCovers ? (byte) 1 : (byte) 0);
         dest.writeByte(mShowExpunged ? (byte) 1 : (byte) 0);
+        dest.writeInt(mMinRatingHundredths);
+        dest.writeByte(mRatingOverride ? (byte) 1 : (byte) 0);
     }
 
     public ListUrlBuilder() {
@@ -717,6 +806,8 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         this.mUseSimilarityScan = in.readByte() != 0;
         this.mOnlySearchCovers = in.readByte() != 0;
         this.mShowExpunged = in.readByte() != 0;
+        this.mMinRatingHundredths = in.readInt();
+        this.mRatingOverride = in.readByte() != 0;
     }
 
     public static final Creator<ListUrlBuilder> CREATOR = new Creator<>() {

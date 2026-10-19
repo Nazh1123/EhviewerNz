@@ -92,6 +92,8 @@ import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
+import com.hippo.ehviewer.client.SearchRating;
+import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
 import com.hippo.ehviewer.client.SeenGalleryHistory;
 import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
@@ -344,6 +346,8 @@ public class GalleryListScene extends BaseScene
     private long mPressBackTime = 0;
 
     private boolean mHasFirstRefresh = false;
+    private int mLastRequestedRatingMinimum = -1;
+    private boolean mLastRequestedPreciseRating;
 
     private int mNavCheckedId = 0;
 
@@ -674,7 +678,7 @@ public class GalleryListScene extends BaseScene
                 EhUtils.NONE == category &&
                 TextUtils.isEmpty(keyword) &&
                 urlBuilder.getAdvanceSearch() == -1 &&
-                urlBuilder.getMinRating() == -1 &&
+                urlBuilder.getMinRating() == -1 && urlBuilder.getMinRatingHundredths() == 0 &&
                 urlBuilder.getPageFrom() == -1 &&
                 urlBuilder.getPageTo() == -1) {
             return resources.getString(appName ? R.string.app_name : R.string.homepage);
@@ -682,7 +686,7 @@ public class GalleryListScene extends BaseScene
                 EhUtils.NONE == category &&
                 TextUtils.isEmpty(keyword) &&
                 urlBuilder.getAdvanceSearch() == -1 &&
-                urlBuilder.getMinRating() == -1 &&
+                urlBuilder.getMinRating() == -1 && urlBuilder.getMinRatingHundredths() == 0 &&
                 urlBuilder.getPageFrom() == -1 &&
                 urlBuilder.getPageTo() == -1) {
             return resources.getString(R.string.subscription);
@@ -737,6 +741,8 @@ public class GalleryListScene extends BaseScene
         mSearchLayout.setNormalSearchMode(builder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION
                 ? R.id.search_subscription_search
                 : R.id.search_normal_search);
+        mSearchLayout.setSourceMode(builder.getMode());
+        mSearchLayout.setRatingFromBuilder(builder);
 
         // Update search edit text
         if (!TextUtils.isEmpty(keyword) && null != mSearchBar) {
@@ -745,6 +751,8 @@ public class GalleryListScene extends BaseScene
             }
             mSearchBar.setText(keyword);
             mSearchBar.cursorToEnd();
+        } else if (SearchRating.isClientOnlyMode(builder.getMode()) && mSearchBar != null) {
+            mSearchBar.setText("");
         }
 
         // Update title
@@ -1436,7 +1444,15 @@ public class GalleryListScene extends BaseScene
         }
         if (mAdapter != null) mAdapter.invalidateReadingProgress();
         if (mAdapter != null && mHelper != null) mAdapter.onSourceDataSetChanged();
-        if (isBookmarkSubscriptionMode() && mBookmarkSubscriptionCoordinator != null
+        boolean ratingPolicyChanged = mLastRequestedRatingMinimum >= 0 && mUrlBuilder != null
+                && (mLastRequestedRatingMinimum != mUrlBuilder.getEffectiveMinRatingHundredths()
+                || mLastRequestedPreciseRating != Settings.getEnablePreciseRatingFilter());
+        if (ratingPolicyChanged && mHelper != null) {
+            // A lower default needs galleries excluded by the earlier request; cached list stars
+            // also cannot supply exact decimals when precise filtering has just been enabled.
+            mHasFirstRefresh = true;
+            mHelper.refresh();
+        } else if (isBookmarkSubscriptionMode() && mBookmarkSubscriptionCoordinator != null
                 && !mBookmarkSubscriptionCoordinator.isLoading()
                 && !mBookmarkSubscriptionCoordinator.matchesSubscriptions(
                 EhDB.getSubscribedQuickSearch(), isGlobalSubscriptionMode()) && mHelper != null) {
@@ -2054,6 +2070,8 @@ public class GalleryListScene extends BaseScene
         if (mPopularViewMode == PopularGalleryHistory.UPDATES && mPopularRepeatedExpanded) {
             galleries.addAll(mPopularHistory.repeatedGalleries());
         }
+        galleries.removeIf(gallery -> !SearchRating.matches(
+                gallery.rating, mUrlBuilder.getEffectiveMinRatingHundredths()));
         return galleries;
     }
 
@@ -3037,6 +3055,7 @@ public class GalleryListScene extends BaseScene
             boolean noPopularUpdates = false;
             if (isPopularMode() && mPopularHistory != null && result.customErrorString == null) {
                 mPopularRepeatedExpanded = false;
+                mPopularHistory.updateRatings(result.ratingMetadata);
                 mPopularHistory.record(result.galleryInfoList);
                 mPopularHistory.persist();
                 mPopularResponseReady = true;
@@ -3191,6 +3210,9 @@ public class GalleryListScene extends BaseScene
             }
         }
         onGetGalleryListSuccess(result, taskId);
+        if (data.isEmpty() && hasMore) {
+            mHelper.showContent();
+        }
     }
 
     @Override
@@ -3333,7 +3355,10 @@ public class GalleryListScene extends BaseScene
             mPopularNewCount = 0;
             if (hasPopularProjection()) {
                 mPopularData.addAll(getPopularDisplayGalleries());
-                mPopularNewCount = mPopularHistory.galleries(PopularGalleryHistory.UPDATES).size();
+                for (GalleryInfo gallery : mPopularHistory.galleries(PopularGalleryHistory.UPDATES)) {
+                    if (SearchRating.matches(gallery.rating,
+                            mUrlBuilder.getEffectiveMinRatingHundredths())) mPopularNewCount++;
+                }
             }
         }
 
@@ -3589,6 +3614,8 @@ public class GalleryListScene extends BaseScene
             if (null == activity || null == mClient || null == mUrlBuilder) {
                 return;
             }
+            mLastRequestedRatingMinimum = mUrlBuilder.getEffectiveMinRatingHundredths();
+            mLastRequestedPreciseRating = Settings.getEnablePreciseRatingFilter();
 
             if (isPopularMode()) {
                 mPopularRequestInFlight = true;
@@ -3601,7 +3628,10 @@ public class GalleryListScene extends BaseScene
                     request.setMethod(EhClient.METHOD_GET_GALLERY_LIST);
                     request.setCallback(new GetGalleryListListener(getContext(),
                             activity.getStageId(), getTag(), taskId));
-                    request.setArgs(url, ListUrlBuilder.MODE_WHATS_HOT);
+                    request.setArgs(url, ListUrlBuilder.MODE_WHATS_HOT, false, false,
+                            mUrlBuilder.getEffectiveMinRatingHundredths(), false,
+                            SubscriptionGallerySnapshot.copy(
+                                    mPopularHistory.galleries(PopularGalleryHistory.CURRENT)));
                     mClient.execute(request);
                 });
                 return;
@@ -3631,7 +3661,8 @@ public class GalleryListScene extends BaseScene
                 request.setMethod(EhClient.METHOD_GET_GALLERY_LIST);
                 request.setCallback(new GetGalleryListListener(getContext(),
                         activity.getStageId(), getTag(), taskId));
-                request.setArgs(url, mUrlBuilder.getMode());
+                request.setArgs(url, mUrlBuilder.getMode(), false, false,
+                        mUrlBuilder.getEffectiveMinRatingHundredths(), true);
                 mClient.execute(request);
             }
         }
@@ -3663,7 +3694,7 @@ public class GalleryListScene extends BaseScene
                             getBookmarkSubscriptionCoordinator();
                     if (coordinator != null) {
                         coordinator.refresh(taskId, subscriptions, includeEhSubscription,
-                                recentCheckResult);
+                                recentCheckResult, mUrlBuilder.getEffectiveMinRatingHundredths());
                     }
                 });
             });
@@ -3705,7 +3736,8 @@ public class GalleryListScene extends BaseScene
             request.setMethod(EhClient.METHOD_GET_GALLERY_LIST);
             request.setCallback(new GetGalleryListListener(getContext(),
                     activity.getStageId(), getTag(), taskId));
-            request.setArgs(url, mUrlBuilder.getMode());
+            request.setArgs(url, mUrlBuilder.getMode(), false, false,
+                    mUrlBuilder.getEffectiveMinRatingHundredths(), pageAction == GOTO_NEXT_PAGE);
             mClient.execute(request);
         }
 

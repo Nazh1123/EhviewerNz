@@ -195,6 +195,14 @@ public class EhDB {
             db.execSQL("ALTER TABLE \"QUICK_SEARCH\" ADD COLUMN "
                     + "\"SUBSCRIBED\" INTEGER NOT NULL DEFAULT 0");
         }
+        if (!hasColumn(db, "QUICK_SEARCH", "MIN_RATING_HUNDREDTHS")) {
+            db.execSQL("ALTER TABLE \"QUICK_SEARCH\" ADD COLUMN "
+                    + "\"MIN_RATING_HUNDREDTHS\" INTEGER NOT NULL DEFAULT 0");
+        }
+        if (!hasColumn(db, "QUICK_SEARCH", "RATING_OVERRIDE")) {
+            db.execSQL("ALTER TABLE \"QUICK_SEARCH\" ADD COLUMN "
+                    + "\"RATING_OVERRIDE\" INTEGER NOT NULL DEFAULT 0");
+        }
         if (!hasColumn(db, "DOWNLOADS", "FIRST_GID")) {
             db.execSQL("ALTER TABLE \"DOWNLOADS\" ADD COLUMN \"FIRST_GID\" INTEGER");
         }

@@ -1030,6 +1030,30 @@ public class Settings {
     */
 
     public static final String KEY_SEARCH_PRESET_TAG_1 = "search_preset_tag_1";
+    public static final String KEY_ENABLE_SEARCH_PRESET_TAGS = "enable_search_preset_tags";
+    public static final String KEY_ENABLE_PRECISE_RATING_FILTER = "enable_precise_rating_filter";
+    public static final String KEY_PERSISTENT_MIN_RATING = "persistent_min_rating_hundredths";
+
+    public static int getConfiguredPersistentMinRatingHundredths() {
+        return sSettingsPre == null ? 0 : Math.max(0, Math.min(500, getInt(KEY_PERSISTENT_MIN_RATING, 0)));
+    }
+
+    public static int getPersistentMinRatingHundredths() {
+        return sSettingsPre != null && getEnablePreciseRatingFilter()
+                ? getConfiguredPersistentMinRatingHundredths() : 0;
+    }
+
+    public static void putPersistentMinRatingHundredths(int hundredths) {
+        putInt(KEY_PERSISTENT_MIN_RATING, Math.max(0, Math.min(500, hundredths)));
+    }
+
+    public static boolean getEnableSearchPresetTags() {
+        return getBoolean(KEY_ENABLE_SEARCH_PRESET_TAGS, true);
+    }
+
+    public static boolean getEnablePreciseRatingFilter() {
+        return getBoolean(KEY_ENABLE_PRECISE_RATING_FILTER, true);
+    }
     public static final String KEY_SEARCH_PRESET_TAG_2 = "search_preset_tag_2";
 
     @NonNull

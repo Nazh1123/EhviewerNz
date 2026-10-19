@@ -92,6 +92,22 @@ public class PopularGalleryHistoryTest {
         assertEquals(Collections.singletonList(50L), ids(history.galleries(PopularGalleryHistory.CURRENT)));
     }
 
+    @Test public void exactMetadataUpdatesPreviousRatingsWithoutDroppingAnyGallery() {
+        PopularGalleryHistory history = history(0);
+        history.record(galleries(10, 20));
+        List<GalleryInfo> metadata = galleries(10, 20);
+        metadata.get(0).firstGid = 10L;
+        metadata.get(0).rating = 4.74f;
+        metadata.get(1).firstGid = 20L;
+        metadata.get(1).rating = 4.75f;
+        history.updateRatings(metadata);
+        history.record(galleries(30));
+        List<GalleryInfo> previous = history.galleries(PopularGalleryHistory.PREVIOUS);
+        assertEquals(2, previous.size());
+        assertEquals(4.74f, previous.get(0).rating, 0f);
+        assertEquals(4.75f, previous.get(1).rating, 0f);
+    }
+
     private PopularGalleryHistory history(int site) {
         return new PopularGalleryHistory(folder.getRoot(), site);
     }

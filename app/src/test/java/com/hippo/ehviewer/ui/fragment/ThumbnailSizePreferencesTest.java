@@ -98,7 +98,7 @@ public class ThumbnailSizePreferencesTest {
         @Override public void onCreatePreferences(Bundle savedState, String rootKey) {
             PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(requireContext());
             setPreferenceScreen(screen);
-            try (XmlResourceParser xml = getResources().getXml(R.xml.eh_settings)) {
+            try (XmlResourceParser xml = getResources().getXml(R.xml.search_settings)) {
                 while (xml.next() != XmlResourceParser.END_DOCUMENT) {
                     if (xml.getEventType() == XmlResourceParser.START_TAG
                             && ThumbnailSizePreference.class.getName().equals(xml.getName())) {

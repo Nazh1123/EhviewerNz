@@ -24,6 +24,12 @@
         app:fragment="com.hippo.ehviewer.ui.fragment.EhFragment" />
 
     <com.hippo.ehviewer.ui.fragment.BasePreference
+        android:icon="@drawable/v_magnify_primary_x24"
+        android:title="@string/settings_search"
+        app:allowDividerAbove="true"
+        app:fragment="com.hippo.ehviewer.ui.fragment.SearchFragment" />
+
+    <com.hippo.ehviewer.ui.fragment.BasePreference
         android:icon="@drawable/v_book_open_primary_x24"
         android:title="@string/settings_read"
         app:allowDividerAbove="true"

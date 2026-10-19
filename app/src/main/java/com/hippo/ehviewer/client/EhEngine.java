@@ -36,6 +36,7 @@ import com.hippo.ehviewer.client.data.GalleryCommentList;
 import com.hippo.ehviewer.client.data.GalleryChainMetadata;
 import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ehviewer.client.data.GalleryInfo;
+import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.data.HomeDetail;
 import com.hippo.ehviewer.client.data.TorrentInfo;
 import com.hippo.ehviewer.client.data.userTag.TagPushParam;
@@ -215,6 +216,12 @@ public class EhEngine {
 
     private static void fillGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
             List<GalleryInfo> list, String url, boolean filter, @Nullable String subscriptionScope) throws Throwable {
+        fillGalleryList(task, okHttpClient, list, url, filter, subscriptionScope, false);
+    }
+
+    private static void fillGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
+            List<GalleryInfo> list, String url, boolean filter, @Nullable String subscriptionScope,
+            boolean preciseRating) throws Throwable {
         // Filter title and uploader
         if (filter) {
             for (int i = 0, n = list.size(); i < n; i++) {
@@ -251,7 +258,7 @@ public class EhEngine {
         boolean needThumbnailInfo = Settings.isThumbnailInfoBarEffective()
                 && Settings.getShowThumbnailInfoDetails()
                 && (!allHaveTags || !allHavePages);
-        boolean needApi = (filter && sEhFilter.needTags() && !hasTags) ||
+        boolean needApi = preciseRating || (filter && sEhFilter.needTags() && !hasTags) ||
                 (Settings.getShowGalleryPages() && !hasPages) ||
                 hasRated ||
                 needThumbnailInfo;
@@ -290,6 +297,49 @@ public class EhEngine {
     public static GalleryListParser.Result getGalleryList(@Nullable EhClient.Task task,
             OkHttpClient okHttpClient, String url, int mode,
             boolean subscriptionSearch, boolean requireUploader) throws Throwable {
+        return getGalleryList(task, okHttpClient, url, mode, subscriptionSearch, requireUploader,
+                Settings.getPersistentMinRatingHundredths(), true);
+    }
+
+    public static GalleryListParser.Result getGalleryList(@Nullable EhClient.Task task,
+            OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
+            boolean requireUploader, int minRatingHundredths, boolean allowExtraPage) throws Throwable {
+        return getGalleryList(task, okHttpClient, url, mode, subscriptionSearch, requireUploader,
+                minRatingHundredths, allowExtraPage, null);
+    }
+
+    public static GalleryListParser.Result getGalleryList(@Nullable EhClient.Task task,
+            OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
+            boolean requireUploader, int minRatingHundredths, boolean allowExtraPage,
+            @Nullable List<GalleryInfo> previousPopular) throws Throwable {
+        GalleryListParser.Result result = getGalleryListPage(task, okHttpClient, url, mode,
+                subscriptionSearch, requireUploader, minRatingHundredths);
+        if (mode == ListUrlBuilder.MODE_WHATS_HOT
+                && minRatingHundredths > 0 && previousPopular != null && !previousPopular.isEmpty()) {
+            fillGalleryListByApi(task, okHttpClient, previousPopular, url);
+            result.ratingMetadata = previousPopular;
+        }
+        String next = result.nextHref;
+        // Bound this to one extra page per user request, even if that page is also empty.
+        if (allowExtraPage && result.ratingFilteredAll && result.customErrorString == null
+                && next != null && !next.isEmpty() && !next.equals(url)) {
+            GalleryListParser.Result extra = getGalleryListPage(task, okHttpClient, next, mode,
+                    subscriptionSearch, requireUploader, minRatingHundredths);
+            extra.firstHref = result.firstHref;
+            extra.prevHref = result.prevHref;
+            extra.rawHeadGid = Math.max(result.rawHeadGid, extra.rawHeadGid);
+            return extra;
+        }
+        return result;
+    }
+
+    private static GalleryListParser.Result getGalleryListPage(@Nullable EhClient.Task task,
+            OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
+            boolean requireUploader, int minRatingHundredths) throws Throwable {
+        if (subscriptionSearch || SearchRating.isClientOnlyMode(mode)) {
+            url = SearchRating.withoutServerFilter(url);
+        }
+        final String requestUrl = url;
         String subscriptionScope = subscriptionSearch ? SubscriptionSearchContext.key() : null;
         String referer = EhUrl.getReferer();
         Log.d(TAG, url);
@@ -332,7 +382,7 @@ public class EhEngine {
             }
             if (!missingUploaders.isEmpty()) {
                 SUBSCRIPTION_METADATA.fill(subscriptionScope, missingUploaders,
-                        items -> fillGalleryListByApi(task, okHttpClient, items, url));
+                        items -> fillGalleryListByApi(task, okHttpClient, items, requestUrl));
                 for (GalleryInfo gallery : missingUploaders) {
                     if (TextUtils.isEmpty(gallery.uploader)) {
                         throw new IllegalStateException("Unable to resolve subscription uploader");
@@ -340,7 +390,15 @@ public class EhEngine {
                 }
             }
         }
-        fillGalleryList(task, okHttpClient, result.galleryInfoList, url, true, subscriptionScope);
+        fillGalleryList(task, okHttpClient, result.galleryInfoList, url, true, subscriptionScope,
+                minRatingHundredths > 0);
+        // Popular history must retain the entire snapshot; its UI projection applies the threshold.
+        if (minRatingHundredths > 0 && mode != ListUrlBuilder.MODE_WHATS_HOT) {
+            boolean hadGalleries = !result.galleryInfoList.isEmpty();
+            result.galleryInfoList.removeIf(gallery -> gallery.firstGid == null || gallery.firstGid < 0
+                    || !SearchRating.matches(gallery.rating, minRatingHundredths));
+            result.ratingFilteredAll = hadGalleries && result.galleryInfoList.isEmpty();
+        }
 
         if (code == 200 && url.equals("https://exhentai.org/") && body.isEmpty()) {
             result.customErrorString = GetText.getString(R.string.error_igneous_wrong);
@@ -1307,7 +1365,22 @@ public class EhEngine {
         if (shouldDelete){
             imageFile.delete();
         }
-        fillGalleryList(task, okHttpClient, result.galleryInfoList, url, true);
+        int minimum = Settings.getPersistentMinRatingHundredths();
+        fillGalleryList(task, okHttpClient, result.galleryInfoList, url, true, null, minimum > 0);
+        if (minimum > 0) {
+            boolean hadGalleries = !result.galleryInfoList.isEmpty();
+            result.galleryInfoList.removeIf(gallery -> gallery.firstGid == null || gallery.firstGid < 0
+                    || !SearchRating.matches(gallery.rating, minimum));
+            result.ratingFilteredAll = hadGalleries && result.galleryInfoList.isEmpty();
+            if (result.ratingFilteredAll && result.nextHref != null && !result.nextHref.isEmpty()) {
+                GalleryListParser.Result extra = getGalleryList(task, okHttpClient, result.nextHref,
+                        MODE_NORMAL, false, false, minimum, false);
+                extra.firstHref = result.firstHref;
+                extra.prevHref = result.prevHref;
+                extra.rawHeadGid = Math.max(result.rawHeadGid, extra.rawHeadGid);
+                return extra;
+            }
+        }
 
         return result;
     }

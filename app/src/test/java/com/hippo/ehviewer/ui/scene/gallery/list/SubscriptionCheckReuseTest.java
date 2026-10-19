@@ -166,6 +166,115 @@ public class SubscriptionCheckReuseTest {
         assertEquals(2, requests.size());
     }
 
+    @Test public void bookmarkChecksUseOnlyExactClientRatingAndKeepItWhenReusingResults() {
+        enableBookmark();
+        bookmarks.get(0).minRatingHundredths = 480;
+        start(true);
+        for (EhRequest request : requests) assertFalse(((String) request.getArgs()[0]).contains("f_sr"));
+        assertEquals(480, requests.get(1).getArgs()[4]);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        int before = requests.size();
+        refresh(false, manager.getRecentCheckResult(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+        assertEquals(before, requests.size());
+    }
+
+    @Test public void filteredGlobalFeedLoadsExactMetadataAndStripsRatingFromPagination() {
+        enableBookmark();
+        bookmarks.get(0).minRatingHundredths = 480;
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        List<Boolean> more = new ArrayList<>();
+        BookmarkSubscriptionCoordinator coordinator = new BookmarkSubscriptionCoordinator(client,
+                new BookmarkSubscriptionCoordinator.Listener() {
+                    @Override public void onBookmarkSubscriptionBatch(int taskId, List<GalleryInfo> data,
+                            boolean hasMore, boolean refresh, boolean noSubscriptions, boolean partialFailure) {
+                        assertTrue(data.isEmpty());
+                        more.add(hasMore);
+                    }
+                    @Override public void onBookmarkSubscriptionFailure(int taskId, Exception error) {
+                        throw new AssertionError(error);
+                    }
+                });
+        coordinator.refresh(1, bookmarks, true,
+                manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION), 490);
+        // Unfiltered cached pages can carry half-star ratings, so the filtered feed requests metadata.
+        assertEquals(4, requests.size());
+        assertEquals(490, requests.get(2).getArgs()[4]);
+        assertEquals(490, requests.get(3).getArgs()[4]);
+        for (int i = 2; i < 4; i++) {
+            assertFalse(((String) requests.get(i).getArgs()[0]).contains("f_sr"));
+            GalleryListParser.Result empty = page(180 - i, "https://e-hentai.org/?next=100&f_sr=on&f_srdd=5");
+            empty.galleryInfoList.clear();
+            empty.ratingFilteredAll = true;
+            succeed(i, empty);
+        }
+        assertEquals(Collections.singletonList(true), more);
+        assertEquals(4, requests.size()); // do not scan indefinitely when both extra pages were empty
+        coordinator.loadMore(2);
+        assertEquals(5, requests.size());
+        assertFalse(((String) requests.get(4).getArgs()[0]).contains("f_sr"));
+        coordinator.cancel();
+    }
+
+    @Test public void legacyBookmarkSiteOptionBecomesEquivalentClientBoundary() {
+        enableBookmark();
+        bookmarks.get(0).advanceSearch = ListUrlBuilder.DEFAULT_ADVANCE;
+        bookmarks.get(0).minRating = 4;
+        start(true);
+        assertFalse(((String) requests.get(1).getArgs()[0]).contains("f_sr"));
+        assertEquals(375, requests.get(1).getArgs()[4]);
+    }
+
+    @Test public void nativeBookmarkRatingStillAppliesWhenPreciseControlIsDisabled() {
+        Settings.putPersistentMinRatingHundredths(450);
+        Settings.putBoolean(Settings.KEY_ENABLE_PRECISE_RATING_FILTER, false);
+        enableBookmark();
+        bookmarks.get(0).advanceSearch = ListUrlBuilder.DEFAULT_ADVANCE;
+        bookmarks.get(0).minRating = 4;
+        bookmarks.get(0).minRatingHundredths = 480;
+        start(true);
+        assertFalse(((String) requests.get(1).getArgs()[0]).contains("f_sr"));
+        assertEquals(0, requests.get(0).getArgs()[4]);
+        assertEquals(375, requests.get(1).getArgs()[4]);
+    }
+
+    @Test public void defaultRatingAppliesToChecksAndLowerBrowseOverrideRefetches() {
+        Settings.putPersistentMinRatingHundredths(400);
+        enableBookmark();
+        start(true);
+        assertEquals(2, requests.size());
+        for (EhRequest request : requests) {
+            assertFalse(((String) request.getArgs()[0]).contains("f_sr"));
+            assertEquals(400, request.getArgs()[4]);
+        }
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        var cached = manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        refresh(true, cached);
+        assertEquals(2, requests.size());
+        BookmarkSubscriptionCoordinator coordinator = new BookmarkSubscriptionCoordinator(client,
+                new BookmarkSubscriptionCoordinator.Listener() {
+                    @Override public void onBookmarkSubscriptionBatch(int taskId, List<GalleryInfo> data,
+                            boolean hasMore, boolean refresh, boolean noSubscriptions, boolean partialFailure) { }
+                    @Override public void onBookmarkSubscriptionFailure(int taskId, Exception error) {
+                        throw new AssertionError(error);
+                    }
+                });
+        coordinator.refresh(2, bookmarks, true, cached, 0);
+        assertEquals(4, requests.size());
+        for (int i = 2; i < 4; i++) assertEquals(0, requests.get(i).getArgs()[4]);
+        assertEquals(400, Settings.getPersistentMinRatingHundredths());
+        coordinator.cancel();
+        assertNotNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        Settings.putPersistentMinRatingHundredths(350);
+        assertNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION).isEmpty());
+        start(true);
+        for (int i = 4; i < 6; i++) assertEquals(350, requests.get(i).getArgs()[4]);
+    }
+
     private void start(boolean manual) {
         assertTrue(manager.checkForUpdates(manual));
         shadowOf(Looper.getMainLooper()).idle();

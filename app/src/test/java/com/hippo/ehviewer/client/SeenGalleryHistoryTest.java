@@ -43,6 +43,18 @@ public class SeenGalleryHistoryTest {
         assertEquals("", Settings.getString("seen_gallery_searches_v1", ""));
     }
 
+    @Test public void differentExactDefaultsDoNotShareViewedHistoryWithinTheSameSiteOption() {
+        Settings.putPersistentMinRatingHundredths(400);
+        SeenGalleryHistory.record(SeenGalleryHistory.open(builder), 100);
+        Settings.putPersistentMinRatingHundredths(450);
+        assertTrue(builder.build().contains("f_srdd=4"));
+        assertEquals(0, SeenGalleryHistory.open(builder).baseline());
+        Settings.putPersistentMinRatingHundredths(400);
+        assertEquals(100, SeenGalleryHistory.open(builder).baseline());
+        builder.setMinRatingHundredths(0);
+        assertEquals(0, SeenGalleryHistory.open(builder).baseline());
+    }
+
     @Test public void sameQueryIgnoresPaginationButIncludesSearchFiltersAndSite() {
         SeenGalleryHistory.Search search = SeenGalleryHistory.open(builder);
         SeenGalleryHistory.record(search, 100);

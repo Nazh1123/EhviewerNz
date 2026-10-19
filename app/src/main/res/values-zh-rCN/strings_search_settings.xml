@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search">搜索</string>
+    <string name="settings_enable_search_preset_tags">启用搜索预设标签</string>
+    <string name="settings_enable_precise_rating_filter">启用精确评分筛选</string>
+    <string name="settings_persistent_min_rating">常驻筛选评分</string>
+    <string name="settings_persistent_min_rating_description">设定常驻的筛选评分，每次搜索都默认不显示该评分以下的画廊</string>
+    <string name="settings_persistent_min_rating_value">当前：%1$s（0.00 为不限制）</string>
+</resources>

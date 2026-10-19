@@ -153,6 +153,67 @@ public class PopularGalleryRenderingTest {
         assertRendered(3);
     }
 
+    @Test public void exactRatingFiltersProjectionWithoutRemovingSnapshotsOrBreakingDividers() {
+        refresh(2, 3, 4);
+        PopularGalleryHistory history = ReflectionHelpers.getField(scene, "mPopularHistory");
+        for (GalleryInfo gallery : history.galleries(PopularGalleryHistory.CURRENT)) {
+            gallery.rating = gallery.gid == 3 ? 4.74f : 4.75f;
+        }
+        builder.setMinRatingHundredths(475);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertRendered(2);
+        assertEquals(3, history.galleries(PopularGalleryHistory.CURRENT).size());
+        toggle(PopularGalleryHistory.UPDATES);
+        assertRendered(1);
+        ReflectionHelpers.setField(scene, "mPopularRepeatedExpanded", true);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertEquals(3, adapter.getItemCount()); // one new, one divider, one repeated gallery
+        assertEquals(1, (int) ReflectionHelpers.<Integer>getField(adapter, "mPopularNewCount"));
+        builder.setMinRatingHundredths(0);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertEquals(3, history.galleries(PopularGalleryHistory.CURRENT).size());
+        assertEquals(4, adapter.getItemCount());
+    }
+
+    @Test public void defaultRatingFiltersPopularSnapshotAndTemporaryZeroRestoresAllItems() {
+        refresh(2, 3, 4);
+        PopularGalleryHistory history = ReflectionHelpers.getField(scene, "mPopularHistory");
+        for (GalleryInfo gallery : history.galleries(PopularGalleryHistory.CURRENT)) {
+            gallery.rating = gallery.gid == 3 ? 3.99f : 4f;
+        }
+        Settings.putPersistentMinRatingHundredths(400);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertRendered(2);
+        builder.setMinRatingHundredths(0);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertRendered(3);
+        assertEquals(400, Settings.getPersistentMinRatingHundredths());
+        assertEquals(3, history.galleries(PopularGalleryHistory.CURRENT).size());
+    }
+
+    @Test public void returningFromSettingsRefetchesChangedDefaultButKeepsBrowseOverride() {
+        List<Integer> requestedRatings = new ArrayList<>();
+        GalleryListScene.GalleryListHelper requestRecorder = scene.new GalleryListHelper() {
+            @Override protected void getPageData(int taskId, int type, int page) {
+                requestedRatings.add(builder.getEffectiveMinRatingHundredths());
+            }
+        };
+        ReflectionHelpers.setField(scene, "mHelper", requestRecorder);
+        content.setHelper(requestRecorder);
+        ReflectionHelpers.setField(scene, "mLastRequestedRatingMinimum", 0);
+        ReflectionHelpers.setField(scene, "mLastRequestedPreciseRating", true);
+        Settings.putPersistentMinRatingHundredths(400);
+        scene.onResume();
+        assertEquals(java.util.List.of(400), requestedRatings);
+        builder.setMinRatingHundredths(0);
+        Settings.putPersistentMinRatingHundredths(350);
+        scene.onResume();
+        assertEquals(java.util.List.of(400), requestedRatings);
+        Settings.putBoolean(Settings.KEY_ENABLE_PRECISE_RATING_FILTER, false);
+        scene.onResume();
+        assertEquals(java.util.List.of(400, 0), requestedRatings);
+    }
+
     @Test public void countButtonsFollowVisibleUpdatesAndKeepTheCurrentSnapshotTotal() {
         View actions = bindPopularActions();
         refresh(2, 3, 4);

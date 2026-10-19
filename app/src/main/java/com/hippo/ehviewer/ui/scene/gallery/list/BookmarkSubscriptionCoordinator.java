@@ -29,6 +29,7 @@ import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.SubscriptionSearchContext;
 import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
 import com.hippo.ehviewer.client.SubscriptionRetry;
+import com.hippo.ehviewer.client.SearchRating;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
@@ -79,6 +80,7 @@ final class BookmarkSubscriptionCoordinator {
         boolean exhausted;
         boolean queued;
         boolean loading;
+        boolean ratingBatchEmpty;
         @Nullable EhRequest request;
         int retries;
         @Nullable String retryUrl;
@@ -143,6 +145,7 @@ final class BookmarkSubscriptionCoordinator {
     private int mActiveRequests;
     private int mInitialRequestsRemaining;
     private int mBatchSize = DEFAULT_BATCH_SIZE;
+    private int mMinRatingHundredths;
     private long mLatestEhGid;
     private long mLatestBookmarkGid;
     private boolean mRefresh;
@@ -178,6 +181,8 @@ final class BookmarkSubscriptionCoordinator {
                     .append(quickSearch.keyword).append('|')
                     .append(quickSearch.advanceSearch).append('|')
                     .append(quickSearch.minRating).append('|')
+                    .append(quickSearch.minRatingHundredths).append('|')
+                    .append(quickSearch.ratingOverride).append('|')
                     .append(quickSearch.pageFrom).append('|')
                     .append(quickSearch.pageTo).append(';');
         }
@@ -222,6 +227,8 @@ final class BookmarkSubscriptionCoordinator {
         int excludedCategories = 0;
         int advanceSearch = 0;
         int minRating = -1;
+        int minRatingHundredths = 0;
+        boolean hasRatingOverride = false;
         int pageFrom = -1;
         int pageTo = -1;
         boolean hasAdvanceSearch = false;
@@ -247,6 +254,8 @@ final class BookmarkSubscriptionCoordinator {
                 hasAdvanceSearch = true;
                 advanceSearch |= quickSearch.advanceSearch;
             }
+            minRatingHundredths = Math.max(minRatingHundredths, quickSearch.minRatingHundredths);
+            hasRatingOverride |= quickSearch.ratingOverride || quickSearch.minRatingHundredths > 0;
             if (quickSearch.minRating != -1) {
                 minRating = Math.max(minRating, quickSearch.minRating);
             }
@@ -260,6 +269,7 @@ final class BookmarkSubscriptionCoordinator {
         }
 
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        if (hasRatingOverride) builder.setMinRatingHundredths(minRatingHundredths);
         builder.setCategory(excludedCategories);
         builder.setKeyword(TextUtils.join(" ", uniqueTerms.values()));
         if (hasAdvanceSearch) {
@@ -302,7 +312,7 @@ final class BookmarkSubscriptionCoordinator {
         builder.set(candidate);
         int generation = mGeneration;
         resolution.request = new EhRequest().setMethod(EhClient.METHOD_VERIFY_BOOKMARK)
-                .setArgs(builder.build(), builder.getMode(), resolution.gid)
+                .setArgs(builder.buildWithoutRatingFilter(), builder.getMode(), resolution.gid)
                 .setCallback(new EhClient.Callback<Boolean>() {
                     @Override public void onSuccess(Boolean matches) {
                         if (generation != mGeneration || mResolution != resolution) return;
@@ -328,7 +338,16 @@ final class BookmarkSubscriptionCoordinator {
     void refresh(int taskId, List<QuickSearch> quickSearches,
                  boolean includeEhSubscription,
                  @Nullable SubscriptionUpdateManager.RecentCheckResult recentResult) {
+        refresh(taskId, quickSearches, includeEhSubscription, recentResult,
+                com.hippo.ehviewer.Settings.getPersistentMinRatingHundredths());
+    }
+
+    void refresh(int taskId, List<QuickSearch> quickSearches,
+                 boolean includeEhSubscription,
+                 @Nullable SubscriptionUpdateManager.RecentCheckResult recentResult,
+                 int minRatingHundredths) {
         cancel();
+        mMinRatingHundredths = minRatingHundredths;
         mTaskId = taskId;
         mRefresh = true;
         mLoading = true;
@@ -381,6 +400,7 @@ final class BookmarkSubscriptionCoordinator {
         mRefresh = false;
         mLoading = true;
         mFirstFailure = null;
+        for (Source source : mSources) source.ratingBatchEmpty = false;
         continueProducing();
     }
 
@@ -410,7 +430,7 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     @Nullable
-    private static SubscriptionUpdateManager.RecentCheckSource findCachedSource(
+    private SubscriptionUpdateManager.RecentCheckSource findCachedSource(
             @Nullable SubscriptionUpdateManager.RecentCheckResult recentResult,
             Source source) {
         if (recentResult == null || !recentResult.matchesContext()) {
@@ -418,7 +438,7 @@ final class BookmarkSubscriptionCoordinator {
         }
         for (SubscriptionUpdateManager.RecentCheckSource cachedSource
                 : recentResult.sources) {
-            if (!cachedSource.isFresh()) continue;
+            if (!cachedSource.isFresh() || cachedSource.ratingMinimumHundredths != sourceRatingMinimum(source)) continue;
             if (source.plan == null
                     ? cachedSource.isEhSubscription()
                     : cachedSource.matchesBookmarkSource(source.plan)) {
@@ -449,6 +469,10 @@ final class BookmarkSubscriptionCoordinator {
         mRequestQueue.addLast(new PendingRequest(source, initial));
     }
 
+    private int sourceRatingMinimum(Source source) {
+        return Math.max(mMinRatingHundredths, source.builder.getSubscriptionMinRatingHundredths());
+    }
+
     private void pumpRequests() {
         pumpResolution();
         while (mActiveRequests < MAX_CONCURRENT_REQUESTS && !mRequestQueue.isEmpty()) {
@@ -463,13 +487,13 @@ final class BookmarkSubscriptionCoordinator {
             } else if (pending.initial()) {
                 source.pageIndex = 0;
                 source.builder.setPageIndex(0);
-                url = source.builder.build();
+                url = source.builder.buildWithoutRatingFilter();
             } else if (!TextUtils.isEmpty(source.nextHref)) {
                 url = source.nextHref;
             } else {
                 source.pageIndex++;
                 source.builder.setPageIndex(source.pageIndex);
-                url = source.builder.build();
+                url = source.builder.buildWithoutRatingFilter();
             }
 
             if (TextUtils.isEmpty(url)) {
@@ -478,12 +502,14 @@ final class BookmarkSubscriptionCoordinator {
                 continue;
             }
 
+            url = SearchRating.withoutServerFilter(url);
             source.retryUrl = url;
             int generation = mGeneration;
             EhRequest request = new EhRequest()
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
                     .setArgs(url, source.builder.getMode(), true,
-                            source.plan != null && source.plan.isMergedUploaderSearch())
+                            source.plan != null && source.plan.isMergedUploaderSearch(),
+                            sourceRatingMinimum(source), true)
                     .setCallback(new EhClient.Callback<GalleryListParser.Result>() {
                         @Override
                         public void onSuccess(GalleryListParser.Result result) {
@@ -520,6 +546,7 @@ final class BookmarkSubscriptionCoordinator {
             mBatchSize = Math.max(mBatchSize, result.rawResultCount);
         }
         setSourceGalleryInfos(source, result.galleryInfoList);
+        source.ratingBatchEmpty = result.ratingFilteredAll;
 
         if (result.rawResultCount > 0) {
             source.boundaryPosted = result.rawTailPosted;
@@ -619,6 +646,11 @@ final class BookmarkSubscriptionCoordinator {
             Source visibleSource = findNewestVisibleSource();
             Source blockingSource = findBlockingUnknownSource(visibleSource);
             if (blockingSource != null) {
+                if (blockingSource.ratingBatchEmpty) {
+                    // The engine already tried the one extra page for this request.
+                    finishBatch();
+                    return;
+                }
                 if (!blockingSource.loading && !blockingSource.queued) {
                     enqueue(blockingSource, false);
                     pumpRequests();

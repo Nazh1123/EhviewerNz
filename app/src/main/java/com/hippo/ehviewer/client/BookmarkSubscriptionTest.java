@@ -120,7 +120,9 @@ public final class BookmarkSubscriptionTest {
             ListUrlBuilder builder = source.createBuilder();
             EhRequest request = new EhRequest()
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
-                    .setArgs(builder.build(), builder.getMode(), true, source.isMergedUploaderSearch())
+                    .setArgs(builder.buildWithoutRatingFilter(), builder.getMode(), true, source.isMergedUploaderSearch(),
+                            Math.max(Settings.getPersistentMinRatingHundredths(),
+                                    builder.getSubscriptionMinRatingHundredths()), true)
                     .setCallback(new EhClient.Callback<GalleryListParser.Result>() {
                         private boolean mCompleted;
                         private void complete(boolean failed) {

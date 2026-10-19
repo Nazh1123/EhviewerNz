@@ -79,11 +79,13 @@ public class GalleryListParser {
         public String lastHref;
         public String customErrorString;
         public boolean noWatchedTags;
+        public boolean ratingFilteredAll;
         public int rawResultCount;
         public long rawHeadGid;
         public String rawTailPosted;
         public long rawTailGid;
         public List<GalleryInfo> galleryInfoList = new ArrayList<>();
+        public List<GalleryInfo> ratingMetadata;
     }
 
     private static int parsePages(Document d, String body) throws ParseException {

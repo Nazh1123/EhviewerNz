@@ -33,6 +33,8 @@ public class QuickSearchDao extends AbstractDao<QuickSearch, Long> {
         public final static Property PageTo = new Property(8, int.class, "pageTo", false, "PAGE_TO");
         public final static Property Time = new Property(9, long.class, "time", false, "TIME");
         public final static Property Subscribed = new Property(10, boolean.class, "subscribed", false, "SUBSCRIBED");
+        public final static Property MinRatingHundredths = new Property(11, int.class, "minRatingHundredths", false, "MIN_RATING_HUNDREDTHS");
+        public final static Property RatingOverride = new Property(12, boolean.class, "ratingOverride", false, "RATING_OVERRIDE");
     };
 
 
@@ -58,7 +60,9 @@ public class QuickSearchDao extends AbstractDao<QuickSearch, Long> {
                 "\"PAGE_FROM\" INTEGER NOT NULL ," + // 7: pageFrom
                 "\"PAGE_TO\" INTEGER NOT NULL ," + // 8: pageTo
                 "\"TIME\" INTEGER NOT NULL ," + // 9: time
-                "\"SUBSCRIBED\" INTEGER NOT NULL );"); // 10: subscribed
+                "\"SUBSCRIBED\" INTEGER NOT NULL ," + // 10: subscribed
+                "\"MIN_RATING_HUNDREDTHS\" INTEGER NOT NULL DEFAULT 0 ," +
+                "\"RATING_OVERRIDE\" INTEGER NOT NULL DEFAULT 0 );");
     }
 
     /** Drops the underlying database table. */
@@ -93,6 +97,8 @@ public class QuickSearchDao extends AbstractDao<QuickSearch, Long> {
         stmt.bindLong(9, entity.getPageTo());
         stmt.bindLong(10, entity.getTime());
         stmt.bindLong(11, entity.getSubscribed() ? 1L: 0L);
+        stmt.bindLong(12, entity.getMinRatingHundredths());
+        stmt.bindLong(13, entity.getRatingOverride() ? 1L : 0L);
     }
 
     @Override
@@ -121,6 +127,8 @@ public class QuickSearchDao extends AbstractDao<QuickSearch, Long> {
         stmt.bindLong(9, entity.getPageTo());
         stmt.bindLong(10, entity.getTime());
         stmt.bindLong(11, entity.getSubscribed() ? 1L: 0L);
+        stmt.bindLong(12, entity.getMinRatingHundredths());
+        stmt.bindLong(13, entity.getRatingOverride() ? 1L : 0L);
     }
 
     @Override
@@ -143,6 +151,8 @@ public class QuickSearchDao extends AbstractDao<QuickSearch, Long> {
             cursor.getLong(offset + 9), // time
             cursor.getShort(offset + 10) != 0 // subscribed
         );
+        entity.setMinRatingHundredths(cursor.getInt(offset + 11));
+        entity.setRatingOverride(cursor.getShort(offset + 12) != 0);
         return entity;
     }
      
@@ -159,6 +169,8 @@ public class QuickSearchDao extends AbstractDao<QuickSearch, Long> {
         entity.setPageTo(cursor.getInt(offset + 8));
         entity.setTime(cursor.getLong(offset + 9));
         entity.setSubscribed(cursor.getShort(offset + 10) != 0);
+        entity.setMinRatingHundredths(cursor.getInt(offset + 11));
+        entity.setRatingOverride(cursor.getShort(offset + 12) != 0);
      }
     
     @Override

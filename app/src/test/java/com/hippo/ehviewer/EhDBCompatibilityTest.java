@@ -75,6 +75,45 @@ public class EhDBCompatibilityTest {
     }
 
     @Test
+    public void upgradesPreviousForkAndPersistsExactSearchRating() throws Exception {
+        try (SQLiteDatabase db = upstream(8)) {
+            db.setVersion(1_000_010);
+            EhDB.prepareImportDatabase(db);
+            DaoSession session = new DaoMaster(db).newSession();
+            com.hippo.ehviewer.dao.QuickSearch search = session.getQuickSearchDao().load(1L);
+            assertEquals(0, search.minRatingHundredths);
+            search.minRatingHundredths = 451;
+            session.getQuickSearchDao().update(search);
+            session.clear();
+            assertEquals(451, session.getQuickSearchDao().load(1L).minRatingHundredths);
+            search.minRatingHundredths = 0;
+            search.ratingOverride = true;
+            session.getQuickSearchDao().update(search);
+            session.clear();
+            search = session.getQuickSearchDao().load(1L);
+            assertTrue(search.ratingOverride);
+            assertEquals(0, search.minRatingHundredths);
+            assertTrue(com.hippo.ehviewer.dao.QuickSearch.quickSearchFromJson(search.toJson()).ratingOverride);
+        }
+    }
+
+    @Test
+    public void migratesPreciseRatingWithoutOverrideColumnAndKeepsItsValue() throws Exception {
+        try (SQLiteDatabase db = upstream(8)) {
+            db.execSQL("ALTER TABLE QUICK_SEARCH ADD COLUMN MIN_RATING_HUNDREDTHS INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("UPDATE QUICK_SEARCH SET MIN_RATING_HUNDREDTHS=451");
+            db.setVersion(1_000_011);
+            EhDB.prepareImportDatabase(db);
+            var search = new DaoMaster(db).newSession().getQuickSearchDao().load(1L);
+            assertEquals(451, search.minRatingHundredths);
+            var builder = new com.hippo.ehviewer.client.data.ListUrlBuilder();
+            builder.set(search);
+            assertTrue(builder.hasRatingOverride());
+            assertEquals(451, builder.getMinRatingHundredths());
+        }
+    }
+
+    @Test
     public void importsUpstream7And8() throws Exception {
         for (int version : new int[] {7, 8}) {
             try (SQLiteDatabase db = upstream(version)) {

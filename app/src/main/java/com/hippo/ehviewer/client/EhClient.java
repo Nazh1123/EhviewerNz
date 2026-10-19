@@ -23,6 +23,7 @@ import android.util.Log;
 
 import com.hippo.ehviewer.Analytics;
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.userTag.TagPushParam;
 import com.hippo.ehviewer.client.data.userTag.UserTag;
 import com.hippo.ehviewer.client.exception.CancelledException;
@@ -31,6 +32,7 @@ import com.hippo.util.IoThreadPoolExecutor;
 import com.hippo.lib.yorozuya.SimpleHandler;
 
 import java.io.File;
+import java.util.List;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -162,7 +164,10 @@ public class EhClient {
                         return EhEngine.getGalleryList(this, mOkHttpClient,
                                 (String) params[0], (int) params[1],
                                 params.length > 2 && Boolean.TRUE.equals(params[2]),
-                                params.length > 3 && Boolean.TRUE.equals(params[3]));
+                                params.length > 3 && Boolean.TRUE.equals(params[3]),
+                                params.length > 4 ? (int) params[4] : com.hippo.ehviewer.Settings.getPersistentMinRatingHundredths(),
+                                params.length > 5 && Boolean.TRUE.equals(params[5]),
+                                params.length > 6 ? (List<GalleryInfo>) params[6] : null);
                     case METHOD_VERIFY_BOOKMARK:
                         return EhEngine.verifyBookmark(this, mOkHttpClient,
                                 (String) params[0], (int) params[1], (long) params[2]);
