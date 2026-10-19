@@ -694,6 +694,12 @@ public class Settings {
         return getBoolean(KEY_FIX_THUMB_URL, DEFAULT_FIX_THUMB_URL);
     }
 
+    public static final String KEY_USE_LOCAL_TIMEZONE = "use_local_timezone";
+
+    public static boolean getUseLocalTimezone() {
+        return getBoolean(KEY_USE_LOCAL_TIMEZONE, true);
+    }
+
     private static final String KEY_SHOW_JPN_TITLE = "show_jpn_title";
     private static final boolean DEFAULT_SHOW_JPN_TITLE = false;
 

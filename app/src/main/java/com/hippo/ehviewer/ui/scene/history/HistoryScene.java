@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.ui.scene.history;
 
+import com.hippo.ehviewer.util.GalleryTimeFormatter;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.res.Resources;
@@ -163,6 +164,12 @@ public class HistoryScene extends ToolbarScene
         super.onViewCreated(view, savedInstanceState);
         setTitle(R.string.history);
         setNavigationIcon(R.drawable.v_arrow_left_dark_x24);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (mAdapter != null) mAdapter.notifyDataSetChanged();
     }
 
     @Override
@@ -383,7 +390,7 @@ public class HistoryScene extends ToolbarScene
                 category.setText(newCategoryText);
                 category.setBackgroundColor(EhUtils.getCategoryColor(gi.category));
             }
-            holder.posted.setText(gi.posted);
+            holder.posted.setText(GalleryTimeFormatter.format(gi.posted));
             holder.simpleLanguage.setText(gi.simpleLanguage);
 
             // Update transition name

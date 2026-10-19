@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_eh_use_local_timezone">Utiliser le fuseau horaire de l’appareil</string>
+    <string name="settings_eh_use_local_timezone_summary">Affiche les dates de publication des galeries et les autres heures du site dans le fuseau horaire de l’appareil. Désactivez cette option pour utiliser UTC.</string>
+</resources>

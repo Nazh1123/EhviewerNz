@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
+import com.hippo.ehviewer.util.GalleryTimeFormatter;
 import android.annotation.SuppressLint;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
@@ -261,7 +262,7 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
                     category.setText(newCategoryText);
                     category.setBackgroundColor(EhUtils.getCategoryColor(gi.category));
                 }
-                holder.posted.setText(gi.posted);
+                holder.posted.setText(GalleryTimeFormatter.format(gi.posted));
                 if (gi.pages == 0 || !Settings.getShowGalleryPages()) {
                     holder.pages.setText(null);
                     holder.pages.setVisibility(View.GONE);

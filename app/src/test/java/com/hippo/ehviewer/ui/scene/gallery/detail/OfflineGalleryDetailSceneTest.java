@@ -152,6 +152,34 @@ public class OfflineGalleryDetailSceneTest {
         return detail;
     }
 
+    @Test public void uploadTimePreferenceAppliesToOnlineAndOfflineDetailsWithoutMutatingSource() {
+        java.util.TimeZone previous = java.util.TimeZone.getDefault();
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Asia/Shanghai"));
+            GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+            info.posted = "2026-01-01 16:00";
+            fail("Offline");
+            assertEquals("2026-01-02 00:00", text(R.id.posted));
+            assertEquals("2026-01-01 16:00", info.posted);
+            Settings.putBoolean(Settings.KEY_USE_LOCAL_TIMEZONE, false);
+            ReflectionHelpers.callInstanceMethod(scene, "bindOfflineDetail");
+            assertEquals("2026-01-01 16:00", text(R.id.posted));
+
+            GalleryDetail detail = online();
+            detail.posted = "2026-01-01 16:00";
+            ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+            Settings.putBoolean(Settings.KEY_USE_LOCAL_TIMEZONE, true);
+            scene.onGetGalleryDetailSuccess(detail);
+            assertEquals("2026-01-02 00:00", text(R.id.posted));
+            assertEquals("2026-01-01 16:00", detail.posted);
+            Settings.putBoolean(Settings.KEY_USE_LOCAL_TIMEZONE, false);
+            scene.onGetGalleryDetailSuccess(detail);
+            assertEquals("2026-01-01 16:00", text(R.id.posted));
+        } finally {
+            java.util.TimeZone.setDefault(previous);
+        }
+    }
+
     @Test public void failureShowsLocalContentErrorAndArtistSimilarAndLocalDeleteActions() {
         Settings.setShowGalleryComment(false);
         Settings.setShowGalleryRating(false);

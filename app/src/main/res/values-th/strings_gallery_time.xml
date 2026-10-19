@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_eh_use_local_timezone">ใช้เขตเวลาของอุปกรณ์</string>
+    <string name="settings_eh_use_local_timezone_summary">แสดงเวลาอัปโหลดแกลเลอรีและเวลาอื่นบนเว็บไซต์ตามเขตเวลาของอุปกรณ์ ปิดเพื่อใช้เวลาสากล (UTC)</string>
+</resources>

@@ -236,6 +236,11 @@ class FavoritesScene : BaseScene(), EasyRecyclerView.OnItemClickListener,
         outState.putIntArray(KEY_FAV_COUNT_ARRAY, mFavCountArray)
     }
 
+    override fun onResume() {
+        super.onResume()
+        mAdapter?.notifyDataSetChanged()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
 

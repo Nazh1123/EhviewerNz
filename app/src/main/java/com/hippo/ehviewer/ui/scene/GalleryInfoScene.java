@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.ui.scene;
 
+import com.hippo.ehviewer.util.GalleryTimeFormatter;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -234,6 +235,20 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
         }
     }
 
+    private String displayedValue(int position) {
+        String value = mValues.get(position);
+        return getString(R.string.key_posted).equals(mKeys.get(position))
+                ? GalleryTimeFormatter.format(value) : value;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (mRecyclerView != null && mRecyclerView.getAdapter() != null) {
+            mRecyclerView.getAdapter().notifyDataSetChanged();
+        }
+    }
+
     @Override
     public boolean onItemClick(EasyRecyclerView parent, View view, int position, long id) {
         Context context = getEHContext();
@@ -248,7 +263,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
                 }
             } else {
                 ClipboardManager cmb = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-                cmb.setPrimaryClip(ClipData.newPlainText(null, mValues.get(position)));
+                cmb.setPrimaryClip(ClipData.newPlainText(null, displayedValue(position)));
 
                 if ((!mOffline && position == INDEX_URL)
                         || (mOffline && mKeys.get(position).equals(getString(R.string.key_url)))) {
@@ -313,7 +328,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
         public void onBindViewHolder(InfoHolder holder, int position) {
             if (mKeys != null && mValues != null) {
                 holder.key.setText(mKeys.get(position));
-                holder.value.setText(mValues.get(position));
+                holder.value.setText(displayedValue(position));
                 holder.itemView.setEnabled(position != 0);
             }
         }

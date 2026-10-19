@@ -17,6 +17,7 @@
 package com.hippo.ehviewer.ui.scene.gallery.detail;
 
 
+import com.hippo.ehviewer.util.GalleryTimeFormatter;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Dialog;
@@ -896,6 +897,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @Override
     public void onResume() {
         super.onResume();
+        GalleryInfo postedInfo = getGalleryInfo();
+        if (mPosted != null && postedInfo != null) {
+            mPosted.setText(GalleryTimeFormatter.format(postedInfo.posted));
+        }
         if (mOffline) {
             if (mOfflineDetail != null && !isDetailRequestPending()) loadOfflineDetail(null);
             return;
@@ -1327,7 +1332,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 //        mPages.setText(resources.getQuantityString(
 //                R.plurals.page_count, gd.pages, gd.pages));
         mSize.setText(gd.size);
-        mPosted.setText(gd.posted);
+        mPosted.setText(GalleryTimeFormatter.format(gd.posted));
 
         mRatingText.setText(getAllRatingText(gd.rating, gd.ratingCount));
         mRating.setRating(gd.rating);
@@ -1456,7 +1461,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         if (local.cover != null) LocalImageLoader.load(mThumb, local.cover);
         else mThumb.load(EhCacheKeyFactory.getThumbKey(info.gid), info.thumb, false);
         mLanguage.setText(TextUtils.isEmpty(info.language) ? "—" : info.language);
-        mPosted.setText(info.posted);
+        mPosted.setText(GalleryTimeFormatter.format(info.posted));
         mPages.setText(info.pages > 0 ? (local.startPage > 0 ? local.startPage + 1 : 0) + "/" + info.pages + "P"
                 : local.previews.isEmpty() ? "—" : getString(R.string.offline_gallery_local_pages, local.previews.size()));
         info.size = local.imageBytes > 0 ? getString(R.string.offline_gallery_local_size,

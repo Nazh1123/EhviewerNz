@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_eh_use_local_timezone">기기 시간대 사용</string>
+    <string name="settings_eh_use_local_timezone_summary">갤러리 업로드 시간 등 웹사이트의 시간을 기기 시간대로 표시합니다. 끄면 협정 세계시(UTC)를 사용합니다.</string>
+</resources>

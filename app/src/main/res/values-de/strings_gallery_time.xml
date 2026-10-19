@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_eh_use_local_timezone">Zeitzone des Geräts verwenden</string>
+    <string name="settings_eh_use_local_timezone_summary">Upload-Zeiten der Galerien und andere Website-Zeitangaben in der Zeitzone des Geräts anzeigen. Deaktivieren, um UTC zu verwenden.</string>
+</resources>
