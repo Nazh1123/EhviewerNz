@@ -8,8 +8,8 @@ import java.util.Set;
 
 /** Bookmark queries are retained; other queries are evicted in least-recently-used order. */
 final class SeenGalleryStore {
-    private final Map<String, Long> bookmarks = new LinkedHashMap<>();
-    private final Map<String, Long> searches = new LinkedHashMap<>();
+    private final Map<String, GallerySeenState> bookmarks = new LinkedHashMap<>();
+    private final Map<String, GallerySeenState> searches = new LinkedHashMap<>();
     private final Set<String> subscribed = new HashSet<>();
 
     SeenGalleryStore(String serialized) {
@@ -17,13 +17,11 @@ final class SeenGalleryStore {
         for (String line : serialized.split("\n")) {
             String[] parts = line.split(":", 3);
             if (parts.length != 3 || !parts[1].matches("[0-9]+/[0-9a-f]{64}")) continue;
-            try {
-                long gid = Long.parseLong(parts[2]);
-                if (gid > 0 && (parts[0].equals("B") || parts[0].equals("U") || parts[0].equals("S"))) {
-                    (parts[0].equals("S") ? searches : bookmarks).put(parts[1], gid);
-                    if (parts[0].equals("U")) subscribed.add(parts[1]);
-                }
-            } catch (NumberFormatException ignored) { }
+            GallerySeenState state = GallerySeenState.parse(parts[2]);
+            if (state.initialized() && (parts[0].equals("B") || parts[0].equals("U") || parts[0].equals("S"))) {
+                (parts[0].equals("S") ? searches : bookmarks).put(parts[1], state);
+                if (parts[0].equals("U")) subscribed.add(parts[1]);
+            }
         }
     }
 
@@ -44,25 +42,26 @@ final class SeenGalleryStore {
         trim(limit);
     }
 
-    long get(String key) {
+    GallerySeenState get(String key) {
         if (bookmarks.containsKey(key)) return bookmarks.get(key);
-        Long gid = searches.remove(key);
-        if (gid == null) return 0;
-        searches.put(key, gid);
-        return gid;
+        GallerySeenState state = searches.remove(key);
+        if (state == null) return GallerySeenState.empty();
+        searches.put(key, state);
+        return state;
     }
 
-    void record(String key, long gid, boolean bookmark, int limit) {
-        if (gid <= 0) return;
-        long previous = Math.max(bookmarks.getOrDefault(key, 0L), searches.getOrDefault(key, 0L));
+    void record(String key, GallerySeenState state, boolean bookmark, int limit) {
+        if (!state.initialized()) return;
+        GallerySeenState previous = bookmarks.getOrDefault(key, GallerySeenState.empty())
+                .merge(searches.getOrDefault(key, GallerySeenState.empty()));
         bookmarks.remove(key);
         searches.remove(key);
         if (!bookmark) subscribed.remove(key);
-        put(bookmark ? bookmarks : searches, key, Math.max(previous, gid));
+        put(bookmark ? bookmarks : searches, key, previous.merge(state));
         trim(limit);
     }
 
-    void syncSubscribed(String site, long baseline) {
+    void syncSubscribed(String site, GallerySeenState baseline) {
         for (String key : subscribed) {
             if (key.startsWith(site + "/")) put(bookmarks, key, baseline);
         }
@@ -72,15 +71,15 @@ final class SeenGalleryStore {
         subscribed.removeIf(key -> !queries.contains(query(key)));
     }
 
-    void recordSubscribed(String key, long baseline, int limit) {
+    void recordSubscribed(String key, GallerySeenState baseline, int limit) {
         record(key, baseline, true, limit);
         if (bookmarks.containsKey(key)) subscribed.add(key);
     }
 
     private static String query(String key) { return key.substring(key.indexOf('/') + 1); }
 
-    private static void put(Map<String, Long> map, String key, long gid) {
-        long latest = Math.max(map.getOrDefault(key, 0L), gid);
+    private static void put(Map<String, GallerySeenState> map, String key, GallerySeenState state) {
+        GallerySeenState latest = map.getOrDefault(key, GallerySeenState.empty()).merge(state);
         map.remove(key);
         map.put(key, latest);
     }
@@ -92,8 +91,8 @@ final class SeenGalleryStore {
     String serialize() {
         StringBuilder result = new StringBuilder();
         bookmarks.forEach((key, gid) -> result.append(subscribed.contains(key) ? "U:" : "B:")
-                .append(key).append(':').append(gid).append('\n'));
-        searches.forEach((key, gid) -> result.append("S:").append(key).append(':').append(gid).append('\n'));
+                .append(key).append(':').append(gid.serialize()).append('\n'));
+        searches.forEach((key, gid) -> result.append("S:").append(key).append(':').append(gid.serialize()).append('\n'));
         return result.toString();
     }
 }

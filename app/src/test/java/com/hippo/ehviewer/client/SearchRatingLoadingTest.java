@@ -36,6 +36,7 @@ public class SearchRatingLoadingTest {
     private static String subscriptionScope;
     private String html;
     private boolean distinctPages;
+    private String apiPosted = "1";
     private final AtomicInteger listRequests = new AtomicInteger();
     private final AtomicInteger apiRequests = new AtomicInteger();
     private final java.util.List<String> requestedUrls = new java.util.ArrayList<>();
@@ -84,7 +85,7 @@ public class SearchRatingLoadingTest {
                         metadata.put(new JSONObject().put("gid", ids.getJSONArray(i).getLong(0))
                                 .put("title", "gallery").put("title_jpn", "")
                                 .put("category", "Manga").put("thumb", "https://example.org/thumb.jpg")
-                                .put("uploader", "tester").put("posted", "1").put("filecount", "10")
+                                .put("uploader", "tester").put("posted", apiPosted).put("filecount", "10")
                                 .put("rating", secondPageMatches && listRequests.get() > 1 ? "4.51" : "4.50")
                                 .put("tags", new JSONArray()));
                     }
@@ -173,6 +174,20 @@ public class SearchRatingLoadingTest {
         }
         assertFalse(result.galleryInfoList.isEmpty());
         assertEquals(4.51f, result.galleryInfoList.get(0).rating, 0f);
+    }
+
+    @Test public void utcApiMetadataKeepsTheUnfilteredPublicationBoundary() throws Throwable {
+        java.util.TimeZone original = java.util.TimeZone.getDefault();
+        try {
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/New_York"));
+            apiPosted = "1767225630"; // 2026-01-01 00:00:30 UTC
+            GalleryListParser.Result result = EhEngine.getGalleryList(null, client(false), FIRST,
+                    ListUrlBuilder.MODE_NORMAL, false, false, 450, false);
+            assertFalse(result.galleryInfoList.isEmpty());
+            assertEquals("2026-01-01 00:00", result.galleryInfoList.get(0).posted);
+            // The retained raw marker belongs to the original 2023 HTML, not the API override.
+            assertEquals(GallerySeenState.postedMinute("2023-01-06 16:58"), result.rawSeenState.minute());
+        } finally { java.util.TimeZone.setDefault(original); }
     }
 
     @org.robolectric.annotation.Implements(SubscriptionSearchContext.class)

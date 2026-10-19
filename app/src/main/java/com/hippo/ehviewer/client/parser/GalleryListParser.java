@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.client.parser;
 
+import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 
 import android.text.TextUtils;
@@ -81,6 +82,8 @@ public class GalleryListParser {
         public boolean noWatchedTags;
         public boolean ratingFilteredAll;
         public int rawResultCount;
+        public GallerySeenState rawSeenState =
+                GallerySeenState.empty();
         public long rawHeadGid;
         public String rawTailPosted;
         public long rawTailGid;
@@ -257,6 +260,7 @@ public class GalleryListParser {
 //                throw new ParseException("No gallery", body);
             }
             result.galleryInfoList = list;
+            result.rawSeenState = result.rawSeenState.observe(list);
             result.rawResultCount = list.size();
             if (!list.isEmpty()) {
                 result.rawHeadGid = list.get(0).gid;

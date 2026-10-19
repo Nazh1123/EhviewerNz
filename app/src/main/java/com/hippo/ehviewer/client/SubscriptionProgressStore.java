@@ -8,8 +8,7 @@ import java.util.Map;
 
 /** A completed source advances independently; failed or cancelled pages never advance it. */
 final class SubscriptionProgressStore {
-    record Progress(long cursor, boolean initialized) {}
-    private final Map<String, Long> completed = new LinkedHashMap<>();
+    private final Map<String, GallerySeenState> completed = new LinkedHashMap<>();
 
     static String key(String context, String query) {
         try {
@@ -26,21 +25,18 @@ final class SubscriptionProgressStore {
         for (String line : serialized.split("\n")) {
             String[] parts = line.split(":", 2);
             if (parts.length != 2 || !parts[0].matches("[0-9a-f]{64}")) continue;
-            try {
-                long gid = Long.parseLong(parts[1]);
-                if (gid >= 0) completed.put(parts[0], gid);
-            } catch (NumberFormatException ignored) { }
+            GallerySeenState state = GallerySeenState.parse(parts[1]);
+            if (state.initialized()) completed.put(parts[0], state);
         }
     }
 
-    Progress get(String key, long fallbackCursor, boolean fallbackInitialized) {
-        Long cursor = completed.get(key);
-        return new Progress(Math.max(fallbackCursor, cursor == null ? 0 : cursor),
-                fallbackInitialized || cursor != null);
+    GallerySeenState get(String key, GallerySeenState fallback) {
+        return fallback.merge(completed.getOrDefault(key, GallerySeenState.empty()));
     }
 
-    void complete(String key, long cursor) {
-        long latest = Math.max(completed.getOrDefault(key, 0L), cursor);
+    void complete(String key, GallerySeenState cursor) {
+        if (!cursor.initialized()) return;
+        GallerySeenState latest = completed.getOrDefault(key, GallerySeenState.empty()).merge(cursor);
         completed.remove(key);
         completed.put(key, latest);
         while (completed.size() > 2048) completed.remove(completed.keySet().iterator().next());
@@ -48,7 +44,7 @@ final class SubscriptionProgressStore {
 
     String serialize() {
         StringBuilder result = new StringBuilder();
-        completed.forEach((key, cursor) -> result.append(key).append(':').append(cursor).append('\n'));
+        completed.forEach((key, cursor) -> result.append(key).append(':').append(cursor.serialize()).append('\n'));
         return result.toString();
     }
 }

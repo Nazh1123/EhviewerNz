@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
+import com.hippo.ehviewer.client.GallerySeenState;
 import android.text.TextUtils;
 import android.os.Handler;
 import android.os.Looper;
@@ -146,8 +147,10 @@ final class BookmarkSubscriptionCoordinator {
     private int mInitialRequestsRemaining;
     private int mBatchSize = DEFAULT_BATCH_SIZE;
     private int mMinRatingHundredths;
-    private long mLatestEhGid;
-    private long mLatestBookmarkGid;
+    private GallerySeenState mLatestEhState = GallerySeenState.empty();
+    private GallerySeenState mLatestBookmarkState = GallerySeenState.empty();
+    private final Set<Long> mEhGids = new HashSet<>();
+    private final Set<Long> mBookmarkGids = new HashSet<>();
     private boolean mRefresh;
     private boolean mLoading;
     @Nullable private Exception mFirstFailure;
@@ -199,12 +202,13 @@ final class BookmarkSubscriptionCoordinator {
         return mLoading;
     }
 
-    long getLatestEhGid() {
-        return mLatestEhGid;
-    }
+    GallerySeenState getLatestEhState() { return mLatestEhState; }
+    GallerySeenState getLatestBookmarkState() { return mLatestBookmarkState; }
 
-    long getLatestBookmarkGid() {
-        return mLatestBookmarkGid;
+    boolean isNewGallery(GalleryInfo gallery, GallerySeenState eh,
+                         GallerySeenState bookmark) {
+        return (mEhGids.contains(gallery.gid) && eh.isNew(gallery))
+                || (mBookmarkGids.contains(gallery.gid) && bookmark.isNew(gallery));
     }
 
     @Nullable
@@ -425,8 +429,10 @@ final class BookmarkSubscriptionCoordinator {
         mPendingBatch.clear();
         mEmittedGids.clear();
         mMatchingQuickSearches.clear();
-        mLatestEhGid = 0L;
-        mLatestBookmarkGid = 0L;
+        mLatestEhState = GallerySeenState.empty();
+        mLatestBookmarkState = GallerySeenState.empty();
+        mEhGids.clear();
+        mBookmarkGids.clear();
     }
 
     @Nullable
@@ -459,6 +465,8 @@ final class BookmarkSubscriptionCoordinator {
         source.hasBoundary = cachedSource.hasBoundary;
         source.exhausted = cachedSource.exhausted;
         setSourceGalleryInfos(source, SubscriptionGallerySnapshot.copy(cachedSource.galleryInfoList));
+        if (source.plan == null) mLatestEhState = mLatestEhState.merge(cachedSource.observed);
+        else mLatestBookmarkState = mLatestBookmarkState.merge(cachedSource.observed);
     }
 
     private void enqueue(Source source, boolean initial) {
@@ -546,6 +554,8 @@ final class BookmarkSubscriptionCoordinator {
             mBatchSize = Math.max(mBatchSize, result.rawResultCount);
         }
         setSourceGalleryInfos(source, result.galleryInfoList);
+        if (source.plan == null) mLatestEhState = mLatestEhState.merge(result.rawSeenState);
+        else mLatestBookmarkState = mLatestBookmarkState.merge(result.rawSeenState);
         source.ratingBatchEmpty = result.ratingFilteredAll;
 
         if (result.rawResultCount > 0) {
@@ -566,13 +576,10 @@ final class BookmarkSubscriptionCoordinator {
         source.buffer.clear();
         source.bufferIndex = 0;
         source.buffer.addAll(galleryInfoList);
+        if (source.plan == null) mLatestEhState = mLatestEhState.observe(galleryInfoList);
+        else mLatestBookmarkState = mLatestBookmarkState.observe(galleryInfoList);
         for (GalleryInfo galleryInfo : galleryInfoList) {
-            if (source.plan == null) {
-                mLatestEhGid = Math.max(mLatestEhGid, galleryInfo.gid);
-            } else {
-                mLatestBookmarkGid = Math.max(
-                        mLatestBookmarkGid, galleryInfo.gid);
-            }
+            (source.plan == null ? mEhGids : mBookmarkGids).add(galleryInfo.gid);
             if (source.plan != null) {
                 LinkedHashSet<QuickSearch> matches =
                         mMatchingQuickSearches.get(galleryInfo.gid);

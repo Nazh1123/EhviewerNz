@@ -49,25 +49,17 @@ public final class SubscriptionUpdateManager {
     public static final long CHECK_REUSE_WINDOW_MS = 30L * 1000L;
 
     private static final int MAX_CONCURRENT_REQUESTS = 8;
-    private static final String KEY_SOURCE_PROGRESS = "subscription_source_progress_v1";
+    private static final String KEY_SOURCE_PROGRESS = "subscription_source_progress_v2";
     private static final String KEY_UNREAD_RATING_POLICY = "subscription_unread_rating_policy";
 
     private static final String KEY_LAST_CHECK_TIME =
             "subscription_updates_last_check_time";
     private static final String KEY_CANCEL_RETRY_NOT_BEFORE_TIME =
             "subscription_updates_cancel_retry_not_before_time";
-    private static final String KEY_LAST_SEEN_EH_GID =
-            "subscription_updates_last_seen_eh_gid";
-    private static final String KEY_LAST_SEEN_BOOKMARK_GID =
-            "subscription_updates_last_seen_bookmark_gid";
-    private static final String KEY_LAST_CHECKED_EH_GID =
-            "subscription_updates_last_checked_eh_gid";
-    private static final String KEY_LAST_CHECKED_BOOKMARK_GID =
-            "subscription_updates_last_checked_bookmark_gid";
-    private static final String KEY_EH_BASELINE_INITIALIZED =
-            "subscription_updates_eh_baseline_initialized";
-    private static final String KEY_BOOKMARK_BASELINE_INITIALIZED =
-            "subscription_updates_bookmark_baseline_initialized";
+    private static final String KEY_LAST_SEEN_EH = "subscription_seen_eh_v2";
+    private static final String KEY_LAST_SEEN_BOOKMARK = "subscription_seen_bookmark_v2";
+    private static final String KEY_LAST_CHECKED_EH = "subscription_checked_eh_v2";
+    private static final String KEY_LAST_CHECKED_BOOKMARK = "subscription_checked_bookmark_v2";
     private static final String KEY_UNREAD_EH_GIDS =
             "subscription_updates_unread_eh_gids";
     private static final String KEY_UNREAD_BOOKMARK_GIDS =
@@ -129,6 +121,7 @@ public final class SubscriptionUpdateManager {
     public static final class RecentCheckSource {
         public final int ratingMinimumHundredths;
         @NonNull public final List<GalleryInfo> galleryInfoList;
+        public final GallerySeenState observed;
         public final int initialResultCount;
         public final int pageIndex;
         @Nullable public final String nextHref;
@@ -142,6 +135,7 @@ public final class SubscriptionUpdateManager {
         @Nullable private final String mBookmarkSourceKey;
 
         RecentCheckSource(@NonNull Source source) {
+            observed = source.observed;
             ratingMinimumHundredths = source.ratingMinimumHundredths;
             mBuilder.set(source.builder);
             mBookmarkSourceKey = source.plan != null ? source.plan.getCacheKey() : null;
@@ -199,8 +193,7 @@ public final class SubscriptionUpdateManager {
         final Group group;
         @Nullable final BookmarkSubscriptionPlanner.Source plan;
         final ListUrlBuilder builder = new ListUrlBuilder();
-        long cursorGid;
-        boolean baselineInitialized;
+        GallerySeenState cursor;
         String progressKey;
         long startedRealtime;
         int retries;
@@ -212,7 +205,7 @@ public final class SubscriptionUpdateManager {
         @Nullable String nextHref;
         @Nullable String boundaryPosted;
         long boundaryGid;
-        long maxObservedGid;
+        GallerySeenState observed = GallerySeenState.empty();
         boolean hasBoundary;
         boolean exhausted;
         boolean queued;
@@ -221,21 +214,19 @@ public final class SubscriptionUpdateManager {
         boolean successful;
         @Nullable EhRequest request;
 
-        Source(long cursorGid, boolean baselineInitialized) {
+        Source(GallerySeenState cursor) {
             group = Group.EH;
             plan = null;
-            this.cursorGid = cursorGid;
-            this.baselineInitialized = baselineInitialized;
+            this.cursor = cursor;
             builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
             builder.setPageIndex(0);
         }
 
-        Source(long cursorGid, boolean baselineInitialized,
+        Source(GallerySeenState cursor,
                @NonNull BookmarkSubscriptionPlanner.Source plan) {
             group = Group.BOOKMARK;
             this.plan = plan;
-            this.cursorGid = cursorGid;
-            this.baselineInitialized = baselineInitialized;
+            this.cursor = cursor;
             builder.set(plan.createBuilder());
             builder.setPageIndex(0);
         }
@@ -264,16 +255,14 @@ public final class SubscriptionUpdateManager {
     private int mBookmarkSourceCount;
     private int mEhFailureCount;
     private int mBookmarkFailureCount;
-    private long mEhCursorGid;
-    private long mBookmarkCursorGid;
-    private long mEhMaxObservedGid;
-    private long mBookmarkMaxObservedGid;
+    private GallerySeenState mEhCursor;
+    private GallerySeenState mBookmarkCursor;
+    private GallerySeenState mEhObserved;
+    private GallerySeenState mBookmarkObserved;
     private boolean mChecking;
     private boolean mManual;
     private boolean mEhEnabled;
     private boolean mBookmarkEnabled;
-    private boolean mEhBaselineInitialized;
-    private boolean mBookmarkBaselineInitialized;
     private boolean mBookmarkPreparationFailed;
 
     public SubscriptionUpdateManager(@NonNull Context context) {
@@ -410,23 +399,15 @@ public final class SubscriptionUpdateManager {
         mBookmarkSourceCount = 0;
         mEhFailureCount = 0;
         mBookmarkFailureCount = 0;
-        mEhMaxObservedGid = 0L;
-        mBookmarkMaxObservedGid = 0L;
+        mEhObserved = GallerySeenState.empty();
+        mBookmarkObserved = GallerySeenState.empty();
         mBookmarkPreparationFailed = false;
         mQueue.clear();
         mSources.clear();
         Settings.putLong(KEY_CANCEL_RETRY_NOT_BEFORE_TIME, 0L);
 
-        mEhCursorGid = Math.max(
-                Settings.getLong(KEY_LAST_SEEN_EH_GID, 0L),
-                Settings.getLong(KEY_LAST_CHECKED_EH_GID, 0L));
-        mBookmarkCursorGid = Math.max(
-                Settings.getLong(KEY_LAST_SEEN_BOOKMARK_GID, 0L),
-                Settings.getLong(KEY_LAST_CHECKED_BOOKMARK_GID, 0L));
-        mEhBaselineInitialized = Settings.getBoolean(
-                KEY_EH_BASELINE_INITIALIZED, false);
-        mBookmarkBaselineInitialized = Settings.getBoolean(
-                KEY_BOOKMARK_BASELINE_INITIALIZED, false);
+        mEhCursor = getLastSeenEhState().merge(readState(KEY_LAST_CHECKED_EH));
+        mBookmarkCursor = getLastSeenBookmarkState().merge(readState(KEY_LAST_CHECKED_BOOKMARK));
 
         notifyStateChanged();
         final int generation = mGeneration;
@@ -491,44 +472,53 @@ public final class SubscriptionUpdateManager {
     }
 
     public void recordEhPageViewed(@Nullable List<GalleryInfo> galleries) {
-        clearEhUnread();
-        Settings.putBoolean(KEY_EH_BASELINE_INITIALIZED, true);
-        long maxGid = findMaxGid(galleries);
-        if (maxGid > 0L) {
-            putMaxLong(KEY_LAST_SEEN_EH_GID, maxGid);
-            putMaxLong(KEY_LAST_CHECKED_EH_GID, maxGid);
+        if (galleries == null) return;
+        recordGlobalPageViewed(GallerySeenState.empty().observe(galleries), null);
+    }
+
+    public void recordBookmarkPageViewed(GallerySeenState state) {
+        recordGlobalPageViewed(null, state);
+    }
+
+    public static GallerySeenState getLastSeenEhState() { return readState(KEY_LAST_SEEN_EH); }
+    public static GallerySeenState getLastSeenBookmarkState() { return readState(KEY_LAST_SEEN_BOOKMARK); }
+
+    /** First opening can follow a completed check without any previous page-view record. */
+    public static GallerySeenState getEhDisplayBaseline() {
+        GallerySeenState viewed = getLastSeenEhState();
+        return viewed.initialized() ? viewed : readState(KEY_LAST_CHECKED_EH);
+    }
+
+    public static GallerySeenState getBookmarkDisplayBaseline() {
+        GallerySeenState viewed = getLastSeenBookmarkState();
+        return viewed.initialized() ? viewed : readState(KEY_LAST_CHECKED_BOOKMARK);
+    }
+
+    /** null means this response did not observe that subscription group. */
+    public void recordGlobalPageViewed(@Nullable GallerySeenState eh, @Nullable GallerySeenState bookmark) {
+        if (eh != null && eh.initialized()) {
+            clearEhUnread();
+            mergeState(KEY_LAST_SEEN_EH, eh);
+            mergeState(KEY_LAST_CHECKED_EH, eh);
+        }
+        if (bookmark != null && bookmark.initialized()) {
+            clearBookmarkUnread();
+            mergeState(KEY_LAST_SEEN_BOOKMARK, bookmark);
+            mergeState(KEY_LAST_CHECKED_BOOKMARK, bookmark);
         }
         notifyStateChanged();
     }
 
-    public void recordBookmarkPageViewed(long maxGid) {
-        clearBookmarkUnread();
-        Settings.putBoolean(KEY_BOOKMARK_BASELINE_INITIALIZED, true);
-        if (maxGid > 0L) {
-            putMaxLong(KEY_LAST_SEEN_BOOKMARK_GID, maxGid);
-            putMaxLong(KEY_LAST_CHECKED_BOOKMARK_GID, maxGid);
-        }
-        notifyStateChanged();
+    private static String stateKey(String key) { return key + "_" + Settings.getGallerySite(); }
+
+    private static GallerySeenState readState(String key) {
+        // v1 GIDs have no publication time. First successful v2 response seeds the new state.
+        return GallerySeenState.parse(Settings.getString(stateKey(key), ""));
     }
 
-    public static long getLastSeenBookmarkGid() {
-        return Settings.getLong(KEY_LAST_SEEN_BOOKMARK_GID, 0L);
-    }
-
-    public void recordGlobalPageViewed(long ehMaxGid, long bookmarkMaxGid) {
-        clearEhUnread();
-        clearBookmarkUnread();
-        Settings.putBoolean(KEY_EH_BASELINE_INITIALIZED, true);
-        Settings.putBoolean(KEY_BOOKMARK_BASELINE_INITIALIZED, true);
-        if (ehMaxGid > 0L) {
-            putMaxLong(KEY_LAST_SEEN_EH_GID, ehMaxGid);
-            putMaxLong(KEY_LAST_CHECKED_EH_GID, ehMaxGid);
-        }
-        if (bookmarkMaxGid > 0L) {
-            putMaxLong(KEY_LAST_SEEN_BOOKMARK_GID, bookmarkMaxGid);
-            putMaxLong(KEY_LAST_CHECKED_BOOKMARK_GID, bookmarkMaxGid);
-        }
-        notifyStateChanged();
+    private static void mergeState(String key, GallerySeenState state) {
+        GallerySeenState merged = readState(key).merge(state);
+        Settings.putString(stateKey(key), merged.serialize());
     }
 
     private void prepareSources(int generation, @Nullable List<QuickSearch> quickSearches,
@@ -538,7 +528,7 @@ public final class SubscriptionUpdateManager {
         }
 
         if (mEhEnabled) {
-            addSource(new Source(mEhCursorGid, mEhBaselineInitialized));
+            addSource(new Source(mEhCursor));
             mEhSourceCount++;
         }
 
@@ -548,8 +538,7 @@ public final class SubscriptionUpdateManager {
             } else if (quickSearches != null) {
                 for (BookmarkSubscriptionPlanner.Source plan
                         : BookmarkSubscriptionPlanner.plan(quickSearches)) {
-                    addSource(new Source(mBookmarkCursorGid,
-                            mBookmarkBaselineInitialized, plan));
+                    addSource(new Source(mBookmarkCursor, plan));
                     mBookmarkSourceCount++;
                 }
             }
@@ -565,10 +554,13 @@ public final class SubscriptionUpdateManager {
     private void addSource(@NonNull Source source) {
         source.progressKey = SubscriptionProgressStore.key(mSearchContext,
                 source.plan == null ? "eh-subscription" : source.plan.getCacheKey());
-        SubscriptionProgressStore.Progress progress = mProgress.get(source.progressKey,
-                source.cursorGid, source.baselineInitialized);
-        source.cursorGid = progress.cursor();
-        source.baselineInitialized = progress.initialized();
+        GallerySeenState completed = mProgress.get(source.progressKey, GallerySeenState.empty());
+        if (completed.initialized()) {
+            // Another source's checked watermark must not evict this source's six recent IDs.
+            GallerySeenState viewed = source.group == Group.EH
+                    ? getLastSeenEhState() : getLastSeenBookmarkState();
+            source.cursor = completed.merge(viewed);
+        }
         source.queued = true;
         mSources.add(source);
         mQueue.addLast(source);
@@ -640,13 +632,14 @@ public final class SubscriptionUpdateManager {
             source.initialResultCount = result.rawResultCount;
         }
         source.galleryInfoList.addAll(result.galleryInfoList);
-        source.maxObservedGid = Math.max(source.maxObservedGid, result.rawHeadGid);
+        if (result.customErrorString != null) {
+            completeSource(source, false);
+            pumpRequests(generation);
+            return;
+        }
+        source.observed = source.observed.merge(result.rawSeenState).observe(result.galleryInfoList);
         for (GalleryInfo gallery : result.galleryInfoList) {
-            source.maxObservedGid = Math.max(source.maxObservedGid, gallery.gid);
-            if (source.baselineInitialized
-                    && gallery.gid > source.cursorGid) {
-                source.discoveredGids.add(gallery.gid);
-            }
+            if (source.cursor.isNew(gallery)) source.discoveredGids.add(gallery.gid);
         }
 
         source.nextHref = result.nextHref;
@@ -661,9 +654,12 @@ public final class SubscriptionUpdateManager {
         }
         source.exhausted = !hasMore;
         boolean reachedCursor = result.rawResultCount == 0
-                || (result.rawTailGid > 0L && result.rawTailGid <= source.cursorGid);
-        boolean shouldContinue = source.baselineInitialized
-                && hasMore && !reachedCursor;
+                || source.cursor.reachedOlderThanWindow(result.rawTailPosted);
+        long tailMinute = GallerySeenState.postedMinute(result.rawTailPosted);
+        boolean seedNeedsMore = source.observed.retainedCount() < 6
+                || (source.observed.minute() > 0 && tailMinute == source.observed.minute());
+        boolean shouldContinue = hasMore && !reachedCursor
+                && (source.cursor.initialized() || (tailMinute > 0 && seedNeedsMore));
 
         if (shouldContinue) {
             source.pageIndex++;
@@ -714,21 +710,19 @@ public final class SubscriptionUpdateManager {
             Set<Long> unread = source.group == Group.EH ? mEhUnreadGids : mBookmarkUnreadGids;
             if (unread.addAll(source.discoveredGids)) persistGids(
                     source.group == Group.EH ? KEY_UNREAD_EH_GIDS : KEY_UNREAD_BOOKMARK_GIDS, unread);
-            mProgress.complete(source.progressKey, Math.max(source.cursorGid, source.maxObservedGid));
+            mProgress.complete(source.progressKey, source.cursor.merge(source.observed));
             Settings.putString(KEY_SOURCE_PROGRESS, mProgress.serialize());
         }
         mCompletedSources++;
         if (source.group == Group.EH) {
             if (success) {
-                mEhMaxObservedGid = Math.max(mEhMaxObservedGid,
-                        source.maxObservedGid);
+                mEhObserved = mEhObserved.merge(source.observed);
             } else {
                 mEhFailureCount++;
             }
         } else {
             if (success) {
-                mBookmarkMaxObservedGid = Math.max(mBookmarkMaxObservedGid,
-                        source.maxObservedGid);
+                mBookmarkObserved = mBookmarkObserved.merge(source.observed);
             } else {
                 mBookmarkFailureCount++;
             }
@@ -756,11 +750,10 @@ public final class SubscriptionUpdateManager {
                 && mCompletedSourcesFor(Group.BOOKMARK) == mBookmarkSourceCount));
 
         if (mEhEnabled && ehSuccess) {
-            commitGroup(Group.EH, mEhCursorGid, mEhMaxObservedGid);
+            mergeState(KEY_LAST_CHECKED_EH, mEhObserved);
         }
         if (mBookmarkEnabled && bookmarkSuccess) {
-            commitGroup(Group.BOOKMARK, mBookmarkCursorGid,
-                    mBookmarkMaxObservedGid);
+            mergeState(KEY_LAST_CHECKED_BOOKMARK, mBookmarkObserved);
         }
 
         if (sameContext) {
@@ -790,44 +783,6 @@ public final class SubscriptionUpdateManager {
             }
         }
         return count;
-    }
-
-    private void commitGroup(@NonNull Group group, long cursorGid,
-                             long maxObservedGid) {
-        Set<Long> discovered = new HashSet<>();
-        for (Source source : mSources) {
-            if (source.group == group) {
-                discovered.addAll(source.discoveredGids);
-            }
-        }
-
-        boolean baselineInitialized = group == Group.EH
-                ? mEhBaselineInitialized : mBookmarkBaselineInitialized;
-        if (!baselineInitialized) {
-            if (maxObservedGid > 0L) {
-                if (group == Group.EH) {
-                    putMaxLong(KEY_LAST_CHECKED_EH_GID, maxObservedGid);
-                } else {
-                    putMaxLong(KEY_LAST_CHECKED_BOOKMARK_GID, maxObservedGid);
-                }
-            }
-            Settings.putBoolean(group == Group.EH
-                    ? KEY_EH_BASELINE_INITIALIZED
-                    : KEY_BOOKMARK_BASELINE_INITIALIZED, true);
-            return;
-        }
-
-        if (group == Group.EH) {
-            if (mEhUnreadGids.addAll(discovered)) {
-                persistGids(KEY_UNREAD_EH_GIDS, mEhUnreadGids);
-            }
-            putMaxLong(KEY_LAST_CHECKED_EH_GID, maxObservedGid);
-        } else {
-            if (mBookmarkUnreadGids.addAll(discovered)) {
-                persistGids(KEY_UNREAD_BOOKMARK_GIDS, mBookmarkUnreadGids);
-            }
-            putMaxLong(KEY_LAST_CHECKED_BOOKMARK_GID, maxObservedGid);
-        }
     }
 
     private void cacheRecentCheckResult() {
@@ -860,27 +815,11 @@ public final class SubscriptionUpdateManager {
         }
     }
 
-    private static void putMaxLong(@NonNull String key, long value) {
-        if (value > 0L) {
-            Settings.putLong(key, Math.max(Settings.getLong(key, 0L), value));
-        }
-    }
-
     private void notifyStateChanged() {
         Listener listener = mListener;
         if (listener != null) {
             listener.onSubscriptionUpdateStateChanged();
         }
-    }
-
-    private static long findMaxGid(@Nullable List<GalleryInfo> galleries) {
-        long maxGid = 0L;
-        if (galleries != null) {
-            for (GalleryInfo gallery : galleries) {
-                maxGid = Math.max(maxGid, gallery.gid);
-            }
-        }
-        return maxGid;
     }
 
     static Set<Long> parseGids(@Nullable String value) {

@@ -3,29 +3,30 @@ package com.hippo.ehviewer.client;
 import org.junit.Test;
 import java.io.IOException;
 import static org.junit.Assert.*;
+import static com.hippo.ehviewer.client.GallerySeenStateTest.*;
 
 public class SubscriptionProgressStoreTest {
     @Test public void successfulSourcesAdvanceIndependentlyAndSurviveRestart() {
         SubscriptionProgressStore store = new SubscriptionProgressStore("");
         String a = SubscriptionProgressStore.key("account", "sourceA");
         String b = SubscriptionProgressStore.key("account", "sourceB");
-        store.complete(a, 200);
+        store.complete(a, state(200));
         SubscriptionProgressStore restored = new SubscriptionProgressStore(store.serialize());
-        assertEquals(200,restored.get(a,100,true).cursor());
-        assertEquals(100,restored.get(b,100,true).cursor());
-        assertTrue(restored.get(a,0,false).initialized());
-        assertFalse(restored.get(b,0,false).initialized());
-        restored.complete(a,150);
-        assertEquals(200,restored.get(a,0,false).cursor());
-        assertEquals(300,restored.get(a,300,true).cursor());
+        assertEquals(200,marker(restored.get(a,state(100))));
+        assertEquals(100,marker(restored.get(b,state(100))));
+        assertTrue(restored.get(a,GallerySeenState.empty()).initialized());
+        assertFalse(restored.get(b,GallerySeenState.empty()).initialized());
+        restored.complete(a,state(150));
+        assertEquals(200,marker(restored.get(a,GallerySeenState.empty())));
+        assertEquals(300,marker(restored.get(a,state(300))));
     }
 
     @Test public void emptySuccessIsInitializedAndInvalidEntriesAreIgnored() {
         String key = SubscriptionProgressStore.key("a","b");
         SubscriptionProgressStore store = new SubscriptionProgressStore("broken\n" + key + ":oops\n");
-        assertFalse(store.get(key,0,false).initialized());
-        store.complete(key,0);
-        assertTrue(new SubscriptionProgressStore(store.serialize()).get(key,0,false).initialized());
+        assertFalse(store.get(key,GallerySeenState.empty()).initialized());
+        store.complete(key,GallerySeenState.empty().observe(java.util.List.of()));
+        assertTrue(new SubscriptionProgressStore(store.serialize()).get(key,GallerySeenState.empty()).initialized());
         assertNotEquals(key,SubscriptionProgressStore.key("differentAccount","b"));
     }
 

@@ -328,6 +328,7 @@ public class EhEngine {
             extra.firstHref = result.firstHref;
             extra.prevHref = result.prevHref;
             extra.rawHeadGid = Math.max(result.rawHeadGid, extra.rawHeadGid);
+            extra.rawSeenState = result.rawSeenState.merge(extra.rawSeenState);
             return extra;
         }
         return result;
@@ -1378,6 +1379,7 @@ public class EhEngine {
                 extra.firstHref = result.firstHref;
                 extra.prevHref = result.prevHref;
                 extra.rawHeadGid = Math.max(result.rawHeadGid, extra.rawHeadGid);
+            extra.rawSeenState = result.rawSeenState.merge(extra.rawSeenState);
                 return extra;
             }
         }

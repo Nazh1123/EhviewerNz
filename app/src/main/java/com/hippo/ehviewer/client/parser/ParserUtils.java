@@ -32,6 +32,13 @@ public class ParserUtils {
         return sDateFormat.format(new Date(time));
     }
 
+    /** Publication strings share the website's UTC minute format, regardless of device timezone. */
+    public static String formatPostedDate(long time) {
+        if (time <= 0) return "";
+        return java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm", Locale.US)
+                .withZone(java.time.ZoneOffset.UTC).format(java.time.Instant.ofEpochMilli(time));
+    }
+
     public static String trim(String str) {
         // Avoid null
         if (str == null) {

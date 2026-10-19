@@ -24,6 +24,7 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.EhClient;
+import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.download.DownloadManager;
@@ -370,7 +371,7 @@ public class PopularGalleryRenderingTest {
     }
 
     @Test @Config(sdk = 34, qualifiers = "600dpi")
-    public void dividerUsesTwoRoundLinesWithOneDpBetweenThemAtDeviceDensity() {
+    public void dividerUsesConfiguredRoundLinesAndGapAtDeviceDensity() {
         refresh(2, 3, 4);
         toggle(PopularGalleryHistory.UPDATES);
         adapter.setType(GalleryAdapterNew.TYPE_GRID);
@@ -381,9 +382,9 @@ public class PopularGalleryRenderingTest {
         assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
         assertEquals(recycler.getWidth() - recycler.getPaddingLeft() - recycler.getPaddingRight(),
                 divider.getWidth());
-        assertEquals(8, divider.getPaddingTop());
-        assertEquals(8, divider.getPaddingBottom());
-        assertEquals(32, divider.getHeight());
+        assertEquals(11, divider.getPaddingTop());
+        assertEquals(11, divider.getPaddingBottom());
+        assertEquals(46, divider.getHeight());
         assertTrue(divider instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
     }
 
@@ -418,7 +419,8 @@ public class PopularGalleryRenderingTest {
         assertEquals(0, revealScrollCount);
     }
 
-    @Test public void appendingAtTheBottomScrollsDownByTheNormalNextPageDistance() {
+    @Test @Config(qualifiers = "w360dp-h640dp-xxhdpi")
+    public void appendingAtTheBottomScrollsDownByTheNormalNextPageDistance() {
         long[] gids = new long[32];
         for (int i = 0; i < 30; i++) gids[i] = i + 3;
         gids[30] = 2;
@@ -426,9 +428,12 @@ public class PopularGalleryRenderingTest {
         refresh(gids);
         toggle(PopularGalleryHistory.UPDATES);
         layout();
-        recycler.scrollToPosition(29);
+        ((StaggeredGridLayoutManager) recycler.getLayoutManager()).scrollToPositionWithOffset(29, 0);
+        content.requestLayout();
         layout();
-        int oldTop = recycler.findViewHolderForAdapterPosition(29).itemView.getTop();
+        RecyclerView.ViewHolder anchor = recycler.findViewHolderForAdapterPosition(29);
+        assertNotNull("The end-of-list anchor must be laid out before testing the reveal scroll", anchor);
+        int oldTop = anchor.itemView.getTop();
         footer();
         layout();
         assertEquals(oldTop - LayoutUtils.dp2pix(recycler.getContext(), 48),
@@ -518,7 +523,7 @@ public class PopularGalleryRenderingTest {
             adapter.setType(GalleryAdapterNew.TYPE_GRID);
             layout();
             View divider = recycler.findViewHolderForAdapterPosition(2).itemView;
-            assertEquals(32, divider.getHeight());
+            assertEquals(46, divider.getHeight());
             assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
             assertEquals(3, helper.getAdapterPosition(0));
             assertEquals(1, helper.getDataPosition(0));
@@ -678,13 +683,95 @@ public class PopularGalleryRenderingTest {
         ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
         refresh(5, 4);
         assertEquals(Arrays.asList(5L, 4L), visibleIds());
-        assertEquals(5, Settings.getLong("subscription_updates_last_seen_eh_gid", 0));
-        assertEquals("", Settings.getString("seen_gallery_searches_v1", ""));
+        assertEquals(seen(5).minute(), SubscriptionUpdateManager.getLastSeenEhState().minute());
+        assertEquals("", Settings.getString("seen_gallery_searches_v2", ""));
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
         builder.setKeyword("disabled-search");
         refresh(9, 5);
         assertEquals(Arrays.asList(9L, 5L), visibleIds());
-        assertEquals("", Settings.getString("seen_gallery_searches_v1", ""));
+        assertEquals("", Settings.getString("seen_gallery_searches_v2", ""));
+    }
+
+    @Test public void latePublishedLowerGidAppearsAboveViewedDivider() throws Exception {
+        String resource = "/com/hippo/ehviewer/client/parser/GalleryListUploader.html";
+        org.jsoup.nodes.Document page;
+        try (java.io.InputStream input = getClass().getResourceAsStream(resource)) {
+            assertNotNull(input);
+            page = org.jsoup.Jsoup.parse(input, "UTF-8", "");
+        }
+        // Existing website fixture: publication order is the reverse of GID order.
+        assertEquals("2021-08-31 22:20", page.getElementById("posted_1992853").text());
+        assertEquals("2021-08-31 14:28", page.getElementById("posted_1997697").text());
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("late-publication-characterization");
+        refresh(1997697);
+        assertEquals(Arrays.asList(1997697L), visibleIds());
+
+        // Replay a later response containing that previously absent, later-published GID.
+        // 1999000 is a synthetic newer control. null denotes the section divider.
+        refresh(1992853, 1999000, 1997697);
+        assertEquals(Arrays.asList(1992853L, 1999000L, 1997697L), ids(helper.getData()));
+        assertEquals(Arrays.asList(1992853L, 1999000L, null, 1997697L), visibleIds());
+    }
+
+    @Test public void olderUnknownGalleryOutsideRetainedTimeWindowRemainsBelowDivider() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("unloaded-gallery-characterization");
+        refresh(110, 109);
+        // GID 108 was never returned to this scene, but the maximum already covers it.
+        refresh(111, 110, 109, 108);
+        assertEquals(Arrays.asList(111L, null, 110L, 109L, 108L), visibleIds());
+    }
+
+    @Test public void subscribedBookmarksKeepSharedAcknowledgementTime() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("subscription-a-characterization");
+        QuickSearch first = builder.toQuickSearch();
+        first.subscribed = true;
+        bookmarks.add(first);
+        builder.setKeyword("subscription-b-characterization");
+        QuickSearch second = builder.toQuickSearch();
+        second.subscribed = true;
+        bookmarks.add(second);
+        SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
+        ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+        builder.set(first);
+        refresh(200);
+        assertEquals(seen(200).minute(), SubscriptionUpdateManager.getLastSeenBookmarkState().minute());
+
+        // First visit to B inherits A's watermark, despite B never having been opened.
+        builder.set(second);
+        refresh(190, 180);
+        assertEquals(Arrays.asList(null, 190L, 180L), visibleIds());
+    }
+
+    @Test public void subscriptionRefreshRecomputesUpdatesAgainstPreviousPublicationState() {
+        subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 200);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(200, 190);
+        assertEquals(Arrays.asList(200L, null, 190L), visibleIds());
+
+        // A new successful refresh gets a new comparison snapshot before advancing it.
+        refresh(210, 200, 190);
+        assertEquals(Arrays.asList(210L, null, 200L, 190L), visibleIds());
+    }
+
+    @Test public void failedSubscriptionRefreshKeepsDisplayedUpdatesAndStoredPublicationState() {
+        subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 200);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(200, 190);
+        long previous = SubscriptionUpdateManager.getLastSeenEhState().minute();
+        helper.refresh();
+        assertTrue(ReflectionHelpers.<Set<Long>>getField(scene, "mSubscriptionNewGids").contains(200L));
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListFailure",
+                ClassParameter.from(Exception.class, new java.io.IOException("offline")),
+                ClassParameter.from(int.class, task));
+        assertTrue(ReflectionHelpers.<Set<Long>>getField(scene, "mSubscriptionNewGids").contains(200L));
+        assertEquals(previous, SubscriptionUpdateManager.getLastSeenEhState().minute());
     }
 
     @Test public void subscribedBookmarkAndGlobalSubscriptionShareViewedMaximum() {
@@ -696,13 +783,13 @@ public class PopularGalleryRenderingTest {
         bookmarks.add(bookmark);
         SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
         ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
-        manager.recordGlobalPageViewed(90, 100);
+        manager.recordGlobalPageViewed(seen(90), seen(100));
         refresh(110, 100, 95);
         assertEquals(Arrays.asList(110L, null, 100L, 95L), visibleIds());
-        assertEquals(110, SubscriptionUpdateManager.getLastSeenBookmarkGid());
-        manager.recordBookmarkPageViewed(120);
+        assertEquals(seen(110).minute(), SubscriptionUpdateManager.getLastSeenBookmarkState().minute());
+        manager.recordBookmarkPageViewed(seen(120));
         refresh(125, 115, 100);
-        assertEquals(Arrays.asList(125L, null, 115L, 100L), visibleIds());
+        assertEquals(Arrays.asList(125L, 115L, null, 100L), visibleIds());
     }
 
     private void footer() {
@@ -776,11 +863,20 @@ public class PopularGalleryRenderingTest {
         assertFalse(title.getText().toString().isEmpty());
     }
 
+    private static GallerySeenState seen(long... gids) {
+        return GallerySeenState.empty().observe(galleries(gids));
+    }
+
     private static List<GalleryInfo> galleries(long... gids) {
         List<GalleryInfo> result = new ArrayList<>();
         for (long gid : gids) {
             GalleryInfo gallery = new GalleryInfo();
             gallery.gid = gid;
+            gallery.posted = com.hippo.ehviewer.client.parser.ParserUtils.formatPostedDate(
+                    1767225600000L + gid * 60000L);
+            if (gid == 1992853) gallery.posted = "2021-08-31 22:20";
+            if (gid == 1997697) gallery.posted = "2021-08-31 14:28";
+            if (gid == 1999000) gallery.posted = "2021-08-31 23:00";
             gallery.token = "token" + gid;
             gallery.title = "Gallery " + gid;
             gallery.thumb = "https://example.com/" + gid;

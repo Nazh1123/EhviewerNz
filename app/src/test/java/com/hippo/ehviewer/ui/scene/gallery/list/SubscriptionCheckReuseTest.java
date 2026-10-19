@@ -8,6 +8,7 @@ import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhClient;
+import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.SubscriptionSearchContext;
@@ -67,7 +68,9 @@ public class SubscriptionCheckReuseTest {
 
     @Test public void dividerSnapshotMatchesActualSidebarCheckAndSurvivesBadgeClearing() {
         enableBookmark();
-        manager.recordGlobalPageViewed(100, 100);
+        manager.recordGlobalPageViewed(
+                GallerySeenState.empty().observe(page(100, null).galleryInfoList),
+                GallerySeenState.empty().observe(page(100, null).galleryInfoList));
         start(true);
         succeed(0, page(200, null));
         succeed(1, page(200, null));
@@ -278,6 +281,79 @@ public class SubscriptionCheckReuseTest {
     private void start(boolean manual) {
         assertTrue(manager.checkForUpdates(manual));
         shadowOf(Looper.getMainLooper()).idle();
+    }
+
+    @Test public void scannerUsesPublicationTimeAndScansAcrossSameMinuteAndLowGidTail() {
+        Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
+        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        start(true);
+        GalleryListParser.Result first = page(110, "https://e-hentai.org/watched?next=90");
+        first.galleryInfoList.get(0).posted = "2026-09-20 00:01";
+        first.galleryInfoList.addAll(page(90, null).galleryInfoList);
+        first.rawResultCount = 2;
+        first.rawTailGid = 90;
+        succeed(0, first);
+        assertTrue(manager.isChecking());
+        assertEquals(2, requests.size());
+        GalleryListParser.Result second = page(105, null);
+        succeed(1, second);
+        assertFalse(manager.isChecking());
+        assertEquals(new java.util.HashSet<>(java.util.Arrays.asList(110L, 90L, 105L)),
+                manager.getUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION));
+    }
+
+    @Test public void failedSourceDoesNotSeedPublicationProgress() {
+        start(true);
+        requests.get(0).getCallback().onFailure(new IllegalArgumentException("invalid query"));
+        assertEquals("", Settings.getString("subscription_source_progress_v2", ""));
+        assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION).isEmpty());
+    }
+
+    @Test public void scannerIncludesOldestRetainedMinuteAndStopsStrictlyBeforeIt() {
+        List<GalleryInfo> seed = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            seed.add(datedPage(100 - i, String.format(java.util.Locale.US,
+                    "2026-09-20 00:%02d", 10 - i), null).galleryInfoList.get(0));
+        }
+        manager.recordEhPageViewed(seed);
+        start(true);
+        GalleryListParser.Result first = datedPage(110, "2026-09-20 00:11", "https://e-hentai.org/watched?next=90");
+        first.galleryInfoList.addAll(datedPage(90, "2026-09-20 00:05", null).galleryInfoList);
+        first.rawResultCount = 2;
+        first.rawTailPosted = "2026-09-20 00:05";
+        succeed(0, first);
+        assertEquals(2, requests.size());
+        assertTrue(manager.isChecking());
+        succeed(1, datedPage(80, "2026-09-20 00:04", "https://e-hentai.org/watched?next=80"));
+        assertFalse(manager.isChecking());
+        assertEquals(2, requests.size());
+        assertEquals(new java.util.HashSet<>(java.util.Arrays.asList(110L, 90L)),
+                manager.getUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION));
+    }
+
+    @Test public void legacyCheckedGidDoesNotSuppressTheFirstPublicationSeed() {
+        Settings.putLong("subscription_updates_last_checked_eh_gid", 9999999);
+        Settings.putBoolean("subscription_updates_eh_baseline_initialized", true);
+        start(true);
+        succeed(0, page(100, null));
+        assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION).isEmpty());
+        assertTrue(Settings.getString("subscription_source_progress_v2", "").contains("2;"));
+        assertEquals(9999999, Settings.getLong("subscription_updates_last_checked_eh_gid", 0));
+    }
+
+    @Test public void firstOpeningCanCompareArrivalsAfterTheInitialBackgroundCheck() {
+        start(true);
+        succeed(0, page(100, null));
+        assertFalse(SubscriptionUpdateManager.getLastSeenEhState().initialized());
+        assertTrue(SubscriptionUpdateManager.getEhDisplayBaseline().initialized());
+        assertTrue(SubscriptionUpdateManager.getEhDisplayBaseline().isNew(page(200, null).galleryInfoList.get(0)));
+    }
+
+    private static GalleryListParser.Result datedPage(long gid, String posted, String next) {
+        GalleryListParser.Result result = page(gid, next);
+        result.galleryInfoList.get(0).posted = posted;
+        result.rawTailPosted = posted;
+        return result;
     }
 
     private void enableBookmark() {

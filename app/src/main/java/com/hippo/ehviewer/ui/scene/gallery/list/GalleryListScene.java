@@ -95,6 +95,7 @@ import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.SearchRating;
 import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
 import com.hippo.ehviewer.client.SeenGalleryHistory;
+import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUtils;
@@ -385,6 +386,12 @@ public class GalleryListScene extends BaseScene
     private SubscriptionUpdateManager mSubscriptionUpdateManager;
     private final Set<Long> mSubscriptionNewGids = new HashSet<>();
     private SeenGalleryHistory.Search mSeenSearch;
+    private GallerySeenState mSubscriptionEhBaseline = GallerySeenState.empty();
+    private GallerySeenState mSubscriptionBookmarkBaseline = GallerySeenState.empty();
+    private boolean mSubscriptionHasResponse;
+    private boolean mSubscriptionPreserveSnapshot;
+    private boolean mSubscriptionRefreshPending;
+    private final Set<Long> mSubscriptionPendingUnread = new HashSet<>();
     @Nullable
     private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
 
@@ -541,9 +548,13 @@ public class GalleryListScene extends BaseScene
         mPopularResponseReady = mHasFirstRefresh && isPopularMode();
         String seenKey = savedInstanceState.getString("seen_search_key");
         if (seenKey != null) mSeenSearch = new SeenGalleryHistory.Search(seenKey,
-                savedInstanceState.getLong("seen_search_baseline"),
+                GallerySeenState.parse(savedInstanceState.getString("seen_search_state_v2")),
                 savedInstanceState.getBoolean("seen_search_bookmarked"),
                 savedInstanceState.getBoolean("seen_search_subscribed"));
+        mSubscriptionEhBaseline = GallerySeenState.parse(savedInstanceState.getString("subscription_eh_state_v2"));
+        mSubscriptionBookmarkBaseline = GallerySeenState.parse(savedInstanceState.getString("subscription_bookmark_state_v2"));
+        mSubscriptionHasResponse = savedInstanceState.getBoolean("subscription_response_ready_v2");
+        mSubscriptionPreserveSnapshot = mSubscriptionHasResponse && !mHasFirstRefresh;
         long[] subscriptionNewGids = savedInstanceState.getLongArray(KEY_SUBSCRIPTION_NEW_GIDS);
         if (subscriptionNewGids != null) {
             for (long gid : subscriptionNewGids) mSubscriptionNewGids.add(gid);
@@ -577,10 +588,13 @@ public class GalleryListScene extends BaseScene
         outState.putBoolean(KEY_POPULAR_REPEATED_EXPANDED, mPopularRepeatedExpanded);
         if (mSeenSearch != null) {
             outState.putString("seen_search_key", mSeenSearch.key());
-            outState.putLong("seen_search_baseline", mSeenSearch.baseline());
+            outState.putString("seen_search_state_v2", mSeenSearch.baseline().serialize());
             outState.putBoolean("seen_search_bookmarked", mSeenSearch.bookmarked());
             outState.putBoolean("seen_search_subscribed", mSeenSearch.subscribed());
         }
+        outState.putString("subscription_eh_state_v2", mSubscriptionEhBaseline.serialize());
+        outState.putString("subscription_bookmark_state_v2", mSubscriptionBookmarkBaseline.serialize());
+        outState.putBoolean("subscription_response_ready_v2", mSubscriptionHasResponse);
         long[] subscriptionNewGids = new long[mSubscriptionNewGids.size()];
         int subscriptionIndex = 0;
         for (long gid : mSubscriptionNewGids) subscriptionNewGids[subscriptionIndex++] = gid;
@@ -3073,19 +3087,22 @@ public class GalleryListScene extends BaseScene
                 result.nextPage = 0;
                 result.firstHref = result.prevHref = result.nextHref = result.lastHref = null;
             }
-            if (mUrlBuilder != null
-                    && mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION
-                    && mHelper.isCurrentTaskRefresh(taskId)
-                    && mSubscriptionUpdateManager != null) {
-                mSubscriptionUpdateManager.recordEhPageViewed(
-                        result.galleryInfoList);
+            if (result.customErrorString == null && mUrlBuilder != null
+                    && mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION) {
+                beginSubscriptionResponse(taskId);
+                for (GalleryInfo gallery : result.galleryInfoList) {
+                    if (mSubscriptionEhBaseline.isNew(gallery)) mSubscriptionNewGids.add(gallery.gid);
+                }
+                if (mSubscriptionUpdateManager != null) {
+                    mSubscriptionUpdateManager.recordEhPageViewed(result.galleryInfoList);
+                }
             }
             if (result.customErrorString == null && SeenGalleryHistory.supports(mUrlBuilder)
                     && Settings.getShowViewedGalleries() && mSeenSearch != null) {
-                long maxGid = result.rawHeadGid;
-                for (GalleryInfo gallery : result.galleryInfoList) maxGid = Math.max(maxGid, gallery.gid);
-                if (SeenGalleryHistory.record(mSeenSearch, maxGid) && mSubscriptionUpdateManager != null) {
-                    mSubscriptionUpdateManager.recordBookmarkPageViewed(maxGid);
+                if (SeenGalleryHistory.record(mSeenSearch, result.galleryInfoList)
+                        && mSubscriptionUpdateManager != null) {
+                    mSubscriptionUpdateManager.recordBookmarkPageViewed(
+                            GallerySeenState.empty().observe(result.galleryInfoList));
                 }
             }
             String emptyString;
@@ -3134,7 +3151,13 @@ public class GalleryListScene extends BaseScene
     }
 
     private void markSubscriptionOpened(boolean captureUnread) {
-        if (captureUnread) mSubscriptionNewGids.clear();
+        if (captureUnread) {
+            mSubscriptionNewGids.clear();
+            mSubscriptionHasResponse = false;
+            mSubscriptionPreserveSnapshot = false;
+            mSubscriptionRefreshPending = false;
+            mSubscriptionPendingUnread.clear();
+        }
         if (mUrlBuilder == null || mSubscriptionUpdateManager == null) {
             return;
         }
@@ -3152,6 +3175,16 @@ public class GalleryListScene extends BaseScene
                 || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
             mRecentCheckResult =
                     mSubscriptionUpdateManager.getRecentCheckResult(mode);
+        }
+    }
+
+    /** Keep the displayed update markers intact until a refresh actually succeeds. */
+    private void beginSubscriptionResponse(int taskId) {
+        if (mSubscriptionRefreshPending && mHelper != null && mHelper.isCurrentTaskRefresh(taskId)) {
+            mSubscriptionNewGids.clear();
+            mSubscriptionNewGids.addAll(mSubscriptionPendingUnread);
+            mSubscriptionRefreshPending = false;
+            mSubscriptionHasResponse = true;
         }
     }
 
@@ -3198,15 +3231,18 @@ public class GalleryListScene extends BaseScene
                     ? R.string.global_subscription_partial_failure
                     : R.string.bookmark_subscription_partial_failure, LENGTH_SHORT);
         }
-        if (refresh && !partialFailure && mSubscriptionUpdateManager != null
-                && mBookmarkSubscriptionCoordinator != null) {
-            if (isGlobalSubscriptionMode()) {
+        if (mBookmarkSubscriptionCoordinator != null) {
+            beginSubscriptionResponse(taskId);
+            for (GalleryInfo gallery : data) {
+                if (mBookmarkSubscriptionCoordinator.isNewGallery(gallery,
+                        mSubscriptionEhBaseline, mSubscriptionBookmarkBaseline)) {
+                    mSubscriptionNewGids.add(gallery.gid);
+                }
+            }
+            if (!partialFailure && mSubscriptionUpdateManager != null) {
                 mSubscriptionUpdateManager.recordGlobalPageViewed(
-                        mBookmarkSubscriptionCoordinator.getLatestEhGid(),
-                        mBookmarkSubscriptionCoordinator.getLatestBookmarkGid());
-            } else {
-                mSubscriptionUpdateManager.recordBookmarkPageViewed(
-                        mBookmarkSubscriptionCoordinator.getLatestBookmarkGid());
+                        isGlobalSubscriptionMode() ? mBookmarkSubscriptionCoordinator.getLatestEhState() : null,
+                        mBookmarkSubscriptionCoordinator.getLatestBookmarkState());
             }
         }
         onGetGalleryListSuccess(result, taskId);
@@ -3330,11 +3366,11 @@ public class GalleryListScene extends BaseScene
         }
 
         private boolean hasSearchBaseline() {
-            return SeenGalleryHistory.supports(mUrlBuilder) && mSeenSearch != null && mSeenSearch.baseline() > 0;
+            return SeenGalleryHistory.supports(mUrlBuilder) && mSeenSearch != null && mSeenSearch.baseline().initialized();
         }
 
         private boolean isNewGallery(GalleryInfo gallery) {
-            return hasSearchBaseline() ? gallery.gid > mSeenSearch.baseline()
+            return hasSearchBaseline() ? mSeenSearch.baseline().isNew(gallery)
                     : mSubscriptionNewGids.contains(gallery.gid);
         }
 
@@ -3607,9 +3643,30 @@ public class GalleryListScene extends BaseScene
             super.refresh();
         }
 
+        private void prepareSeenState(int taskId) {
+            if (isCurrentTaskRefresh(taskId)) {
+                mSeenSearch = SeenGalleryHistory.open(mUrlBuilder);
+                if (isSubscriptionMode()) {
+                    mSubscriptionPendingUnread.clear();
+                    if (mSubscriptionHasResponse && !mSubscriptionPreserveSnapshot) {
+                        if (mSubscriptionUpdateManager != null) mSubscriptionPendingUnread.addAll(
+                                mSubscriptionUpdateManager.getUnreadGalleryGids(mUrlBuilder.getMode()));
+                    } else {
+                        mSubscriptionPendingUnread.addAll(mSubscriptionNewGids);
+                    }
+                    if (!mSubscriptionPreserveSnapshot) {
+                        mSubscriptionEhBaseline = SubscriptionUpdateManager.getEhDisplayBaseline();
+                        mSubscriptionBookmarkBaseline = SubscriptionUpdateManager.getBookmarkDisplayBaseline();
+                    }
+                    mSubscriptionRefreshPending = true;
+                }
+                mSubscriptionPreserveSnapshot = false;
+            }
+        }
+
         @Override
         protected void getPageData(int taskId, int type, int page) {
-            if (isCurrentTaskRefresh(taskId)) mSeenSearch = SeenGalleryHistory.open(mUrlBuilder);
+            prepareSeenState(taskId);
             MainActivity activity = getActivity2();
             if (null == activity || null == mClient || null == mUrlBuilder) {
                 return;
@@ -3715,6 +3772,7 @@ public class GalleryListScene extends BaseScene
                 getPageData(taskId, pageAction, page);
                 return;
             }
+            prepareSeenState(taskId);
             if (isBookmarkSubscriptionMode()) {
                 BookmarkSubscriptionCoordinator coordinator =
                         getBookmarkSubscriptionCoordinator();

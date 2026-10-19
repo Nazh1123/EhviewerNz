@@ -21,6 +21,13 @@ import static org.junit.Assert.assertEquals;
 //import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+import android.app.Application;
+import com.hippo.ehviewer.EhDB;
+import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.client.GallerySeenState;
+import com.hippo.ehviewer.sync.GalleryListTagsSyncTask;
 
 import java.util.Arrays;
 import java.io.InputStream;
@@ -28,23 +35,30 @@ import java.util.List;
 import okio.BufferedSource;
 import okio.Okio;
 import org.junit.Test;
+import org.junit.Before;
 import org.junit.runner.RunWith;
 import org.robolectric.ParameterizedRobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
+import org.robolectric.annotation.Config;
+import org.robolectric.annotation.Implements;
+import org.robolectric.annotation.Implementation;
 
 @RunWith(ParameterizedRobolectricTestRunner.class)
+@Config(application = Application.class, sdk = 28, manifest = Config.NONE,
+    shadows = {GalleryListParserTest.DbShadow.class, GalleryListParserTest.TagsShadow.class})
 public class GalleryListParserTest {
 
-  private static final String E_MINIMAL = "GalleryListParserTestEMinimal.GalleryTopListEX.html";
-  private static final String E_MINIMAL_PLUS = "GalleryListParserTestEMinimalPlus.GalleryTopListEX.html";
-  private static final String E_COMPAT = "GalleryListParserTestECompat.GalleryTopListEX.html";
-  private static final String E_EXTENDED = "GalleryListParserTestEExtended.GalleryTopListEX.html";
-  private static final String E_THUMBNAIL = "GalleryListParserTestEThumbnail.GalleryTopListEX.html";
+  private static final String E_MINIMAL = "GalleryListParserTestEMinimal.html";
+  private static final String E_MINIMAL_PLUS = "GalleryListParserTestEMinimalPlus.html";
+  private static final String E_COMPAT = "GalleryListParserTestECompat.html";
+  private static final String E_EXTENDED = "GalleryListParserTestEExtended.html";
+  private static final String E_THUMBNAIL = "GalleryListParserTestEThumbnail.html";
 
-  private static final String EX_MINIMAL = "GalleryListParserTestExMinimal.GalleryTopListEX.html";
-  private static final String EX_MINIMAL_PLUS = "GalleryListParserTestExMinimalPlus.GalleryTopListEX.html";
-  private static final String EX_COMPAT = "GalleryListParserTestExCompat.GalleryTopListEX.html";
-  private static final String EX_EXTENDED = "GalleryListParserTestExExtended.GalleryTopListEX.html";
-  private static final String EX_THUMBNAIL = "GalleryListParserTestExThumbnail.GalleryTopListEX.html";
+  private static final String EX_MINIMAL = "GalleryListParserTestExMinimal.html";
+  private static final String EX_MINIMAL_PLUS = "GalleryListParserTestExMinimalPlus.html";
+  private static final String EX_COMPAT = "GalleryListParserTestExCompat.html";
+  private static final String EX_EXTENDED = "GalleryListParserTestExExtended.html";
+  private static final String EX_THUMBNAIL = "GalleryListParserTestExThumbnail.html";
 
   @ParameterizedRobolectricTestRunner.Parameters(name = "{index}-{0}")
   public static List data() {
@@ -68,15 +82,26 @@ public class GalleryListParserTest {
     this.file = file;
   }
 
+  @Before public void initializeSettings() {
+    Settings.initialize(RuntimeEnvironment.getApplication());
+  }
+
   @Test
   public void testParse() throws Exception {
-    InputStream resource = GalleryPageApiParserTest.class.getResourceAsStream(file);
-    BufferedSource source = Okio.buffer(Okio.source(resource));
-    String body = source.readUtf8();
+    String body;
+    try (InputStream resource = getClass().getResourceAsStream(file)) {
+      assertNotNull("Missing gallery-list fixture: " + file, resource);
+      try (BufferedSource source = Okio.buffer(Okio.source(resource))) {
+        body = source.readUtf8();
+      }
+    }
 
     GalleryListParser.Result result = GalleryListParser.parse(body, MODE_NORMAL);
 
     assertEquals(25, result.galleryInfoList.size());
+    assertTrue(result.rawSeenState.initialized());
+    assertEquals(GallerySeenState.postedMinute(result.galleryInfoList.get(0).posted),
+        result.rawSeenState.minute());
 
     result.galleryInfoList.forEach(gi -> {
 //      assertNotEquals(0, gi.gid);
@@ -91,6 +116,7 @@ public class GalleryListParserTest {
 //      assertNotEquals(0, gi.thumbHeight);
       assertNotNull(gi.thumb);
       assertNotNull(gi.posted);
+      assertFalse(result.rawSeenState.isNew(gi));
 //      assertNotEquals(0.0, gi.rating);
       if (E_MINIMAL.equals(file) ||
           E_MINIMAL_PLUS.equals(file) ||
@@ -107,4 +133,13 @@ public class GalleryListParserTest {
 //      assertNotEquals(0, gi.pages);
     });
   }
+  @Implements(EhDB.class)
+  public static class DbShadow {
+    @Implementation protected static boolean containLocalFavorites(long gid) { return false; }
+  }
+  @Implements(GalleryListTagsSyncTask.class)
+  public static class TagsShadow {
+    @Implementation protected void execute() { }
+  }
+
 }
