@@ -96,6 +96,9 @@ class SuperResolutionFinalImageTest {
     @Test fun webpAdmissionChecksDimensionsAndWorkspaceWithLongArithmetic() {
         val budget = SuperResolutionWebp.MAX_WORKSPACE
         assertTrue(SuperResolutionWebp.accepts(2400, 3600, budget))
+        assertTrue(SuperResolutionWebp.accepts(1200, 1600, budget, lossless = true))
+        assertFalse(SuperResolutionWebp.accepts(2400, 3600, budget, lossless = true))
+        assertFalse(SuperResolutionWebp.accepts(16384, 1, budget, lossless = true))
         assertFalse(SuperResolutionWebp.accepts(16384, 1, budget))
         assertFalse(SuperResolutionWebp.accepts(2400, 3600, 8L * 1024 * 1024))
         assertFalse(SuperResolutionWebp.accepts(Int.MAX_VALUE, Int.MAX_VALUE, Long.MAX_VALUE))

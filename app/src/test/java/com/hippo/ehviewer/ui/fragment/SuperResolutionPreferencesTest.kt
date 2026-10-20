@@ -12,6 +12,7 @@ import androidx.preference.PreferenceManager
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.superresolution.SuperResolutionModels
+import com.hippo.ehviewer.superresolution.SuperResolutionQuality
 import com.hippo.ehviewer.superresolution.SuperResolutionSettings
 import com.hippo.preference.ListPreference
 import com.hippo.preference.SwitchPreference
@@ -65,7 +66,7 @@ class SuperResolutionPreferencesTest {
         assertTrue((preference(SuperResolutionSettings.PERSIST) as SwitchPreference).isChecked)
         for ((key, value) in mapOf(SuperResolutionSettings.SCALE to "2",
             SuperResolutionModels.BACKEND to "auto_fast", SuperResolutionSettings.AHEAD to "2",
-            SuperResolutionSettings.CACHE to "512")) {
+            SuperResolutionSettings.CACHE to "512", SuperResolutionSettings.QUALITY to "95")) {
             val list = preference(key) as ListPreference
             assertEquals(value, list.value)
             assertFalse(list.summary.isNullOrEmpty())
@@ -99,6 +100,26 @@ class SuperResolutionPreferencesTest {
         assertEquals("8192", (preference(SuperResolutionSettings.CACHE) as ListPreference).value)
     }
 
+    @Test fun qualityDefaultsTo95AndAllSixSelectionsSurviveReopening() {
+        val settings = SuperResolutionSettings(app)
+        assertEquals(SuperResolutionQuality.Q95, settings.read().quality)
+        openSettings()
+        val quality = preference(SuperResolutionSettings.QUALITY) as ListPreference
+        assertEquals(listOf("80", "85", "90", "95", "100", "lossless"),
+            quality.entryValues.map { it.toString() })
+        for (selected in SuperResolutionQuality.entries) {
+            quality.value = selected.value
+            assertEquals(selected, settings.read().quality)
+            fragment.onCreatePreferences(null, null)
+            val reopened = preference(SuperResolutionSettings.QUALITY) as ListPreference
+            assertEquals(selected.value, reopened.value)
+            assertTrue(reopened.summary.toString().contains(reopened.entry))
+            assertFalse(reopened.summary.toString().contains("%1$"))
+        }
+        settings.preferences.edit().putString(SuperResolutionSettings.QUALITY, "invalid").commit()
+        assertEquals(SuperResolutionQuality.Q95, settings.read().quality)
+    }
+
     @Test fun xmlSummariesFollowSelectionChanges() {
         openSettings()
         val scale = preference(SuperResolutionSettings.SCALE) as ListPreference
@@ -127,6 +148,12 @@ class SuperResolutionPreferencesTest {
             ahead.value = "10"
             assertTrue(language, ahead.summary.toString().contains("10"))
             assertFalse(language, ahead.summary.toString().contains("%1$"))
+            val quality = requireNotNull(screen.findPreference<ListPreference>(SuperResolutionSettings.QUALITY))
+            for (value in listOf("95", "lossless")) {
+                quality.value = value
+                assertTrue(language, quality.summary.toString().contains(quality.entry))
+                assertFalse(language, quality.summary.toString().contains("%1$"))
+            }
         }
     }
 

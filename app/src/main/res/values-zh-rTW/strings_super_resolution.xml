@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_quality">結果圖片品質</string>
+    <string name="sr_quality_lossless">無損（WebP）</string>
+    <string name="sr_quality_summary">%1$s。僅影響新產生的結果，數值越高通常畫質越好、檔案越大；100 仍為有損壓縮。</string>
     <string name="sr_downloaded">已下載 waifu2x 模型（1.06 MiB）</string>
     <string name="sr_title">超解析度</string>
     <string name="sr_settings">超解析度設定與模型</string>

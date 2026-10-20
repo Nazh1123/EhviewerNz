@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_quality">결과 이미지 품질</string>
+    <string name="sr_quality_lossless">무손실(WebP)</string>
+    <string name="sr_quality_summary">%1$s. 새로 생성되는 결과에만 적용됩니다. 값이 높을수록 일반적으로 화질이 좋아지고 파일이 커집니다. 100도 손실 압축입니다.</string>
     <string name="sr_downloaded">waifu2x 모델 다운로드 완료 (1.06 MiB)</string>
     <string name="sr_title">초해상도</string>
     <string name="sr_settings">초해상도 설정 및 모델</string>

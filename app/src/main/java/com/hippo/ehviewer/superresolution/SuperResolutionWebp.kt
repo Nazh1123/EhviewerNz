@@ -7,10 +7,12 @@ import java.io.OutputStream
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
-/** Account for YUVA planes, the VP8 encoder, bitstream and fixed-size RGBA input bands. */
+/** Account for native image planes, encoder workspace, bitstream and bounded input bands. */
 internal object SuperResolutionWebp {
     const val MAX_WORKSPACE = 256L * 1024 * 1024
-    fun estimatedBytes(width: Int, height: Int) = width.toLong() * height * 12 + 32L * 1024 * 1024
+    // VP8L also keeps ARGB transforms, hash chains and backward references.
+    fun estimatedBytes(width: Int, height: Int, lossless: Boolean = false) =
+        width.toLong() * height * (if (lossless) 48 else 12) + 32L * 1024 * 1024
 
     fun budget(context: Context): Long {
         val info = ActivityManager.MemoryInfo()
@@ -25,20 +27,22 @@ internal object SuperResolutionWebp {
         return minOf(MAX_WORKSPACE, (info.availMem - info.threshold).coerceAtLeast(0) / 3)
     }
 
-    fun accepts(width: Int, height: Int, budget: Long): Boolean =
+    fun accepts(width: Int, height: Int, budget: Long, lossless: Boolean = false): Boolean =
         width in 1..WebpEncoder.MAX_DIMENSION && height in 1..WebpEncoder.MAX_DIMENSION &&
-            estimatedBytes(width, height) <= budget.coerceAtMost(MAX_WORKSPACE)
+            estimatedBytes(width, height, lossless) <= budget.coerceAtMost(MAX_WORKSPACE)
 
-    suspend fun write(page: EnhancedTilePage, output: OutputStream) {
+    suspend fun write(page: EnhancedTilePage, output: OutputStream, quality: Int? = 95) {
         val coroutine = currentCoroutineContext()
         coroutine.ensureActive()
-        val handle = WebpEncoder.create(page.width, page.height)
+        val handle = if (quality == null) WebpEncoder.createLossless(page.width, page.height)
+            else WebpEncoder.create(page.width, page.height)
         check(handle != 0L) { "Cannot allocate WebP workspace" }
         try {
             SuperResolutionBands.read(page) { pixels, rows ->
                 check(WebpEncoder.append(handle, pixels, rows)) { "Cannot prepare WebP band" }
             }
-            check(WebpEncoder.finish(handle, output, Runnable { coroutine.ensureActive() })) { "Cannot encode SR WebP" }
+            // In lossless mode 75 controls encoding effort, with no near-lossless preprocessing.
+            check(WebpEncoder.finish(handle, output, Runnable { coroutine.ensureActive() }, quality ?: 75)) { "Cannot encode SR WebP" }
         } finally { WebpEncoder.release(handle) }
     }
 }

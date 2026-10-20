@@ -41,12 +41,21 @@
 
     <PreferenceCategory android:title="@string/sr_category_storage">
 
+        <com.hippo.preference.ListPreference
+            android:defaultValue="95"
+            android:key="super_resolution_quality"
+            android:summary="@string/sr_quality_summary"
+            android:title="@string/sr_quality"
+            app:allowDividerAbove="false"
+            app:entries="@array/sr_quality_entries"
+            app:entryValues="@array/sr_quality_values" />
+
         <com.hippo.preference.SwitchPreference
             android:defaultValue="true"
             android:key="super_resolution_persist"
             android:summary="@string/sr_persist_help"
             android:title="@string/sr_persist"
-            app:allowDividerAbove="false" />
+            app:allowDividerAbove="true" />
 
         <com.hippo.preference.ListPreference
             android:defaultValue="512"

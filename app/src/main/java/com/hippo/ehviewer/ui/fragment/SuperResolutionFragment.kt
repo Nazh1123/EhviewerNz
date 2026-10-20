@@ -60,6 +60,7 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
         }
         requirePreference<ListPreference>(SuperResolutionSettings.AHEAD).value = options.ahead.toString()
         requirePreference<ListPreference>(SuperResolutionSettings.CACHE).value = options.cacheMiB.toString()
+        requirePreference<ListPreference>(SuperResolutionSettings.QUALITY).value = options.quality.value
         action("super_resolution_clear_cache") {
             operate(getString(R.string.sr_clear_cache)) { SuperResolutionStore.clear(requireContext().applicationContext) }
         }

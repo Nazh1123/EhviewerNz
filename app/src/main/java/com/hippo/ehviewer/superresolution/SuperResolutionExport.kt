@@ -11,7 +11,8 @@ import kotlinx.coroutines.ensureActive
 internal object SuperResolutionExport {
     const val DIRECTORY_NAME = "_suepr_resolution"
 
-    suspend fun save(page: EnhancedTilePage, gallery: UniFile, sourceName: String, workspace: Long = 0): UniFile {
+    suspend fun save(page: EnhancedTilePage, gallery: UniFile, sourceName: String, workspace: Long = 0,
+        quality: SuperResolutionQuality = SuperResolutionQuality.Q95): UniFile {
         val final = page.finalImage
         if (final != null) {
             val extension = final.name?.substringAfterLast('.') ?: "png"
@@ -20,13 +21,15 @@ internal object SuperResolutionExport {
             if (destination.findFile(name)?.uri == final.uri) return final
             return publish(gallery, sourceName, extension) { output -> final.openInputStream().use { it.copyTo(output) } }
         }
-        return encode(page, workspace) { extension, writer -> publish(gallery, sourceName, extension, writer) }
+        return encode(page, workspace, quality) { extension, writer -> publish(gallery, sourceName, extension, writer) }
     }
 
     internal suspend fun encode(page: EnhancedTilePage, workspace: Long,
+        quality: SuperResolutionQuality = SuperResolutionQuality.Q95,
         publish: suspend (String, suspend (OutputStream) -> Unit) -> UniFile): UniFile {
-        if (SuperResolutionWebp.accepts(page.width, page.height, workspace) && WebpEncoder.nativeAvailable) {
-            try { return publish("webp") { SuperResolutionWebp.write(page, it) } }
+        val webpQuality = quality.webpQuality
+        if (SuperResolutionWebp.accepts(page.width, page.height, workspace, lossless = webpQuality == null) && WebpEncoder.nativeAvailable) {
+            try { return publish("webp") { SuperResolutionWebp.write(page, it, webpQuality) } }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: IllegalStateException) { /* Workspace/encoder failure: retain the streaming PNG path. */ }
             catch (_: OutOfMemoryError) { /* No whole-page RGBA allocation is needed for PNG. */ }

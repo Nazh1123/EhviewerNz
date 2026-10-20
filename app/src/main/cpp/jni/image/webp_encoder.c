@@ -31,9 +31,9 @@ static int check_progress(int percent, const WebPPicture* picture) {
   return !(*sink->env)->ExceptionCheck(sink->env);
 }
 
-static int encode(JNIEnv* env, WebPPicture* picture, jobject output, jobject progress, int lossless) {
+static int encode(JNIEnv* env, WebPPicture* picture, jobject output, jobject progress, int lossless, float quality) {
   WebPConfig config;
-  if (!WebPConfigPreset(&config, WEBP_PRESET_DRAWING, lossless ? 75.f : 95.f)) return 0;
+  if (!WebPConfigPreset(&config, WEBP_PRESET_DRAWING, quality)) return 0;
   config.lossless = lossless;
   config.method = lossless ? 3 : 4;
   config.low_memory = 1;
@@ -60,17 +60,28 @@ static int encode(JNIEnv* env, WebPPicture* picture, jobject output, jobject pro
   return success;
 }
 
-JNIEXPORT jlong JNICALL Java_com_hippo_ehviewer_image_WebpEncoder_create(
-    JNIEnv* env, jobject self, jint width, jint height) {
-  (void)env; (void)self;
+static jlong create_frame(jint width, jint height, int lossless) {
   if (width <= 0 || height <= 0 || width > WEBP_MAX_DIMENSION || height > WEBP_MAX_DIMENSION) return 0;
   Frame* frame = calloc(1, sizeof(*frame));
   if (!frame) return 0;
   if (!WebPPictureInit(&frame->picture)) { free(frame); return 0; }
   frame->picture.width = width; frame->picture.height = height;
+  frame->picture.use_argb = lossless;
   frame->picture.colorspace = WEBP_YUV420A;
   if (!WebPPictureAlloc(&frame->picture)) { WebPPictureFree(&frame->picture); free(frame); return 0; }
   return (jlong)(intptr_t)frame;
+}
+
+JNIEXPORT jlong JNICALL Java_com_hippo_ehviewer_image_WebpEncoder_create(
+    JNIEnv* env, jobject self, jint width, jint height) {
+  (void)env; (void)self;
+  return create_frame(width, height, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_com_hippo_ehviewer_image_WebpEncoder_createLossless(
+    JNIEnv* env, jobject self, jint width, jint height) {
+  (void)env; (void)self;
+  return create_frame(width, height, 1);
 }
 
 JNIEXPORT jboolean JNICALL Java_com_hippo_ehviewer_image_WebpEncoder_append(
@@ -78,9 +89,19 @@ JNIEXPORT jboolean JNICALL Java_com_hippo_ehviewer_image_WebpEncoder_append(
   (void)self;
   Frame* frame = (Frame*)(intptr_t)handle;
   if (!frame || rows <= 0 || frame->next_y + rows > frame->picture.height ||
-      (rows % 2 && frame->next_y + rows != frame->picture.height)) return JNI_FALSE;
+      (!frame->picture.use_argb && rows % 2 && frame->next_y + rows != frame->picture.height)) return JNI_FALSE;
   const int width = frame->picture.width;
   if ((*env)->GetArrayLength(env, pixels) < (jlong)width * rows) return JNI_FALSE;
+  if (frame->picture.use_argb) {
+    // Preserve RGB directly: passing through YUV420 would make even a VP8L file lossy.
+    for (int y = 0; y < rows; ++y) {
+      (*env)->GetIntArrayRegion(env, pixels, y * width, width,
+          (jint*)(frame->picture.argb + (frame->next_y + y) * frame->picture.argb_stride));
+      if ((*env)->ExceptionCheck(env)) return JNI_FALSE;
+    }
+    frame->next_y += rows;
+    return JNI_TRUE;
+  }
   uint8_t* rgba = malloc((size_t)width * rows * 4);
   if (!rgba) return JNI_FALSE;
   // getPixels returns straight ARGB, so no premultiplied-alpha colour leaks into the encoder.
@@ -114,10 +135,11 @@ JNIEXPORT jboolean JNICALL Java_com_hippo_ehviewer_image_WebpEncoder_append(
 }
 
 JNIEXPORT jboolean JNICALL Java_com_hippo_ehviewer_image_WebpEncoder_finish(
-    JNIEnv* env, jobject self, jlong handle, jobject output, jobject progress) {
+    JNIEnv* env, jobject self, jlong handle, jobject output, jobject progress, jint quality) {
   (void)self;
   Frame* frame = (Frame*)(intptr_t)handle;
-  return frame && frame->next_y == frame->picture.height && encode(env, &frame->picture, output, progress, 0);
+  return frame && frame->next_y == frame->picture.height && quality >= 0 && quality <= 100 &&
+      encode(env, &frame->picture, output, progress, frame->picture.use_argb, (float)quality);
 }
 
 JNIEXPORT void JNICALL Java_com_hippo_ehviewer_image_WebpEncoder_release(
@@ -162,7 +184,7 @@ JNIEXPORT jboolean JNICALL Java_com_hippo_ehviewer_image_WebpEncoder_nativeWrite
     }
   }
   AndroidBitmap_unlockPixels(env, bitmap);
-  const int success = encode(env, &picture, output, NULL, 1);
+  const int success = encode(env, &picture, output, NULL, 1, 75.f);
   WebPPictureFree(&picture);
   return success;
 }

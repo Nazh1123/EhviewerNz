@@ -43,11 +43,13 @@ class SuperResolutionExportTest {
         return page
     }
 
-    @Test fun completePngHasCorrectDimensionsAndSeamPixelsAtEveryScale() = runBlocking {
+    @Test fun losslessSelectionFallsBackToPixelExactPngWithoutWorkspaceAtEveryScale() = runBlocking {
         val gallery = checkNotNull(UniFile.fromFile(temp.newFolder()))
         for (scale in listOf(2, 4, 8)) {
             val page = page(259, 257, scale)
-            val result = SuperResolutionExport.save(page, gallery, "Chapter/001")
+            val result = SuperResolutionExport.save(page, gallery, "Chapter/001",
+                0, SuperResolutionQuality.LOSSLESS)
+            assertTrue(result.name!!.endsWith(".png"))
             val decoded = checkNotNull(result.openInputStream().use { BitmapFactory.decodeStream(it) })
             try {
                 assertEquals(page.width, decoded.width); assertEquals(page.height, decoded.height)

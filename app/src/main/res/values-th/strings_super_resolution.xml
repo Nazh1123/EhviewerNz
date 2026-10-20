@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_quality">คุณภาพภาพผลลัพธ์</string>
+    <string name="sr_quality_lossless">ไม่สูญเสียข้อมูล (WebP)</string>
+    <string name="sr_quality_summary">%1$s ใช้กับผลลัพธ์ที่สร้างใหม่เท่านั้น ค่าที่สูงขึ้นมักให้คุณภาพดีขึ้นและไฟล์ใหญ่ขึ้น โดย 100 ยังเป็นการบีบอัดแบบสูญเสียข้อมูล</string>
     <string name="sr_downloaded">ดาวน์โหลดโมเดล waifu2x แล้ว (1.06 MiB)</string>
     <string name="sr_title">เพิ่มความละเอียดภาพ</string>
     <string name="sr_settings">การตั้งค่าและโมเดลเพิ่มความละเอียดภาพ</string>

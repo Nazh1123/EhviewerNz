@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_quality">結果画像の品質</string>
+    <string name="sr_quality_lossless">可逆圧縮（WebP）</string>
+    <string name="sr_quality_summary">%1$s。新しく生成する結果にのみ適用します。値が高いほど通常は画質とファイルサイズが上がります。100 も非可逆圧縮です。</string>
     <string name="sr_downloaded">waifu2x モデルをダウンロード済み（1.06 MiB）</string>
     <string name="sr_title">超解像</string>
     <string name="sr_settings">超解像の設定とモデル</string>

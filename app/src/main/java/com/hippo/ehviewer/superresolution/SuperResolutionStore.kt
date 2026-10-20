@@ -162,8 +162,8 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
     suspend fun compact(key: String, page: EnhancedTilePage, gallery: UniFile?, sourceName: String): UniFile {
         val previous = page.finalImage
         val workspace = SuperResolutionWebp.budget(app)
-        val image = if (gallery != null) SuperResolutionExport.save(page, gallery, sourceName, workspace)
-        else previous ?: SuperResolutionExport.encode(page, workspace) { extension, writer ->
+        val image = if (gallery != null) SuperResolutionExport.save(page, gallery, sourceName, workspace, options.quality)
+        else previous ?: SuperResolutionExport.encode(page, workspace, options.quality) { extension, writer ->
             val target = File(page.directory, "result.$extension")
             val temporary = File.createTempFile("final-", ".tmp", page.directory)
             try {

@@ -84,6 +84,8 @@ class SuperResolutionStoreTest {
         }
         assertEquals(4, keys.toSet().size)
         assertEquals(legacyHash, keys[SuperResolutionScale.X2.ordinal])
+        for (quality in SuperResolutionQuality.entries)
+            assertEquals(legacyHash, SuperResolutionStore(context, "one", SuperResolutionOptions(quality = quality)).key(source))
     }
 
     @Test fun originalTileMetadataReopensAndScaleMismatchIsRejected() {

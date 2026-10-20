@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_quality">Qualité des images produites</string>
+    <string name="sr_quality_lossless">Sans perte (WebP)</string>
+    <string name="sr_quality_summary">%1$s. Uniquement pour les nouveaux résultats. Une valeur plus élevée donne généralement une meilleure qualité et des fichiers plus volumineux ; 100 reste avec perte.</string>
     <string name="sr_downloaded">Modèle waifu2x téléchargé (1.06 MiB)</string>
     <string name="sr_title">Super-résolution</string>
     <string name="sr_settings">Paramètres et modèles de super-résolution</string>

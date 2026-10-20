@@ -27,10 +27,12 @@ internal object WebpEncoder {
         check(success) { "Cannot encode lossless image" }
     }
 
-    // A lossy frame owns YUV planes, never an entire RGBA Bitmap. Supply even-height bands.
+    // Native YUV (lossy) or ARGB (lossless) planes avoid a whole-page Java Bitmap.
+    // Only lossy frames require even-height input bands.
     external fun create(width: Int, height: Int): Long
+    external fun createLossless(width: Int, height: Int): Long
     external fun append(handle: Long, pixels: IntArray, rows: Int): Boolean
-    external fun finish(handle: Long, output: OutputStream, checkActive: Runnable): Boolean
+    external fun finish(handle: Long, output: OutputStream, checkActive: Runnable, quality: Int = 95): Boolean
     external fun release(handle: Long)
     private external fun nativeWriteLossless(bitmap: Bitmap, output: OutputStream): Boolean
 }
