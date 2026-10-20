@@ -435,6 +435,8 @@ public class SearchBar extends CardView implements View.OnClickListener,
 
 
     public void showImeAndSuggestionsList(boolean animation) {
+        // A condition field may still own focus when returning from the search options.
+        mEditText.requestFocus();
         // Show ime
         InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
         imm.showSoftInput(mEditText, 0);

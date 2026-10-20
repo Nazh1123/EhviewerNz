@@ -208,6 +208,7 @@ public class GalleryListScene extends BaseScene
     final static int STATE_NORMAL = 0;
     final static int STATE_SIMPLE_SEARCH = 1;
     final static int STATE_SEARCH = 2;
+    // Keep advanced criteria active while hiding the options panel to show suggestions.
     final static int STATE_SEARCH_SHOW_LIST = 3;
 
     private static final int FAB_MULTI_SELECT_DOWNLOAD = 0;
@@ -251,7 +252,11 @@ public class GalleryListScene extends BaseScene
     @Nullable
     private View mSearchFab;
     @Nullable
-    private View mSearchOptionsFab;
+    private FloatingActionButton mSearchOptionsFab;
+    @Nullable
+    private AddDeleteDrawable mSearchOptionsDrawable;
+    @Nullable
+    private ObjectAnimator mSearchOptionsIconAnimator;
     @Nullable
     private FabLayout mFabLayout;
     @Nullable
@@ -852,7 +857,7 @@ public class GalleryListScene extends BaseScene
         onFilter(filterOpen, filterTagList.size());
 
         mSearchFab = ViewUtils.$$(mainLayout, R.id.search_fab);
-        mSearchOptionsFab = ViewUtils.$$(mainLayout, R.id.search_options_fab);
+        mSearchOptionsFab = (FloatingActionButton) ViewUtils.$$(mainLayout, R.id.search_options_fab);
 
         int paddingTopSB = resources.getDimensionPixelOffset(R.dimen.gallery_padding_top_search_bar);
         int paddingBottomFab = resources.getDimensionPixelOffset(R.dimen.gallery_padding_bottom_fab);
@@ -920,7 +925,7 @@ public class GalleryListScene extends BaseScene
         updateDownloadedOnlyFabState();
 
         mSearchFab.setOnClickListener(this);
-        mSearchOptionsFab.setOnClickListener(v -> setState(STATE_SEARCH));
+        mSearchOptionsFab.setOnClickListener(this);
 
         mSearchBarMover = new SearchBarMover(this, mSearchBar, mRecyclerView, mSearchLayout);
 
@@ -1205,6 +1210,9 @@ public class GalleryListScene extends BaseScene
         mSearchBar = null;
         mSearchFab = null;
         if (mSearchOptionsFab != null) mSearchOptionsFab.animate().cancel();
+        if (mSearchOptionsIconAnimator != null) mSearchOptionsIconAnimator.cancel();
+        mSearchOptionsIconAnimator = null;
+        mSearchOptionsDrawable = null;
         mSearchOptionsFab = null;
         mFloatingActionButton = null;
         mMultiSelectFab = null;
@@ -1532,11 +1540,8 @@ public class GalleryListScene extends BaseScene
                 break;
             case STATE_SIMPLE_SEARCH:
             case STATE_SEARCH:
-                setState(STATE_NORMAL);
-                handle = true;
-                break;
             case STATE_SEARCH_SHOW_LIST:
-                setState(STATE_SEARCH);
+                setState(STATE_NORMAL);
                 handle = true;
                 break;
         }
@@ -2412,6 +2417,12 @@ public class GalleryListScene extends BaseScene
 
     @Override
     public void onClick(View v) {
+        if (v == mSearchOptionsFab) {
+            if (!mMultiSelectMode && mState != STATE_NORMAL) {
+                setState(mState == STATE_SEARCH ? STATE_SEARCH_SHOW_LIST : STATE_SEARCH);
+            }
+            return;
+        }
         if (STATE_NORMAL != mState && null != mSearchBar) {
             mSearchBar.applySearch(false);
             hideSoftInput();
@@ -2770,6 +2781,41 @@ public class GalleryListScene extends BaseScene
         setState(state, true);
     }
 
+    private void updateSearchOptionsFab(boolean animation) {
+        if (mSearchOptionsFab == null) return;
+        Context context = mSearchOptionsFab.getContext();
+        // Like the search vector, use the FAB theme's tint when present, then iconColor.
+        // AddDeleteDrawable draws with Paint and does not apply image tint lists itself.
+        ColorStateList iconTint = mSearchOptionsFab.getImageTintList();
+        if (iconTint == null) iconTint = mSearchOptionsFab.getSupportImageTintList();
+        int iconColor = iconTint != null
+                ? iconTint.getColorForState(mSearchOptionsFab.getDrawableState(), iconTint.getDefaultColor())
+                : AttrResources.getAttrColor(context, R.attr.iconColor);
+        if (mSearchOptionsDrawable == null) {
+            mSearchOptionsDrawable = new AddDeleteDrawable(context, iconColor);
+            mSearchOptionsFab.setImageDrawable(mSearchOptionsDrawable);
+        } else {
+            mSearchOptionsDrawable.setColor(iconColor);
+        }
+        boolean expanded = mState == STATE_SEARCH;
+        mSearchOptionsFab.setContentDescription(mSearchOptionsFab.getContext().getString(
+                expanded ? R.string.search_hide_options : R.string.search_more_options));
+        // Cancel even at an endpoint: a second tap can arrive before the first animation frame.
+        if (mSearchOptionsIconAnimator != null) {
+            mSearchOptionsIconAnimator.cancel();
+            mSearchOptionsIconAnimator = null;
+        }
+        float progress = expanded ? 1f : 0f;
+        if (animation && mSearchOptionsDrawable.getProgress() != progress) {
+            // Match the search bar's shape animation while retaining the FAB's icon color.
+            mSearchOptionsIconAnimator = ObjectAnimator.ofFloat(mSearchOptionsDrawable, "progress", progress);
+            mSearchOptionsIconAnimator.setDuration(ANIMATE_TIME);
+            mSearchOptionsIconAnimator.start();
+        } else {
+            mSearchOptionsDrawable.setProgress(progress);
+        }
+    }
+
     private void setState(@State int state, boolean animation) {
         if (null == mSearchBar || null == mSearchBarMover ||
                 null == mViewTransition || null == mSearchLayout) {
@@ -2793,8 +2839,6 @@ public class GalleryListScene extends BaseScene
                         mSearchBarMover.returnSearchBarPosition();
                         selectSearchFab(animation);
                     } else if (state == STATE_SEARCH_SHOW_LIST) {
-                        mViewTransition.showView(1, animation);
-                        mSearchLayout.scrollSearchContainerToTop();
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                         selectSearchFab(animation);
@@ -2811,8 +2855,6 @@ public class GalleryListScene extends BaseScene
                         mSearchBar.setState(SearchBar.STATE_SEARCH, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     } else if (state == STATE_SEARCH_SHOW_LIST) {
-                        mViewTransition.showView(1, animation);
-                        mSearchLayout.scrollSearchContainerToTop();
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     }
@@ -2828,6 +2870,7 @@ public class GalleryListScene extends BaseScene
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     } else if (state == STATE_SEARCH_SHOW_LIST) {
+                        mViewTransition.showView(0, animation);
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     }
@@ -2843,6 +2886,7 @@ public class GalleryListScene extends BaseScene
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     } else if (state == STATE_SEARCH) {
+                        mViewTransition.showView(1, animation);
                         mSearchBar.setState(SearchBar.STATE_SEARCH, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     }
@@ -2852,6 +2896,7 @@ public class GalleryListScene extends BaseScene
         if (state == STATE_SEARCH || state == STATE_SEARCH_SHOW_LIST) {
             mSearchLayout.syncPresetTags(mSearchBar.getText());
         }
+        updateSearchOptionsFab(animation);
         updatePopularActions();
     }
 
@@ -3311,10 +3356,8 @@ public class GalleryListScene extends BaseScene
         public void onClick() {
             startScene(createAnnouncer());
 
-            if (mState == STATE_SIMPLE_SEARCH) {
+            if (mState == STATE_SIMPLE_SEARCH || mState == STATE_SEARCH_SHOW_LIST) {
                 setState(STATE_NORMAL);
-            } else if (mState == STATE_SEARCH_SHOW_LIST) {
-                setState(STATE_SEARCH);
             }
         }
 

@@ -186,6 +186,7 @@
     <string name="search_normal">Recherche normale</string>
     <string name="search_advance">Options avancées</string>
     <string name="search_more_options">Plus de critères de recherche</string>
+    <string name="search_hide_options">Masquer les critères de recherche</string>
     <string name="search_image">Recherche d\'une image</string>
     <string name="search_subscription_search">Recherche dans les tags suivis</string>
     <string name="search_normal_search">Chercher</string>
