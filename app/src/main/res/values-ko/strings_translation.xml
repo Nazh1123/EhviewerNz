@@ -86,10 +86,10 @@
     <string name="translation_target_mlkit_help">선택한 원문 및 대상 언어 팩을 준비하세요. 중국어는 공통 zh 모델을 사용하며 영어는 별도 팩이 필요하지 않습니다.</string>
     <string name="translation_target_reset">현재 대상 언어는 이 엔진에서 지원하지 않아 중국어 간체로 변경되었습니다.</string>
     <string name="translation_ahead">미리 번역할 페이지 수</string>
-    <string name="translation_ahead_help">현재 페이지와 지정된 수의 다음 페이지를 자동 번역합니다. 0~10페이지로 설정할 수 있습니다.</string>
-    <string name="translation_ahead_summary">다음 %1$d페이지</string>
+    <string name="translation_ahead_help">현재 페이지와 지정된 수의 다음 페이지를 자동 번역합니다. 0~6페이지로 설정할 수 있습니다.</string>
+    <string name="translation_ahead_summary">현재 페이지 + 다음 %1$s페이지</string>
     <string name="translation_current_only">현재 페이지만 번역</string>
-    <string name="translation_ahead_range">0~10 사이의 정수를 입력하세요</string>
+    <string name="translation_ahead_range">0~6 사이의 정수를 입력하세요</string>
     <string name="translation_model_status">만화 모델 상태</string>
     <string name="translation_checking_models">확인 중…</string>
     <string name="translation_models_available">텍스트 감지, OCR 및 텍스트 제거 모델이 준비되었습니다. 번역 시작 시 자동 검증합니다.</string>

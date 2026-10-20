@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_downloaded">waifu2x モデルをダウンロード済み（1.06 MiB）</string>
     <string name="sr_title">超解像</string>
     <string name="sr_settings">超解像の設定とモデル</string>
     <string name="sr_description">waifu2x で静止画像を選択した倍率に拡大します。4× と 8× は 2× の超解像を繰り返して処理します。既定では速度を優先し、画質優先では元の階調をより忠実に保ちます。リーダーの SR ボタンをタップすると有効になり、長押しするとギャラリー全体の処理、現在のページの再処理、原画像との比較ができます。同じページで両方の処理が必要な場合は、翻訳、超解像の順に完了してから次のページに進みます。それぞれの先読み処理範囲は独立しており、どちらも原画像を読み込みます。結果はタイル単位で保存され、中断後は保存済みのタイルから再開します。アニメーションや作業用メモリの上限を超える画像はスキップします。</string>
     <string name="sr_scale">拡大倍率</string>
-    <string name="sr_scale_auto">自動（短辺 ≥ 1200px、2×～8×）</string>
-    <string name="sr_scale_help">2×、4×、8× のうち、短辺が 1200px 以上になる最小の倍率を自動で選びます。上限は 8× のため、非常に小さい画像では 1200px に届かない場合があります。倍率が高いほど時間とストレージ容量が必要です。変更はリーダーに戻ると反映されます。</string>
+    <string name="sr_scale_auto">自動（短辺 ≥ 1200px、2×-8×）</string>
+    <string name="sr_scale_summary">%1$s</string>
     <string name="sr_automatic">閲覧中に自動で超解像</string>
     <string name="sr_auto_on">自動超解像：オン（タップでオフ）</string>
     <string name="sr_auto_off">自動超解像：オフ（タップでオン）</string>
@@ -34,8 +35,9 @@
     <string name="sr_category_reading">閲覧と処理</string>
     <string name="sr_category_storage">結果とストレージ</string>
     <string name="sr_category_models">モデル管理</string>
+    <string name="sr_category_about">使い方</string>
     <string name="sr_ahead">先読み処理するページ数</string>
-    <string name="sr_ahead_help">現在のページ + 後続 %1$d ページ（0～10）。リーダーの SR ボタンを長押しするとギャラリー全体を処理できます。</string>
+    <string name="sr_ahead_summary">現在のページ + 後続 %1$s ページ</string>
     <string name="sr_persist">超解像の結果を保持</string>
     <string name="sr_persist_help">再利用可能なタイルをアプリの専用ストレージに保持します。ギャラリーにローカルフォルダーがある場合は、完全な可逆圧縮 PNG も _suepr_resolution サブフォルダーに保存します。保存済みのタイルは再処理時にモデルを実行せずに書き出します。元のファイルは保持されます。</string>
     <string name="sr_cache_limit">一時キャッシュの上限</string>

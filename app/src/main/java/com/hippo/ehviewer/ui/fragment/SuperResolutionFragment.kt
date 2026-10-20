@@ -4,19 +4,16 @@ import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.preference.Preference
-import androidx.preference.PreferenceGroup
-import androidx.preference.PreferenceCategory
-import androidx.preference.ListPreference
-import androidx.preference.SwitchPreferenceCompat
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.superresolution.SuperResolutionModels
 import com.hippo.ehviewer.superresolution.SuperResolutionMemoryBudget
 import com.hippo.ehviewer.superresolution.SuperResolutionSettings
-import com.hippo.ehviewer.superresolution.SuperResolutionScale
 import com.hippo.ehviewer.superresolution.SuperResolutionStore
 import com.hippo.ehviewer.translation.TranslationModels
 import com.hippo.ehviewer.translation.notifyModelDownloadNetwork
 import com.hippo.ehviewer.ui.SettingsActivity
+import com.hippo.preference.ListPreference
+import com.hippo.preference.SwitchPreference
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
 
@@ -25,9 +22,10 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
     private var mode = TranslationModels.ImportMode.COPY
     private var scope: CoroutineScope? = null
     private var work: Job? = null
-    private lateinit var automatic: SwitchPreferenceCompat
+    private lateinit var automatic: SwitchPreference
     private lateinit var info: Preference
     private lateinit var acceleration: ListPreference
+    private lateinit var download: Preference
     private val actions = mutableListOf<Preference>()
     private val picker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) {
@@ -43,24 +41,11 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
         models = SuperResolutionModels(requireContext().applicationContext)
         mode = if (savedInstanceState?.getBoolean("reference") == true)
             TranslationModels.ImportMode.REFERENCE else TranslationModels.ImportMode.COPY
-        val screen = preferenceManager.createPreferenceScreen(requireContext())
-        preferenceScreen = screen
-        info = Preference(requireContext()).apply {
-            setTitle(R.string.sr_title)
-            setSummary(R.string.sr_description)
-            isSelectable = false
-        }
-        screen.addPreference(info)
-        fun category(title: Int) = PreferenceCategory(requireContext()).apply {
-            setTitle(title)
-            screen.addPreference(this)
-        }
-        val reading = category(R.string.sr_category_reading)
-        automatic = SwitchPreferenceCompat(requireContext()).apply {
-            key = SuperResolutionSettings.AUTO_ENABLE
-            setTitle(R.string.sr_automatic)
-            setSummary(R.string.sr_automatic_help)
-            setDefaultValue(false)
+        val options = SuperResolutionSettings(requireContext()).read()
+        actions.clear()
+        setPreferencesFromResource(R.xml.super_resolution_settings, rootKey)
+        info = requirePreference("super_resolution_info")
+        automatic = requirePreference<SwitchPreference>(SuperResolutionSettings.AUTO_ENABLE).apply {
             setOnPreferenceChangeListener { _, value ->
                 if (value == true && !models.store.ready()) {
                     AlertDialog.Builder(requireContext()).setMessage(R.string.sr_models_required)
@@ -69,69 +54,22 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
                 } else true
             }
         }
-        reading.addPreference(automatic)
-        reading.addPreference(ListPreference(requireContext()).apply {
-            key = SuperResolutionSettings.SCALE
-            setTitle(R.string.sr_scale)
-            entries = arrayOf(getString(R.string.sr_scale_auto), "2×", "4×", "8×")
-            entryValues = SuperResolutionScale.entries.map { it.value }.toTypedArray()
-            setDefaultValue("2")
-            summaryProvider = Preference.SummaryProvider<ListPreference> {
-                "${it.entry ?: "2×"}\n${getString(R.string.sr_scale_help)}"
-            }
-        })
-        acceleration = ListPreference(requireContext()).apply {
-            key = SuperResolutionModels.BACKEND
-            setTitle(R.string.sr_backend)
-            entries = arrayOf(getString(R.string.sr_backend_auto), getString(R.string.sr_backend_fast), getString(R.string.sr_backend_cpu))
-            entryValues = arrayOf("auto", "auto_fast", "cpu")
-            setDefaultValue(SuperResolutionModels.DEFAULT_BACKEND)
-            summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
+        requirePreference<ListPreference>(SuperResolutionSettings.SCALE).value = options.scale.value
+        acceleration = requirePreference<ListPreference>(SuperResolutionModels.BACKEND).apply {
+            value = options.mode
         }
-        reading.addPreference(acceleration)
-        reading.addPreference(ListPreference(requireContext()).apply {
-            key = SuperResolutionSettings.AHEAD
-            setTitle(R.string.sr_ahead)
-            entries = (0..10).map(Int::toString).toTypedArray()
-            entryValues = entries
-            setDefaultValue("2")
-            summaryProvider = Preference.SummaryProvider<ListPreference> {
-                getString(R.string.sr_ahead_help, it.value?.toIntOrNull() ?: 2)
-            }
-        })
-        val storage = category(R.string.sr_category_storage)
-        storage.addPreference(SwitchPreferenceCompat(requireContext()).apply {
-            key = SuperResolutionSettings.PERSIST
-            setTitle(R.string.sr_persist)
-            setSummary(R.string.sr_persist_help)
-            setDefaultValue(true)
-        })
-        storage.addPreference(ListPreference(requireContext()).apply {
-            key = SuperResolutionSettings.CACHE
-            setTitle(R.string.sr_cache_limit)
-            entryValues = arrayOf("64", "128", "256", "512", "1024", "2048", "4096", "8192")
-            entries = entryValues.map { "$it MiB" }.toTypedArray()
-            setDefaultValue("512")
-            summaryProvider = ListPreference.SimpleSummaryProvider.getInstance()
-        })
-        action(storage, R.string.sr_clear_cache) {
+        requirePreference<ListPreference>(SuperResolutionSettings.AHEAD).value = options.ahead.toString()
+        requirePreference<ListPreference>(SuperResolutionSettings.CACHE).value = options.cacheMiB.toString()
+        action("super_resolution_clear_cache") {
             operate(getString(R.string.sr_clear_cache)) { SuperResolutionStore.clear(requireContext().applicationContext) }
         }
-        action(storage, R.string.sr_clear_saved) {
-            AlertDialog.Builder(requireContext()).setMessage(R.string.sr_clear_saved_help)
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(android.R.string.ok) { _, _ ->
-                    operate(getString(R.string.sr_clear_saved)) { SuperResolutionStore.clear(requireContext().applicationContext, persistent = true) }
-                }.show()
-        }
-        val modelSettings = category(R.string.sr_category_models)
-        action(modelSettings, R.string.sr_download) {
+        download = action("super_resolution_download") {
             operate(getString(R.string.sr_download)) {
                 notifyModelDownloadNetwork(requireContext().applicationContext)
                 models.download(::progress)
             }
         }
-        action(modelSettings, R.string.sr_import) {
+        action("super_resolution_import") {
             AlertDialog.Builder(requireContext()).setTitle(R.string.translation_image_import_mode)
                 .setItems(arrayOf(getString(R.string.translation_model_import_copy),
                     getString(R.string.translation_model_import_reference))) { _, which ->
@@ -139,10 +77,10 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
                     picker.launch(arrayOf("*/*"))
                 }.show()
         }
-        action(modelSettings, R.string.sr_remove) {
+        action("super_resolution_remove") {
             operate(getString(R.string.sr_remove)) { models.store.delete() }
         }
-        action(modelSettings, R.string.sr_license) {
+        action("super_resolution_license") {
             val license = requireContext().assets.open("super-resolution-notices.txt")
                 .bufferedReader().use { it.readText() } + "\n\n" +
                 requireContext().assets.open("super-resolution-vulkan-notices.txt")
@@ -150,28 +88,39 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
             AlertDialog.Builder(requireContext()).setTitle(R.string.sr_license).setMessage(license)
                 .setPositiveButton(android.R.string.ok, null).show()
         }
-        action(modelSettings, android.R.string.cancel) { work?.cancel() }
         refresh()
     }
 
-    private fun action(screen: PreferenceGroup, title: Int, block: () -> Unit) {
-        val preference = Preference(requireContext()).apply {
-            setTitle(title)
+    private fun <T : Preference> requirePreference(key: String): T =
+        requireNotNull(findPreference<T>(key)) { "Missing preference: $key" }
+
+    private fun action(key: String, block: () -> Unit): Preference {
+        val preference = requirePreference<Preference>(key).apply {
             setOnPreferenceClickListener { block(); true }
         }
         actions += preference
-        screen.addPreference(preference)
+        return preference
     }
 
     private fun refresh() {
-        info.summary = getString(R.string.sr_description) + "\n" +
-            getString(if (models.store.ready()) R.string.sr_models_ready else R.string.sr_models_required) + "\n" +
+        refreshDownloadState(work?.isActive == true)
+        info.summary = getString(R.string.sr_info_summary,
+            getString(R.string.sr_description),
+            getString(if (models.store.ready()) R.string.sr_models_ready else R.string.sr_models_required),
             getString(R.string.sr_memory_budget, SuperResolutionMemoryBudget.current(requireContext()) /
-                SuperResolutionMemoryBudget.MIB)
+                SuperResolutionMemoryBudget.MIB))
+    }
+
+    private fun refreshDownloadState(busy: Boolean) {
+        val ready = models.store.ready()
+        download.setTitle(if (ready) R.string.sr_downloaded else R.string.sr_download)
+        download.isEnabled = !busy && !ready
     }
 
     private fun progress(name: String, bytes: Long, total: Long) {
-        scope?.launch { info.summary = "$name: ${bytes * 100 / total.coerceAtLeast(1)}%" }
+        scope?.launch {
+            info.summary = getString(R.string.sr_model_progress, name, bytes * 100 / total.coerceAtLeast(1))
+        }
     }
 
     private fun operate(title: String, block: suspend () -> Unit) {
@@ -180,7 +129,7 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
         work = operationScope.launch {
             automatic.isEnabled = false
             acceleration.isEnabled = false
-            actions.dropLast(1).forEach { it.isEnabled = false }
+            actions.forEach { it.isEnabled = false }
             info.summary = title
             try {
                 withContext(Dispatchers.IO) { SuperResolutionModels.lock.withLock { block() } }
@@ -195,6 +144,7 @@ class SuperResolutionFragment : BasePreferenceFragmentCompat() {
                     automatic.isEnabled = true
                     acceleration.isEnabled = true
                     actions.forEach { it.isEnabled = true }
+                    refreshDownloadState(busy = false)
                 }
             }
         }

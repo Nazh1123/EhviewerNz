@@ -1120,7 +1120,7 @@
     <string name="settings_fork_delete_empty_galleries">Eliminar galería vacía</string>
     <string name="settings_fork_download_label_continuous_browse">Descargar pestaña navegación continua</string>
     <string name="settings_fork_download_label_continuous_browse_summary">Mostrar la galería de descargas continuamente de arriba a abajo por etiqueta en la página de descarga</string>
-    <string name="settings_fork_features">Funciones varias del Fork</string>
+    <string name="settings_fork_features">Varios del Fork</string>
     <string name="settings_fork_gallery_immediate_jump">Saltar a la galería ahora</string>
     <string name="settings_fork_long_press_save_summary">Mantenga presionada la zona de cambio de página para guardar la imagen actual localmente</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Mantenga presionado para guardar correctamente y pasar automáticamente a la página siguiente.</string>

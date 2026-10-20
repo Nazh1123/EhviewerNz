@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="sr_scale_entries" translatable="false">
+        <item>@string/sr_scale_auto</item>
+        <item>2×</item>
+        <item>4×</item>
+        <item>8×</item>
+    </string-array>
+    <string-array name="sr_scale_values" translatable="false">
+        <item>auto</item>
+        <item>2</item>
+        <item>4</item>
+        <item>8</item>
+    </string-array>
+    <string-array name="sr_backend_entries" translatable="false">
+        <item>@string/sr_backend_auto</item>
+        <item>@string/sr_backend_fast</item>
+        <item>@string/sr_backend_cpu</item>
+    </string-array>
+    <string-array name="sr_backend_values" translatable="false">
+        <item>auto</item>
+        <item>auto_fast</item>
+        <item>cpu</item>
+    </string-array>
+    <string-array name="sr_ahead_values" translatable="false">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
+        <item>9</item>
+        <item>10</item>
+    </string-array>
+    <string-array name="sr_cache_entries" translatable="false">
+        <item>64 MiB</item>
+        <item>128 MiB</item>
+        <item>256 MiB</item>
+        <item>512 MiB</item>
+        <item>1024 MiB</item>
+        <item>2048 MiB</item>
+        <item>4096 MiB</item>
+        <item>8192 MiB</item>
+    </string-array>
+    <string-array name="sr_cache_values" translatable="false">
+        <item>64</item>
+        <item>128</item>
+        <item>256</item>
+        <item>512</item>
+        <item>1024</item>
+        <item>2048</item>
+        <item>4096</item>
+        <item>8192</item>
+    </string-array>
+</resources>

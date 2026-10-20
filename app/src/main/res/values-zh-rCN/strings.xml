@@ -768,7 +768,7 @@
     <string name="settings_advanced_clear_memory_cache_summary">清理缩略图、画廊信息的内存缓存</string>
     <string name="settings_advanced_read_cache_size">阅读缓存大小</string>
     <string name="settings_advanced_app_language_title">App 界面语言</string>
-    <string name="settings_fork_features">Fork功能杂项</string>
+    <string name="settings_fork_features">Fork 杂项</string>
     <string name="settings_fork_category_gallery">画廊与搜索</string>
     <string name="settings_fork_category_reading">阅读与保存</string>
     <string name="settings_fork_category_animated_webp">动态 WebP</string>

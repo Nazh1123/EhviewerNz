@@ -1123,7 +1123,7 @@
     <string name="settings_fork_delete_empty_galleries">ลบแกลเลอรีที่ว่างเปล่า</string>
     <string name="settings_fork_download_label_continuous_browse">ดาวน์โหลดแท็บเรียกดูอย่างต่อเนื่อง</string>
     <string name="settings_fork_download_label_continuous_browse_summary">แสดงแกลเลอรีดาวน์โหลดอย่างต่อเนื่องจากบนลงล่างด้วยแท็กในหน้าดาวน์โหลด</string>
-    <string name="settings_fork_features">ฟังก์ชันเบ็ดเตล็ดของ Fork</string>
+    <string name="settings_fork_features">เบ็ดเตล็ดของ Fork</string>
     <string name="settings_fork_gallery_immediate_jump">แกลลอรี่กระโดดตอนนี้</string>
     <string name="settings_fork_long_press_save_summary">กดบริเวณเปลี่ยนหน้าค้างไว้เพื่อบันทึกรูปภาพปัจจุบันในเครื่อง</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">กดค้างเพื่อบันทึกสำเร็จและเปิดหน้าถัดไปโดยอัตโนมัติ</string>

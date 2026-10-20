@@ -86,10 +86,10 @@
     <string name="translation_target_mlkit_help">เตรียมชุดภาษาต้นทางและปลายทางที่เลือก ภาษาจีนใช้โมเดล zh ร่วมกัน ภาษาอังกฤษไม่ต้องมีชุดภาษาแยก</string>
     <string name="translation_target_reset">เอนจินนี้ไม่รองรับภาษาปลายทางปัจจุบัน จึงเปลี่ยนเป็นจีนตัวย่อแล้ว</string>
     <string name="translation_ahead">จำนวนหน้าที่แปลล่วงหน้า</string>
-    <string name="translation_ahead_help">แปลหน้าปัจจุบันและหน้าถัดไปตามจำนวนที่กำหนดโดยอัตโนมัติ ตั้งได้ 0–10 หน้า</string>
-    <string name="translation_ahead_summary">%1$d หน้าถัดไป</string>
+    <string name="translation_ahead_help">แปลหน้าปัจจุบันและหน้าถัดไปตามจำนวนที่กำหนดโดยอัตโนมัติ ตั้งได้ 0–6 หน้า</string>
+    <string name="translation_ahead_summary">หน้าปัจจุบัน + %1$s หน้าถัดไป</string>
     <string name="translation_current_only">แปลเฉพาะหน้าปัจจุบัน</string>
-    <string name="translation_ahead_range">ป้อนจำนวนเต็มตั้งแต่ 0 ถึง 10</string>
+    <string name="translation_ahead_range">ป้อนจำนวนเต็มตั้งแต่ 0 ถึง 6</string>
     <string name="translation_model_status">สถานะโมเดลมังงะ</string>
     <string name="translation_checking_models">กำลังตรวจสอบ…</string>
     <string name="translation_models_available">โมเดลตรวจจับข้อความ OCR และลบข้อความพร้อมแล้ว จะตรวจสอบโดยอัตโนมัติเมื่อเริ่มแปล</string>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory android:title="@string/sr_category_reading">
+
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="false"
+            android:key="super_resolution_auto_enable_on_entry"
+            android:summary="@string/sr_automatic_help"
+            android:title="@string/sr_automatic"
+            app:allowDividerAbove="false" />
+
+        <com.hippo.preference.ListPreference
+            android:defaultValue="2"
+            android:key="super_resolution_scale"
+            android:summary="@string/sr_scale_summary"
+            android:title="@string/sr_scale"
+            app:allowDividerAbove="true"
+            app:entries="@array/sr_scale_entries"
+            app:entryValues="@array/sr_scale_values" />
+
+        <com.hippo.preference.ListPreference
+            android:defaultValue="auto_fast"
+            android:key="reader_super_resolution_backend"
+            android:summary="%s"
+            android:title="@string/sr_backend"
+            app:allowDividerAbove="true"
+            app:entries="@array/sr_backend_entries"
+            app:entryValues="@array/sr_backend_values" />
+
+        <com.hippo.preference.ListPreference
+            android:defaultValue="2"
+            android:key="super_resolution_ahead"
+            android:summary="@string/sr_ahead_summary"
+            android:title="@string/sr_ahead"
+            app:allowDividerAbove="true"
+            app:entries="@array/sr_ahead_values"
+            app:entryValues="@array/sr_ahead_values" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/sr_category_storage">
+
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="true"
+            android:key="super_resolution_persist"
+            android:summary="@string/sr_persist_help"
+            android:title="@string/sr_persist"
+            app:allowDividerAbove="false" />
+
+        <com.hippo.preference.ListPreference
+            android:defaultValue="512"
+            android:key="super_resolution_cache_mib"
+            android:summary="%s"
+            android:title="@string/sr_cache_limit"
+            app:allowDividerAbove="true"
+            app:entries="@array/sr_cache_entries"
+            app:entryValues="@array/sr_cache_values" />
+
+        <Preference
+            android:key="super_resolution_clear_cache"
+            android:persistent="false"
+            android:title="@string/sr_clear_cache"
+            app:allowDividerAbove="true" />
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="@string/sr_category_models">
+
+        <Preference
+            android:key="super_resolution_download"
+            android:persistent="false"
+            android:title="@string/sr_download"
+            app:allowDividerAbove="false" />
+
+        <Preference
+            android:key="super_resolution_import"
+            android:persistent="false"
+            android:title="@string/sr_import"
+            app:allowDividerAbove="true" />
+
+        <Preference
+            android:key="super_resolution_remove"
+            android:persistent="false"
+            android:title="@string/sr_remove"
+            app:allowDividerAbove="true" />
+
+        <Preference
+            android:key="super_resolution_license"
+            android:persistent="false"
+            android:title="@string/sr_license"
+            app:allowDividerAbove="true" />
+    </PreferenceCategory>
+    
+    <PreferenceCategory android:title="@string/sr_category_about">
+
+        <Preference
+            android:key="super_resolution_info"
+            android:persistent="false"
+            android:selectable="false"
+            android:summary="@string/sr_description"
+            android:title="@string/sr_title" />
+    </PreferenceCategory>
+</PreferenceScreen>

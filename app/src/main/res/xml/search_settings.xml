@@ -4,10 +4,17 @@
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
+        android:key="show_viewed_galleries"
+        android:title="@string/settings_show_viewed_galleries"
+        android:summary="@string/settings_show_viewed_galleries_summary"
+        app:allowDividerAbove="false" />
+
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
         android:key="popular_updates_only"
         android:title="@string/settings_popular_updates_only"
         android:summary="@string/settings_popular_updates_only_summary"
-        app:allowDividerAbove="false" />
+        app:allowDividerAbove="true" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"
@@ -21,7 +28,7 @@
         android:title="@string/settings_search_preset_tag_1"
         android:dialogMessage="@string/settings_search_preset_tag_hint"
         app:useSimpleSummaryProvider="true"
-        app:allowDividerAbove="true" />
+        app:allowDividerAbove="false" />
 
     <androidx.preference.EditTextPreference
         android:dependency="enable_search_preset_tags"

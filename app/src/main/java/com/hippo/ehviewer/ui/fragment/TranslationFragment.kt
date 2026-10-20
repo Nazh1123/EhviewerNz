@@ -2,11 +2,7 @@ package com.hippo.ehviewer.ui.fragment
 
 import android.os.Bundle
 import android.text.InputType
-import android.view.ViewGroup
-import android.widget.SeekBar
 import android.widget.Toast
-import androidx.appcompat.widget.AppCompatSeekBar
-import androidx.core.widget.doAfterTextChanged
 import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.appcompat.app.AlertDialog
@@ -186,44 +182,11 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
             }
         }
         refreshLanguages()
-        requirePreference<EditTextPreference>("translation_ahead").apply {
-            text = options.ahead.toString()
-            summaryProvider = Preference.SummaryProvider<EditTextPreference> {
-                val count = it.text?.toIntOrNull() ?: 2
-                if (count == 0) getString(R.string.translation_current_only)
-                else getString(R.string.translation_ahead_summary, count)
-            }
-            setOnBindEditTextListener { input ->
-                input.inputType = InputType.TYPE_CLASS_NUMBER
-                input.setSingleLine(true)
-                input.setSelectAllOnFocus(true)
-                val slider = AppCompatSeekBar(input.context).apply {
-                    tag = "translation_ahead_slider"
-                    max = 10
-                    progress = input.text.toString().toIntOrNull()?.coerceIn(0, max) ?: 2
-                    contentDescription = getString(R.string.translation_ahead)
-                }
-                (input.parent as ViewGroup).addView(slider, ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, (48 * resources.displayMetrics.density).toInt()))
-                slider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                        if (input.text.toString().toIntOrNull() != progress) {
-                            input.setText(progress.toString())
-                            input.setSelection(input.length())
-                        }
-                    }
-                    override fun onStartTrackingTouch(seekBar: SeekBar) = Unit
-                    override fun onStopTrackingTouch(seekBar: SeekBar) = Unit
-                })
-                input.doAfterTextChanged { text ->
-                    text.toString().toIntOrNull()?.takeIf { it in 0..slider.max }?.let {
-                        slider.progress = it
-                    }
-                }
-            }
+        requirePreference<ListPreference>("translation_ahead").apply {
+            value = options.ahead.toString()
             setOnPreferenceChangeListener { _, value ->
                 val count = value.toString().toIntOrNull()
-                if (count == null || count !in 0..10) {
+                if (count == null || count !in 0..TranslationWindow.MAX_AHEAD) {
                     Toast.makeText(context, R.string.translation_ahead_range, Toast.LENGTH_SHORT).show()
                     false
                 } else { settings.save(settings.read().copy(ahead = count)); true }

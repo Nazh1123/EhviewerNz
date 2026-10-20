@@ -1064,7 +1064,7 @@
     <string name="settings_fork_delete_empty_galleries">空のギャラリーを削除する</string>
     <string name="settings_fork_download_label_continuous_browse">「ダウンロード」タブの継続的な閲覧</string>
     <string name="settings_fork_download_label_continuous_browse_summary">ダウンロード ページのタグごとにダウンロード ギャラリーを上から下に連続して表示します</string>
-    <string name="settings_fork_features">Forkのその他の機能</string>
+    <string name="settings_fork_features">Fork その他</string>
     <string name="settings_fork_gallery_immediate_jump">今すぐギャラリージャンプ</string>
     <string name="settings_fork_long_press_save_summary">ページめくり領域を長押しして、現在の画像をローカルに保存します</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">長押しすると正常に保存され、自動的に次のページに進みます。</string>

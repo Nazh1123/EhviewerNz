@@ -77,13 +77,14 @@
             android:title="@string/translation_target"
             app:allowDividerAbove="true" />
 
-        <androidx.preference.EditTextPreference
-            android:dialogMessage="@string/translation_ahead_help"
-            android:dialogTitle="@string/translation_ahead"
+        <com.hippo.preference.ListPreference
             android:key="translation_ahead"
             android:persistent="false"
+            android:summary="@string/translation_ahead_summary"
             android:title="@string/translation_ahead"
-            app:allowDividerAbove="true" />
+            app:allowDividerAbove="true"
+            app:entries="@array/translation_ahead_values"
+            app:entryValues="@array/translation_ahead_values" />
 
         <com.hippo.preference.SwitchPreference
             android:key="translation_inpaint"

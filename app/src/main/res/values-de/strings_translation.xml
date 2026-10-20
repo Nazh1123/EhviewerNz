@@ -86,10 +86,10 @@
     <string name="translation_target_mlkit_help">Pakete für die gewählte Quell- und Zielsprache vorbereiten. Chinesisch nutzt das gemeinsame zh-Modell; Englisch benötigt kein separates Paket.</string>
     <string name="translation_target_reset">Die aktuelle Zielsprache wird von dieser Engine nicht unterstützt. Auf vereinfachtes Chinesisch umgestellt.</string>
     <string name="translation_ahead">Seiten im Voraus übersetzen</string>
-    <string name="translation_ahead_help">Aktuelle Seite und die angegebene Anzahl nachfolgender Seiten automatisch übersetzen. Einstellbar von 0 bis 10 Seiten.</string>
-    <string name="translation_ahead_summary">Nächste %1$d Seiten</string>
+    <string name="translation_ahead_help">Aktuelle Seite und die angegebene Anzahl nachfolgender Seiten automatisch übersetzen. Einstellbar von 0 bis 6 Seiten.</string>
+    <string name="translation_ahead_summary">Aktuelle Seite + %1$s folgende Seiten</string>
     <string name="translation_current_only">Nur aktuelle Seite übersetzen</string>
-    <string name="translation_ahead_range">Eine ganze Zahl von 0 bis 10 eingeben</string>
+    <string name="translation_ahead_range">Eine ganze Zahl von 0 bis 6 eingeben</string>
     <string name="translation_model_status">Manga-Modellstatus</string>
     <string name="translation_checking_models">Wird geprüft…</string>
     <string name="translation_models_available">Modelle für Texterkennung, OCR und Textentfernung sind bereit. Beim Übersetzungsstart erfolgt eine automatische Prüfung.</string>

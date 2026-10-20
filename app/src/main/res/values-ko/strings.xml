@@ -1112,7 +1112,7 @@
     <string name="settings_fork_delete_empty_galleries">빈 갤러리 삭제</string>
     <string name="settings_fork_download_label_continuous_browse">다운로드 탭 연속 탐색</string>
     <string name="settings_fork_download_label_continuous_browse_summary">다운로드 페이지의 태그를 통해 다운로드 갤러리를 위에서 아래로 연속적으로 표시합니다.</string>
-    <string name="settings_fork_features">Fork 기타 기능</string>
+    <string name="settings_fork_features">Fork 기타</string>
     <string name="settings_fork_gallery_immediate_jump">지금 갤러리 점프</string>
     <string name="settings_fork_long_press_save_summary">현재 사진을 로컬에 저장하려면 페이지 넘김 영역을 길게 누르세요.</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">길게 누르면 성공적으로 저장되고 자동으로 다음 페이지로 넘어갑니다.</string>

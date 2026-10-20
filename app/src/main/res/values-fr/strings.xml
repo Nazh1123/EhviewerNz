@@ -1046,7 +1046,7 @@
     <string name="settings_fork_delete_empty_galleries">Supprimer la galerie vide</string>
     <string name="settings_fork_download_label_continuous_browse">Onglet de téléchargement navigation continue</string>
     <string name="settings_fork_download_label_continuous_browse_summary">Afficher la galerie de téléchargement en continu de haut en bas par balise dans la page de téléchargement</string>
-    <string name="settings_fork_features">Fonctions diverses du Fork</string>
+    <string name="settings_fork_features">Divers du Fork</string>
     <string name="settings_fork_gallery_immediate_jump">Galerie sauter maintenant</string>
     <string name="settings_fork_long_press_save_summary">Appuyez longuement sur la zone de tournage de page pour enregistrer l\'image actuelle localement</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Appuyez longuement pour enregistrer avec succès et passer automatiquement à la page suivante.</string>

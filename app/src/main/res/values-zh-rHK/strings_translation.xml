@@ -86,10 +86,10 @@
     <string name="translation_target_mlkit_help">請準備所選來源與目標語言包。中文共用 zh 模型，英語無需獨立語言包。</string>
     <string name="translation_target_reset">目前目標語言不適用於此引擎，已切換為簡體中文。</string>
     <string name="translation_ahead">預翻譯頁數</string>
-    <string name="translation_ahead_help">自動翻譯目前頁面以及指定數量的後續頁面。可設定 0–10 頁。</string>
-    <string name="translation_ahead_summary">後續 %1$d 頁</string>
+    <string name="translation_ahead_help">自動翻譯目前頁面以及指定數量的後續頁面。可設定 0–6 頁。</string>
+    <string name="translation_ahead_summary">目前頁面 + 後續 %1$s 頁</string>
     <string name="translation_current_only">僅翻譯目前頁面</string>
-    <string name="translation_ahead_range">請輸入 0–10 之間的整數</string>
+    <string name="translation_ahead_range">請輸入 0–6 之間的整數</string>
     <string name="translation_model_status">漫畫模型狀態</string>
     <string name="translation_checking_models">正在檢查…</string>
     <string name="translation_models_available">文字偵測、OCR 和去字模型已就緒，開始翻譯時自動驗證</string>

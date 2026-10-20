@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_downloaded">已下载 waifu2x 模型（1.06 MiB）</string>
     <string name="sr_title">超分辨率</string>
     <string name="sr_settings">超分辨率设置与模型</string>
     <string name="sr_description">waifu2x 按所选倍率放大静态图片，4× 与 8× 通过多轮 2× 超分实现。默认速度优先，画质优先更接近原有灰阶。点击阅读器超分按钮开启，长按可处理完整画廊、重试本页或对比原图。同一页需要两条流程时，先翻译、再超分，完成后再处理下一页。两边的预处理范围独立，均读取原图。结果分块保存，中断后从已保存的块继续。动画及处理内存不足的图片会跳过。</string>
     <string name="sr_scale">超分放大倍率</string>
-    <string name="sr_scale_auto">自动（短边 ≥ 1200px，2×～8×）</string>
-    <string name="sr_scale_help">自动从 2×、4×、8× 中选择使短边达到 1200px 的最小倍率，最高 8×；极小图片可能仍不足 1200px。高倍率需要更多时间和存储空间。修改后返回阅读器生效。</string>
+    <string name="sr_scale_auto">自动（短边 ≥ 1200px，2×-8×）</string>
+    <string name="sr_scale_summary">%1$s</string>
     <string name="sr_automatic">阅读时自动超分</string>
     <string name="sr_auto_on">自动超分：已开启（点击关闭）</string>
     <string name="sr_auto_off">自动超分：已关闭（点击开启）</string>
@@ -34,8 +35,9 @@
     <string name="sr_category_reading">阅读与处理</string>
     <string name="sr_category_storage">结果与存储</string>
     <string name="sr_category_models">模型管理</string>
+    <string name="sr_category_about">使用说明</string>
     <string name="sr_ahead">预处理后续页数</string>
-    <string name="sr_ahead_help">当前页 + 后续 %1$d 页（0～10）。长按阅读器超分按钮可处理完整画廊。</string>
+    <string name="sr_ahead_summary">当前页 + 后续 %1$s 页</string>
     <string name="sr_persist">持久保存超分结果</string>
     <string name="sr_persist_help">在应用私有存储保留可复用的分块结果。画廊有本地目录时，同时合成为完整无损 PNG，保存到画廊的 _suepr_resolution 子文件夹。已有分块再次处理时会直接导出，无需重新运行模型。保留原始文件。</string>
     <string name="sr_cache_limit">临时缓存上限</string>

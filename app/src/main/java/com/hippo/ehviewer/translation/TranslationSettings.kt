@@ -122,7 +122,7 @@ class TranslationSettings(context: Context) {
     }
 
     fun read() = TranslationOptions(prefs.getString("target", "zh") ?: "zh", prefs.getBoolean("inpaint", true),
-        prefs.getInt("ahead", 2).coerceIn(0, 10),
+        prefs.getInt("ahead", 2).coerceIn(0, TranslationWindow.MAX_AHEAD),
         TranslationBackend.entries.firstOrNull { it.name == prefs.getString("backend", null) }
             ?: TranslationBackend.NATIVE_LLM,
         prefs.getString("api_url", null) ?: TranslationOptions().apiUrl,
@@ -135,7 +135,7 @@ class TranslationSettings(context: Context) {
     fun save(options: TranslationOptions) {
         require(TranslationLanguages.validTarget(options))
         require(TranslationLanguages.validSource(options))
-        require(options.ahead in 0..10)
+        require(options.ahead in 0..TranslationWindow.MAX_AHEAD)
         require(options.validApiUrl())
         require(options.cacheSizeMb in CACHE_SIZES_MB)
         require(options.nativeModelId.isEmpty() || options.nativeModelId.matches(Regex("[a-f0-9]{64}")))

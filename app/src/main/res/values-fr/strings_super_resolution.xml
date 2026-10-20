@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_downloaded">Modèle waifu2x téléchargé (1.06 MiB)</string>
     <string name="sr_title">Super-résolution</string>
     <string name="sr_settings">Paramètres et modèles de super-résolution</string>
     <string name="sr_description">waifu2x agrandit les images fixes selon le facteur choisi ; les facteurs 4× et 8× utilisent plusieurs traitements 2× successifs. Le mode vitesse est activé par défaut ; le mode qualité préserve plus fidèlement les niveaux de gris. Touchez le bouton SR du lecteur pour activer la fonction, ou maintenez-le enfoncé pour traiter toute la galerie, réessayer une page ou comparer les images. Si les deux fonctions doivent traiter une même page, la traduction se termine avant la super-résolution, puis la page suivante est traitée. Chaque fonction conserve sa propre plage de prétraitement et lit l’original. Les résultats sont enregistrés par tuiles ; un traitement interrompu reprend à partir des tuiles enregistrées. Les animations et les images dépassant le budget de mémoire de travail sont ignorées.</string>
     <string name="sr_scale">Facteur d’agrandissement</string>
-    <string name="sr_scale_auto">Automatique (côté court ≥ 1200px, 2×–8×)</string>
-    <string name="sr_scale_help">Choisit automatiquement le plus petit facteur parmi 2×, 4× et 8× permettant d’atteindre au moins 1200px sur le côté court, avec un maximum de 8×. Les très petites images peuvent rester en dessous de 1200px. Un facteur plus élevé demande davantage de temps et d’espace de stockage. Les modifications prennent effet au retour dans le lecteur.</string>
+    <string name="sr_scale_auto">Automatique (côté court ≥ 1200px, 2×-8×)</string>
+    <string name="sr_scale_summary">%1$s</string>
     <string name="sr_automatic">Améliorer automatiquement pendant la lecture</string>
     <string name="sr_auto_on">Super-résolution automatique : activée (toucher pour désactiver)</string>
     <string name="sr_auto_off">Super-résolution automatique : désactivée (toucher pour activer)</string>
@@ -34,8 +35,9 @@
     <string name="sr_category_reading">Lecture et traitement</string>
     <string name="sr_category_storage">Résultats et stockage</string>
     <string name="sr_category_models">Gestion des modèles</string>
+    <string name="sr_category_about">Instructions</string>
     <string name="sr_ahead">Pages suivantes à prétraiter</string>
-    <string name="sr_ahead_help">Page actuelle + %1$d pages suivantes (0–10). Maintenez le bouton SR du lecteur enfoncé pour traiter toute la galerie.</string>
+    <string name="sr_ahead_summary">Page actuelle + %1$s pages suivantes</string>
     <string name="sr_persist">Conserver les résultats améliorés</string>
     <string name="sr_persist_help">Conserve les tuiles réutilisables dans le stockage privé de l’application. Si la galerie possède un dossier local, des PNG complets sans perte sont aussi enregistrés dans son sous-dossier _suepr_resolution. Les tuiles déjà enregistrées sont exportées lors d’un nouveau traitement, sans relancer le modèle. Les fichiers originaux sont conservés.</string>
     <string name="sr_cache_limit">Limite du cache temporaire</string>

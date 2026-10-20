@@ -16,6 +16,12 @@
             android:key="manual_image_save_location"
             android:title="@string/settings_download_manual_save_location"
             app:allowDividerAbove="true" />
+
+        <com.hippo.preference.SwitchPreference  
+            android:defaultValue="true"
+            android:key="use_local_timezone"
+            android:summary="@string/settings_eh_use_local_timezone_summary"
+            android:title="@string/settings_eh_use_local_timezone" />
             
     <!-- Retired switches: use key bindings.
 

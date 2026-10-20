@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_downloaded">Modelo waifu2x descargado (1.06 MiB)</string>
     <string name="sr_title">Superresolución</string>
     <string name="sr_settings">Ajustes y modelos de superresolución</string>
     <string name="sr_description">waifu2x amplía imágenes estáticas con el factor seleccionado; 4× y 8× usan varias pasadas de mejora 2×. El modo de velocidad es el predeterminado; el modo de calidad conserva mejor los niveles de gris originales. Toca el botón SR del lector para activar la función o mantenlo pulsado para procesar toda la galería, reintentar una página o comparar imágenes. Si ambas funciones necesitan la misma página, primero termina la traducción y después la superresolución, antes de pasar a la siguiente página. Cada función mantiene su propio intervalo de preprocesamiento y lee el original. Los resultados se guardan por bloques; el trabajo interrumpido se reanuda desde los bloques guardados. Se omiten las animaciones y las imágenes que superan el presupuesto de memoria de trabajo.</string>
     <string name="sr_scale">Factor de ampliación</string>
-    <string name="sr_scale_auto">Automático (lado corto ≥ 1200px, 2×–8×)</string>
-    <string name="sr_scale_help">Elige automáticamente el menor factor entre 2×, 4× y 8× que permita alcanzar al menos 1200px en el lado corto, con un máximo de 8×. Las imágenes muy pequeñas pueden quedar por debajo de 1200px. Los factores mayores requieren más tiempo y espacio de almacenamiento. Los cambios se aplican al volver al lector.</string>
+    <string name="sr_scale_auto">Automático (lado corto ≥ 1200px, 2×-8×)</string>
+    <string name="sr_scale_summary">%1$s</string>
     <string name="sr_automatic">Mejorar automáticamente durante la lectura</string>
     <string name="sr_auto_on">Superresolución automática: activada (toca para desactivar)</string>
     <string name="sr_auto_off">Superresolución automática: desactivada (toca para activar)</string>
@@ -34,8 +35,9 @@
     <string name="sr_category_reading">Lectura y procesamiento</string>
     <string name="sr_category_storage">Resultados y almacenamiento</string>
     <string name="sr_category_models">Gestión de modelos</string>
+    <string name="sr_category_about">Instrucciones</string>
     <string name="sr_ahead">Páginas siguientes a preprocesar</string>
-    <string name="sr_ahead_help">Página actual + %1$d páginas siguientes (0–10). Mantén pulsado el botón SR del lector para procesar toda la galería.</string>
+    <string name="sr_ahead_summary">Página actual + %1$s páginas siguientes</string>
     <string name="sr_persist">Conservar los resultados mejorados</string>
     <string name="sr_persist_help">Conserva bloques reutilizables en el almacenamiento privado de la aplicación. Si la galería tiene una carpeta local, también guarda PNG completos sin pérdida en su subcarpeta _suepr_resolution. Los bloques guardados se exportan al volver a procesar, sin ejecutar de nuevo el modelo. Los archivos originales se conservan.</string>
     <string name="sr_cache_limit">Límite de caché temporal</string>

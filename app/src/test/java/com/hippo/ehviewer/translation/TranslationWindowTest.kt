@@ -38,8 +38,8 @@ class TranslationWindowTest {
         assertTrue(TranslationWindow.pages(0, 0, 2).isEmpty())
         assertTrue(TranslationWindow.pages(100, 100, 2).isEmpty())
     }
-    @Test fun neverExceedsElevenPagesOrOverflows() {
-        assertEquals(11, TranslationWindow.pages(8, 100, Int.MAX_VALUE).size)
+    @Test fun neverExceedsSevenPagesOrOverflows() {
+        assertEquals(7, TranslationWindow.pages(8, 100, Int.MAX_VALUE).size)
         assertEquals(listOf(Int.MAX_VALUE - 2, Int.MAX_VALUE - 1),
             TranslationWindow.pages(Int.MAX_VALUE - 2, Int.MAX_VALUE, 10))
     }

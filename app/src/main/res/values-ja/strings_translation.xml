@@ -86,10 +86,10 @@
     <string name="translation_target_mlkit_help">選択した元の言語と翻訳先の言語パックを準備してください。中国語は共通の zh モデルを使用し、英語には個別パックが不要です。</string>
     <string name="translation_target_reset">現在の翻訳先言語はこのエンジンに対応していないため、簡体字中国語に変更しました。</string>
     <string name="translation_ahead">先読み翻訳のページ数</string>
-    <string name="translation_ahead_help">現在のページと、指定した数の後続ページを自動翻訳します。0～10 ページに設定できます。</string>
-    <string name="translation_ahead_summary">後続 %1$d ページ</string>
+    <string name="translation_ahead_help">現在のページと、指定した数の後続ページを自動翻訳します。0～6 ページに設定できます。</string>
+    <string name="translation_ahead_summary">現在のページ + 後続 %1$s ページ</string>
     <string name="translation_current_only">現在のページのみ翻訳</string>
-    <string name="translation_ahead_range">0～10 の整数を入力してください</string>
+    <string name="translation_ahead_range">0～6 の整数を入力してください</string>
     <string name="translation_model_status">漫画モデルの状態</string>
     <string name="translation_checking_models">確認中…</string>
     <string name="translation_models_available">文字検出、OCR、文字除去モデルは準備済みです。翻訳開始時に自動検証します。</string>

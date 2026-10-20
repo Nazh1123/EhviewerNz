@@ -99,10 +99,10 @@
     <string name="translation_target_mlkit_help">Prepare the selected source and target packs. Chinese uses the shared zh model; English needs no separate pack.</string>
     <string name="translation_target_reset">The current target language is unsupported by this engine. Switched to Simplified Chinese.</string>
     <string name="translation_ahead">Pages to translate ahead</string>
-    <string name="translation_ahead_help">Automatically translate the current page and the specified number of following pages. Set 0–10 pages.</string>
-    <string name="translation_ahead_summary">Next %1$d pages</string>
+    <string name="translation_ahead_help">Automatically translate the current page and the specified number of following pages. Set 0–6 pages.</string>
+    <string name="translation_ahead_summary">Current page + %1$s following pages</string>
     <string name="translation_current_only">Translate current page only</string>
-    <string name="translation_ahead_range">Enter an integer from 0 to 10</string>
+    <string name="translation_ahead_range">Enter an integer from 0 to 6</string>
     <string name="translation_model_status">Manga model status</string>
     <string name="translation_checking_models">Checking…</string>
     <string name="translation_models_available">Text detection, OCR and text removal models are ready. Automatically validated when translation starts.</string>

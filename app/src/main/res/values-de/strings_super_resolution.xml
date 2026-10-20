@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_downloaded">waifu2x-Modell heruntergeladen (1.06 MiB)</string>
     <string name="sr_title">Superauflösung</string>
     <string name="sr_settings">Superauflösung: Einstellungen und Modelle</string>
     <string name="sr_description">waifu2x vergrößert statische Bilder mit dem gewählten Faktor; 4× und 8× entstehen durch wiederholte 2×-Verarbeitung. Standardmäßig hat Geschwindigkeit Vorrang; der Qualitätsmodus erhält Graustufen originalgetreuer. Zum Aktivieren die SR-Schaltfläche im Reader antippen; durch langes Drücken lässt sich die gesamte Galerie verarbeiten, eine Seite erneut verarbeiten oder das Original vergleichen. Benötigen beide Funktionen dieselbe Seite, wird zuerst übersetzt und dann die Superauflösung ausgeführt, bevor die nächste Seite beginnt. Beide Funktionen haben einen eigenen Vorverarbeitungsbereich und lesen das Original. Ergebnisse werden in Kacheln gespeichert; unterbrochene Aufgaben werden anhand gespeicherter Kacheln fortgesetzt. Animationen und Bilder, die das Arbeitsspeicherbudget überschreiten, werden übersprungen.</string>
     <string name="sr_scale">Vergrößerungsfaktor</string>
-    <string name="sr_scale_auto">Automatisch (kurze Seite ≥ 1200px, 2×–8×)</string>
-    <string name="sr_scale_help">Wählt automatisch den kleinsten Faktor aus 2×, 4× und 8×, der die kurze Seite auf mindestens 1200px vergrößert, höchstens jedoch 8×. Sehr kleine Bilder können unter 1200px bleiben. Höhere Faktoren benötigen mehr Zeit und Speicherplatz. Änderungen gelten nach der Rückkehr zum Reader.</string>
+    <string name="sr_scale_auto">Automatisch (kurze Seite ≥ 1200px, 2×-8×)</string>
+    <string name="sr_scale_summary">%1$s</string>
     <string name="sr_automatic">Beim Lesen automatisch verbessern</string>
     <string name="sr_auto_on">Automatische Superauflösung: an (zum Deaktivieren antippen)</string>
     <string name="sr_auto_off">Automatische Superauflösung: aus (zum Aktivieren antippen)</string>
@@ -34,8 +35,9 @@
     <string name="sr_category_reading">Lesen und Verarbeitung</string>
     <string name="sr_category_storage">Ergebnisse und Speicher</string>
     <string name="sr_category_models">Modellverwaltung</string>
+    <string name="sr_category_about">Anleitung</string>
     <string name="sr_ahead">Folgende Seiten vorverarbeiten</string>
-    <string name="sr_ahead_help">Aktuelle Seite + %1$d folgende Seiten (0–10). Die SR-Schaltfläche im Reader lange drücken, um die gesamte Galerie zu verarbeiten.</string>
+    <string name="sr_ahead_summary">Aktuelle Seite + %1$s folgende Seiten</string>
     <string name="sr_persist">Verbesserte Ergebnisse behalten</string>
     <string name="sr_persist_help">Speichert wiederverwendbare Kacheln im privaten App-Speicher. Hat die Galerie einen lokalen Ordner, werden dort zusätzlich vollständige verlustfreie PNGs im Unterordner _suepr_resolution gespeichert. Bereits gespeicherte Kacheln werden bei erneuter Verarbeitung ohne erneute Modellausführung exportiert. Originaldateien bleiben erhalten.</string>
     <string name="sr_cache_limit">Limit für temporären Cache</string>

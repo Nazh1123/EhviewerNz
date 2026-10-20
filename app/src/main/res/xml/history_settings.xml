@@ -2,6 +2,15 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <com.hippo.preference.ListPreference
+        android:defaultValue="100"
+        android:key="history_info_size"
+        android:summary="%s"
+        android:title="@string/settings_eh_history_size"
+        app:allowDividerAbove="true"
+        app:entries="@array/history_info_size_entries"
+        app:entryValues="@array/history_info_size_entry_values" />
+        
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="collapse_history_in_sidebar"

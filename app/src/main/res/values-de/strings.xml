@@ -1051,7 +1051,7 @@
     <string name="settings_fork_delete_empty_galleries">Leere Galerie löschen</string>
     <string name="settings_fork_download_label_continuous_browse">Kontinuierliches Surfen auf der Registerkarte „Download“.</string>
     <string name="settings_fork_download_label_continuous_browse_summary">Zeigt die Download-Galerie kontinuierlich von oben nach unten nach Tag auf der Download-Seite an</string>
-    <string name="settings_fork_features">Sonstige Fork-Funktionen</string>
+    <string name="settings_fork_features">Fork – Sonstiges</string>
     <string name="settings_fork_gallery_immediate_jump">Jetzt in die Galerie springen</string>
     <string name="settings_fork_long_press_save_summary">Drücken Sie lange auf den Umblätterbereich, um das aktuelle Bild lokal zu speichern</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Lange drücken, um erfolgreich zu speichern und automatisch zur nächsten Seite zu wechseln.</string>

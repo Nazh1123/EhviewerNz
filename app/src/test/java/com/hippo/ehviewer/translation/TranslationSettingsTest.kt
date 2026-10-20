@@ -262,16 +262,18 @@ class TranslationSettingsTest {
         val context = RuntimeEnvironment.getApplication()
         val settings = TranslationSettings(context)
         assertEquals(2, settings.read().ahead)
-        settings.save(TranslationOptions("en", false, 10))
-        assertEquals(TranslationOptions("en", false, 10), TranslationSettings(context).read())
+        settings.save(TranslationOptions("en", false, 6))
+        assertEquals(TranslationOptions("en", false, 6), TranslationSettings(context).read())
         settings.save(settings.read().copy(ahead = 0))
         assertEquals(0, TranslationSettings(context).read().ahead)
     }
     @Test fun corruptedWindowIsClampedAndInvalidInputRejected() {
         val context = RuntimeEnvironment.getApplication()
-        context.getSharedPreferences("manga_translation", Context.MODE_PRIVATE).edit().putInt("ahead", 1000).commit()
-        assertEquals(10, TranslationSettings(context).read().ahead)
+        for (count in listOf(7, 10, 1000)) {
+            context.getSharedPreferences("manga_translation", Context.MODE_PRIVATE).edit().putInt("ahead", count).commit()
+            assertEquals(6, TranslationSettings(context).read().ahead)
+        }
         assertThrows(IllegalArgumentException::class.java) { TranslationSettings(context).save(TranslationOptions(ahead = -1)) }
-        assertThrows(IllegalArgumentException::class.java) { TranslationSettings(context).save(TranslationOptions(ahead = 11)) }
+        assertThrows(IllegalArgumentException::class.java) { TranslationSettings(context).save(TranslationOptions(ahead = 7)) }
     }
 }

@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="sr_downloaded">Downloaded waifu2x model (1.06 MiB)</string>
     <string name="sr_title">Super-resolution</string>
     <string name="sr_settings">Super-resolution settings and models</string>
     <string name="sr_description">waifu2x enlarges still images at the selected scale; 4× and 8× use repeated 2× enhancement. Speed mode is the default; quality mode preserves grayscale more closely. Tap the reader SR button to enable, or hold it to process the whole gallery, retry a page, or compare images. When both features need a page, translation finishes first, then super-resolution, before the next page starts. Each feature keeps its own preprocessing range and reads the original. Results are saved in tiles; interrupted work resumes from saved tiles. Animations and images that cannot fit the working memory budget are skipped.</string>
     <string name="sr_scale">Enlargement scale</string>
-    <string name="sr_scale_auto">Automatic (short side ≥ 1200px, 2×–8×)</string>
-    <string name="sr_scale_help">Automatic chooses the smallest of 2×, 4× and 8× that makes the short side at least 1200px, capped at 8×. Very small images may remain below 1200px. Higher scales take more time and storage. Changes apply when you return to the reader.</string>
+    <string name="sr_scale_auto">Automatic (short side ≥ 1200px, 2×-8×)</string>
+    <string name="sr_scale_summary">%1$s</string>
     <string name="sr_automatic">Automatically enhance while reading</string>
     <string name="sr_auto_on">Automatic super-resolution: on (tap to disable)</string>
     <string name="sr_auto_off">Automatic super-resolution: off (tap to enable)</string>
@@ -34,8 +35,9 @@
     <string name="sr_category_reading">Reading and processing</string>
     <string name="sr_category_storage">Results and storage</string>
     <string name="sr_category_models">Model management</string>
+    <string name="sr_category_about">Instructions</string>
     <string name="sr_ahead">Preprocess pages ahead</string>
-    <string name="sr_ahead_help">Current page + %1$d following pages (0–10). Hold the reader SR button to process the whole gallery.</string>
+    <string name="sr_ahead_summary">Current page + %1$s following pages</string>
     <string name="sr_persist">Keep enhanced results</string>
     <string name="sr_persist_help">Keep reusable tiles in app private storage. When the gallery has a local folder, also save complete lossless PNGs in its _suepr_resolution subfolder. Previously saved tiles are exported when processed again, without running the model. Original files are preserved.</string>
     <string name="sr_cache_limit">Temporary cache limit</string>

@@ -86,10 +86,10 @@
     <string name="translation_target_mlkit_help">Prepara los paquetes de origen y destino seleccionados. El chino usa el modelo compartido zh; el inglés no necesita paquete independiente.</string>
     <string name="translation_target_reset">El idioma de destino actual no es compatible con este motor. Se ha cambiado a chino simplificado.</string>
     <string name="translation_ahead">Páginas para traducir por adelantado</string>
-    <string name="translation_ahead_help">Traduce automáticamente la página actual y el número indicado de páginas siguientes. Puedes elegir entre 0 y 10.</string>
-    <string name="translation_ahead_summary">Siguientes %1$d páginas</string>
+    <string name="translation_ahead_help">Traduce automáticamente la página actual y el número indicado de páginas siguientes. Puedes elegir entre 0 y 6.</string>
+    <string name="translation_ahead_summary">Página actual + %1$s páginas siguientes</string>
     <string name="translation_current_only">Traducir solo la página actual</string>
-    <string name="translation_ahead_range">Introduce un número entero entre 0 y 10</string>
+    <string name="translation_ahead_range">Introduce un número entero entre 0 y 6</string>
     <string name="translation_model_status">Estado de los modelos de manga</string>
     <string name="translation_checking_models">Comprobando…</string>
     <string name="translation_models_available">Los modelos de detección de texto, OCR y eliminación de texto están listos. Se validan automáticamente al iniciar la traducción.</string>
