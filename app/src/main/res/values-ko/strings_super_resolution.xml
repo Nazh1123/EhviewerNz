@@ -39,7 +39,7 @@
     <string name="sr_ahead">미리 처리할 다음 페이지 수</string>
     <string name="sr_ahead_summary">현재 페이지 + 다음 %1$s페이지</string>
     <string name="sr_persist">초해상도 결과 유지</string>
-    <string name="sr_persist_help">재사용 가능한 타일을 앱 전용 저장 공간에 보관합니다. 갤러리에 로컬 폴더가 있으면 완전한 무손실 PNG도 _suepr_resolution 하위 폴더에 저장합니다. 저장된 타일은 다시 처리할 때 모델을 실행하지 않고 내보냅니다. 원본 파일은 유지됩니다.</string>
+    <string name="sr_persist_help">다운로드 목록에 있고 접근 가능한 로컬 폴더가 있는 갤러리만 _suepr_resolution 하위 폴더에 결과를 저장합니다. 다른 결과는 임시 캐시에 저장합니다. 원본 파일은 유지됩니다.</string>
     <string name="sr_cache_limit">임시 캐시 한도</string>
     <string name="sr_clear_cache">초해상도 임시 캐시 지우기</string>
     <string name="sr_clear_saved">저장된 초해상도 결과 삭제</string>

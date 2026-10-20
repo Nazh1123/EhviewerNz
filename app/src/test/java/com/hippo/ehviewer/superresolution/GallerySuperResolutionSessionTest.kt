@@ -5,6 +5,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.os.Looper
 import com.hippo.ehviewer.R
+import com.hippo.ehviewer.EhApplication
+import com.hippo.ehviewer.dao.DownloadInfo
+import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.unifile.UniFile
 import java.io.File
@@ -18,18 +21,23 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
 
 @RunWith(RobolectricTestRunner::class)
-@Config(application = Application::class, sdk = [26, 34])
+@Config(application = Application::class, sdk = [26, 34], shadows = [
+    GallerySuperResolutionSessionTest.AppShadow::class, GallerySuperResolutionSessionTest.DownloadShadow::class])
 class GallerySuperResolutionSessionTest {
     private val context get() = RuntimeEnvironment.getApplication()
     private lateinit var sources: List<File>
     private val identity = "sr-session-test"
     @Before fun prepare() = runBlocking {
+        download = null
+        manager = DownloadManager(context)
         SuperResolutionSettings(context).preferences.edit().clear().putString(SuperResolutionSettings.AHEAD, "1").commit()
         SuperResolutionStore.clear(context); SuperResolutionStore.clear(context, true)
         sources = (0..3).map { index -> File(context.cacheDir, "original-$index").apply { writeText("original source $index") } }
-        val store = SuperResolutionStore(context, identity, SuperResolutionOptions(ahead = 1))
+        val store = SuperResolutionStore(context, identity, SuperResolutionOptions(ahead = 1, persist = false))
         val bitmap = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888)
         try { for (source in sources) store.save(store.key(source), bitmap) } finally { bitmap.recycle() }
     }
@@ -50,14 +58,24 @@ class GallerySuperResolutionSessionTest {
     }
 
     @Test fun fullGalleryWrapsAndReopenedSessionRestoresAfterTemporaryCleanup() {
-        val first = GallerySuperResolutionSession(context, Provider(sources), identity, null)
+        // Seed the persistent fixture directly; Windows can retain a legacy region-decoder file handle.
+        SuperResolutionStore.clear(context)
+        runBlocking {
+            val store = SuperResolutionStore(context, identity, SuperResolutionOptions(ahead = 1))
+            val bitmap = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888)
+            try { for (source in sources) store.save(store.key(source), bitmap) } finally { bitmap.recycle() }
+        }
+        val gallery = File(context.cacheDir, "sr-downloaded-gallery").apply { mkdirs() }
+        download = DownloadInfo(71).apply { state = DownloadInfo.STATE_FINISH; archiveUri = "content://test/archive" }
+        val provider = Provider(sources, checkNotNull(UniFile.fromFile(gallery)))
+        val first = GallerySuperResolutionSession(context, provider, identity, download)
         try {
             first.pageChanged(2); first.full()
             await { !first.working && first.states.size == 4 }
             assertFalse(first.fullGallery)
         } finally { close(first) }
         SuperResolutionStore.clear(context)
-        val reopened = GallerySuperResolutionSession(context, Provider(sources), identity, null)
+        val reopened = GallerySuperResolutionSession(context, provider, identity, download)
         try {
             reopened.pageChanged(0); reopened.enable()
             await { !reopened.working && reopened.states.size == 2 }
@@ -80,7 +98,8 @@ class GallerySuperResolutionSessionTest {
     @Test fun persistentCachedPagesAreExportedWithoutModelsWhenTheGalleryIsReopened() {
         val gallery = File(context.cacheDir, "sr-export-gallery").apply { deleteRecursively(); mkdirs() }
         val provider = Provider(sources, checkNotNull(UniFile.fromFile(gallery)))
-        val session = GallerySuperResolutionSession(context, provider, identity, null)
+        download = DownloadInfo(71).apply { state = DownloadInfo.STATE_FINISH; archiveUri = "content://test/archive" }
+        val session = GallerySuperResolutionSession(context, provider, identity, download)
         try {
             session.pageChanged(0); session.enable()
             await { !session.working && session.states.size == 2 }
@@ -94,13 +113,88 @@ class GallerySuperResolutionSessionTest {
     @Test fun temporaryPagesDoNotExportIntoTheGallery() {
         SuperResolutionSettings(context).preferences.edit().putBoolean(SuperResolutionSettings.PERSIST, false).commit()
         val gallery = File(context.cacheDir, "sr-temporary-gallery").apply { deleteRecursively(); mkdirs() }
-        val session = GallerySuperResolutionSession(context, Provider(sources, checkNotNull(UniFile.fromFile(gallery))), identity, null)
+        download = DownloadInfo(71).apply { state = DownloadInfo.STATE_FINISH; archiveUri = "content://test/archive" }
+        val session = GallerySuperResolutionSession(context, Provider(sources, checkNotNull(UniFile.fromFile(gallery))), identity, download)
         try {
             session.pageChanged(0); session.enable()
             await { !session.working && session.states.size == 2 }
             assertTrue(session.states.values.all { it == R.string.sr_done })
             assertFalse(File(gallery, "_suepr_resolution").exists())
         } finally { close(session) }
+    }
+
+    @Test fun onlineAndArchiveResultsStayInCacheEvenWhenPersistenceIsEnabled() {
+        for (info in listOf(null, DownloadInfo(71).apply {
+            state = DownloadInfo.STATE_FINISH; archiveUri = "content://test/archive"
+        })) {
+            download = info
+            val session = GallerySuperResolutionSession(context, Provider(sources), identity, info)
+            try {
+                session.pageChanged(0); session.enable()
+                await { !session.working && session.states.size == 2 }
+                assertTrue(session.states.values.all { it == R.string.sr_done })
+                assertFalse(File(context.noBackupFilesDir, "super-resolution-pages").exists())
+                assertTrue(File(context.cacheDir, "super-resolution-pages").walkTopDown().any { it.name == "page.json" })
+            } finally { close(session) }
+        }
+    }
+
+    @Test fun aFolderWithoutADownloadRecordDoesNotQualifyForPersistence() {
+        val gallery = File(context.cacheDir, "sr-unregistered-gallery").apply { mkdirs() }
+        val session = GallerySuperResolutionSession(context, Provider(sources, checkNotNull(UniFile.fromFile(gallery))), identity, null)
+        try {
+            session.pageChanged(0); session.enable()
+            await { !session.working && session.states.size == 2 }
+            assertTrue(session.states.values.all { it == R.string.sr_done })
+            assertFalse(File(gallery, "_suepr_resolution").exists())
+            assertFalse(File(context.noBackupFilesDir, "super-resolution-pages").exists())
+        } finally { close(session) }
+    }
+
+    @Test fun unfinishedDownloadsWithAFolderAlsoPersistCompletedPages() {
+        for (state in listOf(DownloadInfo.STATE_DOWNLOAD, DownloadInfo.STATE_NONE, DownloadInfo.STATE_FAILED)) {
+            val gallery = File(context.cacheDir, "sr-download-state-$state").apply { mkdirs() }
+            download = DownloadInfo(71).apply { this.state = state; archiveUri = "content://test/archive" }
+            val session = GallerySuperResolutionSession(context, Provider(sources, checkNotNull(UniFile.fromFile(gallery))), identity, download)
+            try {
+                session.pageChanged(0); session.enable()
+                await { !session.working && session.states.size == 2 }
+                assertTrue(session.states.values.all { it == R.string.sr_done })
+                assertTrue(File(gallery, "_suepr_resolution/0_sr.png").isFile)
+            } finally { close(session) }
+        }
+    }
+
+    @Test fun completedFolderDownloadWithAMissingDirectoryFailsBeforeWritingPersistentResults() {
+        // A local-folder source resolves to no directory; unlike an archive it must report failure.
+        download = DownloadInfo(71).apply {
+            state = DownloadInfo.STATE_FINISH
+            archiveUri = com.hippo.ehviewer.gallery.LocalFolderGallerySource.create(
+                android.net.Uri.parse("content://missing/tree/gallery"), "").encode()
+        }
+        val session = GallerySuperResolutionSession(context, Provider(sources), identity, download)
+        try {
+            session.pageChanged(0); session.enable()
+            await { !session.working && session.states.size == 2 }
+            assertTrue(session.states.values.all { it == R.string.sr_failed_short })
+            assertFalse(File(context.noBackupFilesDir, "super-resolution-pages").exists())
+        } finally { close(session) }
+    }
+
+    companion object {
+        private var download: DownloadInfo? = null
+        private lateinit var manager: DownloadManager
+    }
+    @Implements(EhApplication::class)
+    class AppShadow {
+        companion object {
+            @JvmStatic @Implementation fun getDownloadManager(context: Context): DownloadManager = manager
+        }
+    }
+    @Implements(DownloadManager::class)
+    class DownloadShadow {
+        @Implementation fun __constructor__(context: Context) = Unit
+        @Implementation fun getDownloadInfo(gid: Long): DownloadInfo? = download?.takeIf { it.gid == gid }
     }
 
     private fun close(session: GallerySuperResolutionSession) { session.close(); await { !session.working } }

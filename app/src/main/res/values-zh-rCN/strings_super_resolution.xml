@@ -39,7 +39,7 @@
     <string name="sr_ahead">预处理后续页数</string>
     <string name="sr_ahead_summary">当前页 + 后续 %1$s 页</string>
     <string name="sr_persist">持久保存超分结果</string>
-    <string name="sr_persist_help">在应用私有存储保留可复用的分块结果。画廊有本地目录时，同时合成为完整无损 PNG，保存到画廊的 _suepr_resolution 子文件夹。已有分块再次处理时会直接导出，无需重新运行模型。保留原始文件。</string>
+    <string name="sr_persist_help">仅为下载列表中具有可用本地目录的画廊，将结果保存到画廊的 _suepr_resolution 子文件夹。其他结果仅作临时缓存。保留原始文件。</string>
     <string name="sr_cache_limit">临时缓存上限</string>
     <string name="sr_clear_cache">清理超分临时缓存</string>
     <string name="sr_clear_saved">删除已保存的超分结果</string>

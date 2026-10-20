@@ -39,7 +39,7 @@
     <string name="sr_ahead">先読み処理するページ数</string>
     <string name="sr_ahead_summary">現在のページ + 後続 %1$s ページ</string>
     <string name="sr_persist">超解像の結果を保持</string>
-    <string name="sr_persist_help">再利用可能なタイルをアプリの専用ストレージに保持します。ギャラリーにローカルフォルダーがある場合は、完全な可逆圧縮 PNG も _suepr_resolution サブフォルダーに保存します。保存済みのタイルは再処理時にモデルを実行せずに書き出します。元のファイルは保持されます。</string>
+    <string name="sr_persist_help">ダウンロード一覧にあり、利用可能なローカルフォルダーを持つギャラリーのみ、結果を _suepr_resolution サブフォルダーに保存します。それ以外の結果は一時キャッシュに保存します。元のファイルは保持されます。</string>
     <string name="sr_cache_limit">一時キャッシュの上限</string>
     <string name="sr_clear_cache">超解像の一時キャッシュを消去</string>
     <string name="sr_clear_saved">保存済みの超解像結果を削除</string>

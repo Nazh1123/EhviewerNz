@@ -7,7 +7,6 @@ import android.graphics.BitmapFactory
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.client.data.GalleryInfo
-import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.ehviewer.gallery.GalleryProcessingProgress
 import com.hippo.lib.image.Image
@@ -224,15 +223,10 @@ internal class GalleryTranslationSession(
 
     private fun resultStore(options: TranslationOptions, sourceName: String? = null): TranslationResultStore {
         val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
-        val directory = download?.let { TranslationStorage.galleryDir(context, it) }
-            ?: provider.translationDirectory
+        val directory = TranslationStorage.resultDirectory(context, download, provider, options.persistDownloaded)
         // An available source folder can retain each completed page while the rest
         // of the gallery is still downloading, paused, or failed.
         val downloaded = download != null && directory != null
-        if (options.persistDownloaded && download?.state == DownloadInfo.STATE_FINISH &&
-            TranslationStorage.hasGalleryDirectory(download)) {
-            checkNotNull(directory) { "Gallery download directory unavailable" }
-        }
         return TranslationResultStore(TranslationStorage.cacheDir(context),
             directory, options, galleryInfo?.gid, downloaded,
             sourceName, TranslationStorage.legacyPersistentDir(context), filesRemoved = { files ->

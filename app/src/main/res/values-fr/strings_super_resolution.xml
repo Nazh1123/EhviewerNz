@@ -39,7 +39,7 @@
     <string name="sr_ahead">Pages suivantes à prétraiter</string>
     <string name="sr_ahead_summary">Page actuelle + %1$s pages suivantes</string>
     <string name="sr_persist">Conserver les résultats améliorés</string>
-    <string name="sr_persist_help">Conserve les tuiles réutilisables dans le stockage privé de l’application. Si la galerie possède un dossier local, des PNG complets sans perte sont aussi enregistrés dans son sous-dossier _suepr_resolution. Les tuiles déjà enregistrées sont exportées lors d’un nouveau traitement, sans relancer le modèle. Les fichiers originaux sont conservés.</string>
+    <string name="sr_persist_help">Enregistre les résultats dans le sous-dossier _suepr_resolution uniquement pour les galeries de la liste des téléchargements disposant d’un dossier local accessible. Les autres résultats utilisent le cache temporaire. Les fichiers originaux sont conservés.</string>
     <string name="sr_cache_limit">Limite du cache temporaire</string>
     <string name="sr_clear_cache">Vider le cache SR temporaire</string>
     <string name="sr_clear_saved">Supprimer les résultats SR enregistrés</string>

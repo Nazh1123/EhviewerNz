@@ -8,6 +8,7 @@ import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource
+import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.ehviewer.gallery.GalleryProcessingProgress
 import com.hippo.ehviewer.spider.SpiderDen
 import com.hippo.unifile.UniFile
@@ -51,6 +52,16 @@ object TranslationStorage {
             }
         }
         return directory?.takeIf { it.isDirectory }
+    }
+
+    /** Both page-processing pipelines use the same source-folder resolution and failure policy. */
+    internal fun resultDirectory(context: Context, download: DownloadInfo?, provider: GalleryProvider2,
+                                 persist: Boolean): UniFile? {
+        val directory = download?.let { galleryDir(context, it) } ?: provider.translationDirectory
+        if (persist && download?.state == DownloadInfo.STATE_FINISH && hasGalleryDirectory(download)) {
+            checkNotNull(directory) { "Gallery download directory unavailable" }
+        }
+        return directory
     }
 
     fun pruneCache(context: Context) {

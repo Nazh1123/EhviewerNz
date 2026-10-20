@@ -42,7 +42,7 @@
     <string name="sr_ahead">Preprocess pages ahead</string>
     <string name="sr_ahead_summary">Current page + %1$s following pages</string>
     <string name="sr_persist">Keep enhanced results</string>
-    <string name="sr_persist_help">Keep reusable tiles in app private storage. When the gallery has a local folder, also save complete lossless PNGs in its _suepr_resolution subfolder. Previously saved tiles are exported when processed again, without running the model. Original files are preserved.</string>
+    <string name="sr_persist_help">Save results in the _suepr_resolution subfolder only for galleries in the download list with an accessible local folder. Other results use temporary cache. Original files are preserved.</string>
     <string name="sr_cache_limit">Temporary cache limit</string>
     <string name="sr_clear_cache">Clear temporary SR cache</string>
     <string name="sr_clear_saved">Delete saved SR results</string>

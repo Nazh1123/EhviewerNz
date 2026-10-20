@@ -4,7 +4,6 @@ import android.content.Context
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.client.data.GalleryInfo
-import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.ehviewer.gallery.GalleryProcessingProgress
 import com.hippo.ehviewer.translation.ImageProcessingPriority
@@ -290,7 +289,11 @@ internal class GallerySuperResolutionSession(
                     if (!NativeMemoryPolicy(context).canRetain()) TranslationRuntime.closeIdleModels()
                 }
                 SuperResolutionModels.lock.withLock {
-                    val store = SuperResolutionStore(context, identity, selected)
+                    val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
+                    val directory = TranslationStorage.resultDirectory(context, download, provider, selected.persist)
+                        .takeIf { selected.persist && download != null }
+                    // A global preference alone must never make online/archive results persistent.
+                    val store = SuperResolutionStore(context, identity, selected.copy(persist = directory != null))
                     val key = store.key(source)
                     val force = withContext(NonCancellable + Dispatchers.Main) { forced.remove(page) }
                     val sourceName = provider.getTranslationFilename(page)
@@ -343,14 +346,6 @@ internal class GallerySuperResolutionSession(
                                 } else false
                             }
                         }, grouped = true).also { (tiles, _) ->
-                            val directory = if (selected.persist) {
-                                val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
-                                val directory = download?.let { TranslationStorage.galleryDir(context, it) }
-                                    ?: provider.translationDirectory
-                                if (download?.state == DownloadInfo.STATE_FINISH && TranslationStorage.hasGalleryDirectory(download))
-                                    checkNotNull(directory) { "Gallery download directory unavailable" }
-                                directory
-                            } else null
                             recordResult(store.compact(key, tiles, directory, sourceName))
                         }
                 }
