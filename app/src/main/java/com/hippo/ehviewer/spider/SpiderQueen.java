@@ -223,6 +223,7 @@ public final class SpiderQueen implements Runnable {
      */
     @UiThread
     public static void resetReadingProgress(long gid) {
+        sStartPages.put(gid, 0);
         SpiderQueen queen = sQueenMap.get(gid);
         if (queen == null) {
             return;
@@ -254,7 +255,16 @@ public final class SpiderQueen implements Runnable {
         return findStartPage(context, galleryInfo.gid);
     }
 
+    // Reuse list prefetches when opening details, without reading disk on the UI thread.
+    private static final android.util.LruCache<Long, Integer> sStartPages = new android.util.LruCache<>(256);
+
+    @Nullable
+    public static Integer peekStartPage(long gid) {
+        return sStartPages.get(gid);
+    }
+
     public static int findStartPage(@NonNull Context context, long gid) {
+        Integer previous = sStartPages.get(gid);
         SpiderInfo spiderInfo = null;
         SimpleDiskCache msic;
         EhApplication application = (EhApplication) context.getApplicationContext();
@@ -276,6 +286,11 @@ public final class SpiderQueen implements Runnable {
         int startPage = 0;
         if (spiderInfo != null) {
             startPage = spiderInfo.startPage;
+        }
+        synchronized (sStartPages) {
+            Integer current = sStartPages.get(gid);
+            if (current != previous && current != null) return current;
+            sStartPages.put(gid, startPage);
         }
         return startPage;
     }
@@ -845,6 +860,7 @@ public final class SpiderQueen implements Runnable {
         }
         if (spiderInfo != null) {
             spiderInfo.startPage = page;
+            sStartPages.put(mGalleryInfo.gid, page);
             final SpiderInfo infoToWrite = spiderInfo;
             new AsyncTask<Void, Void, Void>() {
                 @Override

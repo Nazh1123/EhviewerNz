@@ -16,7 +16,31 @@
 
 package com.hippo.ehviewer.client;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import okhttp3.HttpUrl;
+
 public class EhCacheKeyFactory {
+    private static final String SHEET_PREFIX = "preview:sheet:v1:";
+    private static final Pattern SHEET_PATH = Pattern.compile(
+            "^/(c[12m])/[^/]+/(\\d+-\\d+)\\.(jpg|jpeg|webp)$");
+
+    /** H@H hosts and timed access tokens may change without changing the sprite sheet. */
+    public static String getNormalPreviewKey(String imageUrl) {
+        HttpUrl url = HttpUrl.parse(imageUrl);
+        if (url != null && url.host().endsWith(".hath.network") && url.query() == null) {
+            Matcher match = SHEET_PATH.matcher(url.encodedPath());
+            if (match.matches()) {
+                return SHEET_PREFIX + match.group(1) + ":" + match.group(2) + ":" + match.group(3);
+            }
+        }
+        // Unknown URL formats retain their complete identity rather than risking a collision.
+        return SHEET_PREFIX + "url:" + imageUrl;
+    }
+
+    public static boolean isNormalPreviewKey(String key) {
+        return key != null && key.startsWith(SHEET_PREFIX);
+    }
 
     public static String getThumbKey(long gid) {
         return "preview:large:" + gid + ":" + 0; // "thumb:" + gid;

@@ -864,6 +864,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         updateQuickSettingsButtons();
 
         mSeekBarPanel = ViewUtils.$$(this, R.id.seek_bar_panel);
+        setQuickSettingsBackgroundAlpha(mSeekBarPanel, 190);
+        setQuickSettingsBackgroundAlpha(findViewById(R.id.page_preview_strip), 190);
         mAutoTransferPanel = (ImageView) ViewUtils.$$(this, R.id.auto_transfer);
         mLeftText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.left);
         mRightText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.right);

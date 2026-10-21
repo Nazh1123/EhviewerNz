@@ -47,6 +47,7 @@ public class EhCookieStore extends CookieRepository {
     }
 
     public void signOut() {
+        WebViewCookieSync.getInstance().invalidate();
         clear();
     }
 

@@ -6,11 +6,15 @@ import android.os.Bundle;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.RatingBar;
 
 import androidx.appcompat.widget.PopupMenu;
+import androidx.appcompat.app.AlertDialog;
 
+import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.conaco.Conaco;
 import com.hippo.conaco.DataContainer;
 import com.hippo.ehviewer.EhApplication;
@@ -25,12 +29,18 @@ import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.GalleryTagGroup;
 import com.hippo.ehviewer.client.data.NormalPreviewSet;
+import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.exception.EhException;
 import com.hippo.ehviewer.dao.DaoMaster;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.scene.GalleryInfoScene;
+import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
+import com.hippo.ehviewer.spider.SpiderInfo;
+import com.hippo.ehviewer.spider.SpiderQueen;
+import com.hippo.scene.Announcer;
+import com.hippo.streampipe.OutputStreamPipe;
 import com.hippo.lib.image.Image;
 import com.hippo.unifile.UniFile;
 import com.hippo.view.ViewTransition;
@@ -50,6 +60,7 @@ import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.shadow.api.Shadow;
 import org.robolectric.shadows.ShadowLooper;
+import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.util.ReflectionHelpers;
 
 import java.io.File;
@@ -82,7 +93,7 @@ public class OfflineGalleryDetailSceneTest {
     private View content;
     private Context context;
 
-    @Before public void setUp() {
+    @Before public void setUp() throws Exception {
         context = new ContextThemeWrapper(RuntimeEnvironment.getApplication(), R.style.AppTheme);
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre", context.getSharedPreferences("offline-test", Context.MODE_PRIVATE));
         ReflectionHelpers.setStaticField(Settings.class, "sArchiverPre", context.getSharedPreferences("offline-archiver-test", Context.MODE_PRIVATE));
@@ -93,6 +104,9 @@ public class OfflineGalleryDetailSceneTest {
         manager = new DownloadManager(context);
         client = Shadow.newInstanceOf(EhClient.class);
         executor = new QueuedExecutor();
+        ReflectionHelpers.setField(RuntimeEnvironment.getApplication(), "mSpiderInfoCache",
+                new SimpleDiskCache(temporaryFolder.newFolder("progress"), 1024 * 1024));
+        ((android.util.LruCache<?, ?>) ReflectionHelpers.getStaticField(SpiderQueen.class, "sStartPages")).evictAll();
         requests.clear();
         imageNetworkLoads.clear();
         scene = new TestScene(context);
@@ -112,7 +126,11 @@ public class OfflineGalleryDetailSceneTest {
         TextView tip = new TextView(context);
         ReflectionHelpers.setField(scene, "mTip", tip);
         ReflectionHelpers.setField(scene, "mViewTransition", new ViewTransition(content, new View(context), tip));
-        ReflectionHelpers.setField(scene, "mViewTransition2", new ViewTransition(content, new View(context)));
+        ReflectionHelpers.setField(scene, "mViewTransition2", new ViewTransition(
+                content.findViewById(R.id.detail_body), content.findViewById(R.id.progress)));
+        ReflectionHelpers.setField(scene, "mInfo", content.findViewById(R.id.info));
+        ReflectionHelpers.setField(scene, "mArtist", content.findViewById(R.id.artist));
+        ReflectionHelpers.setField(scene, "mSimilar", content.findViewById(R.id.similar));
         ReflectionHelpers.setField(scene, "mGalleryInfo", source());
     }
 
@@ -150,6 +168,389 @@ public class OfflineGalleryDetailSceneTest {
         detail.comments = new GalleryCommentList(new GalleryComment[0], false);
         detail.previewSet = new NormalPreviewSet();
         return detail;
+    }
+
+    private void bindPendingHeader() {
+        ReflectionHelpers.setField(scene, "mAction", GalleryDetailScene.ACTION_GALLERY_INFO);
+        ReflectionHelpers.callInstanceMethod(scene, "bindViewFirst");
+        ReflectionHelpers.callInstanceMethod(scene, "adjustViewVisibility",
+                ReflectionHelpers.ClassParameter.from(int.class, 2),
+                ReflectionHelpers.ClassParameter.from(boolean.class, false));
+    }
+
+    @Test public void knownSummaryRendersOutsideLoadingBodyWithoutRequestingMoreData() {
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.rating = 4.5f;
+        info.firstGid = 100L;
+        info.posted = "2026-01-01 16:00";
+        bindPendingHeader();
+        // onResume/download callbacks also refresh version actions while HTML is pending.
+        ReflectionHelpers.callInstanceMethod(scene, "updateGalleryVersionActionsVisibility");
+        assertEquals("Saved title", text(R.id.title));
+        assertEquals(4.5f, ((RatingBar) content.findViewById(R.id.rating)).getRating(), 0.001f);
+        assertTrue(text(R.id.rating_text).contains(String.format(java.util.Locale.getDefault(), "%.2f", 4.5f)));
+        assertEquals("0/10P", text(R.id.pages));
+        assertEquals(View.VISIBLE, content.findViewById(R.id.header).getVisibility());
+        assertEquals(View.VISIBLE, content.findViewById(R.id.actions).getVisibility());
+        assertEquals(View.VISIBLE, content.getVisibility());
+        assertEquals(View.GONE, content.findViewById(R.id.detail_body).getVisibility());
+        assertEquals(View.VISIBLE, content.findViewById(R.id.progress).getVisibility());
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        for (int id : new int[]{R.id.update_gallery, R.id.info, R.id.rate, R.id.heart_group,
+                R.id.torrent, R.id.h_h, R.id.archiver, R.id.artist, R.id.similar}) {
+            assertTrue(content.findViewById(id).isEnabled());
+        }
+        assertTrue(content.findViewById(R.id.download).isEnabled());
+        assertTrue(content.findViewById(R.id.read).isEnabled());
+        assertTrue(imageNetworkLoads.contains(true));
+        assertTrue(requests.isEmpty());
+        // Hiding the body cannot hide any part of the visible summary.
+        for (int id : new int[]{R.id.header, R.id.info, R.id.actions}) {
+            assertSame(content, content.findViewById(id).getParent());
+        }
+    }
+
+    @Test public void unknownFieldsStayUnknownAndMissingTokenDisablesGalleryOperations() {
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.token = null;
+        info.rating = -1;
+        info.pages = 0;
+        bindPendingHeader();
+        assertEquals("", text(R.id.rating_text));
+        assertEquals("", text(R.id.pages));
+        assertEquals("", text(R.id.size));
+        assertEquals("", text(R.id.language));
+        assertEquals(context.getString(R.string.not_favorited), text(R.id.heart_outline));
+        assertEquals(context.getString(R.string.favored_times, 0).replace("0", " "), text(R.id.favoredTimes));
+        assertEquals(context.getString(R.string.torrent_count, 0).replace("0", "  "), text(R.id.torrent));
+        assertEquals(View.GONE, content.findViewById(R.id.tags).getVisibility());
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        assertFalse(content.findViewById(R.id.download).isEnabled());
+        assertFalse(content.findViewById(R.id.read).isEnabled());
+    }
+
+    @Test public void pendingCountsPreserveFinalLocalizedFormatAndRequestedBlankWidths() {
+        for (java.util.Locale locale : new java.util.Locale[]{java.util.Locale.ENGLISH,
+                java.util.Locale.SIMPLIFIED_CHINESE, java.util.Locale.JAPANESE,
+                java.util.Locale.GERMAN, java.util.Locale.forLanguageTag("ar")}) {
+            android.content.res.Configuration configuration =
+                    new android.content.res.Configuration(context.getResources().getConfiguration());
+            configuration.setLocale(locale);
+            // The themed context can use a different language from the base Fragment context.
+            scene.themeContext = new ContextThemeWrapper(context.createConfigurationContext(configuration), R.style.AppTheme);
+            ReflectionHelpers.setField(scene, "mGalleryDetail", null);
+            GalleryInfo summary = source();
+            summary.rating = 4.5f;
+            ReflectionHelpers.setField(scene, "mGalleryInfo", summary);
+            bindPendingHeader();
+            String favorites = text(R.id.favoredTimes);
+            String torrents = text(R.id.torrent);
+            String rating = text(R.id.rating_text);
+            GalleryDetail detail = online();
+            detail.rating = 4.5f;
+            detail.ratingCount = 123;
+            detail.favoriteCount = 987;
+            detail.torrentCount = 64;
+            ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+            scene.onGetGalleryDetailSuccess(detail);
+            assertEquals(locale.toLanguageTag(),
+                    text(R.id.favoredTimes).replace(String.format(locale, "%d", 987), " "), favorites);
+            assertEquals(locale.toLanguageTag(),
+                    text(R.id.torrent).replace(String.format(locale, "%d", 64), "  "), torrents);
+            assertEquals(locale.toLanguageTag(),
+                    text(R.id.rating_text).replace(String.format(locale, "%d", 123), "   "), rating);
+        }
+    }
+
+    private DownloadInfo addKnownDownload(long gid, Long firstGid, int state) {
+        DownloadInfo download = new DownloadInfo(source());
+        download.gid = gid;
+        download.firstGid = firstGid;
+        download.state = state;
+        ReflectionHelpers.callInstanceMethod(manager, "addToAllDownloads",
+                ReflectionHelpers.ClassParameter.from(DownloadInfo.class, download),
+                ReflectionHelpers.ClassParameter.from(boolean.class, false));
+        return download;
+    }
+
+    @Test public void pendingUpdateNeedsKnownLocalOlderVersionAndRespondsToItsRemoval() {
+        GalleryInfo summary = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        summary.firstGid = 100L;
+        bindPendingHeader();
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        // A gallery from a different family is not an update source.
+        addKnownDownload(90, 90L, DownloadInfo.STATE_FINISH);
+        ReflectionHelpers.callInstanceMethod(scene, "updateGalleryVersionActionsVisibility");
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        DownloadInfo older = addKnownDownload(100, 100L, DownloadInfo.STATE_FINISH);
+        ReflectionHelpers.callInstanceMethod(scene, "updateGalleryVersionActionsVisibility");
+        assertEquals(View.VISIBLE, content.findViewById(R.id.update_gallery).getVisibility());
+        assertEquals(View.VISIBLE, content.findViewById(R.id.update_action_card).getVisibility());
+        assertTrue(content.findViewById(R.id.update_gallery).isEnabled());
+        ReflectionHelpers.callInstanceMethod(manager, "removeFromAllDownloads",
+                ReflectionHelpers.ClassParameter.from(DownloadInfo.class, older));
+        ReflectionHelpers.callInstanceMethod(scene, "updateGalleryVersionActionsVisibility");
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void pendingUpdateDefaultsHiddenWhenVersionMetadataIsUnknown() {
+        addKnownDownload(100, 100L, DownloadInfo.STATE_FINISH);
+        GalleryInfo summary = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        for (Long family : new Long[]{null, 0L, 123L}) {
+            summary.firstGid = family;
+            bindPendingHeader();
+            ReflectionHelpers.callInstanceMethod(scene, "updateGalleryVersionActionsVisibility");
+            assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        }
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void pendingUpdateDoesNotOfferAnExistingTargetOrActiveSource() {
+        GalleryInfo summary = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        summary.firstGid = 100L;
+        DownloadInfo older = addKnownDownload(100, 100L, DownloadInfo.STATE_WAIT);
+        for (int state : new int[]{DownloadInfo.STATE_WAIT, DownloadInfo.STATE_DOWNLOAD, DownloadInfo.STATE_UPDATE}) {
+            older.state = state;
+            bindPendingHeader();
+            assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        }
+        older.state = DownloadInfo.STATE_FINISH;
+        bindPendingHeader();
+        assertEquals(View.VISIBLE, content.findViewById(R.id.update_action_card).getVisibility());
+        addKnownDownload(123, 100L, DownloadInfo.STATE_FINISH);
+        ReflectionHelpers.callInstanceMethod(scene, "updateGalleryVersionActionsVisibility");
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void completeHtmlProvidedAsArgumentsIsReusedWithoutAnotherDetailRequest() {
+        GalleryDetail detail = online();
+        ReflectionHelpers.setField(scene, "mGalleryInfo", detail);
+        assertTrue(ReflectionHelpers.<Boolean>callInstanceMethod(scene, "prepareData"));
+        assertSame(detail, ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertTrue(requests.isEmpty());
+    }
+
+    private void cacheProgress(int page) throws Exception {
+        SpiderInfo info = new SpiderInfo();
+        info.gid = 123;
+        info.token = "token";
+        info.pages = 12;
+        info.startPage = page;
+        info.pTokenMap = new android.util.SparseArray<>();
+        OutputStreamPipe pipe = EhApplication.getSpiderInfoCache(context).getOutputStreamPipe("123");
+        try { pipe.obtain(); info.write(pipe.open()); }
+        finally { pipe.close(); pipe.release(); }
+    }
+
+    @Test public void prefetchedProgressAndLanguageAreVisibleBeforeHtmlAndUseFinalPageCount() throws Exception {
+        cacheProgress(4);
+        // The list prefetch populates the same bounded snapshot used by details.
+        assertEquals(4, SpiderQueen.findStartPage(context, 123));
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.simpleLanguage = "ZH";
+        bindPendingHeader();
+        assertEquals("Chinese", text(R.id.language));
+        assertEquals("5/10P", text(R.id.pages));
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        GalleryDetail detail = online();
+        detail.language = "Chinese";
+        scene.onGetGalleryDetailSuccess(detail);
+        assertEquals("5/12P", text(R.id.pages));
+        executor.runAll();
+        ShadowLooper.idleMainLooper();
+        assertEquals("Chinese", text(R.id.language));
+        assertEquals("5/12P", text(R.id.pages));
+    }
+
+    @Test public void diskProgressReplacesFallbackWithoutWaitingForHtml() throws Exception {
+        cacheProgress(6);
+        bindPendingHeader();
+        assertEquals("0/10P", text(R.id.pages));
+        executor.runAll();
+        ShadowLooper.idleMainLooper();
+        assertEquals("7/10P", text(R.id.pages));
+        assertTrue(requests.isEmpty());
+        SpiderQueen.resetReadingProgress(123);
+        assertEquals(Integer.valueOf(0), SpiderQueen.peekStartPage(123));
+    }
+
+    @Test public void delayedSummaryProgressCannotOverwriteOfflineFallback() {
+        bindPendingHeader();
+        Runnable delayed = executor.queue.remove(0);
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.pages = 20;
+        fail("Offline");
+        assertEquals("0/20P", text(R.id.pages));
+        delayed.run();
+        ShadowLooper.idleMainLooper();
+        assertEquals("0/20P", text(R.id.pages));
+    }
+
+    private List<String> tagKeys(View view) {
+        List<String> result = new ArrayList<>();
+        if (view.getTag(R.id.tag) instanceof String tag) result.add(tag);
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) result.addAll(tagKeys(group.getChildAt(i)));
+        }
+        return result;
+    }
+
+    @Test public void knownTagsShowAboveSpinnerThenHtmlReplacesThem() {
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.simpleTags = new String[]{"artist:known", "language:chinese"};
+        info.tgList = new ArrayList<>(List.of("artist:known", ":full color"));
+        bindPendingHeader();
+        View tags = content.findViewById(R.id.tags);
+        assertSame(content, tags.getParent());
+        assertEquals(View.VISIBLE, tags.getVisibility());
+        assertEquals(List.of("artist:known", "language:chinese", "misc:full color"), tagKeys(tags));
+        assertEquals(View.VISIBLE, content.findViewById(R.id.progress).getVisibility());
+        assertEquals("Chinese", text(R.id.language));
+        GalleryDetail detail = online();
+        GalleryTagGroup group = new GalleryTagGroup();
+        group.groupName = "artist";
+        group.addTag("complete");
+        detail.tags = new GalleryTagGroup[]{group};
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        scene.onGetGalleryDetailSuccess(detail);
+        assertEquals(List.of("artist:complete"), tagKeys(tags));
+    }
+
+    @Test public void htmlListTagsAndLanguageWorkWithoutApiMetadata() {
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.tgList = new ArrayList<>(List.of("artist:list artist", "language:korean"));
+        bindPendingHeader();
+        assertEquals("Korean", text(R.id.language));
+        assertEquals(List.of("artist:list artist", "language:korean"), tagKeys(content.findViewById(R.id.tags)));
+    }
+
+    @Test public void titleSearchActionsWorkWithoutHtmlOrNetwork() {
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.title = "[Author] Example title [Chinese]";
+        bindPendingHeader();
+        scene.onClick(content.findViewById(R.id.artist));
+        assertNotNull(scene.opened);
+        assertEquals(GalleryListScene.class, scene.opened.getClazz());
+        ListUrlBuilder artist = scene.opened.getArgs().getParcelable(GalleryListScene.KEY_LIST_URL_BUILDER);
+        assertTrue(artist.getKeyword().contains("Author"));
+        scene.opened = null;
+        scene.onClick(content.findViewById(R.id.similar));
+        assertNotNull(scene.opened);
+        ListUrlBuilder similar = scene.opened.getArgs().getParcelable(GalleryListScene.KEY_LIST_URL_BUILDER);
+        assertTrue(similar.getKeyword().contains("Example title"));
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void ratingDialogOpensImmediatelyAndSubmissionReusesPendingHtmlRequest() {
+        bindPendingHeader();
+        ReflectionHelpers.callInstanceMethod(scene, "refreshDetail");
+        scene.onClick(content.findViewById(R.id.rate));
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertTrue(dialog.isShowing());
+        assertNotNull(dialog.findViewById(R.id.rating_view));
+        ((com.hippo.ehviewer.widget.GalleryRatingBar) dialog.findViewById(R.id.rating_view)).setRating(4f);
+        assertEquals(1, requests.size());
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        ShadowLooper.idleMainLooper();
+        assertEquals(1, requests.size());
+        assertEquals(1, ((java.util.Map<?, ?>) ReflectionHelpers.getField(scene, "mPendingDetailActions")).size());
+        GalleryDetail detail = online();
+        detail.apiUid = 99;
+        detail.apiKey = "key";
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        scene.onGetGalleryDetailSuccess(detail);
+        assertEquals(2, requests.size());
+        assertEquals(EhClient.METHOD_GET_RATE_GALLERY, requests.get(1).getMethod());
+        assertEquals(99L, requests.get(1).getArgs()[0]);
+        assertEquals("key", requests.get(1).getArgs()[1]);
+        assertEquals(4f, requests.get(1).getArgs()[4]);
+        assertTrue(((java.util.Map<?, ?>) ReflectionHelpers.getField(scene, "mPendingDetailActions")).isEmpty());
+    }
+
+    @Test public void torrentClickLoadsOnlyTorrentEndpointBeforeHtml() {
+        bindPendingHeader();
+        TorrentDownloadController controller = new TorrentDownloadController(new TorrentDownloadController.Host() {
+            @Override public Context getEHContext() { return context; }
+            @Override public boolean isHostActive() { return true; }
+            @Override public void retryTorrentDownload() {}
+        }, 123, "token");
+        ReflectionHelpers.setField(scene, "torrentDownloadController", controller);
+        scene.onClick(content.findViewById(R.id.torrent));
+        assertTrue(ShadowDialog.getLatestDialog().isShowing());
+        assertEquals(1, requests.size());
+        EhRequest request = requests.get(0);
+        assertEquals(EhClient.METHOD_GET_TORRENT_LIST, request.getMethod());
+        assertTrue(request.getArgs()[0].toString().endsWith("gallerytorrents.php?gid=123&t=token"));
+        assertEquals(123L, request.getArgs()[1]);
+        assertEquals("token", request.getArgs()[2]);
+        android.app.Dialog dialog = ShadowDialog.getLatestDialog();
+        scene.onClick(content.findViewById(R.id.torrent));
+        assertSame(dialog, ShadowDialog.getLatestDialog());
+        assertEquals(1, requests.size());
+        controller.release();
+        ShadowLooper.idleMainLooper();
+        assertFalse(dialog.isShowing());
+        assertTrue(request.isCancelled());
+    }
+
+    @Test public void htmlFailureDropsPendingActionsAndDoesNotSubmitRating() {
+        bindPendingHeader();
+        ReflectionHelpers.callInstanceMethod(scene, "submitRating", ReflectionHelpers.ClassParameter.from(float.class, 4f));
+        assertEquals(1, requests.size());
+        fail("Offline");
+        assertTrue(((java.util.Map<?, ?>) ReflectionHelpers.getField(scene, "mPendingDetailActions")).isEmpty());
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        scene.onGetGalleryDetailSuccess(online());
+        assertEquals(1, requests.size());
+    }
+
+    @Test public void completedEarlyFavoriteChangeSurvivesOlderHtmlResponse() {
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.favoriteSlot = 2;
+        info.favoriteName = "My favorites";
+        ReflectionHelpers.callInstanceMethod(scene, "onModifyFavoritesSuccess",
+                ReflectionHelpers.ClassParameter.from(GalleryInfo.class, info));
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        GalleryDetail detail = online();
+        scene.onGetGalleryDetailSuccess(detail);
+        assertTrue(detail.isFavorited);
+        assertEquals(2, detail.favoriteSlot);
+        assertEquals("My favorites", text(R.id.heart));
+        assertEquals(View.VISIBLE, content.findViewById(R.id.heart).getVisibility());
+    }
+
+    @Test public void detailSuccessFillsRatingCountAndKeepsActionsEnabled() {
+        bindPendingHeader();
+        assertTrue(content.findViewById(R.id.info).isEnabled());
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        GalleryDetail detail = online();
+        detail.rating = 4.5f;
+        detail.ratingCount = 123;
+        scene.onGetGalleryDetailSuccess(detail);
+        assertEquals("Online title", text(R.id.title));
+        assertTrue(text(R.id.rating_text).contains("123"));
+        assertTrue(content.findViewById(R.id.info).isEnabled());
+        assertTrue(content.findViewById(R.id.rate).isEnabled());
+        assertEquals(View.VISIBLE, content.findViewById(R.id.detail_body).getVisibility());
+    }
+
+    @Test public void refreshingKeepsKnownSummaryVisible() {
+        bindPendingHeader();
+        ReflectionHelpers.callInstanceMethod(scene, "refreshDetail");
+        assertEquals(1, requests.size());
+        assertEquals(View.VISIBLE, content.getVisibility());
+        assertEquals(View.VISIBLE, content.findViewById(R.id.header).getVisibility());
+        assertEquals("Saved title", text(R.id.title));
+    }
+
+    @Test public void offlineFallbackRestoresInformationActionAfterPartialHeader() {
+        bindPendingHeader();
+        assertTrue(content.findViewById(R.id.info).isEnabled());
+        fail("Offline");
+        assertTrue(content.findViewById(R.id.info).isEnabled());
+        assertEquals(View.VISIBLE, content.findViewById(R.id.detail_body).getVisibility());
     }
 
     @Test public void uploadTimePreferenceAppliesToOnlineAndOfflineDetailsWithoutMutatingSource() {
@@ -325,11 +726,14 @@ public class OfflineGalleryDetailSceneTest {
 
     private static class TestScene extends GalleryDetailScene {
         final Context context;
+        Context themeContext;
         final MainActivity activity = Shadow.newInstanceOf(MainActivity.class);
-        TestScene(Context context) { this.context = context; }
+        Announcer opened;
+        TestScene(Context context) { this.context = context; this.themeContext = context; }
         @Override public Context getContext() { return context; }
-        @Override public Context getEHContext() { return context; }
+        @Override public Context getEHContext() { return themeContext; }
         @Override public MainActivity getActivity2() { return activity; }
+        @Override public void startScene(Announcer announcer) { opened = announcer; }
     }
 
     @Implements(EhApplication.class)
@@ -338,6 +742,7 @@ public class OfflineGalleryDetailSceneTest {
         @Implementation protected static DownloadManager getDownloadManager(Context context) { return manager; }
         @Implementation protected static EhClient getEhClient(Context context) { return client; }
         @Implementation protected static ExecutorService getExecutorService(Context context) { return executor; }
+        @Implementation protected static okhttp3.OkHttpClient getOkHttpClient(Context context) { return new okhttp3.OkHttpClient(); }
     }
 
     @Implements(EhClient.class)

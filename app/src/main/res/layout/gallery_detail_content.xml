@@ -17,19 +17,36 @@
 
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/below_header"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:divider="?attr/galleryDetailDivider"
+    android:showDividers="middle"
+    android:dividerPadding="@dimen/keyline_margin">
+
+    <include layout="@layout/gallery_detail_header"/>
+
+    <include layout="@layout/gallery_detail_info"/>
+
+    <include layout="@layout/gallery_detail_actions"/>
+
+    <include
+        layout="@layout/gallery_detail_tags"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"/>
 
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="wrap_content"
+        android:minHeight="64dp">
 
         <include
             layout="@layout/gallery_detail_progress"/>
 
         <LinearLayout
-            android:id="@+id/below_header"
+            android:id="@+id/detail_body"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
@@ -38,25 +55,10 @@
             android:dividerPadding="@dimen/keyline_margin">
 
             <include
-                layout="@layout/gallery_detail_header"/>
-
-            <include
-                layout="@layout/gallery_detail_info"/>
-
-            <include
-                layout="@layout/gallery_detail_actions"/>
-
-            <include
-                layout="@layout/gallery_detail_tags"/>
-
-            <include
                 layout="@layout/gallery_detail_comments"/>
 
             <include
                 layout="@layout/gallery_detail_previews"/>
-<!--            <include-->
-<!--                layout="@layout/gallery_detail_progress"/>-->
-
         </LinearLayout>
 
     </FrameLayout>
