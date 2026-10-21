@@ -31,7 +31,6 @@ import android.os.Debug;
 import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.View;
-import android.webkit.CookieManager;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -47,6 +46,7 @@ import com.hippo.conaco.Conaco;
 import com.hippo.content.RecordingApplication;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhCookieStore;
+import com.hippo.ehviewer.client.WebViewCookieSync;
 import com.hippo.ehviewer.client.EhHosts;
 import com.hippo.ehviewer.client.EhEngine;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
@@ -100,7 +100,6 @@ import okhttp3.Cache;
 import okhttp3.ConnectionPool;
 import okhttp3.ConnectionSpec;
 import okhttp3.OkHttpClient;
-import okhttp3.Response;
 
 public class EhApplication extends RecordingApplication {
 
@@ -435,23 +434,7 @@ public class EhApplication extends RecordingApplication {
                             throw new NullPointerException(e.getMessage());
                         }
                     })
-                    .addNetworkInterceptor(chain -> {
-                        Response response = chain.proceed(chain.request());
-                        // 同步Cookie到WebView
-                        if (response.headers("Set-Cookie") != null) {
-                            try {
-                                CookieManager cookieManager = CookieManager.getInstance();
-                                String url = chain.request().url().toString();
-                                for (String header : response.headers("Set-Cookie")) {
-                                    cookieManager.setCookie(url, header);
-                                }
-                                cookieManager.flush();
-                            } catch (Throwable t) {
-                                Log.e(TAG, "CookieManager/WebView sync skipped", t);
-                            }
-                        }
-                        return response;
-                    })
+                    .addNetworkInterceptor(WebViewCookieSync.getInstance())
                     .proxySelector(getEhProxySelector(application));
             if (Settings.getDF() && AppHelper.checkVPN(context)) {
                 if (Build.VERSION.SDK_INT < 29) {
