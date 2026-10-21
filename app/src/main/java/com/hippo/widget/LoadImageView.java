@@ -73,6 +73,9 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     private DataContainer mDataContainer;
     private boolean mUseNetwork;
     private boolean mHardware;
+    private boolean mKeepImageWhileLoading;
+    private String mImageKey;
+    private String mImageUrl;
     private int mOffsetX = Integer.MIN_VALUE;
     private int mOffsetY = Integer.MIN_VALUE;
     private int mClipWidth = Integer.MIN_VALUE;
@@ -134,7 +137,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
         if (!mLoadFromDrawable) {
             if (mFailed) {
                 onFailure();
-            } else if (mTaskId == Unikery.INVALID_ID) /* if (!mConaco.isLoading(mTaskId)) TODO Update Conaco */ {
+            } else if (mImage == null && mTaskId == Unikery.INVALID_ID) {
                 load(mKey, mUrl, mDataContainer, mUseNetwork, mHardware);
             }
         }
@@ -174,6 +177,58 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
         // Set drawable null
         setImageDrawable(null);
         if (mImage != null) { mImage.release(); mImage = null; }
+        mImageKey = null;
+        mImageUrl = null;
+    }
+
+    /** A short-lived, owned reference; survives recycling/detaching the source view. */
+    public static final class ImageSnapshot implements AutoCloseable {
+        private Image image;
+        public final String key;
+        public final String url;
+
+        private ImageSnapshot(Image image, String key, String url) {
+            this.image = image;
+            this.key = key;
+            this.url = url;
+        }
+
+        static ImageSnapshot capture(Image image, String key, String url) {
+            return image != null && image.obtain() ? new ImageSnapshot(image, key, url) : null;
+        }
+
+        @Override public void close() {
+            if (image != null) { image.release(); image = null; }
+        }
+    }
+
+    @Nullable public ImageSnapshot snapshot() {
+        return ImageSnapshot.capture(mImage, mImageKey, mImageUrl);
+    }
+
+    public boolean hasImage() { return mImage != null; }
+
+    public boolean adopt(ImageSnapshot snapshot) {
+        if (snapshot.image == null) return false;
+        if (mConaco != null) mConaco.cancel(this);
+        mKey = snapshot.key;
+        mUrl = snapshot.url;
+        mDataContainer = null;
+        mUseNetwork = true;
+        mLoadFromDrawable = false;
+        mFailed = false;
+        resetClip();
+        return onGetValue(snapshot.image, Conaco.SOURCE_MEMORY);
+    }
+
+    /** Refresh without blanking a valid image on a cache miss, wait, or failure. */
+    public void loadKeepingImage(String key, String url, @Nullable DataContainer container) {
+        if (java.util.Objects.equals(key, mKey) && java.util.Objects.equals(url, mUrl)
+                && !mFailed && (mTaskId != Unikery.INVALID_ID
+                || (mImage != null && java.util.Objects.equals(key, mImageKey)
+                && java.util.Objects.equals(url, mImageUrl)))) return;
+        mKeepImageWhileLoading = true;
+        load(key, url, container, true, false);
     }
 
     private void clearRetry() {
@@ -296,12 +351,13 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
         mKey = null;
         mUrl = null;
         mDataContainer = null;
+        mKeepImageWhileLoading = false;
         clearDrawable();
     }
 
     @Override
     public void onMiss(int source) {
-        if (source == Conaco.SOURCE_MEMORY) {
+        if (source == Conaco.SOURCE_MEMORY && !(mKeepImageWhileLoading && mImage != null)) {
             clearDrawable();
         }
     }
@@ -316,7 +372,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
 
     @Override
     public void onWait() {
-        clearDrawable();
+        if (!(mKeepImageWhileLoading && mImage != null)) clearDrawable();
     }
 
     @Override
@@ -349,8 +405,11 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
 
         Image previous = mImage;
         mImage = value;
+        mImageKey = mKey;
+        mImageUrl = mUrl;
         onPreSetImageDrawable(drawable, true);
-        if (animateImageChanges() && (source == Conaco.SOURCE_DISK || source == Conaco.SOURCE_NETWORK) && isShown()) {
+        if (!(mKeepImageWhileLoading && previous != null) && animateImageChanges()
+                && (source == Conaco.SOURCE_DISK || source == Conaco.SOURCE_NETWORK) && isShown()) {
             Drawable[] layers = new Drawable[2];
             layers[0] = new ColorDrawable(Color.TRANSPARENT);
             layers[1] = drawable;
@@ -368,6 +427,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     @Override
     public void onFailure() {
         mFailed = true;
+        if (mKeepImageWhileLoading && mImage != null) return;
         clearDrawable();
         Drawable drawable;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

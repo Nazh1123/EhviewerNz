@@ -1187,6 +1187,13 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                     args.putString(GalleryDetailScene.KEY_ACTION, GalleryDetailScene.ACTION_DOWNLOAD_GALLERY_INFO);
                     args.putParcelable(GalleryDetailScene.KEY_GALLERY_INFO,
                             list.get(listPosition));
+                    // This was already read for the visible download row; pass the snapshot, never re-read it.
+                    SpiderInfo knownProgress = mCallback.getSpiderInfoMap().get(currentInfo.gid);
+                    if (knownProgress != null && knownProgress.gid == currentInfo.gid
+                            && android.text.TextUtils.equals(knownProgress.token, currentInfo.token)) {
+                        args.putInt(GalleryDetailScene.KEY_KNOWN_START_PAGE, knownProgress.startPage);
+                        args.putInt(GalleryDetailScene.KEY_KNOWN_PAGE_COUNT, knownProgress.pages);
+                    }
                     Announcer announcer = new Announcer(GalleryDetailScene.class).setArgs(args);
                     announcer.setTranHelper(new EnterGalleryDetailTransaction(thumb));
                     mScene.startScene(announcer);

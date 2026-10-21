@@ -40,12 +40,13 @@
 
     </com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailRefreshLayout>
 
-    <com.hippo.widget.ProgressView
+    <include
         android:id="@+id/progress_view"
-        style="@style/ProgressView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"/>
+        layout="@layout/gallery_detail_progress"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <include layout="@layout/gallery_detail_progress"/>
 
     <TextView
         android:id="@+id/tip"

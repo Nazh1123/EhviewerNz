@@ -602,7 +602,7 @@ class FavoritesScene : BaseScene(), EasyRecyclerView.OnItemClickListener,
                 args.putParcelable(GalleryDetailScene.KEY_GALLERY_INFO, gi)
                 val announcer = Announcer(GalleryDetailScene::class.java).setArgs(args)
                 val thumb: View?
-                if (null != (view.findViewById<View?>(R.id.thumb).also { thumb = it })) {
+                if (null != (EnterGalleryDetailTransaction.findCover(view).also { thumb = it })) {
                     announcer.setTranHelper(EnterGalleryDetailTransaction(thumb))
                 }
                 startScene(announcer)

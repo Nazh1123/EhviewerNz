@@ -25,6 +25,8 @@ import androidx.transition.TransitionInflater;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
 import com.hippo.scene.TransitionHelper;
+import com.hippo.widget.LoadImageView;
+import com.hippo.widget.LoadImageViewNew;
 
 public class EnterGalleryDetailTransaction implements TransitionHelper {
 
@@ -37,9 +39,12 @@ public class EnterGalleryDetailTransaction implements TransitionHelper {
     @Override
     public boolean onTransition(Context context, FragmentTransaction transaction,
             Fragment exit, Fragment enter) {
-        if (mThumb == null || !(enter instanceof GalleryDetailScene)) {
+        if (mThumb == null || !(enter instanceof GalleryDetailScene detail)) {
             return false;
         }
+
+        if (mThumb instanceof LoadImageView cover) detail.setEntryCover(cover.snapshot());
+        else if (mThumb instanceof LoadImageViewNew cover) detail.setEntryCover(cover.snapshot());
 
         String transitionName = ViewCompat.getTransitionName(mThumb);
         if (transitionName != null) {
@@ -54,5 +59,11 @@ public class EnterGalleryDetailTransaction implements TransitionHelper {
             transaction.addSharedElement(mThumb, transitionName);
         }
         return true;
+    }
+
+    public static View findCover(View item) {
+        if (item instanceof LoadImageView || item instanceof LoadImageViewNew) return item;
+        View cover = item.findViewById(R.id.thumb);
+        return cover != null ? cover : item.findViewById(R.id.thumb_new);
     }
 }

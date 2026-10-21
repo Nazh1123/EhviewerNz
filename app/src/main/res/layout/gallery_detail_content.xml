@@ -37,29 +37,19 @@
         android:layout_height="wrap_content"
         android:visibility="gone"/>
 
-    <FrameLayout
+    <LinearLayout
+        android:id="@+id/detail_body"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:minHeight="64dp">
+        android:orientation="vertical"
+        android:divider="?attr/galleryDetailDivider"
+        android:showDividers="middle"
+        android:dividerPadding="@dimen/keyline_margin">
 
         <include
-            layout="@layout/gallery_detail_progress"/>
+            layout="@layout/gallery_detail_comments"/>
 
-        <LinearLayout
-            android:id="@+id/detail_body"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:divider="?attr/galleryDetailDivider"
-            android:showDividers="middle"
-            android:dividerPadding="@dimen/keyline_margin">
-
-            <include
-                layout="@layout/gallery_detail_comments"/>
-
-            <include
-                layout="@layout/gallery_detail_previews"/>
-        </LinearLayout>
-
-    </FrameLayout>
+        <include
+            layout="@layout/gallery_detail_previews"/>
+    </LinearLayout>
 </LinearLayout>

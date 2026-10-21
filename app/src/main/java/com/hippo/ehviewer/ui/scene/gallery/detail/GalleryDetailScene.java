@@ -130,6 +130,7 @@ import com.hippo.ehviewer.ui.scene.GalleryPreviewsScene;
 import com.hippo.ehviewer.widget.HoldThumbnailPreview;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
 import com.hippo.ehviewer.ui.scene.download.DownloadsScene;
+import com.hippo.ehviewer.ui.scene.download.part.ThumbDataContainer;
 import com.hippo.ehviewer.ui.scene.gallery.list.FavoritesScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListSceneDialog;
@@ -214,6 +215,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     public static final String ACTION_GID_TOKEN = "action_gid_token";
 
     public static final String KEY_GALLERY_INFO = "gallery_info";
+    public static final String KEY_KNOWN_START_PAGE = "known_start_page";
+    public static final String KEY_KNOWN_PAGE_COUNT = "known_page_count";
+    private static final String KEY_KNOWN_PROGRESS_GID = "known_progress_gid";
     public static final String KEY_GID = "gid";
     public static final String KEY_TOKEN = "token";
     public static final String KEY_PAGE = "page";
@@ -364,6 +368,15 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private GalleryInfo mGalleryInfo;
     private final Map<Integer, Runnable> mPendingDetailActions = new java.util.LinkedHashMap<>();
     private int mReadProgressGeneration;
+    private long mReadProgressLookupGid = -1L;
+    private long mKnownReadProgressGid = -1L;
+    @Nullable private Integer mKnownReadProgress;
+    private int mKnownPageCount;
+    @Nullable private LoadImageView.ImageSnapshot mEntryCover;
+    private long mCoverGid = -1L;
+    @Nullable private String mCoverUrl;
+    @Nullable private List<String> mBoundTagSignature;
+    @Nullable private EhTagDatabase mBoundTagDatabase;
     @Nullable private GalleryInfo mFavoriteOverride;
     private DownloadInfo mDownloadInfo;
     private long mGid;
@@ -409,7 +422,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private GalleryParentChainDialog mParentChainDialog;
     private GalleryListSceneDialog tagDialog;
 
-    private boolean useNetWorkLoadThumb = false;
 
     private Context mContext;
     private MainActivity activity;
@@ -430,7 +442,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             mGalleryInfo = args.getParcelable(KEY_GALLERY_INFO);
             // Add history
             if (null != mGalleryInfo) {
-                EhDB.putHistoryInfo(mGalleryInfo);
+                recordHistory(mGalleryInfo);
             }
         } else if (ACTION_GID_TOKEN.equals(action)) {
             mGid = args.getLong(KEY_GID);
@@ -440,16 +452,21 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 mDownloadInfo = args.getParcelable(KEY_GALLERY_INFO);
                 mGalleryInfo = mDownloadInfo;
                 if (null != mGalleryInfo) {
-                    EhDB.putHistoryInfo(mGalleryInfo);
+                    recordHistory(mGalleryInfo);
                 }
             } catch (ClassCastException e) {
                 mGalleryInfo = args.getParcelable(KEY_GALLERY_INFO);
                 if (null != mGalleryInfo) {
-                    EhDB.putHistoryInfo(mGalleryInfo);
+                    recordHistory(mGalleryInfo);
                 }
             }
             // Add history
 
+        }
+        if (mGalleryInfo != null && args.containsKey(KEY_KNOWN_START_PAGE)) {
+            mKnownReadProgressGid = mGalleryInfo.gid;
+            mKnownReadProgress = Math.max(0, args.getInt(KEY_KNOWN_START_PAGE));
+            mKnownPageCount = Math.max(0, args.getInt(KEY_KNOWN_PAGE_COUNT));
         }
     }
 
@@ -569,12 +586,61 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         handleArgs(getArguments());
     }
 
+    private void recordHistory(GalleryInfo info) {
+        // Record visits independently of initial view creation and metadata rendering.
+        com.hippo.ehviewer.dao.HistoryInfo snapshot = new com.hippo.ehviewer.dao.HistoryInfo(info);
+        Context context = getEHContext();
+        if (context != null) EhApplication.getExecutorService(context).execute(() -> EhDB.putHistoryInfo(snapshot));
+    }
+
+    public void setEntryCover(@Nullable LoadImageView.ImageSnapshot cover) {
+        if (mEntryCover != null) mEntryCover.close();
+        mEntryCover = cover;
+    }
+
+    @Override public void onDestroy() {
+        setEntryCover(null);
+        super.onDestroy();
+    }
+
+    private void bindCover(GalleryInfo info) {
+        if (mThumb == null) return;
+        if (mEntryCover != null) {
+            try {
+                String key = mEntryCover.key;
+                if ((EhCacheKeyFactory.getThumbKey(info.gid).equals(key)
+                        || (key != null && key.startsWith("cover:v1:" + info.gid + ":")))
+                        && mThumb.adopt(mEntryCover)) {
+                    mCoverGid = info.gid;
+                    mCoverUrl = mEntryCover.url;
+                }
+            } finally { setEntryCover(null); }
+        }
+        if (TextUtils.isEmpty(info.thumb)) return;
+        if (mCoverGid == info.gid && !mThumb.mFailed
+                && !EhCacheKeyFactory.needsCoverUpdate(mCoverUrl, info.thumb)) return;
+        boolean replacing = mCoverGid == info.gid || (mGalleryInfo != null
+                && mGalleryInfo.gid == info.gid
+                && EhCacheKeyFactory.needsCoverUpdate(mGalleryInfo.thumb, info.thumb));
+        String key = replacing ? EhCacheKeyFactory.getCoverKey(info.gid, info.thumb)
+                : EhCacheKeyFactory.getThumbKey(info.gid);
+        mCoverGid = info.gid;
+        mCoverUrl = info.thumb;
+        // The download list already uses this source for .thumb; never scan the gallery for a placeholder.
+        mThumb.loadKeepingImage(key, info.thumb,
+                !replacing && mDownloadInfo != null ? new ThumbDataContainer(mDownloadInfo) : null);
+    }
+
     private void onRestore(Bundle savedInstanceState) {
         mAction = savedInstanceState.getString(KEY_ACTION);
         mGalleryInfo = savedInstanceState.getParcelable(KEY_GALLERY_INFO);
         mGid = savedInstanceState.getLong(KEY_GID);
         mToken = savedInstanceState.getString(KEY_TOKEN);
         mGalleryDetail = savedInstanceState.getParcelable(KEY_GALLERY_DETAIL);
+        mKnownReadProgressGid = savedInstanceState.getLong(KEY_KNOWN_PROGRESS_GID, -1L);
+        mKnownReadProgress = savedInstanceState.containsKey(KEY_KNOWN_START_PAGE)
+                ? savedInstanceState.getInt(KEY_KNOWN_START_PAGE) : null;
+        mKnownPageCount = savedInstanceState.getInt(KEY_KNOWN_PAGE_COUNT);
         mOffline = savedInstanceState.getBoolean(KEY_OFFLINE);
         mOfflineError = savedInstanceState.getString(KEY_OFFLINE_ERROR);
         mRequestId = savedInstanceState.getInt(KEY_REQUEST_ID);
@@ -603,6 +669,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         outState.putInt(KEY_REQUEST_ID, mRequestId);
         outState.putBoolean(KEY_OFFLINE, mOffline);
+        if (mKnownReadProgress != null) {
+            outState.putLong(KEY_KNOWN_PROGRESS_GID, mKnownReadProgressGid);
+            outState.putInt(KEY_KNOWN_START_PAGE, mKnownReadProgress);
+            outState.putInt(KEY_KNOWN_PAGE_COUNT, mKnownPageCount);
+        }
         outState.putString(KEY_OFFLINE_ERROR, mOfflineError);
         if (mGalleryUpdateSessionGid > 0L) {
             outState.putLong(KEY_GALLERY_UPDATE_SESSION_GID, mGalleryUpdateSessionGid);
@@ -855,7 +926,14 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mPreviews.setOnClickListener(this);
         mDetailScrollView.setSwipeActivationView(mPreviewText);
 
-        mProgress = ViewUtils.$$(mainView, R.id.progress);
+        mProgress = ViewUtils.$$(main, R.id.progress);
+        for (View loading : new View[]{progressView, mProgress}) {
+            GradientDrawable background = new GradientDrawable();
+            background.setColor(AttrResources.getAttrColor(context, android.R.attr.colorBackground));
+            background.setAlpha(125);
+            background.setCornerRadius(LayoutUtils.dp2pix(context, 12));
+            loading.findViewById(R.id.detail_loading_indicator).setBackground(background);
+        }
 
         // Loading the body must not hide the already-known cover, actions and rating.
         mViewTransition2 = new ViewTransition(mainView.findViewById(R.id.detail_body), mProgress);
@@ -929,6 +1007,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     public void onDestroyView() {
         mPendingDetailActions.clear();
         ++mReadProgressGeneration;
+        mReadProgressLookupGid = -1L;
         mThumbnailPreview.dismiss();
         super.onDestroyView();
         mOfflineGeneration++;
@@ -966,7 +1045,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         mHeader = null;
         mColorBg = null;
+        if (mThumb != null) mThumb.unload();
         mThumb = null;
+        mCoverGid = -1L;
+        mCoverUrl = null;
+        setEntryCover(null);
         mTitle = null;
         mUploader = null;
         mCategory = null;
@@ -1027,6 +1110,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         mTags = null;
         mNoTags = null;
+        mBoundTagSignature = null;
+        mBoundTagDatabase = null;
 
         mComments = null;
         mCommentsText = null;
@@ -1228,6 +1313,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 break;
             case STATE_REFRESH:
                 // Show mProgressView
+                mViewTransition2.showView(0, false);
                 mViewTransition.showView(1, animation);
                 break;
             case STATE_REFRESH_HEADER:
@@ -1240,6 +1326,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             case STATE_INIT:
             case STATE_FAILED:
                 // Show mFailedView
+                mViewTransition2.showView(0, false);
                 mViewTransition.showView(2, animation);
                 break;
         }
@@ -1267,7 +1354,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         if ((ACTION_GALLERY_INFO.equals(mAction) || ACTION_DOWNLOAD_GALLERY_INFO.equals(mAction)) && mGalleryInfo != null) {
             GalleryInfo gi = mGalleryInfo;
-            mThumb.load(EhCacheKeyFactory.getThumbKey(gi.gid), gi.thumb);
+            bindCover(gi);
             mTitle.setText(EhUtils.getSuitableTitle(gi));
             mUploader.setText(gi.uploader);
             mCategory.setText(EhUtils.getCategory(gi.category));
@@ -1297,7 +1384,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     private static String getPendingLanguage(GalleryInfo info) {
         if (TextUtils.isEmpty(info.simpleLanguage)) info.generateSLang();
-        String code = info.simpleLanguage;
+        String code = info.simpleLanguage == null ? null : info.simpleLanguage.trim();
         if (TextUtils.isEmpty(code)) {
             for (String tag : getKnownTags(info)) {
                 for (int i = 0; i < GalleryInfo.S_LANG_TAGS.length; i++) {
@@ -1307,7 +1394,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 if (!TextUtils.isEmpty(code)) break;
             }
         }
-        return TextUtils.isEmpty(code) ? "" : Locale.forLanguageTag(code).getDisplayLanguage(Locale.ENGLISH);
+        return TextUtils.isEmpty(code) ? "Japanese" : Locale.forLanguageTag(code).getDisplayLanguage(Locale.ENGLISH);
     }
 
     private String getPendingRatingText(float rating) {
@@ -1353,7 +1440,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
 
-        boolean local = EhDB.containLocalFavorites(info.gid);
+        // Pending rendering only consumes the status already carried by the entry snapshot.
+        boolean local = mGalleryDetail == null ? info.favoriteSlot == -1 : EhDB.containLocalFavorites(info.gid);
         boolean favorited = mGalleryDetail != null ? mGalleryDetail.isFavorited : info.favoriteSlot >= 0;
         if (favorited || local) {
             mHeart.setVisibility(View.VISIBLE);
@@ -1391,16 +1479,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 mHaveNewVersion.setVisibility(View.GONE);
             }
         }
-        if (null == mGalleryInfo) {
-            mThumb.load(EhCacheKeyFactory.getThumbKey(gd.gid), gd.thumb);
-        } else {
-            if (useNetWorkLoadThumb) {
-                mThumb.load(EhCacheKeyFactory.getThumbKey(gd.gid), gd.thumb);
-                useNetWorkLoadThumb = false;
-            } else {
-                mThumb.load(EhCacheKeyFactory.getThumbKey(gd.gid), gd.thumb, false);
-            }
-        }
+        bindCover(gd);
 
         mTitle.setText(EhUtils.getSuitableTitle(gd));
         mUploader.setText(gd.uploader);
@@ -1555,9 +1634,18 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUploader.setText(info.uploader);
         mCategory.setText(EhUtils.getCategory(info.category));
         mCategory.setTextColor(EhUtils.getCategoryColor(info.category));
-        mThumb.unload();
-        if (local.cover != null) LocalImageLoader.load(mThumb, local.cover);
-        else mThumb.load(EhCacheKeyFactory.getThumbKey(info.gid), info.thumb, false);
+        if (!mThumb.hasImage()) {
+            mThumb.unload();
+            if (local.cover != null) {
+                LocalImageLoader.load(mThumb, local.cover);
+                mCoverGid = info.gid;
+                mCoverUrl = local.cover.getUri().toString();
+            }
+            else mThumb.load(EhCacheKeyFactory.getThumbKey(info.gid), info.thumb, false);
+        }
+        mKnownReadProgressGid = info.gid;
+        mKnownReadProgress = local.startPage;
+        mKnownPageCount = info.pages;
         mLanguage.setText(info.language);
         mPosted.setText(GalleryTimeFormatter.format(info.posted));
         mPages.setText(info.pages > 0 ? (local.startPage > 0 ? local.startPage + 1 : 0) + "/" + info.pages + "P"
@@ -1623,15 +1711,26 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void bindReadProgress(GalleryInfo info) {
-        final int generation = ++mReadProgressGeneration;
         final long gid = info.gid;
-        final int pages = info.pages;
+        final int pages = info.pages > 0 ? info.pages
+                : mGalleryDetail == null && mKnownReadProgressGid == gid ? mKnownPageCount : 0;
         if (pages <= 0) {
             mPages.setText("");
             return;
         }
         Integer cached = SpiderQueen.peekStartPage(gid);
+        if (cached != null) {
+            mKnownReadProgressGid = gid;
+            mKnownReadProgress = cached;
+        } else if (mKnownReadProgressGid == gid) {
+            cached = mKnownReadProgress;
+        }
+        if (mKnownReadProgressGid == gid) mKnownPageCount = pages;
         mPages.setText(formatReadProgress(cached == null ? 0 : cached, pages));
+        // List-prefetched progress is authoritative for the initial display. Do not query for placeholders.
+        if (mGalleryDetail == null || cached != null || mReadProgressLookupGid == gid) return;
+        final int generation = ++mReadProgressGeneration;
+        mReadProgressLookupGid = gid;
         if (mContext == null) {
             mContext = getEHContext();
             if (mContext == null) {
@@ -1647,7 +1746,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             int startPage = SpiderQueen.findStartPage(context, gid);
             handler.post(() -> {
                 if (mPages != null && generation == mReadProgressGeneration && gid == getGid()) {
-                    mPages.setText(formatReadProgress(startPage, pages));
+                    mReadProgressLookupGid = -1L;
+                    mKnownReadProgressGid = gid;
+                    mKnownReadProgress = startPage;
+                    GalleryInfo current = getGalleryInfo();
+                    mPages.setText(formatReadProgress(startPage, current != null ? current.pages : pages));
                 }
             });
         });
@@ -1666,58 +1769,80 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
 
-        mTags.setVisibility(View.VISIBLE);
-        mTags.removeViews(1, mTags.getChildCount() - 1);
-        if (tagGroups == null || tagGroups.length == 0) {
-            mNoTags.setVisibility(View.VISIBLE);
-            return;
-        } else {
-            mNoTags.setVisibility(View.GONE);
-        }
-
         ehTags = Settings.getShowTagTranslations() ? EhTagDatabase.getInstance(context) : null;
+        List<String> signature = new ArrayList<>();
+        if (tagGroups != null) for (GalleryTagGroup group : tagGroups) {
+            signature.add("group:" + group.groupName);
+            for (int i = 0; i < group.size(); i++) signature.add("tag:" + group.getTagAt(i));
+        }
+        mTags.setVisibility(View.VISIBLE);
+        if (signature.equals(mBoundTagSignature) && ehTags == mBoundTagDatabase) return;
+        mBoundTagSignature = signature;
+        mBoundTagDatabase = ehTags;
+        mNoTags.setVisibility(signature.isEmpty() ? View.VISIBLE : View.GONE);
 
         int colorTag = AttrResources.getAttrColor(context, R.attr.tagBackgroundColor);
         int colorName = AttrResources.getAttrColor(context, R.attr.tagGroupBackgroundColor);
-        for (GalleryTagGroup tg : tagGroups) {
-            LinearLayout ll = (LinearLayout) inflater.inflate(R.layout.gallery_tag_group, mTags, false);
-            ll.setOrientation(LinearLayout.HORIZONTAL);
-            mTags.addView(ll);
-
-            String readableTagName = null;
-            if (ehTags != null) {
-                readableTagName = ehTags.getTranslation("n:" + tg.groupName);
+        Map<String, LinearLayout> rows = new HashMap<>();
+        for (int i = 1; i < mTags.getChildCount(); i++) {
+            LinearLayout row = (LinearLayout) mTags.getChildAt(i);
+            rows.put((String) row.getTag(), row);
+        }
+        int rowPosition = 1;
+        if (tagGroups != null) for (GalleryTagGroup tg : tagGroups) {
+            LinearLayout ll = rows.remove(tg.groupName);
+            if (ll == null) {
+                ll = (LinearLayout) inflater.inflate(R.layout.gallery_tag_group, mTags, false);
+                ll.setTag(tg.groupName);
+                TextView name = (TextView) inflater.inflate(R.layout.item_gallery_tag, ll, false);
+                name.setBackgroundDrawable(new RoundSideRectDrawable(colorName));
+                ll.addView(name);
+                ll.addView(new AutoWrapLayout(context), ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT);
             }
-
-            TextView tgName = (TextView) inflater.inflate(R.layout.item_gallery_tag, ll, false);
-            ll.addView(tgName);
-            tgName.setText(readableTagName != null ? readableTagName : tg.groupName);
-            tgName.setBackgroundDrawable(new RoundSideRectDrawable(colorName));
+            placeChild(mTags, ll, rowPosition++);
+            TextView tgName = (TextView) ll.getChildAt(0);
+            String readableTagName = ehTags == null ? null : ehTags.getTranslation("n:" + tg.groupName);
+            setTagText(tgName, readableTagName != null ? readableTagName : tg.groupName);
 
             String prefix = EhTagDatabase.namespaceToPrefix(tg.groupName);
-            if (prefix == null) {
-                prefix = "";
+            if (prefix == null) prefix = "";
+            AutoWrapLayout awl = (AutoWrapLayout) ll.getChildAt(1);
+            Map<String, TextView> tags = new HashMap<>();
+            for (int i = 0; i < awl.getChildCount(); i++) {
+                TextView tag = (TextView) awl.getChildAt(i);
+                tags.put((String) tag.getTag(R.id.tag), tag);
             }
-
-            AutoWrapLayout awl = new AutoWrapLayout(context);
-            ll.addView(awl, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             for (int j = 0, z = tg.size(); j < z; j++) {
-                TextView tag = (TextView) inflater.inflate(R.layout.item_gallery_tag, awl, false);
-                awl.addView(tag);
                 String tagStr = tg.getTagAt(j);
-
-                String readableTag = null;
-                if (ehTags != null) {
-                    readableTag = ehTags.getTranslation(prefix + tagStr);
+                String key = tg.groupName + ":" + tagStr;
+                TextView tag = tags.remove(key);
+                if (tag == null) {
+                    tag = (TextView) inflater.inflate(R.layout.item_gallery_tag, awl, false);
+                    tag.setBackgroundDrawable(new RoundSideRectDrawable(colorTag));
+                    tag.setTag(R.id.tag, key);
+                    tag.setOnClickListener(this);
+                    tag.setOnLongClickListener(this);
                 }
-
-                tag.setText(readableTag != null ? readableTag : tagStr);
-                tag.setBackgroundDrawable(new RoundSideRectDrawable(colorTag));
-                tag.setTag(R.id.tag, tg.groupName + ":" + tagStr);
-                tag.setOnClickListener(this);
-                tag.setOnLongClickListener(this);
+                placeChild(awl, tag, j);
+                String readableTag = ehTags == null ? null : ehTags.getTranslation(prefix + tagStr);
+                setTagText(tag, readableTag != null ? readableTag : tagStr);
             }
+            for (TextView removed : tags.values()) awl.removeView(removed);
         }
+        for (LinearLayout removed : rows.values()) mTags.removeView(removed);
+    }
+
+    private static void placeChild(ViewGroup parent, View child, int index) {
+        if (child.getParent() == parent) {
+            if (parent.indexOfChild(child) == index) return;
+            parent.removeView(child);
+        }
+        parent.addView(child, index);
+    }
+
+    private static void setTagText(TextView view, String text) {
+        if (!TextUtils.equals(view.getText(), text)) view.setText(text);
     }
 
     private void bindComments(GalleryComment[] comments) {
@@ -3501,7 +3626,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         updateDownloadState();
         if (mDownloadState != DownloadInfo.STATE_INVALID) {
             if (mDownloadInfo != null && !mDownloadInfo.thumb.equals(result.thumb) && mDownloadInfo.gid == result.gid) {
-                useNetWorkLoadThumb = true;
                 mDownloadInfo.updateInfo(result);
                 mDownloadInfo.state = mDownloadState;
                 EhDB.putDownloadInfo(mDownloadInfo);
