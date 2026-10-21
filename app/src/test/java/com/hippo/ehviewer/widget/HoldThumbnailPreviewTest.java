@@ -2,12 +2,16 @@ package com.hippo.ehviewer.widget;
 
 import android.app.Activity;
 import android.app.Application;
+import android.app.Dialog;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.os.Looper;
+import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -20,6 +24,12 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.hippo.drawable.PreciselyClipDrawable;
 import com.hippo.easyrecyclerview.EasyRecyclerView;
+import com.hippo.conaco.Conaco;
+import com.hippo.conaco.ConacoTask;
+import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.R;
+import com.hippo.lib.image.Image;
+import com.hippo.widget.LoadImageView;
 
 import org.junit.After;
 import org.junit.Before;
@@ -68,54 +78,130 @@ public class HoldThumbnailPreviewTest {
 
     @After public void tearDown() { preview.dispose(); activity.finish(); }
 
-    @Test public void tapStillClicksAndScrollCancelsPendingPreview() {
+    @Test public void tapStillClicksAndMovingOutsideCancelsLongPress() {
         touch(image, MotionEvent.ACTION_DOWN, 20, 20);
         touch(image, MotionEvent.ACTION_UP, 20, 20);
         idle(600);
         assertEquals(1, clicks);
         assertNull(overlay());
         touch(image, MotionEvent.ACTION_DOWN, 20, 20);
-        touch(image, MotionEvent.ACTION_MOVE, 20, 100);
+        touch(image, MotionEvent.ACTION_MOVE, 20, 200);
         idle(600);
         assertNull(overlay());
-        touch(image, MotionEvent.ACTION_CANCEL, 20, 100);
+        touch(image, MotionEvent.ACTION_CANCEL, 20, 200);
     }
 
-    @Test public void holdExpandsAndReleaseReversesWithoutClicking() {
+    @Test public void longPressStaysOpenAfterReleaseAndTapClosesWithoutClickingThrough() {
         hold();
         assertNotNull(overlay());
         idle(140);
         assertEquals(1f, progress(), 0.001f);
         touch(image, MotionEvent.ACTION_UP, 20, 20);
         idle(140);
+        assertNotNull(overlay());
+        tapPreview(20, 20);
+        idle(140);
         assertNull(overlay());
         assertEquals(0, clicks);
     }
 
-    @Test public void releaseDuringOpeningAndImmediateReholdDoNotLeaveOverlay() {
+    @Test public void releaseDuringOpeningKeepsPreviewAndBackClosesIt() {
         hold();
         idle(50);
         touch(image, MotionEvent.ACTION_UP, 20, 20);
-        touch(image, MotionEvent.ACTION_DOWN, 20, 20);
-        idle(ViewConfiguration.getLongPressTimeout() + 250);
+        idle(250);
         assertNotNull(overlay());
-        touch(image, MotionEvent.ACTION_CANCEL, 20, 20);
+        Dialog dialog = dialog();
+        dialog.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK));
+        dialog.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK));
         idle(300);
         assertNull(overlay());
         assertEquals(0, clicks);
+        assertFalse(activity.isFinishing());
     }
 
-    @Test public void extraPointerCancelsPendingAndActivePreview() {
-        touch(image, MotionEvent.ACTION_DOWN, 20, 20);
-        touch(image, MotionEvent.ACTION_POINTER_DOWN, 20, 20);
-        idle(600);
+    @Test public void standardLongClickCanReopenAfterClosingDuringAnimation() {
+        assertTrue(image.performLongClick());
+        idle(50);
+        dialog().onBackPressed();
+        idle(200);
         assertNull(overlay());
-        touch(image, MotionEvent.ACTION_CANCEL, 20, 20);
+        assertTrue(image.performLongClick());
+        idle(200);
+        assertNotNull(overlay());
+        assertEquals(1f, progress(), 0.001f);
+    }
+
+    @Test @Config(shadows = {PreviewAppShadow.class, ThumbnailLoaderShadow.class})
+    public void detailThumbnailLongClickSurvivesLoadingAndFailureRetry() {
+        ThumbnailLoaderShadow.loads = 0;
+        root.removeAllViews();
+        View item = LayoutInflater.from(activity).inflate(R.layout.item_gallery_preview, root, false);
+        LoadImageView thumbnail = item.findViewById(R.id.image);
+        image = thumbnail;
+        thumbnail.setOnClickListener(view -> clicks++);
+        preview.bind(thumbnail);
+        root.addView(item);
+        thumbnail.load("preview", "https://example.invalid/preview.jpg");
+        Bitmap bitmap = Bitmap.createBitmap(100, 150, Bitmap.Config.ARGB_8888);
+        bitmap.eraseColor(Color.RED);
+        Image loaded = Image.create(bitmap);
+        assertTrue(thumbnail.onGetValue(loaded, Conaco.SOURCE_MEMORY));
+        layout(root, 480, 800);
+        hold();
+        touch(thumbnail, MotionEvent.ACTION_UP, 20, 20);
+        idle(140);
+        assertNotNull(overlay());
+        preview.dismiss();
+
+        thumbnail.load("replacement", "https://example.invalid/replacement.jpg");
+        thumbnail.onFailure();
+        int requestsBeforeRetry = ThumbnailLoaderShadow.loads;
+        assertTrue(thumbnail.performLongClick());
+        assertNull(overlay());
+        assertEquals(requestsBeforeRetry + 1, ThumbnailLoaderShadow.loads);
+
+        assertTrue(thumbnail.onGetValue(Image.create(Bitmap.createBitmap(
+                100, 150, Bitmap.Config.ARGB_8888)), Conaco.SOURCE_MEMORY));
+        layout(root, 480, 800);
+        assertFalse("Retry must clear the failure state", thumbnail.mFailed);
+        assertTrue("Retry must restore the external long-click listener", thumbnail.isLongClickable());
+        assertTrue(thumbnail.performLongClick());
+        idle(140);
+        assertNotNull(overlay());
+        tapPreview(240, 400);
+        idle(140);
+        assertNull(overlay());
+        assertEquals(0, clicks);
+
+        thumbnail.performClick();
+        assertEquals(1, clicks);
+    }
+
+    @Implements(EhApplication.class)
+    public static class PreviewAppShadow extends org.robolectric.shadows.ShadowApplication {
+        @Implementation protected static Conaco<Image> getConaco(Context context) {
+            return Shadow.newInstanceOf(Conaco.class);
+        }
+    }
+
+    @Implements(Conaco.class)
+    public static class ThumbnailLoaderShadow {
+        private static int loads;
+        @Implementation protected void load(ConacoTask.Builder<Image> builder) { loads++; }
+    }
+
+    @Test public void cancelOfOpeningGestureDoesNotClosePreview() {
         hold();
         idle(260);
+        touch(image, MotionEvent.ACTION_CANCEL, 20, 20);
         touch(image, MotionEvent.ACTION_POINTER_DOWN, 20, 20);
         idle(300);
+        assertNotNull(overlay());
+        tapPreview(240, 400);
+        idle(140);
         assertNull(overlay());
+        assertEquals(0, clicks);
     }
 
     @Test public void detachAndLifecycleDismissCleanUpImmediately() {
@@ -170,6 +256,9 @@ public class HoldThumbnailPreviewTest {
         assertEquals(Color.BLUE, snapshot.getPixel(50, 75));
         touch(image, MotionEvent.ACTION_UP, 20, 20);
         idle(140);
+        assertNotNull(overlay());
+        tapPreview(240, 400);
+        idle(140);
         assertNull(overlay());
         assertFalse(hardware.isRecycled());
     }
@@ -212,7 +301,7 @@ public class HoldThumbnailPreviewTest {
         }
     }
 
-    @Test public void recyclerLongPressReceivesReleaseWithoutOpeningItem() {
+    @Test public void recyclerLongPressStaysOpenUntilTappedWithoutOpeningItem() {
         preview.dispose();
         root.removeAllViews();
         EasyRecyclerView recycler = new EasyRecyclerView(activity);
@@ -241,6 +330,9 @@ public class HoldThumbnailPreviewTest {
         touch(recycler, MotionEvent.ACTION_MOVE, 20, 300);
         touch(recycler, MotionEvent.ACTION_UP, 20, 300);
         idle(300);
+        assertNotNull(overlay());
+        tapPreview(240, 400);
+        idle(140);
         assertNull(overlay());
         assertEquals(0, clicks);
     }
@@ -251,6 +343,13 @@ public class HoldThumbnailPreviewTest {
     }
 
     private Object overlay() { return ReflectionHelpers.getField(preview, "mOverlay"); }
+    private Dialog dialog() { return ReflectionHelpers.getField(preview, "mDialog"); }
+    private void tapPreview(float x, float y) {
+        View decor = dialog().getWindow().getDecorView();
+        layout(decor, 480, 800);
+        touch(decor, MotionEvent.ACTION_DOWN, x, y);
+        touch(decor, MotionEvent.ACTION_UP, x, y);
+    }
     private float progress() { return ReflectionHelpers.getField(overlay(), "progress"); }
     private static void idle(long millis) { shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(millis)); }
     private static void layout(View view, int width, int height) {

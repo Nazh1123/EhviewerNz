@@ -81,6 +81,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     private int mClipWidth = Integer.MIN_VALUE;
     private int mClipHeight = Integer.MIN_VALUE;
     private int mRetryType;
+    @Nullable private View.OnLongClickListener mExternalLongClickListener;
     public boolean mFailed;
     private boolean mLoadFromDrawable;
     private boolean secondTry = false;
@@ -217,6 +218,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
         mUseNetwork = true;
         mLoadFromDrawable = false;
         mFailed = false;
+        updateLongClickListener();
         resetClip();
         return onGetValue(snapshot.image, Conaco.SOURCE_MEMORY);
     }
@@ -231,13 +233,26 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
         load(key, url, container, true, false);
     }
 
+    @Override
+    public void setOnLongClickListener(@Nullable View.OnLongClickListener listener) {
+        mExternalLongClickListener = listener;
+        updateLongClickListener();
+    }
+
+    private void updateLongClickListener() {
+        // Retry temporarily takes priority without discarding the caller's normal action.
+        View.OnLongClickListener listener = mFailed && mRetryType == RETRY_TYPE_LONG_CLICK
+                ? this : mExternalLongClickListener;
+        super.setOnLongClickListener(listener);
+        setLongClickable(listener != null);
+    }
+
     private void clearRetry() {
         if (mRetryType == RETRY_TYPE_CLICK) {
             setOnClickListener(null);
             setClickable(false);
         } else if (mRetryType == RETRY_TYPE_LONG_CLICK) {
-            setOnLongClickListener(null);
-            setLongClickable(false);
+            updateLongClickListener();
         }
     }
 
@@ -251,14 +266,13 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
                     setOnClickListener(null);
                     setClickable(false);
                 } else if (oldRetryType == RETRY_TYPE_LONG_CLICK) {
-                    setOnLongClickListener(null);
-                    setLongClickable(false);
+                    updateLongClickListener();
                 }
 
                 if (retryType == RETRY_TYPE_CLICK) {
                     setOnClickListener(this);
                 } else if (retryType == RETRY_TYPE_LONG_CLICK) {
-                    setOnLongClickListener(this);
+                    updateLongClickListener();
                 }
             }
         }
@@ -441,7 +455,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
         if (mRetryType == RETRY_TYPE_CLICK) {
             setOnClickListener(this);
         } else if (mRetryType == RETRY_TYPE_LONG_CLICK) {
-            setOnLongClickListener(this);
+            updateLongClickListener();
         } else {
             if (secondTry && downloadInfo != null) {
                 Context context = this.getContext();
@@ -468,6 +482,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     @Override
     public void onCancel() {
         mFailed = false;
+        updateLongClickListener();
     }
 
     @Override

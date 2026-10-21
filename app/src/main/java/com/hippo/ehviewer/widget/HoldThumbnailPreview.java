@@ -3,7 +3,7 @@ package com.hippo.ehviewer.widget;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
-import android.annotation.SuppressLint;
+import android.app.Dialog;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -13,104 +13,36 @@ import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.TransitionDrawable;
-import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageView;
 
-import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.hippo.widget.LoadImageView;
 import com.hippo.widget.LoadImageViewNew;
 import com.hippo.drawable.PreciselyClipDrawable;
 
-/** A window overlay that keeps the original touch target until the finger is released. */
-public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchListener
-        implements View.OnTouchListener, View.OnAttachStateChangeListener {
+/** A thumbnail preview opened by long-click and closed by a tap or Back. */
+public final class HoldThumbnailPreview implements View.OnAttachStateChangeListener {
     private static final long DURATION_MS = 110;
     private RecyclerView mRecyclerView;
-    private View mTouchHost;
-    private View mPendingView;
     private ImageView mSource;
-    private ViewGroup mRoot;
+    private Dialog mDialog;
     private PreviewOverlay mOverlay;
     private ValueAnimator mAnimator;
-    private boolean mEligible;
-    private boolean mHolding;
-    private float mDownX;
-    private float mDownY;
-    private final Runnable mShowPending = () -> {
-        View pending = mPendingView;
-        mPendingView = null;
-        if (pending instanceof ImageView image && show(image)) {
-            // Cancel the ordinary click/long-click without changing the touch target.
-            MotionEvent cancel = MotionEvent.obtain(0, 0, MotionEvent.ACTION_CANCEL, 0, 0, 0);
-            pending.onTouchEvent(cancel);
-            cancel.recycle();
-            pending.setPressed(false);
-        }
-    };
 
     public void attachToRecyclerView(RecyclerView recyclerView) {
         mRecyclerView = recyclerView;
-        recyclerView.addOnItemTouchListener(this);
         recyclerView.addOnAttachStateChangeListener(this);
     }
 
-    /** Detail thumbnails have click handlers, so observe their touch stream directly. */
+    /** Keep the ordinary click handler and use the standard long-click gesture to open. */
     public void bind(ImageView image) {
-        image.setOnTouchListener(this);
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    @Override public boolean onTouch(View view, MotionEvent event) {
-        boolean consumed = observe(view, event);
-        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-            mPendingView = view;
-            view.postDelayed(mShowPending, ViewConfiguration.getLongPressTimeout());
-        }
-        return consumed;
-    }
-
-    @Override public boolean onInterceptTouchEvent(@NonNull RecyclerView view,
-                                                  @NonNull MotionEvent event) {
-        return observe(view, event);
-    }
-
-    @Override public void onTouchEvent(@NonNull RecyclerView view, @NonNull MotionEvent event) {
-        observe(view, event);
-    }
-
-    private boolean observe(View host, MotionEvent event) {
-        boolean consumed = mHolding;
-        switch (event.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                dismiss();
-                mTouchHost = host;
-                mEligible = true;
-                mDownX = event.getX();
-                mDownY = event.getY();
-                break;
-            case MotionEvent.ACTION_MOVE:
-                int slop = ViewConfiguration.get(host.getContext()).getScaledTouchSlop();
-                if (!mHolding && (Math.abs(event.getX() - mDownX) > slop
-                        || Math.abs(event.getY() - mDownY) > slop)) {
-                    mEligible = false;
-                    cancelPending();
-                }
-                break;
-            case MotionEvent.ACTION_POINTER_DOWN:
-            case MotionEvent.ACTION_UP:
-            case MotionEvent.ACTION_CANCEL:
-                mEligible = false;
-                cancelPending();
-                release();
-                break;
-        }
-        return consumed;
+        image.setOnLongClickListener(view -> show(image));
     }
 
     /** Called by the existing RecyclerView long-press handler. */
@@ -121,7 +53,7 @@ public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchLi
         if (drawable instanceof TransitionDrawable transition && transition.getNumberOfLayers() > 0) {
             drawable = transition.getDrawable(transition.getNumberOfLayers() - 1);
         }
-        if (!mEligible || !source.isAttachedToWindow() || !source.isShown()
+        if (!source.isAttachedToWindow() || !source.isShown()
                 || source.getWidth() <= 0 || source.getHeight() <= 0 || drawable == null
                 || drawable.getIntrinsicWidth() <= 0 || drawable.getIntrinsicHeight() <= 0
                 || !(source.getRootView() instanceof ViewGroup root)) {
@@ -144,11 +76,9 @@ public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchLi
         }
 
         int[] sourceLocation = new int[2];
-        int[] rootLocation = new int[2];
         source.getLocationOnScreen(sourceLocation);
-        root.getLocationOnScreen(rootLocation);
-        float x = sourceLocation[0] - rootLocation[0] + source.getPaddingLeft();
-        float y = sourceLocation[1] - rootLocation[1] + source.getPaddingTop();
+        float x = sourceLocation[0] + source.getPaddingLeft();
+        float y = sourceLocation[1] + source.getPaddingTop();
         RectF imageBounds = new RectF(0, 0, width, height);
         source.getImageMatrix().mapRect(imageBounds);
         imageBounds.offset(x, y);
@@ -156,16 +86,26 @@ public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchLi
                 x + source.getWidth() - source.getPaddingLeft() - source.getPaddingRight(),
                 y + source.getHeight() - source.getPaddingTop() - source.getPaddingBottom());
 
+        dismiss();
         mSource = source;
         source.addOnAttachStateChangeListener(this);
-        mRoot = root;
         mOverlay = new PreviewOverlay(source, bitmap, imageBounds, clip);
-        mOverlay.layout(0, 0, root.getWidth(), root.getHeight());
-        root.getOverlay().add(mOverlay);
-        mHolding = true;
-        if (mTouchHost != null && mTouchHost.getParent() != null) {
-            mTouchHost.getParent().requestDisallowInterceptTouchEvent(true);
-        }
+        mOverlay.setOnClickListener(view -> close());
+        mDialog = new Dialog(source.getContext(), android.R.style.Theme_Translucent_NoTitleBar) {
+            @Override public void cancel() { close(); }
+        };
+        mDialog.setContentView(mOverlay);
+        mDialog.setOnDismissListener(dialog -> {
+            if (mDialog == dialog) dismiss();
+        });
+        Window window = mDialog.getWindow();
+        window.setBackgroundDrawableResource(android.R.color.transparent);
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        window.setWindowAnimations(0);
+        window.getDecorView().setPadding(0, 0, 0, 0);
+        window.getDecorView().setSystemUiVisibility(root.getSystemUiVisibility());
+        mDialog.show();
+        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         animateTo(1f);
         return true;
     }
@@ -196,12 +136,7 @@ public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchLi
         }
     }
 
-    private void release() {
-        if (!mHolding) return;
-        mHolding = false;
-        if (mTouchHost != null && mTouchHost.getParent() != null) {
-            mTouchHost.getParent().requestDisallowInterceptTouchEvent(false);
-        }
+    private void close() {
         if (mOverlay != null) animateTo(0f);
     }
 
@@ -223,7 +158,7 @@ public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchLi
             @Override public void onAnimationEnd(Animator animation) {
                 if (mAnimator == animation) {
                     mAnimator = null;
-                    if (target == 0f) removeOverlay();
+                    if (target == 0f) dismiss();
                 }
             }
         });
@@ -231,41 +166,25 @@ public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchLi
         animator.start();
     }
 
-    private void cancelPending() {
-        if (mPendingView != null) {
-            mPendingView.removeCallbacks(mShowPending);
-            mPendingView = null;
-        }
-    }
-
-    private void removeOverlay() {
-        if (mSource != null) mSource.removeOnAttachStateChangeListener(this);
-        if (mRoot != null && mOverlay != null) mRoot.getOverlay().remove(mOverlay);
-        mSource = null;
-        mRoot = null;
-        mOverlay = null;
-    }
-
     public void dismiss() {
-        mEligible = false;
-        cancelPending();
-        mHolding = false;
         if (mAnimator != null) {
             ValueAnimator animator = mAnimator;
             mAnimator = null;
             animator.cancel();
         }
-        if (mTouchHost != null && mTouchHost.getParent() != null) {
-            mTouchHost.getParent().requestDisallowInterceptTouchEvent(false);
+        if (mDialog != null) {
+            mDialog.setOnDismissListener(null);
+            mDialog.dismiss();
+            mDialog = null;
         }
-        mTouchHost = null;
-        removeOverlay();
+        if (mSource != null) mSource.removeOnAttachStateChangeListener(this);
+        mSource = null;
+        mOverlay = null;
     }
 
     public void dispose() {
         dismiss();
         if (mRecyclerView != null) {
-            mRecyclerView.removeOnItemTouchListener(this);
             mRecyclerView.removeOnAttachStateChangeListener(this);
             mRecyclerView = null;
         }
@@ -282,6 +201,7 @@ public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchLi
         private final RectF target = new RectF();
         private final RectF current = new RectF();
         private final RectF clip = new RectF();
+        private final int[] location = new int[2];
         private float progress;
 
         PreviewOverlay(View source, Bitmap bitmap, RectF start, RectF startClip) {
@@ -289,7 +209,6 @@ public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchLi
             this.bitmap = bitmap;
             this.start = start;
             this.startClip = startClip;
-            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         }
 
         @Override protected void onDraw(Canvas canvas) {
@@ -300,8 +219,14 @@ public final class HoldThumbnailPreview extends RecyclerView.SimpleOnItemTouchLi
             float height = bitmap.getHeight() * scale;
             target.set((getWidth() - width) / 2, (getHeight() - height) / 2,
                     (getWidth() + width) / 2, (getHeight() + height) / 2);
-            interpolate(current, start, target, progress);
-            interpolate(clip, startClip, target, progress);
+            // The dialog content can have different system-bar insets from the source window.
+            getLocationOnScreen(location);
+            current.set(start);
+            current.offset(-location[0], -location[1]);
+            clip.set(startClip);
+            clip.offset(-location[0], -location[1]);
+            interpolate(current, current, target, progress);
+            interpolate(clip, clip, target, progress);
             int save = canvas.save();
             canvas.clipRect(clip);
             canvas.drawBitmap(bitmap, null, current, paint);
