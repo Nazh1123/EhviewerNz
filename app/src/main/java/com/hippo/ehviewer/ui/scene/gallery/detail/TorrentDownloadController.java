@@ -64,6 +64,8 @@ class TorrentDownloadController {
     @Nullable
     private AlertDialog downLoadAlertDialog;
     @Nullable
+    private Dialog torrentListDialog;
+    @Nullable
     private View torrentDownloadView;
     @Nullable
     private TextView downloadProgress;
@@ -76,7 +78,7 @@ class TorrentDownloadController {
     }
 
     void showTorrentList(@NonNull Context context, @NonNull String torrentUrl, @NonNull OkHttpClient okHttpClient) {
-        if (!host.isHostActive()) {
+        if (!host.isHostActive() || torrentListDialog != null && torrentListDialog.isShowing()) {
             return;
         }
         TorrentListDialogHelper helper = new TorrentListDialogHelper(torrentUrl, okHttpClient);
@@ -85,10 +87,15 @@ class TorrentDownloadController {
                 .setView(R.layout.dialog_torrent_list)
                 .setOnDismissListener(helper)
                 .show();
+        torrentListDialog = dialog;
         helper.setDialog(dialog);
     }
 
     void release() {
+        if (torrentListDialog != null) {
+            torrentListDialog.dismiss();
+            torrentListDialog = null;
+        }
         dismissTorrentDialog();
         torrentList = null;
         torrentDownloadView = null;
@@ -341,6 +348,7 @@ class TorrentDownloadController {
 
         @Override
         public void onDismiss(DialogInterface dialog) {
+            if (torrentListDialog == dialog) torrentListDialog = null;
             if (mRequest != null) {
                 mRequest.cancel();
                 mRequest = null;
