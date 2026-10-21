@@ -46,6 +46,7 @@ import com.hippo.conaco.Conaco;
 import com.hippo.content.RecordingApplication;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhCookieStore;
+import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.WebViewCookieSync;
 import com.hippo.ehviewer.client.EhHosts;
 import com.hippo.ehviewer.client.EhEngine;
@@ -566,6 +567,8 @@ public class EhApplication extends RecordingApplication {
             Conaco.Builder<Image> builder = new Conaco.Builder<>();
             builder.hasMemoryCache = true;
             builder.memoryCacheMaxSize = getMemoryCacheMaxSize();
+            builder.sharedMemoryCacheMaxSize = ImageBitmapHelper.PREVIEW_CACHE_BYTES;
+            builder.sharedMemoryCacheKey = EhCacheKeyFactory::isNormalPreviewKey;
             builder.hasDiskCache = true;
             builder.diskCacheDir = new File(context.getCacheDir(), "thumb");
             builder.diskCacheMaxSize = 320 * 1024 * 1024; // 320MB

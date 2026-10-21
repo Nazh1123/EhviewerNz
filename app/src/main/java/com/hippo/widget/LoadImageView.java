@@ -66,6 +66,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     private static final String TAG = LoadImageView.class.getSimpleName();
     private int mTaskId = Unikery.INVALID_ID;
     private Conaco<Image> mConaco;
+    @Nullable private Image mImage;
     private String mKey;
     private String mUrl;
     @Nullable
@@ -172,6 +173,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
 
         // Set drawable null
         setImageDrawable(null);
+        if (mImage != null) { mImage.release(); mImage = null; }
     }
 
     private void clearRetry() {
@@ -320,14 +322,18 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     @Override
     public boolean onGetValue(@NonNull Image value, int source) {
         Drawable drawable;
+        boolean obtained = false;
         try {
-            Drawable.ConstantState state = value.getDrawable().getConstantState();
+            Drawable original = value.getDrawable();
+            obtained = true;
+            Drawable.ConstantState state = original.getConstantState();
             if (state!=null){
                 drawable = state.newDrawable();
             }else {
-                drawable = value.getDrawable();
+                drawable = original;
             }
         } catch (Exception e) {
+            if (obtained) value.release();
             // The image might be recycled because it is removed from memory cache.
             Log.d(TAG, "The image is recycled", e);
             return false;
@@ -341,6 +347,8 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
             drawable = new PreciselyClipDrawable(drawable, mOffsetX, mOffsetY, mClipWidth, mClipHeight);
         }
 
+        Image previous = mImage;
+        mImage = value;
         onPreSetImageDrawable(drawable, true);
         if (animateImageChanges() && (source == Conaco.SOURCE_DISK || source == Conaco.SOURCE_NETWORK) && isShown()) {
             Drawable[] layers = new Drawable[2];
@@ -353,6 +361,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
             setImageDrawable(drawable);
         }
 
+        if (previous != null) previous.release();
         return true;
     }
 

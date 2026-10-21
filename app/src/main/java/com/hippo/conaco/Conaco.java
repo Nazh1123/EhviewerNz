@@ -66,7 +66,8 @@ public class Conaco<V> {
         beerBellyParams.diskCacheDir = builder.diskCacheDir;
         beerBellyParams.diskCacheMaxSize = builder.diskCacheMaxSize;
 
-        mCache = new ValueCache<>(beerBellyParams, mHelper);
+        mCache = new ValueCache<>(beerBellyParams, mHelper,
+                builder.sharedMemoryCacheMaxSize, builder.sharedMemoryCacheKey);
         mOkHttpClient = builder.okHttpClient;
 
         mRegister = new Register<>();
@@ -204,6 +205,10 @@ public class Conaco<V> {
         public ValueHelper<T> objectHelper = null;
 
         public boolean debug = false;
+
+        /** Optional, separately bounded cache for large values shared by several targets. */
+        public int sharedMemoryCacheMaxSize;
+        public java.util.function.Predicate<String> sharedMemoryCacheKey;
 
         @Override
         public void isValid() throws IllegalStateException {
