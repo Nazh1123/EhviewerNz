@@ -1,0 +1,4 @@
+<resources>
+    <string name="reader_prefer_existing_results">Prefer existing results</string>
+    <string name="reader_prefer_existing_results_help">Show saved translation and enhanced images even when processing is off. Pages without results show their original image; no models are started.</string>
+</resources>

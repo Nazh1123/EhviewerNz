@@ -311,9 +311,23 @@ public final class GalleryUpdateManager {
         }
 
         UniFile oldFile = source.filesByPToken.get(pToken);
-        return oldFile != null && oldFile.exists() && oldFile.length() > 0L
-                && SpiderDen.isReadableImage(oldFile)
-                && targetDen.copyImageFrom(oldFile, targetIndex);
+        boolean copied = oldFile != null && oldFile.exists() && oldFile.length() > 0L
+                && SpiderDen.isReadableImage(oldFile) && targetDen.copyImageFrom(oldFile, targetIndex);
+        if (copied && EhApplication.getInstance() != null) {
+            try {
+                DownloadInfo parent = EhApplication.getDownloadManager().getDownloadInfo(plan.sourceGid);
+                UniFile parentDir = parent != null ? SpiderDen.getExistingGalleryDownloadDir(parent) : null;
+                UniFile targetDir = targetDen.getDownloadDir();
+                if (parentDir != null && targetDir != null) {
+                    com.hippo.ehviewer.gallery.GalleryResultIndex.copyPage(EhApplication.getInstance(),
+                            plan.sourceGid, targetGid, oldFile.getName().substring(0, 8),
+                            SpiderDen.generateImageFilename(targetIndex, ""), parentDir, targetDir);
+                }
+            } catch (Exception error) {
+                Log.w(TAG, "Cannot copy indexed results for updated page " + targetIndex, error);
+            }
+        }
+        return copied;
     }
 
     @Nullable

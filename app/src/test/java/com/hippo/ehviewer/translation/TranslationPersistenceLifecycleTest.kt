@@ -14,6 +14,7 @@ import com.hippo.ehviewer.R
 import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.download.DownloadManager
 import com.hippo.ehviewer.gallery.GalleryProvider2
+import com.hippo.ehviewer.gallery.GalleryResultIndex
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource
 import com.hippo.unifile.UniFile
 import com.hippo.unifile.UriHandler
@@ -82,7 +83,7 @@ class TranslationPersistenceLifecycleTest {
         assertEquals(emptyList<Throwable>(), errors.toList())
     }
 
-    @Test fun oldHashNamedPersistentFullPageMigratesToNamedOverlayWithoutModels() {
+    @Test fun unindexedFilesAreNotMigratedOrUsedAsResults() {
         val selected = options.copy(ahead = 0)
         val source = provider.sources[0]
         val key = "g71_" + TranslationCache(TranslationStorage.cacheDir(context))
@@ -94,10 +95,9 @@ class TranslationPersistenceLifecycleTest {
         withSession(selected) { session ->
             ReflectionHelpers.setField(session, "activated", true)
             session.onPageChanged(0)
-            await { !session.working && session.states[0] == R.string.translation_done }
-            assertFalse(legacy.exists())
-            assertEquals(setOf("0_tl.$renderedExtension"), savedDir.list()!!.toSet())
-            assertTrue(TranslationStorage.cacheDir(context).list()!!.isEmpty())
+            await { !session.working && session.states[0] == R.string.translation_models_required }
+            assertTrue(legacy.exists())
+            assertEquals(setOf("$key.png"), savedDir.list()!!.toSet())
         }
     }
 
@@ -176,8 +176,10 @@ class TranslationPersistenceLifecycleTest {
 
     @Test fun ordinaryReadingAndLookaheadPersistBeforeDownloadFinishesAndReopenWithoutModels() {
         download.state = DownloadInfo.STATE_DOWNLOAD
-        val cached = store(options.copy(persistDownloaded = false))
-        provider.sources.forEach { source -> cached.writeImage(cached.key(source)) { out -> source.inputStream().use { it.copyTo(out) } } }
+        provider.sources.forEachIndexed { page, source ->
+            val cached = store(options.copy(persistDownloaded = false), page.toString())
+            cached.writeImage(cached.key(source)) { out -> source.inputStream().use { it.copyTo(out) } }
+        }
         withSession { session ->
             ReflectionHelpers.setField(session, "activated", true)
             session.onPageChanged(0)
@@ -283,7 +285,7 @@ class TranslationPersistenceLifecycleTest {
     @Test fun enablingPersistenceAdoptsAllSettledReaderResultsIncludingOutOfWindowAndSkippedPages() =
         withSession(options.copy(persistDownloaded = false)) { session ->
             for (page in 0..2) {
-                val key = store().key(provider.sources[page])
+                val key = store(name = page.toString()).key(provider.sources[page])
                 val job = jobs.launch {
                     session.finishWithSource(0, TranslationPageRequest(page, false), key, session.activeOptions) {
                         if (page == 0) PageResult.Skipped("No text", stats)
@@ -347,7 +349,8 @@ class TranslationPersistenceLifecycleTest {
 
     private fun store(selected: TranslationOptions = options, name: String = "0") = TranslationResultStore(
         TranslationStorage.cacheDir(context), UniFile.fromFile(gallery), selected, download.gid, true,
-        name)
+        name, resultIndex = GalleryResultIndex.open(context, "gallery:${download.gid}", download.gid,
+            UniFile.fromFile(gallery), selected.persistDownloaded), indexedSource = GalleryResultIndex.Source(name))
 
     private fun withSession(selected: TranslationOptions = options, test: (GalleryTranslationSession) -> Unit) {
         val session = TranslationTasks.acquire(context, provider, download)

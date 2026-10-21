@@ -1698,6 +1698,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
                     boolean deleted = dir == null || !dir.exists() || dir.delete();
                     if (deleted) {
+                        com.hippo.ehviewer.gallery.GalleryResultIndex.clearCachedGallery(mContext, gid);
                         EhDB.removeDownloadDirname(gid);
                     } else {
                         success = false;

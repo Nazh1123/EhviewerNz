@@ -6,6 +6,7 @@ import com.hippo.ehviewer.R
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.ehviewer.gallery.GalleryProcessingProgress
+import com.hippo.ehviewer.gallery.GalleryResultIndex
 import com.hippo.ehviewer.translation.ImageProcessingPriority
 import com.hippo.ehviewer.translation.GalleryPageWork
 import com.hippo.ehviewer.translation.GalleryPageWorkRegistry
@@ -49,6 +50,7 @@ internal class GallerySuperResolutionSession(
     private var browsing = true
     @Volatile private var generation = 0
     private var closed = false
+    private var reconciledResults = false
     private var options = settings.read()
     private var automaticPreference = settings.automatic
     private var singlePage: Int? = null
@@ -271,6 +273,25 @@ internal class GallerySuperResolutionSession(
         val source = File.createTempFile("sr-original-", ".image", context.cacheDir)
         val selected = options
         try {
+            val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
+            val directory = TranslationStorage.resultDirectory(context, download, provider, selected.persist)
+            val entry = GalleryResultIndex.source(provider, page, galleryInfo?.gid)
+            val index = GalleryResultIndex.open(context, identity, galleryInfo?.gid, directory,
+                selected.persist && download != null && directory != null)
+            if (!reconciledResults) {
+                index.reconcile(provider)
+                reconciledResults = true
+            }
+            val forceRequested = withContext(Dispatchers.Main) { page in forced }
+            if (!forceRequested) index.find(entry, GalleryResultIndex.Kind.SR)?.takeIf { it.state == "complete" }?.let { hit ->
+                val tiles = EnhancedTilePage(File(context.cacheDir, "result-reader").apply { mkdirs() },
+                    hit.width / hit.scale, hit.height / hit.scale, hit.scale).apply { useFinalImage(checkNotNull(hit.file)) }
+                withContext(Dispatchers.Main) {
+                    if (generation == epoch && enabled && browsing && current == page) reader?.displayTiles(page, tiles)
+                }
+                return tiles to SuperResolutionPageMetrics(reusedTiles = tiles.count)
+            }
+            if (forceRequested) index.invalidate(entry, GalleryResultIndex.Kind.SR)
             var saved = false
             for (attempt in 0 until 30) {
                 currentCoroutineContext().ensureActive()
@@ -289,14 +310,11 @@ internal class GallerySuperResolutionSession(
                     if (!NativeMemoryPolicy(context).canRetain()) TranslationRuntime.closeIdleModels()
                 }
                 SuperResolutionModels.lock.withLock {
-                    val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
-                    val directory = TranslationStorage.resultDirectory(context, download, provider, selected.persist)
-                        .takeIf { selected.persist && download != null }
                     // A global preference alone must never make online/archive results persistent.
-                    val store = SuperResolutionStore(context, identity, selected.copy(persist = directory != null))
+                    val store = SuperResolutionStore(context, identity, selected.copy(persist = false), index, entry)
                     val key = store.key(source)
                     val force = withContext(NonCancellable + Dispatchers.Main) { forced.remove(page) }
-                    val sourceName = provider.getTranslationFilename(page)
+                    val sourceName = entry.name
                     fun recordResult(result: UniFile?) {
                         galleryInfo?.gid?.let { GalleryProcessingProgress.record(context, it,
                             GalleryProcessingProgress.Kind.SUPER_RESOLUTION, sourceName, result) }
@@ -347,6 +365,7 @@ internal class GallerySuperResolutionSession(
                             }
                         }, grouped = true).also { (tiles, _) ->
                             recordResult(store.compact(key, tiles, directory, sourceName))
+                            GalleryResultIndex.prune(context, GalleryResultIndex.Kind.SR, selected.cacheMiB * 1024L * 1024)
                         }
                 }
             }

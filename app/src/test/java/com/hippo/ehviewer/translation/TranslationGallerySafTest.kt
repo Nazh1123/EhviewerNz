@@ -40,6 +40,23 @@ import org.greenrobot.greendao.database.StandardDatabase
 @RunWith(RobolectricTestRunner::class)
 @org.robolectric.annotation.Config(application = Application::class, sdk = [28], manifest = org.robolectric.annotation.Config.NONE)
 class TranslationGallerySafTest {
+    @Test fun perGalleryManifestResolvesDoneAfterOpaqueSafRenamesAndReopens() {
+        val index = com.hippo.ehviewer.gallery.GalleryResultIndex.open(context, "saf-test", null, book, true)
+        val page = com.hippo.ehviewer.gallery.GalleryResultIndex.Source("Chapter/001.jpg", "known", "content://source/one")
+        val bitmap = Bitmap.createBitmap(9, 13, Bitmap.Config.ARGB_8888)
+        try { index.write(page, com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL, "png") {
+            assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+        } } finally { bitmap.recycle() }
+        val json = book.findFile(com.hippo.ehviewer.gallery.GalleryResultIndex.MANIFEST)!!.openInputStream().bufferedReader().use { it.readText() }
+        assertEquals("done", org.json.JSONObject(json).getJSONObject("pages").getJSONObject(page.name).getJSONObject("tl").getString("uri"))
+        com.hippo.ehviewer.gallery.GalleryResultIndex.dropMemory()
+        val reopened = com.hippo.ehviewer.gallery.GalleryResultIndex.open(context, "saf-test", null, book, false)
+        val hit = requireNotNull(reopened.find(page, com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL))
+        assertEquals("content", hit.file!!.uri.scheme)
+        assertEquals(9, hit.width); assertEquals(13, hit.height)
+        reopened.invalidate(page, com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL)
+        assertNull(reopened.find(page, com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL))
+    }
     @Test fun partialCheckpointSurvivesOpaqueSafRenameAndCacheMigration() {
         val key = "g${source.stableGalleryId()}_partial"
         val checkpoint = com.hippo.ehviewer.translation.engine.TranslationResume(listOf("first", "second"), mapOf(0 to "译文"))

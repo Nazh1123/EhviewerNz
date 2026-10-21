@@ -75,6 +75,14 @@ public abstract class GalleryProvider2 extends GalleryProvider {
     @NonNull
     public String getTranslationFilename(int index) { return getImageFilename(index); }
 
+    /** Full source name for result indexing; never a visible/subset page number. */
+    public String getResultPageName(int index) {
+        UniFile source = getPreviewFile(index);
+        return source != null && source.getName() != null ? source.getName() : getTranslationFilename(index);
+    }
+
+    public String getResultSourceStamp(int index) { return ""; }
+
     /** Existing local source folder, also available when opened outside the download list. */
     @Nullable
     public UniFile getTranslationDirectory() { return null; }

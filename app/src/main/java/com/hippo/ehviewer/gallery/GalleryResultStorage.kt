@@ -161,6 +161,9 @@ object GalleryResultStorage {
                     if (!deleted) success = false
                     deleted
                 }
+                for (gallery in galleries) GalleryResultIndex.deleteKind(context, gallery.gid,
+                    TranslationStorage.galleryDir(context, gallery),
+                    if (kind == Kind.TRANSLATION) GalleryResultIndex.Kind.TL else GalleryResultIndex.Kind.SR)
                 GalleryProcessingProgress.forget(context, removed.map { it.uri }).join()
                 GalleryProcessingProgress.removeMissing(context, ids, kind).join()
                 success
@@ -177,6 +180,8 @@ object GalleryResultStorage {
     /** Include partial/checkpoint bytes; an internal tile page is storage, not one image per tile. */
     internal suspend fun collect(context: Context, ids: Set<Long>, galleries: List<UniFile>, kind: Kind): List<UniFile> {
         val files = linkedMapOf<String, UniFile>()
+        for (gid in ids) for (entry in GalleryResultIndex.files(context, gid, null,
+            if (kind == Kind.TRANSLATION) GalleryResultIndex.Kind.TL else GalleryResultIndex.Kind.SR)) files[entry.uri.toString()] = entry
         suspend fun addTree(directory: UniFile, accept: (String) -> Boolean) {
             currentCoroutineContext().ensureActive()
             val children = checkNotNull(directory.listFiles()) { "Result directory unavailable" }

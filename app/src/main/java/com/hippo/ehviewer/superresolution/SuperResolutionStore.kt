@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import com.hippo.ehviewer.gallery.GalleryProcessingProgress
+import com.hippo.ehviewer.gallery.GalleryResultIndex
 import com.hippo.ehviewer.image.WebpEncoder
 import com.hippo.unifile.UniFile
 import java.io.File
@@ -18,7 +19,9 @@ import kotlinx.coroutines.ensureActive
 
 /** Lossless resumable checkpoints compacted into one final image. Calls hold the model lock on IO. */
 internal class SuperResolutionStore(context: Context, private val identity: String,
-                                    private val options: SuperResolutionOptions) {
+                                    private val options: SuperResolutionOptions,
+                                    private val resultIndex: GalleryResultIndex? = null,
+                                    private val indexedSource: GalleryResultIndex.Source? = null) {
     private val app = context.applicationContext
     private val cacheRoot = File(context.cacheDir, "super-resolution-pages")
     private val persistentRoot = File(context.noBackupFilesDir, "super-resolution-pages")
@@ -27,7 +30,7 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
     private val persistent get() = File(persistentRoot, gallery)
 
     fun scaleFor(width: Int, height: Int) = options.scale.resolve(width, height)
-    val acceptsLegacy get() = options.scale == SuperResolutionScale.X2
+    val acceptsLegacy get() = resultIndex == null && options.scale == SuperResolutionScale.X2
 
     suspend fun key(source: File): String {
         val hash = MessageDigest.getInstance("SHA-256")
@@ -86,7 +89,7 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
 
     fun invalidate(key: String) { deleteResult(File(cache, "$key.png")); deleteResult(File(persistent, "$key.png")) }
 
-    fun findTiles(key: String): EnhancedTilePage? = listOf(persistent, cache).firstNotNullOfOrNull { root ->
+    fun findTiles(key: String): EnhancedTilePage? = (if (resultIndex != null) listOf(cache) else listOf(persistent, cache)).firstNotNullOfOrNull { root ->
         val directory = File(root, "$key.tiles")
         readPage(directory, completed = true)?.also { directory.setLastModified(System.currentTimeMillis()) }
     }
@@ -162,7 +165,14 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
     suspend fun compact(key: String, page: EnhancedTilePage, gallery: UniFile?, sourceName: String): UniFile {
         val previous = page.finalImage
         val workspace = SuperResolutionWebp.budget(app)
-        val image = if (gallery != null) SuperResolutionExport.save(page, gallery, sourceName, workspace, options.quality)
+        val image = if (resultIndex != null && indexedSource != null) {
+            val coroutine = kotlinx.coroutines.currentCoroutineContext()
+            SuperResolutionExport.encode(page, workspace, options.quality) { extension, writer ->
+                resultIndex.write(indexedSource, GalleryResultIndex.Kind.SR, extension, page.scale) { output ->
+                    kotlinx.coroutines.runBlocking(coroutine) { writer(output) }
+                }
+            }
+        } else if (gallery != null) SuperResolutionExport.save(page, gallery, sourceName, workspace, options.quality)
         else previous ?: SuperResolutionExport.encode(page, workspace, options.quality) { extension, writer ->
             val target = File(page.directory, "result.$extension")
             val temporary = File.createTempFile("final-", ".tmp", page.directory)
@@ -178,9 +188,13 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
         image.openInputStream().use { BitmapFactory.decodeStream(it, null, bounds) }
         check(bounds.outWidth == page.width && bounds.outHeight == page.height) { "Invalid SR final image" }
         // Commit metadata first; on failure the current page and checkpoints remain usable.
-        writePage(page, true, image)
+        if (resultIndex == null) writePage(page, true, image)
         page.useFinalImage(image)
         page.removeTileImages()
+        if (resultIndex != null) {
+            check(page.directory.deleteRecursively())
+            return image
+        }
         for (extension in listOf("png", "webp")) {
             val obsolete = File(page.directory, "result.$extension")
             if (obsolete.isFile && localFile(image) != obsolete) check(obsolete.delete())
@@ -207,6 +221,7 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
     private fun readPage(directory: File, completed: Boolean): EnhancedTilePage? = runCatching {
         val json = JSONObject(File(directory, "page.json").readText())
         val version = json.getInt("version")
+        if (resultIndex != null && (version != 2 || json.has("result"))) return@runCatching null
         if (version !in 1..3 || (completed && !json.getBoolean("complete"))) return@runCatching null
         val w = json.getInt("width"); val h = json.getInt("height")
         if (w !in 1..32768 || h !in 1..32768) return@runCatching null
@@ -298,6 +313,7 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
         private fun digest(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it) }
         fun clear(context: Context, persistent: Boolean = false) {
+            if (!persistent) GalleryResultIndex.clearCache(context, GalleryResultIndex.Kind.SR)
             val root = File(if (persistent) context.noBackupFilesDir else context.cacheDir, "super-resolution-pages")
             check(!root.exists() || root.deleteRecursively()) { "Cannot remove super-resolution results" }
             GalleryProcessingProgress.forgetUnder(context, Uri.fromFile(root))

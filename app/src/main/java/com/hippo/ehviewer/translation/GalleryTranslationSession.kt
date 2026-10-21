@@ -9,6 +9,7 @@ import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.ehviewer.gallery.GalleryProcessingProgress
+import com.hippo.ehviewer.gallery.GalleryResultIndex
 import com.hippo.lib.image.Image
 import com.hippo.unifile.UniFile
 import java.io.File
@@ -221,17 +222,29 @@ internal class GalleryTranslationSession(
         return enabled
     }
 
+    private val indexedSources = java.util.concurrent.ConcurrentHashMap<String, GalleryResultIndex.Source>()
+    private var reconciledResults = false
+    private fun resultSourceName(page: Int): String = GalleryResultIndex.source(provider, page, galleryInfo?.gid).let {
+        indexedSources[it.name] = it; it.name
+    }
     private fun resultStore(options: TranslationOptions, sourceName: String? = null): TranslationResultStore {
         val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
         val directory = TranslationStorage.resultDirectory(context, download, provider, options.persistDownloaded)
         // An available source folder can retain each completed page while the rest
         // of the gallery is still downloading, paused, or failed.
         val downloaded = download != null && directory != null
+        val index = GalleryResultIndex.open(context, identity, galleryInfo?.gid, directory,
+            options.persistDownloaded && downloaded)
+        if (!reconciledResults && provider.size() > 0) {
+            index.reconcile(provider)
+            reconciledResults = true
+        }
         return TranslationResultStore(TranslationStorage.cacheDir(context),
             directory, options, galleryInfo?.gid, downloaded,
-            sourceName, TranslationStorage.legacyPersistentDir(context), filesRemoved = { files ->
+            sourceName, filesRemoved = { files ->
                 GalleryProcessingProgress.forget(context, files.map { it.uri })
-            }) { result ->
+            }, resultIndex = index,
+            indexedSource = sourceName?.let { indexedSources[it] ?: GalleryResultIndex.Source(it) }) { result ->
                 galleryInfo?.gid?.let { gid ->
                     if (sourceName != null) GalleryProcessingProgress.record(context, gid,
                         GalleryProcessingProgress.Kind.TRANSLATION, sourceName, result)
@@ -351,7 +364,7 @@ internal class GalleryTranslationSession(
                             val source = File.createTempFile("translation-source-", ".img", context.cacheDir)
                             try {
                                 status(epoch, page, R.string.translation_working)
-                                request.sourceName = provider.getTranslationFilename(page)
+                                request.sourceName = resultSourceName(page)
                                 val savedResults = resultStore(resolvedOptions(options), request.sourceName)
                                 if (!request.force && resultLock.withLock {
                                     val hit = savedResults.findSavedResult() ?: return@withLock false
@@ -390,7 +403,7 @@ internal class GalleryTranslationSession(
                                 }
                                 ensureActive()
                                 request.ensureRelevant()
-                                request.sourceName = provider.getTranslationFilename(page)
+                                request.sourceName = resultSourceName(page)
                                 var pageOptions = resolvedOptions(options)
                                 var results = resultStore(pageOptions, request.sourceName)
                                 withContext(Dispatchers.Main) {
@@ -878,7 +891,7 @@ internal class GalleryTranslationSession(
                 is PageResult.Translated -> {
                     resultLock.withLock {
                         // Download completion may have changed while this page was translating.
-                        val sourceName = request.sourceName ?: provider.getTranslationFilename(request.page)
+                        val sourceName = request.sourceName ?: resultSourceName(request.page)
                         val results = resultStore(options, sourceName)
                         val checkpoint = resume()
                         TranslationOverlay.extract(original, result.page)
@@ -916,7 +929,7 @@ internal class GalleryTranslationSession(
                 }
                 is PageResult.Skipped -> {
                     resultLock.withLock {
-                        val sourceName = request.sourceName ?: provider.getTranslationFilename(request.page)
+                        val sourceName = request.sourceName ?: resultSourceName(request.page)
                         val results = resultStore(options, sourceName)
                         results.recordSkipped(key)
                         withContext(Dispatchers.Main) {

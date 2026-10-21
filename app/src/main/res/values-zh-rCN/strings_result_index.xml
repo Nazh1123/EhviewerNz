@@ -1,0 +1,4 @@
+<resources>
+    <string name="reader_prefer_existing_results">优先显示已有结果</string>
+    <string name="reader_prefer_existing_results_help">翻译或超分模式关闭时，仍优先显示已有结果。无结果时显示原图，不启动模型处理。</string>
+</resources>

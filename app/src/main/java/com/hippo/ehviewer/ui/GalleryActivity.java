@@ -222,6 +222,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private GalleryProvider2 mGalleryProvider;
     private ReaderTranslationController mTranslationController;
+    private com.hippo.ehviewer.gallery.ReaderExistingResults mExistingResults;
     private com.hippo.ehviewer.superresolution.ReaderSuperResolutionController mSuperResolutionController;
     @Nullable
     private GalleryAdapter mGalleryAdapter;
@@ -796,6 +797,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 this, mGalleryProvider, findViewById(R.id.quick_translation), mGalleryInfo, progressLayout);
         mSuperResolutionController = new com.hippo.ehviewer.superresolution.ReaderSuperResolutionController(
                 this, mGalleryProvider, findViewById(R.id.quick_super_resolution), mGalleryInfo, progressLayout);
+        mExistingResults = new com.hippo.ehviewer.gallery.ReaderExistingResults(this, mGalleryProvider, mGalleryInfo);
         mGLRootView = (GLRootView) ViewUtils.$$(this, R.id.gl_root_view);
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();
@@ -958,6 +960,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mCurrentIndex = startPage;
         if (mTranslationController != null) mTranslationController.onPageChanged(startPage);
         if (mSuperResolutionController != null) mSuperResolutionController.onPageChanged(startPage);
+        if (mExistingResults != null) mExistingResults.onPageChanged(startPage);
         if (mGalleryView != null) {
             mLayoutMode = mGalleryView.getLayoutMode();
         }
@@ -1045,6 +1048,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        if (mExistingResults != null) { mExistingResults.close(); mExistingResults = null; }
         if (mSuperResolutionController != null) {
             mSuperResolutionController.close(isFinishing());
             mSuperResolutionController = null;
@@ -1154,6 +1158,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         cancelPagePreview();
         if (mTranslationController != null) mTranslationController.pause(isFinishing());
         if (mSuperResolutionController != null) mSuperResolutionController.pause(isFinishing());
+        if (mExistingResults != null) mExistingResults.pause();
         if (mOrientationEventListener != null) {
             mOrientationEventListener.disable();
         }
@@ -1180,6 +1185,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         applyReaderKeyProfile();
         if (mTranslationController != null) mTranslationController.resume();
         if (mSuperResolutionController != null) mSuperResolutionController.resume();
+        if (mExistingResults != null) mExistingResults.resume();
         if (mOrientationEventListener != null && mOrientationEventListener.canDetectOrientation()) {
             mOrientationEventListener.enable();
         }
@@ -2087,6 +2093,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         SimpleHandler.getInstance().post(() -> {
             if (mTranslationController != null) mTranslationController.onPageReady(index);
             if (mSuperResolutionController != null) mSuperResolutionController.onPageReady(index);
+            if (mExistingResults != null) mExistingResults.onPageReady(index);
         });
         boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
         int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
@@ -3874,6 +3881,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     GalleryActivity.this.mCurrentIndex = mValue;
                     if (mTranslationController != null) mTranslationController.onPageChanged(mValue);
                     if (mSuperResolutionController != null) mSuperResolutionController.onPageChanged(mValue);
+                    if (mExistingResults != null) mExistingResults.onPageChanged(mValue);
                     updateLocalGalleryHistoryPage(mValue);
                     updateSlider();
                     updateProgress();

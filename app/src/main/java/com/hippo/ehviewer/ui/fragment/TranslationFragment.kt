@@ -223,6 +223,8 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                     withContext(Dispatchers.IO) {
                         TranslationRuntime.lock.withLock {
                             TranslationStorage.cache(app).clear()
+                            com.hippo.ehviewer.gallery.GalleryResultIndex.clearCache(app,
+                                com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL)
                             TranslationRuntime.preparedPages.clear()
                         }
                     }

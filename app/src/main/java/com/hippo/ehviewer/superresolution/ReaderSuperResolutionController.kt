@@ -47,6 +47,7 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
         update()
     }
     private fun update() {
+        provider.setShowEnhancements(session.enabled && !closed)
         progressLayout.setEnhancementEnabled(session.enabled && !closed)
         button.imageTintList = android.content.res.ColorStateList.valueOf(
             AttrResources.getAttrColor(activity,

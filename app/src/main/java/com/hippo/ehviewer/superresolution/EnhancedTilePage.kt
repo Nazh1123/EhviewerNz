@@ -29,7 +29,7 @@ class EnhancedTilePage internal constructor(val directory: File, val sourceWidth
         private set
     private var decoder: BitmapRegionDecoder? = null
     // Used on the UI thread: remote SAF availability is validated by the IO reader/store.
-    internal val available get() = directory.isDirectory
+    internal val available get() = finalImage?.let { it.uri.scheme != "file" || it.isFile } ?: directory.isDirectory
 
     @Synchronized internal fun useFinalImage(image: UniFile) {
         decoder?.recycle(); decoder = null

@@ -73,6 +73,10 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
   @Override
   public String getTranslationIdentity() { return file != null ? "archive:" + file.getUri() : null; }
 
+  @Override public String getResultSourceStamp(int index) {
+    return file != null ? file.length() + ":" + file.lastModified() : "";
+  }
+
   @Override public ReaderPreviewSource createPreviewSource(Context context) {
     return new ReaderPreviewSource() {
       private A7ZipArchive archive;

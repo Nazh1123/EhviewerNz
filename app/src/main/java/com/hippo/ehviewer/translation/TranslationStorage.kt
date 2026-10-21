@@ -68,7 +68,12 @@ object TranslationStorage {
         val app = context.applicationContext
         scope.launch {
             TranslationRuntime.lock.withLock {
-                runCatching { cache(app, TranslationSettings(app).read().cacheLimitBytes).prune() }
+                runCatching {
+                    val limit = TranslationSettings(app).read().cacheLimitBytes
+                    cache(app, limit).prune()
+                    com.hippo.ehviewer.gallery.GalleryResultIndex.prune(app,
+                        com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL, limit)
+                }
             }
         }
     }

@@ -17,6 +17,12 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <com.hippo.preference.SwitchPreference
+        android:key="reader_prefer_existing_results"
+        android:defaultValue="false"
+        android:title="@string/reader_prefer_existing_results"
+        android:summary="@string/reader_prefer_existing_results_help" />
+
 <!--    <com.hippo.preference.ListPreference-->
 <!--        android:defaultValue="0"-->
 <!--        android:key="screen_rotation"-->
