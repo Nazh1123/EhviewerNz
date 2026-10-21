@@ -37,6 +37,12 @@ class GalleryProcessingProgressTest {
         file.writeText("image")
         return checkNotNull(UniFile.fromFile(file)).also { files[it.uri] = it }
     }
+    @Test fun queryingAbsentImportHistoryDoesNotCreateADatabase() = runBlocking {
+        val database = context.getDatabasePath("gallery_processing_progress.db")
+        assertFalse(database.exists())
+        assertTrue(GalleryProcessingProgress.savedResults(context, 99).isEmpty())
+        assertFalse(database.exists())
+    }
 
     @Test fun oldResultsAreCountedOnlyWhenAccessedAndReadingCountsDoesNotProbeFiles() = runBlocking {
         val old = file("gallery/_translated/001_tl.png")

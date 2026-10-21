@@ -171,13 +171,14 @@ class ReaderTranslationControllerTest {
             reader.showMenu(0)
             val dialog = org.robolectric.shadows.ShadowDialog.getLatestDialog() as androidx.appcompat.app.AlertDialog
             val items = dialog.listView.adapter
-            assertEquals(if (BuildConfig.DEBUG) 5 else 4, items.count)
+            assertEquals(if (BuildConfig.DEBUG) 6 else 5, items.count)
             val app = org.robolectric.RuntimeEnvironment.getApplication()
             assertEquals(app.getString(R.string.translation_show), items.getItem(0).toString())
             assertEquals(app.getString(R.string.translation_retry), items.getItem(1).toString())
             assertEquals(app.getString(R.string.translation_full_gallery), items.getItem(2).toString())
             assertEquals(app.getString(R.string.translation_source), items.getItem(3).toString())
             if (BuildConfig.DEBUG) assertEquals(app.getString(R.string.translation_timings), items.getItem(4).toString())
+            assertEquals(app.getString(R.string.result_import), items.getItem(items.count - 1).toString())
             dialog.dismiss()
         }
     }

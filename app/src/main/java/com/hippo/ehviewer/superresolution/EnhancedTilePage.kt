@@ -88,6 +88,13 @@ class EnhancedTilePage internal constructor(val directory: File, val sourceWidth
         }
     }
     fun remember(index: Int, bitmap: Bitmap): Pixels = Pixels(bitmap).also { cache("$index:1", it) }
+    /** Warm just the first screen-scale region, without allocating a whole enhanced bitmap. */
+    internal fun warmFirstRegion(viewWidth: Int, viewHeight: Int) {
+        var sample = 1
+        val ratio = minOf(width.toFloat() / viewWidth.coerceAtLeast(1), height.toFloat() / viewHeight.coerceAtLeast(1))
+        while (sample * 2 <= ratio) sample *= 2
+        acquire(0, sample)?.close()
+    }
     /** IO only. The caller owns one reference, including when the cache evicts the tile. */
     fun acquire(index: Int, sample: Int): Pixels? {
         synchronized(this) { cache["$index:$sample"]?.let { return it.retain() } }

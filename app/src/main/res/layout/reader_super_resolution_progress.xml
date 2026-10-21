@@ -21,6 +21,7 @@
     tools:ignore="RtlHardcoded">
 
     <LinearLayout
+        android:id="@+id/super_resolution_progress_bars"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"

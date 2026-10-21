@@ -1,4 +1,11 @@
 <resources>
-    <string name="reader_prefer_existing_results">Prefer existing results</string>
-    <string name="reader_prefer_existing_results_help">Show saved translation and enhanced images even when processing is off. Pages without results show their original image; no models are started.</string>
+    <string name="reader_prefer_existing_results">Show existing results</string>
+    <string name="reader_prefer_existing_results_help">Show saved results even when processing is off. Tap a floating icon to switch between the original and its result. Pages without results show their original image; no models are started.</string>
+    <string name="reader_show_original">Show original image</string>
+    <string name="reader_show_translation_result">Show translation result</string>
+    <string name="reader_show_enhanced_result">Show enhanced result</string>
+    <string name="result_import">Import results from directory</string>
+    <string name="result_import_running">Importing complete translation and enhanced images for this gallery…</string>
+    <string name="result_import_report">Imported translations: %1$d\nImported enhanced images: %2$d\nSkipped: %3$d\nFailed: %4$d\n\nOnly complete images with a confirmed source page are imported. No original-image hashes are calculated. Cached results remain subject to your cache limits.</string>
+    <string name="result_import_failed">Could not import results. Existing images have been preserved.</string>
 </resources>

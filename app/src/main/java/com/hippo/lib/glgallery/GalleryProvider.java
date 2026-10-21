@@ -136,6 +136,15 @@ public abstract class GalleryProvider {
     private boolean mPreferExistingResults;
     private boolean mShowEnhancements;
     private Runnable mExistingResultLoader;
+    private final java.util.Set<Runnable> mResultStateListeners = new java.util.concurrent.CopyOnWriteArraySet<>();
+    public void addResultStateListener(Runnable listener) { mResultStateListeners.add(listener); }
+    public void removeResultStateListener(Runnable listener) { mResultStateListeners.remove(listener); }
+    public boolean isPreferExistingResults() { return mPreferExistingResults; }
+    private void notifyResultStateChanged() {
+        if (mResultStateListeners.isEmpty()) return;
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) mResultStateListeners.forEach(Runnable::run);
+        else new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> mResultStateListeners.forEach(Runnable::run));
+    }
     private final java.util.Set<Integer> mExistingEnhancedPages = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final java.util.Set<Integer> mExistingTranslatedPages = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public void setExistingResultLoader(Runnable loader) { mExistingResultLoader = loader; }
@@ -144,6 +153,7 @@ public abstract class GalleryProvider {
     public void setPreferExistingResults(boolean prefer) {
         if (mPreferExistingResults == prefer) return;
         mPreferExistingResults = prefer;
+        notifyResultStateChanged();
         for (Integer page : mTranslatedCache.snapshot().keySet()) notifyOverlayChanged(page);
         for (Integer page : mExistingEnhancedPages) notifyOverlayChanged(page);
     }
@@ -161,20 +171,41 @@ public abstract class GalleryProvider {
         }
         mExistingTranslatedPages.clear(); mExistingEnhancedPages.clear();
     }
+    public void clearExistingResult(int page, boolean translation, boolean enhancement) {
+        if (translation && mExistingTranslatedPages.contains(page)) {
+            boolean hidden = mOriginalPages.contains(page);
+            removeTranslatedPage(page);
+            if (hidden) mOriginalPages.add(page);
+        }
+        if (enhancement && mExistingEnhancedPages.contains(page)) {
+            boolean hidden = mUnenhancedPages.contains(page);
+            removeEnhancedPage(page);
+            if (hidden) mUnenhancedPages.add(page);
+        }
+    }
+    public void retainExistingResults(int current) {
+        for (Integer page : new java.util.ArrayList<>(mExistingTranslatedPages))
+            if (Math.abs(page - current) > 1) clearExistingResult(page, true, false);
+        for (Integer page : new java.util.ArrayList<>(mExistingEnhancedPages))
+            if (Math.abs(page - current) > 1) clearExistingResult(page, false, true);
+    }
     public void setExistingEnhancedTiles(int index, com.hippo.ehviewer.superresolution.EnhancedTilePage page) {
-        boolean hidden = mUnenhancedPages.contains(index);
-        setEnhancedTiles(index, page); mExistingEnhancedPages.add(index);
-        if (hidden) mUnenhancedPages.add(index);
+        mExistingEnhancedPages.add(index);
+        setEnhancedTilesInternal(index, page, false);
     }
 
     public void setEnhancedTiles(int index, com.hippo.ehviewer.superresolution.EnhancedTilePage page) {
         mExistingEnhancedPages.remove(index);
+        setEnhancedTilesInternal(index, page, true);
+    }
+
+    private void setEnhancedTilesInternal(int index, com.hippo.ehviewer.superresolution.EnhancedTilePage page, boolean resetComparison) {
         page.activate();
         if (mEnhancedTiles.get(index) == page) return;
         mEnhancedCache.remove(index);
         com.hippo.ehviewer.superresolution.EnhancedTilePage previous = mEnhancedTiles.put(index, page);
         if (previous != null) previous.trim();
-        mUnenhancedPages.remove(index);
+        if (resetComparison) mUnenhancedPages.remove(index);
         notifyOverlayChanged(index);
     }
 
@@ -213,13 +244,15 @@ public abstract class GalleryProvider {
 
     /** Reclaim previous enhanced pages before allocating another full-size result. */
     public void retainEnhancedPage(int index) {
-        for (Integer page : mEnhancedTiles.keySet()) if (page != index) removeEnhancedPage(page);
+        for (Integer page : mEnhancedTiles.keySet()) if (page != index &&
+                (!mExistingEnhancedPages.contains(page) || Math.abs(page - index) > 1)) removeEnhancedPage(page);
         for (Integer page : mEnhancedCache.snapshot().keySet()) {
             if (page != index) removeEnhancedPage(page);
         }
     }
 
     public void setEnhancedPage(int index, Image image) {
+        mExistingEnhancedPages.remove(index);
         com.hippo.ehviewer.superresolution.EnhancedTilePage previous = mEnhancedTiles.remove(index);
         if (previous != null) previous.trim();
         mUnenhancedPages.remove(index);
@@ -337,6 +370,7 @@ public abstract class GalleryProvider {
         mExistingTranslatedPages.remove(index);
         mTranslatedCache.add(index, new ImageWrapper(image));
         if ((mShowTranslations || mPreferExistingResults) && !mOriginalPages.contains(index)) notifyOverlayChanged(index);
+        else notifyResultStateChanged();
     }
 
     public ImageWrapper getTranslationOverlay(int index) {
@@ -353,6 +387,14 @@ public abstract class GalleryProvider {
 
     public boolean hasTranslatedPage(int index) {
         return mTranslatedCache.getLive(index) != null;
+    }
+    public boolean canPrefetchTranslationResult(int current, long bytes) {
+        synchronized (mTranslatedCache) {
+            ImageWrapper visible = mTranslatedCache.getLive(current);
+            long visibleBytes = visible == null ? 0 : (long) visible.getWidth() * visible.getHeight() * 4;
+            return bytes <= Math.min(16L * 1024 * 1024, mTranslatedCache.maxSize() / 2L)
+                    && bytes + visibleBytes <= mTranslatedCache.maxSize();
+        }
     }
 
     public void removeTranslatedPage(int index) {
@@ -379,6 +421,7 @@ public abstract class GalleryProvider {
     }
 
     private void notifyOverlayChanged(int index) {
+        notifyResultStateChanged();
         notify(NotifyTask.TYPE_OVERLAY_CHANGED, index, 0.0f, null, null);
     }
 

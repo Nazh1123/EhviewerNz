@@ -163,4 +163,22 @@ class GalleryResultIndexTest {
         catch (_: IllegalStateException) { }
         assertTrue(file.isFile); assertNotNull(index.find(source, tl))
     }
+    @Test fun enhancedNeighborWarmsOnlyAScreenScaleRegionAndReleasesItsPixelCache() {
+        val image = index(true).write(source, sr, "png", 2) { it.write(png(1200, 1800)) }
+        val page = com.hippo.ehviewer.superresolution.EnhancedTilePage(File(app.cacheDir, "warm-test"), 600, 900, 2)
+        page.useFinalImage(image)
+        try {
+            page.warmFirstRegion(300, 450)
+            // Robolectric's region decoder ignores inSampleSize; verify the requested cache key
+            // and a single region budget rather than asserting its simulated sampled dimensions.
+            val cached = org.robolectric.util.ReflectionHelpers.getField<Map<String, com.hippo.ehviewer.superresolution.EnhancedTilePage.Pixels>>(page, "cache")
+            assertEquals(setOf("0:4"), cached.keys)
+            assertTrue(page.cachedBytes() in 1..(512L * 512 * 4))
+            val warmed = cached.getValue("0:4").bitmap
+            val first = checkNotNull(page.acquire(0, 4))
+            val second = checkNotNull(page.acquire(0, 4))
+            try { assertSame(warmed, first.bitmap); assertSame(first.bitmap, second.bitmap) } finally { first.close(); second.close() }
+        } finally { page.trim() }
+        assertEquals(0L, page.cachedBytes())
+    }
 }

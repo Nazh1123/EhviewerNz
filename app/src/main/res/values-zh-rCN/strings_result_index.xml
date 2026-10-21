@@ -1,4 +1,11 @@
 <resources>
-    <string name="reader_prefer_existing_results">优先显示已有结果</string>
-    <string name="reader_prefer_existing_results_help">翻译或超分模式关闭时，仍优先显示已有结果。无结果时显示原图，不启动模型处理。</string>
+    <string name="reader_prefer_existing_results">显示已有结果</string>
+    <string name="reader_show_original">显示原图</string>
+    <string name="reader_show_translation_result">显示翻译结果</string>
+    <string name="reader_show_enhanced_result">显示超分结果</string>
+    <string name="reader_prefer_existing_results_help">翻译或超分模式关闭时，仍显示已有结果。点击浮窗图标可切换原图与结果，无结果时显示原图，不启动模型处理。</string>
+    <string name="result_import">导入目录内结果</string>
+    <string name="result_import_running">正在为当前画廊导入完整翻译和超分结果…</string>
+    <string name="result_import_report">导入翻译：%1$d 张\n导入超分：%2$d 张\n跳过：%3$d 项\n失败：%4$d 项\n\n仅导入能确认对应原图的完整结果，不计算原图哈希。缓存结果仍受缓存限额约束。</string>
+    <string name="result_import_failed">导入失败，已有结果图已保留。</string>
 </resources>

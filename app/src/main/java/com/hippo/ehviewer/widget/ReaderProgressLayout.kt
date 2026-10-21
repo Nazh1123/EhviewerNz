@@ -4,6 +4,7 @@ import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -23,6 +24,8 @@ class ReaderProgressLayout(activity: AppCompatActivity) {
     private val width = (minOf(screen.widthPixels, screen.heightPixels) * 0.35f).roundToInt()
     private var translationEnabled = false
     private var enhancementEnabled = false
+    private var translationResult = false
+    private var enhancementResult = false
     private var quickSettingsVisible = false
     private var quickSettingsBottom = 0f
     private val panels = listOfNotNull(translation, enhancement)
@@ -61,6 +64,16 @@ class ReaderProgressLayout(activity: AppCompatActivity) {
         enhancementEnabled = enabled
         update()
     }
+    fun setTranslationResultAvailable(available: Boolean) {
+        if (translationResult == available) return
+        translationResult = available
+        update()
+    }
+    fun setEnhancementResultAvailable(available: Boolean) {
+        if (enhancementResult == available) return
+        enhancementResult = available
+        update()
+    }
 
     fun onQuickSettingsPositionChanged(visible: Boolean, bottom: Float) {
         quickSettingsVisible = visible
@@ -69,23 +82,37 @@ class ReaderProgressLayout(activity: AppCompatActivity) {
     }
 
     private fun update() {
-        val both = translationEnabled && enhancementEnabled
-        translation?.findViewById<View>(R.id.translation_progress_icon)?.visibility = if (both) View.VISIBLE else View.GONE
-        enhancement?.findViewById<View>(R.id.super_resolution_progress_icon)?.visibility = if (both) View.VISIBLE else View.GONE
+        val both = (translationEnabled || translationResult) && (enhancementEnabled || enhancementResult)
         panels.forEach { panel ->
+            val enabled = if (panel === translation) translationEnabled else enhancementEnabled
+            val result = if (panel === translation) translationResult else enhancementResult
+            val iconOnly = !enabled && result
+            panel.visibility = if (enabled || result) View.VISIBLE else View.GONE
+            val icon = panel.findViewById<View>(if (panel === translation) R.id.translation_progress_icon else R.id.super_resolution_progress_icon)
+            icon.visibility = if (iconOnly || both) View.VISIBLE else View.GONE
+            val iconParams = icon.layoutParams as LinearLayout.LayoutParams
+            val iconMargin = (4 * density).roundToInt()
+            val leftMargin = if (!iconOnly && panel === enhancement) iconMargin else 0
+            val rightMargin = if (!iconOnly && panel === translation) iconMargin else 0
+            if (iconParams.leftMargin != leftMargin || iconParams.rightMargin != rightMargin) {
+                iconParams.leftMargin = leftMargin; iconParams.rightMargin = rightMargin
+                icon.layoutParams = iconParams
+            }
+            panel.findViewById<View>(if (panel === translation) R.id.translation_progress_bars else R.id.super_resolution_progress_bars)
+                .visibility = if (iconOnly) View.GONE else View.VISIBLE
             val params = panel.layoutParams as FrameLayout.LayoutParams
             val gravity = Gravity.TOP or if (both && panel === enhancement) Gravity.RIGHT else Gravity.LEFT
             val (leftPadding, rightPadding) = paddings.getValue(panel)
             panel.setPadding(
-                if (both) { if (panel === translation) iconPadding else innerPadding } else leftPadding,
+                if (iconOnly) innerPadding else if (both) { if (panel === translation) iconPadding else innerPadding } else leftPadding,
                 panel.paddingTop,
-                if (both) { if (panel === enhancement) iconPadding else innerPadding } else rightPadding,
+                if (iconOnly) innerPadding else if (both) { if (panel === enhancement) iconPadding else innerPadding } else rightPadding,
                 panel.paddingBottom,
             )
             // Reclaim horizontal padding while preserving the original bar length and height.
             val savedPadding = leftPadding + rightPadding - panel.paddingLeft - panel.paddingRight
-            var targetWidth = width + if (both) iconSpace - savedPadding else 0
-            if (both) {
+            var targetWidth = if (iconOnly) (40 * density).roundToInt() else width + if (both) iconSpace - savedPadding else 0
+            if (both && !iconOnly) {
                 // Keep the two controls separate in narrow windows and beside display cutouts.
                 val available = (panel.parent as? View)?.width?.takeIf { it > 0 } ?: screen.widthPixels
                 val margin = maxOf(params.leftMargin, params.rightMargin)

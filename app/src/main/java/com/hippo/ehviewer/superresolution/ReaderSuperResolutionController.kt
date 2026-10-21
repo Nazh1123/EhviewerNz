@@ -19,7 +19,7 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
     private val activity: AppCompatActivity,
     private val provider: GalleryProvider2,
     private val button: ImageButton,
-    galleryInfo: GalleryInfo? = null,
+    private val galleryInfo: GalleryInfo? = null,
     private val progressLayout: ReaderProgressLayout = ReaderProgressLayout(activity),
 ) : AutoCloseable {
     internal val session = SuperResolutionTasks.acquire(activity.applicationContext, provider, galleryInfo)
@@ -27,6 +27,7 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
     private val pageBar = activity.findViewById<ProgressBar>(R.id.super_resolution_page_progress_bar)
     private val queueBar = activity.findViewById<ProgressBar>(R.id.super_resolution_queue_progress_bar)
     private var closed = false
+    private val resultChanged = Runnable { if (!closed) updateFloatingControl() }
     private val observer = object : GallerySuperResolutionSession.Reader {
         override fun changed() { if (!closed) update() }
         override fun display(page: Int, image: Image) {
@@ -38,6 +39,7 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
         override fun clear() { provider.clearEnhancedPages() }
     }
     init {
+        provider.addResultStateListener(resultChanged)
         button.setOnClickListener { toggle() }
         button.setOnLongClickListener { showMenu(session.current); true }
         panel.setOnClickListener {
@@ -56,13 +58,21 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
         button.alpha = if (session.enabled) 1f else 0.65f
         button.contentDescription = activity.getString(if (session.enabled) R.string.sr_auto_on else R.string.sr_auto_off)
         val message = session.message ?: if (session.enabled) session.states[session.current]?.let { activity.getString(it) } else null
-        panel.visibility = if (session.enabled && !closed) View.VISIBLE else View.GONE
         panel.contentDescription = listOfNotNull(activity.getString(R.string.sr_compare), message).joinToString(". ")
+        updateFloatingControl()
         pageBar.progress = session.progress
         pageBar.contentDescription = session.activePage?.let { activity.getString(R.string.sr_page_progress, it + 1, session.progress) }
         queueBar.max = session.total.coerceAtLeast(1)
         queueBar.progress = session.completed
         queueBar.contentDescription = activity.getString(R.string.sr_queue_progress, session.completed, session.total)
+    }
+    private fun updateFloatingControl() {
+        val available = !closed && !session.enabled && provider.isPreferExistingResults && provider.hasEnhancedPage(session.current)
+        progressLayout.setEnhancementResultAvailable(available)
+        val hidden = available && provider.getEnhancedTiles(session.current) == null && provider.getEnhancedPage(session.current) == null
+        if (available) panel.contentDescription = activity.getString(if (hidden)
+            R.string.reader_show_enhanced_result else R.string.reader_show_original)
+        panel.findViewById<View>(R.id.super_resolution_progress_icon)?.alpha = if (hidden) .5f else 1f
     }
     private fun toggle() {
         if (closed) return
@@ -86,6 +96,7 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
             activity.getString(if (session.fullGallery) R.string.sr_stop_full else R.string.sr_full_gallery),
             activity.getString(R.string.sr_compare),
             activity.getString(R.string.sr_settings),
+            activity.getString(R.string.result_import),
         )) { _, which ->
             when (which) {
                 0 -> toggle()
@@ -93,6 +104,7 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
                 2 -> if (session.fullGallery) session.disable() else session.full()
                 3 -> provider.toggleEnhancedPage(page)
                 4 -> showSettings()
+                5 -> com.hippo.ehviewer.gallery.GalleryResultImportDialog.show(activity, provider, galleryInfo)
             }
         }.show()
     }
@@ -103,6 +115,8 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
     fun close(leavingGallery: Boolean) {
         if (closed) return
         closed = true
+        provider.removeResultStateListener(resultChanged)
+        progressLayout.setEnhancementResultAvailable(false)
         progressLayout.setEnhancementEnabled(false)
         session.detach(observer, leavingGallery)
         if (!session.fullGallery && leavingGallery) SuperResolutionTasks.release(session)

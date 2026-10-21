@@ -40,6 +40,35 @@ import org.greenrobot.greendao.database.StandardDatabase
 @RunWith(RobolectricTestRunner::class)
 @org.robolectric.annotation.Config(application = Application::class, sdk = [28], manifest = org.robolectric.annotation.Config.NONE)
 class TranslationGallerySafTest {
+    @Test fun importNamedOverlayIntoDoneIndexWithOpaqueSafDocumentIds() = kotlinx.coroutines.runBlocking {
+        val directory = book.createDirectory("_translated")!!.createDirectory("Chapter")!!
+        val old = directory.createFile("001_tl.png")!!
+        val bitmap = Bitmap.createBitmap(9, 13, Bitmap.Config.ARGB_8888)
+        try { old.openOutputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+        finally { bitmap.recycle() }
+        val provider = object : com.hippo.ehviewer.gallery.GalleryProvider2() {
+            override fun size() = 1
+            override fun getError(): String? = null
+            override fun getImageFilename(index: Int) = "001"
+            override fun getTranslationFilename(index: Int) = "Chapter/001"
+            override fun getResultPageName(index: Int) = "Chapter/001.jpg"
+            override fun onRequest(index: Int) = Unit
+            override fun onForceRequest(index: Int) = Unit
+            override fun onCancelRequest(index: Int) = Unit
+            override fun save(index: Int, file: UniFile): Boolean = error("Import must not acquire originals")
+            override fun save(index: Int, dir: UniFile, filename: String): UniFile? = null
+            override fun saveWithResult(index: Int, dir: UniFile, filename: String): SaveResult? = null
+        }
+        val report = com.hippo.ehviewer.gallery.GalleryResultImporter.import(context, provider, null, "saf-import", book, emptyList())
+        assertEquals(1, report.translated); assertEquals(0, report.failed)
+        assertFalse(old.exists())
+        com.hippo.ehviewer.gallery.GalleryResultIndex.dropMemory()
+        val reopened = com.hippo.ehviewer.gallery.GalleryResultIndex.open(context, "saf-import", null, book, false)
+        val hit = reopened.find(com.hippo.ehviewer.gallery.GalleryResultIndex.Source("Chapter/001.jpg"),
+            com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL)!!
+        assertEquals("content", hit.file!!.uri.scheme)
+        assertEquals(9, hit.width); assertEquals(13, hit.height)
+    }
     @Test fun perGalleryManifestResolvesDoneAfterOpaqueSafRenamesAndReopens() {
         val index = com.hippo.ehviewer.gallery.GalleryResultIndex.open(context, "saf-test", null, book, true)
         val page = com.hippo.ehviewer.gallery.GalleryResultIndex.Source("Chapter/001.jpg", "known", "content://source/one")

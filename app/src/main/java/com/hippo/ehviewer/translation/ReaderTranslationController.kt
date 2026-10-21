@@ -35,6 +35,7 @@ class ReaderTranslationController @JvmOverloads constructor(
     private val enabled get() = session.enabled
     private val activeRequest get() = session.activePage
     private var closed = false
+    private val resultChanged = Runnable { if (!closed) updateFloatingControl() }
     private val observer = object : GalleryTranslationSession.Reader {
         override fun changed() {
             if (!closed) {
@@ -51,13 +52,14 @@ class ReaderTranslationController @JvmOverloads constructor(
     }
 
     init {
+        provider.addResultStateListener(resultChanged)
         session.attach(observer)
         button.setImageResource(R.drawable.v_translate_x24)
         button.setOnClickListener { toggle() }
         button.setOnLongClickListener { showMenu(current); true }
         progressPanel?.let { panel ->
             panel.setOnClickListener {
-                if (enabled && !closed) provider.toggleTranslationOverlay(current)
+                if (!closed && (enabled || provider.isPreferExistingResults)) provider.toggleTranslationOverlay(current)
             }
         }
         updateUi()
@@ -134,6 +136,7 @@ class ReaderTranslationController @JvmOverloads constructor(
     }
 
     private fun updatePageProgress() {
+        updateFloatingControl()
         resultStatus?.apply {
             val message = when (states[current]) {
                 R.string.translation_partial -> R.string.translation_partial_short
@@ -144,7 +147,6 @@ class ReaderTranslationController @JvmOverloads constructor(
             if (message != null) setText(message)
         }
         val pages = pendingPages()
-        progressPanel?.visibility = if (enabled && !closed && pages.isNotEmpty()) View.VISIBLE else View.GONE
         if (!enabled || closed || pages.isEmpty()) return
         val active = activeRequest
         val page = active
@@ -170,6 +172,17 @@ class ReaderTranslationController @JvmOverloads constructor(
         }
     }
 
+    private fun updateFloatingControl() {
+        val available = !closed && !enabled && provider.isPreferExistingResults && provider.hasTranslatedPage(current)
+        progressLayout.setTranslationResultAvailable(available)
+        if (available) {
+            progressPanel?.contentDescription = activity.getString(if (provider.getTranslationOverlay(current) == null)
+                R.string.reader_show_translation_result else R.string.reader_show_original)
+        }
+        progressPanel?.findViewById<View>(R.id.translation_progress_icon)?.alpha =
+            if (available && provider.getTranslationOverlay(current) == null) .5f else 1f
+    }
+
     private fun updateQueueProgress() {
         if (!enabled || closed) return
         // Count a fixed reading window. Advancing the worker must not shrink the range or reset the bar.
@@ -188,6 +201,7 @@ class ReaderTranslationController @JvmOverloads constructor(
         if (closed) return
         val partial = states[page] == R.string.translation_partial
         val needsModels = states[page] == R.string.translation_models_required
+        val importPosition = 4 + (if (BuildConfig.DEBUG) 1 else 0) + (if (needsModels) 1 else 0)
         val state = states[page]?.let { activity.getString(it) } ?: activity.getString(R.string.translation_original)
         AlertDialog.Builder(activity).setTitle(activity.getString(R.string.translation_page_status, page + 1, state))
             .setItems((listOf(
@@ -196,8 +210,13 @@ class ReaderTranslationController @JvmOverloads constructor(
                 activity.getString(if (session.fullGallery) R.string.translation_stop_full else R.string.translation_full_gallery),
                 activity.getString(R.string.translation_source),
             ) + (if (BuildConfig.DEBUG) listOf(activity.getString(R.string.translation_timings)) else emptyList()) +
-                (if (needsModels) listOf(activity.getString(R.string.translation_settings)) else emptyList()))
+                (if (needsModels) listOf(activity.getString(R.string.translation_settings)) else emptyList()) +
+                activity.getString(R.string.result_import))
                 .toTypedArray()) { _, which ->
+                if (which == importPosition) {
+                    com.hippo.ehviewer.gallery.GalleryResultImportDialog.show(activity, provider, galleryInfo)
+                    return@setItems
+                }
                 if (needsModels && which == (if (BuildConfig.DEBUG) 5 else 4)) {
                     showSettings()
                     return@setItems
@@ -274,6 +293,8 @@ class ReaderTranslationController @JvmOverloads constructor(
     fun close(leavingGallery: Boolean) {
         if (closed) return
         closed = true
+        provider.removeResultStateListener(resultChanged)
+        progressLayout.setTranslationResultAvailable(false)
         progressLayout.setTranslationEnabled(false)
         session.detach(observer, leavingGallery)
         if (!enabled && session.reader == null) TranslationTasks.release(session)

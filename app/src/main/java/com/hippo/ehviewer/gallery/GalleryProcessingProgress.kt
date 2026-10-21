@@ -63,6 +63,39 @@ object GalleryProcessingProgress {
     @JvmStatic fun addListener(listener: Listener) { listeners.add(listener) }
     @JvmStatic fun removeListener(listener: Listener) { listeners.remove(listener) }
 
+    internal data class SavedResult(val kind: Kind, val source: String, val uri: Uri)
+
+    /** Explicit import only. Use the publication dispatcher and never create an empty database. */
+    internal suspend fun savedResults(context: Context, galleryId: Long): List<SavedResult> = scope.async {
+        if (helper == null && !context.getDatabasePath("gallery_processing_progress.db").isFile) return@async emptyList()
+        database(context).query("results", arrayOf("source_key", "uri"), "gallery_id=?",
+            arrayOf(galleryId.toString()), null, null, null).use { cursor ->
+            buildList {
+                while (cursor.moveToNext()) {
+                    val key = cursor.getString(0)
+                    val kind = Kind.entries.firstOrNull { key.startsWith("${it.name}/") } ?: continue
+                    add(SavedResult(kind, key.substringAfter('/'), Uri.parse(cursor.getString(1))))
+                }
+            }
+        }
+    }.await()
+
+    /** Publication jobs are queued first. Preserve old files still referenced by another gallery. */
+    internal suspend fun retireImported(context: Context, galleryId: Long?, files: Collection<UniFile>): Int = scope.async {
+        if (files.isEmpty()) return@async 0
+        val db = if (helper != null || context.getDatabasePath("gallery_processing_progress.db").isFile) database(context) else null
+        var failed = 0
+        for (file in files) {
+            val uri = file.uri.toString()
+            if (galleryId != null) db?.delete("results", "gallery_id=? AND uri=?", arrayOf(galleryId.toString(), uri))
+            val referenced = db?.query("results", arrayOf("uri"), "uri=?", arrayOf(uri), null, null, null, "1")
+                ?.use { it.moveToFirst() } == true
+            if (!referenced && !file.delete()) failed++
+        }
+        if (galleryId != null && db != null) saveSnapshot(context, galleryId, db)
+        failed
+    }.await()
+
     internal fun sourceKey(name: String): String = name.replace('\\', '/').split('/')
         .filter { it.isNotEmpty() }.joinToString("/") {
             require(it != "." && it != "..")

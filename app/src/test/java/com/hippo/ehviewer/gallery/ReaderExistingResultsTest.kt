@@ -31,10 +31,10 @@ class ReaderExistingResultsTest {
         provider = Provider(checkNotNull(UniFile.fromFile(directory)))
         PreferenceManager.getDefaultSharedPreferences(app).edit().putBoolean(GalleryResultIndex.PREFER_EXISTING, true).commit()
     }
-    private fun seed(kind: GalleryResultIndex.Kind, scale: Int = 1) {
+    private fun seed(kind: GalleryResultIndex.Kind, scale: Int = 1, page: Int = 0) {
         val bitmap = Bitmap.createBitmap(16, 24, Bitmap.Config.ARGB_8888)
         try { GalleryResultIndex.open(app, provider.translationIdentity, null, provider.translationDirectory, true)
-            .write(GalleryResultIndex.Source("0"), kind, "png", scale) { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+            .write(GalleryResultIndex.Source("$page"), kind, "png", scale) { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
         finally { bitmap.recycle() }
     }
     @Test fun bothResultsDisplayWhileProcessingIsOffWithoutReadingOriginalBytes() {
@@ -61,6 +61,93 @@ class ReaderExistingResultsTest {
             assertEquals(0, provider.metadataReads)
             assertFalse(provider.hasTranslatedPage(0)); assertFalse(provider.hasEnhancedPage(0))
             assertFalse(GalleryResultIndex.root(app).exists())
+        } finally { reader.close(); provider.stop() }
+    }
+    @Test fun prefetchAndOriginalReadinessReuseDecodedResultsWithoutRepeatedDirectoryQueries() {
+        provider.pageCount = 2
+        for (page in 0..1) { seed(GalleryResultIndex.Kind.TL, page = page); seed(GalleryResultIndex.Kind.SR, 2, page) }
+        shadowOf(Looper.getMainLooper()).idle() // Deliver publication events before subscribing.
+        val reader = ReaderExistingResults(app, provider, null)
+        val decode = reader.decodeTranslation
+        val decoded = java.util.concurrent.atomic.AtomicInteger()
+        reader.decodeTranslation = { decoded.incrementAndGet(); decode(it) }
+        try {
+            reader.onPageChanged(0)
+            await { provider.hasTranslatedPage(1) && provider.hasEnhancedPage(1) }
+            val originalOverlay = provider.getTranslationOverlay(0)
+            val enhanced = provider.getEnhancedTiles(0)
+            val queries = provider.directoryReads
+            repeat(20) { reader.onPageReady(0) }
+            reader.onPageChanged(1)
+            assertNotNull(provider.getTranslationOverlay(1)); assertNotNull(provider.getEnhancedTiles(1))
+            reader.onPageChanged(0)
+            assertSame(originalOverlay, provider.getTranslationOverlay(0))
+            assertSame(enhanced, provider.getEnhancedTiles(0))
+            await { ReflectionHelpers.getField<Job?>(reader, "job")?.isCompleted == true }
+            assertEquals(2, decoded.get())
+            assertEquals(queries, provider.directoryReads)
+        } finally { reader.close(); provider.stop() }
+    }
+    @Test fun enhancedResultPublishesWithoutWaitingForTranslationDecode() {
+        seed(GalleryResultIndex.Kind.TL); seed(GalleryResultIndex.Kind.SR, 2)
+        shadowOf(Looper.getMainLooper()).idle()
+        val reader = ReaderExistingResults(app, provider, null)
+        val decode = reader.decodeTranslation
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val finish = java.util.concurrent.CountDownLatch(1)
+        reader.decodeTranslation = {
+            entered.countDown()
+            check(finish.await(8, TimeUnit.SECONDS))
+            decode(it)
+        }
+        try {
+            reader.onPageChanged(0)
+            await { entered.count == 0L && provider.hasEnhancedPage(0) }
+            assertFalse(provider.hasTranslatedPage(0))
+            finish.countDown()
+            await { provider.hasTranslatedPage(0) }
+        } finally { finish.countDown(); reader.close(); provider.stop() }
+    }
+    @Test fun speculativeDecodeDoesNotEvictTheVisibleOverlayWhenCacheIsSmall() {
+        provider.pageCount = 2
+        seed(GalleryResultIndex.Kind.TL); seed(GalleryResultIndex.Kind.TL, page = 1)
+        shadowOf(Looper.getMainLooper()).idle()
+        val cache = ReflectionHelpers.getField<android.util.LruCache<Int, com.hippo.lib.glview.image.ImageWrapper>>(provider, "mTranslatedCache")
+        cache.resize(2048) // Each 16x24 overlay costs 1536 bytes; only the visible one fits.
+        val reader = ReaderExistingResults(app, provider, null)
+        val decode = reader.decodeTranslation
+        val count = java.util.concurrent.atomic.AtomicInteger()
+        reader.decodeTranslation = { count.incrementAndGet(); decode(it) }
+        try {
+            reader.onPageChanged(0)
+            await { ReflectionHelpers.getField<Job?>(reader, "job")?.isCompleted == true }
+            assertTrue(provider.hasTranslatedPage(0)); assertFalse(provider.hasTranslatedPage(1))
+            assertEquals(1, count.get())
+            reader.onPageChanged(1)
+            await { provider.hasTranslatedPage(1) }
+            assertEquals(2, count.get())
+        } finally { reader.close(); provider.stop() }
+    }
+    @Test fun publishingAnotherPageDoesNotInvalidateTheVisibleResultsOrManualComparison() {
+        provider.pageCount = 2
+        seed(GalleryResultIndex.Kind.TL)
+        shadowOf(Looper.getMainLooper()).idle()
+        val reader = ReaderExistingResults(app, provider, null)
+        val decode = reader.decodeTranslation
+        val decoded = java.util.concurrent.atomic.AtomicInteger()
+        reader.decodeTranslation = { decoded.incrementAndGet(); decode(it) }
+        try {
+            reader.onPageChanged(0)
+            await { provider.hasTranslatedPage(0) }
+            val overlay = provider.getTranslationOverlay(0)
+            await { ReflectionHelpers.getField<Job?>(reader, "job")?.isCompleted == true }
+            provider.toggleTranslationOverlay(0)
+            seed(GalleryResultIndex.Kind.TL, page = 1)
+            await { provider.hasTranslatedPage(1) }
+            assertNull(provider.getTranslationOverlay(0))
+            provider.toggleTranslationOverlay(0)
+            assertSame(overlay, provider.getTranslationOverlay(0))
+            assertEquals(2, decoded.get())
         } finally { reader.close(); provider.stop() }
     }
     @Test fun missingManifestsSkipAllPageWorkUntilPublicationOrResume() {

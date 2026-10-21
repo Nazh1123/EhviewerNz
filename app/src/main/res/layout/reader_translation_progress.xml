@@ -33,6 +33,7 @@
         android:visibility="gone" />
 
     <LinearLayout
+        android:id="@+id/translation_progress_bars"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"

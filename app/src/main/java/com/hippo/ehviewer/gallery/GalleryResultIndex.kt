@@ -36,12 +36,12 @@ class GalleryResultIndex private constructor(
             } ?: JSONObject().put("version", 1).put("gallery", identity).put("pages", JSONObject())
         }
     }
-    private fun commit(directory: UniFile, json: JSONObject) {
+    private fun commit(directory: UniFile, json: JSONObject, source: Source, kind: Kind) {
         if (identity.isNotEmpty()) json.put("gallery", identity)
         if (json.getJSONObject("pages").length() == 0) {
             for (name in listOf(MANIFEST, "$MANIFEST.bak", "$MANIFEST.part")) directory.findFile(name)?.let { check(it.delete()) }
             documents[directory.uri.toString()] = json
-            changed(json)
+            changed(json, source, kind)
             return
         }
         val temp = checkNotNull(directory.createFile("$MANIFEST.part"))
@@ -63,12 +63,13 @@ class GalleryResultIndex private constructor(
             if (!published) temp.delete() else backup?.delete()
         }
         documents[directory.uri.toString()] = json
-        changed(json)
+        changed(json, source, kind)
     }
-    private fun changed(json: JSONObject) {
+    private fun changed(json: JSONObject, source: Source, kind: Kind) {
         revision++
         val changed = json.optString("gallery", identity)
-        android.os.Handler(android.os.Looper.getMainLooper()).post { listeners.forEach { it(changed) } }
+        val event = Change(changed, source.name, kind)
+        android.os.Handler(android.os.Looper.getMainLooper()).post { listeners.forEach { it(event) } }
     }
     private fun row(json: JSONObject, source: Source, kind: Kind) =
         json.getJSONObject("pages").optJSONObject(source.name)?.optJSONObject(kind.key)
@@ -143,7 +144,7 @@ class GalleryResultIndex private constructor(
                     .put("stamp", source.stamp).put("sourceId", source.uri.takeIf { it.isNotEmpty() }?.let(::digest).orEmpty())
                     .put("used", System.currentTimeMillis())
                 page.put(kind.key, entry)
-                commit(directory, json)
+                commit(directory, json, source, kind)
                 published = true
                 if (old != null && old.optString("format") != format) file(directory, source, kind, old)?.delete()
                 if (format != "partial") target.findFile(if (persistent) filename(source.name, kind, "regions") else "${kind.key}.regions")?.delete()
@@ -169,6 +170,31 @@ class GalleryResultIndex private constructor(
             if (row(json, source, kind) != null) remove(directory, json, source, kind)
         }
     }
+    /** Explicit import: merge without replacing a current result or recompressing old pixels. */
+    internal fun importComplete(source: Source, kind: Kind, image: UniFile, scale: Int,
+                                persistent: Boolean): Boolean = synchronized(guard) {
+        if (find(source, kind) != null) return@synchronized false
+        val format = image.name!!.substringAfterLast('.')
+        require(format in setOf("png", "webp"))
+        val target = GalleryResultIndex(context, identity, gid, local, persistent && local != null)
+        val existing = local?.findFile(kind.directory)?.findFile(filename(source.name, kind, format))
+        if (persistent && existing?.uri == image.uri) {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            image.openInputStream().use { BitmapFactory.decodeStream(it, null, bounds) }
+            check(bounds.outWidth > 0 && bounds.outHeight > 0)
+            val json = target.manifest(checkNotNull(local))
+            val pages = json.getJSONObject("pages")
+            val page = pages.optJSONObject(source.name) ?: JSONObject().also { pages.put(source.name, it) }
+            page.put(kind.key, JSONObject().put("uri", "done").put("format", format).put("state", "complete")
+                .put("width", bounds.outWidth).put("height", bounds.outHeight).put("scale", scale)
+                .put("stamp", source.stamp).put("sourceId", source.uri.takeIf { it.isNotEmpty() }?.let(::digest).orEmpty())
+                .put("used", System.currentTimeMillis()))
+            try { target.commit(local, json, source, kind) }
+            catch (error: Throwable) { documents.remove(local.uri.toString()); throw error }
+            target.record(source, kind, image)
+        } else target.write(source, kind, format, scale) { out -> image.openInputStream().use { it.copyTo(out) } }
+        true
+    }
     private fun removeCache(source: Source, kind: Kind) {
         val json = manifest(cacheDirectory)
         if (row(json, source, kind) != null) remove(cacheDirectory, json, source, kind)
@@ -190,7 +216,7 @@ class GalleryResultIndex private constructor(
         val page = pages.getJSONObject(source.name)
         page.remove(kind.key)
         if (page.length() == 0) pages.remove(source.name)
-        commit(directory, json)
+        commit(directory, json, source, kind)
         if (directory.uri != local?.uri && directory.listFiles()?.isEmpty() == true) directory.delete()
     }
     private fun record(source: Source, kind: Kind, file: UniFile?) {
@@ -244,7 +270,8 @@ class GalleryResultIndex private constructor(
         const val MANIFEST = ".ehviewer-results.json"
         const val PREFER_EXISTING = "reader_prefer_existing_results"
         private val guard = Any()
-        internal val listeners = java.util.concurrent.CopyOnWriteArraySet<(String) -> Unit>()
+        internal data class Change(val identity: String, val source: String, val kind: Kind)
+        internal val listeners = java.util.concurrent.CopyOnWriteArraySet<(Change) -> Unit>()
         // Includes negative entries. Bounded so reading many empty galleries cannot grow this indefinitely.
         private val documents = object : LinkedHashMap<String, JSONObject>(16, .75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, JSONObject>?) = size > 48
@@ -255,7 +282,7 @@ class GalleryResultIndex private constructor(
         fun root(context: Context) = File(context.cacheDir, "gallery-results")
         internal fun digest(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
             .joinToString("") { "%02x".format(it) }
-        private fun filename(name: String, kind: Kind, extension: String): String {
+        internal fun filename(name: String, kind: Kind, extension: String): String {
             require(extension in setOf("png", "webp", "partial", "skip", "regions"))
             if (name.matches(Regex("[0-9]{1,8}"))) return name + kind.suffix + ".$extension"
             var base = FileUtils.sanitizeFilename(name.substringAfterLast('/'))
