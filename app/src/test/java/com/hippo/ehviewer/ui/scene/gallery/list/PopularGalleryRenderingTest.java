@@ -870,6 +870,64 @@ public class PopularGalleryRenderingTest {
         Settings.putBoolean(Settings.KEY_POPULAR_UPDATES_ONLY, enabled);
     }
 
+    @Test @Config(sdk = 34)
+    @org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.PAUSED)
+    public void unrelatedGalleryReturnAndOlderCallbacksCannotOverrideReaderOrReset() {
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        java.util.concurrent.atomic.AtomicInteger page = new java.util.concurrent.atomic.AtomicInteger(1);
+        GalleryAdapterNew progressAdapter = new GalleryAdapterNew(LayoutInflater.from(scene.getContext()),
+                scene.getContext().getResources(), recycler, GalleryAdapterNew.TYPE_GRID, false, jobs, true) {
+            @Override public int getItemCount() { return 0; }
+        };
+        ReflectionHelpers.setField(progressAdapter, "mReadingProgress",
+                new com.hippo.ehviewer.gallery.ReadingProgressCache(jobs, gid -> page.get()));
+        GalleryInfo gallery = galleries(123).get(0);
+        gallery.pages = 134;
+        android.util.LruCache<?, ?> snapshots = ReflectionHelpers.getStaticField(
+                com.hippo.ehviewer.spider.SpiderQueen.class, "sStartPages");
+        com.hippo.ehviewer.spider.SpiderQueen.recordReadingProgress(gallery.gid, 1);
+        GalleryAdapterNew.GalleryHolder holder = progressAdapter.onCreateViewHolder(recycler, GalleryAdapterNew.TYPE_GRID);
+        holder.boundGid = gallery.gid;
+        bindProgress(progressAdapter, holder, gallery);
+        assertEquals("2/134", holder.thumbnailPages.getText().toString());
+        // Another gallery was visited; the list rebinds without clearing progress.
+        progressAdapter.notifyDataSetChanged();
+        bindProgress(progressAdapter, holder, gallery);
+        assertEquals("2/134", holder.thumbnailPages.getText().toString());
+        jobs.runAll();
+        // The old lookup's UI callback has not run yet when the reader advances.
+        com.hippo.ehviewer.spider.SpiderQueen.recordReadingProgress(gallery.gid, 5);
+        shadowOf(android.os.Looper.getMainLooper()).idle();
+        assertEquals("6/134", holder.thumbnailPages.getText().toString());
+        bindProgress(progressAdapter, holder, gallery);
+        assertEquals("6/134", holder.thumbnailPages.getText().toString());
+        // Explicit reset wins over a still-fresh positive adapter cache entry.
+        com.hippo.ehviewer.spider.SpiderQueen.resetReadingProgress(gallery.gid);
+        shadowOf(android.os.Looper.getMainLooper()).idle();
+        assertEquals("134p", holder.thumbnailPages.getText().toString());
+        snapshots.evictAll();
+    }
+
+    private void bindProgress(GalleryAdapterNew progressAdapter, GalleryAdapterNew.GalleryHolder holder, GalleryInfo gallery) {
+        ReflectionHelpers.callInstanceMethod(progressAdapter, "bindPageProgress",
+                ClassParameter.from(GalleryAdapterNew.GalleryHolder.class, holder),
+                ClassParameter.from(TextView.class, holder.thumbnailPages),
+                ClassParameter.from(GalleryInfo.class, gallery),
+                ClassParameter.from(boolean.class, true), ClassParameter.from(boolean.class, false),
+                ClassParameter.from(boolean.class, true));
+    }
+
+    private static class ManualProgressExecutor extends java.util.concurrent.AbstractExecutorService {
+        final java.util.ArrayDeque<Runnable> jobs = new java.util.ArrayDeque<>();
+        @Override public void execute(Runnable job) { jobs.add(job); }
+        void runAll() { while (!jobs.isEmpty()) jobs.remove().run(); }
+        @Override public void shutdown() {}
+        @Override public List<Runnable> shutdownNow() { return List.of(); }
+        @Override public boolean isShutdown() { return false; }
+        @Override public boolean isTerminated() { return false; }
+        @Override public boolean awaitTermination(long timeout, java.util.concurrent.TimeUnit unit) { return true; }
+    }
+
     private void refresh(long... gids) {
         helper.refresh();
         GalleryListParser.Result result = new GalleryListParser.Result();

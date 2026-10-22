@@ -62,6 +62,7 @@ public class GalleryUpdateCleanupTest {
 
     @Before public void setup() throws Exception {
         context = RuntimeEnvironment.getApplication();
+        ((android.util.LruCache<?, ?>) ReflectionHelpers.getStaticField(SpiderQueen.class, "sStartPages")).evictAll();
         // Android's rename replaces an existing cache file. Java File.renameTo on Windows
         // does not; emulate replacement only in this desktop fixture, keeping real cache I/O.
         SimpleDiskCache cache = new SimpleDiskCache(temporary.newFolder("cache"), 1024 * 1024) {
@@ -99,6 +100,7 @@ public class GalleryUpdateCleanupTest {
     }
 
     @After public void cleanup() {
+        ((android.util.LruCache<?, ?>) ReflectionHelpers.getStaticField(SpiderQueen.class, "sStartPages")).evictAll();
         GalleryUpdateRecordStore.get(context).close();
         ReflectionHelpers.setStaticField(GalleryUpdateRecordStore.class, "instance", null);
         ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
@@ -158,6 +160,7 @@ public class GalleryUpdateCleanupTest {
         disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
         assertNull(EhApplication.getSpiderInfoCache(context).getInputStreamPipe("100"));
         assertNull(EhApplication.getSpiderInfoCache(context).getInputStreamPipe("200"));
+        assertEquals(0, SpiderQueen.findStartPage(context, 200));
         GalleryUpdateManager.register(200, 100, List.of(100L));
         assertTrue(manager.retryGalleryUpdateCleanup(200));
         awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
@@ -166,11 +169,38 @@ public class GalleryUpdateCleanupTest {
         assertFalse(sourceDir.exists());
         assertTrue(manager.isCompleteUsableGallery(manager.getDownloadInfo(200)));
         assertEquals(2, GalleryUpdateManager.readDownloadedSpiderInfo(200).startPage);
+        assertEquals(Integer.valueOf(2), SpiderQueen.peekStartPage(200));
+        assertEquals(2, SpiderQueen.findStartPage(context, 200));
         GalleryUpdateRecord record = GalleryUpdateRecordStore.get(context).find(200);
         assertNotNull(record); assertTrue(record.complete);
         assertArrayEquals(new int[]{1}, record.addedPages);
         assertArrayEquals(new int[0], record.deletedPages);
         assertNull(GalleryUpdateManager.getPlan(200));
+    }
+
+    @Test public void persistentProgressSurvivesMissingOrStaleCacheAndUnrelatedGalleryReads() throws Exception {
+        disk(targetDir, metadata(200, 1, "1111111111", "2222222222", "3333333333"));
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+        // A separate gallery detail lookup must not change the downloaded gallery's source.
+        assertEquals(0, SpiderQueen.findStartPage(context, 100));
+        cache(metadata(200, 0, "1111111111", "2222222222", "3333333333"));
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+        EhApplication.getSpiderInfoCache(context).remove("200");
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+        assertTrue(new File(targetDir, SpiderQueen.SPIDER_INFO_FILENAME).delete());
+        // Temporary storage loss cannot manufacture an explicit reset.
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+    }
+
+    @Test public void readerBackwardMovementAndExplicitResetWinBeforeDiskWriteCompletes() throws Exception {
+        disk(targetDir, metadata(200, 2, "1111111111", "2222222222", "3333333333"));
+        cache(metadata(200, 2, "1111111111", "2222222222", "3333333333"));
+        assertEquals(2, SpiderQueen.findStartPage(context, 200));
+        SpiderQueen.recordReadingProgress(200, 1);
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+        SpiderQueen.resetReadingProgress(200);
+        assertEquals(0, SpiderQueen.findStartPage(context, 200));
+        assertEquals(2, GalleryUpdateManager.readDownloadedSpiderInfo(200).startPage);
     }
 
     @Test public void corruptTargetKeepsSourceAndPlanThenRetryFinishesWithoutRedownload() throws Exception {

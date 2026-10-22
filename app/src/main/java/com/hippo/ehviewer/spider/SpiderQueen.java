@@ -34,6 +34,7 @@ import androidx.annotation.UiThread;
 import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.ehviewer.Analytics;
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.GetText;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
@@ -223,7 +224,7 @@ public final class SpiderQueen implements Runnable {
      */
     @UiThread
     public static void resetReadingProgress(long gid) {
-        sStartPages.put(gid, 0);
+        recordReadingProgress(gid, 0);
         SpiderQueen queen = sQueenMap.get(gid);
         if (queen == null) {
             return;
@@ -234,37 +235,39 @@ public final class SpiderQueen implements Runnable {
         }
     }
 
-//    @UiThread
-//    public static int findStartPage(@NonNull Context context, @NonNull GalleryInfo galleryInfo) {
-//        Log.e("StartTime",System.currentTimeMillis()+"");
-//        SpiderInfo fromDownload = SpiderInfo.getSpiderInfo(galleryInfo);
-//        SpiderInfo fromCache = readSpiderInfoFromCache(context, galleryInfo.gid);
-//
-//        int startPage = 0;
-//        if (isValidSpiderInfo(fromDownload, galleryInfo)) {
-//            startPage = fromDownload.startPage;
-//        }
-//        if (isValidSpiderInfo(fromCache, galleryInfo)) {
-//            startPage = Math.max(startPage, fromCache.startPage);
-//        }
-//        Log.e("EndTime",System.currentTimeMillis()+"");
-//        return startPage;
-//    }
-
     public static int findStartPage(@NonNull Context context, @NonNull GalleryInfo galleryInfo) {
         return findStartPage(context, galleryInfo.gid);
     }
 
     // Reuse list prefetches when opening details, without reading disk on the UI thread.
-    private static final android.util.LruCache<Long, Integer> sStartPages = new android.util.LruCache<>(256);
+    private record ReadingPosition(int page, boolean authoritative) {}
+    private static final android.util.LruCache<Long, ReadingPosition> sStartPages = new android.util.LruCache<>(256);
+
+    /** Publish an explicit reader/reset/migration change before a list can reread older storage. */
+    public static void recordReadingProgress(long gid, int page) {
+        sStartPages.put(gid, new ReadingPosition(Math.max(0, page), true));
+    }
 
     @Nullable
     public static Integer peekStartPage(long gid) {
-        return sStartPages.get(gid);
+        ReadingPosition position = sStartPages.get(gid);
+        return position != null ? position.page : null;
     }
 
     public static int findStartPage(@NonNull Context context, long gid) {
-        Integer previous = sStartPages.get(gid);
+        ReadingPosition previous = sStartPages.get(gid);
+        if (previous != null && previous.authoritative) return previous.page;
+
+        // Downloads are persistent; the Spider cache can be evicted independently.
+        // Read headers only, without loading page-token arrays or creating folders.
+        GalleryInfo placeholder = new GalleryInfo();
+        placeholder.gid = gid;
+        // Never scan the download root for every online list item.
+        UniFile directory = EhDB.getDownloadDirname(gid) != null
+                ? SpiderDen.getExistingGalleryDownloadDir(placeholder) : null;
+        SpiderInfo downloaded = directory != null
+                ? SpiderInfo.readHeader(directory.findFile(SPIDER_INFO_FILENAME)) : null;
+        if (downloaded != null && downloaded.gid != gid) downloaded = null;
         SpiderInfo spiderInfo = null;
         SimpleDiskCache msic;
         EhApplication application = (EhApplication) context.getApplicationContext();
@@ -283,14 +286,15 @@ public final class SpiderQueen implements Runnable {
             }
         }
 
-        int startPage = 0;
-        if (spiderInfo != null) {
-            startPage = spiderInfo.startPage;
-        }
+        if (spiderInfo != null && spiderInfo.gid != gid) spiderInfo = null;
+        int startPage = Math.max(downloaded != null ? downloaded.startPage : 0,
+                spiderInfo != null ? spiderInfo.startPage : 0);
         synchronized (sStartPages) {
-            Integer current = sStartPages.get(gid);
-            if (current != previous && current != null) return current;
-            sStartPages.put(gid, startPage);
+            ReadingPosition current = sStartPages.get(gid);
+            if (current != previous && current != null) return current.page;
+            // Unavailable/evicted storage is not evidence that a known position was reset.
+            if (downloaded == null && spiderInfo == null) return current != null ? current.page : 0;
+            sStartPages.put(gid, new ReadingPosition(startPage, false));
         }
         return startPage;
     }
@@ -860,7 +864,7 @@ public final class SpiderQueen implements Runnable {
         }
         if (spiderInfo != null) {
             spiderInfo.startPage = page;
-            sStartPages.put(mGalleryInfo.gid, page);
+            recordReadingProgress(mGalleryInfo.gid, page);
             final SpiderInfo infoToWrite = spiderInfo;
             new AsyncTask<Void, Void, Void>() {
                 @Override

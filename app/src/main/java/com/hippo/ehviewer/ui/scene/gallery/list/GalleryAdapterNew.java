@@ -439,29 +439,31 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             return;
         }
 
-        target.setText(appendPageSuffix
-                ? gi.pages + "P"
-                : GalleryListDisplayHelper.formatPageProgress(0, gi.pages, false));
+        Integer knownPage = SpiderQueen.peekStartPage(gi.gid);
+        if (knownPage == null) knownPage = mReadingProgress.peek(gi.gid);
+        target.setText(GalleryListDisplayHelper.formatPageProgress(
+                knownPage != null ? knownPage : 0, gi.pages, appendPageSuffix));
+        if (highlightReadProgress && knownPage != null && knownPage > 0) {
+            target.setTextColor(mInfoHighlightYellow);
+        }
         long gid = gi.gid;
         int pages = gi.pages;
         int generation = holder.progressGeneration;
         holder.progressRequest = mReadingProgress.request(gid, startPage -> {
-            String text = GalleryListDisplayHelper.formatPageProgress(
-                    startPage, pages, appendPageSuffix);
             handler.post(() -> {
                 if (holder.boundGid == gid && holder.progressGeneration == generation) {
-                    target.setText(text);
-                    if (highlightReadProgress && startPage > 0) {
-                        target.setTextColor(mInfoHighlightYellow);
+                    // An adapter cache hit or a queued callback can predate a reader/reset.
+                    Integer current = SpiderQueen.peekStartPage(gid);
+                    int page = current != null ? current : startPage;
+                    target.setText(GalleryListDisplayHelper.formatPageProgress(
+                            page, pages, appendPageSuffix));
+                    if (highlightReadProgress) {
+                        if (page > 0) target.setTextColor(mInfoHighlightYellow);
+                        else target.setTextColor(holder.thumbnailInfoTextColors);
                     }
                 }
             });
         });
-    }
-
-    public void invalidateReadingProgress() {
-        mReadingProgress.clear();
-        notifyDataSetChanged();
     }
 
     private void cancelProgressRequest(@NonNull GalleryHolder holder) {

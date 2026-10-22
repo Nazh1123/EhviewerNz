@@ -451,6 +451,7 @@ public final class GalleryUpdateManager {
                     + ", cache=" + readCachedStartPage(context, targetInfo.gid));
             return context.getString(R.string.gallery_update_error_progress_save);
         }
+        SpiderQueen.recordReadingProgress(targetInfo.gid, mappedPage);
         Log.i(TAG, "Migrated reading progress from " + sourceGid + " page "
                 + source.startPage + " to " + targetInfo.gid + " page " + mappedPage);
         return null;

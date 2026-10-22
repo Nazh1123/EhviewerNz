@@ -1473,7 +1473,8 @@ public class GalleryListScene extends BaseScene
         if (mSearchLayout != null && mSearchBar != null) {
             mSearchLayout.syncPresetTags(mSearchBar.getText());
         }
-        if (mAdapter != null) mAdapter.invalidateReadingProgress();
+        // Rebinding below picks up shared per-gallery reader/reset changes without
+        // discarding every successful progress lookup after visiting any detail page.
         if (mAdapter != null && mHelper != null) mAdapter.onSourceDataSetChanged();
         boolean ratingPolicyChanged = mLastRequestedRatingMinimum >= 0 && mUrlBuilder != null
                 && (mLastRequestedRatingMinimum != mUrlBuilder.getEffectiveMinRatingHundredths()

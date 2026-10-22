@@ -104,6 +104,22 @@ public class ReadingProgressCacheTest {
         List<Integer> values = new ArrayList<>();
         cache.request(1, values::add);
         cache.request(1, values::add);
-        assertEquals(List.of(0, 4), values);
+        assertEquals(List.of(4), values);
+    }
+
+    @Test public void expiredValueRemainsAvailableWhileRefreshFails() {
+        AtomicLong clock = new AtomicLong();
+        AtomicInteger attempts = new AtomicInteger();
+        ReadingProgressCache cache = new ReadingProgressCache(Runnable::run, gid -> {
+            if (attempts.getAndIncrement() > 0) throw new IllegalStateException("storage offline");
+            return 1;
+        }, clock::get);
+        List<Integer> values = new ArrayList<>();
+        cache.request(123, values::add);
+        clock.set(TimeUnit.SECONDS.toNanos(6));
+        assertEquals(Integer.valueOf(1), cache.peek(123));
+        cache.request(123, values::add);
+        assertEquals(List.of(1), values);
+        assertEquals(Integer.valueOf(1), cache.peek(123));
     }
 }
