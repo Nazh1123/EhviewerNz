@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 import android.util.JsonReader;
+import android.util.LruCache;
 
 import androidx.annotation.Nullable;
 
@@ -19,10 +20,14 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 /** Small app-private database: look up one gid without parsing the entire update history. */
 public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
     private static GalleryUpdateRecordStore instance;
+    private final LruCache<Long, ActionSnapshot> actionSnapshots = new LruCache<>(256);
+    private final Set<Long> pendingSnapshots = new HashSet<>();
 
     public static synchronized GalleryUpdateRecordStore get(Context context) {
         if (instance == null) instance = new GalleryUpdateRecordStore(context.getApplicationContext());
@@ -52,7 +57,9 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
     }
 
     @Nullable public synchronized GalleryUpdateRecord find(long gid) {
-        return read("records", gid);
+        GalleryUpdateRecord record = read("records", gid);
+        actionSnapshots.put(gid, snapshot(record, record != null ? record.completedAt : 0));
+        return record;
     }
 
     /** Card metadata only; skip page-token snapshots without constructing their arrays. */
@@ -60,31 +67,93 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
                           int addedPages, int deletedPages, boolean complete,
                           boolean failure, String targetToken) {}
 
+    /** UI-only metadata; page-token arrays are never retained by this cache. */
+    public record ActionSnapshot(@Nullable Summary summary, boolean readable) {}
+
+    @Nullable public ActionSnapshot peekActionSnapshot(long gid) { return actionSnapshots.get(gid); }
+
+    public void prefetchActionSnapshot(long gid, Executor executor) {
+        if (actionSnapshots.get(gid) != null) return;
+        synchronized (pendingSnapshots) {
+            if (pendingSnapshots.size() >= 64 || !pendingSnapshots.add(gid)) return;
+        }
+        try {
+            executor.execute(() -> {
+                try {
+                    synchronized (this) {
+                        if (actionSnapshots.get(gid) != null) return;
+                        try (Cursor cursor = getReadableDatabase().query("records",
+                                new String[]{"gid", "completed_at", "reading_page", "payload"},
+                                "gid=?", new String[]{Long.toString(gid)}, null, null, null)) {
+                            actionSnapshots.put(gid, cursor.moveToFirst()
+                                    ? readActionSnapshot(cursor) : new ActionSnapshot(null, false));
+                        }
+                    }
+                } catch (IOException | RuntimeException e) {
+                    Log.w("GalleryUpdateRecords", "Unable to prefetch update actions for " + gid, e);
+                } finally {
+                    synchronized (pendingSnapshots) { pendingSnapshots.remove(gid); }
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            synchronized (pendingSnapshots) { pendingSnapshots.remove(gid); }
+        }
+    }
+
+    private static ActionSnapshot snapshot(@Nullable GalleryUpdateRecord record, long completedAt) {
+        return record == null ? new ActionSnapshot(null, false) : new ActionSnapshot(new Summary(
+                record.targetGid, completedAt, record.readingPage, record.addedPages.length,
+                record.deletedPages.length, record.complete, record.isFailure(), record.targetToken),
+                record.complete && !record.isFailure() && record.hasTokenSnapshot() && record.addedPages.length > 0);
+    }
+
+    private void cacheWrittenRecord(GalleryUpdateRecord record, long completedAt) {
+        try (Cursor cursor = getReadableDatabase().query("records", new String[]{"gid"}, "gid=?",
+                new String[]{Long.toString(record.targetGid)}, null, null, null)) {
+            actionSnapshots.put(record.targetGid, cursor.moveToFirst()
+                    ? snapshot(record, completedAt) : new ActionSnapshot(null, false));
+        }
+    }
+
+    private static ActionSnapshot readActionSnapshot(Cursor cursor) throws IOException {
+        try (JsonReader json = new JsonReader(new StringReader(cursor.getString(3)))) {
+            int added = 0, deleted = 0, pages = 0, tokens = 0;
+            boolean complete = false, failure = false;
+            String token = "";
+            json.beginObject();
+            while (json.hasNext()) {
+                switch (json.nextName()) {
+                    case "added" -> added = countIndexes(json);
+                    case "deleted" -> deleted = countIndexes(json);
+                    case "new_pages" -> pages = json.nextInt();
+                    case "target_tokens" -> {
+                        json.beginArray();
+                        while (json.hasNext()) { json.skipValue(); tokens++; }
+                        json.endArray();
+                    }
+                    case "complete" -> complete = json.nextBoolean();
+                    case "error_reason" -> failure = !json.nextString().isEmpty();
+                    case "target_token" -> token = json.nextString();
+                    default -> json.skipValue();
+                }
+            }
+            json.endObject();
+            return new ActionSnapshot(new Summary(cursor.getLong(0), cursor.getLong(1),
+                    Math.max(0, Math.min(cursor.getInt(2), added - 1)), added, deleted, complete, failure, token),
+                    complete && !failure && added > 0 && tokens > 0 && tokens == pages);
+        }
+    }
+
     public synchronized List<Summary> listSummaries() {
         ArrayList<Summary> result = new ArrayList<>();
         try (Cursor cursor = getReadableDatabase().query("records",
                 new String[]{"gid", "completed_at", "reading_page", "payload"},
                 null, null, null, null, "completed_at DESC, gid DESC")) {
             while (cursor.moveToNext()) {
-                try (JsonReader json = new JsonReader(new StringReader(cursor.getString(3)))) {
-                    int added = 0, deleted = 0;
-                    boolean complete = false, failure = false;
-                    String token = "";
-                    json.beginObject();
-                    while (json.hasNext()) {
-                        switch (json.nextName()) {
-                            case "added" -> added = countIndexes(json);
-                            case "deleted" -> deleted = countIndexes(json);
-                            case "complete" -> complete = json.nextBoolean();
-                            case "error_reason" -> failure = !json.nextString().isEmpty();
-                            case "target_token" -> token = json.nextString();
-                            default -> json.skipValue();
-                        }
-                    }
-                    json.endObject();
-                    result.add(new Summary(cursor.getLong(0), cursor.getLong(1),
-                            Math.max(0, Math.min(cursor.getInt(2), added - 1)),
-                            added, deleted, complete, failure, token));
+                try {
+                    ActionSnapshot snapshot = readActionSnapshot(cursor);
+                    result.add(snapshot.summary());
+                    actionSnapshots.put(cursor.getLong(0), snapshot);
                 } catch (IOException | IllegalStateException | NumberFormatException e) {
                     Log.w("GalleryUpdateRecords", "Invalid history card for " + cursor.getLong(0), e);
                 }
@@ -209,13 +278,15 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
             return false;
         }
         SQLiteDatabase db = getWritableDatabase();
+        long completedAt = System.currentTimeMillis();
+        boolean committed = false;
         db.beginTransaction();
         try {
             ContentValues values = new ContentValues();
             values.put("gid", gid);
             values.put("source_gid", sourceGid);
             values.put("first_gid", record.firstGid);
-            values.put("completed_at", System.currentTimeMillis());
+            values.put("completed_at", completedAt);
             values.put("reading_page", 0);
             values.put("payload", record.toJson());
             if (db.insertWithOnConflict("records", null, values,
@@ -223,11 +294,13 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
             // Keep the draft until the update plan has been removed, allowing crash recovery.
             trim(db, Settings.getGalleryUpdateRecordLimit());
             db.setTransactionSuccessful();
+            committed = true;
             return true;
         } catch (JSONException e) {
             return false;
         } finally {
             db.endTransaction();
+            if (committed) cacheWrittenRecord(record, completedAt);
         }
     }
 
@@ -249,6 +322,7 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
             if (previous != null) record = record.withFirstGid(previous.firstGid);
         }
         SQLiteDatabase db = getWritableDatabase();
+        boolean committed = false;
         db.beginTransaction();
         try {
             ContentValues values = new ContentValues();
@@ -262,11 +336,13 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
                     SQLiteDatabase.CONFLICT_REPLACE) == -1) return false;
             trim(db, Settings.getGalleryUpdateRecordLimit());
             db.setTransactionSuccessful();
+            committed = true;
             return true;
         } catch (JSONException e) {
             return false;
         } finally {
             db.endTransaction();
+            if (committed) cacheWrittenRecord(record, record.completedAt);
         }
     }
 
@@ -274,10 +350,19 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
         trim(getWritableDatabase(), limit);
     }
 
-    private static void trim(SQLiteDatabase db, int limit) {
+    private void trim(SQLiteDatabase db, int limit) {
         db.execSQL("DELETE FROM records WHERE gid IN (SELECT gid FROM records "
                 + "ORDER BY completed_at DESC, gid DESC LIMIT -1 OFFSET ?)",
                 new Object[]{Math.max(1, limit)});
+        Set<Long> retained = new HashSet<>();
+        try (Cursor cursor = db.query("records", new String[]{"gid"}, null, null, null, null, null)) {
+            while (cursor.moveToNext()) retained.add(cursor.getLong(0));
+        }
+        for (var entry : actionSnapshots.snapshot().entrySet()) {
+            if (entry.getValue().summary() != null && !retained.contains(entry.getKey())) {
+                actionSnapshots.put(entry.getKey(), new ActionSnapshot(null, false));
+            }
+        }
     }
 
     public synchronized void saveReadingPage(long gid, long completedAt, int page) {

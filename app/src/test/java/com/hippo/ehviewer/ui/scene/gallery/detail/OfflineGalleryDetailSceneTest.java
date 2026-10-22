@@ -1,6 +1,7 @@
 package com.hippo.ehviewer.ui.scene.gallery.detail;
 
 import android.content.Context;
+import android.content.Intent;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
 import android.view.ContextThemeWrapper;
@@ -34,7 +35,11 @@ import com.hippo.ehviewer.client.exception.EhException;
 import com.hippo.ehviewer.dao.DaoMaster;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.download.GalleryUpdateManager;
+import com.hippo.ehviewer.download.GalleryUpdateRecord;
+import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.ui.MainActivity;
+import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.scene.GalleryInfoScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
 import com.hippo.ehviewer.spider.SpiderInfo;
@@ -89,6 +94,7 @@ public class OfflineGalleryDetailSceneTest {
     private static final List<EhRequest> requests = new ArrayList<>();
     private static final List<Boolean> imageNetworkLoads = new ArrayList<>();
     private SQLiteDatabase database;
+    private GalleryUpdateRecordStore recordStore;
     private TestScene scene;
     private View sceneView;
     private View content;
@@ -99,6 +105,8 @@ public class OfflineGalleryDetailSceneTest {
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre", context.getSharedPreferences("offline-test", Context.MODE_PRIVATE));
         ReflectionHelpers.setStaticField(Settings.class, "sArchiverPre", context.getSharedPreferences("offline-archiver-test", Context.MODE_PRIVATE));
         context.getSharedPreferences("offline-test", Context.MODE_PRIVATE).edit().clear().commit();
+        context.deleteDatabase("gallery_update_records.db");
+        recordStore = GalleryUpdateRecordStore.get(context);
         database = SQLiteDatabase.create(null);
         DaoMaster.createAllTables(new StandardDatabase(database), false);
         ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", new DaoMaster(database).newSession());
@@ -138,6 +146,8 @@ public class OfflineGalleryDetailSceneTest {
     }
 
     @After public void tearDown() {
+        recordStore.close();
+        ReflectionHelpers.setStaticField(GalleryUpdateRecordStore.class, "instance", null);
         database.close();
         ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
     }
@@ -354,6 +364,252 @@ public class OfflineGalleryDetailSceneTest {
         assertTrue(requests.isEmpty());
     }
 
+    private GalleryDetail updatableDetail() {
+        GalleryDetail detail = online();
+        detail.firstGid = 100L;
+        detail.parent = "https://e-hentai.org/g/100/old-token/";
+        return detail;
+    }
+
+    private void assertUpdateCardVisible() {
+        assertEquals(View.VISIBLE, content.findViewById(R.id.update_action_card).getVisibility());
+        assertEquals(View.VISIBLE, content.findViewById(R.id.update_gallery).getVisibility());
+    }
+
+    private void finishLocalLookups() {
+        executor.runAll();
+        ShadowLooper.idleMainLooper();
+    }
+
+    private void refreshUpdateRecord() {
+        // Exercise the same invalidation/rebind used on return to the scene.
+        ReflectionHelpers.callInstanceMethod(scene, "invalidateUpdateRecord");
+        ReflectionHelpers.callInstanceMethod(scene, "updateGalleryVersionActionsVisibility");
+    }
+
+    @Test public void updateCardStaysVisibleAcrossHtmlAndRecordLookupAndRefresh() {
+        GalleryInfo summary = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        summary.firstGid = 100L;
+        addKnownDownload(100, 100L, DownloadInfo.STATE_FINISH);
+        bindPendingHeader();
+        assertUpdateCardVisible();
+        GalleryDetail detail = updatableDetail();
+        detail.firstGid = null; // The response must inherit the already known family.
+        scene.onGetGalleryDetailSuccess(detail);
+        assertEquals(Long.valueOf(100), detail.firstGid);
+        assertTrue(ReflectionHelpers.<Boolean>getField(scene, "mUpdateRecordLookupPending"));
+        assertUpdateCardVisible();
+        finishLocalLookups();
+        assertUpdateCardVisible();
+        refreshUpdateRecord();
+        assertTrue(ReflectionHelpers.<Boolean>getField(scene, "mUpdateRecordLookupPending"));
+        assertUpdateCardVisible();
+        finishLocalLookups();
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.update), text(R.id.update_gallery));
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void pendingRecordLookupStillHidesAnUpdateWhoseSourceWasRemoved() {
+        DownloadInfo older = addKnownDownload(100, 100L, DownloadInfo.STATE_FINISH);
+        scene.onGetGalleryDetailSuccess(updatableDetail());
+        assertUpdateCardVisible();
+        ReflectionHelpers.callInstanceMethod(manager, "removeFromAllDownloads",
+                ReflectionHelpers.ClassParameter.from(DownloadInfo.class, older));
+        scene.onRemove(older, List.of(), 0);
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        finishLocalLookups();
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+    }
+
+    @Test public void pendingRecordLookupRespectsCompletedTargetAndAuthoritativeMissingParent() {
+        addKnownDownload(100, 100L, DownloadInfo.STATE_FINISH);
+        scene.onGetGalleryDetailSuccess(updatableDetail());
+        assertUpdateCardVisible();
+        DownloadInfo target = addKnownDownload(123, 100L, DownloadInfo.STATE_FINISH);
+        scene.onAdd(target, List.of(target), 0);
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        ReflectionHelpers.callInstanceMethod(manager, "removeFromAllDownloads",
+                ReflectionHelpers.ClassParameter.from(DownloadInfo.class, target));
+        GalleryDetail detail = updatableDetail();
+        detail.parent = "";
+        scene.onGetGalleryDetailSuccess(detail);
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        finishLocalLookups();
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+    }
+
+    @Test public void unknownFamilyStaysHiddenAndWaitsForRecordBeforeParentLookup() {
+        GalleryDetail detail = updatableDetail();
+        detail.firstGid = null;
+        detail.parent = "https://e-hentai.org/g/50/unknown/";
+        scene.onGetGalleryDetailSuccess(detail);
+        assertTrue(ReflectionHelpers.<Boolean>getField(scene, "mUpdateRecordLookupPending"));
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryVersionLookup"));
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void updateRecordReplacesButtonInPlaceAndRemainsVisibleDuringRefresh() {
+        GalleryUpdateRecord failure = GalleryUpdateRecord.failure(123, 100, 1234,
+                "Old title", "Download failed", new long[]{100}).withTargetToken("token");
+        assertTrue(recordStore.saveFailure(failure));
+        addKnownDownload(100, 100L, DownloadInfo.STATE_FINISH);
+        scene.onGetGalleryDetailSuccess(updatableDetail());
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.update), text(R.id.update_gallery));
+        finishLocalLookups();
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.download_state_failed), text(R.id.update_gallery));
+        assertEquals(context.getString(R.string.gallery_update_error_log), text(R.id.gallery_history));
+        refreshUpdateRecord();
+        assertTrue(ReflectionHelpers.<Boolean>getField(scene, "mUpdateRecordLookupPending"));
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.download_state_failed), text(R.id.update_gallery));
+        assertEquals(context.getString(R.string.gallery_update_error_log), text(R.id.gallery_history));
+        finishLocalLookups();
+        assertUpdateCardVisible();
+        GalleryDetail replacement = online();
+        replacement.token = "replacement-token";
+        scene.onGetGalleryDetailSuccess(replacement);
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryUpdateRecord"));
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+    }
+
+    private void saveCompletedUpdateRecord() {
+        SpiderInfo source = new SpiderInfo();
+        source.gid = 100;
+        source.token = "old-token";
+        source.pages = 1;
+        source.pTokenMap = new android.util.SparseArray<>();
+        source.pTokenMap.put(0, "shared-page");
+        SpiderInfo target = new SpiderInfo();
+        target.gid = 123;
+        target.token = "token";
+        target.pages = 2;
+        target.pTokenMap = new android.util.SparseArray<>();
+        target.pTokenMap.put(0, "shared-page");
+        target.pTokenMap.put(1, "new-page");
+        GalleryUpdateRecord record = ReflectionHelpers.callStaticMethod(GalleryUpdateRecord.class, "compare",
+                ReflectionHelpers.ClassParameter.from(long.class, 123L),
+                ReflectionHelpers.ClassParameter.from(long.class, 100L),
+                ReflectionHelpers.ClassParameter.from(SpiderInfo.class, source),
+                ReflectionHelpers.ClassParameter.from(SpiderInfo.class, target));
+        GalleryUpdateManager.UpdatePlan plan = ReflectionHelpers.callConstructor(GalleryUpdateManager.UpdatePlan.class,
+                ReflectionHelpers.ClassParameter.from(long.class, 123L),
+                ReflectionHelpers.ClassParameter.from(long.class, 100L),
+                ReflectionHelpers.ClassParameter.from(List.class, List.of(100L)));
+        assertTrue(recordStore.stage(plan, () -> record.withFirstGid(100)));
+        assertTrue(recordStore.complete(123, 100));
+    }
+
+    @Test public void oldGalleryProgressDoesNotResetWhenDetailOrResumeRebindsIt() throws Exception {
+        cacheProgress(100, 0, 145);
+        DownloadInfo older = addKnownDownload(100, 100L, DownloadInfo.STATE_FINISH);
+        older.pages = older.total = 0;
+        GalleryInfo summary = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        summary.firstGid = 100L;
+        bindPendingHeader();
+        assertFalse(text(R.id.gallery_history).contains("0/0"));
+        finishLocalLookups();
+        String expected = context.getString(R.string.gallery_old_version_progress, 0, 145);
+        assertEquals(expected, text(R.id.gallery_history));
+        scene.onGetGalleryDetailSuccess(updatableDetail());
+        assertEquals(expected, text(R.id.gallery_history));
+        finishLocalLookups();
+        ReflectionHelpers.setField(scene, "mVersionProgressTargetGid", -1L);
+        ReflectionHelpers.setField(scene, "mVersionProgressSourceGid", -1L);
+        refreshUpdateRecord();
+        assertEquals(expected, text(R.id.gallery_history));
+        finishLocalLookups();
+        assertEquals(expected, text(R.id.gallery_history));
+    }
+
+    @Test public void completedUpdateActionsAndReaderAreAvailableBeforeHtmlOrRecordArrays() {
+        saveCompletedUpdateRecord();
+        addKnownDownload(123, 100L, DownloadInfo.STATE_FINISH);
+        bindPendingHeader();
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.gallery_read_updates), text(R.id.update_gallery));
+        assertTrue(content.findViewById(R.id.update_gallery).isEnabled());
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryUpdateRecord"));
+        scene.onClick(content.findViewById(R.id.update_gallery));
+        assertNotNull(scene.startedActivity);
+        assertEquals(123L, scene.startedActivity.getLongExtra(GalleryActivity.KEY_UPDATE_RECORD_GID, -1));
+        assertTrue(scene.startedActivity.getLongExtra(GalleryActivity.KEY_UPDATE_RECORD_TIME, 0) > 0);
+        assertTrue(requests.isEmpty());
+        scene.onGetGalleryDetailSuccess(updatableDetail());
+        assertUpdateCardVisible();
+        finishLocalLookups();
+        assertUpdateCardVisible();
+    }
+
+    @Test public void coldUpdateRecordLoadsDuringPlaceholderInsteadOfWaitingForHtml() {
+        saveCompletedUpdateRecord();
+        addKnownDownload(123, 100L, DownloadInfo.STATE_FINISH);
+        recordStore.close();
+        ReflectionHelpers.setStaticField(GalleryUpdateRecordStore.class, "instance", null);
+        recordStore = GalleryUpdateRecordStore.get(context);
+        assertNull(recordStore.peekActionSnapshot(123));
+        bindPendingHeader();
+        finishLocalLookups();
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.gallery_read_updates), text(R.id.update_gallery));
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void prefetchedCompletedUpdateAvoidsHiddenInitialFrameAfterReopeningStore() {
+        saveCompletedUpdateRecord();
+        addKnownDownload(123, 100L, DownloadInfo.STATE_FINISH);
+        recordStore.close();
+        ReflectionHelpers.setStaticField(GalleryUpdateRecordStore.class, "instance", null);
+        recordStore = GalleryUpdateRecordStore.get(context);
+        recordStore.prefetchActionSnapshot(123, executor);
+        finishLocalLookups();
+        bindPendingHeader();
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.gallery_read_updates), text(R.id.update_gallery));
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryUpdateRecord"));
+    }
+
+    @Test public void readUpdatesStaysVisibleDuringRefreshIncludingTemporaryReadFailure() {
+        saveCompletedUpdateRecord();
+        addKnownDownload(123, 100L, DownloadInfo.STATE_FINISH);
+        scene.onGetGalleryDetailSuccess(updatableDetail());
+        finishLocalLookups();
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.gallery_read_updates), text(R.id.update_gallery));
+        assertTrue(content.findViewById(R.id.update_gallery).isEnabled());
+        refreshUpdateRecord();
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.gallery_read_updates), text(R.id.update_gallery));
+        finishLocalLookups();
+        assertUpdateCardVisible();
+        recordStore.getWritableDatabase().execSQL("ALTER TABLE records RENAME TO unavailable_records");
+        refreshUpdateRecord();
+        finishLocalLookups();
+        assertUpdateCardVisible();
+        assertEquals(context.getString(R.string.gallery_read_updates), text(R.id.update_gallery));
+        assertTrue(content.findViewById(R.id.update_gallery).isEnabled());
+        recordStore.getWritableDatabase().execSQL("ALTER TABLE unavailable_records RENAME TO records");
+    }
+
+    @Test public void tokenChangeRejectsQueuedRecordCallback() {
+        assertTrue(recordStore.saveFailure(GalleryUpdateRecord.failure(123, 100, 1234,
+                "Old title", "Old failure", new long[]{100}).withTargetToken("token")));
+        scene.onGetGalleryDetailSuccess(updatableDetail());
+        executor.runAll(); // Queue the old callback, but do not deliver it yet.
+        GalleryDetail replacement = online();
+        replacement.token = "replacement-token";
+        scene.onGetGalleryDetailSuccess(replacement);
+        ShadowLooper.idleMainLooper();
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryUpdateRecord"));
+        assertTrue(ReflectionHelpers.<Boolean>getField(scene, "mUpdateRecordLookupPending"));
+        assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+    }
+
     @Test public void completeHtmlProvidedAsArgumentsIsReusedWithoutAnotherDetailRequest() {
         GalleryDetail detail = online();
         ReflectionHelpers.setField(scene, "mGalleryInfo", detail);
@@ -363,13 +619,17 @@ public class OfflineGalleryDetailSceneTest {
     }
 
     private void cacheProgress(int page) throws Exception {
+        cacheProgress(123, page, 12);
+    }
+
+    private void cacheProgress(long gid, int page, int pages) throws Exception {
         SpiderInfo info = new SpiderInfo();
-        info.gid = 123;
+        info.gid = gid;
         info.token = "token";
-        info.pages = 12;
+        info.pages = pages;
         info.startPage = page;
         info.pTokenMap = new android.util.SparseArray<>();
-        OutputStreamPipe pipe = EhApplication.getSpiderInfoCache(context).getOutputStreamPipe("123");
+        OutputStreamPipe pipe = EhApplication.getSpiderInfoCache(context).getOutputStreamPipe(Long.toString(gid));
         try { pipe.obtain(); info.write(pipe.open()); }
         finally { pipe.close(); pipe.release(); }
     }
@@ -896,11 +1156,17 @@ public class OfflineGalleryDetailSceneTest {
         Context themeContext;
         final MainActivity activity = Shadow.newInstanceOf(MainActivity.class);
         Announcer opened;
-        TestScene(Context context) { this.context = context; this.themeContext = context; }
+        Intent startedActivity;
+        TestScene(Context context) {
+            this.context = context;
+            this.themeContext = context;
+            ReflectionHelpers.setField(activity, "mBase", context);
+        }
         @Override public Context getContext() { return context; }
         @Override public Context getEHContext() { return themeContext; }
         @Override public MainActivity getActivity2() { return activity; }
         @Override public void startScene(Announcer announcer) { opened = announcer; }
+        @Override public void startActivity(Intent intent) { startedActivity = intent; }
     }
 
     @Implements(EhApplication.class)

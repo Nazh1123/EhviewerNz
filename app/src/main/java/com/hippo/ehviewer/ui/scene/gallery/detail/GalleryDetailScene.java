@@ -394,10 +394,14 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private long mVersionProgressTargetGid = -1L;
     private long mVersionProgressSourceGid = -1L;
     private int mVersionProgressGeneration;
+    private final android.util.LruCache<Long, GalleryUpdateManager.LocalReadingProgress>
+            mVersionProgressSnapshots = new android.util.LruCache<>(8);
     private GalleryUpdateRecord mGalleryUpdateRecord;
     private long mUpdateRecordLookupGid = -1L;
+    @Nullable private String mUpdateRecordLookupToken;
     private int mUpdateRecordGeneration;
     private boolean mUpdateRecordLookupPending;
+    private boolean mPendingUpdateLog;
     private AlertDialog mUpdateLogDialog;
     private long mGalleryUpdateSessionGid = -1L;
     private int mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_AVAILABLE;
@@ -1062,6 +1066,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUpdateGallery = null;
         mGalleryHistory = null;
         invalidateUpdateRecord();
+        mGalleryUpdateRecord = null;
+        mUpdateRecordLookupToken = null;
+        mPendingUpdateLog = false;
         if (mUpdateLogDialog != null) {
             mUpdateLogDialog.dismiss();
             mUpdateLogDialog = null;
@@ -1419,16 +1426,62 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         // A version family alone does not imply a usable local version to update from.
         // Reuse the in-memory download index also used by the list; unknown stays hidden.
         Context context = getEHContext();
-        boolean updateAvailable = false;
-        if (context != null && info != null && info.firstGid != null && info.firstGid > 0) {
+        if (context != null && info != null) {
             DownloadManager manager = EhApplication.getDownloadManager(context);
-            updateAvailable = !manager.containDownloadInfo(info.gid)
-                    && manager.findClosestOlderGalleryVersion(info.firstGid, info.gid) != null;
+            if (manager.containDownloadInfo(info.gid)
+                    || GalleryUpdateRecordStore.get(context).peekActionSnapshot(info.gid) != null) {
+                loadUpdateRecord(context, info);
+            }
+            if (bindCachedCompletedUpdate(context, info)) return;
         }
+        DownloadInfo source = context != null ? findLocalUpdateSource(
+                EhApplication.getDownloadManager(context), info) : null;
+        boolean updateAvailable = source != null;
         setGalleryVersionActionVisibility(updateAvailable, updateAvailable);
         mUpdateGallery.setText(R.string.update);
         mUpdateGallery.setEnabled(true);
         mGalleryHistory.setEnabled(true);
+        if (source != null) bindGalleryVersionSourceProgress(context, info.gid, source);
+    }
+
+    @Nullable
+    private GalleryUpdateRecordStore.ActionSnapshot getCompletedUpdateSnapshot(Context context, GalleryInfo info) {
+        GalleryUpdateRecordStore.ActionSnapshot snapshot =
+                GalleryUpdateRecordStore.get(context).peekActionSnapshot(info.gid);
+        if (snapshot == null || snapshot.summary() == null || snapshot.summary().failure()
+                || (!TextUtils.isEmpty(snapshot.summary().targetToken())
+                    && !TextUtils.equals(snapshot.summary().targetToken(), info.token))) return null;
+        DownloadManager manager = EhApplication.getDownloadManager(context);
+        return GalleryUpdateManager.getPlan(info.gid) == null && !manager.isDownloadActive(info.gid)
+                ? snapshot : null;
+    }
+
+    private boolean bindCachedCompletedUpdate(Context context, GalleryInfo info) {
+        GalleryUpdateRecordStore.ActionSnapshot snapshot = getCompletedUpdateSnapshot(context, info);
+        if (snapshot == null) return false;
+        DownloadInfo local = EhApplication.getDownloadManager(context).getDownloadInfo(info.gid);
+        mUpdateGallery.setText(R.string.gallery_read_updates);
+        mUpdateGallery.setEnabled(snapshot.readable() && local != null && local.state == DownloadInfo.STATE_FINISH);
+        mGalleryHistory.setText(R.string.gallery_update_log);
+        mGalleryHistory.setEnabled(true);
+        mVersionProgressTargetGid = -1;
+        mVersionProgressSourceGid = -1;
+        ++mVersionProgressGeneration;
+        setGalleryVersionActionVisibility(true, true);
+        return true;
+    }
+
+    private static boolean isUpdateTargetBlocked(DownloadManager manager, long gid) {
+        DownloadInfo target = manager.getDownloadInfo(gid);
+        return target != null && (target.state == DownloadInfo.STATE_FINISH
+                || manager.isDownloadActive(gid));
+    }
+
+    @Nullable
+    private static DownloadInfo findLocalUpdateSource(DownloadManager manager, @Nullable GalleryInfo info) {
+        if (info == null || info.firstGid == null || info.firstGid <= 0
+                || isUpdateTargetBlocked(manager, info.gid)) return null;
+        return manager.findClosestOlderGalleryVersion(info.firstGid, info.gid);
     }
 
     private void updateFavoriteDrawable() {
@@ -2360,8 +2413,27 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
 
+        GalleryInfo currentInfo = getGalleryInfo();
+        if (v == mUpdateGallery && currentInfo != null) {
+            GalleryUpdateRecordStore.ActionSnapshot snapshot = getCompletedUpdateSnapshot(mContext, currentInfo);
+            if (snapshot != null && snapshot.readable()) {
+                openUpdatedGallery(currentInfo, snapshot.summary().targetGid(), snapshot.summary().completedAt());
+                return;
+            }
+        }
+
         if ((v == mInfo || v == mHaH || v == mArchiver || v == mUpdateGallery || v == mGalleryHistory)
                 && !mOffline && awaitDetail(v.getId(), () -> onClick(v))) {
+            return;
+        }
+        if (v == mGalleryHistory && mGalleryDetail != null && mGalleryUpdateRecord == null
+                && getCompletedUpdateSnapshot(mContext, mGalleryDetail) != null) {
+            mPendingUpdateLog = true;
+            if (!mUpdateRecordLookupPending) {
+                invalidateUpdateRecord();
+                loadUpdateRecord(mContext, mGalleryDetail);
+            }
+            showTip(R.string.please_wait, LENGTH_SHORT);
             return;
         }
 
@@ -3168,12 +3240,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         DownloadInfo exactDownload = downloadManager.getDownloadInfo(detail.gid);
         GalleryUpdateManager.UpdatePlan updatePlan =
                 GalleryUpdateManager.getPlan(detail.gid);
-        loadUpdateRecord(context, detail.gid);
-        // Resolve local records first; the log's history button must not cause eager chain lookup.
-        if (mUpdateRecordLookupPending) {
-            setGalleryVersionActionVisibility(false, false);
-            return;
-        }
+        loadUpdateRecord(context, detail);
+        // Pending disk reads do not invalidate the known record or local update eligibility.
+        if (mGalleryUpdateRecord == null && bindCachedCompletedUpdate(context, detail)) return;
         if (mGalleryUpdateRecord != null && mGalleryUpdateRecord.targetGid == detail.gid
                 && mGalleryUpdateRecord.isFailure()) {
             mVersionProgressTargetGid = -1L;
@@ -3236,10 +3305,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_AVAILABLE;
         bindGalleryUpdateButtonState();
-        boolean exactDownloadBlocksUpdate = exactDownload != null
-                && (exactDownload.state == DownloadInfo.STATE_FINISH
-                || downloadManager.isDownloadActive(detail.gid));
-        if (!hasParent || exactDownloadBlocksUpdate) {
+        if (!hasParent || isUpdateTargetBlocked(downloadManager, detail.gid)) {
             setGalleryVersionActionVisibility(false, false);
             return;
         }
@@ -3256,9 +3322,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
 
         if (detail.firstGid != null) {
-            DownloadInfo source = detail.firstGid > 0L
-                    ? downloadManager.findClosestOlderGalleryVersion(
-                            detail.firstGid, detail.gid) : null;
+            DownloadInfo source = findLocalUpdateSource(downloadManager, detail);
             boolean updateAvailable = source != null;
             setGalleryVersionActionVisibility(updateAvailable, updateAvailable);
             if (source != null) {
@@ -3269,6 +3333,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
 
         setGalleryVersionActionVisibility(false, false);
+        // Resolve local records before starting a parent-chain lookup for an unknown family.
+        if (mUpdateRecordLookupPending) return;
         if (mGalleryVersionLookup != null) {
             return;
         }
@@ -3324,30 +3390,43 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUpdateRecordLookupGid = -1L;
         mUpdateRecordGeneration++;
         mUpdateRecordLookupPending = false;
-        mGalleryUpdateRecord = null;
+        // Keep the last record for this gallery visible until its replacement is available.
     }
 
-    private void loadUpdateRecord(Context context, long gid) {
-        if (mUpdateRecordLookupGid == gid) return;
+    private void loadUpdateRecord(Context context, GalleryInfo detail) {
+        long gid = detail.gid;
+        String token = detail.token;
+        if (mUpdateRecordLookupGid == gid && TextUtils.equals(mUpdateRecordLookupToken, token)) return;
+        if (mGalleryUpdateRecord != null && (mGalleryUpdateRecord.targetGid != gid
+                || !TextUtils.equals(mUpdateRecordLookupToken, token))) mGalleryUpdateRecord = null;
         mUpdateRecordLookupGid = gid;
+        mUpdateRecordLookupToken = token;
         mUpdateRecordLookupPending = true;
-        mGalleryUpdateRecord = null;
         int generation = ++mUpdateRecordGeneration;
         Context application = context.getApplicationContext();
         EhApplication.getExecutorService(application).execute(() -> {
             GalleryUpdateRecord loaded = null;
+            boolean succeeded = false;
             try {
                 loaded = GalleryUpdateRecordStore.get(application).find(gid);
+                succeeded = true;
             } catch (RuntimeException e) {
                 android.util.Log.w("GalleryUpdateRecords", "Unable to read update record " + gid, e);
             }
             GalleryUpdateRecord record = loaded;
+            boolean replaceRecord = succeeded;
             handler.post(() -> {
+                GalleryInfo current = getGalleryInfo();
                 if (generation != mUpdateRecordGeneration || mUpdateGallery == null
-                        || mGalleryDetail == null || mGalleryDetail.gid != gid) return;
-                mGalleryUpdateRecord = record;
+                        || current == null || current.gid != gid
+                        || !TextUtils.equals(current.token, token)) return;
+                if (replaceRecord) mGalleryUpdateRecord = record;
                 mUpdateRecordLookupPending = false;
                 updateGalleryVersionActionsVisibility();
+                if (mPendingUpdateLog) {
+                    mPendingUpdateLog = false;
+                    if (mGalleryUpdateRecord != null && mGalleryDetail != null) showGalleryUpdateLog();
+                }
             });
         });
     }
@@ -3359,8 +3438,12 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private void readGalleryUpdates(GalleryUpdateRecord record) {
         if (record == null || !record.complete || !record.hasTokenSnapshot() || record.addedPages.length == 0
                 || mGalleryDetail == null || getActivity2() == null) return;
-        if (getEHContext() == null) return;
-        DownloadInfo local = EhApplication.getDownloadManager(getEHContext()).getDownloadInfo(mGalleryDetail.gid);
+        openUpdatedGallery(mGalleryDetail, record.targetGid, record.completedAt);
+    }
+
+    private void openUpdatedGallery(GalleryInfo info, long recordGid, long completedAt) {
+        if (getEHContext() == null || getActivity2() == null) return;
+        DownloadInfo local = EhApplication.getDownloadManager(getEHContext()).getDownloadInfo(info.gid);
         if (local == null || local.state != DownloadInfo.STATE_FINISH
                 || GalleryUpdateManager.getPlan(local.gid) != null) {
             showTip(R.string.gallery_update_history_no_local, LENGTH_SHORT);
@@ -3370,10 +3453,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Intent intent = new Intent(getActivity2(), GalleryActivity.class);
         intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.UPDATE);
         intent.setAction(GalleryActivity.ACTION_EH);
-        intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, mGalleryDetail);
+        intent.putExtra(GalleryActivity.KEY_GALLERY_INFO, info);
         // Resolve the record in the reader, avoiding large Intent page arrays.
-        intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_TIME, record.completedAt);
-        intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_GID, record.targetGid);
+        intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_TIME, completedAt);
+        intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_GID, recordGid);
         startActivity(intent);
     }
 
@@ -3502,23 +3585,41 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         final int generation = ++mVersionProgressGeneration;
 
         int localTotal = Math.max(0, Math.max(source.pages, source.total));
-        mGalleryHistory.setText(context.getString(
-                R.string.gallery_old_version_progress, 0, localTotal));
+        GalleryUpdateManager.LocalReadingProgress known = mVersionProgressSnapshots.get(source.gid);
+        if (known != null) {
+            mGalleryHistory.setText(context.getString(R.string.gallery_old_version_progress,
+                    known.currentPage, known.totalPages));
+        } else if (localTotal > 0) {
+            Integer startPage = SpiderQueen.peekStartPage(source.gid);
+            int current = startPage != null && startPage > 0 ? Math.min(startPage + 1, localTotal) : 0;
+            mGalleryHistory.setText(context.getString(R.string.gallery_old_version_progress, current, localTotal));
+        } else {
+            mGalleryHistory.setText(R.string.gallery_old_version);
+        }
 
         Context application = context.getApplicationContext();
+        String targetToken = getToken();
         EhApplication.getExecutorService(application).execute(() -> {
             GalleryUpdateManager.LocalReadingProgress progress =
                     GalleryUpdateManager.loadLocalReadingProgress(application, source);
             handler.post(() -> {
-                GalleryDetail current = mGalleryDetail;
+                GalleryInfo current = getGalleryInfo();
                 Context localizedContext = getEHContext();
                 if (localizedContext == null || mGalleryHistory == null || current == null
                         || current.gid != targetGid
+                        || !TextUtils.equals(current.token, targetToken)
                         || mVersionProgressTargetGid != targetGid
                         || mVersionProgressSourceGid != source.gid
                         || mVersionProgressGeneration != generation) {
                     return;
                 }
+                if (progress.totalPages <= 0) {
+                    if (mVersionProgressSnapshots.get(source.gid) == null) {
+                        mGalleryHistory.setText(R.string.gallery_old_version);
+                    }
+                    return;
+                }
+                mVersionProgressSnapshots.put(source.gid, progress);
                 mGalleryHistory.setText(localizedContext.getString(
                         R.string.gallery_old_version_progress,
                         progress.currentPage, progress.totalPages));
@@ -3601,6 +3702,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mOfflineDetail = null;
         if (mGalleryDetail == null || mGalleryDetail.gid != result.gid
                 || !TextUtils.equals(mGalleryDetail.token, result.token)) {
+            if (mGalleryDetail != null) {
+                mPendingUpdateLog = false;
+                mGalleryUpdateSessionGid = -1L;
+                mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_AVAILABLE;
+            }
             if (mGalleryVersionLookup != null) {
                 mGalleryVersionLookup.cancel();
                 mGalleryVersionLookup = null;

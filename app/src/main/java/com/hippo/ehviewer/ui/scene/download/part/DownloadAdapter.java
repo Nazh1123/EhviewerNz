@@ -45,6 +45,8 @@ import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.dao.DownloadInfo;
@@ -328,6 +330,11 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
                     && info.archiveUri.startsWith("content://");
             boolean isLocalAlbum = DownloadAlbumImporter.Companion.isLocalAlbum(info);
             boolean isImportedLocal = isImportedFolder || isImportedArchive || isLocalAlbum;
+            if (!isImportedLocal && info.state == DownloadInfo.STATE_FINISH) {
+                Context context = mInflater.getContext();
+                GalleryUpdateRecordStore.get(context).prefetchActionSnapshot(
+                        info.gid, EhApplication.getExecutorService(context));
+            }
 
             String title = EhUtils.getSuitableTitle(info);
             if (isImportedLocal) {

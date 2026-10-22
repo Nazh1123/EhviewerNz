@@ -47,6 +47,7 @@ import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.gallery.ReadingProgressCache;
+import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
 import com.hippo.ehviewer.widget.SimpleRatingView;
 import com.hippo.ehviewer.widget.TileThumbNew;
@@ -95,11 +96,13 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private DownloadManager mDownloadManager;
 
     private final ReadingProgressCache mReadingProgress;
+    private final ExecutorService executor;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
 
     public GalleryAdapterNew(@NonNull LayoutInflater inflater, @NonNull Resources resources,
                              @NonNull RecyclerView recyclerView, int type, boolean showFavourited, ExecutorService executor, boolean showReadProgress) {
+        this.executor = executor;
         android.content.Context context = inflater.getContext().getApplicationContext();
         mReadingProgress = new ReadingProgressCache(executor,
                 gid -> SpiderQueen.findStartPage(context, gid));
@@ -287,6 +290,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         holder.boundGid = gi.gid;
 
         boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
+        if (downloaded) GalleryUpdateRecordStore.get(mInflater.getContext())
+                .prefetchActionSnapshot(gi.gid, executor);
         boolean updateAvailable = !downloaded && gi.firstGid != null && gi.firstGid > 0L
                 && mDownloadManager.hasOlderGalleryVersion(gi.firstGid, gi.gid);
         bindVersionBadge(holder.downloaded, updateAvailable,

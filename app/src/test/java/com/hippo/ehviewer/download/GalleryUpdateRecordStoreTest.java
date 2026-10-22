@@ -41,6 +41,58 @@ public class GalleryUpdateRecordStoreTest {
                 2, 5, true, new int[]{1, 3, 4}, new int[0], 0)));
     }
 
+    @Test public void actionMetadataIsPublishedAtCompletionButNotForDrafts() {
+        java.util.ArrayDeque<Runnable> jobs = new java.util.ArrayDeque<>();
+        store.prefetchActionSnapshot(200, jobs::add);
+        store.prefetchActionSnapshot(200, jobs::add);
+        assertEquals(1, jobs.size());
+        jobs.remove().run();
+        assertNull(store.peekActionSnapshot(200).summary());
+        stage(200, 100);
+        assertNull(store.peekActionSnapshot(200).summary());
+        assertTrue(store.complete(200, 100));
+        assertEquals(200, store.peekActionSnapshot(200).summary().targetGid());
+        assertTrue(store.peekActionSnapshot(200).summary().completedAt() > 0);
+        assertFalse("A legacy record without page tokens cannot open the update reader",
+                store.peekActionSnapshot(200).readable());
+    }
+
+    @Test public void actionMetadataPrefetchIsBoundedAndRetentionInvalidatesDeletedRecords() {
+        java.util.ArrayDeque<Runnable> jobs = new java.util.ArrayDeque<>();
+        for (int i = 0; i < 100; i++) store.prefetchActionSnapshot(1000 + i, jobs::add);
+        assertEquals(64, jobs.size());
+        while (!jobs.isEmpty()) jobs.remove().run();
+        stage(200, 100); assertTrue(store.complete(200, 100));
+        stage(300, 200); assertTrue(store.complete(300, 200));
+        store.getWritableDatabase().execSQL("UPDATE records SET completed_at=1 WHERE gid=200");
+        store.trim(1);
+        assertNull(store.peekActionSnapshot(200).summary());
+        assertEquals(300, store.peekActionSnapshot(300).summary().targetGid());
+    }
+
+    @Test public void coldMetadataReaderKeepsSnapshotCapabilityWithoutKeepingPageArrays() {
+        com.hippo.ehviewer.spider.SpiderInfo oldInfo = new com.hippo.ehviewer.spider.SpiderInfo();
+        oldInfo.pages = 1;
+        oldInfo.pTokenMap = new android.util.SparseArray<>();
+        oldInfo.pTokenMap.put(0, "same");
+        com.hippo.ehviewer.spider.SpiderInfo target = new com.hippo.ehviewer.spider.SpiderInfo();
+        target.token = "target-token";
+        target.pages = 2;
+        target.pTokenMap = new android.util.SparseArray<>();
+        target.pTokenMap.put(0, "same");
+        target.pTokenMap.put(1, "addition");
+        GalleryUpdateRecord record = GalleryUpdateRecord.compare(200, 100, oldInfo, target);
+        assertTrue(store.stage(new GalleryUpdateManager.UpdatePlan(200, 100, List.of(100L)), () -> record));
+        assertTrue(store.complete(200, 100));
+        assertTrue(store.peekActionSnapshot(200).readable());
+        store.close();
+        store = new GalleryUpdateRecordStore(context);
+        assertNull(store.peekActionSnapshot(200));
+        store.prefetchActionSnapshot(200, Runnable::run);
+        assertTrue(store.peekActionSnapshot(200).readable());
+        assertEquals("target-token", store.peekActionSnapshot(200).summary().targetToken());
+    }
+
     @Test public void draftIsInvisibleAndSurvivesReopeningBeforeParentCleanupRetry() {
         stage(200, 100);
         assertNull(store.find(200));

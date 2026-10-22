@@ -39,6 +39,7 @@ import com.hippo.easyrecyclerview.MarginItemDecoration;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -243,6 +244,8 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
         }
 
         boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
+        if (downloaded) GalleryUpdateRecordStore.get(mInflater.getContext())
+                .prefetchActionSnapshot(gi.gid, executor);
         boolean updateAvailable = !downloaded && gi.firstGid != null && gi.firstGid > 0L
                 && mDownloadManager.hasOlderGalleryVersion(gi.firstGid, gi.gid);
         bindVersionBadge(holder.downloaded, updateAvailable,
@@ -280,7 +283,9 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
                             }
                         });
                     });
-                    holder.pages.setText(new StringBuffer(gi.pages + "P"));
+                    Integer knownPage = SpiderQueen.peekStartPage(gi.gid);
+                    holder.pages.setText(knownPage != null
+                            ? (knownPage > 0 ? knownPage + 1 : 0) + "/" + gi.pages + "P" : gi.pages + "P");
                     holder.pages.setVisibility(View.VISIBLE);
                 }
                 if (TextUtils.isEmpty(gi.simpleLanguage)) {
