@@ -42,11 +42,13 @@ class TranslationBackgroundTest {
             val service = controller.get()
             service.onStartCommand(Intent(context, TranslationService::class.java), 0, 1)
             val notifications = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            assertEquals(context.getString(R.string.translation_notification_active_progress, 0, 8, 4, 50, 0),
+            assertEquals(context.getString(R.string.translation_notification_active_progress, 0, 8, 4, 50, 0) +
+                " · " + context.getString(R.string.gallery_processing_queued, 0),
                 notifications.activeNotifications.first().notification.extras.getString(Notification.EXTRA_TEXT))
             session.pageProgress.update(TranslationStage.TRANSLATE, 0.5f)
             ReflectionHelpers.callInstanceMethod<Unit>(service, "refreshNotifications")
-            assertEquals(context.getString(R.string.translation_notification_active_progress, 0, 8, 4, 73, 0),
+            assertEquals(context.getString(R.string.translation_notification_active_progress, 0, 8, 4, 73, 0) +
+                " · " + context.getString(R.string.gallery_processing_queued, 0),
                 notifications.activeNotifications.first().notification.extras.getString(Notification.EXTRA_TEXT))
         } finally { controller.destroy() }
     }
@@ -234,7 +236,7 @@ class TranslationBackgroundTest {
         assertEquals(listOf(session), TranslationTasks.fullGalleryTasks())
     }
 
-    @Test fun ordinaryAndFullTasksHaveNotificationsAndStoppingOnePreservesTheOther() = withSession { ordinary ->
+    @Test fun ordinaryAndFullTasksShareOneNotificationAndStoppingOnePreservesTheOther() = withSession { ordinary ->
         val context = RuntimeEnvironment.getApplication()
         val full = TranslationTasks.acquire(context, Provider("full-notification"), null)
         val controller = Robolectric.buildService(TranslationService::class.java).create()
@@ -247,13 +249,13 @@ class TranslationBackgroundTest {
             ReflectionHelpers.setField(full, "fullGallery", true)
             controller.get().onStartCommand(Intent(context, TranslationService::class.java), 0, 1)
             val notifications = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            assertEquals(2, notifications.activeNotifications.size)
+            assertEquals(1, notifications.activeNotifications.size)
             val notice = shadowOf(controller.get()).lastForegroundNotification
-            assertEquals(3, notice.extras.getInt(Notification.EXTRA_PROGRESS_MAX))
+            assertEquals(8, notice.extras.getInt(Notification.EXTRA_PROGRESS_MAX))
             controller.get().onStartCommand(shadowOf(notice.actions[0].actionIntent).savedIntent, 0, 2)
-            assertTrue(full.enabled)
-            assertFalse(ordinary.enabled)
-            assertTrue(full.working)
+            assertFalse(full.enabled)
+            assertTrue(ordinary.enabled)
+            assertTrue(ordinary.working)
             assertFalse(shadowOf(controller.get()).isStoppedBySelf)
             assertEquals(1, notifications.activeNotifications.size)
         } finally {
@@ -402,12 +404,13 @@ class TranslationBackgroundTest {
             }
             service.onStartCommand(Intent(context, TranslationService::class.java), 0, 1)
             val notice = shadowOf(service).lastForegroundNotification
-            assertEquals(context.getString(R.string.translation_notification_progress, 2, 8, 1),
+            assertEquals(context.getString(R.string.translation_notification_progress, 2, 8, 1) +
+                " · " + context.getString(R.string.gallery_processing_queued, 1),
                 notice.extras.getString(Notification.EXTRA_TEXT))
             assertEquals(8, notice.extras.getInt(Notification.EXTRA_PROGRESS_MAX))
             assertEquals(2, notice.extras.getInt(Notification.EXTRA_PROGRESS))
             assertEquals(1, notice.actions.size)
-            assertEquals(context.getString(R.string.translation_notification_stop), notice.actions[0].title)
+            assertEquals(context.getString(R.string.gallery_processing_stop), notice.actions[0].title)
             val wakeLock = ReflectionHelpers.getField<PowerManager.WakeLock>(service, "wakeLock")
             assertTrue(wakeLock.isHeld)
             val stop = shadowOf(notice.actions[0].actionIntent).savedIntent

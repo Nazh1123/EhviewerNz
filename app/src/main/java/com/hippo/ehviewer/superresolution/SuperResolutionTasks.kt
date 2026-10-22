@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
+import com.hippo.ehviewer.translation.TranslationService
 
 /** Main-thread registry shared by detachable reader controls and the foreground service. */
 internal object SuperResolutionTasks {
@@ -16,7 +17,7 @@ internal object SuperResolutionTasks {
         return sessions.getOrPut(identity) { GallerySuperResolutionSession(context.applicationContext, provider, identity, info) }
     }
     fun active() = sessions.values.filter { it.enabled && it.working }
-    fun wake(context: Context) { ContextCompat.startForegroundService(context, Intent(context, SuperResolutionService::class.java)) }
+    fun wake(context: Context) { ContextCompat.startForegroundService(context, Intent(context, TranslationService::class.java)) }
     fun changed() { listener?.invoke() }
     fun stop(identity: String) { sessions[identity]?.disable() }
     fun stopAll() { sessions.values.toList().forEach { it.disable() } }

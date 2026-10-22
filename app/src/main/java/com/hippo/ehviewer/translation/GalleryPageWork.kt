@@ -92,6 +92,7 @@ internal class GalleryPageWork(
 internal object GalleryPageWorkRegistry {
     private val galleries = mutableMapOf<String, GalleryPageWork>()
     private val galleryQueue = GalleryTaskQueue()
+    fun fullGalleryOrder(): List<String> = galleryQueue.identities
     fun acquire(identity: String) = galleries.getOrPut(identity) { GalleryPageWork(identity, galleryQueue) }
     fun release(identity: String, work: GalleryPageWork) {
         if (work.empty && galleries[identity] === work) galleries.remove(identity)

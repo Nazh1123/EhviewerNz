@@ -294,14 +294,7 @@
             android:exported="false"
             android:stopWithTask="false"
             android:foregroundServiceType="dataSync"
-            android:label="@string/translation_service_label" />
-
-        <service
-            android:name=".superresolution.SuperResolutionService"
-            android:exported="false"
-            android:stopWithTask="false"
-            android:foregroundServiceType="dataSync"
-            android:label="@string/sr_title" />
+            android:label="@string/gallery_processing_service" />
 
         <provider
             android:name="com.hippo.content.FileProvider"

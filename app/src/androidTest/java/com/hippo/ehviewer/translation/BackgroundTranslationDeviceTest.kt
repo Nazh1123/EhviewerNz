@@ -97,7 +97,7 @@ class BackgroundTranslationDeviceTest {
         }
         await { source.order.isNotEmpty() && notices().any { !it.notification.actions.isNullOrEmpty() } }
         val stop = notices().first { !it.notification.actions.isNullOrEmpty() }.notification.actions[0]
-        assertEquals(context.getString(R.string.translation_notification_stop), stop.title)
+        assertEquals(context.getString(R.string.gallery_processing_stop), stop.title)
         stop.actionIntent.send()
         await { onMainResult { !session.enabled && !session.working } }
         await { notices().none { it.notification.flags and android.app.Notification.FLAG_ONGOING_EVENT != 0 } }

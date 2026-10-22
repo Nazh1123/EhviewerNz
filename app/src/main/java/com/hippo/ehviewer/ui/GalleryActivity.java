@@ -100,6 +100,7 @@ import com.hippo.ehviewer.gallery.DirGalleryProvider;
 import com.hippo.ehviewer.gallery.EhGalleryProvider;
 import com.hippo.ehviewer.gallery.ExternalImageFileResolver;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
+import com.hippo.ehviewer.gallery.GalleryResultIndex;
 import com.hippo.ehviewer.translation.ReaderTranslationController;
 import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.gallery.LocalGalleryHistory;
@@ -2866,6 +2867,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         private final SwitchCompat mShowProgress;
         private final SwitchCompat mShowBattery;
         private final SwitchCompat mShowPageInterval;
+        private final SwitchCompat mPreferExistingResults;
         private final SwitchCompat mVolumePage;
         private final SwitchCompat mReverseVolumePage;
         private final SwitchCompat mReadingFullscreen;
@@ -2909,6 +2911,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mShowProgress = mView.findViewById(R.id.show_progress);
             mShowBattery = mView.findViewById(R.id.show_battery);
             mShowPageInterval = mView.findViewById(R.id.show_page_interval);
+            mPreferExistingResults = mView.findViewById(R.id.prefer_existing_results);
             mVolumePage = mView.findViewById(R.id.volume_page);
             mReverseVolumePage = mView.findViewById(R.id.reverse_volume_page);
             mReadingFullscreen = mView.findViewById(R.id.reading_fullscreen);
@@ -2937,6 +2940,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mShowProgress.setChecked(Settings.getShowProgress());
             mShowBattery.setChecked(Settings.getShowBattery());
             mShowPageInterval.setChecked(Settings.getShowPageInterval());
+            mPreferExistingResults.setChecked(Settings.getBoolean(GalleryResultIndex.PREFER_EXISTING, false));
             mVolumePage.setChecked(Settings.getVolumePage());
             mReverseVolumePage.setChecked(Settings.getReverseVolumePage());
             mReadingFullscreen.setChecked(Settings.getReadingFullscreen());
@@ -3148,6 +3152,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             Settings.putShowProgress(showProgress);
             Settings.putShowBattery(showBattery);
             Settings.putShowPageInterval(showPageInterval);
+            boolean preferExistingResults = mPreferExistingResults.isChecked();
+            if (preferExistingResults != Settings.getBoolean(GalleryResultIndex.PREFER_EXISTING, false)) {
+                Settings.putBoolean(GalleryResultIndex.PREFER_EXISTING, preferExistingResults);
+                if (mExistingResults != null) mExistingResults.resume();
+            }
             Settings.putVolumePage(volumePage);
             Settings.putReadingFullscreen(readingFullscreen);
             Settings.putCustomScreenLightness(customScreenLightness);

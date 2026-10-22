@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 /** Main-thread FIFO for whole galleries, shared by translation and super resolution. */
 internal class GalleryTaskQueue {
     private val waiting = linkedSetOf<String>()
+    val identities: List<String> get() = waiting.toList()
     val revision = MutableStateFlow(0L)
 
     fun changed(identity: String, fullGallery: Boolean) {
