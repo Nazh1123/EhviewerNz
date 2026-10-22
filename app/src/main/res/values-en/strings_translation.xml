@@ -127,7 +127,9 @@
     <string name="translation_progress_page_distance">Reading position is %1$d pages ahead of the page being translated</string>
     <string name="translation_show">Enable automatic translation</string>
     <string name="translation_hide">Stop translation</string>
-    <string name="translation_full_gallery">Translate the entire gallery</string>
+    <string name="translation_full_gallery">Translate all pages in this gallery</string>
+    <string name="translation_gallery">Translate this gallery</string>
+    <string name="translation_gallery_submitted">Gallery translation task submitted</string>
     <string name="translation_stop_full">Stop full gallery translation</string>
     <string name="translation_service_label">Gallery translation</string>
     <string name="translation_notification_progress">Processed %1$d / %2$d pages · Failed %3$d pages</string>

@@ -38,4 +38,12 @@
         android:id="@+id/action_view_local_gallery_size"
         android:title="@string/view_local_gallery_size"/>
 
+    <item
+        android:id="@+id/action_enhance_local_gallery"
+        android:title="@string/sr_gallery"/>
+
+    <item
+        android:id="@+id/action_translate_local_gallery"
+        android:title="@string/translation_gallery"/>
+
 </menu>

@@ -91,6 +91,17 @@ class GallerySuperResolutionSessionTest {
         } finally { close(session) }
     }
 
+    @Test fun requestingAnAlreadyCompletedGalleryDoesNotLeaveAFullGalleryTaskRegistered() {
+        val session = GallerySuperResolutionSession(context, Provider(sources), identity, null)
+        try {
+            session.pageChanged(0); session.full()
+            await { !session.working && session.states.size == sources.size }
+            session.full()
+            assertFalse(session.fullGallery)
+            assertFalse(session.working)
+        } finally { close(session) }
+    }
+
     @Test fun persistentCachedPagesAreExportedWithoutModelsWhenTheGalleryIsReopened() {
         val gallery = File(context.cacheDir, "sr-export-gallery").apply { deleteRecursively(); mkdirs() }
         val provider = Provider(sources, checkNotNull(UniFile.fromFile(gallery)))

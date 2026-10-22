@@ -1111,7 +1111,8 @@ public class OfflineGalleryDetailSceneTest {
                 boolean visible = state == DownloadInfo.STATE_FINISH || state == DownloadInfo.STATE_NONE;
                 assertEquals(visible ? View.VISIBLE : View.GONE, content.findViewById(R.id.local_delete).getVisibility());
                 for (int id : new int[]{R.id.action_open_local_gallery_image,
-                        R.id.action_copy_local_gallery_path, R.id.action_view_local_gallery_size}) {
+                        R.id.action_copy_local_gallery_path, R.id.action_view_local_gallery_size,
+                        R.id.action_enhance_local_gallery, R.id.action_translate_local_gallery}) {
                     assertEquals("offline=" + offline + ", state=" + state, visible, popup.getMenu().findItem(id).isVisible());
                 }
                 assertTrue(popup.getMenu().findItem(R.id.action_refresh).isVisible());

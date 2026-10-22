@@ -547,6 +547,33 @@ class TranslationBackgroundTest {
     private fun next(session: GalleryTranslationSession) =
         ReflectionHelpers.callInstanceMethod<TranslationPageRequest?>(session, "nextRequest")
 
+    @Test fun queuedFullGalleryOnlyAdmitsItsVisibleWindowUntilThePreviousGalleryEnds() = withSession { first ->
+        val second = TranslationTasks.acquire(RuntimeEnvironment.getApplication(), Provider("queued-gallery"), null)
+        try {
+            // Keep workers inactive so this test exercises real session admission without models/IO.
+            for (session in listOf(first, second)) {
+                ReflectionHelpers.setField(session, "enabled", true)
+                session.onPageChanged(0)
+                assertTrue(session.translateFullGallery())
+            }
+            assertEquals(0, next(first)?.page)
+            assertNull(next(second))
+            second.attach(Reader())
+            second.setBrowsing(true)
+            val visible = TranslationWindow.pages(0, second.size, second.activeOptions.ahead)
+            for (page in visible) {
+                val request = checkNotNull(next(second))
+                assertEquals(page, request.page)
+                settle(second, request)
+            }
+            assertNull(next(second)) // Background pages must not follow the visible exception.
+            second.setBrowsing(false)
+            assertNull(next(second))
+            first.disable()
+            assertEquals(visible.last() + 1, next(second)?.page)
+        } finally { TranslationTasks.release(second) }
+    }
+
     private fun settle(session: GalleryTranslationSession, request: TranslationPageRequest) {
         session.states[request.page] = R.string.translation_animation
         ReflectionHelpers.callInstanceMethod<Unit>(session, "finishRequest",

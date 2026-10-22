@@ -111,6 +111,13 @@ internal class GalleryTranslationSession(
         active = { enabled && (readerOpen || fullGallery) },
         pages = { pendingPages() }, settled = { isPageSettled(it) },
         ready = { size > 0 },
+        fullGallery = { fullGallery },
+        foregroundPages = {
+            if (browsing && reader != null) {
+                if (size > 0) TranslationWindow.pages(current, size, activeOptions.ahead)
+                else listOf(current).filter { it >= 0 }
+            } else emptyList()
+        },
     ).also { pageWork.register(GalleryPageWork.Stage.TRANSLATION, it) }
     private class NativeModels(
         val epoch: Int, val identity: String,
@@ -319,6 +326,7 @@ internal class GalleryTranslationSession(
                 // A paired SR stage must finish outside both the scheduler turn and
                 // the high-priority inference gate, otherwise SR could never enter.
                 val nextPage = withContext(Dispatchers.Main) {
+                    pageWork.awaitAdmission(GalleryPageWork.Stage.TRANSLATION)
                     if (size > 0) pageWork.await(GalleryPageWork.Stage.TRANSLATION) else -1
                 }
                 if (nextPage == null && size > 0) return@launch
@@ -795,6 +803,7 @@ internal class GalleryTranslationSession(
         }
         val concurrent = activeOptions.backend == TranslationBackend.LLM_API
         val page = pages.firstOrNull { (selectedPage == null || selectedPage == it) &&
+            pageWork.admits(GalleryPageWork.Stage.TRANSLATION, it) &&
             (!concurrent || it !in activeRequests) && !isPageSettled(it) } ?: return null
         val restoring = states[page] in imageStates && restorePages.remove(page)
         val request = TranslationPageRequest(page, forced.remove(page), restoring, partialRetries.remove(page))

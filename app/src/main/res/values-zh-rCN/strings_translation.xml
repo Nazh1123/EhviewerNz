@@ -127,7 +127,9 @@
     <string name="translation_progress_page_distance">阅读位置超过正在翻译的页面 %1$d 页</string>
     <string name="translation_show">开启自动翻译</string>
     <string name="translation_hide">停止翻译</string>
-    <string name="translation_full_gallery">完整翻译该画廊</string>
+    <string name="translation_full_gallery">翻译该画廊所有页</string>
+    <string name="translation_gallery">翻译该画廊</string>
+    <string name="translation_gallery_submitted">画廊翻译任务已提交</string>
     <string name="translation_stop_full">停止完整翻译</string>
     <string name="translation_service_label">画廊翻译</string>
     <string name="translation_notification_progress">已处理 %1$d / %2$d 页 · 失败 %3$d 页</string>

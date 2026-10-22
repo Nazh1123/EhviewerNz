@@ -50,7 +50,9 @@
     <string name="sr_clear_cache">Clear temporary SR cache</string>
     <string name="sr_clear_saved">Delete saved SR results</string>
     <string name="sr_clear_saved_help">Delete app-private SR results for all galleries? Exported PNGs in _suepr_resolution, originals and translation results are preserved.</string>
-    <string name="sr_full_gallery">Enhance the whole gallery</string>
+    <string name="sr_full_gallery">Enhance all pages in this gallery</string>
+    <string name="sr_gallery">Enhance this gallery</string>
+    <string name="sr_gallery_submitted">Gallery enhancement task submitted</string>
     <string name="sr_stop_full">Stop whole-gallery enhancement</string>
     <string name="sr_stop_all">Stop SR tasks</string>
     <string name="sr_wait_translation">Waiting for translation (higher priority)</string>

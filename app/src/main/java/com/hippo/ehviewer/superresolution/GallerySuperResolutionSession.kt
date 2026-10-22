@@ -87,6 +87,13 @@ internal class GallerySuperResolutionSession(
         active = { !closed && enabled && (browsing || fullGallery) },
         pages = { pages() }, settled = { it in states },
         ready = { size > 0 },
+        fullGallery = { fullGallery },
+        foregroundPages = {
+            if (browsing && reader != null) {
+                if (size > 0) TranslationWindow.pages(current, size, options.ahead)
+                else listOf(current).filter { it >= 0 }
+            } else emptyList()
+        },
     ).also { pageWork.register(GalleryPageWork.Stage.SUPER_RESOLUTION, it) }
 
     fun attach(observer: Reader) { reader = observer; browsing = true; restore(); changed(); start() }
@@ -162,7 +169,8 @@ internal class GallerySuperResolutionSession(
     }
 
     fun full() {
-        if (enable()) { fullGallery = true; start(); changed() }
+        fullGallery = true
+        enable()
     }
 
     fun retry(page: Int) {
@@ -191,7 +199,14 @@ internal class GallerySuperResolutionSession(
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun start() {
         if (closed || !enabled || worker != null || (!browsing && !fullGallery)) return
-        if (size > 0 && pages().all { it in states }) { restore(); return }
+        if (size > 0 && pages().all { it in states }) {
+            if (fullGallery) {
+                message = context.getString(R.string.sr_gallery_done, completed, failed)
+                fullGallery = false
+                changed()
+            }
+            restore(); return
+        }
         working = true
         try { SuperResolutionTasks.wake(context) }
         catch (error: RuntimeException) {
@@ -204,6 +219,7 @@ internal class GallerySuperResolutionSession(
             var source: GalleryProvider2? = null
             try {
                 yield() // Publish the worker before any synchronous source failure/cleanup.
+                pageWork.awaitAdmission(GalleryPageWork.Stage.SUPER_RESOLUTION)
                 source = if (ownsSource) sourceTemplate.createTranslationProvider(context) else null
                 if (source == null && fullGallery) error(context.getString(R.string.sr_source_unavailable))
                 val provider = source ?: sourceTemplate

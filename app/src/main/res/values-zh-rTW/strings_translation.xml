@@ -114,7 +114,9 @@
     <string name="translation_progress_page_distance">閱讀位置超過正在翻譯的頁面 %1$d 頁</string>
     <string name="translation_show">開啟自動翻譯</string>
     <string name="translation_hide">停止翻譯</string>
-    <string name="translation_full_gallery">完整翻譯此畫廊</string>
+    <string name="translation_full_gallery">翻譯此畫廊所有頁</string>
+    <string name="translation_gallery">翻譯此畫廊</string>
+    <string name="translation_gallery_submitted">畫廊翻譯任務已提交</string>
     <string name="translation_stop_full">停止完整翻譯</string>
     <string name="translation_service_label">畫廊翻譯</string>
     <string name="translation_notification_progress">已處理 %1$d / %2$d 頁 · 失敗 %3$d 頁</string>

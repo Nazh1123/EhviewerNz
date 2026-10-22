@@ -47,7 +47,9 @@
     <string name="sr_clear_cache">清除超分暫存</string>
     <string name="sr_clear_saved">刪除已儲存的超分結果</string>
     <string name="sr_clear_saved_help">刪除所有畫廊在應用程式私有空間的超分結果？_suepr_resolution 中匯出的 PNG、原圖與翻譯結果會保留。</string>
-    <string name="sr_full_gallery">超分完整畫廊</string>
+    <string name="sr_full_gallery">超分此畫廊所有頁</string>
+    <string name="sr_gallery">超分此畫廊</string>
+    <string name="sr_gallery_submitted">畫廊超分任務已提交</string>
     <string name="sr_stop_full">停止完整畫廊超分</string>
     <string name="sr_stop_all">停止超分工作</string>
     <string name="sr_wait_translation">等待翻譯工作（翻譯優先）</string>

@@ -2112,6 +2112,12 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 case R.id.action_view_local_gallery_size:
                     handleLocalGalleryAction(LOCAL_ACTION_VIEW_SIZE);
                     break;
+                case R.id.action_enhance_local_gallery:
+                    processLocalGallery(true);
+                    break;
+                case R.id.action_translate_local_gallery:
+                    processLocalGallery(false);
+                    break;
             }
             return true;
         });
@@ -2848,7 +2854,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         if (mPopupMenu != null) {
             for (int id : new int[]{R.id.action_open_local_gallery_image,
-                    R.id.action_copy_local_gallery_path, R.id.action_view_local_gallery_size}) {
+                    R.id.action_copy_local_gallery_path, R.id.action_view_local_gallery_size,
+                    R.id.action_enhance_local_gallery, R.id.action_translate_local_gallery}) {
                 mPopupMenu.getMenu().findItem(id).setVisible(visible);
             }
         }
@@ -2897,6 +2904,20 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 }
             });
         });
+    }
+
+    private void processLocalGallery(boolean enhance) {
+        Context context = getEHContext();
+        GalleryInfo info = getGalleryInfo();
+        if (context == null || info == null || !hasLocalDownloadState()) {
+            showNoLocalGalleryFiles();
+            return;
+        }
+        if (enhance) {
+            com.hippo.ehviewer.gallery.DownloadedGalleryTasks.enhance(context, info);
+        } else {
+            com.hippo.ehviewer.gallery.DownloadedGalleryTasks.translate(context, info);
+        }
     }
 
     private void showLocalGallerySize(GalleryInfo galleryInfo) {
