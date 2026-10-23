@@ -2,8 +2,10 @@ package com.hippo.ehviewer.ui.scene.gallery.detail;
 
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
+import android.os.Looper;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -73,6 +75,7 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.AbstractExecutorService;
@@ -139,6 +142,8 @@ public class OfflineGalleryDetailSceneTest {
                 sceneView.findViewById(R.id.preview_pull_layout), sceneView.findViewById(R.id.progress_view), tip));
         ReflectionHelpers.setField(scene, "mViewTransition2", new ViewTransition(
                 content.findViewById(R.id.detail_body), sceneView.findViewById(R.id.progress)));
+        ReflectionHelpers.setField(scene, "mProgress", sceneView.findViewById(R.id.progress));
+        ReflectionHelpers.setField(scene, "mProgressView", sceneView.findViewById(R.id.progress_view));
         ReflectionHelpers.setField(scene, "mInfo", content.findViewById(R.id.info));
         ReflectionHelpers.setField(scene, "mArtist", content.findViewById(R.id.artist));
         ReflectionHelpers.setField(scene, "mSimilar", content.findViewById(R.id.similar));
@@ -146,6 +151,8 @@ public class OfflineGalleryDetailSceneTest {
     }
 
     @After public void tearDown() {
+        ReflectionHelpers.callInstanceMethod(scene, "cancelLoadingIndicator");
+        ReflectionHelpers.callInstanceMethod(scene, "cancelPreviewLoads");
         recordStore.close();
         ReflectionHelpers.setStaticField(GalleryUpdateRecordStore.class, "instance", null);
         database.close();
@@ -189,6 +196,107 @@ public class OfflineGalleryDetailSceneTest {
         ReflectionHelpers.callInstanceMethod(scene, "adjustViewVisibility",
                 ReflectionHelpers.ClassParameter.from(int.class, 2),
                 ReflectionHelpers.ClassParameter.from(boolean.class, false));
+    }
+
+    private void setState(int state) {
+        ReflectionHelpers.callInstanceMethod(scene, "adjustViewVisibility",
+                ReflectionHelpers.ClassParameter.from(int.class, state),
+                ReflectionHelpers.ClassParameter.from(boolean.class, false));
+    }
+
+    private void advanceMillis(long millis) {
+        org.robolectric.Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(millis));
+    }
+
+    @Test public void bothInitialLoadingIndicatorsWaitExactly175Millis() {
+        for (int state : new int[]{1, 2}) {
+            setState(0);
+            setState(state);
+            View indicator = sceneView.findViewById(state == 1 ? R.id.progress_view : R.id.progress)
+                    .findViewById(R.id.detail_loading_indicator);
+            assertEquals(View.INVISIBLE, indicator.getVisibility());
+            advanceMillis(174);
+            assertEquals(View.INVISIBLE, indicator.getVisibility());
+            advanceMillis(1);
+            assertEquals(View.VISIBLE, indicator.getVisibility());
+        }
+    }
+
+    @Test public void fastCompletionAndFailureNeverShowTheirCancelledIndicator() {
+        for (int loadingState : new int[]{1, 2}) {
+            for (int finalState : new int[]{0, 3}) {
+                setState(loadingState);
+                advanceMillis(100);
+                setState(finalState);
+                advanceMillis(200);
+                for (int id : new int[]{R.id.progress, R.id.progress_view}) {
+                    View loading = sceneView.findViewById(id);
+                    assertEquals(View.GONE, loading.getVisibility());
+                    assertEquals(View.INVISIBLE, loading.findViewById(R.id.detail_loading_indicator).getVisibility());
+                }
+            }
+        }
+    }
+
+    @Test public void replacingLoadingStateStartsANew175MillisDelay() {
+        setState(1);
+        advanceMillis(100);
+        setState(2);
+        advanceMillis(75);
+        View indicator = sceneView.findViewById(R.id.progress).findViewById(R.id.detail_loading_indicator);
+        assertEquals(View.INVISIBLE, indicator.getVisibility());
+        advanceMillis(100);
+        assertEquals(View.VISIBLE, indicator.getVisibility());
+        assertEquals(View.INVISIBLE, sceneView.findViewById(R.id.progress_view)
+                .findViewById(R.id.detail_loading_indicator).getVisibility());
+    }
+
+    @Test public void destroyedViewCannotShowItsPendingIndicatorOrLoadPreviews() {
+        bindPendingHeader();
+        RecordingPreviews previews = bindRecordingPreviews(24);
+        View indicator = sceneView.findViewById(R.id.progress).findViewById(R.id.detail_loading_indicator);
+        scene.onDestroyView();
+        advanceMillis(1000);
+        assertEquals(View.INVISIBLE, indicator.getVisibility());
+        assertTrue(previews.loaded.isEmpty());
+    }
+
+    private RecordingPreviews bindRecordingPreviews(int count) {
+        RecordingPreviews previews = new RecordingPreviews();
+        for (int i = 0; i < count; i++) {
+            previews.addItem(i, "https://example.invalid/preview-" + i, 0, 0, 100, 150,
+                    "https://example.invalid/page-" + i);
+        }
+        GalleryDetail detail = online();
+        detail.previewPages = 1;
+        detail.previewSet = previews;
+        ReflectionHelpers.callInstanceMethod(scene, "bindPreviews",
+                ReflectionHelpers.ClassParameter.from(GalleryDetail.class, detail));
+        return previews;
+    }
+
+    @Test public void rebindingPreviewsCancelsOldImmediateAndDelayedLoads() {
+        RecordingPreviews old = bindRecordingPreviews(24);
+        View oldImage = ((ViewGroup) content.findViewById(R.id.grid_layout)).getChildAt(23).findViewById(R.id.image);
+        RecordingPreviews current = bindRecordingPreviews(24);
+        assertNotNull(oldImage.getParent()); // A removed item's image still has its own container.
+        advanceMillis(1000);
+        assertTrue(old.loaded.isEmpty());
+        assertEquals(24, current.loaded.size());
+    }
+
+    @Test public void removingPreviewContainerPreventsItsPendingLoad() {
+        RecordingPreviews previews = bindRecordingPreviews(24);
+        ViewGroup grid = content.findViewById(R.id.grid_layout);
+        grid.removeViewAt(23);
+        advanceMillis(1000);
+        assertEquals(23, previews.loaded.size());
+        assertFalse(previews.loaded.contains(23));
+    }
+
+    private static class RecordingPreviews extends NormalPreviewSet {
+        final List<Integer> loaded = new ArrayList<>();
+        @Override public void load(LoadImageView view, long gid, int index) { loaded.add(index); }
     }
 
     @Test public void knownSummaryRendersOutsideLoadingBodyWithoutRequestingMoreData() {
@@ -677,7 +785,11 @@ public class OfflineGalleryDetailSceneTest {
                 ReflectionHelpers.ClassParameter.from(GalleryInfo.class, detail));
         Runnable delayed = executor.queue.remove(0);
         detail.pages = 20;
-        fail("Offline");
+        // Exercise fallback directly: a failed refresh now retains complete online details.
+        ReflectionHelpers.callInstanceMethod(scene, "loadOfflineDetail",
+                ReflectionHelpers.ClassParameter.from(Exception.class, new EhException("Offline")));
+        executor.runAll();
+        ShadowLooper.idleMainLooper();
         assertEquals("0/20P", text(R.id.pages));
         delayed.run();
         ShadowLooper.idleMainLooper();
@@ -970,6 +1082,126 @@ public class OfflineGalleryDetailSceneTest {
         assertEquals(View.VISIBLE, content.getVisibility());
         assertEquals(View.VISIBLE, content.findViewById(R.id.header).getVisibility());
         assertEquals("Saved title", text(R.id.title));
+    }
+
+    @Test public void refreshingFullDetailKeepsBodyAndScrollPositionEvenWhenRequestFails() {
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        GalleryDetail detail = online();
+        scene.onGetGalleryDetailSuccess(detail);
+        View body = content.findViewById(R.id.detail_body);
+        ViewGroup.LayoutParams params = body.getLayoutParams();
+        params.height = 2000;
+        body.setLayoutParams(params);
+        sceneView.measure(View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY));
+        sceneView.layout(0, 0, 800, 600);
+        android.widget.ScrollView scroll = sceneView.findViewById(R.id.scroll_view);
+        scroll.scrollTo(0, 900);
+        int previousScroll = scroll.getScrollY();
+        assertTrue(previousScroll > 0);
+
+        ReflectionHelpers.callInstanceMethod(scene, "refreshDetail");
+        assertEquals(1, requests.size());
+        assertEquals(View.VISIBLE, body.getVisibility());
+        advanceMillis(174);
+        View indicator = sceneView.findViewById(R.id.progress).findViewById(R.id.detail_loading_indicator);
+        assertEquals(View.INVISIBLE, indicator.getVisibility());
+        advanceMillis(1);
+        assertEquals(View.VISIBLE, indicator.getVisibility());
+        fail("Refresh failed");
+        assertSame(detail, ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertFalse(ReflectionHelpers.<Boolean>getField(scene, "mOffline"));
+        assertEquals(View.VISIBLE, body.getVisibility());
+        assertEquals(previousScroll, scroll.getScrollY());
+        assertEquals(View.GONE, sceneView.findViewById(R.id.progress).getVisibility());
+        assertEquals("Online title", text(R.id.title));
+    }
+
+    @Test public void successfulRefreshRestoresNormalStateAndCancelsDelayedIndicator() {
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        scene.onGetGalleryDetailSuccess(online());
+        ReflectionHelpers.callInstanceMethod(scene, "refreshDetail");
+        GalleryDetail updated = online();
+        updated.title = "Refreshed title";
+        scene.onGetGalleryDetailSuccess(updated);
+        advanceMillis(500);
+        assertEquals("Refreshed title", text(R.id.title));
+        assertEquals(View.VISIBLE, content.findViewById(R.id.detail_body).getVisibility());
+        assertEquals(View.GONE, sceneView.findViewById(R.id.progress).getVisibility());
+        assertEquals(View.INVISIBLE, sceneView.findViewById(R.id.progress)
+                .findViewById(R.id.detail_loading_indicator).getVisibility());
+    }
+
+    @Test public void detailRendersBeforeDownloadMetadataIsPersistedAndKeepsCurrentDownloadState() {
+        DownloadInfo downloaded = addKnownDownload(123, 100L, DownloadInfo.STATE_DOWNLOAD);
+        EhDB.putDownloadInfo(downloaded);
+        ReflectionHelpers.setField(scene, "mDownloadInfo", downloaded);
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        GalleryDetail detail = online();
+        detail.thumb = "https://example.invalid/updated-cover";
+        scene.onGetGalleryDetailSuccess(detail);
+        assertEquals("Online title", text(R.id.title));
+        assertEquals(View.VISIBLE, content.findViewById(R.id.detail_body).getVisibility());
+        assertEquals(detail.thumb, downloaded.thumb);
+        assertEquals(Long.valueOf(123), downloaded.firstGid);
+        try (Cursor row = database.rawQuery("SELECT THUMB, FIRST_GID FROM DOWNLOADS WHERE GID=123", null)) {
+            assertTrue(row.moveToFirst());
+            assertEquals("https://example.invalid/cover.jpg", row.getString(0));
+            assertEquals(100L, row.getLong(1));
+        }
+        downloaded.state = DownloadInfo.STATE_FINISH;
+        EhDB.putDownloadInfo(downloaded);
+        executor.runAll();
+        try (Cursor row = database.rawQuery("SELECT THUMB, FIRST_GID, STATE FROM DOWNLOADS WHERE GID=123", null)) {
+            assertTrue(row.moveToFirst());
+            assertEquals(detail.thumb, row.getString(0));
+            assertEquals(123L, row.getLong(1));
+            assertEquals(DownloadInfo.STATE_FINISH, row.getInt(2));
+        }
+    }
+
+    @Test public void queuedMetadataSavesCannotRestoreOlderMetadataOrDeletedDownloads() {
+        DownloadInfo downloaded = addKnownDownload(123, 100L, DownloadInfo.STATE_FINISH);
+        EhDB.putDownloadInfo(downloaded);
+        GalleryDetail first = online();
+        first.thumb = "first-cover";
+        manager.updateGalleryMetadata(first);
+        GalleryDetail latest = online();
+        latest.thumb = "latest-cover";
+        manager.updateGalleryMetadata(latest);
+        java.util.Collections.reverse(executor.queue);
+        executor.runAll();
+        try (Cursor row = database.rawQuery("SELECT THUMB FROM DOWNLOADS WHERE GID=123", null)) {
+            assertTrue(row.moveToFirst());
+            assertEquals("latest-cover", row.getString(0));
+        }
+        first.thumb = "deleted-cover";
+        manager.updateGalleryMetadata(first);
+        EhDB.removeDownloadInfo(123);
+        executor.runAll();
+        try (Cursor row = database.rawQuery("SELECT GID FROM DOWNLOADS WHERE GID=123", null)) {
+            assertFalse(row.moveToFirst());
+        }
+    }
+
+    @Test public void queuedMetadataDoesNotOverwriteReplacementDownload() {
+        DownloadInfo old = addKnownDownload(123, 100L, DownloadInfo.STATE_FINISH);
+        EhDB.putDownloadInfo(old);
+        GalleryDetail detail = online();
+        detail.thumb = "old-task-cover";
+        manager.updateGalleryMetadata(detail);
+        ReflectionHelpers.callInstanceMethod(manager, "removeFromAllDownloads",
+                ReflectionHelpers.ClassParameter.from(DownloadInfo.class, old));
+        EhDB.removeDownloadInfo(123);
+        DownloadInfo replacement = addKnownDownload(123, 456L, DownloadInfo.STATE_NONE);
+        replacement.thumb = "replacement-cover";
+        EhDB.putDownloadInfo(replacement);
+        executor.runAll();
+        try (Cursor row = database.rawQuery("SELECT THUMB, FIRST_GID FROM DOWNLOADS WHERE GID=123", null)) {
+            assertTrue(row.moveToFirst());
+            assertEquals("replacement-cover", row.getString(0));
+            assertEquals(456L, row.getLong(1));
+        }
     }
 
     @Test public void offlineFallbackRestoresInformationActionAfterPartialHeader() {

@@ -30,6 +30,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.hippo.ehviewer.Analytics;
+import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.R;
@@ -365,6 +366,33 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         for (DownloadInfoListener listener : mDownloadInfoListeners) {
             listener.onUpdateAll();
         }
+    }
+
+    /** Apply received detail metadata now; persistence must not delay displaying the gallery. */
+    public void updateGalleryMetadata(@NonNull GalleryInfo metadata) {
+        final DownloadInfo downloaded;
+        synchronized (this) {
+            downloaded = mAllInfoMap.get(metadata.gid);
+            if (downloaded == null) return;
+            boolean versionChanged = metadata.firstGid != null
+                    && !metadata.firstGid.equals(downloaded.firstGid);
+            boolean coverChanged = !java.util.Objects.equals(downloaded.thumb, metadata.thumb);
+            if (!versionChanged && !coverChanged) return;
+            if (coverChanged) downloaded.updateInfo(metadata);
+            if (metadata.firstGid != null) downloaded.firstGid = metadata.firstGid;
+            updateGalleryVersionIndex(downloaded);
+        }
+        for (DownloadInfoListener listener : mDownloadInfoListeners) {
+            listener.onUpdateAll();
+        }
+        EhApplication.getExecutorService(mContext).execute(() -> {
+            try {
+                // Persist current fields, rather than an old snapshot of download state.
+                EhDB.updateDownloadInfoIfPresent(downloaded);
+            } catch (Exception e) {
+                Log.w(TAG, "Unable to persist gallery metadata for " + downloaded.gid, e);
+            }
+        });
     }
 
     @NonNull

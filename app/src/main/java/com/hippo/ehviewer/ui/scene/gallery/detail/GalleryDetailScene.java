@@ -33,6 +33,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.DocumentsContract;
 import android.text.TextUtils;
 import android.util.Pair;
@@ -191,7 +192,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         GalleryUpdateManager.UpdateStateListener,
         View.OnLongClickListener {
 
-    @IntDef({STATE_INIT, STATE_NORMAL, STATE_REFRESH, STATE_REFRESH_HEADER, STATE_FAILED})
+    @IntDef({STATE_INIT, STATE_NORMAL, STATE_REFRESH, STATE_REFRESH_HEADER, STATE_FAILED, STATE_REFRESH_CONTENT})
     @Retention(RetentionPolicy.SOURCE)
     private @interface State {
     }
@@ -203,6 +204,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private static final int STATE_REFRESH = 1;
     private static final int STATE_REFRESH_HEADER = 2;
     private static final int STATE_FAILED = 3;
+    private static final int STATE_REFRESH_CONTENT = 4;
+    private static final long LOADING_INDICATOR_DELAY_MS = 175L;
 
     private static final int LOCAL_ACTION_DELETE = 0;
     private static final int LOCAL_ACTION_OPEN_IMAGE = 1;
@@ -352,6 +355,15 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     // Progress
     @Nullable
     private View mProgress;
+    @Nullable
+    private View mProgressView;
+    @Nullable
+    private View mLoadingIndicator;
+    private final Runnable mShowLoadingIndicator = () -> {
+        if (mLoadingIndicator != null) mLoadingIndicator.setVisibility(View.VISIBLE);
+    };
+    private final Object mPreviewLoadToken = new Object();
+    private int mPreviewGeneration;
     @Nullable
     private ArchiverDownloadProgress mArchiverDownloadProgress;
     @Nullable
@@ -715,6 +727,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         initPreviewPull(previewPullLayout);
         View mainView = previewPullLayout;
         View progressView = ViewUtils.$$(main, R.id.progress_view);
+        mProgressView = progressView;
         mTip = (TextView) ViewUtils.$$(main, R.id.tip);
         mViewTransition = new ViewTransition(mainView, progressView, mTip);
 
@@ -1009,6 +1022,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     @Override
     public void onDestroyView() {
+        cancelLoadingIndicator();
+        cancelPreviewLoads();
         mPendingDetailActions.clear();
         ++mReadProgressGeneration;
         mReadProgressLookupGid = -1L;
@@ -1128,6 +1143,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mPreviewText = null;
 
         mProgress = null;
+        mProgressView = null;
 
         mViewTransition2 = null;
 
@@ -1289,7 +1305,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         // Only compare distances on scroll/layout events; no polling or view traversal.
         int viewportHeight = mDetailScrollView.getHeight();
-        boolean visible = mState == STATE_NORMAL && viewportHeight > 0
+        boolean visible = (mState == STATE_NORMAL || mState == STATE_REFRESH_CONTENT) && viewportHeight > 0
                 && mDetailScrollView.getScrollY() >= viewportHeight;
         int visibility = visible ? View.VISIBLE : View.GONE;
         if (mBackToTop.getVisibility() != visibility) {
@@ -1306,6 +1322,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
 
         int oldState = mState;
+        cancelLoadingIndicator();
         mState = state;
         updateBackToTopVisibility();
 
@@ -1322,12 +1339,24 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 // Show mProgressView
                 mViewTransition2.showView(0, false);
                 mViewTransition.showView(1, animation);
+                scheduleLoadingIndicator(mProgressView);
                 break;
             case STATE_REFRESH_HEADER:
                 // Show mMainView
                 mViewTransition.showView(0, animation);
                 // Keep the known summary visible while loading the body.
                 mViewTransition2.showView(1, animation);
+                scheduleLoadingIndicator(mProgress);
+                break;
+            case STATE_REFRESH_CONTENT:
+                mViewTransition.showView(0, false);
+                mViewTransition2.showView(0, false);
+                // Refresh feedback floats above the existing body without changing its height.
+                if (mProgress != null) {
+                    mProgress.setAlpha(1f);
+                    mProgress.setVisibility(View.VISIBLE);
+                }
+                scheduleLoadingIndicator(mProgress);
                 break;
             default:
             case STATE_INIT:
@@ -1347,6 +1376,21 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 SimpleHandler.getInstance().post(this::createCircularReveal);
             }
         }
+    }
+
+    private void scheduleLoadingIndicator(@Nullable View loading) {
+        if (loading == null) return;
+        mLoadingIndicator = loading.findViewById(R.id.detail_loading_indicator);
+        if (mLoadingIndicator != null) {
+            mLoadingIndicator.setVisibility(View.INVISIBLE);
+            handler.postDelayed(mShowLoadingIndicator, LOADING_INDICATOR_DELAY_MS);
+        }
+    }
+
+    private void cancelLoadingIndicator() {
+        handler.removeCallbacks(mShowLoadingIndicator);
+        if (mLoadingIndicator != null) mLoadingIndicator.setVisibility(View.INVISIBLE);
+        mLoadingIndicator = null;
     }
 
     private void bindViewFirst() {
@@ -1597,7 +1641,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 mDownload.setText(R.string.offline_gallery_refreshing);
                 mCommentsText.setText(R.string.offline_gallery_refreshing);
             } else {
-                adjustViewVisibility(getGalleryInfo() != null ? STATE_REFRESH_HEADER : STATE_REFRESH, true);
+                adjustViewVisibility(mGalleryDetail != null ? STATE_REFRESH_CONTENT
+                        : getGalleryInfo() != null ? STATE_REFRESH_HEADER : STATE_REFRESH, true);
             }
         }
     }
@@ -1679,6 +1724,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @SuppressLint("SetTextI18n")
     private void bindOfflineDetail() {
         if (mOfflineDetail == null || mThumb == null) return;
+        cancelPreviewLoads();
         ++mReadProgressGeneration;
         OfflineGalleryDetail local = mOfflineDetail;
         GalleryDetail info = local.info;
@@ -1935,13 +1981,16 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     @SuppressLint("SetTextI18n")
     private void bindPreviews(GalleryDetail gd) {
+        cancelPreviewLoads();
         LayoutInflater inflater = getLayoutInflater2();
         Resources resources = getResources2();
         if (null == resources || null == mGridLayout || null == mPreviewText) {
             return;
         }
 
-        mGridLayout.removeAllViews();
+        final SimpleGridAutoSpanLayout grid = mGridLayout;
+        final int generation = mPreviewGeneration;
+        grid.removeAllViews();
         PreviewSet previewSet = gd.previewSet;
 
 
@@ -1996,26 +2045,20 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
             final int index = i;
 
-            if (i < immediateLoadCount) {
-                // 前12个：立即加载（通常可见区域）
-                image.post(() -> {
-                    if (image.getParent() != null && mGridLayout != null) {
-                        previewSet.load(image, gid, index);
-                    }
-                });
-            } else {
-                // 后面的：延迟加载，根据索引调整延迟时间
-                int delay = (i - immediateLoadCount) * 50; // 每个延迟50ms
-                delay = Math.min(delay, 500); // 最大延迟500ms
-                handler.postDelayed(() -> {
-                    if (image.getParent() != null && mGridLayout != null) {
-                        previewSet.load(image, gid, index);
-                    }
-                }, delay);
-            }
+            int delay = i < immediateLoadCount ? 0 : Math.min((i - immediateLoadCount) * 50, 500);
+            handler.postAtTime(() -> {
+                if (generation == mPreviewGeneration && mGridLayout == grid
+                        && view.getParent() == grid) {
+                    previewSet.load(image, gid, index);
+                }
+            }, mPreviewLoadToken, SystemClock.uptimeMillis() + delay);
         }
     }
 
+    private void cancelPreviewLoads() {
+        ++mPreviewGeneration;
+        handler.removeCallbacksAndMessages(mPreviewLoadToken);
+    }
 
     private static String getRatingText(float rating, Resources resources) {
         int resId;
@@ -3742,24 +3785,13 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         mGalleryDetail = result;
         if (mFavoriteOverride != null) applyFavoriteStatus(mFavoriteOverride);
-        Context context = getEHContext();
-        if (context != null && result.firstGid != null) {
-            DownloadManager manager = EhApplication.getDownloadManager(context);
-            DownloadInfo downloaded = manager.getDownloadInfo(result.gid);
-            if (downloaded != null && !result.firstGid.equals(downloaded.firstGid)) {
-                manager.updateGalleryVersionInfo(downloaded, result.firstGid);
-            }
-        }
         updateDownloadState();
-        if (mDownloadState != DownloadInfo.STATE_INVALID) {
-            if (mDownloadInfo != null && !mDownloadInfo.thumb.equals(result.thumb) && mDownloadInfo.gid == result.gid) {
-                mDownloadInfo.updateInfo(result);
-                mDownloadInfo.state = mDownloadState;
-                EhDB.putDownloadInfo(mDownloadInfo);
-            }
-        }
-        adjustViewVisibility(STATE_NORMAL, true);
         bindViewSecond();
+        adjustViewVisibility(STATE_NORMAL, true);
+        Context context = getEHContext();
+        if (context != null) {
+            EhApplication.getDownloadManager(context).updateGalleryMetadata(result);
+        }
         List<Runnable> pending = new ArrayList<>(mPendingDetailActions.values());
         mPendingDetailActions.clear();
         for (Runnable action : pending) action.run();
@@ -3768,6 +3800,12 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     protected void onGetGalleryDetailFailure(Exception e) {
         mPendingDetailActions.clear();
         e.printStackTrace();
+        if (mGalleryDetail != null && !mOffline) {
+            ++mOfflineGeneration;
+            adjustViewVisibility(STATE_NORMAL, false);
+            showTip(ExceptionUtils.getReadableString(e), LENGTH_LONG);
+            return;
+        }
         Context context = getEHContext();
         if (null != context && null != mTip) {
             loadOfflineDetail(e);

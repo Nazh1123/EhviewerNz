@@ -545,6 +545,13 @@ public class EhDB {
         }
     }
 
+    /** Only persist the same live entity; delayed saves cannot restore deleted/replaced downloads. */
+    public static synchronized void updateDownloadInfoIfPresent(DownloadInfo downloadInfo) {
+        DownloadsDao dao = sDaoSession.getDownloadsDao();
+        // The session identity scope keeps the manager's live entity until deletion/replacement.
+        if (dao.load(downloadInfo.gid) == downloadInfo) dao.update(downloadInfo);
+    }
+
     public static synchronized void putDownloadInfo(@NonNull List<DownloadInfo> downloadInfoList) {
         if (downloadInfoList.isEmpty()) {
             return;
