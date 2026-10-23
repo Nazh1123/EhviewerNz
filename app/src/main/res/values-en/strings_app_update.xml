@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_method">Update method</string>
+    <string name="app_update_method_description">Open the Release page or download the APK here and open the installer when it finishes.</string>
+    <string name="app_update_open_release">Open Release</string>
+    <string name="app_update_direct_download">Direct download</string>
+    <string name="app_update_no_apk">This release does not have a single downloadable APK. Please download it from the Release page.</string>
+    <string name="app_update_download_title">EhViewerNz update</string>
+    <string name="app_update_downloading">Downloading update…</string>
+    <string name="app_update_progress">Downloading update: %1$d%%</string>
+    <string name="app_update_waiting_network">Download paused. Waiting for network or system retry…</string>
+    <string name="app_update_ready">Download complete. Ready to install.</string>
+    <string name="app_update_install">Install</string>
+    <string name="app_update_install_permission">Allow this app to install unknown apps in system settings, then return to continue installation.</string>
+    <string name="app_update_install_failed">Could not open the installer. Try again or download from the Release page.</string>
+    <string name="app_update_download_failed">Download failed. Check your connection and storage, then retry or open the Release page.</string>
+    <string name="app_update_retry">Retry download</string>
+</resources>

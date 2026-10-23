@@ -29,6 +29,7 @@ class AppUpdater private constructor() {
         const val VERSION: String = "version"
         const val VERSION_CODE: String = "versionCode"
         const val FILE_DOWNLOAD_URL: String = "fileDownloadUrl"
+        const val RELEASE_URL: String = "releaseUrl"
         const val MUST_UPDATE: String = "mustUpdate"
         const val UPDATE_CONTENT: String = "updateContent"
         const val TITLE: String = "title"
@@ -104,7 +105,7 @@ class AppUpdater private constructor() {
             return value?.let { numericVersion.find(it)?.value }
         }
 
-        private fun createDialogData(
+        internal fun createDialogData(
             release: JSONObject,
             version: String,
             releaseUrl: String
@@ -124,13 +125,25 @@ class AppUpdater private constructor() {
                 ?.takeIf { it.isNotBlank() }
                 ?: "EhViewerNz $version"
             updateContent[CONTENT] = lines
-            updateContent[FILE_DOWNLOAD_URL] = releaseUrl
+            updateContent[RELEASE_URL] = releaseUrl
+            updateContent[FILE_DOWNLOAD_URL] = findApkDownloadUrl(release)
 
             val data = JSONObject()
             data[VERSION] = version
             data[MUST_UPDATE] = false
             data[UPDATE_CONTENT] = updateContent
             return data
+        }
+
+        internal fun findApkDownloadUrl(release: JSONObject): String? {
+            val assets = release.getJSONArray("assets") ?: return null
+            // Source archives are not APKs. If multiple APKs appear in a future release,
+            // keep the Release option available instead of guessing an architecture.
+            val apks = assets.filterIsInstance<JSONObject>().filter {
+                it.getString("name")?.endsWith(".apk", ignoreCase = true) == true
+            }
+            return apks.singleOrNull()?.getString("browser_download_url")
+                ?.takeIf { it.startsWith("https://") }
         }
     }
 }
