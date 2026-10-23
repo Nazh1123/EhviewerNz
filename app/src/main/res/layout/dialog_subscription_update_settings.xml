@@ -64,5 +64,19 @@
 
         </LinearLayout>
 
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/subscription_homepage_scan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:text="@string/settings_subscription_homepage_scan"
+            app:switchPadding="16dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_subscription_homepage_scan_summary"
+            android:textAppearance="?android:attr/textAppearanceSmall" />
+
     </LinearLayout>
 </ScrollView>

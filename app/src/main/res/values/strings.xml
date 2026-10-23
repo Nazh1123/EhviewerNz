@@ -1330,4 +1330,6 @@
     <string name="settings_test_bookmark_subscription_failed">Some bookmark subscription requests failed</string>
     <string name="settings_show_viewed_galleries">Show browsed galleries</string>
     <string name="settings_show_viewed_galleries_summary">Record the newest gallery in search results to mark previously browsed galleries when searching with the same conditions again.</string>
+    <string name="settings_subscription_homepage_scan">Scan homepage for subscription updates</string>
+    <string name="settings_subscription_homepage_scan_summary">Uses homepage metadata for supported bookmark rules during manual and automatic update checks. Complex searches use the existing method. First use initializes a baseline. Bookmark subscription browsing is unchanged.</string>
 </resources>

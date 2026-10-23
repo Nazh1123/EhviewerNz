@@ -39,6 +39,7 @@ public class SubscriptionUpdatePreferencesTest {
     public void setUp() {
         Settings.initialize(RuntimeEnvironment.getApplication());
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES, false);
+        Settings.putBoolean(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN, false);
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, true);
         Settings.putString(Settings.KEY_AUTO_SUBSCRIPTION_UPDATE_INTERVAL, "60");
@@ -118,6 +119,22 @@ public class SubscriptionUpdatePreferencesTest {
         automatic.setChecked(false);
         assertFalse(interval.isEnabled());
         host.finish();
+    }
+
+    @Test public void homepageModeIsAvailableForManualChecksAndSavesOnlyOnConfirmation() {
+        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
+        SwitchCompat homepage = dialog.findViewById(R.id.subscription_homepage_scan);
+        assertTrue(homepage.isEnabled());
+        assertFalse(homepage.isChecked());
+        homepage.setChecked(true);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+        assertFalse(Settings.getSubscriptionHomepageScan());
+        dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
+        ((SwitchCompat) dialog.findViewById(R.id.subscription_homepage_scan)).setChecked(true);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertTrue(Settings.getSubscriptionHomepageScan());
+        assertFalse(Settings.getAutoSubscriptionUpdates());
+        assertEquals(1, saves.get());
     }
 
     public static class Harness extends PreferenceFragmentCompat {

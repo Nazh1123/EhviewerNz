@@ -63,6 +63,7 @@ public class SubscriptionCheckReuseTest {
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 context.getSharedPreferences("reuse-test", Context.MODE_PRIVATE));
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, false);
+        Settings.putBoolean(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN, false);
         client = Shadow.newInstanceOf(EhClient.class);
         manager = new SubscriptionUpdateManager(context);
     }
@@ -423,6 +424,170 @@ public class SubscriptionCheckReuseTest {
         assertFalse(SubscriptionUpdateManager.getLastSeenEhState().initialized());
         assertTrue(SubscriptionUpdateManager.getEhDisplayBaseline().initialized());
         assertTrue(SubscriptionUpdateManager.getEhDisplayBaseline().isNew(page(200, null).galleryInfoList.get(0)));
+    }
+
+    private void enableHomepage() {
+        enableBookmark();
+        bookmarks.get(0).keyword = "uploader:tester";
+        Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, false);
+        Settings.putBoolean(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN, true);
+    }
+
+    private static GalleryListParser.Result homePage(long start, int count, String next) {
+        GalleryListParser.Result page = new GalleryListParser.Result();
+        page.nextHref = next;
+        page.subscriptionRawGalleries = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            GalleryInfo gallery = new GalleryInfo();
+            gallery.gid = start + i;
+            gallery.posted = "2026-10-23 00:30";
+            page.subscriptionRawGalleries.add(gallery);
+            page.galleryInfoList.add(gallery);
+        }
+        page.rawResultCount = count;
+        page.rawSeenState = GallerySeenState.empty().observe(page.subscriptionRawGalleries);
+        return page;
+    }
+
+    @Test public void homepageModeSeedsThenCountsMatchesOnBothSidesOfAnchorAndExtraPage() {
+        enableHomepage();
+        start(true);
+        assertEquals(EhClient.METHOD_GET_SUBSCRIPTION_HOMEPAGE, requests.get(0).getMethod());
+        succeed(0, homePage(100, 25, null));
+        assertFalse(manager.isChecking());
+        assertEquals(0, manager.getSnapshot().bookmarkCount);
+        assertNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+        start(false);
+        GalleryListParser.Result first = homePage(200, 24, "https://e-hentai.org/?next=100");
+        first.subscriptionRawGalleries.addAll(homePage(100, 1, null).subscriptionRawGalleries);
+        first.rawResultCount++;
+        succeed(1, first);
+        assertTrue(manager.isChecking());
+        GalleryListParser.Result second = homePage(300, 25, "https://e-hentai.org/?next=75");
+        second.galleryInfoList = new ArrayList<>(second.galleryInfoList.subList(0, 2));
+        succeed(2, second);
+        assertFalse(manager.isChecking());
+        assertEquals(26, manager.getSnapshot().bookmarkCount);
+        assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION).contains(301L));
+        assertFalse(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION).contains(324L));
+        start(true);
+        succeed(3, homePage(200, 25, "https://e-hentai.org/?next=175"));
+        assertFalse(manager.isChecking());
+        assertEquals(27, manager.getSnapshot().bookmarkCount);
+    }
+
+    @Test public void failedAndCancelledHomepagePassesDoNotCommitUnreadOrCheckpoint() {
+        enableHomepage();
+        start(true);
+        succeed(0, homePage(100, 25, null));
+        String checkpoint = Settings.getString("subscription_homepage_checkpoint_v1", "");
+        for (boolean cancel : new boolean[]{false, true}) {
+            int index = requests.size();
+            start(true);
+            succeed(index, homePage(200, 25, "https://e-hentai.org/?next=175"));
+            assertTrue(manager.isChecking());
+            if (cancel) manager.cancelCheck();
+            else requests.get(index + 1).getCallback().onFailure(new IllegalArgumentException("failed"));
+            assertFalse(manager.isChecking());
+            assertEquals(checkpoint, Settings.getString("subscription_homepage_checkpoint_v1", ""));
+            assertEquals(0, manager.getSnapshot().bookmarkCount);
+        }
+    }
+
+    @Test public void homepageModeKeepsComplexSearchesAndEhSubscriptionOnExistingPaths() {
+        enableHomepage();
+        Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
+        QuickSearch complex = new QuickSearch();
+        complex.subscribed = true;
+        complex.mode = ListUrlBuilder.MODE_NORMAL;
+        complex.keyword = "free text";
+        complex.category = EhUtils.NONE;
+        complex.advanceSearch = complex.minRating = complex.pageFrom = complex.pageTo = -1;
+        bookmarks.add(complex);
+        start(true);
+        assertEquals(3, requests.size());
+        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(0).getMethod());
+        assertEquals(ListUrlBuilder.MODE_SUBSCRIPTION, requests.get(0).getArgs()[1]);
+        assertEquals(EhClient.METHOD_GET_SUBSCRIPTION_HOMEPAGE, requests.get(1).getMethod());
+        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(2).getMethod());
+        assertTrue(((String) requests.get(2).getArgs()[0]).contains("free+text"));
+        succeed(0, page(100, null));
+        succeed(1, homePage(200, 25, null));
+        succeed(2, page(100, null));
+        assertFalse(manager.isChecking());
+    }
+
+    @Test public void changedHomepageBookmarkDefinitionSeedsANewCheckpoint() {
+        enableHomepage();
+        start(true);
+        succeed(0, homePage(100, 25, null));
+        bookmarks.get(0).keyword = "uploader:other";
+        start(true);
+        succeed(1, homePage(200, 25, null));
+        assertEquals(0, manager.getSnapshot().bookmarkCount);
+    }
+
+    @Test public void homepageCommitsOnlyAfterMinuteCompletionAndKeepsSpillIdsAcrossShorterRepeats() {
+        enableHomepage();
+        start(true);
+        assertEquals(3, requests.get(0).getArgs().length);
+        succeed(0, homePage(100, 25, "https://e-hentai.org/?next=75"));
+        assertTrue(manager.isChecking());
+        assertEquals("", Settings.getString("subscription_homepage_checkpoint_v1", ""));
+        GalleryListParser.Result closure = homePage(200, 5, "https://e-hentai.org/?next=50");
+        List<GalleryInfo> older = homePage(300, 20, null).subscriptionRawGalleries;
+        for (GalleryInfo gallery : older) gallery.posted = "2026-10-23 00:29";
+        closure.subscriptionRawGalleries.addAll(older);
+        closure.rawResultCount = 25;
+        succeed(1, closure);
+        assertFalse(manager.isChecking());
+        assertTrue(Settings.getString("subscription_homepage_checkpoint_v1", "").contains("\"version\":2"));
+        assertEquals(0, manager.getSnapshot().bookmarkCount);
+        start(true);
+        succeed(2, homePage(100, 25, "https://e-hentai.org/?next=75"));
+        assertFalse(manager.isChecking());
+        start(true);
+        GalleryListParser.Result arrivals = homePage(100, 25, "https://e-hentai.org/?next=75");
+        GalleryInfo oldSpill = homePage(200, 1, null).galleryInfoList.get(0);
+        GalleryInfo arrival = homePage(999, 1, null).galleryInfoList.get(0);
+        arrivals.subscriptionRawGalleries.set(1, oldSpill);
+        arrivals.subscriptionRawGalleries.set(2, arrival);
+        arrivals.galleryInfoList = new ArrayList<>(java.util.Arrays.asList(oldSpill, arrival));
+        succeed(3, arrivals);
+        assertFalse(manager.isChecking());
+        assertEquals(Collections.singleton(999L), manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+    }
+
+    @Test public void unmatchedHomepageStillSetsDisplayBaselineAndContextChangeCannotCommit() {
+        enableHomepage();
+        start(true);
+        GalleryListParser.Result rawOnly = homePage(100, 25, null);
+        rawOnly.galleryInfoList.clear();
+        succeed(0, rawOnly);
+        GalleryInfo older = homePage(90, 1, null).galleryInfoList.get(0);
+        older.posted = "2026-10-23 00:20";
+        assertFalse(SubscriptionUpdateManager.getBookmarkDisplayBaseline().isNew(older));
+        String checkpoint = Settings.getString("subscription_homepage_checkpoint_v1", "");
+        start(true);
+        contextKey = "account-b";
+        succeed(1, homePage(200, 25, null));
+        assertEquals(checkpoint, Settings.getString("subscription_homepage_checkpoint_v1", ""));
+        assertEquals(0, manager.getSnapshot().bookmarkCount);
+    }
+
+    @Test public void repeatedHomepageLinkFailsWithoutCommittingPartialResults() {
+        enableHomepage();
+        start(true);
+        succeed(0, homePage(100, 25, null));
+        String checkpoint = Settings.getString("subscription_homepage_checkpoint_v1", "");
+        start(true);
+        String next = "https://e-hentai.org/?next=175";
+        succeed(1, homePage(200, 25, next));
+        succeed(2, homePage(300, 25, next));
+        assertFalse(manager.isChecking());
+        assertEquals(3, requests.size());
+        assertEquals(checkpoint, Settings.getString("subscription_homepage_checkpoint_v1", ""));
+        assertEquals(0, manager.getSnapshot().bookmarkCount);
     }
 
     private static GalleryListParser.Result datedPage(long gid, String posted, String next) {

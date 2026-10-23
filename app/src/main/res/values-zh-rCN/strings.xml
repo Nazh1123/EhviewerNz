@@ -1260,4 +1260,6 @@
     <string name="app_widget_description">应用小组件说明</string>
     <string name="animated_webp_progress">动图播放进度</string>
     <string name="animated_webp_play_pause">播放或暂停动图</string>
+    <string name="settings_subscription_homepage_scan">主页扫描更新订阅</string>
+    <string name="settings_subscription_homepage_scan_summary">手动及自动“更新订阅”时，从主页匹配支持的书签规则；复杂搜索自动使用原方式。首次使用建立基线，不改变“书签订阅”的浏览方式。</string>
 </resources>

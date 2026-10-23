@@ -57,6 +57,13 @@
         android:title="@string/settings_fork_auto_subscription_updates_bookmark"
         app:allowDividerAbove="false" />
 
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="subscription_homepage_scan"
+        android:summary="@string/settings_subscription_homepage_scan_summary"
+        android:title="@string/settings_subscription_homepage_scan"
+        app:allowDividerAbove="true" />
+
     <EditTextPreference
         android:defaultValue="60"
         android:dependency="auto_subscription_updates"

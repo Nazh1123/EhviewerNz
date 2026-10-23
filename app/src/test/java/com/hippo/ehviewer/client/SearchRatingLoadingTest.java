@@ -180,6 +180,94 @@ public class SearchRatingLoadingTest {
         assertEquals(4.51f, result.galleryInfoList.get(0).rating, 0f);
     }
 
+    private static SubscriptionHomepageMatcher homepageMatcher(String uploader) {
+        com.hippo.ehviewer.dao.QuickSearch bookmark = new com.hippo.ehviewer.dao.QuickSearch();
+        bookmark.mode = ListUrlBuilder.MODE_UPLOADER;
+        bookmark.keyword = uploader;
+        bookmark.subscribed = true;
+        return new SubscriptionHomepageMatcher(java.util.List.of(bookmark));
+    }
+
+    @Test public void homepageCheckLoadsMetadataButKeepsRawOrderAndOnlyOnePage() throws Throwable {
+        var raw = GalleryListParser.parseMergedUploaderSearch(html, ListUrlBuilder.MODE_NORMAL);
+        GalleryListParser.Result result = EhEngine.getSubscriptionHomepagePage(null, client(false), FIRST,
+                homepageMatcher("tester"));
+        assertEquals(1, listRequests.get());
+        assertEquals(raw.galleryInfoList.size(), result.subscriptionRawGalleries.size());
+        assertEquals(raw.galleryInfoList.size(), result.galleryInfoList.size());
+        assertEquals(raw.galleryInfoList.size(), apiGids.size());
+        assertEquals(raw.galleryInfoList.get(0).posted, result.subscriptionRawGalleries.get(0).posted);
+        assertEquals("tester", result.galleryInfoList.get(0).uploader);
+        assertFalse(requestedUrls.get(0).contains("f_sr"));
+    }
+
+    @Test public void homepageCheckRetainsRawPageWhenNoLocalRulesMatch() throws Throwable {
+        GalleryListParser.Result result = EhEngine.getSubscriptionHomepagePage(null, client(false), FIRST,
+                homepageMatcher("someone else"));
+        assertTrue(result.galleryInfoList.isEmpty());
+        assertFalse(result.subscriptionRawGalleries.isEmpty());
+        assertEquals(1, listRequests.get());
+        assertNotNull(result.nextHref);
+    }
+
+    @Test public void homepageCheckAlsoAppliesLocalBlocklists() throws Throwable {
+        com.hippo.ehviewer.dao.Filter blocked = new com.hippo.ehviewer.dao.Filter();
+        blocked.mode = EhFilter.MODE_UPLOADER;
+        blocked.text = "tester";
+        blocked.enable = true;
+        EhFilter.getInstance().addFilter(blocked);
+        GalleryListParser.Result result = EhEngine.getSubscriptionHomepagePage(null, client(false), FIRST,
+                homepageMatcher("tester"));
+        assertTrue(result.galleryInfoList.isEmpty());
+        assertFalse(result.subscriptionRawGalleries.isEmpty());
+    }
+
+    @Test public void homepageSeedAndKnownIdsSkipAllMetadataEvenWithDisplayRequirements() throws Throwable {
+        Settings.putBoolean("show_gallery_pages", true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        SubscriptionHomepageScan seed = new SubscriptionHomepageScan("");
+        var first = EhEngine.getSubscriptionHomepagePage(null, client(false), FIRST, homepageMatcher("tester"), seed);
+        assertTrue(first.galleryInfoList.isEmpty());
+        assertFalse(first.subscriptionRawGalleries.isEmpty());
+        assertEquals(0, apiRequests.get());
+        seed.shouldContinue(first.subscriptionRawGalleries, false);
+        var repeat = EhEngine.getSubscriptionHomepagePage(null, client(false), FIRST,
+                homepageMatcher("tester"), new SubscriptionHomepageScan(seed.checkpoint()));
+        assertTrue(repeat.galleryInfoList.isEmpty());
+        assertEquals(first.rawResultCount, repeat.subscriptionRawGalleries.size());
+        assertEquals(0, apiRequests.get());
+    }
+
+    @Test public void homepageFetchesMetadataOnlyForNewCandidatesWithUnknownUploader() throws Throwable {
+        var doc = org.jsoup.Jsoup.parse(html);
+        doc.select(".glhide a, .gl3e a").remove();
+        html = doc.outerHtml();
+        var raw = GalleryListParser.parseMergedUploaderSearch(html, ListUrlBuilder.MODE_NORMAL);
+        assertTrue(raw.galleryInfoList.stream().allMatch(g -> g.uploader == null));
+        SubscriptionHomepageScan seed = new SubscriptionHomepageScan("");
+        seed.shouldContinue(raw.galleryInfoList.subList(1, raw.galleryInfoList.size()), false);
+        var result = EhEngine.getSubscriptionHomepagePage(null, client(false), FIRST,
+                homepageMatcher("tester"), new SubscriptionHomepageScan(seed.checkpoint()));
+        assertEquals(java.util.Set.of(raw.galleryInfoList.get(0).gid), apiGids);
+        assertEquals(1, result.galleryInfoList.size());
+        assertEquals(raw.rawResultCount, result.subscriptionRawGalleries.size());
+    }
+
+    @Test public void homepageCoarseUploaderFilterSkipsMetadataForImpossibleCandidates() throws Throwable {
+        var raw = GalleryListParser.parseMergedUploaderSearch(html, ListUrlBuilder.MODE_NORMAL);
+        assertTrue(raw.galleryInfoList.stream().allMatch(g -> g.uploader != null));
+        SubscriptionHomepageScan old = new SubscriptionHomepageScan("");
+        GalleryInfo older = new GalleryInfo();
+        older.gid = 1; older.posted = "2000-01-01 00:00";
+        old.shouldContinue(java.util.List.of(older), false);
+        var result = EhEngine.getSubscriptionHomepagePage(null, client(false), FIRST,
+                homepageMatcher("nonexistent uploader for coarse rejection"), new SubscriptionHomepageScan(old.checkpoint()));
+        assertTrue(result.galleryInfoList.isEmpty());
+        assertEquals(0, apiRequests.get());
+        assertFalse(result.subscriptionRawGalleries.isEmpty());
+    }
+
     private static GallerySeenState cursorAt(String posted) {
         GalleryInfo seen = new GalleryInfo();
         seen.gid = 1;

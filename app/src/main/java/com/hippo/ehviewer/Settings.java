@@ -585,7 +585,12 @@ public class Settings {
             "auto_subscription_updates_bookmark";
     public static final String KEY_AUTO_SUBSCRIPTION_UPDATE_INTERVAL =
             "auto_subscription_update_interval";
+    public static final String KEY_SUBSCRIPTION_HOMEPAGE_SCAN = "subscription_homepage_scan";
     public static final int DEFAULT_AUTO_SUBSCRIPTION_UPDATE_INTERVAL = 60;
+
+    public static boolean getSubscriptionHomepageScan() {
+        return getBoolean(KEY_SUBSCRIPTION_HOMEPAGE_SCAN, false);
+    }
 
     public static boolean getAutoSubscriptionUpdates() {
         return getBoolean(KEY_AUTO_SUBSCRIPTION_UPDATES, false);

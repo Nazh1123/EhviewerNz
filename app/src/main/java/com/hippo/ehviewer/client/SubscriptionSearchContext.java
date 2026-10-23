@@ -15,6 +15,7 @@ public final class SubscriptionSearchContext {
     public static String key() {
         List<String> parts = new ArrayList<>();
         parts.add(EhUrl.getHost());
+        parts.add("homepage-scan:" + Settings.getSubscriptionHomepageScan());
         parts.add(Settings.getEhConfig().uconfig());
         parts.add("gallery-pages:" + Settings.getShowGalleryPages());
         parts.add("default-rating:" + Settings.getPersistentMinRatingHundredths());

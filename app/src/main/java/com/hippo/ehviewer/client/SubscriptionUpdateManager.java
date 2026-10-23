@@ -49,6 +49,7 @@ public final class SubscriptionUpdateManager {
     public static final long CHECK_REUSE_WINDOW_MS = 30L * 1000L;
 
     private static final int MAX_CONCURRENT_REQUESTS = 8;
+    private static final String KEY_HOMEPAGE_CHECKPOINT = "subscription_homepage_checkpoint_v1";
     private static final String KEY_SOURCE_PROGRESS = "subscription_source_progress_v2";
     private static final String KEY_UNREAD_RATING_POLICY = "subscription_unread_rating_policy";
 
@@ -216,6 +217,10 @@ public final class SubscriptionUpdateManager {
         boolean complete;
         boolean successful;
         @Nullable EhRequest request;
+        @Nullable SubscriptionHomepageMatcher homepageMatcher;
+        @Nullable SubscriptionHomepageScan homepageScan;
+        @Nullable String homepageContext;
+        final Set<String> visitedUrls = new HashSet<>();
 
         Source(GallerySeenState cursor) {
             group = Group.EH;
@@ -223,6 +228,14 @@ public final class SubscriptionUpdateManager {
             this.cursor = cursor;
             builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
             builder.setPageIndex(0);
+        }
+
+        Source(GallerySeenState cursor, SubscriptionHomepageMatcher matcher) {
+            group = Group.BOOKMARK;
+            plan = null;
+            this.cursor = cursor;
+            homepageMatcher = matcher;
+            builder.setCategory(EhConfig.ALL_CATEGORY);
         }
 
         Source(GallerySeenState cursor,
@@ -539,6 +552,20 @@ public final class SubscriptionUpdateManager {
             if (preparationFailure != null) {
                 mBookmarkPreparationFailed = true;
             } else if (quickSearches != null) {
+                if (Settings.getSubscriptionHomepageScan()) {
+                    SubscriptionHomepageMatcher matcher = new SubscriptionHomepageMatcher(quickSearches);
+                    if (!matcher.isEmpty()) {
+                        Source homepage = new Source(mBookmarkCursor, matcher);
+                        homepage.homepageContext = SubscriptionProgressStore.key(mSearchContext, matcher.fingerprint());
+                        String saved = Settings.getString(KEY_HOMEPAGE_CHECKPOINT, "");
+                        String prefix = homepage.homepageContext + "\n";
+                        homepage.homepageScan = new SubscriptionHomepageScan(saved.startsWith(prefix)
+                                ? saved.substring(prefix.length()) : "");
+                        addSource(homepage);
+                        mBookmarkSourceCount++;
+                    }
+                    quickSearches = matcher.fallbackBookmarks();
+                }
                 for (BookmarkSubscriptionPlanner.Source plan
                         : BookmarkSubscriptionPlanner.plan(quickSearches)) {
                     addSource(new Source(mBookmarkCursor, plan));
@@ -556,9 +583,10 @@ public final class SubscriptionUpdateManager {
 
     private void addSource(@NonNull Source source) {
         source.progressKey = SubscriptionProgressStore.key(mSearchContext,
-                source.plan == null ? "eh-subscription" : source.plan.getCacheKey());
+                source.homepageScan != null ? "homepage:" + source.homepageContext
+                        : source.plan == null ? "eh-subscription" : source.plan.getCacheKey());
         GallerySeenState completed = mProgress.get(source.progressKey, GallerySeenState.empty());
-        if (completed.initialized()) {
+        if (source.homepageScan == null && completed.initialized()) {
             // Another source's checked watermark must not evict this source's six recent IDs.
             GallerySeenState viewed = source.group == Group.EH
                     ? getLastSeenEhState() : getLastSeenBookmarkState();
@@ -593,6 +621,11 @@ public final class SubscriptionUpdateManager {
                 continue;
             }
 
+            if (source.homepageScan != null && (source.pageIndex >= 1000
+                    || (source.retries == 0 && !source.visitedUrls.add(url)))) {
+                completeSource(source, false);
+                continue;
+            }
             source.ratingMinimumHundredths = Math.max(Settings.getPersistentMinRatingHundredths(),
                     source.builder.getSubscriptionMinRatingHundredths());
             EhRequest request = new EhRequest()
@@ -616,6 +649,10 @@ public final class SubscriptionUpdateManager {
                             // Cancellation invalidates the generation before cancelling requests.
                         }
                     });
+            if (source.homepageScan != null) {
+                request.setMethod(EhClient.METHOD_GET_SUBSCRIPTION_HOMEPAGE)
+                        .setArgs(SearchRating.withoutServerFilter(url), source.homepageMatcher, source.homepageScan);
+            }
             source.request = request;
             mActiveRequests++;
             mClient.execute(request);
@@ -634,17 +671,21 @@ public final class SubscriptionUpdateManager {
         if (source.pageIndex == 0) {
             source.initialResultCount = result.rawResultCount;
         }
-        source.requiresDisplayPreparation |= result.subscriptionRawGalleries != null;
-        source.galleryInfoList.addAll(result.subscriptionRawGalleries != null
-                ? result.subscriptionRawGalleries : result.galleryInfoList);
+        if (source.homepageScan == null) {
+            source.requiresDisplayPreparation |= result.subscriptionRawGalleries != null;
+            source.galleryInfoList.addAll(result.subscriptionRawGalleries != null
+                    ? result.subscriptionRawGalleries : result.galleryInfoList);
+        }
         if (result.customErrorString != null) {
             completeSource(source, false);
             pumpRequests(generation);
             return;
         }
+        // Even an unmatched homepage page establishes a publication-time display baseline.
         source.observed = source.observed.merge(result.rawSeenState).observe(result.galleryInfoList);
         for (GalleryInfo gallery : result.galleryInfoList) {
-            if (source.cursor.isNew(gallery)) source.discoveredGids.add(gallery.gid);
+            if (source.homepageScan != null ? source.homepageScan.isNew(gallery)
+                    : source.cursor.isNew(gallery)) source.discoveredGids.add(gallery.gid);
         }
 
         source.nextHref = result.nextHref;
@@ -666,6 +707,16 @@ public final class SubscriptionUpdateManager {
         boolean shouldContinue = hasMore && !reachedCursor
                 && (source.cursor.initialized() || (tailMinute > 0 && seedNeedsMore));
 
+        if (source.homepageScan != null) {
+            try {
+                if (result.subscriptionRawGalleries == null) throw new IllegalStateException("Missing homepage order");
+                shouldContinue = source.homepageScan.shouldContinue(result.subscriptionRawGalleries, hasMore);
+            } catch (RuntimeException error) {
+                completeSource(source, false);
+                pumpRequests(generation);
+                return;
+            }
+        }
         if (shouldContinue) {
             source.pageIndex++;
             source.queued = true;
@@ -715,8 +766,14 @@ public final class SubscriptionUpdateManager {
             Set<Long> unread = source.group == Group.EH ? mEhUnreadGids : mBookmarkUnreadGids;
             if (unread.addAll(source.discoveredGids)) persistGids(
                     source.group == Group.EH ? KEY_UNREAD_EH_GIDS : KEY_UNREAD_BOOKMARK_GIDS, unread);
-            mProgress.complete(source.progressKey, source.cursor.merge(source.observed));
-            Settings.putString(KEY_SOURCE_PROGRESS, mProgress.serialize());
+            if (source.homepageScan != null) {
+                String checkpoint = source.homepageScan.checkpoint();
+                if (!checkpoint.isEmpty()) Settings.putString(KEY_HOMEPAGE_CHECKPOINT,
+                        source.homepageContext + "\n" + checkpoint);
+            } else {
+                mProgress.complete(source.progressKey, source.cursor.merge(source.observed));
+                Settings.putString(KEY_SOURCE_PROGRESS, mProgress.serialize());
+            }
         }
         mCompletedSources++;
         if (source.group == Group.EH) {
@@ -793,7 +850,7 @@ public final class SubscriptionUpdateManager {
     private void cacheRecentCheckResult() {
         ArrayList<RecentCheckSource> sources = new ArrayList<>();
         for (Source source : mSources) {
-            if (source.successful) {
+            if (source.successful && source.homepageScan == null) {
                 sources.add(new RecentCheckSource(source));
             }
         }

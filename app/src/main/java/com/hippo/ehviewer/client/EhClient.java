@@ -75,6 +75,7 @@ public class EhClient {
     public static final int METHOD_GET_GALLERY_CHAIN_METADATA = 30;
     public static final int METHOD_VERIFY_BOOKMARK = 31;
     public static final int METHOD_PREPARE_SUBSCRIPTION_LIST = 32;
+    public static final int METHOD_GET_SUBSCRIPTION_HOMEPAGE = 33;
 
     private final ThreadPoolExecutor mRequestThreadPool;
     private final OkHttpClient mOkHttpClient;
@@ -170,6 +171,10 @@ public class EhClient {
                                 params.length > 5 && Boolean.TRUE.equals(params[5]),
                                 params.length > 6 ? (List<GalleryInfo>) params[6] : null,
                                 params.length > 7 ? (GallerySeenState) params[7] : null);
+                    case METHOD_GET_SUBSCRIPTION_HOMEPAGE:
+                        return EhEngine.getSubscriptionHomepagePage(this, mOkHttpClient,
+                                (String) params[0], (SubscriptionHomepageMatcher) params[1],
+                                params.length > 2 ? (SubscriptionHomepageScan) params[2] : null);
                     case METHOD_PREPARE_SUBSCRIPTION_LIST:
                         return EhEngine.prepareSubscriptionList(this, mOkHttpClient,
                                 (String) params[0], (List<GalleryInfo>) params[1],

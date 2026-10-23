@@ -205,6 +205,30 @@ public final class BookmarkSubscriptionPlanner {
         Collections.sort(terms);
         return terms;
     }
+    /** Exact metadata predicates supported by homepage checks; null keeps the native search. */
+    static List<String> homepageTerms(QuickSearch bookmark) {
+        if (!isSupported(bookmark) || !bookmark.subscribed) return null;
+        // These options depend on information/search visibility absent from gallery metadata.
+        if (bookmark.mode == ListUrlBuilder.MODE_NORMAL && bookmark.advanceSearch != -1
+                && (bookmark.advanceSearch & ~ListUrlBuilder.DEFAULT_ADVANCE) != 0) return null;
+        Entry entry = entry(bookmark);
+        if (entry.terms == null) {
+            return bookmark.mode == ListUrlBuilder.MODE_NORMAL
+                    && (bookmark.keyword == null || bookmark.keyword.trim().isEmpty())
+                    ? Collections.emptyList() : null;
+        }
+        List<String> result = new ArrayList<>();
+        for (Term term : entry.terms) {
+            if (term.field.equals("title") || term.field.equals("tag")) return null;
+            if (!term.field.equals("uploader") && !term.value.endsWith("$")) return null;
+            String value = term.field.equals("uploader") ? term.value
+                    : term.value.substring(0, term.value.length() - 1);
+            if (value.isEmpty()) return null;
+            result.add((term.negative ? "-" : "") + term.field + ":" + value);
+        }
+        return result;
+    }
+
     private static boolean safeUploader(@Nullable String value) {
         if (value == null || value.isEmpty() || !value.equals(value.trim())) return false;
         for (char c : value.toCharArray()) if (Character.isISOControl(c) || "\"\\~*$%:".indexOf(c) >= 0) return false;

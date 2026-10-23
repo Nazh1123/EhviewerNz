@@ -364,6 +364,27 @@ public class EhEngine {
     private static GalleryListParser.Result getGalleryListPage(@Nullable EhClient.Task task,
             OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
             boolean requireUploader, int minRatingHundredths, @Nullable GallerySeenState checkCursor) throws Throwable {
+        return getGalleryListPage(task, okHttpClient, url, mode, subscriptionSearch,
+                requireUploader, minRatingHundredths, checkCursor, null, null);
+    }
+
+    public static GalleryListParser.Result getSubscriptionHomepagePage(@Nullable EhClient.Task task,
+            OkHttpClient client, String url, SubscriptionHomepageMatcher matcher) throws Throwable {
+        return getSubscriptionHomepagePage(task, client, url, matcher, null);
+    }
+
+    public static GalleryListParser.Result getSubscriptionHomepagePage(@Nullable EhClient.Task task,
+            OkHttpClient client, String url, SubscriptionHomepageMatcher matcher,
+            @Nullable SubscriptionHomepageScan scan) throws Throwable {
+        return getGalleryListPage(task, client, url, ListUrlBuilder.MODE_NORMAL,
+                true, false, 0, null, matcher, scan);
+    }
+
+    private static GalleryListParser.Result getGalleryListPage(@Nullable EhClient.Task task,
+            OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
+            boolean requireUploader, int minRatingHundredths, @Nullable GallerySeenState checkCursor,
+            @Nullable SubscriptionHomepageMatcher homepageMatcher,
+            @Nullable SubscriptionHomepageScan homepageScan) throws Throwable {
         if (subscriptionSearch || SearchRating.isClientOnlyMode(mode)) {
             url = SearchRating.withoutServerFilter(url);
         }
@@ -401,12 +422,27 @@ public class EhEngine {
             throw e;
         }
 
+        if (homepageMatcher != null) {
+            // Preserve the unfiltered website order for the anchor and the 15-gallery margin.
+            result.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
+            if (homepageScan != null) {
+                result.galleryInfoList.removeIf(gallery -> !homepageScan.isNew(gallery)
+                        || !homepageMatcher.mayMatch(gallery)
+                        || !sEhFilter.filterTitle(gallery) || !sEhFilter.filterUploader(gallery));
+            }
+            SUBSCRIPTION_METADATA.fill(subscriptionScope, result.galleryInfoList,
+                    items -> fillGalleryListByApi(task, okHttpClient, items, requestUrl));
+            for (GalleryInfo gallery : result.galleryInfoList) {
+                if (gallery.firstGid == null) throw new IOException("Incomplete homepage metadata");
+            }
+            result.galleryInfoList.removeIf(gallery -> gallery.firstGid < 0 || !homepageMatcher.matches(gallery));
+        }
         if (checkCursor != null) {
             result.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
             result.galleryInfoList.removeIf(gallery -> !checkCursor.isNew(gallery));
         }
         prepareGalleryList(task, okHttpClient, requestUrl, mode, result, subscriptionScope,
-                requireUploader && checkCursor == null, minRatingHundredths, checkCursor != null);
+                requireUploader && checkCursor == null, minRatingHundredths, checkCursor != null || homepageMatcher != null);
 
         if (code == 200 && url.equals("https://exhentai.org/") && body.isEmpty()) {
             result.customErrorString = GetText.getString(R.string.error_igneous_wrong);
