@@ -342,7 +342,7 @@ public class DownloadBatchActions {
     }
 
     /**
-     * 单条删除对话框。当前下载页未使用，保持原逻辑。
+     * 画廊详情页使用的单条删除对话框，与下载列表共用文件删除逻辑。
      */
     public static class DeleteDialogHelper implements DialogInterface.OnClickListener {
 

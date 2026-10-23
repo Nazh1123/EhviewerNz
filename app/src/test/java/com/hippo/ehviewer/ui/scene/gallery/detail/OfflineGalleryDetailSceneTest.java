@@ -11,6 +11,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.CheckBox;
 import android.widget.TextView;
 import android.widget.RatingBar;
 
@@ -128,12 +129,12 @@ public class OfflineGalleryDetailSceneTest {
         String[] fields = {"mThumb", "mTitle", "mUploader", "mCategory", "mDownload", "mRead", "mHaveNewVersion",
                 "mArchiverDownloadProgress", "mUpdateActionGroup", "mUpdateGallery", "mGalleryHistory", "mUpdateActionDivider",
                 "mLanguage", "mPages", "mSize", "mPosted", "mFavoredTimes", "mHeartGroup", "mRate", "mShare", "mTorrent",
-                "mArchiver", "mHaH", "mSearchCover", "mLocalDelete", "mRating", "mRatingText", "mComments", "mCommentsText",
+                "mArchiver", "mHaH", "mSearchCover", "mRating", "mRatingText", "mComments", "mCommentsText",
                 "mTags", "mNoTags", "mGridLayout", "mPreviewText", "mHeart", "mHeartOutline"};
         int[] ids = {R.id.thumb, R.id.title, R.id.uploader, R.id.category, R.id.download, R.id.read, R.id.new_version,
                 R.id.archiver_download_progress, R.id.update_action_card, R.id.update_gallery, R.id.gallery_history, R.id.update_action_divider,
                 R.id.language, R.id.pages, R.id.size, R.id.posted, R.id.favoredTimes, R.id.heart_group, R.id.rate, R.id.share, R.id.torrent,
-                R.id.archiver, R.id.h_h, R.id.search_cover, R.id.local_delete, R.id.rating, R.id.rating_text, R.id.comments, R.id.comments_text,
+                R.id.archiver, R.id.h_h, R.id.search_cover, R.id.rating, R.id.rating_text, R.id.comments, R.id.comments_text,
                 R.id.tags, R.id.no_tags, R.id.grid_layout, R.id.preview_text, R.id.heart, R.id.heart_outline};
         for (int i = 0; i < fields.length; i++) ReflectionHelpers.setField(scene, fields[i], content.findViewById(ids[i]));
         TextView tip = new TextView(context);
@@ -1240,7 +1241,7 @@ public class OfflineGalleryDetailSceneTest {
         }
     }
 
-    @Test public void failureShowsLocalContentErrorAndArtistSimilarAndLocalDeleteActions() {
+    @Test public void failureShowsLocalContentErrorAndArtistSimilarActions() {
         Settings.setShowGalleryComment(false);
         Settings.setShowGalleryRating(false);
         fail("Gallery removed");
@@ -1250,7 +1251,7 @@ public class OfflineGalleryDetailSceneTest {
         assertEquals(context.getString(R.string.offline_gallery_refresh), text(R.id.comments_text));
         for (int id : new int[]{R.id.artist, R.id.similar, R.id.comments, R.id.rating_text}) assertEquals(View.VISIBLE, content.findViewById(id).getVisibility());
         for (int id : new int[]{R.id.heart_group, R.id.rate, R.id.share, R.id.torrent, R.id.archiver, R.id.h_h, R.id.search_cover,
-                R.id.rating, R.id.favoredTimes, R.id.update_action_card, R.id.local_delete}) assertEquals(View.GONE, content.findViewById(id).getVisibility());
+                R.id.rating, R.id.favoredTimes, R.id.update_action_card}) assertEquals(View.GONE, content.findViewById(id).getVisibility());
         assertFalse(imageNetworkLoads.isEmpty());
         assertFalse(imageNetworkLoads.contains(true));
         assertNull(ReflectionHelpers.getField(scene, "mGalleryDetail"));
@@ -1270,6 +1271,73 @@ public class OfflineGalleryDetailSceneTest {
         fail("Another error");
         assertTrue(content.findViewById(R.id.download).isEnabled());
         assertTrue(text(R.id.rating_text).endsWith("\nAnother error"));
+    }
+
+    @Test public void downloadedClickWithoutCheckboxRemovesRecordAndKeepsLocalFiles() throws Exception {
+        File directory = prepareDownloadedGallery();
+        Settings.putRemoveImageFiles(true);
+        scene.onClick(content.findViewById(R.id.download));
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        CheckBox checkbox = dialog.findViewById(R.id.checkbox);
+        assertEquals(context.getString(R.string.download_remove_dialog_check_text), checkbox.getText().toString());
+        assertTrue(checkbox.isChecked());
+        checkbox.setChecked(false);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        ShadowLooper.idleMainLooper();
+        assertFalse(manager.containDownloadInfo(123));
+        assertTrue(new File(directory, "001.jpg").exists());
+        assertEquals(directory.getName(), EhDB.getDownloadDirname(123));
+        assertFalse(Settings.getRemoveImageFiles());
+    }
+
+    @Test public void downloadedClickWithCheckboxAlsoDeletesLocalFiles() throws Exception {
+        File directory = prepareDownloadedGallery();
+        Settings.putRemoveImageFiles(false);
+        scene.onClick(content.findViewById(R.id.download));
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        CheckBox checkbox = dialog.findViewById(R.id.checkbox);
+        assertFalse(checkbox.isChecked());
+        checkbox.setChecked(true);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        ShadowLooper.idleMainLooper();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (directory.exists() && System.nanoTime() < deadline) {
+            ShadowLooper.idleMainLooper();
+            Thread.sleep(10);
+        }
+        assertFalse(manager.containDownloadInfo(123));
+        assertFalse(directory.exists());
+        assertNull(EhDB.getDownloadDirname(123));
+        assertTrue(Settings.getRemoveImageFiles());
+    }
+
+    @Test public void dismissingDownloadedDeleteDialogKeepsRecordFilesAndPreference() throws Exception {
+        File directory = prepareDownloadedGallery();
+        Settings.putRemoveImageFiles(false);
+        scene.onClick(content.findViewById(R.id.download));
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        ((CheckBox) dialog.findViewById(R.id.checkbox)).setChecked(true);
+        dialog.cancel();
+        ShadowLooper.idleMainLooper();
+        assertTrue(manager.containDownloadInfo(123));
+        assertTrue(new File(directory, "001.jpg").exists());
+        assertEquals(directory.getName(), EhDB.getDownloadDirname(123));
+        assertFalse(Settings.getRemoveImageFiles());
+    }
+
+    private File prepareDownloadedGallery() throws Exception {
+        ReflectionHelpers.setStaticField(Settings.class, "sContext", context);
+        File root = temporaryFolder.newFolder("downloads");
+        Settings.putDownloadLocation(UniFile.fromFile(root));
+        File directory = new File(root, "123-saved");
+        assertTrue(directory.mkdir());
+        Files.write(new File(directory, "001.jpg").toPath(), new byte[]{1});
+        EhDB.putDownloadDirname(123, directory.getName());
+        addKnownDownload(123, null, DownloadInfo.STATE_FINISH);
+        ReflectionHelpers.setField(scene, "mDownloadState", DownloadInfo.STATE_FINISH);
+        ReflectionHelpers.callInstanceMethod(scene, "updateDownloadText");
+        assertEquals(context.getString(R.string.download_state_downloaded), text(R.id.download));
+        return directory;
     }
 
     @Test public void onlineSuccessRestoresActionsAndRejectsQueuedOfflineResult() {
@@ -1328,7 +1396,7 @@ public class OfflineGalleryDetailSceneTest {
         assertFalse(keys.contains(context.getString(R.string.key_parent)));
     }
 
-    @Test public void localMenuActionsFollowLocalDeleteForEveryDownloadStateOnlineAndOffline() {
+    @Test public void localMenuActionsFollowDownloadStateOnlineAndOffline() {
         ReflectionHelpers.setField(scene, "mOtherActions", new ImageView(context));
         ReflectionHelpers.callInstanceMethod(scene, "ensurePopMenu");
         PopupMenu popup = ReflectionHelpers.getField(scene, "mPopupMenu");
@@ -1341,7 +1409,6 @@ public class OfflineGalleryDetailSceneTest {
                 ReflectionHelpers.setField(scene, "mDownloadState", state);
                 ReflectionHelpers.callInstanceMethod(scene, "updateDownloadText");
                 boolean visible = state == DownloadInfo.STATE_FINISH || state == DownloadInfo.STATE_NONE;
-                assertEquals(visible ? View.VISIBLE : View.GONE, content.findViewById(R.id.local_delete).getVisibility());
                 for (int id : new int[]{R.id.action_open_local_gallery_image,
                         R.id.action_copy_local_gallery_path, R.id.action_view_local_gallery_size,
                         R.id.action_enhance_local_gallery, R.id.action_translate_local_gallery}) {

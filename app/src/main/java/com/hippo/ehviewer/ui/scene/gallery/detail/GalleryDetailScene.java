@@ -131,6 +131,7 @@ import com.hippo.ehviewer.ui.scene.GalleryPreviewsScene;
 import com.hippo.ehviewer.widget.HoldThumbnailPreview;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
 import com.hippo.ehviewer.ui.scene.download.DownloadsScene;
+import com.hippo.ehviewer.ui.scene.download.part.DownloadBatchActions.DeleteDialogHelper;
 import com.hippo.ehviewer.ui.scene.download.part.ThumbDataContainer;
 import com.hippo.ehviewer.ui.scene.gallery.list.FavoritesScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
@@ -207,7 +208,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private static final int STATE_REFRESH_CONTENT = 4;
     private static final long LOADING_INDICATOR_DELAY_MS = 175L;
 
-    private static final int LOCAL_ACTION_DELETE = 0;
     private static final int LOCAL_ACTION_OPEN_IMAGE = 1;
     private static final int LOCAL_ACTION_COPY_PATH = 2;
     private static final int LOCAL_ACTION_VIEW_SIZE = 3;
@@ -321,8 +321,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private TextView mArtist;
     @Nullable
     private TextView mSimilar;
-    @Nullable
-    private TextView mLocalDelete;
     @Nullable
     private TextView mSearchCover;
     // Tags
@@ -893,7 +891,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mRate = (TextView) ViewUtils.$$(mActions, R.id.rate);
         mArtist = (TextView) ViewUtils.$$(mActions, R.id.artist);
         mSimilar = (TextView) ViewUtils.$$(mActions, R.id.similar);
-        mLocalDelete = (TextView) ViewUtils.$$(mActions, R.id.local_delete);
         mSearchCover = (TextView) ViewUtils.$$(mActions, R.id.search_cover);
         Ripple.addRipple(mHeartGroup, isDarkTheme);
         Ripple.addRipple(mTorrent, isDarkTheme);
@@ -903,7 +900,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Ripple.addRipple(mRate, isDarkTheme);
         Ripple.addRipple(mArtist, isDarkTheme);
         Ripple.addRipple(mSimilar, isDarkTheme);
-        Ripple.addRipple(mLocalDelete, isDarkTheme);
         Ripple.addRipple(mSearchCover, isDarkTheme);
         mHeartGroup.setOnClickListener(this);
         mHeartGroup.setOnLongClickListener(this);
@@ -915,7 +911,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mArtist.setOnClickListener(this);
         mArtist.setOnLongClickListener(this);
         mSimilar.setOnClickListener(this);
-        mLocalDelete.setOnClickListener(this);
         mSearchCover.setOnClickListener(this);
         ensureActionDrawable(context);
 
@@ -1127,7 +1122,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mRate = null;
         mArtist = null;
         mSimilar = null;
-        mLocalDelete = null;
         mSearchCover = null;
 
         mTags = null;
@@ -1257,10 +1251,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Drawable similar = DrawableManager.getVectorDrawable(context, R.drawable.v_similar_primary_x48);
         if (mSimilar != null) {
             setActionDrawable(mSimilar, similar);
-        }
-        Drawable localDelete = DrawableManager.getVectorDrawable(context, R.drawable.v_delete_primary_x48);
-        if (mLocalDelete != null) {
-            setActionDrawable(mLocalDelete, localDelete);
         }
         Drawable searchCover = DrawableManager.getVectorDrawable(context, R.drawable.v_file_find_primary_x48);
         if (mSearchCover != null) {
@@ -2645,8 +2635,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             showArtistGalleryList();
         } else if (mSimilar == v) {
             showSimilarGalleryList();
-        } else if (mLocalDelete == v) {
-            handleLocalGalleryAction(LOCAL_ACTION_DELETE);
         } else if (mSearchCover == v) {
             showCoverGalleryList();
         } else if (mComments == v) {
@@ -2864,22 +2852,23 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             if (EhApplication.getDownloadManager(mContext).getDownloadState(galleryInfo.gid) == DownloadInfo.STATE_INVALID) {
                 CommonOperations.startDownload(activity, galleryInfo, false);
             } else {
-                new AlertDialog.Builder(mContext)
-                        .setTitle(R.string.download_remove_dialog_title)
-                        .setMessage(getString(R.string.download_remove_dialog_message, galleryInfo.title))
-                        .setPositiveButton(android.R.string.ok, (dialog1, which1) -> EhApplication.getDownloadManager(mContext).deleteDownload(galleryInfo.gid))
+                CheckBoxDialogBuilder builder = new CheckBoxDialogBuilder(mContext,
+                        getString(R.string.download_remove_dialog_message, galleryInfo.title),
+                        getString(R.string.download_remove_dialog_check_text),
+                        Settings.getRemoveImageFiles());
+                builder.setTitle(R.string.download_remove_dialog_title)
+                        .setPositiveButton(android.R.string.ok, new DeleteDialogHelper(
+                                galleryInfo, builder, EhApplication.getDownloadManager(mContext)))
                         .show();
             }
         }
     }
 
     private static class LocalGalleryFiles {
-        final GalleryInfo galleryInfo;
         final UniFile directory;
         final UniFile firstImage;
 
-        LocalGalleryFiles(GalleryInfo galleryInfo, UniFile directory, UniFile firstImage) {
-            this.galleryInfo = galleryInfo;
+        LocalGalleryFiles(UniFile directory, UniFile firstImage) {
             this.directory = directory;
             this.firstImage = firstImage;
         }
@@ -2892,9 +2881,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     private void updateLocalActionsVisibility() {
         boolean visible = hasLocalDownloadState();
-        if (mLocalDelete != null) {
-            mLocalDelete.setVisibility(visible ? View.VISIBLE : View.GONE);
-        }
         if (mPopupMenu != null) {
             for (int id : new int[]{R.id.action_open_local_gallery_image,
                     R.id.action_copy_local_gallery_path, R.id.action_view_local_gallery_size,
@@ -2935,9 +2921,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                     return;
                 }
                 switch (action) {
-                    case LOCAL_ACTION_DELETE:
-                        showLocalDeleteDialog(localFiles);
-                        break;
                     case LOCAL_ACTION_OPEN_IMAGE:
                         openLocalGalleryImage(localFiles.firstImage);
                         break;
@@ -3052,7 +3035,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
                 }
             }
             return firstImage != null
-                    ? new LocalGalleryFiles(galleryInfo, directory, firstImage)
+                    ? new LocalGalleryFiles(directory, firstImage)
                     : null;
         } catch (Throwable e) {
             ExceptionUtils.throwIfFatal(e);
@@ -3083,32 +3066,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         if (context != null) {
             Toast.makeText(context, R.string.no_local_gallery_files, Toast.LENGTH_SHORT).show();
         }
-    }
-
-    private void showLocalDeleteDialog(LocalGalleryFiles localFiles) {
-        Context context = getEHContext();
-        if (context == null) {
-            return;
-        }
-        CheckBoxDialogBuilder builder = new CheckBoxDialogBuilder(context,
-                getString(R.string.download_remove_dialog_message, localFiles.galleryInfo.title),
-                getString(R.string.download_remove_dialog_check_text), true);
-        builder.setTitle(R.string.download_remove_dialog_title)
-                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    EhApplication.getDownloadManager(context)
-                            .deleteDownload(localFiles.galleryInfo.gid);
-
-                    boolean deleteFiles = builder.isChecked();
-                    Settings.putRemoveImageFiles(deleteFiles);
-                    if (deleteFiles) {
-                        EhDB.removeDownloadDirname(localFiles.galleryInfo.gid);
-                        if (executorService == null) {
-                            executorService = EhApplication.getExecutorService(context);
-                        }
-                        executorService.submit(localFiles.directory::delete);
-                    }
-                })
-                .show();
     }
 
     private void openLocalGalleryImage(UniFile image) {
