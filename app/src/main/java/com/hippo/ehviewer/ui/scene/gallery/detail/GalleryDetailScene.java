@@ -316,7 +316,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     @Nullable
     private TextView mShare;
     @Nullable
-    private TextView mRate;
+    private View mRatingGroup;
     @Nullable
     private TextView mArtist;
     @Nullable
@@ -865,6 +865,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUpdateGallery.setOnClickListener(this);
         mGalleryHistory.setOnClickListener(this);
         mTitle.setOnClickListener(this);
+        mTitle.setOnLongClickListener(this);
 
         mUploader.setOnLongClickListener(this);
 
@@ -881,6 +882,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mActions = ViewUtils.$$(belowHeader, R.id.actions);
         mRatingText = (TextView) ViewUtils.$$(mActions, R.id.rating_text);
         mRating = (RatingBar) ViewUtils.$$(mActions, R.id.rating);
+        mRatingGroup = ViewUtils.$$(mActions, R.id.rating_group);
         mHeartGroup = ViewUtils.$$(mActions, R.id.heart_group);
         mHeart = (TextView) ViewUtils.$$(mHeartGroup, R.id.heart);
         mHeartOutline = (TextView) ViewUtils.$$(mHeartGroup, R.id.heart_outline);
@@ -888,7 +890,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mHaH = (TextView) ViewUtils.$$(mActions, R.id.h_h);
         mArchiver = (TextView) ViewUtils.$$(mActions, R.id.archiver);
         mShare = (TextView) ViewUtils.$$(mActions, R.id.share);
-        mRate = (TextView) ViewUtils.$$(mActions, R.id.rate);
         mArtist = (TextView) ViewUtils.$$(mActions, R.id.artist);
         mSimilar = (TextView) ViewUtils.$$(mActions, R.id.similar);
         mSearchCover = (TextView) ViewUtils.$$(mActions, R.id.search_cover);
@@ -897,7 +898,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Ripple.addRipple(mHaH, isDarkTheme);
         Ripple.addRipple(mArchiver, isDarkTheme);
         Ripple.addRipple(mShare, isDarkTheme);
-        Ripple.addRipple(mRate, isDarkTheme);
+        Ripple.addRipple(mRatingGroup, isDarkTheme);
         Ripple.addRipple(mArtist, isDarkTheme);
         Ripple.addRipple(mSimilar, isDarkTheme);
         Ripple.addRipple(mSearchCover, isDarkTheme);
@@ -907,7 +908,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mHaH.setOnClickListener(this);
         mArchiver.setOnClickListener(this);
         mShare.setOnClickListener(this);
-        mRate.setOnClickListener(this);
+        mRatingGroup.setOnClickListener(this);
         mArtist.setOnClickListener(this);
         mArtist.setOnLongClickListener(this);
         mSimilar.setOnClickListener(this);
@@ -924,7 +925,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             mCommentsText.setVisibility(View.GONE);
         }
         if (!Settings.getShowGalleryRating()) {
+            mRatingGroup.setVisibility(View.INVISIBLE);
             mRating.setVisibility(View.INVISIBLE);
+            ((View) mRating.getParent()).setVisibility(View.INVISIBLE);
             mRatingText.setVisibility(View.INVISIBLE);
         }
 
@@ -1119,7 +1122,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mHaH = null;
         mArchiver = null;
         mShare = null;
-        mRate = null;
+        mRatingGroup = null;
         mArtist = null;
         mSimilar = null;
         mSearchCover = null;
@@ -1239,10 +1242,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Drawable share = DrawableManager.getVectorDrawable(context, R.drawable.v_share_primary_x48);
         if (mShare != null) {
             setActionDrawable(mShare, share);
-        }
-        Drawable rate = DrawableManager.getVectorDrawable(context, R.drawable.v_thumb_up_primary_x48);
-        if (mRate != null) {
-            setActionDrawable(mRate, rate);
         }
         Drawable artist = DrawableManager.getVectorDrawable(context, R.drawable.v_artist_primary_x48);
         if (mArtist != null) {
@@ -1449,7 +1448,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void setDetailActionsEnabled(boolean enabled) {
-        for (View action : new View[]{mInfo, mHeartGroup, mRate, mTorrent, mHaH, mArchiver,
+        for (View action : new View[]{mInfo, mHeartGroup, mRatingGroup, mTorrent, mHaH, mArchiver,
                 mArtist, mSimilar, mUpdateGallery, mGalleryHistory}) {
             if (action != null) action.setEnabled(enabled);
         }
@@ -1689,12 +1688,16 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     private void setOfflineVisibility(boolean offline) {
         setDetailActionsEnabled(true);
-        for (View action : new View[]{mHeartGroup, mRate, mShare, mTorrent, mArchiver, mHaH, mSearchCover}) {
+        for (View action : new View[]{mHeartGroup, mShare, mTorrent, mArchiver, mHaH, mSearchCover}) {
             action.setVisibility(offline ? View.GONE : View.VISIBLE);
         }
         updateLocalActionsVisibility();
+        mRatingGroup.setVisibility(offline || Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
+        mRatingGroup.setEnabled(!offline);
         mRating.setVisibility(offline ? View.GONE : Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
+        ((View) mRating.getParent()).setVisibility(mRating.getVisibility());
         mRatingText.setVisibility(offline || Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
+        mRatingText.setSingleLine(!offline);
         mRatingText.setGravity(Gravity.CENTER);
         int textPadding = offline ? getResources().getDimensionPixelSize(R.dimen.keyline_margin) : 0;
         mRatingText.setPadding(textPadding, 0, textPadding, 0);
@@ -2620,7 +2623,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             ArchiverDownloadDialog archiverDownloadDialog = new ArchiverDownloadDialog(mGalleryDetail, this);
             archiverDownloadDialog.showDialog();
 
-        } else if (mRate == v) {
+        } else if (mRatingGroup == v) {
+            if (mOffline) return;
             RateDialogHelper helper = new RateDialogHelper();
             Dialog dialog = new AlertDialog.Builder(mContext)
                     .setTitle(R.string.rate)
@@ -2808,7 +2812,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         if (mUploader == v) {
             showFilterUploaderDialog();
-        } else if (mArtist == v) {
+        } else if (mArtist == v || mTitle == v) {
             showTitleKeywordSearchDialog();
             return true;
         } else if (mDownload == v) {
@@ -4092,7 +4096,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Context context = getEHContext();
         MainActivity activity = getActivity2();
         if (context == null || activity == null) return;
-        if (awaitDetail(R.id.rate, () -> submitRating(rating))) return;
+        if (awaitDetail(R.id.rating_group, () -> submitRating(rating))) return;
         if (mGalleryDetail.apiUid < 0 || TextUtils.isEmpty(mGalleryDetail.apiKey)) {
             showTip(R.string.sign_in_first, LENGTH_LONG);
             return;

@@ -128,12 +128,12 @@ public class OfflineGalleryDetailSceneTest {
         content = sceneView.findViewById(R.id.below_header);
         String[] fields = {"mThumb", "mTitle", "mUploader", "mCategory", "mDownload", "mRead", "mHaveNewVersion",
                 "mArchiverDownloadProgress", "mUpdateActionGroup", "mUpdateGallery", "mGalleryHistory", "mUpdateActionDivider",
-                "mLanguage", "mPages", "mSize", "mPosted", "mFavoredTimes", "mHeartGroup", "mRate", "mShare", "mTorrent",
+                "mLanguage", "mPages", "mSize", "mPosted", "mFavoredTimes", "mHeartGroup", "mRatingGroup", "mShare", "mTorrent",
                 "mArchiver", "mHaH", "mSearchCover", "mRating", "mRatingText", "mComments", "mCommentsText",
                 "mTags", "mNoTags", "mGridLayout", "mPreviewText", "mHeart", "mHeartOutline"};
         int[] ids = {R.id.thumb, R.id.title, R.id.uploader, R.id.category, R.id.download, R.id.read, R.id.new_version,
                 R.id.archiver_download_progress, R.id.update_action_card, R.id.update_gallery, R.id.gallery_history, R.id.update_action_divider,
-                R.id.language, R.id.pages, R.id.size, R.id.posted, R.id.favoredTimes, R.id.heart_group, R.id.rate, R.id.share, R.id.torrent,
+                R.id.language, R.id.pages, R.id.size, R.id.posted, R.id.favoredTimes, R.id.heart_group, R.id.rating_group, R.id.share, R.id.torrent,
                 R.id.archiver, R.id.h_h, R.id.search_cover, R.id.rating, R.id.rating_text, R.id.comments, R.id.comments_text,
                 R.id.tags, R.id.no_tags, R.id.grid_layout, R.id.preview_text, R.id.heart, R.id.heart_outline};
         for (int i = 0; i < fields.length; i++) ReflectionHelpers.setField(scene, fields[i], content.findViewById(ids[i]));
@@ -318,7 +318,7 @@ public class OfflineGalleryDetailSceneTest {
         assertEquals(View.GONE, content.findViewById(R.id.detail_body).getVisibility());
         assertEquals(View.VISIBLE, sceneView.findViewById(R.id.progress).getVisibility());
         assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
-        for (int id : new int[]{R.id.update_gallery, R.id.info, R.id.rate, R.id.heart_group,
+        for (int id : new int[]{R.id.update_gallery, R.id.info, R.id.rating_group, R.id.heart_group,
                 R.id.torrent, R.id.h_h, R.id.archiver, R.id.artist, R.id.similar}) {
             assertTrue(content.findViewById(id).isEnabled());
         }
@@ -985,7 +985,7 @@ public class OfflineGalleryDetailSceneTest {
     @Test public void ratingDialogOpensImmediatelyAndSubmissionReusesPendingHtmlRequest() {
         bindPendingHeader();
         ReflectionHelpers.callInstanceMethod(scene, "refreshDetail");
-        scene.onClick(content.findViewById(R.id.rate));
+        scene.onClick(content.findViewById(R.id.rating_group));
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
         assertTrue(dialog.isShowing());
         assertNotNull(dialog.findViewById(R.id.rating_view));
@@ -1060,7 +1060,8 @@ public class OfflineGalleryDetailSceneTest {
         assertEquals(View.VISIBLE, content.findViewById(R.id.heart).getVisibility());
     }
 
-    @Test public void detailSuccessFillsRatingCountAndKeepsActionsEnabled() {
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void detailSuccessFillsRatingCountAndKeepsActionsEnabled() {
         bindPendingHeader();
         assertTrue(content.findViewById(R.id.info).isEnabled());
         ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
@@ -1071,9 +1072,27 @@ public class OfflineGalleryDetailSceneTest {
         assertEquals("Online title", text(R.id.title));
         assertTrue(text(R.id.rating_text).contains("123"));
         assertTrue(content.findViewById(R.id.info).isEnabled());
-        assertTrue(content.findViewById(R.id.rate).isEnabled());
+        assertTrue(content.findViewById(R.id.rating_group).isEnabled());
         assertEquals(View.VISIBLE, content.findViewById(R.id.detail_body).getVisibility());
         assertEquals(View.GONE, sceneView.findViewById(R.id.progress).getVisibility());
+
+        View ratingGroup = content.findViewById(R.id.rating_group);
+        TextView ratingText = content.findViewById(R.id.rating_text);
+        ratingText.setText("Exceptional rating with a very long description (4.50, 2147483647)".repeat(3));
+        float density = context.getResources().getDisplayMetrics().density;
+        for (int widthDp : new int[]{280, 320, 360, 600}) {
+            int width = Math.round(widthDp * density);
+            ratingGroup.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.AT_MOST),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            ratingGroup.layout(0, 0, ratingGroup.getMeasuredWidth(), ratingGroup.getMeasuredHeight());
+            assertTrue(ratingGroup.getWidth() <= width);
+            assertTrue(ratingText.getWidth() > 0);
+            assertTrue("screen=" + width + ", group=" + ratingGroup.getWidth()
+                            + ", text=" + ratingText.getLeft() + ".." + ratingText.getRight(),
+                    ratingText.getRight() <= ratingGroup.getWidth() - ratingGroup.getPaddingRight());
+            assertTrue("screen=" + width + ", text width=" + ratingText.getWidth(),
+                    ratingText.getLayout().getEllipsisCount(0) > 0);
+        }
     }
 
     @Test public void refreshingKeepsKnownSummaryVisible() {
@@ -1250,7 +1269,8 @@ public class OfflineGalleryDetailSceneTest {
         assertEquals("\n" + context.getString(R.string.offline_gallery_notice) + "\nGallery removed", text(R.id.rating_text));
         assertEquals(context.getString(R.string.offline_gallery_refresh), text(R.id.comments_text));
         for (int id : new int[]{R.id.artist, R.id.similar, R.id.comments, R.id.rating_text}) assertEquals(View.VISIBLE, content.findViewById(id).getVisibility());
-        for (int id : new int[]{R.id.heart_group, R.id.rate, R.id.share, R.id.torrent, R.id.archiver, R.id.h_h, R.id.search_cover,
+        assertFalse(content.findViewById(R.id.rating_group).isEnabled());
+        for (int id : new int[]{R.id.heart_group, R.id.share, R.id.torrent, R.id.archiver, R.id.h_h, R.id.search_cover,
                 R.id.rating, R.id.favoredTimes, R.id.update_action_card}) assertEquals(View.GONE, content.findViewById(id).getVisibility());
         assertFalse(imageNetworkLoads.isEmpty());
         assertFalse(imageNetworkLoads.contains(true));

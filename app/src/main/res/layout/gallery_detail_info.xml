@@ -15,17 +15,16 @@
   ~ limitations under the License.
   -->
 
-<LinearLayout
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/info"
-    android:orientation="vertical"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:padding="@dimen/keyline_margin">
+    android:layout_height="match_parent">
 
     <TableLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_margin="@dimen/keyline_margin"
         android:paddingLeft="@dimen/keyline_margin"
         android:paddingRight="@dimen/keyline_margin">
 
@@ -72,6 +71,7 @@
 
             <TextView
                 android:id="@+id/posted"
+                android:layout_column="2"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -83,11 +83,15 @@
     </TableLayout>
 
     <TextView
-        android:layout_width="wrap_content"
+        android:layout_width="48dp"
         android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginTop="16dp"
-        android:text="@string/more_information"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="2dp"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:singleLine="true"
+        android:text=". . ."
+        android:contentDescription="@string/more_information"
         android:textColor="?attr/textColorThemeAccent"/>
 
-</LinearLayout>
+</FrameLayout>
