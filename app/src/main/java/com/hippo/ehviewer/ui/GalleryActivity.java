@@ -1645,15 +1645,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 }
                 clearAnimatedWebpTouchGesture();
                 return false;
+            case MotionEvent.ACTION_POINTER_DOWN:
             case MotionEvent.ACTION_CANCEL:
                 if (mAnimatedWebpTouchDragging) {
                     finishAnimatedWebpSeek(mAnimatedWebpRequestedPosition);
                     clearAnimatedWebpTouchGesture();
                     return true;
                 }
-                clearAnimatedWebpTouchGesture();
-                return false;
-            case MotionEvent.ACTION_POINTER_DOWN:
                 clearAnimatedWebpTouchGesture();
                 return false;
             default:

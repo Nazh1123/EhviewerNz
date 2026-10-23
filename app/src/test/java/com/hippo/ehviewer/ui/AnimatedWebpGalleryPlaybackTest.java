@@ -34,6 +34,7 @@ import org.robolectric.util.ReflectionHelpers.ClassParameter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.lang.reflect.Proxy;
 import java.util.concurrent.ExecutorService;
 
 import static org.junit.Assert.assertEquals;
@@ -146,6 +147,152 @@ public class AnimatedWebpGalleryPlaybackTest {
         ReflectionHelpers.setField(activity, "mAnimatedWebpLifecycleResumed", true);
         ReflectionHelpers.callInstanceMethod(activity, "updateAllAnimatedPagePlayback");
         assertTrue(page.isPlaybackPlaying());
+    }
+
+    @Test
+    public void secondPointerEndsScrubAndResumesPlayback() {
+        assertSecondPointerEndsScrub(true);
+    }
+
+    @Test
+    public void secondPointerEndsScrubWithoutResumingUserPausedPlayback() {
+        assertSecondPointerEndsScrub(false);
+    }
+
+    private void assertSecondPointerEndsScrub(boolean playing) {
+        activity.getWindow().getDecorView().layout(0, 0, 1000, 1000);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTouchSlop", 8);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpGalleryPlaying", playing);
+        ImageTexture page = texture();
+        ReflectionHelpers.setField(page, "mPlaybackDuration", 1001);
+        ReflectionHelpers.setField(page, "mPlaybackFramePosition", 500);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", page);
+        activity.onAnimatedPageVisibility(page, 1f);
+        Settings.putAnimatedWebpAllowSeek(true);
+
+        // DOWN has already selected the animation takeover area.
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTouchCandidate", true);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTouchDownX", 100f);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTouchDownY", 900f);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTouchStartPosition", 500);
+        scrubTouch(MotionEvent.ACTION_MOVE, 200, 1);
+        assertTrue(ReflectionHelpers.getField(activity, "mAnimatedWebpSeeking"));
+        assertFalse(page.isPlaybackPlaying());
+        assertEquals(700, (int) ReflectionHelpers.getField(activity,
+                "mAnimatedWebpRequestedPosition"));
+
+        scrubTouch(MotionEvent.ACTION_POINTER_DOWN | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                200, 2);
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpSeeking"));
+        assertEquals(playing, page.isPlaybackPlaying());
+        assertEquals(700, (int) ReflectionHelpers.getField(page, "mPendingSeek"));
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpTouchCandidate"));
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpTouchDragging"));
+
+        scrubTouch(MotionEvent.ACTION_MOVE, 350, 2);
+        scrubTouch(MotionEvent.ACTION_POINTER_UP | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
+                350, 2);
+        scrubTouch(MotionEvent.ACTION_UP, 350, 1);
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpSeeking"));
+        assertEquals(playing, page.isPlaybackPlaying());
+        assertEquals(700, (int) ReflectionHelpers.getField(page, "mPendingSeek"));
+    }
+
+    private void scrubTouch(int action, float x, int pointerCount) {
+        MotionEvent.PointerProperties[] properties = new MotionEvent.PointerProperties[pointerCount];
+        MotionEvent.PointerCoords[] coordinates = new MotionEvent.PointerCoords[pointerCount];
+        for (int i = 0; i < pointerCount; i++) {
+            properties[i] = new MotionEvent.PointerProperties();
+            properties[i].id = i;
+            properties[i].toolType = MotionEvent.TOOL_TYPE_FINGER;
+            coordinates[i] = new MotionEvent.PointerCoords();
+            coordinates[i].x = x + i * 100;
+            coordinates[i].y = 900;
+        }
+        MotionEvent event = MotionEvent.obtain(0, 100, action, pointerCount,
+                properties, coordinates, 0, 0, 1f, 1f, 0, 0, 0, 0);
+        try {
+            ReflectionHelpers.callInstanceMethod(activity, "handleAnimatedWebpScrubGesture",
+                    ClassParameter.from(MotionEvent.class, event));
+        } finally {
+            event.recycle();
+        }
+    }
+
+    @Test
+    public void unitLongPressSpeedFallsBackToPageMenu() {
+        assertAnimatedLongPress(1f, ReaderKeyMap.LEGACY,
+                List.of("onLongPressSliderArea", "onLongPressPage"));
+    }
+
+    @Test
+    public void unitLongPressSpeedFallsBackToConfiguredAction() {
+        assertAnimatedLongPress(1f, ReaderKeyMap.MENU,
+                List.of("onLongPressSliderArea", "onTapMenuArea"));
+    }
+
+    @Test
+    public void speedLongPressStillConsumesGestureAndReleasesOnce() {
+        assertAnimatedLongPress(2f, ReaderKeyMap.MENU,
+                List.of("onLongPressSliderArea"));
+    }
+
+    private void assertAnimatedLongPress(float speed, int action, List<String> expected) {
+        Settings.putExperimentalAnimatedWebpEnabled(true);
+        Settings.putAnimatedWebpLongPressSpeed(speed);
+        ReflectionHelpers.setField(activity, "mLayoutMode", GalleryView.LAYOUT_LEFT_TO_RIGHT);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpLongPressTouchDown", true);
+        ImageTexture texture = texture();
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        activity.onAnimatedPageVisibility(texture, 1f);
+        GalleryView view = new GalleryView.Builder(RuntimeEnvironment.getApplication(),
+                new GalleryView.Adapter() {
+                    @Override public void onBind(GalleryPageView page, int index) {}
+                    @Override public void onUnbind(GalleryPageView page, int index) {}
+                    @Override public String getError() { return null; }
+                    @Override public int size() { return 1; }
+                }).build();
+        view.bounds().set(0, 0, 1000, 1000);
+        ReflectionHelpers.callInstanceMethod(view, "attachLayoutManager");
+        Object layout = ReflectionHelpers.getField(view, "mLayoutManager");
+        GalleryPageView page = new GalleryPageView(null, 0, 0, 0, 0, 0);
+        ReflectionHelpers.setField(page, "mIndex", 0);
+        page.bounds().set(0, 0, 1000, 1000);
+        page.setImage(texture);
+        ReflectionHelpers.setField(layout, "mCurrent", page);
+        int[] keys = new int[ReaderKeyMap.REGION_COUNT * ReaderKeyMap.GESTURE_COUNT];
+        java.util.Arrays.fill(keys, ReaderKeyMap.LEGACY);
+        keys[ReaderKeyMap.CENTER_BOTTOM * ReaderKeyMap.GESTURE_COUNT
+                + ReaderKeyMap.LONG_PRESS] = action;
+        view.setReaderKeyMap(new ReaderKeyMap(keys));
+        view.setAnimatedPageControlAreasEnabled(true);
+        List<String> callbacks = new ArrayList<>();
+        ReflectionHelpers.setField(view, "mListener", (GalleryView.Listener) Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class[]{GalleryView.Listener.class},
+                (proxy, method, args) -> {
+                    callbacks.add(method.getName());
+                    if (method.getName().equals("onLongPressSliderArea")) {
+                        return activity.onLongPressSliderArea((ImageTexture) args[0]);
+                    }
+                    if (method.getName().equals("onLongPressSliderAreaReleased")) {
+                        activity.onLongPressSliderAreaReleased();
+                    }
+                    return method.getReturnType() == boolean.class ? false : null;
+                }));
+        ReflectionHelpers.callInstanceMethod(view, "onLongPressInternal",
+                ClassParameter.from(float.class, 500f), ClassParameter.from(float.class, 900f));
+        assertEquals(expected, callbacks);
+        boolean speeding = speed != 1f;
+        assertEquals(speeding, (boolean) ReflectionHelpers.getField(view, "mSliderLongPressHandled"));
+        assertEquals(speeding, (boolean) ReflectionHelpers.getField(activity, "mAnimatedWebpLongPressActive"));
+        if (speeding) assertEquals(speed, texture.getPlaybackSpeed(), 0f);
+        ReflectionHelpers.callInstanceMethod(view, "onUpInternal");
+        ReflectionHelpers.callInstanceMethod(view, "onUpInternal");
+        List<String> released = new ArrayList<>(expected);
+        if (speeding) released.add("onLongPressSliderAreaReleased");
+        assertEquals(released, callbacks);
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpLongPressActive"));
+        assertEquals(1f, texture.getPlaybackSpeed(), 0f);
     }
 
     @Test
