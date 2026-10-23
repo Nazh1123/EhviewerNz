@@ -17,7 +17,7 @@ class AppUpdaterTest {
         val content = data.getJSONObject(AppUpdater.UPDATE_CONTENT)
         assertEquals("https://example.com/app.apk", content.getString(AppUpdater.FILE_DOWNLOAD_URL))
         assertEquals("https://example.com/releases/3", content.getString(AppUpdater.RELEASE_URL))
-        assertEquals(listOf("First change", "Second change"), content.getJSONArray(AppUpdater.CONTENT))
+        assertEquals("First change\n\nSecond change", content.getString(AppUpdater.CONTENT))
     }
 
     @Test fun missingAmbiguousOrUnsafeApkDoesNotBecomeDirectDownload() {
@@ -31,5 +31,24 @@ class AppUpdaterTest {
             assertNull(AppUpdater.findApkDownloadUrl(JSON.parseObject("{\"assets\":$assets}")))
         }
         assertNull(AppUpdater.findApkDownloadUrl(JSON.parseObject("{}")))
+    }
+
+    @Test fun preservesMarkdownIndentationBlankLinesAndCodeExactly() {
+        val markdown = "## Changes\n\n- Parent\n  - Child\n\n```kotlin\n    val x = 1\n```\n"
+        val release = JSON.parseObject("{}")
+        release["body"] = markdown
+        val content = AppUpdater.createDialogData(release, "3.0", "https://example.com/releases/3")
+            .getJSONObject(AppUpdater.UPDATE_CONTENT)
+        assertEquals(markdown, content.getString(AppUpdater.CONTENT))
+    }
+
+    @Test fun emptyReleaseNotesFallBackToReleaseLink() {
+        for (body in listOf(null, "", "  \n\t")) {
+            val release = JSON.parseObject("{}")
+            release["body"] = body
+            val content = AppUpdater.createDialogData(release, "3.0", "https://example.com/releases/3")
+                .getJSONObject(AppUpdater.UPDATE_CONTENT)
+            assertEquals("https://example.com/releases/3", content.getString(AppUpdater.CONTENT))
+        }
     }
 }

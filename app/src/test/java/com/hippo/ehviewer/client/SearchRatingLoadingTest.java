@@ -268,6 +268,33 @@ public class SearchRatingLoadingTest {
         assertFalse(result.subscriptionRawGalleries.isEmpty());
     }
 
+    @Test public void nativeToHomepageHandoffSkipsKnownMetadataAndReportsArrivalOnFirstPass() throws Throwable {
+        var doc = org.jsoup.Jsoup.parse(html);
+        doc.select(".glhide a, .gl3e a").remove();
+        html = doc.outerHtml();
+        var raw = GalleryListParser.parseMergedUploaderSearch(html, ListUrlBuilder.MODE_NORMAL);
+        GalleryInfo arrival = raw.galleryInfoList.get(0);
+        GallerySeenState cursor = GallerySeenState.empty().observe(
+                raw.galleryInfoList.subList(1, raw.galleryInfoList.size()));
+        // Keep authoritative API timestamps consistent with the HTML fixture.
+        apiPosted = Long.toString(GallerySeenState.postedMinute(arrival.posted) * 60);
+        com.hippo.ehviewer.dao.QuickSearch bookmark = new com.hippo.ehviewer.dao.QuickSearch();
+        bookmark.mode = ListUrlBuilder.MODE_UPLOADER;
+        bookmark.keyword = "tester";
+        bookmark.subscribed = true;
+        SubscriptionHomepageMatcher matcher = new SubscriptionHomepageMatcher(java.util.List.of(bookmark),
+                java.util.Map.of(bookmark, cursor));
+        SubscriptionHomepageScan scan = new SubscriptionHomepageScan("", java.util.List.of(cursor));
+        var result = EhEngine.getSubscriptionHomepagePage(null, client(false), FIRST, matcher, scan);
+        assertEquals(java.util.Set.of(arrival.gid), apiGids);
+        assertEquals(1, apiRequests.get());
+        assertEquals(1, result.galleryInfoList.size());
+        assertEquals(arrival.gid, result.galleryInfoList.get(0).gid);
+        matcher.observe(result.galleryInfoList);
+        GallerySeenState resumed = cursor.merge(matcher.observed(java.util.List.of(bookmark)));
+        assertFalse(resumed.isNew(arrival));
+    }
+
     private static GallerySeenState cursorAt(String posted) {
         GalleryInfo seen = new GalleryInfo();
         seen.gid = 1;

@@ -13,6 +13,8 @@ import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.SubscriptionSearchContext;
 import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
+import com.hippo.ehviewer.client.SubscriptionHomepageMatcher;
+import com.hippo.ehviewer.client.SubscriptionHomepageScan;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
@@ -60,6 +62,7 @@ public class SubscriptionCheckReuseTest {
         bookmarks.clear();
         contextKey = "account-a";
         Context context = RuntimeEnvironment.getApplication();
+        context.getSharedPreferences("reuse-test", Context.MODE_PRIVATE).edit().clear().commit();
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 context.getSharedPreferences("reuse-test", Context.MODE_PRIVATE));
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, false);
@@ -429,8 +432,13 @@ public class SubscriptionCheckReuseTest {
     private void enableHomepage() {
         enableBookmark();
         bookmarks.get(0).keyword = "uploader:tester";
+        for (int i = 1; i < 9; i++) {
+            enableBookmark();
+            bookmarks.get(i).keyword = "uploader:tester";
+        }
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, false);
         Settings.putBoolean(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN, true);
+        manager.resetCheckTimer();
     }
 
     private static GalleryListParser.Result homePage(long start, int count, String next) {
@@ -441,6 +449,8 @@ public class SubscriptionCheckReuseTest {
             GalleryInfo gallery = new GalleryInfo();
             gallery.gid = start + i;
             gallery.posted = "2026-10-23 00:30";
+            gallery.uploader = "tester";
+            gallery.category = com.hippo.ehviewer.client.EhConfig.MANGA;
             page.subscriptionRawGalleries.add(gallery);
             page.galleryInfoList.add(gallery);
         }
@@ -517,14 +527,162 @@ public class SubscriptionCheckReuseTest {
         assertFalse(manager.isChecking());
     }
 
-    @Test public void changedHomepageBookmarkDefinitionSeedsANewCheckpoint() {
+    @Test public void changedHomepageBookmarkDefinitionKeepsProgressForUnchangedSearches() {
         enableHomepage();
         start(true);
         succeed(0, homePage(100, 25, null));
         bookmarks.get(0).keyword = "uploader:other";
         start(true);
         succeed(1, homePage(200, 25, null));
+        assertEquals(25, manager.getSnapshot().bookmarkCount);
+    }
+
+    private void useNativeOnNextCheck() {
+        Settings.putLong("subscription_updates_last_check_time", System.currentTimeMillis() - 60 * 60_000L);
+    }
+
+    private static GalleryInfo arrival(long gid, int minute) {
+        GalleryInfo gallery = homePage(gid, 1, null).galleryInfoList.get(0);
+        gallery.posted = String.format(java.util.Locale.US, "2026-10-23 00:%02d", minute);
+        return gallery;
+    }
+
+    private static GalleryListParser.Result result(String next, GalleryInfo... galleries) {
+        GalleryListParser.Result result = new GalleryListParser.Result();
+        result.nextHref = next;
+        result.galleryInfoList = new ArrayList<>(java.util.Arrays.asList(galleries));
+        result.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
+        result.rawSeenState = GallerySeenState.empty().observe(result.subscriptionRawGalleries);
+        result.rawResultCount = galleries.length;
+        if (galleries.length > 0) {
+            result.rawTailPosted = galleries[galleries.length - 1].posted;
+            result.rawTailGid = galleries[galleries.length - 1].gid;
+        }
+        return result;
+    }
+
+    @Test public void automaticSelectionUsesTheAutomaticTimerAndRawBookmarkCount() {
+        enableHomepage();
+        // Nine identical bookmarks merge into one source, but N remains nine.
+        start(false);
+        assertEquals(EhClient.METHOD_GET_SUBSCRIPTION_HOMEPAGE, requests.get(0).getMethod());
+        manager.cancelCheck();
+        useNativeOnNextCheck();
+        start(true);
+        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(1).getMethod());
+        manager.cancelCheck();
+        // Opening a subscription resets exactly the timer used by automatic checks.
+        manager.onSubscriptionOpened(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        start(true);
+        assertEquals(EhClient.METHOD_GET_SUBSCRIPTION_HOMEPAGE, requests.get(2).getMethod());
+        manager.cancelCheck();
+        bookmarks.remove(8);
+        manager.resetCheckTimer();
+        start(true);
+        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(3).getMethod());
+        manager.cancelCheck();
+    }
+
+    @Test public void nativeHomepageNativeRoundTripSurvivesBadgeClearingAndManagerRestart() {
+        enableHomepage();
+        useNativeOnNextCheck();
+        start(true);
+        succeed(0, result(null, arrival(100, 30)));
         assertEquals(0, manager.getSnapshot().bookmarkCount);
+        useNativeOnNextCheck();
+        start(true);
+        succeed(1, result(null, arrival(200, 31), arrival(100, 30)));
+        assertEquals(Collections.singleton(200L), manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+        manager.onSubscriptionOpened(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+
+        start(true);
+        assertEquals(EhClient.METHOD_GET_SUBSCRIPTION_HOMEPAGE, requests.get(2).getMethod());
+        // No homepage checkpoint exists: the arrival must be reported on this very first pass.
+        succeed(2, result(null, arrival(300, 32), arrival(200, 31), arrival(100, 30)));
+        assertFalse(manager.isChecking());
+        assertEquals(Collections.singleton(300L), manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+        manager.onSubscriptionOpened(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        manager = new SubscriptionUpdateManager(RuntimeEnvironment.getApplication());
+
+        useNativeOnNextCheck();
+        start(true);
+        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(3).getMethod());
+        GallerySeenState cursor = (GallerySeenState) requests.get(3).getArgs()[7];
+        assertFalse(cursor.isNew(arrival(300, 32)));
+        assertTrue(cursor.isNew(arrival(400, 33)));
+        succeed(3, result(null, arrival(400, 33), arrival(300, 32), arrival(200, 31)));
+        assertEquals(Collections.singleton(400L), manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+        manager.onSubscriptionOpened(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+
+        start(true);
+        // The old homepage checkpoint knows neither 400 nor 500; native progress excludes 400.
+        succeed(4, result(null, arrival(500, 34), arrival(400, 33), arrival(300, 32)));
+        assertEquals(Collections.singleton(500L), manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+    }
+
+    @Test public void failedOrCancelledHandoffDoesNotAdvanceNativeProgress() {
+        for (boolean cancel : new boolean[]{false, true}) {
+            setUp();
+            enableHomepage();
+            useNativeOnNextCheck();
+            start(true);
+            succeed(0, result(null, arrival(100, 30)));
+            String progress = Settings.getString("subscription_source_progress_v2", "");
+            manager.resetCheckTimer();
+            start(true);
+            succeed(1, result("https://e-hentai.org/?next=100", arrival(200, 31)));
+            assertTrue(manager.isChecking());
+            if (cancel) manager.cancelCheck();
+            else requests.get(2).getCallback().onFailure(new IllegalArgumentException("failed"));
+            assertEquals(progress, Settings.getString("subscription_source_progress_v2", ""));
+            assertEquals(0, manager.getSnapshot().bookmarkCount);
+            useNativeOnNextCheck();
+            start(true);
+            succeed(3, result(null, arrival(200, 31), arrival(100, 30)));
+            assertEquals(Collections.singleton(200L), manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+        }
+    }
+
+    @Test public void continuousHomepagePassesKeepTheCompleteFloorBeyondTheNativeSixIdWindow() {
+        enableHomepage();
+        GalleryListParser.Result baseline = homePage(100, 25, null);
+        baseline.galleryInfoList.get(0).posted = "2026-10-23 00:32";
+        baseline.rawSeenState = GallerySeenState.empty().observe(baseline.subscriptionRawGalleries);
+        start(true);
+        succeed(0, baseline);
+        start(true);
+        GalleryListParser.Result next = homePage(100, 25, "https://e-hentai.org/?next=75");
+        next.subscriptionRawGalleries.get(0).posted = "2026-10-23 00:32";
+        next.subscriptionRawGalleries.set(1, arrival(999, 30));
+        next.galleryInfoList = SubscriptionGallerySnapshot.copy(next.subscriptionRawGalleries);
+        next.rawSeenState = GallerySeenState.empty().observe(next.subscriptionRawGalleries);
+        succeed(1, next);
+        assertFalse(manager.isChecking());
+        assertEquals(Collections.singleton(999L), manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+    }
+
+    @Test public void handoffPreservesIndependentSourceWindowsInsteadOfUsingGlobalNewestTime() {
+        enableHomepage();
+        for (int i = 0; i < 8; i++) bookmarks.get(i).keyword = "uploader:alice l:chinese$";
+        bookmarks.get(8).keyword = "uploader:bob l:english$";
+        useNativeOnNextCheck();
+        start(true);
+        assertEquals(2, requests.size());
+        for (int i = 0; i < 2; i++) {
+            boolean alice = ((String) requests.get(i).getArgs()[0]).contains("alice");
+            succeed(i, result(null, arrival(alice ? 100 : 200, alice ? 20 : 30)));
+        }
+        manager.resetCheckTimer();
+        start(true);
+        GalleryInfo alice = arrival(110, 25);
+        alice.uploader = "alice";
+        alice.simpleTags = new String[]{"language:chinese"};
+        GalleryInfo bob = arrival(210, 31);
+        bob.uploader = "bob";
+        bob.simpleTags = new String[]{"language:english"};
+        succeed(2, result(null, bob, alice));
+        assertEquals(new java.util.HashSet<>(java.util.Arrays.asList(110L, 210L)),
+                manager.getUnreadGalleryGids(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
     }
 
     @Test public void homepageCommitsOnlyAfterMinuteCompletionAndKeepsSpillIdsAcrossShorterRepeats() {
@@ -624,6 +782,13 @@ public class SubscriptionCheckReuseTest {
 
     @SuppressWarnings("unchecked")
     private static void succeed(int index, GalleryListParser.Result page) {
+        EhRequest request = requests.get(index);
+        if (request.getMethod() == EhClient.METHOD_GET_SUBSCRIPTION_HOMEPAGE) {
+            SubscriptionHomepageMatcher matcher = (SubscriptionHomepageMatcher) request.getArgs()[1];
+            SubscriptionHomepageScan scan = (SubscriptionHomepageScan) request.getArgs()[2];
+            page.galleryInfoList.removeIf(gallery -> !scan.isNew(gallery)
+                    || !matcher.mayMatch(gallery) || !matcher.matches(gallery));
+        }
         requests.get(index).getCallback().onSuccess(page);
     }
 

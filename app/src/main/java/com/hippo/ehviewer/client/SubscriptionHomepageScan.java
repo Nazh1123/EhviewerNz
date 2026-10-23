@@ -69,6 +69,23 @@ public final class SubscriptionHomepageScan {
         } catch (RuntimeException ignored) { previous.clear(); }
     }
 
+    /** Resume native searches without treating the first homepage response as a new baseline. */
+    public SubscriptionHomepageScan(String checkpoint, List<GallerySeenState> cursors) {
+        this(checkpoint);
+        if (initialized) return;
+        long oldest = Long.MAX_VALUE;
+        for (GallerySeenState cursor : cursors) {
+            if (cursor.initialized() && cursor.oldestMinute() > 0) {
+                oldest = Math.min(oldest, cursor.oldestMinute());
+            }
+        }
+        if (oldest == Long.MAX_VALUE) return;
+        initialized = true;
+        previousMinute = previousFloor = oldest;
+        previousFloorComplete = true;
+        // No homepage anchor exists yet. Require two old pages, as for a deleted anchor.
+    }
+
     /** Also excludes duplicate candidates on later pages of the current pass. */
     public boolean isNew(GalleryInfo gallery) {
         long posted = GallerySeenState.postedMinute(gallery.posted);

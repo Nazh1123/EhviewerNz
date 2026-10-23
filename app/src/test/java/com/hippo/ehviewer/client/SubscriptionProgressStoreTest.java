@@ -41,4 +41,15 @@ public class SubscriptionProgressStoreTest {
         assertFalse(SubscriptionRetry.isTransientStatus(403));
         assertFalse(SubscriptionRetry.isTransientStatus(429));
     }
+
+    @Test public void handoffSnapshotsReplaceRatherThanMergeObsoleteIds() {
+        String key = SubscriptionProgressStore.key("account", "homepage-sync");
+        GallerySeenState old = GallerySeenState.empty().observe(java.util.List.of(gallery(100, 30)));
+        GallerySeenState current = GallerySeenState.empty().observe(java.util.List.of(gallery(200, 30)));
+        SubscriptionProgressStore store = new SubscriptionProgressStore("");
+        store.snapshot(key, old);
+        store.snapshot(key, current);
+        assertEquals(current.serialize(), new SubscriptionProgressStore(store.serialize())
+                .get(key, GallerySeenState.empty()).serialize());
+    }
 }

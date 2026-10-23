@@ -16,14 +16,21 @@ import java.util.Set;
 
 /** Compiles bookmarks once and indexes positive uploader/tag terms to avoid a full cross product. */
 public final class SubscriptionHomepageMatcher {
-    private record Rule(ListUrlBuilder builder, List<String> terms) {}
+    private record Rule(QuickSearch bookmark, ListUrlBuilder builder, List<String> terms,
+                        GallerySeenState cursor) {}
     private final Map<String, List<Rule>> index = new HashMap<>();
     private final List<Rule> unindexed = new ArrayList<>();
     private final List<Rule> rules = new ArrayList<>();
     private final List<QuickSearch> supported = new ArrayList<>();
     private final List<QuickSearch> fallback = new ArrayList<>();
+    private final Map<QuickSearch, GallerySeenState> observed = new HashMap<>();
 
     public SubscriptionHomepageMatcher(List<QuickSearch> bookmarks) {
+        this(bookmarks, java.util.Collections.emptyMap());
+    }
+
+    public SubscriptionHomepageMatcher(List<QuickSearch> bookmarks,
+            Map<QuickSearch, GallerySeenState> cursors) {
         for (QuickSearch bookmark : bookmarks) {
             if (!bookmark.subscribed || !BookmarkSubscriptionPlanner.isSupported(bookmark)) continue;
             List<String> terms = BookmarkSubscriptionPlanner.homepageTerms(bookmark);
@@ -32,7 +39,7 @@ public final class SubscriptionHomepageMatcher {
             for (String term : terms) normalized.add(normalize(term));
             ListUrlBuilder builder = new ListUrlBuilder();
             builder.set(bookmark);
-            Rule rule = new Rule(builder, normalized);
+            Rule rule = new Rule(bookmark, builder, normalized, cursors.get(bookmark));
             rules.add(rule);
             String anchor = null;
             for (String term : normalized) {
@@ -63,12 +70,36 @@ public final class SubscriptionHomepageMatcher {
     }
 
     public boolean matches(GalleryInfo gallery) {
+        return !matchingRules(gallery, true).isEmpty();
+    }
+
+    /** Only completed pages are observed; request retries must not mutate detection cursors. */
+    public void observe(List<GalleryInfo> galleries) {
+        for (GalleryInfo gallery : galleries) {
+            for (Rule rule : matchingRules(gallery, false)) {
+                observed.compute(rule.bookmark, (bookmark, state) ->
+                        (state == null ? GallerySeenState.empty() : state).observe(List.of(gallery)));
+            }
+        }
+    }
+
+    public GallerySeenState observed(List<QuickSearch> bookmarks) {
+        GallerySeenState state = GallerySeenState.empty();
+        for (QuickSearch bookmark : bookmarks) {
+            state = state.merge(observed.getOrDefault(bookmark, GallerySeenState.empty()));
+        }
+        return state;
+    }
+
+    private List<Rule> matchingRules(GalleryInfo gallery, boolean newOnly) {
         Set<String> values = new HashSet<>();
         if (gallery.uploader != null) values.add("uploader:" + gallery.uploader.toLowerCase(Locale.ROOT));
         if (gallery.simpleTags != null) for (String tag : gallery.simpleTags) values.add(normalize(tag));
         Set<Rule> candidates = new LinkedHashSet<>(unindexed);
         for (String value : values) candidates.addAll(index.getOrDefault(value, java.util.Collections.emptyList()));
+        List<Rule> matches = new ArrayList<>();
         for (Rule rule : candidates) {
+            if (newOnly && rule.cursor != null && !rule.cursor.isNew(gallery)) continue;
             ListUrlBuilder builder = rule.builder;
             if (builder.getMode() == ListUrlBuilder.MODE_NORMAL) {
                 int categories = builder.getCategory() == EhUtils.NONE
@@ -85,14 +116,15 @@ public final class SubscriptionHomepageMatcher {
                 boolean negative = term.startsWith("-");
                 if (values.contains(negative ? term.substring(1) : term) == negative) { match = false; break; }
             }
-            if (match) return true;
+            if (match) matches.add(rule);
         }
-        return false;
+        return matches;
     }
 
     /** HTML tags can be incomplete and ratings rounded: reject only authoritative list fields. */
     public boolean mayMatch(GalleryInfo gallery) {
         for (Rule rule : rules) {
+            if (rule.cursor != null && !rule.cursor.isNew(gallery)) continue;
             ListUrlBuilder builder = rule.builder;
             if (builder.getMode() == ListUrlBuilder.MODE_NORMAL) {
                 int categories = builder.getCategory() == EhUtils.NONE

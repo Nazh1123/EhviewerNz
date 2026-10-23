@@ -165,4 +165,19 @@ public class SubscriptionHomepageScanTest {
         assertFalse(restored.isNew(gallery(100, 30)));
         assertTrue(restored.isNew(gallery(999, 31)));
     }
+
+    @Test public void nativeHandoffUsesOldestSourceWindowWithoutSeedingAwayArrivals() {
+        GallerySeenState recent = GallerySeenState.empty().observe(page(100, 6, 30));
+        GallerySeenState older = GallerySeenState.empty().observe(page(200, 6, 20));
+        SubscriptionHomepageScan scan = new SubscriptionHomepageScan("", List.of(recent, older));
+        assertTrue(scan.isNew(gallery(1, 31)));
+        assertTrue(scan.isNew(gallery(2, 20)));
+        assertFalse(scan.isNew(gallery(3, 19)));
+        assertTrue(scan.shouldContinue(page(300, 25, 29), true));
+        assertTrue(scan.shouldContinue(page(400, 25, 20), true));
+        assertTrue(scan.shouldContinue(page(500, 25, 19), true));
+        assertTrue(scan.shouldContinue(page(600, 25, 18), true));
+        assertFalse(scan.shouldContinue(page(700, 25, 17), true));
+        assertFalse(scan.checkpoint().isEmpty());
+    }
 }

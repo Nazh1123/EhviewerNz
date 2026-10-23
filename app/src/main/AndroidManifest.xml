@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" /> <!-- 使用系统自带下载器 -->
     <uses-permission android:name="android.permission.ACCESS_DOWNLOAD_MANAGER" /> <!-- 自动安装apk -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- APK progress is shown by our foreground service, matching gallery downloads. -->
+    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
 
     <uses-feature
         android:glEsVersion="0x00020000"
@@ -222,7 +224,7 @@
         <activity
             android:name=".updater.AppUpdateActivity"
             android:exported="false"
-            android:theme="@style/Theme.AppCompat.DayNight.Dialog" />
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <activity
             android:name=".ui.ExcludedLanguagesActivity"
             android:configChanges="screenSize|uiMode"
@@ -289,6 +291,12 @@
             android:name=".download.DownloadService"
             android:foregroundServiceType="dataSync"
             android:label="@string/download_service_label" />
+        <service
+            android:name=".updater.AppUpdateDownloadService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="dataSync"
+            android:label="@string/app_update_download_title" />
         <service
             android:name=".download.ArchiverDownloadService"
             android:foregroundServiceType="dataSync"

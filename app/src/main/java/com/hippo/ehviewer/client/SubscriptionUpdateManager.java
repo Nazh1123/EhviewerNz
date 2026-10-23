@@ -30,8 +30,10 @@ import com.hippo.ehviewer.dao.QuickSearch;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
@@ -220,6 +222,7 @@ public final class SubscriptionUpdateManager {
         @Nullable SubscriptionHomepageMatcher homepageMatcher;
         @Nullable SubscriptionHomepageScan homepageScan;
         @Nullable String homepageContext;
+        final List<Source> homepageSources = new ArrayList<>();
         final Set<String> visitedUrls = new HashSet<>();
 
         Source(GallerySeenState cursor) {
@@ -552,23 +555,54 @@ public final class SubscriptionUpdateManager {
             if (preparationFailure != null) {
                 mBookmarkPreparationFailed = true;
             } else if (quickSearches != null) {
-                if (Settings.getSubscriptionHomepageScan()) {
-                    SubscriptionHomepageMatcher matcher = new SubscriptionHomepageMatcher(quickSearches);
+                List<Source> nativeSources = new ArrayList<>();
+                for (BookmarkSubscriptionPlanner.Source plan : BookmarkSubscriptionPlanner.plan(quickSearches)) {
+                    Source source = new Source(mBookmarkCursor, plan);
+                    restoreSourceProgress(source);
+                    nativeSources.add(source);
+                }
+                if (Settings.getSubscriptionHomepageScan() && shouldUseHomepageScan(
+                        quickSearches.size(), getLastCheckTime(), System.currentTimeMillis())) {
+                    List<QuickSearch> homepageBookmarks = new ArrayList<>();
+                    List<Source> homepageSources = new ArrayList<>();
+                    List<GallerySeenState> boundaries = new ArrayList<>();
+                    Map<QuickSearch, GallerySeenState> cursors = new HashMap<>();
+                    for (Source source : nativeSources) {
+                        // Keep the same native plan/key in both modes. A mixed plan stays native.
+                        boolean supported = !(source.cursor.initialized() && source.cursor.minute() == 0);
+                        for (QuickSearch bookmark : source.plan.getBookmarks()) {
+                            supported &= BookmarkSubscriptionPlanner.homepageTerms(bookmark) != null;
+                        }
+                        if (!supported) continue;
+                        homepageSources.add(source);
+                        boundaries.add(source.cursor);
+                        GallerySeenState synced = mProgress.get(homepageSyncKey(source), GallerySeenState.empty());
+                        boolean nativeAdvanced = !source.cursor.initialized()
+                                || !synced.serialize().equals(source.cursor.serialize());
+                        for (QuickSearch bookmark : source.plan.getBookmarks()) {
+                            homepageBookmarks.add(bookmark);
+                            // Native searches may have advanced since the saved homepage checkpoint.
+                            // Continuous homepage passes retain the homepage's wider complete-minute window.
+                            if (nativeAdvanced) cursors.put(bookmark, source.cursor);
+                        }
+                    }
+                    SubscriptionHomepageMatcher matcher = new SubscriptionHomepageMatcher(homepageBookmarks, cursors);
                     if (!matcher.isEmpty()) {
                         Source homepage = new Source(mBookmarkCursor, matcher);
+                        homepage.homepageSources.addAll(homepageSources);
                         homepage.homepageContext = SubscriptionProgressStore.key(mSearchContext, matcher.fingerprint());
                         String saved = Settings.getString(KEY_HOMEPAGE_CHECKPOINT, "");
                         String prefix = homepage.homepageContext + "\n";
                         homepage.homepageScan = new SubscriptionHomepageScan(saved.startsWith(prefix)
-                                ? saved.substring(prefix.length()) : "");
+                                ? saved.substring(prefix.length()) : "",
+                                boundaries);
                         addSource(homepage);
                         mBookmarkSourceCount++;
+                        nativeSources.removeAll(homepageSources);
                     }
-                    quickSearches = matcher.fallbackBookmarks();
                 }
-                for (BookmarkSubscriptionPlanner.Source plan
-                        : BookmarkSubscriptionPlanner.plan(quickSearches)) {
-                    addSource(new Source(mBookmarkCursor, plan));
+                for (Source source : nativeSources) {
+                    addSource(source);
                     mBookmarkSourceCount++;
                 }
             }
@@ -582,6 +616,13 @@ public final class SubscriptionUpdateManager {
     }
 
     private void addSource(@NonNull Source source) {
+        if (source.progressKey == null) restoreSourceProgress(source);
+        source.queued = true;
+        mSources.add(source);
+        mQueue.addLast(source);
+    }
+
+    private void restoreSourceProgress(@NonNull Source source) {
         source.progressKey = SubscriptionProgressStore.key(mSearchContext,
                 source.homepageScan != null ? "homepage:" + source.homepageContext
                         : source.plan == null ? "eh-subscription" : source.plan.getCacheKey());
@@ -592,9 +633,6 @@ public final class SubscriptionUpdateManager {
                     ? getLastSeenEhState() : getLastSeenBookmarkState();
             source.cursor = completed.merge(viewed);
         }
-        source.queued = true;
-        mSources.add(source);
-        mQueue.addLast(source);
     }
 
     private void pumpRequests(int generation) {
@@ -681,6 +719,7 @@ public final class SubscriptionUpdateManager {
             pumpRequests(generation);
             return;
         }
+        if (source.homepageMatcher != null) source.homepageMatcher.observe(result.galleryInfoList);
         // Even an unmatched homepage page establishes a publication-time display baseline.
         source.observed = source.observed.merge(result.rawSeenState).observe(result.galleryInfoList);
         for (GalleryInfo gallery : result.galleryInfoList) {
@@ -770,6 +809,16 @@ public final class SubscriptionUpdateManager {
                 String checkpoint = source.homepageScan.checkpoint();
                 if (!checkpoint.isEmpty()) Settings.putString(KEY_HOMEPAGE_CHECKPOINT,
                         source.homepageContext + "\n" + checkpoint);
+                for (Source nativeSource : source.homepageSources) {
+                    GallerySeenState observed = source.homepageMatcher.observed(nativeSource.plan.getBookmarks());
+                    // First checks seed history; later checks retain each search's own overlap.
+                    GallerySeenState completed = nativeSource.cursor.initialized()
+                            ? nativeSource.cursor.merge(observed) : source.observed;
+                    mProgress.complete(nativeSource.progressKey, completed);
+                    mProgress.snapshot(homepageSyncKey(nativeSource),
+                            mProgress.get(nativeSource.progressKey, GallerySeenState.empty()));
+                }
+                Settings.putString(KEY_SOURCE_PROGRESS, mProgress.serialize());
             } else {
                 mProgress.complete(source.progressKey, source.cursor.merge(source.observed));
                 Settings.putString(KEY_SOURCE_PROGRESS, mProgress.serialize());
@@ -845,6 +894,10 @@ public final class SubscriptionUpdateManager {
             }
         }
         return count;
+    }
+
+    private String homepageSyncKey(Source source) {
+        return SubscriptionProgressStore.key(mSearchContext, "homepage-sync:" + source.plan.getCacheKey());
     }
 
     private void cacheRecentCheckResult() {
@@ -928,5 +981,11 @@ public final class SubscriptionUpdateManager {
     static boolean isCheckResultFresh(long cachedRealtime, long nowRealtime) {
         return cachedRealtime >= 0L && nowRealtime >= cachedRealtime
                 && nowRealtime - cachedRealtime <= CHECK_REUSE_WINDOW_MS;
+    }
+
+    static boolean shouldUseHomepageScan(int bookmarkCount, long lastCheckTime, long now) {
+        if (bookmarkCount <= 8 || lastCheckTime <= 0 || now < lastCheckTime) return false;
+        double minutes = (now - lastCheckTime) / 60_000.0;
+        return minutes < 400 && minutes * 0.3 < bookmarkCount;
     }
 }

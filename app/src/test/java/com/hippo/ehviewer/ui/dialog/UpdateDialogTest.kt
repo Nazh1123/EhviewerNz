@@ -3,10 +3,11 @@ package com.hippo.ehviewer.ui.dialog
 import android.app.Activity
 import android.app.Application
 import android.content.Intent
+import android.widget.FrameLayout
 import androidx.appcompat.app.AlertDialog
 import com.alibaba.fastjson.JSON
 import com.hippo.ehviewer.R
-import com.hippo.ehviewer.updater.AppUpdateActivity
+import com.hippo.ehviewer.updater.AppUpdateDownloadService
 import com.hippo.ehviewer.updater.AppUpdater
 import org.junit.Assert.*
 import org.junit.Test
@@ -49,13 +50,14 @@ class UpdateDialogTest {
         assertEquals("https://example.com/releases/3", intent.data.toString())
     }
 
-    @Test fun directChoicePassesApkToDownloadActivity() {
+    @Test fun directChoiceStartsNotificationServiceWithoutOpeningProgressActivity() {
         val activity = showMethods(true)
         (ShadowDialog.getLatestDialog() as AlertDialog)
             .getButton(AlertDialog.BUTTON_POSITIVE).performClick()
         ShadowLooper.idleMainLooper()
-        val intent = shadowOf(activity).nextStartedActivity
-        assertEquals(AppUpdateActivity::class.java.name, intent.component!!.className)
+        assertNull(shadowOf(activity).nextStartedActivity)
+        val intent = shadowOf(activity).nextStartedService
+        assertEquals(AppUpdateDownloadService::class.java.name, intent.component!!.className)
         assertEquals("https://example.com/app.apk", intent.getStringExtra(AppUpdater.FILE_DOWNLOAD_URL))
     }
 
@@ -63,6 +65,23 @@ class UpdateDialogTest {
         showMethods(false)
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
         assertFalse(dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled)
+        assertTrue(dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isEnabled)
+    }
+
+    @Test fun markdownBodyIsRenderedInScrollableViewAndUpdateButtonsRemainAvailable() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        activity.setTheme(R.style.AppTheme)
+        val content = JSON.parseObject("""{"title":"Update","releaseUrl":"https://example.com/releases/3"}""")
+        content[AppUpdater.CONTENT] = "## Changes\n\n**New** feature"
+        val data = JSON.parseObject("""{"mustUpdate":false}""")
+        data[AppUpdater.UPDATE_CONTENT] = content
+        UpdateDialog(activity).showUpdateDialog(data)
+        ShadowLooper.idleMainLooper()
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        val body = dialog.findViewById<FrameLayout>(androidx.appcompat.R.id.custom)!!.getChildAt(0) as UpdateNotesView
+        assertEquals("Changes\n\nNew feature", body.notes.text.toString())
+        assertTrue(dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled)
+        assertTrue(dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled)
         assertTrue(dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isEnabled)
     }
 }

@@ -37,6 +37,12 @@ final class SubscriptionProgressStore {
     void complete(String key, GallerySeenState cursor) {
         if (!cursor.initialized()) return;
         GallerySeenState latest = completed.getOrDefault(key, GallerySeenState.empty()).merge(cursor);
+        snapshot(key, latest);
+    }
+
+    /** An exact handoff snapshot detects whether native progress has subsequently changed. */
+    void snapshot(String key, GallerySeenState latest) {
+        if (!latest.initialized()) return;
         completed.remove(key);
         completed.put(key, latest);
         while (completed.size() > 2048) completed.remove(completed.keySet().iterator().next());

@@ -145,4 +145,30 @@ public class SubscriptionHomepageMatcherTest {
         gallery.category = EhUtils.UNKNOWN;
         assertTrue(matcher.mayMatch(gallery));
     }
+
+    @Test public void nativeCursorsRejectKnownMatchesBeforeMetadataAndTrackProgressPerBookmark() {
+        QuickSearch alice = bookmark("uploader:\"Alice Smith\"");
+        QuickSearch bob = bookmark("uploader:Bob");
+        GalleryInfo known = gallery();
+        known.gid = 100;
+        known.posted = "2026-10-23 00:30";
+        GalleryInfo arrival = gallery();
+        arrival.gid = 101;
+        arrival.posted = known.posted;
+        GallerySeenState cursor = GallerySeenState.empty().observe(List.of(known));
+        SubscriptionHomepageMatcher matcher = new SubscriptionHomepageMatcher(List.of(alice, bob),
+                java.util.Map.of(alice, cursor, bob, GallerySeenState.empty()));
+        assertFalse(matcher.mayMatch(known));
+        assertFalse(matcher.matches(known));
+        assertTrue(matcher.mayMatch(arrival));
+        assertTrue(matcher.matches(arrival));
+        matcher.observe(List.of(arrival));
+        // Observations cannot alter the immutable cursors halfway through a retried pass.
+        assertTrue(matcher.matches(arrival));
+        assertFalse(matcher.observed(List.of(alice)).isNew(arrival));
+        assertTrue(matcher.observed(List.of(alice)).initialized());
+        assertFalse(matcher.observed(List.of(bob)).initialized());
+        arrival.uploader = "Bob";
+        assertFalse(matcher.matches(arrival)); // A source without a baseline seeds silently.
+    }
 }

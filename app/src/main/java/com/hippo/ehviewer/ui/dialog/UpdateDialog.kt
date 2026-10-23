@@ -6,10 +6,11 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import com.alibaba.fastjson.JSONArray
 import com.alibaba.fastjson.JSONObject
 import com.hippo.ehviewer.Analytics
 import com.hippo.ehviewer.R
-import com.hippo.ehviewer.updater.AppUpdateActivity
+import com.hippo.ehviewer.updater.AppUpdateDownload
 import com.hippo.ehviewer.updater.AppUpdater
 
 class UpdateDialog(private val activity: Activity) {
@@ -45,13 +46,18 @@ class UpdateDialog(private val activity: Activity) {
             val releaseUrl = content.getString(AppUpdater.RELEASE_URL)
                 ?.takeIf { it.isNotBlank() } ?: GITHUB_RELEASE_URL
             val downloadUrl = content.getString(AppUpdater.FILE_DOWNLOAD_URL)
-            val notes = content.getJSONArray(AppUpdater.CONTENT).joinToString("\n")
+            val notes = when (val value = content[AppUpdater.CONTENT]) {
+                is String -> value
+                is JSONArray -> value.joinToString("\n")
+                else -> releaseUrl
+            }.ifBlank { releaseUrl }
             ContextCompat.getMainExecutor(activity).execute {
                 if (!isActivityAlive()) return@execute
-                val dialog = AlertDialog.Builder(activity)
+                val builder = AlertDialog.Builder(activity)
+                val dialog = builder
                     .setIcon(R.mipmap.ic_launcher)
                     .setTitle(content.getString(AppUpdater.TITLE))
-                    .setMessage(notes)
+                    .setView(UpdateNotesView(builder.context, notes, releaseUrl, ::openPage))
                     .setPositiveButton(R.string.update, null)
                     .setNeutralButton(R.string.update_dialog_sponsor, null)
                     .apply {
@@ -84,10 +90,7 @@ class UpdateDialog(private val activity: Activity) {
                 onSelected()
             }
             .setPositiveButton(R.string.app_update_direct_download) { _, _ ->
-                activity.startActivity(Intent(activity, AppUpdateActivity::class.java).apply {
-                    putExtra(AppUpdater.FILE_DOWNLOAD_URL, downloadUrl)
-                    putExtra(AppUpdater.RELEASE_URL, releaseUrl)
-                })
+                AppUpdateDownload.start(activity, downloadUrl!!, releaseUrl)
                 onSelected()
             }
             .setNegativeButton(R.string.cancel, null)

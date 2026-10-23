@@ -1261,5 +1261,5 @@
     <string name="animated_webp_progress">动图播放进度</string>
     <string name="animated_webp_play_pause">播放或暂停动图</string>
     <string name="settings_subscription_homepage_scan">主页扫描更新订阅</string>
-    <string name="settings_subscription_homepage_scan_summary">手动及自动“更新订阅”时，从主页匹配支持的书签规则；复杂搜索自动使用原方式。首次使用建立基线，不改变“书签订阅”的浏览方式。</string>
+    <string name="settings_subscription_homepage_scan_summary">手动及自动“更新订阅”时，订阅数 N 大于 8、距上次更新 T 小于 400 分钟且 T × 0.3 小于 N 时，自动使用主页扫描；其他情况及复杂搜索使用原方式。切换时沿用检查进度，不改变“书签订阅”的浏览方式。</string>
 </resources>

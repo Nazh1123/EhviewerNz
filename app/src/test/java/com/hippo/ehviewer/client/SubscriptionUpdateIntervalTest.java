@@ -56,4 +56,18 @@ public class SubscriptionUpdateIntervalTest {
         assertEquals(Integer.MAX_VALUE, Settings.getAutoSubscriptionUpdateIntervalMinutes());
         assertEquals(128_849_018_820_000L, Settings.getAutoSubscriptionUpdateIntervalMillis());
     }
+
+    @Test public void homepageSelectionUsesStrictThresholdsAndFractionalMinutes() {
+        long last = 1_790_000_000_000L;
+        assertFalse(SubscriptionUpdateManager.shouldUseHomepageScan(8, last, last));
+        assertTrue(SubscriptionUpdateManager.shouldUseHomepageScan(9, last, last));
+        assertTrue(SubscriptionUpdateManager.shouldUseHomepageScan(9, last, last + 30 * 60_000L - 1));
+        assertFalse(SubscriptionUpdateManager.shouldUseHomepageScan(9, last, last + 30 * 60_000L));
+        assertFalse(SubscriptionUpdateManager.shouldUseHomepageScan(9, last, last + 30 * 60_000L + 1));
+        assertTrue(SubscriptionUpdateManager.shouldUseHomepageScan(120, last, last + 400 * 60_000L - 1));
+        assertFalse(SubscriptionUpdateManager.shouldUseHomepageScan(121, last, last + 400 * 60_000L));
+        assertFalse(SubscriptionUpdateManager.shouldUseHomepageScan(1000, last, last + 401 * 60_000L));
+        assertFalse(SubscriptionUpdateManager.shouldUseHomepageScan(1000, 0, last));
+        assertFalse(SubscriptionUpdateManager.shouldUseHomepageScan(1000, last, last - 1));
+    }
 }
