@@ -103,7 +103,7 @@
 
             <TextView
                 android:id="@+id/processing_separator"
-                style="@style/ReadProgress"
+                style="@style/CardMessage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_toRightOf="@id/read_progress"
@@ -115,7 +115,7 @@
 
             <TextView
                 android:id="@+id/processing_progress"
-                style="@style/ReadProgress"
+                style="@style/CardMessage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_toRightOf="@id/processing_separator"
@@ -129,7 +129,7 @@
 
             <TextView
                 android:id="@+id/sr_progress"
-                style="@style/ReadProgress"
+                style="@style/CardMessage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_alignLeft="@id/processing_progress"
