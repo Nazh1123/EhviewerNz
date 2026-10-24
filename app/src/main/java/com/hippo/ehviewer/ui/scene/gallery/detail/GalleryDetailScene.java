@@ -2880,7 +2880,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     private boolean hasLocalDownloadState() {
         return mDownloadState == DownloadInfo.STATE_FINISH
-                || mDownloadState == DownloadInfo.STATE_NONE;
+                || mDownloadState == DownloadInfo.STATE_NONE
+                || mDownloadState == DownloadInfo.STATE_DOWNLOAD
+                || mDownloadState == DownloadInfo.STATE_FAILED;
     }
 
     private void updateLocalActionsVisibility() {

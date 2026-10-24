@@ -1428,7 +1428,8 @@ public class OfflineGalleryDetailSceneTest {
                     DownloadInfo.STATE_FAILED, DownloadInfo.STATE_UPDATE, DownloadInfo.GOTO_NEW}) {
                 ReflectionHelpers.setField(scene, "mDownloadState", state);
                 ReflectionHelpers.callInstanceMethod(scene, "updateDownloadText");
-                boolean visible = state == DownloadInfo.STATE_FINISH || state == DownloadInfo.STATE_NONE;
+                boolean visible = state == DownloadInfo.STATE_FINISH || state == DownloadInfo.STATE_NONE
+                        || state == DownloadInfo.STATE_DOWNLOAD || state == DownloadInfo.STATE_FAILED;
                 for (int id : new int[]{R.id.action_open_local_gallery_image,
                         R.id.action_copy_local_gallery_path, R.id.action_view_local_gallery_size,
                         R.id.action_enhance_local_gallery, R.id.action_translate_local_gallery}) {

@@ -32,7 +32,9 @@ object DownloadedGalleryTasks {
                 val provider = withContext(Dispatchers.IO) {
                     try {
                         val download = EhApplication.getDownloadManager(app).getDownloadInfo(info.gid)
-                        if (download == null || download.state !in listOf(DownloadInfo.STATE_FINISH, DownloadInfo.STATE_NONE)) null
+                        if (download == null || download.state !in listOf(
+                                DownloadInfo.STATE_FINISH, DownloadInfo.STATE_NONE,
+                                DownloadInfo.STATE_DOWNLOAD, DownloadInfo.STATE_FAILED)) null
                         else source(app, download)
                     } catch (_: RuntimeException) { null }
                 }
