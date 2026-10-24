@@ -1,6 +1,7 @@
 package com.hippo.ehviewer.ui;
 
 import android.app.Application;
+import android.os.Bundle;
 import android.view.View;
 import android.widget.FrameLayout;
 
@@ -10,6 +11,9 @@ import com.google.android.material.navigation.NavigationView;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.ui.scene.gallery.list.QuickSearchScene;
+import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
+import com.hippo.ehviewer.ui.scene.gallery.list.SubscriptionsScene;
+import com.hippo.ehviewer.ui.scene.history.HistoryScene;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.StageActivity;
 
@@ -38,6 +42,7 @@ public class NavigationLongPressTest {
     @Before
     public void setUp() {
         Settings.initialize(RuntimeEnvironment.getApplication());
+        Settings.putBoolean(Settings.KEY_POPULAR_UPDATES_ONLY, false);
         // Avoid launching network-backed scenes; only attach the navigation and dialog UI.
         activity = Robolectric.buildActivity(MainActivity.class).get();
         activity.setTheme(R.style.AppTheme_Main);
@@ -72,13 +77,60 @@ public class NavigationLongPressTest {
         assertEquals(QuickSearchScene.class, ShadowStageActivity.destination);
     }
 
+    @Test
+    @Config(shadows = ShadowStageActivity.class, instrumentedPackages = "com.hippo.scene")
+    public void subscriptionLongPressOpensSubscriptionManagement() {
+        row.setId(R.id.nav_subscription);
+        assertTrue(row.performLongClick());
+        assertEquals(SubscriptionsScene.class, ShadowStageActivity.destination);
+    }
+
+    @Test
+    @Config(shadows = ShadowStageActivity.class, instrumentedPackages = "com.hippo.scene")
+    public void historyGroupLongPressOpensBrowsingHistoryWithoutExpanding() {
+        row.setId(R.id.nav_history_group);
+        assertTrue(row.performLongClick());
+        assertEquals(HistoryScene.class, ShadowStageActivity.destination);
+        assertFalse(ReflectionHelpers.<Boolean>getField(activity, "mHistorySidebarExpanded"));
+    }
+
+    @Test
+    @Config(shadows = ShadowStageActivity.class, instrumentedPackages = "com.hippo.scene")
+    public void popularLongPressOpensOppositeModeAndClickKeepsDefault() {
+        row.setId(R.id.nav_whats_hot);
+        for (boolean defaultUpdates : new boolean[]{false, true}) {
+            Settings.putBoolean(Settings.KEY_POPULAR_UPDATES_ONLY, defaultUpdates);
+            assertTrue(row.performLongClick());
+            assertEquals(GalleryListScene.class, ShadowStageActivity.destination);
+            assertEquals(GalleryListScene.ACTION_WHATS_HOT,
+                    ShadowStageActivity.args.getString(GalleryListScene.KEY_ACTION));
+            assertTrue(ShadowStageActivity.args.containsKey(GalleryListScene.KEY_POPULAR_UPDATES_ONLY));
+            assertEquals(!defaultUpdates,
+                    ShadowStageActivity.args.getBoolean(GalleryListScene.KEY_POPULAR_UPDATES_ONLY));
+            assertEquals(defaultUpdates, Settings.getPopularUpdatesOnly());
+
+            assertTrue(activity.onNavigationItemSelected(
+                    navigation.getMenu().findItem(R.id.nav_whats_hot)));
+            assertEquals(GalleryListScene.ACTION_WHATS_HOT,
+                    ShadowStageActivity.args.getString(GalleryListScene.KEY_ACTION));
+            assertFalse(ShadowStageActivity.args.containsKey(GalleryListScene.KEY_POPULAR_UPDATES_ONLY));
+        }
+    }
+
     @Implements(value = StageActivity.class, isInAndroidSdk = false)
     public static class ShadowStageActivity extends ShadowActivity {
         static Class<?> destination;
+        static Bundle args;
 
         @Implementation
         protected void startScene(Announcer announcer) {
             destination = announcer.getClazz();
+            args = announcer.getArgs();
+        }
+
+        @Implementation
+        protected void startSceneFirstly(Announcer announcer) {
+            startScene(announcer);
         }
     }
 

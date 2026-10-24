@@ -5,6 +5,7 @@ import android.app.Application;
 import android.content.Context;
 import android.graphics.Rect;
 import android.os.Looper;
+import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.TextView;
@@ -868,6 +869,58 @@ public class PopularGalleryRenderingTest {
 
     private void setDefaultUpdates(boolean enabled) {
         Settings.putBoolean(Settings.KEY_POPULAR_UPDATES_ONLY, enabled);
+    }
+
+    @Test public void explicitPopularModeOverridesDefaultUntilAnotherNavigation() {
+        for (boolean defaultUpdates : new boolean[]{false, true}) {
+            setDefaultUpdates(defaultUpdates);
+            Bundle args = new Bundle();
+            args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_WHATS_HOT);
+            args.putBoolean(GalleryListScene.KEY_POPULAR_UPDATES_ONLY, !defaultUpdates);
+            ReflectionHelpers.callInstanceMethod(scene, "handleArgs", ClassParameter.from(Bundle.class, args));
+            refresh(1, 2, 3);
+            assertEquals(defaultUpdates ? PopularGalleryHistory.CURRENT : PopularGalleryHistory.UPDATES,
+                    (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+            assertEquals(defaultUpdates ? Arrays.asList(1L, 2L, 3L) : Arrays.asList(3L), visibleIds());
+            refresh(1, 2, 3, 4);
+            assertEquals(defaultUpdates ? PopularGalleryHistory.CURRENT : PopularGalleryHistory.UPDATES,
+                    (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+            assertEquals(defaultUpdates, Settings.getPopularUpdatesOnly());
+
+            args.remove(GalleryListScene.KEY_POPULAR_UPDATES_ONLY);
+            ReflectionHelpers.callInstanceMethod(scene, "handleArgs", ClassParameter.from(Bundle.class, args));
+            refresh(1, 2, 3, 4, 5);
+            assertEquals(defaultUpdates ? PopularGalleryHistory.UPDATES : PopularGalleryHistory.CURRENT,
+                    (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+            // Restore a known snapshot for the next setting combination.
+            refresh(1, 2);
+        }
+    }
+
+    @Test public void explicitUpdatesModeStaysActiveWhenThereAreNoUpdates() {
+        Bundle args = new Bundle();
+        args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_WHATS_HOT);
+        args.putBoolean(GalleryListScene.KEY_POPULAR_UPDATES_ONLY, true);
+        ReflectionHelpers.callInstanceMethod(scene, "handleArgs", ClassParameter.from(Bundle.class, args));
+        refresh(1, 2);
+        assertEquals(PopularGalleryHistory.UPDATES,
+                (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+        assertTrue(visibleIds().isEmpty());
+    }
+
+    @Test public void explicitPopularModeSurvivesSavedState() {
+        for (boolean updatesOnly : new boolean[]{false, true}) {
+            Bundle args = new Bundle();
+            args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_WHATS_HOT);
+            args.putBoolean(GalleryListScene.KEY_POPULAR_UPDATES_ONLY, updatesOnly);
+            ReflectionHelpers.callInstanceMethod(scene, "handleArgs", ClassParameter.from(Bundle.class, args));
+            Bundle saved = new Bundle();
+            scene.onSaveInstanceState(saved);
+            GalleryListScene restored = new GalleryListScene();
+            ReflectionHelpers.callInstanceMethod(restored, "onRestore", ClassParameter.from(Bundle.class, saved));
+            assertEquals(Boolean.valueOf(updatesOnly),
+                    ReflectionHelpers.<Boolean>getField(restored, "mPopularUpdatesOnlyOverride"));
+        }
     }
 
     @Test @Config(sdk = 34)

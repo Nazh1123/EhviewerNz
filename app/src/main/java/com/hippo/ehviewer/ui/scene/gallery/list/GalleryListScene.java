@@ -202,6 +202,7 @@ public class GalleryListScene extends BaseScene
     private static final String KEY_SELECTED_GIDS = "selected_gids";
     private static final String KEY_DOWNLOADED_ONLY_MODE = "downloaded_only_mode";
     private static final String KEY_POPULAR_VIEW_MODE = "popular_view_mode";
+    public static final String KEY_POPULAR_UPDATES_ONLY = "popular_updates_only";
     private static final String KEY_POPULAR_REPEATED_EXPANDED = "popular_repeated_expanded";
     private static final String KEY_SUBSCRIPTION_NEW_GIDS = "subscription_new_gids";
 
@@ -273,6 +274,8 @@ public class GalleryListScene extends BaseScene
     private PopularGalleryHistory mPopularHistory;
     private int mPopularHistorySite = -1;
     private int mPopularViewMode = PopularGalleryHistory.CURRENT;
+    @Nullable
+    private Boolean mPopularUpdatesOnlyOverride;
     private boolean mPopularRepeatedExpanded;
     private boolean mPopularResponseReady;
     private boolean mPopularRequestInFlight;
@@ -413,6 +416,9 @@ public class GalleryListScene extends BaseScene
         }
 
         String action = args.getString(KEY_ACTION);
+        mPopularUpdatesOnlyOverride = ACTION_WHATS_HOT.equals(action)
+                && args.containsKey(KEY_POPULAR_UPDATES_ONLY)
+                ? args.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
         if (ACTION_HOMEPAGE.equals(action)) {
             mUrlBuilder.reset();
         } else if (ACTION_SUBSCRIPTION.equals(action)) {
@@ -551,6 +557,8 @@ public class GalleryListScene extends BaseScene
         mMultiSelectMode = savedInstanceState.getBoolean(KEY_MULTI_SELECT_MODE);
         mDownloadedOnlyMode = savedInstanceState.getBoolean(KEY_DOWNLOADED_ONLY_MODE);
         mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
+        mPopularUpdatesOnlyOverride = savedInstanceState.containsKey(KEY_POPULAR_UPDATES_ONLY)
+                ? savedInstanceState.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
         mPopularRepeatedExpanded = savedInstanceState.getBoolean(KEY_POPULAR_REPEATED_EXPANDED);
         mPopularResponseReady = mHasFirstRefresh && isPopularMode();
         String seenKey = savedInstanceState.getString("seen_search_key");
@@ -592,6 +600,9 @@ public class GalleryListScene extends BaseScene
         outState.putBoolean(KEY_MULTI_SELECT_MODE, mMultiSelectMode);
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
         outState.putInt(KEY_POPULAR_VIEW_MODE, mPopularViewMode);
+        if (mPopularUpdatesOnlyOverride != null) {
+            outState.putBoolean(KEY_POPULAR_UPDATES_ONLY, mPopularUpdatesOnlyOverride);
+        }
         outState.putBoolean(KEY_POPULAR_REPEATED_EXPANDED, mPopularRepeatedExpanded);
         if (mSeenSearch != null) {
             outState.putString("seen_search_key", mSeenSearch.key());
@@ -3155,9 +3166,12 @@ public class GalleryListScene extends BaseScene
                 mPopularHistory.persist();
                 mPopularResponseReady = true;
                 mPopularRequestInFlight = false;
-                mPopularViewMode = Settings.getPopularUpdatesOnly()
+                boolean updatesOnly = mPopularUpdatesOnlyOverride != null
+                        ? mPopularUpdatesOnlyOverride : Settings.getPopularUpdatesOnly();
+                mPopularViewMode = updatesOnly
                         ? PopularGalleryHistory.UPDATES : PopularGalleryHistory.CURRENT;
-                if (mPopularViewMode == PopularGalleryHistory.UPDATES && mPopularHistory.hasPrevious()
+                if (mPopularUpdatesOnlyOverride == null
+                        && mPopularViewMode == PopularGalleryHistory.UPDATES && mPopularHistory.hasPrevious()
                         && mPopularHistory.galleries(PopularGalleryHistory.UPDATES).isEmpty()) {
                     // Keep the current list readable when the default filter has no new galleries.
                     mPopularViewMode = PopularGalleryHistory.CURRENT;

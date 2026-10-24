@@ -614,19 +614,33 @@ public final class MainActivity extends StageActivity
 
     private boolean onNavigationItemLongClick(@IdRes int itemId) {
         switch (itemId) {
+            case R.id.nav_subscription:
+                startScene(new Announcer(SubscriptionsScene.class));
+                break;
+            case R.id.nav_history_group:
+                startScene(new Announcer(HistoryScene.class));
+                break;
+            case R.id.nav_whats_hot:
+                Bundle args = new Bundle();
+                args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_WHATS_HOT);
+                args.putBoolean(GalleryListScene.KEY_POPULAR_UPDATES_ONLY,
+                        !Settings.getPopularUpdatesOnly());
+                startSceneFirstly(new Announcer(GalleryListScene.class).setArgs(args));
+                break;
             case R.id.nav_bookmark_subscription:
             case R.id.nav_global_subscription:
                 startScene(new Announcer(QuickSearchScene.class));
-                if (mDrawerLayout != null) {
-                    mDrawerLayout.closeDrawers();
-                }
-                return true;
+                break;
             case R.id.nav_update_subscription:
                 showSubscriptionUpdateSettings();
                 return true;
             default:
                 return false;
         }
+        if (mDrawerLayout != null) {
+            mDrawerLayout.closeDrawers();
+        }
+        return true;
     }
 
     private void showSubscriptionUpdateSettings() {
