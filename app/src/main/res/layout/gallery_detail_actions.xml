@@ -22,7 +22,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:paddingTop="@dimen/keyline_margin"
-    android:paddingBottom="@dimen/keyline_margin">
+    android:paddingBottom="6dp">
 
     <HorizontalScrollView
         android:id="@+id/actions_scroll_view"
