@@ -872,6 +872,93 @@ public class PopularGalleryRenderingTest {
 
     @Test @Config(sdk = 34)
     @org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.PAUSED)
+    public void updateSnapshotRefreshesOnlyMatchingBadgeAtItsCurrentPosition() {
+        Settings.putString(Settings.KEY_LIST_MODE, "1");
+        Settings.putString(Settings.KEY_THUMB_SIZE, "0");
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT, true);
+        coldFailureRecord(200);
+        downloadedGids.addAll(List.of(200L, 201L));
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        List<GalleryInfo> data = galleries(200, 201);
+        RecyclerView parent = new RecyclerView(scene.getContext());
+        GalleryAdapterNew badges = new GalleryAdapterNew(LayoutInflater.from(scene.getContext()),
+                scene.getContext().getResources(), parent, GalleryAdapterNew.TYPE_GRID, false, jobs, true) {
+            @Override public int getItemCount() { return data.size(); }
+            @Override public GalleryInfo getDataAt(int position) { return data.get(position); }
+        };
+        List<Integer> changed = new ArrayList<>();
+        badges.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+            @Override public void onItemRangeChanged(int position, int count, Object payload) {
+                assertSame(GalleryVersionBadge.PAYLOAD, payload);
+                assertEquals(1, count);
+                changed.add(position);
+            }
+        });
+        GalleryAdapterNew.GalleryHolder target = badges.onCreateViewHolder(parent, GalleryAdapterNew.TYPE_GRID);
+        GalleryAdapterNew.GalleryHolder other = badges.onCreateViewHolder(parent, GalleryAdapterNew.TYPE_GRID);
+        badges.onBindViewHolder(target, 0);
+        badges.onBindViewHolder(other, 1);
+        assertEquals(0f, target.thumbnailDownloaded.getRotation(), 0f);
+        target.thumbnailPages.setText("Preserved reading progress");
+        java.util.Collections.swap(data, 0, 1); // A pending callback must not retain an old position.
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(List.of(1), changed);
+        badges.onBindViewHolder(target, 1, List.of(GalleryVersionBadge.PAYLOAD));
+        assertEquals(180f, target.thumbnailDownloaded.getRotation(), 0f);
+        assertEquals(scene.getContext().getString(R.string.gallery_updated),
+                target.thumbnailDownloaded.getContentDescription());
+        assertEquals(GalleryListDisplayHelper.ratingHighlightColor(3.85f,
+                        ReflectionHelpers.getField(badges, "mDarkTheme")),
+                target.thumbnailDownloaded.getImageTintList().getDefaultColor());
+        assertEquals("Preserved reading progress", target.thumbnailPages.getText().toString());
+        assertEquals(0f, other.thumbnailDownloaded.getRotation(), 0f);
+        assertTrue(jobs.jobs.isEmpty());
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT, false);
+        badges.onBindViewHolder(target, 1, List.of(GalleryVersionBadge.PAYLOAD));
+        assertNull(target.thumbnailDownloaded.getImageTintList());
+        // Recycled holders must lose the rotation when displaying an ordinary download.
+        badges.onBindViewHolder(target, 0, List.of(GalleryVersionBadge.PAYLOAD));
+        assertEquals(0f, target.thumbnailDownloaded.getRotation(), 0f);
+        assertEquals(scene.getContext().getString(R.string.download_state_downloaded),
+                target.thumbnailDownloaded.getContentDescription());
+    }
+
+    @Test public void legacyListBadgeAlsoUsesFailureRecordsAndOnlyRebindsItsIcon() {
+        coldFailureRecord(200);
+        downloadedGids.add(200L);
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        List<GalleryInfo> data = galleries(200);
+        RecyclerView parent = new RecyclerView(scene.getContext());
+        GalleryAdapter badges = new GalleryAdapter(LayoutInflater.from(scene.getContext()),
+                scene.getContext().getResources(), parent, GalleryAdapter.TYPE_LIST, false, jobs) {
+            @Override public int getItemCount() { return data.size(); }
+            @Override public GalleryInfo getDataAt(int position) { return data.get(position); }
+        };
+        com.hippo.ehviewer.ui.scene.GalleryHolder holder = badges.onCreateViewHolder(parent, GalleryAdapter.TYPE_LIST);
+        holder.title.setText("Preserved title");
+        badges.onBindViewHolder(holder, 0, List.of(GalleryVersionBadge.PAYLOAD));
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        badges.onBindViewHolder(holder, 0, List.of(GalleryVersionBadge.PAYLOAD));
+        assertEquals(180f, holder.downloaded.getRotation(), 0f);
+        assertEquals("Preserved title", holder.title.getText().toString());
+        assertEquals(scene.getContext().getString(R.string.gallery_updated), holder.downloaded.getContentDescription());
+    }
+
+    private void coldFailureRecord(long gid) {
+        com.hippo.ehviewer.download.GalleryUpdateRecordStore records =
+                com.hippo.ehviewer.download.GalleryUpdateRecordStore.get(scene.getContext());
+        assertTrue(records.saveFailure(com.hippo.ehviewer.download.GalleryUpdateRecord.failure(
+                gid, 100, 1234, "Gallery", "Failed", new long[]{100})));
+        android.util.LruCache<?, ?> snapshots = ReflectionHelpers.getField(records, "actionSnapshots");
+        snapshots.evictAll();
+    }
+
+    @Test @Config(sdk = 34)
+    @org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.PAUSED)
     public void unrelatedGalleryReturnAndOlderCallbacksCannotOverrideReaderOrReset() {
         ManualProgressExecutor jobs = new ManualProgressExecutor();
         java.util.concurrent.atomic.AtomicInteger page = new java.util.concurrent.atomic.AtomicInteger(1);

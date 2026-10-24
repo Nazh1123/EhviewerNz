@@ -57,7 +57,9 @@ import com.hippo.lib.yorozuya.ViewUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.function.LongConsumer;
 
 import com.hippo.ehviewer.spider.SpiderQueen;
 
@@ -87,6 +89,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private final int mInfoTeal;
     private final ColorStateList mInfoDownloadedTint;
     private final ColorStateList mInfoUpdateTint;
+    private final ColorStateList mInfoUpdatedTint;
     private final boolean showReadProgress;
     private int mType = TYPE_INVALID;
     private boolean mShowFavourite;
@@ -98,6 +101,17 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private final ReadingProgressCache mReadingProgress;
     private final ExecutorService executor;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final LongConsumer mUpdateSnapshotLoaded = this::onUpdateSnapshotLoaded;
+
+    private void onUpdateSnapshotLoaded(long gid) {
+        handler.post(() -> {
+            if (!GalleryVersionBadge.hasUpdateRecord(GalleryUpdateRecordStore.get(mInflater.getContext()), gid)) return;
+            for (int position = 0; position < getItemCount(); position++) {
+                GalleryInfo info = getDataAt(position);
+                if (info != null && info.gid == gid) notifyItemChanged(position, GalleryVersionBadge.PAYLOAD);
+            }
+        });
+    }
 
 
     public GalleryAdapterNew(@NonNull LayoutInflater inflater, @NonNull Resources resources,
@@ -119,6 +133,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 inflater.getContext().getTheme());
         mInfoDownloadedTint = ColorStateList.valueOf(mInfoMaxRatingColor);
         mInfoUpdateTint = ColorStateList.valueOf(mInfoTeal);
+        mInfoUpdatedTint = ColorStateList.valueOf(
+                GalleryListDisplayHelper.ratingHighlightColor(3.85f, mDarkTheme));
         mRecyclerView = recyclerView;
         mLayoutManager = new AutoStaggeredGridLayoutManager(0, StaggeredGridLayoutManager.VERTICAL);
         mPaddingTopSB = resources.getDimensionPixelOffset(R.dimen.gallery_padding_top_search_bar);
@@ -275,6 +291,17 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     }
 
     @Override
+    public void onBindViewHolder(@NonNull GalleryHolder holder, int position,
+                                 @NonNull List<Object> payloads) {
+        if (!payloads.isEmpty() && payloads.stream().allMatch(p -> p == GalleryVersionBadge.PAYLOAD)) {
+            GalleryInfo info = getDataAt(position);
+            if (info != null) bindVersionBadges(holder, info);
+        } else {
+            onBindViewHolder(holder, position);
+        }
+    }
+
+    @Override
     public void onBindViewHolder(GalleryAdapterNew.GalleryHolder holder, int position) {
         cancelProgressRequest(holder);
         GalleryInfo gi = getDataAt(position);
@@ -289,14 +316,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         }
         holder.boundGid = gi.gid;
 
-        boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
-        if (downloaded) GalleryUpdateRecordStore.get(mInflater.getContext())
-                .prefetchActionSnapshot(gi.gid, executor);
-        boolean updateAvailable = !downloaded && gi.firstGid != null && gi.firstGid > 0L
-                && mDownloadManager.hasOlderGalleryVersion(gi.firstGid, gi.gid);
-        bindVersionBadge(holder.downloaded, updateAvailable,
-                mType == TYPE_GRID ? getGridDownloadBadgeDrawableRes()
-                        : R.drawable.v_download_x16);
+        bindVersionBadges(holder, gi);
 
         holder.selectionOutline.setVisibility(
                 isGallerySelected(gi) ? View.VISIBLE : View.GONE);
@@ -336,8 +356,6 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     holder.simpleLanguage.setVisibility(View.VISIBLE);
                 }
                 holder.favourite.setVisibility((mShowFavourite && gi.favoriteSlot >= -1 && gi.favoriteSlot <= 10) ? View.VISIBLE : View.GONE);
-                holder.downloaded.setVisibility(
-                        downloaded || updateAvailable ? View.VISIBLE : View.GONE);
                 break;
             }
             case TYPE_GRID: {
@@ -355,11 +373,6 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 holder.simpleLanguage.setText(gi.simpleLanguage);
                 boolean showInfoBar = Settings.isThumbnailInfoBarEffective();
                 holder.thumbnailInfoBar.setVisibility(showInfoBar ? View.VISIBLE : View.GONE);
-                holder.downloaded.setVisibility((!showInfoBar
-                        || !Settings.getShowThumbnailInfoDetails()) &&
-                        Settings.getShowThumbnailDownloadBadge()
-                                && (downloaded || updateAvailable)
-                        ? View.VISIBLE : View.GONE);
                 if (showInfoBar) {
                     boolean showTitle = Settings.getShowThumbnailInfoTitle();
                     boolean showDetails = Settings.getShowThumbnailInfoDetails();
@@ -393,15 +406,6 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                         } else {
                             holder.thumbnailCensorship.setTextColor(holder.thumbnailInfoTextColors);
                         }
-                        holder.thumbnailDownloaded.setVisibility(
-                                downloaded || updateAvailable ? View.VISIBLE : View.GONE);
-                        bindVersionBadge(holder.thumbnailDownloaded, updateAvailable,
-                                highlightColors ? R.drawable.v_download_tintable_x16
-                                        : R.drawable.v_download_x16);
-                        holder.thumbnailDownloaded.setImageTintList(
-                                highlightColors && (downloaded || updateAvailable)
-                                        ? (updateAvailable ? mInfoUpdateTint : mInfoDownloadedTint)
-                                        : null);
                         bindPageProgress(holder, holder.thumbnailPages, gi, true, false,
                                 highlightColors);
                     }
@@ -412,12 +416,29 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         ViewCompat.setTransitionName(holder.thumb, TransitionNameFactory.getThumbTransitionName(gi.gid));
     }
 
-    private void bindVersionBadge(@NonNull ImageView badge, boolean updateAvailable,
-                                  int downloadedDrawableRes) {
-        badge.setImageResource(updateAvailable
-                ? R.drawable.v_updatable_x24 : downloadedDrawableRes);
-        badge.setContentDescription(mResources.getString(updateAvailable
-                ? R.string.gallery_update_available : R.string.download_state_downloaded));
+    private void bindVersionBadges(GalleryHolder holder, GalleryInfo info) {
+        boolean downloaded = mDownloadManager.containDownloadInfo(info.gid);
+        GalleryUpdateRecordStore records = GalleryUpdateRecordStore.get(mInflater.getContext());
+        if (downloaded) records.prefetchActionSnapshot(info.gid, executor, mUpdateSnapshotLoaded);
+        boolean updated = downloaded && GalleryVersionBadge.hasUpdateRecord(records, info.gid);
+        boolean updateAvailable = !downloaded && info.firstGid != null && info.firstGid > 0L
+                && mDownloadManager.hasOlderGalleryVersion(info.firstGid, info.gid);
+        boolean visible = downloaded || updateAvailable;
+        GalleryVersionBadge.bind(holder.downloaded, updateAvailable, updated,
+                mType == TYPE_GRID ? getGridDownloadBadgeDrawableRes() : R.drawable.v_download_x16);
+        boolean showDetails = mType == TYPE_GRID && Settings.isThumbnailInfoBarEffective()
+                && Settings.getShowThumbnailInfoDetails();
+        holder.downloaded.setVisibility(visible && (mType != TYPE_GRID
+                || (!showDetails && Settings.getShowThumbnailDownloadBadge())) ? View.VISIBLE : View.GONE);
+        if (mType == TYPE_GRID && holder.thumbnailDownloaded != null) {
+            boolean highlight = Settings.getShowThumbnailInfoHighlight();
+            GalleryVersionBadge.bind(holder.thumbnailDownloaded, updateAvailable, updated,
+                    highlight ? R.drawable.v_download_tintable_x16 : R.drawable.v_download_x16);
+            holder.thumbnailDownloaded.setVisibility(showDetails && visible ? View.VISIBLE : View.GONE);
+            holder.thumbnailDownloaded.setImageTintList(highlight && visible
+                    ? (updated ? mInfoUpdatedTint : updateAvailable ? mInfoUpdateTint : mInfoDownloadedTint)
+                    : null);
+        }
     }
 
     private void bindPageProgress(@NonNull GalleryHolder holder,

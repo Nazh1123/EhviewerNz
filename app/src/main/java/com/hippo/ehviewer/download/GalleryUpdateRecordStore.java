@@ -18,16 +18,19 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.LongConsumer;
 
 /** Small app-private database: look up one gid without parsing the entire update history. */
 public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
     private static GalleryUpdateRecordStore instance;
     private final LruCache<Long, ActionSnapshot> actionSnapshots = new LruCache<>(256);
-    private final Set<Long> pendingSnapshots = new HashSet<>();
+    private final Map<Long, Set<LongConsumer>> pendingSnapshots = new HashMap<>();
 
     public static synchronized GalleryUpdateRecordStore get(Context context) {
         if (instance == null) instance = new GalleryUpdateRecordStore(context.getApplicationContext());
@@ -73,9 +76,22 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
     @Nullable public ActionSnapshot peekActionSnapshot(long gid) { return actionSnapshots.get(gid); }
 
     public void prefetchActionSnapshot(long gid, Executor executor) {
+        prefetchActionSnapshot(gid, executor, null);
+    }
+
+    /** Completion listeners run on the executor, once the shared snapshot is available. */
+    public void prefetchActionSnapshot(long gid, Executor executor, @Nullable LongConsumer onLoaded) {
         if (actionSnapshots.get(gid) != null) return;
         synchronized (pendingSnapshots) {
-            if (pendingSnapshots.size() >= 64 || !pendingSnapshots.add(gid)) return;
+            Set<LongConsumer> listeners = pendingSnapshots.get(gid);
+            if (listeners != null) {
+                if (onLoaded != null) listeners.add(onLoaded);
+                return;
+            }
+            if (pendingSnapshots.size() >= 64) return;
+            listeners = new HashSet<>();
+            if (onLoaded != null) listeners.add(onLoaded);
+            pendingSnapshots.put(gid, listeners);
         }
         try {
             executor.execute(() -> {
@@ -92,7 +108,11 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
                 } catch (IOException | RuntimeException e) {
                     Log.w("GalleryUpdateRecords", "Unable to prefetch update actions for " + gid, e);
                 } finally {
-                    synchronized (pendingSnapshots) { pendingSnapshots.remove(gid); }
+                    Set<LongConsumer> listeners;
+                    synchronized (pendingSnapshots) { listeners = pendingSnapshots.remove(gid); }
+                    if (actionSnapshots.get(gid) != null && listeners != null) {
+                        for (LongConsumer listener : listeners) listener.accept(gid);
+                    }
                 }
             });
         } catch (RejectedExecutionException e) {

@@ -70,6 +70,32 @@ public class GalleryUpdateRecordStoreTest {
         assertEquals(300, store.peekActionSnapshot(300).summary().targetGid());
     }
 
+    @Test public void sharedPrefetchNotifiesEachListenerOnceAfterSnapshotIsAvailable() {
+        assertTrue(store.saveFailure(GalleryUpdateRecord.failure(200, 100, 1234,
+                "Gallery", "Failed", new long[]{100})));
+        store.close();
+        store = new GalleryUpdateRecordStore(context);
+        java.util.ArrayDeque<Runnable> jobs = new java.util.ArrayDeque<>();
+        java.util.ArrayList<Long> delivered = new java.util.ArrayList<>();
+        java.util.function.LongConsumer first = gid -> {
+            assertTrue(store.peekActionSnapshot(gid).summary().failure());
+            delivered.add(gid);
+        };
+        store.prefetchActionSnapshot(200, jobs::add);
+        store.prefetchActionSnapshot(200, jobs::add, first);
+        store.prefetchActionSnapshot(200, jobs::add, first);
+        store.prefetchActionSnapshot(200, jobs::add, gid -> delivered.add(-gid));
+        assertEquals(1, jobs.size());
+        assertTrue(delivered.isEmpty());
+        jobs.remove().run();
+        assertEquals(2, delivered.size());
+        assertTrue(delivered.contains(200L));
+        assertTrue(delivered.contains(-200L));
+        store.prefetchActionSnapshot(200, jobs::add, first);
+        assertTrue(jobs.isEmpty());
+        assertEquals(2, delivered.size());
+    }
+
     @Test public void coldMetadataReaderKeepsSnapshotCapabilityWithoutKeepingPageArrays() {
         com.hippo.ehviewer.spider.SpiderInfo oldInfo = new com.hippo.ehviewer.spider.SpiderInfo();
         oldInfo.pages = 1;
