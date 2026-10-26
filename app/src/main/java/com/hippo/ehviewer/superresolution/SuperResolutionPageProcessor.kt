@@ -32,6 +32,13 @@ internal class SuperResolutionPageProcessor(private val context: Context) {
                         grouped: Boolean = false): Pair<EnhancedTilePage, SuperResolutionPageMetrics> {
         val start = SystemClock.elapsedRealtime()
         val metrics = SuperResolutionPageMetrics()
+        var lastProgress = -1
+        fun reportProgress(value: Int) {
+            // Native tiles can generate many callbacks for the same visible percentage.
+            if (value == lastProgress) return
+            lastProgress = value
+            progress(value)
+        }
         store.findTiles(key)?.takeIf { page -> (0 until page.count).all(page::complete) }?.let {
             val page = store.retainTiles(it)
             ready(page)
@@ -57,7 +64,7 @@ internal class SuperResolutionPageProcessor(private val context: Context) {
             val upscaler = SuperResolutionUpscaler(render)
             val missing = (0 until tiles.count).filterNot(tiles::complete)
             metrics.reusedTiles = tiles.count - missing.size
-            progress(metrics.reusedTiles * 100 / tiles.count)
+            reportProgress(metrics.reusedTiles * 100 / tiles.count)
             coroutineScope {
                 val encoding = Channel<Encoding>(1, onUndeliveredElement = { it.close() })
                 val writer = launch(Dispatchers.IO) {
@@ -85,15 +92,28 @@ internal class SuperResolutionPageProcessor(private val context: Context) {
                                     // The temporary band stays <=8 MiB, independent of page height.
                                     // A 2x pass also limits its input region to 32768px per side.
                                     val maxWidth = minOf(65536L, BAND_BYTES / region.height() / 4).toInt() / scale * scale
-                                    bandRegion.right = minOf(tiles.width, region.left + maxWidth)
+                                    // Stop at saved tiles and whole-tile boundaries. Filling the entire
+                                    // byte budget would infer saved pixels and an unused strip tail.
+                                    var previous = index
+                                    for (nextPosition in position + 1 until missing.size) {
+                                        val next = missing[nextPosition]
+                                        if (next != previous + 1 || next / tiles.columns != index / tiles.columns) break
+                                        val nextRegion = tiles.region(next)
+                                        if (nextRegion.right - region.left > maxWidth) break
+                                        bandRegion.right = nextRegion.right
+                                        previous = next
+                                    }
                                 }
                                 band = upscaler.upscale(input, Rect(bandRegion.left / scale, bandRegion.top / scale,
                                     bandRegion.right / scale, bandRegion.bottom / scale), scale) { done, total ->
-                                    progress(((metrics.reusedTiles + position + done.toDouble() / total.coerceAtLeast(1)) * 100 / tiles.count).toInt())
+                                    reportProgress(((metrics.reusedTiles + position + done.toDouble() / total.coerceAtLeast(1)) * 100 / tiles.count).toInt())
                                 }
                                 metrics.maxOutputBitmapBytes = maxOf(metrics.maxOutputBitmapBytes, checkNotNull(band).allocationByteCount)
                             }
-                            Bitmap.createBitmap(region.width(), region.height(), Bitmap.Config.ARGB_8888).also { tile ->
+                            if (bandRegion == region) {
+                                // Transfer ownership to the encoder/cache instead of copying a single tile.
+                                checkNotNull(band).also { band = null }
+                            } else Bitmap.createBitmap(region.width(), region.height(), Bitmap.Config.ARGB_8888).also { tile ->
                                 val canvas = Canvas(tile)
                                 try {
                                     canvas.drawBitmap(checkNotNull(band), Rect(region.left - bandRegion.left, region.top - bandRegion.top,
@@ -117,7 +137,7 @@ internal class SuperResolutionPageProcessor(private val context: Context) {
                                 metrics.displayMs = SystemClock.elapsedRealtime() - start
                             }
                             encoding.send(task)
-                            progress((metrics.reusedTiles + position + 1) * 100 / tiles.count)
+                            reportProgress((metrics.reusedTiles + position + 1) * 100 / tiles.count)
                         } catch (error: Throwable) { task.close(); throw error }
                     }
                     if (missing.isEmpty()) { displayed = ready(tiles); metrics.displayMs = SystemClock.elapsedRealtime() - start }

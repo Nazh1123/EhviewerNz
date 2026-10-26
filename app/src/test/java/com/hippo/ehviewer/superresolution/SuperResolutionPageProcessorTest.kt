@@ -103,8 +103,17 @@ class SuperResolutionPageProcessorTest {
         val source = source(1024, 1024)
         val store = SuperResolutionStore(context, "bands", SuperResolutionOptions())
         var calls = 0
+        val updates = mutableListOf<Int>()
         val (page, metrics) = SuperResolutionPageProcessor(context).process(source, store, store.key(source), 6L * 1024 * 1024,
-            {}, { bitmap, rect, callback -> calls++; render(bitmap, rect, callback) }, {}, { false }, grouped = true)
+            {}, { bitmap, rect, callback ->
+                calls++
+                repeat(1000) { callback(it + 1, 1000) }
+                render(bitmap, rect, callback)
+            }, { updates += it }, { false }, grouped = true)
+        assertEquals(0, updates.first())
+        assertEquals(100, updates.last())
+        assertEquals("Only changed percentages should reach the UI", updates.distinct(), updates)
+        assertEquals(updates.sorted(), updates)
         assertEquals(page.rows, calls)
         assertEquals(page.count, metrics.computedTiles)
         assertTrue(metrics.maxOutputBitmapBytes <= SuperResolutionPageProcessor.BAND_BYTES)
@@ -116,6 +125,71 @@ class SuperResolutionPageProcessorTest {
             assertEquals(Color.BLACK, pixels.bitmap.getPixel(1024 - region.left, 1024 - region.top))
             assertEquals(Color.WHITE, pixels.bitmap.getPixel(0, 0))
         } finally { pixels.close(); page.trim() }
+    }
+
+    @Test fun groupedResumeOnlyRendersMissingTileRuns() = runBlocking {
+        val source = source(1024, 128)
+        val store = SuperResolutionStore(context, "sparse-resume", SuperResolutionOptions())
+        val key = store.key(source)
+        val checkpoint = store.checkpoint(key, 1024, 128)
+        val missing = listOf(0, 2)
+        for (index in 0 until checkpoint.count) if (index !in missing) {
+            val region = checkpoint.region(index)
+            val bitmap = Bitmap.createBitmap(region.width(), region.height(), Bitmap.Config.ARGB_8888)
+            try { store.saveTile(checkpoint, index, bitmap) } finally { bitmap.recycle() }
+        }
+        val rendered = mutableListOf<Rect>()
+        val (page, metrics) = SuperResolutionPageProcessor(context).process(source, store, key, 1024L * 1024,
+            {}, { bitmap, rect, callback ->
+                rendered += Rect(rect)
+                render(bitmap, rect, callback)
+            }, {}, { false }, grouped = true)
+        val expected = missing.map { index -> checkpoint.region(index).let {
+            Rect(it.left / 2, it.top / 2, it.right / 2, it.bottom / 2)
+        } }
+        assertEquals("Saved tiles must not extend the inference bands", expected, rendered)
+        assertEquals(missing.size, metrics.computedTiles)
+        assertEquals(page.count - missing.size, metrics.reusedTiles)
+        assertTrue((0 until page.count).all(page::complete))
+    }
+
+    @Test fun singleTileTransfersRenderedPixelsWithoutCopyingAndReleasesThemAfterEncoding() = runBlocking {
+        val source = source(81, 53)
+        for (grouped in listOf(false, true)) {
+            val store = SuperResolutionStore(context, "single-$grouped", SuperResolutionOptions())
+            var rendered: Bitmap? = null
+            val (page, _) = SuperResolutionPageProcessor(context).process(source, store, store.key(source), 1024L * 1024,
+                {}, { bitmap, rect, callback -> render(bitmap, rect, callback).also { rendered = it } }, {}, { tiles ->
+                    val pixels = checkNotNull(tiles.acquire(0, 1))
+                    try {
+                        assertSame("Encoding and display should share the inference output", rendered, pixels.bitmap)
+                        assertFalse(pixels.bitmap.isRecycled)
+                    } finally { pixels.close() }
+                    false
+                }, grouped = grouped)
+            assertTrue(page.complete(0))
+            assertTrue(checkNotNull(rendered).isRecycled)
+            assertEquals(0L, page.cachedBytes())
+        }
+    }
+
+    @Test fun failedPublicationReleasesTransferredPixelsButKeepsReadersBorrowAlive() = runBlocking {
+        val source = source(81, 53)
+        val store = SuperResolutionStore(context, "failed-publication", SuperResolutionOptions())
+        var rendered: Bitmap? = null
+        var borrowed: EnhancedTilePage.Pixels? = null
+        try {
+            SuperResolutionPageProcessor(context).process(source, store, store.key(source), 1024L * 1024,
+                {}, { bitmap, rect, callback -> render(bitmap, rect, callback).also { rendered = it } }, {}, { tiles ->
+                    borrowed = checkNotNull(tiles.acquire(0, 1))
+                    throw CancellationException("Reader left")
+                }, grouped = true)
+            fail("Expected cancellation")
+        } catch (_: CancellationException) {
+            assertSame(rendered, checkNotNull(borrowed).bitmap)
+            assertFalse(checkNotNull(rendered).isRecycled)
+        } finally { borrowed?.close() }
+        assertTrue(checkNotNull(rendered).isRecycled)
     }
 
     @Test fun higherAndAutomaticScalesKeepTilesBoundedAndReopenWithoutInference() = runBlocking {
