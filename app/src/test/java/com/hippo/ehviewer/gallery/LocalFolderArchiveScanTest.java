@@ -72,7 +72,7 @@ public class LocalFolderArchiveScanTest {
     @Test public void safArchivesKeepOpaqueDocumentUrisAndIgnoreAllResultDirectories() throws Exception {
         documents.files.addAll(Arrays.asList("10.zip", "2.CBZ", "book.rar", "book.cbr", "book.7z"));
         documents.directories.addAll(Arrays.asList("_translation", "_translated",
-                "_SUPER_RESOLUTION", "123.zip_results", "_results"));
+                "_SUPER_RESOLUTION", "123.zip.results", ".results"));
         LocalFolderGalleryScanner.ScanResult scan = scan();
         assertTrue(scan.isArchiveOnly());
         assertTrue(scan.images.isEmpty());
@@ -91,13 +91,13 @@ public class LocalFolderArchiveScanTest {
         documents.files.add("readme.txt");
         assertFalse(scan().isArchiveOnly());
         documents.files.remove("readme.txt");
-        documents.directories.add("chapter_results_backup");
+        documents.directories.add("chapter_results");
         assertFalse(scan().isArchiveOnly());
     }
 
     @Test public void safImageScanSkipsResultTreesButKeepsOrdinaryImageFolders() throws Exception {
         documents.files.add("001.jpg");
-        documents.directories.addAll(Arrays.asList("_translation", "output_RESULTS", "chapter"));
+        documents.directories.addAll(Arrays.asList("_translation", "output.RESULTS", "chapter"));
         documents.nestedImage = true;
         LocalFolderGalleryScanner.ScanResult scan = scan();
         assertEquals(2, scan.images.size());
@@ -109,7 +109,7 @@ public class LocalFolderArchiveScanTest {
         File root = Files.createTempDirectory(context.getCacheDir().toPath(), "archive-folder").toFile();
         Files.createFile(new File(root, "10.zip").toPath());
         Files.createFile(new File(root, "2.cbz").toPath());
-        for (String name : Arrays.asList("_translation", "_translated", "_super_resolution", "a_results")) {
+        for (String name : Arrays.asList("_translation", "_translated", "_super_resolution", "a.results")) {
             File result = new File(root, name);
             assertTrue(result.mkdir());
             Files.createFile(new File(result, "ignored.jpg").toPath());
@@ -125,6 +125,10 @@ public class LocalFolderArchiveScanTest {
         Files.createFile(new File(root, "001.jpg").toPath());
         assertFalse(scanLocal(root).isArchiveOnly());
         assertEquals(1, scanLocal(root).images.size());
+        File ordinary = new File(root, "a_results");
+        assertTrue(ordinary.mkdir());
+        Files.createFile(new File(ordinary, "included.jpg").toPath());
+        assertEquals(2, scanLocal(root).images.size());
     }
 
     @Test public void filesystemFastPathStillReturnsGrantedSafUrisForArchives() throws Exception {
@@ -143,7 +147,7 @@ public class LocalFolderArchiveScanTest {
 
     @Test public void emptyOrOnlyResultDirectoriesAreNotArchiveCollections() throws Exception {
         assertFalse(scan().isArchiveOnly());
-        documents.directories.add("anything_results");
+        documents.directories.add("anything.results");
         assertFalse(scan().isArchiveOnly());
     }
 
@@ -219,7 +223,7 @@ public class LocalFolderArchiveScanTest {
                     for (String file : files) row(cursor, projection, "opaque:" + file, file, false);
                     for (String dir : directories) row(cursor, projection, "dir:" + dir, dir, true);
                 } else {
-                    if (!"dir:chapter".equals(id) && !"dir:chapter_results_backup".equals(id)) {
+                    if (!"dir:chapter".equals(id) && !"dir:chapter_results".equals(id)) {
                         throw new AssertionError("Traversed result directory: " + id);
                     }
                     if (nestedImage) row(cursor, projection, "nested-image", "002.png", false);
