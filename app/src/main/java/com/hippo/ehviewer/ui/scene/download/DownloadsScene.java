@@ -2250,7 +2250,8 @@ public class DownloadsScene extends ToolbarScene
             }
             return;
         }
-        if (scanResult.images.isEmpty()) {
+        boolean archiveOnly = scanResult.isArchiveOnly();
+        if (scanResult.images.isEmpty() && !archiveOnly) {
             runOnUiThread(() -> Toast.makeText(
                     context, R.string.local_folder_no_images, Toast.LENGTH_LONG).show());
             return;
@@ -2258,11 +2259,12 @@ public class DownloadsScene extends ToolbarScene
 
         List<FolderImportCandidate> candidates = new ArrayList<>();
         // Keep an aggregate label's original grouping even if root-level images appear later.
-        boolean aggregateChildren = syncLabel != null || scanResult.directImageCount == 0;
-        if (!aggregateChildren) {
+        boolean aggregateChildren = !archiveOnly
+                && (syncLabel != null || scanResult.directImageCount == 0);
+        if (!archiveOnly && !aggregateChildren) {
             candidates.add(new FolderImportCandidate(
                     scanResult.rootName, rootSource, scanResult.images));
-        } else {
+        } else if (!archiveOnly) {
             LinkedHashMap<String, List<LocalFolderGalleryScanner.ImageEntry>> childImages =
                     new LinkedHashMap<>();
             for (LocalFolderGalleryScanner.ImageEntry image : scanResult.images) {
@@ -2288,12 +2290,19 @@ public class DownloadsScene extends ToolbarScene
             }
         }
 
-        String label = aggregateChildren
+        String label = archiveOnly ? scanResult.rootName : aggregateChildren
                 ? '/' + scanResult.rootName + "/..."
                 : (Settings.getHasDefaultDownloadLabel()
                 ? Settings.getDefaultDownloadLabel() : null);
         List<DownloadInfo> imports = new ArrayList<>();
         long importTime = System.currentTimeMillis();
+        if (archiveOnly) {
+            for (LocalFolderGalleryScanner.ArchiveEntry archive : scanResult.archives) {
+                int pages = DownloadArchiveImporter.countArchiveImages(context, archive.uri);
+                imports.add(DownloadArchiveImporter.createFolderArchiveDownloadInfo(
+                        archive.uri, archive.filename, label, importTime - imports.size(), pages));
+            }
+        }
         for (int i = 0; i < candidates.size(); i++) {
             FolderImportCandidate candidate = candidates.get(i);
             DownloadInfo info = createLocalFolderDownloadInfo(
@@ -2311,7 +2320,7 @@ public class DownloadsScene extends ToolbarScene
             String targetLabel = syncLabel == null ? label : syncLabel.getLabel();
             DownloadManager.FolderSyncResult result = downloadManager.applyLocalFolderScan(
                     imports, targetLabel, syncLabel != null);
-            if (aggregateChildren) {
+            if (aggregateChildren || archiveOnly) {
                 if (syncLabel == null && result.added > 0) {
                     downloadManager.placeLocalFolderImportLabel(targetLabel);
                 }

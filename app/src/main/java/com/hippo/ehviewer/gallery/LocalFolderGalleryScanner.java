@@ -91,7 +91,12 @@ public final class LocalFolderGalleryScanner {
             try {
                 File root = new File(local, source.relativePath).getCanonicalFile();
                 if (!root.toPath().startsWith(local.toPath())) throw new IOException("Folder escapes source");
-                return scanLocal(root, deadline, recursive);
+                ScanResult result = scanLocal(root, deadline, recursive);
+                // Archive downloads retain SAF document URIs, even when images can use
+                // the faster filesystem route. The tree grant must remain sufficient.
+                if (!result.isArchiveOnly() || !"content".equals(source.getTreeUri().getScheme())) {
+                    return result;
+                }
             } catch (IOException | SecurityException ignored) {
                 // Direct access can disappear after authorization; retain the SAF route.
             } catch (ScanException failure) {
@@ -111,6 +116,8 @@ public final class LocalFolderGalleryScanner {
         pending.add(new PendingDirectory(root.uri, "", 0));
         Set<String> visitedDirectories = new HashSet<>();
         List<ImageEntry> images = new ArrayList<>();
+        List<ArchiveEntry> archives = new ArrayList<>();
+        boolean onlyRootArchives = true;
         int directoryCount = 0;
         int entryCount = 0;
         int directImageCount = 0;
@@ -179,10 +186,17 @@ public final class LocalFolderGalleryScanner {
                 String name = child.name;
                 String relativePath = directory.relativePath.isEmpty()
                         ? name : directory.relativePath + '/' + name;
+                if (child.directory && isResultDirectory(name)) continue;
+                if (directory.depth == 0) {
+                    if (!child.directory && isSupportedArchive(name)) {
+                        archives.add(new ArchiveEntry(child.uri, name));
+                    } else {
+                        onlyRootArchives = false;
+                    }
+                }
                 if (child.directory) {
                     if (!recursive) continue;
                     // Exported results must not become new source pages on rescan.
-                    if (isResultDirectory(name)) continue;
                     if (directory.depth >= MAX_DEPTH) {
                         throw new ScanException(Reason.TOO_LARGE);
                     }
@@ -202,8 +216,9 @@ public final class LocalFolderGalleryScanner {
 
         Collections.sort(images, (left, right) ->
                 PATH_COMPARATOR.compare(left.relativePath, right.relativePath));
+        archives.sort((left, right) -> NAME_COMPARATOR.compare(left.filename, right.filename));
         return new ScanResult(root.name, images, directImageCount,
-                directoryCount, entryCount);
+                directoryCount, entryCount, archives, onlyRootArchives);
     }
 
     private static long optionalLong(Cursor cursor, int column) {
@@ -228,6 +243,8 @@ public final class LocalFolderGalleryScanner {
         pending.add(new PendingDirectory(Uri.fromFile(root), "", 0));
         Set<String> visited = new HashSet<>();
         List<ImageEntry> images = new ArrayList<>();
+        List<ArchiveEntry> archives = new ArrayList<>();
+        boolean onlyRootArchives = true;
         int directories = 0, entries = 0, directImages = 0;
         while (!pending.isEmpty()) {
             checkCancelledOrExpired(deadline);
@@ -244,9 +261,17 @@ public final class LocalFolderGalleryScanner {
                 if (!child.getCanonicalFile().equals(child.getAbsoluteFile())) continue;
                 String name = child.getName();
                 String path = current.relativePath.isEmpty() ? name : current.relativePath + '/' + name;
+                if (child.isDirectory() && isResultDirectory(name)) continue;
+                if (current.depth == 0) {
+                    if (child.isFile() && isSupportedArchive(name)) {
+                        if (!child.canRead()) throw new ScanException(Reason.INACCESSIBLE);
+                        archives.add(new ArchiveEntry(Uri.fromFile(child), name));
+                    } else {
+                        onlyRootArchives = false;
+                    }
+                }
                 if (child.isDirectory()) {
                     if (!recursive) continue;
-                    if (isResultDirectory(name)) continue;
                     if (current.depth >= MAX_DEPTH) throw new ScanException(Reason.TOO_LARGE);
                     pending.add(new PendingDirectory(Uri.fromFile(child), path, current.depth + 1));
                 } else if (child.isFile() && isSupportedImage(name)) {
@@ -258,11 +283,22 @@ public final class LocalFolderGalleryScanner {
             }
         }
         Collections.sort(images, (left, right) -> PATH_COMPARATOR.compare(left.relativePath, right.relativePath));
-        return new ScanResult(root.getName(), images, directImages, directories, entries);
+        archives.sort((left, right) -> NAME_COMPARATOR.compare(left.filename, right.filename));
+        return new ScanResult(root.getName(), images, directImages, directories, entries,
+                archives, onlyRootArchives);
     }
 
     private static boolean isResultDirectory(String name) {
-        return "_translated".equalsIgnoreCase(name) || "_super_resolution".equalsIgnoreCase(name);
+        String lowerName = name.toLowerCase(Locale.ROOT);
+        return "_translation".equals(lowerName) || "_translated".equals(lowerName)
+                || "_super_resolution".equals(lowerName) || lowerName.endsWith("_results");
+    }
+
+    private static boolean isSupportedArchive(String name) {
+        String lowerName = name.toLowerCase(Locale.ROOT);
+        return lowerName.endsWith(".zip") || lowerName.endsWith(".cbz")
+                || lowerName.endsWith(".rar") || lowerName.endsWith(".cbr")
+                || lowerName.endsWith(".7z");
     }
 
     @NonNull
@@ -426,6 +462,16 @@ public final class LocalFolderGalleryScanner {
         }
     }
 
+    public static final class ArchiveEntry {
+        @NonNull public final Uri uri;
+        @NonNull public final String filename;
+
+        ArchiveEntry(@NonNull Uri uri, @NonNull String filename) {
+            this.uri = uri;
+            this.filename = filename;
+        }
+    }
+
     public static final class ScanResult {
         @NonNull
         public final String rootName;
@@ -434,18 +480,28 @@ public final class LocalFolderGalleryScanner {
         public final int directImageCount;
         public final int directoryCount;
         public final int entryCount;
+        @NonNull public final List<ArchiveEntry> archives;
+        private final boolean onlyRootArchives;
+
+        public boolean isArchiveOnly() {
+            return onlyRootArchives && !archives.isEmpty();
+        }
 
         ScanResult(
                 @NonNull String rootName,
                 @NonNull List<ImageEntry> images,
                 int directImageCount,
                 int directoryCount,
-                int entryCount) {
+                int entryCount,
+                @NonNull List<ArchiveEntry> archives,
+                boolean onlyRootArchives) {
             this.rootName = rootName;
             this.images = Collections.unmodifiableList(new ArrayList<>(images));
             this.directImageCount = directImageCount;
             this.directoryCount = directoryCount;
             this.entryCount = entryCount;
+            this.archives = Collections.unmodifiableList(new ArrayList<>(archives));
+            this.onlyRootArchives = onlyRootArchives;
         }
     }
 

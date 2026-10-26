@@ -91,12 +91,21 @@ public final class LocalFolderGallerySource {
 
     /** Returns a stable negative ID, keeping imported folders outside the positive E-H gallery range. */
     public long stableGalleryId() {
-        byte[] bytes = encode().getBytes(StandardCharsets.UTF_8);
+        return stableId(encode());
+    }
+
+    /** Archive identity is independent of the destination label and import time. */
+    public static long stableArchiveGalleryId(@NonNull Uri archiveUri) {
+        return stableId("ehviewer-local-archive-v1:" + archiveUri);
+    }
+
+    private static long stableId(String identity) {
+        byte[] bytes = identity.getBytes(StandardCharsets.UTF_8);
         long hash;
         try {
             hash = ByteBuffer.wrap(MessageDigest.getInstance("SHA-256").digest(bytes)).getLong();
         } catch (NoSuchAlgorithmException ignored) {
-            hash = encode().hashCode();
+            hash = identity.hashCode();
         }
         long positive = hash & Long.MAX_VALUE;
         return positive == 0 ? -1 : -positive;

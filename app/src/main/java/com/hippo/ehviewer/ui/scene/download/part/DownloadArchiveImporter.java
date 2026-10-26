@@ -35,6 +35,7 @@ import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.gallery.A7ZipArchive;
+import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.unifile.UniFile;
 import com.hippo.unifile.UniRandomAccessFile;
 
@@ -253,7 +254,27 @@ public class DownloadArchiveImporter {
         }
     }
 
-    private int countArchiveImages(@NonNull Context context, @NonNull Uri uri) {
+    /** Folder imports preserve the complete archive filename and use a repeatable ID. */
+    @NonNull
+    public static DownloadInfo createFolderArchiveDownloadInfo(
+            @NonNull Uri uri, @NonNull String filename, @Nullable String label,
+            long importTime, int pages) {
+        DownloadInfo info = new DownloadInfo();
+        info.gid = LocalFolderGallerySource.stableArchiveGalleryId(uri);
+        info.token = "";
+        info.title = filename;
+        info.category = EhUtils.UNKNOWN;
+        info.uploader = "Local Archive";
+        info.rating = -1.0f;
+        info.state = DownloadInfo.STATE_FINISH;
+        info.time = importTime;
+        info.label = label;
+        info.pages = info.total = info.finished = info.downloaded = Math.max(0, pages);
+        info.archiveUri = uri.toString();
+        return info;
+    }
+
+    public static int countArchiveImages(@NonNull Context context, @NonNull Uri uri) {
         UniRandomAccessFile randomAccessFile = null;
         A7ZipArchive archive = null;
         try {
@@ -267,7 +288,7 @@ public class DownloadArchiveImporter {
             }
             archive = A7ZipArchive.create(randomAccessFile);
             return archive == null ? 0 : archive.getArchiveEntries().size();
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
             Log.w(TAG, "Failed to count imported archive pages: " + uri, e);
             return 0;
         } finally {
