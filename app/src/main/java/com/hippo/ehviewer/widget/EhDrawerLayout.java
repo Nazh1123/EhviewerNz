@@ -20,6 +20,7 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.os.Build;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
 import android.view.View;
 import androidx.annotation.Nullable;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
@@ -34,6 +35,10 @@ import java.util.List;
 @CoordinatorLayout.DefaultBehavior(EhDrawerLayout.Behavior.class)
 public class EhDrawerLayout extends DrawerLayout {
 
+    private static final float OPEN_GESTURE_DIRECTION_RATIO = 1.2f;
+
+    private float mGestureStartX;
+    private float mGestureStartY;
     private List<View> mAboveSnackViewList;
 
     public EhDrawerLayout(Context context, AttributeSet attrs) {
@@ -42,6 +47,24 @@ public class EhDrawerLayout extends DrawerLayout {
 
     public EhDrawerLayout(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
+    }
+
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            mGestureStartX = event.getX();
+            mGestureStartY = event.getY();
+        } else if (event.getActionMasked() == MotionEvent.ACTION_MOVE && !isDrawersVisible()) {
+            float distanceX = Math.abs(event.getX() - mGestureStartX);
+            float distanceY = Math.abs(event.getY() - mGestureStartY);
+            // Defer ambiguous diagonals before the parent cancels the content gesture.
+            // Still forward vertical moves so its existing vertical lock takes effect.
+            if (distanceX > distanceY
+                    && distanceX / distanceY < OPEN_GESTURE_DIRECTION_RATIO) {
+                return false;
+            }
+        }
+        return super.onInterceptTouchEvent(event);
     }
 
     public void addAboveSnackView(View view) {
