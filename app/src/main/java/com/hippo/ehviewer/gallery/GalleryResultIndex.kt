@@ -22,6 +22,8 @@ class GalleryResultIndex private constructor(
     data class Hit(val file: UniFile?, val state: String, val width: Int, val height: Int,
                    val scale: Int, val persistent: Boolean)
     private val cache = File(root(context), digest(identity))
+    // Device URIs are session/cache identities, never archive-side manifest locators.
+    private val manifestIdentity get() = if (identity.startsWith("archive:")) "archive" else identity
     internal val applicationContext get() = context
     private val cacheDirectory get() = checkNotNull(UniFile.fromFile(cache))
 
@@ -33,11 +35,11 @@ class GalleryResultIndex private constructor(
                     val bytes = it.readBytesBounded()
                     JSONObject(String(bytes, Charsets.UTF_8)).also { json -> require(json.getInt("version") == 1); json.getJSONObject("pages") }
                 } }.getOrNull()
-            } ?: JSONObject().put("version", 1).put("gallery", identity).put("pages", JSONObject())
+            } ?: JSONObject().put("version", 1).put("gallery", manifestIdentity).put("pages", JSONObject())
         }
     }
     private fun commit(directory: UniFile, json: JSONObject, source: Source, kind: Kind) {
-        if (identity.isNotEmpty()) json.put("gallery", identity)
+        if (identity.isNotEmpty()) json.put("gallery", manifestIdentity)
         if (json.getJSONObject("pages").length() == 0) {
             for (name in listOf(MANIFEST, "$MANIFEST.bak", "$MANIFEST.part")) directory.findFile(name)?.let { check(it.delete()) }
             documents[directory.uri.toString()] = json
@@ -67,7 +69,7 @@ class GalleryResultIndex private constructor(
     }
     private fun changed(json: JSONObject, source: Source, kind: Kind) {
         revision++
-        val changed = json.optString("gallery", identity)
+        val changed = identity.ifEmpty { json.optString("gallery", identity) }
         val event = Change(changed, source.name, kind)
         android.os.Handler(android.os.Looper.getMainLooper()).post { listeners.forEach { it(event) } }
     }

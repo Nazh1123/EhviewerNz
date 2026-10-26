@@ -799,6 +799,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSuperResolutionController = new com.hippo.ehviewer.superresolution.ReaderSuperResolutionController(
                 this, mGalleryProvider, findViewById(R.id.quick_super_resolution), mGalleryInfo, progressLayout);
         mExistingResults = new com.hippo.ehviewer.gallery.ReaderExistingResults(this, mGalleryProvider, mGalleryInfo);
+        if (mGalleryProvider instanceof ArchiveGalleryProvider archive &&
+                androidx.preference.PreferenceManager.getDefaultSharedPreferences(this).getBoolean(
+                        com.hippo.ehviewer.gallery.GalleryResultIndex.PREFER_EXISTING, false)) {
+            com.hippo.ehviewer.gallery.ArchiveResultPermission.request(this,
+                    archive.getArchiveUri(), this::onArchiveResultDirectoryChanged);
+        }
         mGLRootView = (GLRootView) ViewUtils.$$(this, R.id.gl_root_view);
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();
@@ -2396,33 +2402,30 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             Toast.makeText(this, R.string.error_cant_create_temp_file, Toast.LENGTH_SHORT).show();
             return;
         }
-        UniFile file;
-        if (null == (file = mGalleryProvider.save(page, UniFile.fromFile(dir), mGalleryProvider.getImageFilename(page)))) {
-            Toast.makeText(this, R.string.error_cant_save_image, Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String filename = file.getName();
-        if (filename == null) {
-            Toast.makeText(this, R.string.error_cant_save_image, Toast.LENGTH_SHORT).show();
-            return;
-        }
+        prepareImageExport(page, UniFile.fromFile(dir), file -> {
+            String filename = file.getName();
+            if (filename == null) {
+                Toast.makeText(this, R.string.error_cant_save_image, Toast.LENGTH_SHORT).show();
+                return;
+            }
 
 
-        String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(MimeTypeMap.getFileExtensionFromUrl(filename));
-        if (TextUtils.isEmpty(mimeType)) {
-            mimeType = "image/jpeg";
-        }
+            String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(MimeTypeMap.getFileExtensionFromUrl(filename));
+            if (TextUtils.isEmpty(mimeType)) {
+                mimeType = "image/jpeg";
+            }
 
-        Intent intent = new Intent(Intent.ACTION_SEND);
-        intent.putExtra(Intent.EXTRA_STREAM, file.getUri());
-        intent.setType(mimeType);
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.putExtra(Intent.EXTRA_STREAM, file.getUri());
+            intent.setType(mimeType);
 
-        try {
-            startActivity(Intent.createChooser(intent, getString(R.string.share_image)));
-        } catch (Throwable e) {
-            ExceptionUtils.throwIfFatal(e);
-            Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
-        }
+            try {
+                startActivity(Intent.createChooser(intent, getString(R.string.share_image)));
+            } catch (Throwable e) {
+                ExceptionUtils.throwIfFatal(e);
+                Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void saveImage(int page) {
@@ -2679,35 +2682,50 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
     }
 
+    private void prepareImageExport(int page, UniFile directory, java.util.function.Consumer<UniFile> ready) {
+        GalleryProvider2 provider = mGalleryProvider;
+        if (provider == null || directory == null || mImageFileOperationPending || mImageFileExecutor.isShutdown()) return;
+        mImageFileOperationPending = true;
+        mImageFileExecutor.execute(() -> {
+            UniFile saved = null;
+            try { saved = provider.save(page, directory, provider.getImageFilename(page)); }
+            catch (RuntimeException failure) { Log.w(TAG, "Unable to export gallery image", failure); }
+            UniFile result = saved;
+            SimpleHandler.getInstance().post(() -> {
+                mImageFileOperationPending = false;
+                if (isFinishing() || isDestroyed() || mGalleryProvider != provider) return;
+                if (result == null) showSaveErrorNotice(getText(R.string.error_cant_save_image));
+                else ready.accept(result);
+            });
+        });
+    }
+
     private void saveImageTo(int page) {
         if (null == mGalleryProvider) {
             return;
         }
         File dir = getCacheDir();
-        UniFile file;
-        if (null == (file = mGalleryProvider.save(page, UniFile.fromFile(dir), mGalleryProvider.getImageFilename(page)))) {
-            showSaveErrorNotice(getText(R.string.error_cant_save_image));
-            return;
-        }
-        String filename = file.getName();
-        if (filename == null) {
-            showSaveErrorNotice(getText(R.string.error_cant_save_image));
-            return;
-        }
-        mCacheFileName = filename;
-        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("image/*");
-        intent.putExtra(Intent.EXTRA_TITLE, filename);
-        try {
-            startActivityForResult(intent, WRITE_REQUEST_CODE);
-//            registerForActivityResult(intent, WRITE_REQUEST_CODE);
-//            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::saveImageDats)
-//                    .launch(intent);
-        } catch (Throwable e) {
-            ExceptionUtils.throwIfFatal(e);
-            Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
-        }
+        prepareImageExport(page, UniFile.fromFile(dir), file -> {
+            String filename = file.getName();
+            if (filename == null) {
+                showSaveErrorNotice(getText(R.string.error_cant_save_image));
+                return;
+            }
+            mCacheFileName = filename;
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("image/*");
+            intent.putExtra(Intent.EXTRA_TITLE, filename);
+            try {
+                startActivityForResult(intent, WRITE_REQUEST_CODE);
+    //            registerForActivityResult(intent, WRITE_REQUEST_CODE);
+    //            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::saveImageDats)
+    //                    .launch(intent);
+            } catch (Throwable e) {
+                ExceptionUtils.throwIfFatal(e);
+                Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override
@@ -2809,7 +2827,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         builder.setTitle(resources.getString(R.string.page_menu_title, page + 1));
 
         final CharSequence[] items;
-        items = new CharSequence[]{getString(R.string.page_menu_refresh), getString(R.string.page_menu_share), getString(R.string.page_menu_save), getString(R.string.page_menu_save_to), getString(R.string.translation_title), getString(R.string.sr_title)};
+        CharSequence[] baseItems = new CharSequence[]{getString(R.string.page_menu_refresh), getString(R.string.page_menu_share), getString(R.string.page_menu_save), getString(R.string.page_menu_save_to), getString(R.string.translation_title), getString(R.string.sr_title)};
+        if (mGalleryProvider instanceof ArchiveGalleryProvider) {
+            items = java.util.Arrays.copyOf(baseItems, baseItems.length + 1);
+            items[baseItems.length] = getString(R.string.archive_results_directory);
+        } else items = baseItems;
         pageDialogListener(builder, items, page);
         builder.show();
     }
@@ -2842,8 +2864,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 case 5:
                     if (mSuperResolutionController != null) mSuperResolutionController.showMenu(page);
                     break;
+                case 6:
+                    if (mGalleryProvider instanceof ArchiveGalleryProvider archive) {
+                        com.hippo.ehviewer.gallery.ArchiveResultPermission.request(this,
+                                archive.getArchiveUri(), this::onArchiveResultDirectoryChanged);
+                    }
+                    break;
             }
         });
+    }
+
+    public void onArchiveResultDirectoryChanged() {
+        if (mExistingResults != null) mExistingResults.resume();
     }
 
     private class GalleryMenuHelper implements DialogInterface.OnClickListener {

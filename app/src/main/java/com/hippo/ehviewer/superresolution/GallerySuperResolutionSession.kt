@@ -293,7 +293,7 @@ internal class GallerySuperResolutionSession(
             val directory = TranslationStorage.resultDirectory(context, download, provider, selected.persist)
             val entry = GalleryResultIndex.source(provider, page, galleryInfo?.gid)
             val index = GalleryResultIndex.open(context, identity, galleryInfo?.gid, directory,
-                selected.persist && download != null && directory != null)
+                selected.persist && directory != null && (download != null || provider is com.hippo.ehviewer.gallery.ArchiveGalleryProvider))
             if (!reconciledResults) {
                 index.reconcile(provider)
                 reconciledResults = true
@@ -326,7 +326,7 @@ internal class GallerySuperResolutionSession(
                     if (!NativeMemoryPolicy(context).canRetain()) TranslationRuntime.closeIdleModels()
                 }
                 SuperResolutionModels.lock.withLock {
-                    // A global preference alone must never make online/archive results persistent.
+                    // Final persistence belongs to the resolved result index; tile work stays in cache.
                     val store = SuperResolutionStore(context, identity, selected.copy(persist = false), index, entry)
                     val key = store.key(source)
                     val force = withContext(NonCancellable + Dispatchers.Main) { forced.remove(page) }

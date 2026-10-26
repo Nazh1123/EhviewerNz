@@ -136,7 +136,7 @@ class GalleryResultStorageTest {
         val first = write(gallery, "001.JPG", "original one")
         val second = write(gallery, "chapter/002.webp", "original two")
         write(gallery, "_translated/001_tl.png")
-        write(gallery, "_SUEPR_RESOLUTION/001_sr.png")
+        write(gallery, "_SUPER_RESOLUTION/001_sr.png")
         write(gallery, "chapter/_translated/002_tl.png")
         write(gallery, "chapter/003.jpg.part")
         write(gallery, "metadata.json")

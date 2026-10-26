@@ -77,7 +77,11 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
     private fun toggle() {
         if (closed) return
         if (session.enabled) session.disable()
-        else if (!session.enable()) showSettings()
+        else withStorage { if (!session.enable()) showSettings() }
+    }
+    private fun withStorage(action: () -> Unit) {
+        com.hippo.ehviewer.gallery.ArchiveResultPermission.withAccess(activity, provider,
+            SuperResolutionSettings(activity).read().persist, Runnable { if (!closed) action() })
     }
     fun onPageChanged(page: Int) {
         if (closed) return
@@ -100,8 +104,8 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
         )) { _, which ->
             when (which) {
                 0 -> toggle()
-                1 -> session.retry(page)
-                2 -> if (session.fullGallery) session.disable() else session.full()
+                1 -> withStorage { session.retry(page) }
+                2 -> if (session.fullGallery) session.disable() else withStorage { session.full() }
                 3 -> provider.toggleEnhancedPage(page)
                 4 -> showSettings()
                 5 -> com.hippo.ehviewer.gallery.GalleryResultImportDialog.show(activity, provider, galleryInfo)

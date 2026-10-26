@@ -22,24 +22,18 @@ import android.net.Uri;
 import android.os.Process;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import com.hippo.a7zip.ArchiveException;
 import com.hippo.ehviewer.GetText;
 import com.hippo.ehviewer.R;
 import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.image.Image;
 //import com.hippo.lib.image.Image1;
 import com.hippo.unifile.UniFile;
-import com.hippo.unifile.UniRandomAccessFile;
-import com.hippo.util.NaturalComparator;
 import com.hippo.lib.yorozuya.thread.PriorityThread;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Stack;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -49,6 +43,13 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
   private static final AtomicInteger sIdGenerator = new AtomicInteger();
 
   private final UniFile file;
+  private final Context context;
+  private final Uri uri;
+  private final ArchivePageSource.Factory sourceFactory;
+  private final Object saveLock = new Object();
+  private ArchivePageSource saveSource;
+  private volatile String[] pageNames = new String[0];
+  private volatile boolean stopped;
 
   private Thread archiveThread;
   private Thread decodeThread;
@@ -62,71 +63,83 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
   private final AtomicInteger decodingIndex = new AtomicInteger(GalleryPageView.INVALID_INDEX);
 
   public ArchiveGalleryProvider(Context context, Uri uri) {
+    this(context, uri, factory(context.getApplicationContext(), uri));
+  }
+
+  private static ArchivePageSource.Factory factory(Context context, Uri uri) {
+    return () -> {
+      UniFile archive = UniFile.fromUri(context, uri);
+      if (archive == null) throw new IOException("Archive unavailable");
+      return ArchivePageSource.open(archive);
+    };
+  }
+
+  ArchiveGalleryProvider(Context context, Uri uri, ArchivePageSource.Factory factory) {
+    this.context = context.getApplicationContext();
+    this.uri = uri;
+    sourceFactory = factory;
     file = UniFile.fromUri(context, uri);
+  }
+
+  public Uri getArchiveUri() { return uri; }
+
+  @Override public UniFile getTranslationDirectory() {
+    return ArchiveResultStorage.directory(context, uri, false);
   }
 
   @Override
   public GalleryProvider2 createTranslationProvider(Context context) {
-    return file != null ? new ArchiveGalleryProvider(context.getApplicationContext(), file.getUri()) : null;
+    return new ArchiveGalleryProvider(context.getApplicationContext(), uri, sourceFactory);
   }
 
   @Override
   public String getTranslationIdentity() { return file != null ? "archive:" + file.getUri() : null; }
 
   @Override public String getResultSourceStamp(int index) {
-    return file != null ? file.length() + ":" + file.lastModified() : "";
+    return "";
+  }
+
+  @Override public String getResultPageName(int index) {
+    String[] names = pageNames;
+    return index >= 0 && index < names.length ? names[index] : Integer.toString(index);
+  }
+
+  @Override public String getTranslationFilename(int index) {
+    return withoutExtension(getResultPageName(index));
+  }
+
+  private static String withoutExtension(String name) {
+    String extension = com.hippo.lib.yorozuya.FileUtils.getExtensionFromFilename(name);
+    return extension == null ? name : name.substring(0, name.length() - extension.length() - 1);
   }
 
   @Override public ReaderPreviewSource createPreviewSource(Context context) {
     return new ReaderPreviewSource() {
-      private A7ZipArchive archive;
-      private UniRandomAccessFile randomFile;
-      private List<A7ZipArchive.A7ZipArchiveEntry> entries;
-
+      private ArchivePageSource source;
       @Override public ReaderPreviewBitmapCache.Result load(int index, int edge) throws IOException {
         if (file == null || index < 0) return null;
         String identity = file.getUri() + ":" + file.lastModified() + ":" + file.length() + ":" + index;
         ReaderPreviewBitmapCache.Result cached = ReaderPreviewBitmapCache.cached(context, identity, edge);
         if (cached != null) return cached;
+        if (source == null) source = sourceFactory.open();
+        if (index >= source.names().length) return null;
+        java.io.File temporary = java.io.File.createTempFile("reader-preview-", ".image", context.getCacheDir());
         try {
-          if (archive == null) {
-            randomFile = file.createRandomAccessFile("r");
-            try { archive = A7ZipArchive.create(randomFile); }
-            catch (ArchiveException | RuntimeException failure) {
-              randomFile.close();
-              randomFile = null;
-              throw failure;
-            }
-            entries = archive.getArchiveEntries();
-            Collections.sort(entries, naturalComparator);
+          try (java.io.OutputStream output = cancellable(new java.io.FileOutputStream(temporary))) {
+            source.extract(index, output);
           }
-          if (index >= entries.size()) return null;
-          java.io.File temporary = java.io.File.createTempFile("reader-preview-", ".image", context.getCacheDir());
-          try {
-            try (java.io.OutputStream output = new java.io.FilterOutputStream(new java.io.FileOutputStream(temporary)) {
-              @Override public void write(byte[] bytes, int offset, int count) throws IOException {
-                if (Thread.currentThread().isInterrupted()) throw new java.io.InterruptedIOException();
-                out.write(bytes, offset, count);
-              }
-            }) { entries.get(index).extract(output); }
-            return ReaderPreviewBitmapCache.load(context, identity, edge,
-                    Uri.fromFile(temporary), () -> new java.io.FileInputStream(temporary));
-          } finally { temporary.delete(); }
-        } catch (ArchiveException e) {
-          throw new IOException(e);
-        }
+          return ReaderPreviewBitmapCache.load(context, identity, edge,
+              Uri.fromFile(temporary), () -> new java.io.FileInputStream(temporary));
+        } finally { temporary.delete(); }
       }
-
-      @Override public void close() throws IOException {
-        try { if (archive != null) archive.close(); }
-        finally { if (randomFile != null) randomFile.close(); }
-      }
+      @Override public void close() throws IOException { if (source != null) source.close(); }
     };
   }
 
   @Override
   public void start() {
     super.start();
+    stopped = false;
 
     int id = sIdGenerator.incrementAndGet();
 
@@ -141,6 +154,7 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
 
   @Override
   public void stop() {
+    stopped = true;
     super.stop();
 
     if (archiveThread != null) {
@@ -150,6 +164,12 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
     if (decodeThread != null) {
       decodeThread.interrupt();
       decodeThread = null;
+    }
+    synchronized (saveLock) {
+      if (saveSource != null) {
+        try { saveSource.close(); } catch (IOException ignored) { }
+        saveSource = null;
+      }
     }
   }
 
@@ -195,106 +215,124 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
   @NonNull
   @Override
   public String getImageFilename(int index) {
-    // TODO
-    return Integer.toString(index);
+    String path = getResultPageName(index);
+    return withoutExtension(path.substring(path.lastIndexOf('/') + 1));
+  }
+
+  private ArchivePageSource sourceForSave() throws IOException {
+    if (stopped) throw new java.io.InterruptedIOException();
+    if (saveSource == null) {
+      saveSource = sourceFactory.open();
+      pageNames = saveSource.names();
+    }
+    return saveSource;
+  }
+
+  private java.io.OutputStream cancellable(java.io.OutputStream output) {
+    return new java.io.FilterOutputStream(output) {
+      @Override public void write(int value) throws IOException {
+        checkActive(); out.write(value);
+      }
+      @Override public void write(byte[] bytes, int offset, int count) throws IOException {
+        checkActive(); out.write(bytes, offset, count);
+      }
+      private void checkActive() throws IOException {
+        if (stopped || Thread.currentThread().isInterrupted()) throw new java.io.InterruptedIOException();
+      }
+    };
   }
 
   @Override
   public boolean save(int index, @NonNull UniFile file) {
-    // TODO
-    return false;
+    synchronized (saveLock) {
+      try {
+        ArchivePageSource source = sourceForSave();
+        if (index < 0 || index >= pageNames.length || file.getUri().equals(uri)) return false;
+        try (java.io.OutputStream output = cancellable(file.openOutputStream(false))) {
+          source.extract(index, output);
+        }
+        return true;
+      } catch (IOException | RuntimeException failure) { return false; }
+    }
   }
 
   @Nullable
   @Override
   public UniFile save(int index, @NonNull UniFile dir, @NonNull String filename) {
-    // TODO
-    return null;
+    SaveResult result = saveWithResult(index, dir, filename);
+    return result == null ? null : result.file;
   }
 
   @Nullable
   @Override
   public SaveResult saveWithResult(int index, @NonNull UniFile dir, @NonNull String filename) {
-    return null;
+    synchronized (saveLock) {
+      SaveResult destination = null;
+      try {
+        ArchivePageSource source = sourceForSave();
+        if (index < 0 || index >= pageNames.length) return null;
+        String extension = com.hippo.lib.yorozuya.FileUtils.getExtensionFromFilename(pageNames[index]);
+        destination = prepareSaveDestination(dir, extension == null ? filename : filename + "." + extension);
+        if (destination == null || destination.file.getUri().equals(uri)) return null;
+        try (java.io.OutputStream output = cancellable(destination.file.openOutputStream(false))) {
+          source.extract(index, output);
+        }
+        return destination;
+      } catch (IOException | RuntimeException failure) {
+        if (destination != null) destination.deleteIfCreated();
+        return null;
+      }
+    }
   }
 
   private class ArchiveTask implements Runnable {
-    @Override
-    public void run() {
-      UniRandomAccessFile uraf = null;
-      if (file != null) {
-        try {
-          uraf = file.createRandomAccessFile("r");
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
-      }
-      if (uraf == null) {
-        size = STATE_ERROR;
-        error = GetText.getString(R.string.error_reading_failed);
+    @Override public void run() {
+      try (ArchivePageSource source = sourceFactory.open()) {
+        pageNames = source.names();
+        size = pageNames.length;
         notifyDataChanged();
-        return;
-      }
-
-      A7ZipArchive archive = null;
-      try {
-        archive = A7ZipArchive.create(uraf);
-      } catch (ArchiveException e) {
-        e.printStackTrace();
-      }
-      if (archive == null) {
-        size = STATE_ERROR;
-        error = GetText.getString(R.string.error_invalid_archive);
-        notifyDataChanged();
-        return;
-      }
-
-      List<A7ZipArchive.A7ZipArchiveEntry> entries = archive.getArchiveEntries();
-      Collections.sort(entries, naturalComparator);
-
-      // Update size and notify changed
-      size = entries.size();
-      notifyDataChanged();
-
-      while (!Thread.currentThread().isInterrupted()) {
-        int index;
-        synchronized (requests) {
-          if (requests.isEmpty()) {
-            try {
-              requests.wait();
-            } catch (InterruptedException e) {
-              // Interrupted
-              break;
+        while (!stopped && !Thread.currentThread().isInterrupted()) {
+          int index;
+          synchronized (requests) {
+            while (requests.isEmpty()) requests.wait();
+            index = requests.pop();
+            extractingIndex.set(index);
+          }
+          if (index < 0 || index >= pageNames.length) {
+            extractingIndex.set(GalleryPageView.INVALID_INDEX);
+            notifyPageFailed(index, GetText.getString(R.string.error_out_of_range));
+            continue;
+          }
+          Pipe pipe = new Pipe(4 * 1024);
+          synchronized (streams) {
+            if (streams.containsKey(index)) {
+              extractingIndex.set(GalleryPageView.INVALID_INDEX);
+              continue;
             }
-            continue;
+            streams.put(index, pipe.inputStream);
+            streams.notifyAll();
           }
-          index = requests.pop();
-          extractingIndex.lazySet(index);
+          try (java.io.OutputStream output = cancellable(pipe.outputStream)) {
+            source.extract(index, output);
+          } catch (IOException failure) {
+            if (!stopped) notifyPageFailed(index, GetText.getString(R.string.error_reading_failed));
+          } finally { extractingIndex.set(GalleryPageView.INVALID_INDEX); }
         }
-
-        // Check index valid
-        if (index < 0 || index >= entries.size()) {
-          extractingIndex.lazySet(GalleryPageView.INVALID_INDEX);
-          notifyPageFailed(index, GetText.getString(R.string.error_out_of_range));
-          continue;
+      } catch (InterruptedException ignored) {
+        Thread.currentThread().interrupt();
+      } catch (IOException | RuntimeException failure) {
+        if (!stopped) {
+          android.util.Log.w("ArchiveGalleryProvider", "Unable to read archive " + uri, failure);
+          size = STATE_ERROR;
+          error = GetText.getString(R.string.error_invalid_archive);
+          notifyDataChanged();
         }
-
-        Pipe pipe = new Pipe(4 * 1024);
-
+      } finally {
         synchronized (streams) {
-          if (streams.get(index) != null) {
-            continue;
+          for (InputStream input : streams.values()) {
+            try { input.close(); } catch (IOException ignored) { }
           }
-          streams.put(index, pipe.inputStream);
-          streams.notify();
-        }
-
-        try {
-          entries.get(index).extract(pipe.outputStream);
-        } catch (ArchiveException e) {
-          e.printStackTrace();
-        } finally {
-          extractingIndex.lazySet(GalleryPageView.INVALID_INDEX);
+          streams.clear();
         }
       }
     }
@@ -331,21 +369,26 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
           decodingIndex.lazySet(index);
         }
 
-        try {
-//          BitmapFactory.Options option = new BitmapFactory.Options();
-//          if (stream.available()>40960){
-//            option.inSampleSize = 4;
-//          }
-//          Bitmap bitmap = BitmapFactory.decodeStream(stream,null,option);
-//          BitmapDrawable drawable = new BitmapDrawable(EhApplication.getInstance().getResources(),bitmap);
-//          Image image = Image.decode(drawable, false);
-          Image image = Image.decode(BitmapDrawable.createFromStream(stream,null), false);
-//            Image imag = Image1.decode(stream, true);
+        try (InputStream input = stream) {
+          Image image = Image.decode(BitmapDrawable.createFromStream(input, null), false);
+          // Finish the entry even if the bitmap decoder stops before the archive stream's EOF.
+          byte[] remaining = new byte[4096];
+          try { while (input.read(remaining) != -1) { } }
+          catch (IOException failure) {
+            if (image != null) image.recycle();
+            throw failure;
+          }
+          if (stopped) {
+            if (image != null) image.recycle();
+            continue;
+          }
           if (image != null) {
             notifyPageSucceed(index, image);
           } else {
             notifyPageFailed(index, GetText.getString(R.string.error_decoding_failed));
           }
+        } catch (IOException | RuntimeException failure) {
+          if (!stopped) notifyPageFailed(index, GetText.getString(R.string.error_decoding_failed));
         } finally {
           decodingIndex.lazySet(GalleryPageView.INVALID_INDEX);
         }
@@ -353,11 +396,4 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
     }
   }
 
-  private static Comparator<A7ZipArchive.A7ZipArchiveEntry> naturalComparator = new Comparator<A7ZipArchive.A7ZipArchiveEntry>() {
-    private NaturalComparator comparator = new NaturalComparator();
-    @Override
-    public int compare(A7ZipArchive.A7ZipArchiveEntry o1, A7ZipArchive.A7ZipArchiveEntry o2) {
-      return comparator.compare(o1.getPath(), o2.getPath());
-    }
-  };
 }

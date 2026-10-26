@@ -42,10 +42,20 @@ object DownloadedGalleryTasks {
                     Toast.makeText(app, R.string.no_local_gallery_files, Toast.LENGTH_SHORT).show()
                     return@withLock
                 }
-                if (start(app, provider, info, enhance)) {
-                    Toast.makeText(app, if (enhance) R.string.sr_gallery_submitted
-                        else R.string.translation_gallery_submitted, Toast.LENGTH_SHORT).show()
+                val persist = if (enhance) com.hippo.ehviewer.superresolution.SuperResolutionSettings(app).read().persist
+                    else com.hippo.ehviewer.translation.TranslationSettings(app).read().persistDownloaded
+                val submit = Runnable {
+                    if (start(app, provider, info, enhance)) {
+                        Toast.makeText(app, if (enhance) R.string.sr_gallery_submitted
+                            else R.string.translation_gallery_submitted, Toast.LENGTH_SHORT).show()
+                    }
                 }
+                if (provider is ArchiveGalleryProvider && persist) {
+                    val activity = context as? androidx.fragment.app.FragmentActivity
+                    if (activity != null) ArchiveResultPermission.withAccess(activity, provider, true, submit)
+                    else if (withContext(Dispatchers.IO) { ArchiveResultStorage.canWrite(app, provider.archiveUri) }) submit.run()
+                    else Toast.makeText(app, R.string.archive_results_permission_message, Toast.LENGTH_LONG).show()
+                } else submit.run()
             }
         }
     }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_results_directory">压缩包结果目录</string>
+    <string name="archive_results_permission_message">请选择该压缩包所在的文件夹，并允许读写。翻译和超分结果将保存在旁边的“压缩包完整文件名.results”文件夹中，重新打开时可继续使用。取消不会影响普通阅读或保存单张图片。</string>
+    <string name="archive_results_choose_parent">选择所在文件夹</string>
+    <string name="archive_results_wrong_parent">未获得目录访问权限。请选择直接包含该压缩包的文件夹，并允许读写。</string>
+</resources>

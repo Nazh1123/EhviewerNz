@@ -106,10 +106,15 @@ class ReaderTranslationController @JvmOverloads constructor(
         if (enabled) disable() else enable()
     }
 
-    private fun enable() {
+    private fun enable(after: () -> Unit = {}) {
         if (closed) return
-        if (!session.enable()) { showSettings(); return }
-        updateUi()
+        com.hippo.ehviewer.gallery.ArchiveResultPermission.withAccess(activity, provider,
+            session.settings.read().persistDownloaded, Runnable {
+                if (!closed) {
+                    if (!session.enable()) showSettings()
+                    else { updateUi(); after() }
+                }
+            })
     }
 
     private fun disable() {
@@ -225,14 +230,12 @@ class ReaderTranslationController @JvmOverloads constructor(
                     0 -> toggle()
                     1 -> {
                         if (partial) {
-                            enable()
-                            session.enqueue(page, true, retryMissing = true)
+                            enable { session.enqueue(page, true, retryMissing = true) }
                         } else {
                             disable()
                             provider.removeTranslatedPage(page)
                             timings.remove(page)
-                            enable()
-                            session.enqueue(page, true)
+                            enable { session.enqueue(page, true) }
                         }
                     }
                     3 -> showSourceLanguage()
@@ -248,8 +251,7 @@ class ReaderTranslationController @JvmOverloads constructor(
                     2 -> {
                         if (session.fullGallery) disable()
                         else {
-                            enable()
-                            if (enabled) session.translateFullGallery()
+                            enable { session.translateFullGallery() }
                         }
                     }
                 }
@@ -274,8 +276,7 @@ class ReaderTranslationController @JvmOverloads constructor(
                     disable()
                     session.settings.save(currentOptions.copy(source = source))
                     if (wasEnabled) {
-                        enable()
-                        if (wasFullGallery && enabled) session.translateFullGallery()
+                        enable { if (wasFullGallery) session.translateFullGallery() }
                     }
                 }
                 dialog.dismiss()

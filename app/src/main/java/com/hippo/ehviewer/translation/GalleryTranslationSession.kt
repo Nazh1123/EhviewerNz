@@ -239,7 +239,7 @@ internal class GalleryTranslationSession(
         val directory = TranslationStorage.resultDirectory(context, download, provider, options.persistDownloaded)
         // An available source folder can retain each completed page while the rest
         // of the gallery is still downloading, paused, or failed.
-        val downloaded = download != null && directory != null
+        val downloaded = directory != null && (download != null || provider is com.hippo.ehviewer.gallery.ArchiveGalleryProvider)
         val index = GalleryResultIndex.open(context, identity, galleryInfo?.gid, directory,
             options.persistDownloaded && downloaded)
         if (!reconciledResults && provider.size() > 0) {
