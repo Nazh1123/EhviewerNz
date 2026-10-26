@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_download_mobile_browsing_priority">行動網路時瀏覽優先</string>
+    <string name="settings_download_mobile_browsing_priority_summary">使用行動網路載入畫廊資訊、縮圖或目前閱讀頁面時，降低畫廊和封存下載速度；瀏覽請求全部結束並短暫閒置後恢復正常下載速度。Wi-Fi 下不生效。</string>
+</resources>

@@ -64,6 +64,10 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
     public void onResume() {
         super.onResume();
         updateManualSaveLocationSummary();
+        Preference priority = findPreference(Settings.KEY_MOBILE_BROWSING_PRIORITY);
+        if (priority instanceof androidx.preference.TwoStatePreference toggle) {
+            toggle.setChecked(Settings.getMobileBrowsingPriority());
+        }
     }
 
     @Override

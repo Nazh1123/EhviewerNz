@@ -667,6 +667,7 @@ public final class SubscriptionUpdateManager {
             source.ratingMinimumHundredths = Math.max(Settings.getPersistentMinRatingHundredths(),
                     source.builder.getSubscriptionMinRatingHundredths());
             EhRequest request = new EhRequest()
+                    .setBackground(true)
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
                     .setArgs(SearchRating.withoutServerFilter(url), source.builder.getMode(), true,
                             source.plan != null && source.plan.isMergedUploaderSearch(),

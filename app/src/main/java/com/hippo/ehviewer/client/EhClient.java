@@ -80,16 +80,21 @@ public class EhClient {
     private final ThreadPoolExecutor mRequestThreadPool;
     private final OkHttpClient mOkHttpClient;
     private final OkHttpClient mImageOkHttpClient;
+    private final OkHttpClient mBackgroundOkHttpClient;
+    private final OkHttpClient mBackgroundImageOkHttpClient;
 
     public EhClient(Context context) {
         mRequestThreadPool = IoThreadPoolExecutor.Companion.getInstance();
-        mOkHttpClient = EhApplication.getOkHttpClient(context);
-        mImageOkHttpClient = EhApplication.getImageOkHttpClient(context);
+        mOkHttpClient = EhApplication.getBrowsingOkHttpClient(context);
+        mImageOkHttpClient = EhApplication.getBrowsingImageOkHttpClient(context);
+        mBackgroundOkHttpClient = EhApplication.getOkHttpClient(context);
+        mBackgroundImageOkHttpClient = EhApplication.getImageOkHttpClient(context);
     }
 
     public void execute(EhRequest request) {
         if (!request.isCancelled()) {
-            Task task = new Task(request.getMethod(), request.getCallback(), request.getEhConfig());
+            Task task = new Task(request.getMethod(), request.getCallback(), request.getEhConfig(),
+                    request.isBackground());
             task.executeOnExecutor(mRequestThreadPool, request.getArgs());
             request.task = task;
         } else {
@@ -103,14 +108,20 @@ public class EhClient {
         private final int mMethod;
         private Callback mCallback;
         private EhConfig mEhConfig;
+        private final boolean mBackground;
 
         private final AtomicReference<Call> mCall = new AtomicReference<>();
         private final AtomicBoolean mStop = new AtomicBoolean();
 
         public Task(int method, Callback callback, EhConfig ehConfig) {
+            this(method, callback, ehConfig, false);
+        }
+
+        public Task(int method, Callback callback, EhConfig ehConfig, boolean background) {
             mMethod = method;
             mCallback = callback;
             mEhConfig = ehConfig;
+            mBackground = background;
         }
 
         // Called in Job thread
@@ -157,6 +168,8 @@ public class EhClient {
 
         @Override
         protected Object doInBackground(Object... params) {
+            OkHttpClient mOkHttpClient = mBackground ? mBackgroundOkHttpClient : EhClient.this.mOkHttpClient;
+            OkHttpClient mImageOkHttpClient = mBackground ? mBackgroundImageOkHttpClient : EhClient.this.mImageOkHttpClient;
             try {
                 Log.i(TAG, "doInBackground: "+mMethod);
                 switch (mMethod) {

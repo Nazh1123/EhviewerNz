@@ -155,6 +155,10 @@ public class DownloadFragment extends PreferenceFragmentCompat implements
     public void onResume() {
         super.onResume();
         onUpdateManualImageSaveLocation();
+        Preference priority = findPreference(Settings.KEY_MOBILE_BROWSING_PRIORITY);
+        if (priority instanceof androidx.preference.TwoStatePreference toggle) {
+            toggle.setChecked(Settings.getMobileBrowsingPriority());
+        }
     }
 
     public void onUpdateDownloadLocation() {

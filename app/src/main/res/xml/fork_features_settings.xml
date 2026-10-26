@@ -105,6 +105,13 @@
 
         <com.hippo.preference.SwitchPreference
             android:defaultValue="false"
+            android:key="mobile_browsing_priority"
+            android:summary="@string/settings_download_mobile_browsing_priority_summary"
+            android:title="@string/settings_download_mobile_browsing_priority"
+            app:allowDividerAbove="false" />
+
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="false"
             android:key="download_label_continuous_browse"
             android:summary="@string/settings_fork_download_label_continuous_browse_summary"
             android:title="@string/settings_fork_download_label_continuous_browse"

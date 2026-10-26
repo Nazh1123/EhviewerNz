@@ -45,6 +45,7 @@ import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.conaco.Conaco;
 import com.hippo.content.RecordingApplication;
 import com.hippo.ehviewer.client.EhClient;
+import com.hippo.ehviewer.client.BrowsingPriority;
 import com.hippo.ehviewer.client.EhCookieStore;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.WebViewCookieSync;
@@ -129,6 +130,8 @@ public class EhApplication extends RecordingApplication {
     private EhProxySelector mEhProxySelector;
     private OkHttpClient mOkHttpClient;
     private OkHttpClient mImageOkHttpClient;
+    private OkHttpClient mBrowsingOkHttpClient;
+    private OkHttpClient mBrowsingImageOkHttpClient;
     private Cache mOkHttpCache;
     private ImageBitmapHelper mImageBitmapHelper;
     private Conaco<Image> mConaco;
@@ -182,6 +185,7 @@ public class EhApplication extends RecordingApplication {
         GetText.initialize(this);
         StatusCodeException.initialize(this);
         Settings.initialize(this);
+        BrowsingPriority.initialize(this);
         AppUpdateDownload.initialize(this);
         ArchiverDownloader.resumePending(this);
         ReadableTime.initialize(this);
@@ -417,6 +421,8 @@ public class EhApplication extends RecordingApplication {
             );
             
             OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                    .eventListenerFactory(call -> BrowsingPriority.listener(call, false))
+                    .addInterceptor(BrowsingPriority.downloadInterceptor())
                     .followRedirects(true)
                     .followSslRedirects(true)
                     .connectTimeout(10, TimeUnit.SECONDS)
@@ -488,6 +494,8 @@ public class EhApplication extends RecordingApplication {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mImageOkHttpClient == null) {
             OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                    .eventListenerFactory(call -> BrowsingPriority.listener(call, false))
+                    .addInterceptor(BrowsingPriority.downloadInterceptor())
                     .followRedirects(false)
                     .followSslRedirects(false)
                     .connectTimeout(20, TimeUnit.SECONDS)
@@ -563,6 +571,24 @@ public class EhApplication extends RecordingApplication {
     }
 
     @NonNull
+    public static OkHttpClient getBrowsingOkHttpClient(@NonNull Context context) {
+        EhApplication application = (EhApplication) context.getApplicationContext();
+        if (application.mBrowsingOkHttpClient == null) {
+            application.mBrowsingOkHttpClient = BrowsingPriority.browsingClient(getOkHttpClient(context));
+        }
+        return application.mBrowsingOkHttpClient;
+    }
+
+    @NonNull
+    public static OkHttpClient getBrowsingImageOkHttpClient(@NonNull Context context) {
+        EhApplication application = (EhApplication) context.getApplicationContext();
+        if (application.mBrowsingImageOkHttpClient == null) {
+            application.mBrowsingImageOkHttpClient = BrowsingPriority.browsingClient(getImageOkHttpClient(context));
+        }
+        return application.mBrowsingImageOkHttpClient;
+    }
+
+    @NonNull
     public static Conaco<Image> getConaco(@NonNull Context context) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mConaco == null) {
@@ -574,7 +600,7 @@ public class EhApplication extends RecordingApplication {
             builder.hasDiskCache = true;
             builder.diskCacheDir = new File(context.getCacheDir(), "thumb");
             builder.diskCacheMaxSize = 320 * 1024 * 1024; // 320MB
-            builder.okHttpClient = getOkHttpClient(context);
+            builder.okHttpClient = getBrowsingOkHttpClient(context);
 //            builder.okHttpClient = getImageOkHttpClient(context);
             builder.objectHelper = getImageBitmapHelper(context);
             builder.debug = DEBUG_CONACO;

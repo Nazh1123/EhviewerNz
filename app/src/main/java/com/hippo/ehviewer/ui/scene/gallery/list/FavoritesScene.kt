@@ -1583,7 +1583,7 @@ class FavoritesScene : BaseScene(), EasyRecyclerView.OnItemClickListener,
         var mOkHttpClient: OkHttpClient? = null
 
         internal constructor(context: Context) {
-            mOkHttpClient = EhApplication.getOkHttpClient(context)
+            mOkHttpClient = EhApplication.getBrowsingOkHttpClient(context)
         }
 
         constructor()

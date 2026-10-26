@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_download_mobile_browsing_priority">移动网络时浏览优先</string>
+    <string name="settings_download_mobile_browsing_priority_summary">使用移动网络加载画廊信息、缩略图或当前阅读页时，降低画廊和归档下载速度；浏览请求全部结束并短暂空闲后恢复正常下载速度。Wi-Fi 下不生效。</string>
+</resources>

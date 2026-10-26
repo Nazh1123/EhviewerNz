@@ -1242,6 +1242,7 @@ public class EhEngine {
             Request requestContinue = new EhRequestBuilder(continueUrl, origin, null)
                     .build();
             Call callContinue = okHttpClient.newCall(requestContinue);
+            if (task != null) task.setCall(callContinue);
             Response responseC = callContinue.execute();
             if (responseC.body() == null) {
                 return null;
@@ -1427,8 +1428,11 @@ public class EhEngine {
 
             code = response.code();
             if (code == 302) {
-                request = new EhRequestBuilder(response.headers().get("Location"), referer).build();
+                String location = response.header("Location");
+                response.close();
+                request = new EhRequestBuilder(location, referer).build();
                 call = okHttpClient.newCall(request);
+                if (task != null) task.setCall(call);
                 try {
                     response = call.execute();
                 } catch (Throwable e) {

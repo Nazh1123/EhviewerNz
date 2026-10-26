@@ -93,6 +93,13 @@ public class SubscriptionCheckReuseTest {
         assertEquals(Collections.singleton(200L), global);
     }
 
+    @Test public void subscriptionChecksDoNotClaimInteractiveBrowsingPriority() {
+        assertFalse(new EhRequest().isBackground());
+        assertTrue(manager.checkForUpdates(false));
+        assertFalse(requests.isEmpty());
+        for (EhRequest request : requests) assertTrue(request.isBackground());
+    }
+
     @Test public void manualAndAutomaticChecksAreReusableByGlobalEntryOnly() {
         for (boolean manual : new boolean[]{false, true}) {
             assertTrue(manager.checkForUpdates(manual));

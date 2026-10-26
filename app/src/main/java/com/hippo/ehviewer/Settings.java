@@ -1433,6 +1433,12 @@ public class Settings {
     private static final String KEY_MULTI_THREAD_DOWNLOAD = "download_thread";
     private static final int DEFAULT_MULTI_THREAD_DOWNLOAD = 3;
 
+    public static final String KEY_MOBILE_BROWSING_PRIORITY = "mobile_browsing_priority";
+
+    public static boolean getMobileBrowsingPriority() {
+        return getBoolean(KEY_MOBILE_BROWSING_PRIORITY, false);
+    }
+
     public static int getMultiThreadDownload() {
         return getIntFromStr(KEY_MULTI_THREAD_DOWNLOAD, DEFAULT_MULTI_THREAD_DOWNLOAD);
     }
