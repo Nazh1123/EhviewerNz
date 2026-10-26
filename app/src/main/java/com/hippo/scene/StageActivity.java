@@ -37,8 +37,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public abstract class StageActivity extends EhActivity {
@@ -54,6 +56,8 @@ public abstract class StageActivity extends EhActivity {
     private static final String KEY_SCENE_TAG_LIST = "stage_activity_scene_tag_list";
     private static final String KEY_NEXT_ID = "stage_activity_next_id";
 
+    // Navigation entries reference fragment tags. Shared scenes may have several
+    // lightweight entries pointing to the same Fragment instance.
     private final ArrayList<String> mSceneTagList = new ArrayList<>();
     private final ArrayList<String> mDelaySceneTagList = new ArrayList<>();
     private final AtomicInteger mIdGenerator = new AtomicInteger();
@@ -84,7 +88,8 @@ public abstract class StageActivity extends EhActivity {
     public static void registerLaunchMode(Class<?> clazz, @SceneFragment.LaunchMode int launchMode) {
         if (launchMode != SceneFragment.LAUNCH_MODE_STANDARD &&
                 launchMode != SceneFragment.LAUNCH_MODE_SINGLE_TOP &&
-                launchMode != SceneFragment.LAUNCH_MODE_SINGLE_TASK) {
+                launchMode != SceneFragment.LAUNCH_MODE_SINGLE_TASK &&
+                launchMode != SceneFragment.LAUNCH_MODE_SHARED) {
             throw new IllegalStateException("Invalid launch mode: " + launchMode);
         }
         sLaunchModeMap.put(clazz, launchMode);
@@ -167,7 +172,7 @@ public abstract class StageActivity extends EhActivity {
             ArrayList<String> list = savedInstanceState.getStringArrayList(KEY_SCENE_TAG_LIST);
             if (list != null) {
                 mSceneTagList.addAll(list);
-                mDelaySceneTagList.addAll(list);
+                for (String tag : list) moveSceneViewToFront(tag);
             }
             mIdGenerator.lazySet(savedInstanceState.getInt(KEY_NEXT_ID));
         }
@@ -274,8 +279,9 @@ public abstract class StageActivity extends EhActivity {
         FragmentManager fragmentManager = getSupportFragmentManager();
         int launchMode = getSceneLaunchMode(clazz);
 
-        // Check LAUNCH_MODE_SINGLE_TASK
-        if (launchMode == SceneFragment.LAUNCH_MODE_SINGLE_TASK) {
+        // Reuse an existing scene according to its launch mode.
+        if (launchMode == SceneFragment.LAUNCH_MODE_SINGLE_TASK ||
+                launchMode == SceneFragment.LAUNCH_MODE_SHARED) {
             for (int i = 0, n = mSceneTagList.size(); i < n; i++) {
                 String tag = mSceneTagList.get(i);
                 Fragment fragment = fragmentManager.findFragmentByTag(tag);
@@ -284,15 +290,27 @@ public abstract class StageActivity extends EhActivity {
                     continue;
                 }
 
-                if (clazz.isInstance(fragment)) { // Get it
+                // A specialized child scene (such as a single download label) is a
+                // separate destination and must not replace the requested scene.
+                boolean matches = launchMode == SceneFragment.LAUNCH_MODE_SHARED
+                        ? fragment.getClass() == clazz : clazz.isInstance(fragment);
+                if (matches) {
+                    if (launchMode == SceneFragment.LAUNCH_MODE_SHARED) {
+                        pushSharedScene((SceneFragment) fragment, announcer);
+                        return;
+                    }
                     FragmentTransaction transaction = fragmentManager.beginTransaction();
 
                     // Use default animation
                     transaction.setCustomAnimations(R.anim.scene_open_enter, R.anim.scene_open_exit);
 
-                    // Remove top fragments
+                    // Remove top entries, retaining a shared Fragment if an earlier
+                    // entry below the destination still references it.
+                    Set<String> retainedTags = new HashSet<>(mSceneTagList.subList(0, i + 1));
+                    Set<String> handledTags = new HashSet<>();
                     for (int j = i + 1; j < n; j++) {
                         String topTag = mSceneTagList.get(j);
+                        if (!handledTags.add(topTag)) continue;
                         Fragment topFragment = fragmentManager.findFragmentByTag(topTag);
                         if (null == topFragment) {
                             Log.e(TAG, "Can't find fragment with tag: " + topTag);
@@ -303,8 +321,11 @@ public abstract class StageActivity extends EhActivity {
                         topFragment.setSharedElementReturnTransition(null);
                         topFragment.setEnterTransition(null);
                         topFragment.setExitTransition(null);
-                        // Remove it
-                        transaction.remove(topFragment);
+                        if (retainedTags.contains(topTag)) {
+                            if (!topFragment.isDetached()) transaction.detach(topFragment);
+                        } else {
+                            transaction.remove(topFragment);
+                        }
                     }
 
                     // Remove tag from index i+1
@@ -398,6 +419,69 @@ public abstract class StageActivity extends EhActivity {
         }
     }
 
+    private void moveSceneViewToFront(String tag) {
+        mDelaySceneTagList.remove(tag);
+        mDelaySceneTagList.add(tag);
+    }
+
+    private void pushSharedScene(SceneFragment scene, Announcer announcer) {
+        SceneFragment currentScene = getTopScene();
+        if (scene != currentScene) {
+            FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+            transaction.setCustomAnimations(R.anim.scene_open_enter, R.anim.scene_open_exit);
+            trimSharedSceneHistory(scene.getTag(), transaction);
+            if (currentScene != null) {
+                currentScene.setSharedElementEnterTransition(null);
+                currentScene.setSharedElementReturnTransition(null);
+                currentScene.setEnterTransition(null);
+                currentScene.setExitTransition(null);
+                transaction.detach(currentScene);
+            }
+            scene.setSharedElementEnterTransition(null);
+            scene.setSharedElementReturnTransition(null);
+            scene.setEnterTransition(null);
+            scene.setExitTransition(null);
+            if (scene.isDetached()) {
+                transaction.attach(scene);
+            }
+
+            // Keep earlier visits as placeholders. Only the tag is duplicated,
+            // never the Fragment or its data. Its view is attached only at the top.
+            String tag = scene.getTag();
+            mSceneTagList.add(tag);
+            moveSceneViewToFront(tag);
+            transaction.commitAllowingStateLoss();
+            onTransactScene();
+        }
+        if (announcer.args != null) {
+            scene.onNewArguments(announcer.args);
+        }
+        if (announcer.requestFrom != null) {
+            scene.addRequest(announcer.requestFrom.getTag(), announcer.requestCode);
+        }
+    }
+
+    private void trimSharedSceneHistory(String tag, FragmentTransaction transaction) {
+        int first = mSceneTagList.indexOf(tag);
+        int last = mSceneTagList.lastIndexOf(tag);
+        if (first == last) return;
+
+        // Before a third visit, merge the old placeholders into the first one.
+        // Keep the path after the latest visit and everything before the first.
+        Set<String> removedTags = new HashSet<>(mSceneTagList.subList(first + 1, last + 1));
+        mSceneTagList.subList(first + 1, last + 1).clear();
+        for (String removedTag : removedTags) {
+            if (mSceneTagList.contains(removedTag)) continue;
+            Fragment fragment = getSupportFragmentManager().findFragmentByTag(removedTag);
+            if (fragment == null) continue;
+            fragment.setSharedElementEnterTransition(null);
+            fragment.setSharedElementReturnTransition(null);
+            fragment.setEnterTransition(null);
+            fragment.setExitTransition(null);
+            transaction.remove(fragment);
+        }
+    }
+
     public void startSceneFirstly(Announcer announcer) {
         Class<?> clazz = announcer.clazz;
         Bundle args = announcer.args;
@@ -414,8 +498,10 @@ public abstract class StageActivity extends EhActivity {
         transaction.setCustomAnimations(R.anim.scene_open_enter, R.anim.scene_open_exit);
 
         String findSceneTag = null;
+        Set<String> handledTags = new HashSet<>();
         for (int i = 0, n = mSceneTagList.size(); i < n; i++) {
             String tag = mSceneTagList.get(i);
+            if (!handledTags.add(tag)) continue;
             Fragment fragment = fragmentManager.findFragmentByTag(tag);
             if (fragment == null) {
                 Log.e(TAG, "Can't find fragment with tag: " + tag);
@@ -429,8 +515,12 @@ public abstract class StageActivity extends EhActivity {
             fragment.setExitTransition(null);
 
             // Check is target scene
-            if (!forceNewScene && !findScene && clazz.isInstance(fragment) &&
-                    (launchMode == SceneFragment.LAUNCH_MODE_SINGLE_TASK || !fragment.isDetached())) {
+            boolean matches = launchMode == SceneFragment.LAUNCH_MODE_SHARED
+                    ? fragment.getClass() == clazz : clazz.isInstance(fragment);
+            if (!forceNewScene && !findScene && matches &&
+                    (launchMode == SceneFragment.LAUNCH_MODE_SINGLE_TASK ||
+                            launchMode == SceneFragment.LAUNCH_MODE_SHARED ||
+                            !fragment.isDetached())) {
                 scene = (SceneFragment) fragment;
                 findScene = true;
                 createNewScene = false;
@@ -479,7 +569,7 @@ public abstract class StageActivity extends EhActivity {
     }
 
     int getTagIndex(String tag) {
-        return mSceneTagList.indexOf(tag);
+        return mSceneTagList.lastIndexOf(tag);
     }
 
     void sortSceneViews(List<View> views) {
@@ -505,7 +595,7 @@ public abstract class StageActivity extends EhActivity {
         }
 
         // Get scene index
-        int index = mSceneTagList.indexOf(tag);
+        int index = mSceneTagList.lastIndexOf(tag);
         if (index < 0) {
             Log.e(TAG, "finishScene: Can't find the tag in tag list: " + tag);
             return;
@@ -524,6 +614,11 @@ public abstract class StageActivity extends EhActivity {
             next = fragmentManager.findFragmentByTag(mSceneTagList.get(index - 1));
         }
 
+        // Pop one visit. A shared Fragment survives while older placeholders exist.
+        mSceneTagList.remove(index);
+        boolean keepScene = mSceneTagList.contains(tag);
+        if (next == scene) return;
+
         FragmentTransaction transaction = fragmentManager.beginTransaction();
         if (next != null) {
             if (transitionHelper == null || !transitionHelper.onTransition(
@@ -540,18 +635,23 @@ public abstract class StageActivity extends EhActivity {
                 // Do not show animate if it is not the first fragment
                 transaction.setCustomAnimations(R.anim.scene_close_enter, R.anim.scene_close_exit);
             }
+            // An older placeholder may refer to a Fragment shown more recently
+            // than this one. Draw the outgoing view above the returning view.
+            mDelaySceneTagList.remove(next.getTag());
+            mDelaySceneTagList.add(mDelaySceneTagList.indexOf(tag), next.getTag());
             // Attach fragment
             transaction.attach(next);
         }
-        transaction.remove(scene);
+        if (!keepScene) {
+            transaction.remove(scene);
+        } else if (next != null) {
+            transaction.detach(scene);
+        }
         transaction.commitAllowingStateLoss();
         onTransactScene();
 
-        // Remove tag
-        mSceneTagList.remove(index);
-
         // Return result
-        if (scene instanceof SceneFragment) {
+        if (!keepScene && scene instanceof SceneFragment) {
             ((SceneFragment) scene).returnResult(this);
         }
     }
