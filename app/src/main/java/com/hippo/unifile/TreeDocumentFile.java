@@ -17,7 +17,9 @@
 package com.hippo.unifile;
 
 import android.content.Context;
+import android.database.Cursor;
 import android.net.Uri;
+import android.provider.DocumentsContract;
 import android.text.TextUtils;
 import android.util.Log;
 import android.webkit.MimeTypeMap;
@@ -190,6 +192,22 @@ class TreeDocumentFile extends UniFile {
     @Override
     public boolean delete() {
         return com.hippo.unifile.DocumentsContractApi19.delete(mContext, mUri);
+    }
+
+    @Override
+    public boolean deleteIfEmpty() {
+        if (!isDirectory()) return false;
+        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(
+                mUri, DocumentsContract.getDocumentId(mUri));
+        // listFiles() is best-effort and may turn a provider failure into an empty array.
+        // A null/failed query must never authorize deleting a possibly nonempty directory.
+        try (Cursor cursor = mContext.getContentResolver().query(children,
+                new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID}, null, null, null)) {
+            return cursor != null && !cursor.moveToFirst() && delete();
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "Cannot confirm empty directory: " + mUri, failure);
+            return false;
+        }
     }
 
     @Override

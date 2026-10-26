@@ -186,6 +186,12 @@ class RawFile extends UniFile {
     }
 
     @Override
+    public boolean deleteIfEmpty() {
+        // File.delete is non-recursive: a file added after inspection must be preserved.
+        return mFile.isDirectory() && mFile.delete();
+    }
+
+    @Override
     public boolean exists() {
         return mFile.exists();
     }

@@ -40,6 +40,48 @@ import org.greenrobot.greendao.database.StandardDatabase
 @RunWith(RobolectricTestRunner::class)
 @org.robolectric.annotation.Config(application = Application::class, sdk = [28], manifest = org.robolectric.annotation.Config.NONE)
 class TranslationGallerySafTest {
+    @Test fun failedOrNullSafEnumerationNeverAuthorizesDeletingADirectory() {
+        val directory = book.createDirectory("results")!!
+        val other = directory.createFile("keep.txt")!!
+        provider.failChildQueries = true
+        try {
+            assertTrue(directory.listFiles()!!.isEmpty()) // Existing best-effort listing contract.
+            assertFalse(directory.deleteIfEmpty())
+            assertTrue(directory.isDirectory); assertTrue(other.isFile)
+        } finally { provider.failChildQueries = false }
+        provider.nullChildQueries = true
+        try {
+            assertFalse(directory.deleteIfEmpty())
+            assertTrue(directory.isDirectory); assertTrue(other.isFile)
+        } finally { provider.nullChildQueries = false }
+    }
+
+    @Test fun archiveCleanupRecreatesOpaqueResultDirectoryForAnAlreadyProcessingOtherStage() = kotlinx.coroutines.runBlocking {
+        val archive = book.createFile("book.zip")!!
+        assertTrue(com.hippo.ehviewer.gallery.ArchiveResultStorage.bind(context, archive.uri, book.uri, 3))
+        val info = DownloadInfo(92).apply { archiveUri = archive.uri.toString() }
+        val root = com.hippo.ehviewer.gallery.ArchiveResultStorage.directory(context, archive.uri, true)!!
+        val page = com.hippo.ehviewer.gallery.GalleryResultIndex.Source("chapter/001.png")
+        val index = com.hippo.ehviewer.gallery.GalleryResultIndex.open(context, "gallery:92", 92, root, true)
+        val otherStage = com.hippo.ehviewer.gallery.GalleryResultIndex.open(context, "gallery:92", 92, root, true)
+        val tl = com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL
+        val sr = com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.SR
+        index.write(page, tl, "skip") { it.write("skipped".toByteArray()) }
+        root.findFile("_translated")!!.createDirectory("old")!!.createDirectory("empty")
+        assertTrue(com.hippo.ehviewer.gallery.GalleryResultStorage.delete(context, listOf(info),
+            com.hippo.ehviewer.gallery.GalleryProcessingProgress.Kind.TRANSLATION))
+        assertFalse(root.exists()); assertTrue(archive.isFile)
+        val bitmap = Bitmap.createBitmap(18, 26, Bitmap.Config.ARGB_8888)
+        val output = try { otherStage.write(page, sr, "png", 2) { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+            finally { bitmap.recycle() }
+        val newRoot = com.hippo.ehviewer.gallery.ArchiveResultStorage.directory(context, archive.uri, false)!!
+        assertNotEquals(root.uri, newRoot.uri)
+        assertTrue(output.isFile); assertNotNull(index.find(page, sr)); assertNull(index.find(page, tl))
+        assertTrue(com.hippo.ehviewer.gallery.GalleryResultStorage.delete(context, listOf(info),
+            com.hippo.ehviewer.gallery.GalleryProcessingProgress.Kind.SUPER_RESOLUTION))
+        assertFalse(newRoot.exists()); assertTrue(archive.isFile)
+    }
+
     @Test fun importNamedOverlayIntoDoneIndexWithOpaqueSafDocumentIds() = kotlinx.coroutines.runBlocking {
         val directory = book.createDirectory("_translated")!!.createDirectory("Chapter")!!
         val old = directory.createFile("001_tl.png")!!
@@ -284,14 +326,20 @@ class TranslationGallerySafTest {
     // ContentProvider implements the DocumentsContract protocol directly because Robolectric's
     // legacy query dispatch cannot call DocumentsProvider's Android O query overload.
     private class GalleryDocumentsProvider(root: File) : ContentProvider() {
+        var failChildQueries = false
+        var nullChildQueries = false
         private data class Entry(val file: File, val parent: String?, val type: String)
         private val entries = linkedMapOf("root" to Entry(root, null, Document.MIME_TYPE_DIR))
         private var nextId = 0
         override fun onCreate() = true
 
         override fun query(uri: Uri, projection: Array<out String>?, selection: String?,
-                           selectionArgs: Array<out String>?, sortOrder: String?): Cursor {
+                           selectionArgs: Array<out String>?, sortOrder: String?): Cursor? {
             val id = DocumentsContract.getDocumentId(uri)
+            if (uri.lastPathSegment == "children") {
+                if (failChildQueries) error("Test provider is unavailable")
+                if (nullChildQueries) return null
+            }
             return if (uri.lastPathSegment == "children") queryChildDocuments(id, projection)
             else queryDocument(id, projection)
         }

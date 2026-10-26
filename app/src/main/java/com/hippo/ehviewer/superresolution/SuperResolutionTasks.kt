@@ -21,8 +21,8 @@ internal object SuperResolutionTasks {
     fun changed() { listener?.invoke() }
     fun stop(identity: String) { sessions[identity]?.disable() }
     fun stopAll() { sessions.values.toList().forEach { it.disable() } }
-    suspend fun stopForResultDeletion(galleryIds: Set<Long>) {
-        sessions.values.toList().filter { it.galleryInfo?.gid in galleryIds }
+    suspend fun stopForResultDeletion(galleryIds: Set<Long>, sourceIdentities: Set<String> = emptySet()) {
+        sessions.values.toList().filter { it.galleryInfo?.gid in galleryIds || it.identity in sourceIdentities }
             .forEach { it.stopForResultDeletion() }
     }
     fun leaveReaders() {

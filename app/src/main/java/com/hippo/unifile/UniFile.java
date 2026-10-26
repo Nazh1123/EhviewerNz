@@ -279,6 +279,13 @@ public abstract class UniFile {
         return mParent;
     }
 
+    /** Remove an empty directory only. Callers must serialize document-provider writers. */
+    public boolean deleteIfEmpty() {
+        if (!isDirectory()) return false;
+        UniFile[] children = listFiles();
+        return children != null && children.length == 0 && delete();
+    }
+
     /**
      * Indicates if this file represents a <em>directory</em>.
      *

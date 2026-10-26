@@ -80,11 +80,11 @@ object GalleryResultStorage {
         val ids = galleries.map { it.gid }.toSet()
         val directories = directories(context, galleries)
         val translation = TranslationRuntime.lock.withLock {
-            val bytes = collect(context, ids, directories, Kind.TRANSLATION).sumOf { it.length() }
+            val bytes = collect(context, ids, directories, Kind.TRANSLATION, sourceIdentities(galleries)).sumOf { it.length() }
             Usage(ids.sumOf { GalleryProcessingProgress.get(context, it).translated.toLong() }, bytes)
         }
         val sr = SuperResolutionModels.lock.withLock {
-            val bytes = collect(context, ids, directories, Kind.SUPER_RESOLUTION).sumOf { it.length() }
+            val bytes = collect(context, ids, directories, Kind.SUPER_RESOLUTION, sourceIdentities(galleries)).sumOf { it.length() }
             Usage(ids.sumOf { GalleryProcessingProgress.get(context, it).enhanced.toLong() }, bytes)
         }
         val originals = try { inspectOriginals(context, galleries, directories) }
@@ -145,16 +145,17 @@ object GalleryResultStorage {
 
     internal suspend fun delete(context: Context, galleries: List<DownloadInfo>, kind: Kind): Boolean {
         val ids = galleries.map { it.gid }.toSet()
+        val sourceIdentities = sourceIdentities(galleries)
         // Stop only the selected stage and await its writers before removing files.
         withContext(Dispatchers.Main.immediate) {
-            if (kind == Kind.TRANSLATION) TranslationTasks.stopForResultDeletion(ids)
-            else SuperResolutionTasks.stopForResultDeletion(ids)
+            if (kind == Kind.TRANSLATION) TranslationTasks.stopForResultDeletion(ids, sourceIdentities)
+            else SuperResolutionTasks.stopForResultDeletion(ids, sourceIdentities)
         }
         return withContext(Dispatchers.IO) {
             val lock = if (kind == Kind.TRANSLATION) TranslationRuntime.lock else SuperResolutionModels.lock
             lock.withLock {
                 val directories = directories(context, galleries)
-                val files = collect(context, ids, directories, kind)
+                val files = collect(context, ids, directories, kind, sourceIdentities)
                 var success = true
                 val removed = files.filter { file ->
                     val deleted = runCatching { file.delete() || !file.exists() }.getOrDefault(false)
@@ -163,13 +164,26 @@ object GalleryResultStorage {
                 }
                 for (gallery in galleries) GalleryResultIndex.deleteKind(context, gallery.gid,
                     TranslationStorage.galleryDir(context, gallery),
+                    if (kind == Kind.TRANSLATION) GalleryResultIndex.Kind.TL else GalleryResultIndex.Kind.SR,
+                    deleteEmptyRoot = ArchiveResultStorage.isArchiveUri(gallery.archiveUri))
+                for (identity in sourceIdentities) GalleryResultIndex.deleteCachedKind(context, identity,
                     if (kind == Kind.TRANSLATION) GalleryResultIndex.Kind.TL else GalleryResultIndex.Kind.SR)
+                if (kind == Kind.SUPER_RESOLUTION) for (gid in ids)
+                    for (root in SuperResolutionStore.galleryRoots(context, gid))
+                        if (root.isDirectory) GalleryResultIndex.pruneEmptyDirectories(checkNotNull(UniFile.fromFile(root)))
                 GalleryProcessingProgress.forget(context, removed.map { it.uri }).join()
                 GalleryProcessingProgress.removeMissing(context, ids, kind).join()
                 success
             }
         }
     }
+
+    private fun sourceIdentities(galleries: List<DownloadInfo>) = galleries.mapNotNull { gallery ->
+        gallery.archiveUri?.let { uri ->
+            if (ArchiveResultStorage.isArchiveUri(uri)) "archive:$uri"
+            else if (LocalFolderGallerySource.isLocalFolderGallery(uri)) uri else null
+        }
+    }.toSet()
 
     private fun directories(context: Context, galleries: List<DownloadInfo>) = galleries.mapNotNull {
         val directory = TranslationStorage.galleryDir(context, it)
@@ -178,10 +192,13 @@ object GalleryResultStorage {
     }.distinctBy { it.uri }
 
     /** Include partial/checkpoint bytes; an internal tile page is storage, not one image per tile. */
-    internal suspend fun collect(context: Context, ids: Set<Long>, galleries: List<UniFile>, kind: Kind): List<UniFile> {
+    internal suspend fun collect(context: Context, ids: Set<Long>, galleries: List<UniFile>, kind: Kind,
+                                 sourceIdentities: Set<String> = emptySet()): List<UniFile> {
         val files = linkedMapOf<String, UniFile>()
         for (gid in ids) for (entry in GalleryResultIndex.files(context, gid, null,
             if (kind == Kind.TRANSLATION) GalleryResultIndex.Kind.TL else GalleryResultIndex.Kind.SR)) files[entry.uri.toString()] = entry
+        for (identity in sourceIdentities) for (entry in GalleryResultIndex.files(context, null, null,
+            if (kind == Kind.TRANSLATION) GalleryResultIndex.Kind.TL else GalleryResultIndex.Kind.SR, identity)) files[entry.uri.toString()] = entry
         suspend fun addTree(directory: UniFile, accept: (String) -> Boolean) {
             currentCoroutineContext().ensureActive()
             val children = checkNotNull(directory.listFiles()) { "Result directory unavailable" }

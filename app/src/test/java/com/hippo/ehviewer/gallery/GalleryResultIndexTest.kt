@@ -42,6 +42,115 @@ class GalleryResultIndexTest {
         assertFalse(GalleryResultIndex.root(app).exists())
         assertTrue(gallery.listFiles()!!.isEmpty())
     }
+
+    @Test fun deletingKindsPrunesTheirDirectoriesAndLastManifestButPreservesOrdinaryGallery() {
+        val original = File(gallery, "001.jpg").apply { writeText("original") }
+        val index = GalleryResultIndex.open(app, "gallery:81", 81, UniFile.fromFile(gallery), true)
+        val translated = index.write(source, tl, "png") { it.write(png()) }
+        val enhanced = index.write(source, sr, "png", 2) { it.write(png(32, 48)) }
+        File(gallery, "_translated/old/empty").mkdirs()
+        GalleryResultIndex.deleteKind(app, 81, UniFile.fromFile(gallery), tl)
+        assertFalse(translated.exists()); assertFalse(File(gallery, "_translated").exists())
+        assertTrue(enhanced.isFile); assertTrue(File(gallery, GalleryResultIndex.MANIFEST).isFile)
+        GalleryResultIndex.deleteKind(app, 81, UniFile.fromFile(gallery), sr)
+        assertFalse(File(gallery, "_super_resolution").exists())
+        assertFalse(File(gallery, GalleryResultIndex.MANIFEST).exists())
+        assertTrue(gallery.isDirectory); assertEquals("original", original.readText())
+    }
+
+    @Test fun lastArchiveKindRemovesEmptyResultsRootAndAnInflightOtherStageCanRecreateIt() {
+        val parent = checkNotNull(UniFile.fromFile(gallery))
+        val archive = File(gallery, "book.zip").apply { writeText("original archive") }
+        val root = checkNotNull(parent.createDirectory("book.zip.results"))
+        val index = GalleryResultIndex.open(app, "gallery:82", 82, root, true)
+        val pendingOtherStage = GalleryResultIndex.open(app, "gallery:82", 82, root, true)
+        index.write(source, tl, "skip") { it.write("no text".toByteArray()) }
+        root.createDirectory("_super_resolution")!!.createDirectory("old-empty")
+        GalleryResultIndex.deleteKind(app, 82, root, tl, true)
+        assertFalse(root.exists()); assertEquals("original archive", archive.readText())
+        val output = pendingOtherStage.write(source, sr, "png", 2) { it.write(png(32, 48)) }
+        assertTrue(output.isFile)
+        assertNull(index.find(source, tl)); assertNotNull(index.find(source, sr))
+        GalleryResultIndex.deleteKind(app, 82, parent.findFile("book.zip.results"), sr, true)
+        assertNull(parent.findFile("book.zip.results"))
+        assertTrue(archive.isFile)
+    }
+
+    @Test fun archiveCleanupPreservesUnrecognizedFilesAndOtherKindCache() {
+        val root = UniFile.fromFile(gallery)!!.createDirectory("book.cbz.results")!!
+        val index = GalleryResultIndex.open(app, "gallery:83", 83, root, true)
+        index.write(source, tl, "skip") { it.write("skipped".toByteArray()) }
+        root.findFile("_translated")!!.createFile("keep.txt")!!.openOutputStream().use { it.write(byteArrayOf(1)) }
+        GalleryResultIndex.deleteKind(app, 83, root, tl, true)
+        assertTrue(root.findFile("_translated")!!.findFile("keep.txt")!!.isFile)
+        assertNull(root.findFile(GalleryResultIndex.MANIFEST))
+        root.findFile("_translated")!!.findFile("keep.txt")!!.delete()
+        val cache = GalleryResultIndex.open(app, "gallery:83", 83, null, false)
+        val cachedOther = cache.write(source, sr, "png", 2) { it.write(png(32, 48)) }
+        GalleryResultIndex.deleteKind(app, 83, root, tl, true)
+        assertFalse(root.exists()); assertTrue(cachedOther.isFile)
+    }
+
+    @Test fun emptyManifestAndItsBackupsAreRemovedEvenWithoutIndexedRows() {
+        val root = UniFile.fromFile(gallery)!!.createDirectory("book.rar.results")!!
+        for (suffix in listOf("", ".bak", ".part")) {
+            root.createFile(GalleryResultIndex.MANIFEST + suffix)!!.openOutputStream().use {
+                it.write("{\"version\":1,\"gallery\":\"gallery:84\",\"pages\":{}}".toByteArray())
+            }
+        }
+        GalleryResultIndex.deleteKind(app, 84, root, sr, true)
+        assertFalse(root.exists())
+    }
+
+    @Test fun emptyDirectoryRemovalNeverDeletesANonemptyFolderOrAnOrdinaryFile() {
+        val directory = UniFile.fromFile(gallery)!!
+        val original = File(gallery, "original.jpg").apply { writeText("original") }
+        assertFalse(directory.deleteIfEmpty())
+        assertFalse(UniFile.fromFile(original)!!.deleteIfEmpty())
+        assertEquals("original", original.readText())
+        val empty = directory.createDirectory("empty")!!
+        assertTrue(empty.deleteIfEmpty()); assertFalse(empty.exists())
+    }
+
+    @Test fun anUnreadableManifestIsNotMistakenForAnEmptyIndex() {
+        val root = UniFile.fromFile(gallery)!!.createDirectory("book.zip.results")!!
+        val manifest = root.createFile(GalleryResultIndex.MANIFEST)!!
+        manifest.openOutputStream().use { it.write("damaged index".toByteArray()) }
+        val other = root.createDirectory("_super_resolution")!!.createFile("keep_sr.png")!!
+        GalleryResultIndex.deleteKind(app, 86, root, tl, true)
+        assertTrue(root.isDirectory); assertTrue(manifest.isFile); assertTrue(other.isFile)
+    }
+
+    @Test fun deletionWaitsForAnOppositeIndexedWriteAndPreservesItsPublishedResult() {
+        val root = UniFile.fromFile(gallery)!!.createDirectory("book.zip.results")!!
+        val index = GalleryResultIndex.open(app, "gallery:85", 85, root, true)
+        index.write(source, tl, "skip") { it.write("skipped".toByteArray()) }
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val deleted = java.util.concurrent.CountDownLatch(1)
+        val failure = java.util.concurrent.atomic.AtomicReference<Throwable>()
+        val bytes = png(32, 48)
+        val writer = Thread {
+            try { index.write(source, sr, "png", 2) { output ->
+                entered.countDown()
+                check(release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                output.write(bytes)
+            } } catch (error: Throwable) { failure.set(error) }
+        }
+        val cleaner = Thread {
+            try { GalleryResultIndex.deleteKind(app, 85, root, tl, true) }
+            catch (error: Throwable) { failure.set(error) }
+            finally { deleted.countDown() }
+        }
+        writer.start()
+        try {
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            cleaner.start()
+            assertFalse(deleted.await(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+        } finally { release.countDown(); writer.join(5000); cleaner.join(5000) }
+        assertNull(failure.get()); assertFalse(writer.isAlive); assertFalse(cleaner.isAlive)
+        assertTrue(root.isDirectory); assertNull(index.find(source, tl)); assertNotNull(index.find(source, sr))
+    }
     @Test fun removingTheLastLocalEntryDeletesTheManifestAndItsTemporaryFiles() {
         val index = index(true)
         index.write(source, tl, "png") { it.write(png()) }

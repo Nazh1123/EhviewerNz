@@ -131,6 +131,31 @@ class GalleryResultStorageTest {
         } finally { UniFile.removeUriHandler(handler) }
     }
 
+    @Test fun matchedFileDeletionPrunesEmptyNestedDirectoriesButRetainsUnrecognizedFiles() = runBlocking {
+        val gallery = temp.newFolder()
+        val original = write(gallery, "001.jpg", "original")
+        val matched = write(gallery, "_translated/chapter/old/001_tl.png")
+        val keep = write(gallery, "_translated/notes/keep.txt", "keep")
+        val enhanced = write(gallery, "_super_resolution/chapter/001_sr.png")
+        val uri = Uri.fromFile(gallery)
+        val handler = UriHandler { _, candidate -> if (candidate == uri) UniFile.fromFile(gallery) else null }
+        UniFile.addUriHandler(handler)
+        try {
+            val selected = DownloadInfo(91).apply { archiveUri = LocalFolderGallerySource.create(uri, "").encode() }
+            assertTrue(GalleryResultStorage.delete(context, listOf(selected), Kind.TRANSLATION))
+            assertFalse(matched.exists()); assertFalse(File(gallery, "_translated/chapter").exists())
+            assertTrue(keep.exists()); assertTrue(enhanced.exists()); assertTrue(original.exists())
+            keep.delete()
+            assertTrue(GalleryResultStorage.delete(context, listOf(selected), Kind.TRANSLATION))
+            assertFalse(File(gallery, "_translated").exists())
+            val tileRoot = SuperResolutionStore.galleryRoots(context, 91)[0]
+            write(tileRoot, "page.tiles/0.png")
+            assertTrue(GalleryResultStorage.delete(context, listOf(selected), Kind.SUPER_RESOLUTION))
+            assertFalse(File(gallery, "_super_resolution").exists()); assertFalse(tileRoot.exists())
+            assertEquals("original", original.readText())
+        } finally { UniFile.removeUriHandler(handler) }
+    }
+
     @Test fun originalInventoryExcludesResultsAndCountsOverlappingFoldersOnlyOnce() = runBlocking {
         val gallery = temp.newFolder()
         val first = write(gallery, "001.JPG", "original one")
