@@ -9,7 +9,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
 internal object SuperResolutionExport {
-    const val DIRECTORY_NAME = "_suepr_resolution"
+    const val DIRECTORY_NAME = "_super_resolution"
 
     suspend fun save(page: EnhancedTilePage, gallery: UniFile, sourceName: String, workspace: Long = 0,
         quality: SuperResolutionQuality = SuperResolutionQuality.Q95): UniFile {

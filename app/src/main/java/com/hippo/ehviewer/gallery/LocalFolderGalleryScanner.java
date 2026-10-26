@@ -262,7 +262,7 @@ public final class LocalFolderGalleryScanner {
     }
 
     private static boolean isResultDirectory(String name) {
-        return "_translated".equalsIgnoreCase(name) || "_suepr_resolution".equalsIgnoreCase(name);
+        return "_translated".equalsIgnoreCase(name) || "_super_resolution".equalsIgnoreCase(name);
     }
 
     @NonNull

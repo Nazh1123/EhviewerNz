@@ -136,7 +136,7 @@ class TranslationGallerySafTest {
         val second = exporter.publish(book, "Chapter/001") { it.write("second".toByteArray()) }
         assertNotEquals(first.uri, second.uri)
         assertEquals("content", second.uri.scheme)
-        val directory = book.findFile("_suepr_resolution")!!.findFile("Chapter")!!
+        val directory = book.findFile("_super_resolution")!!.findFile("Chapter")!!
         assertEquals(listOf("001_sr.png"), directory.listFiles()!!.map { it.name })
         assertEquals("second", directory.findFile("001_sr.png")!!.openInputStream().bufferedReader().use { it.readText() })
         try {
@@ -209,7 +209,7 @@ class TranslationGallerySafTest {
         for (directory in listOf(book, chapter)) {
             val translated = requireNotNull(directory.createDirectory("_translated"))
             requireNotNull(translated.createFile("g1_result.png"))
-            val enhanced = requireNotNull(directory.createDirectory("_suepr_resolution"))
+            val enhanced = requireNotNull(directory.createDirectory("_super_resolution"))
             requireNotNull(enhanced.createFile("001_sr.png"))
         }
         val scan = LocalFolderGalleryScanner.scan(context, LocalFolderGallerySource.create(tree, ""))

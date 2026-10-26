@@ -42,11 +42,11 @@
     <string name="sr_ahead">Pages suivantes à prétraiter</string>
     <string name="sr_ahead_summary">Page actuelle + %1$s pages suivantes</string>
     <string name="sr_persist">Conserver les résultats améliorés</string>
-    <string name="sr_persist_help">Enregistre les résultats dans le sous-dossier _suepr_resolution uniquement pour les galeries de la liste des téléchargements disposant d’un dossier local accessible. Les autres résultats utilisent le cache temporaire. Les fichiers originaux sont conservés.</string>
+    <string name="sr_persist_help">Enregistre les résultats dans le sous-dossier _super_resolution uniquement pour les galeries de la liste des téléchargements disposant d’un dossier local accessible. Les autres résultats utilisent le cache temporaire. Les fichiers originaux sont conservés.</string>
     <string name="sr_cache_limit">Limite du cache temporaire</string>
     <string name="sr_clear_cache">Vider le cache SR temporaire</string>
     <string name="sr_clear_saved">Supprimer les résultats SR enregistrés</string>
-    <string name="sr_clear_saved_help">Supprimer les résultats SR de toutes les galeries dans le stockage privé de l’application ? Les PNG exportés dans _suepr_resolution, les originaux et les traductions sont conservés.</string>
+    <string name="sr_clear_saved_help">Supprimer les résultats SR de toutes les galeries dans le stockage privé de l’application ? Les PNG exportés dans _super_resolution, les originaux et les traductions sont conservés.</string>
     <string name="sr_full_gallery">Améliorer toute la galerie</string>
     <string name="sr_stop_full">Arrêter l’amélioration de toute la galerie</string>
     <string name="sr_stop_all">Arrêter les tâches SR</string>

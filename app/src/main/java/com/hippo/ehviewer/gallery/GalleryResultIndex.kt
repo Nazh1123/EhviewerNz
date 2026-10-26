@@ -16,7 +16,7 @@ class GalleryResultIndex private constructor(
     private val local: UniFile?, private val persist: Boolean,
 ) {
     enum class Kind(val key: String, val directory: String, val suffix: String) {
-        TL("tl", "_translated", "_tl"), SR("sr", "_suepr_resolution", "_sr")
+        TL("tl", "_translated", "_tl"), SR("sr", "_super_resolution", "_sr")
     }
     data class Source(val name: String, val stamp: String = "", val uri: String = "")
     data class Hit(val file: UniFile?, val state: String, val width: Int, val height: Int,

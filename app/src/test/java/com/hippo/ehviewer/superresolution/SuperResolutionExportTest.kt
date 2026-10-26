@@ -59,7 +59,7 @@ class SuperResolutionExportTest {
                     if (pixels[y * page.width + x] != color(x, y)) fail("Wrong pixel at $x,$y for ${scale}x")
             } finally { decoded.recycle() }
         }
-        assertEquals(listOf("001_sr.png"), gallery.findFile("_suepr_resolution")!!.findFile("Chapter")!!.listFiles()!!.map { it.name })
+        assertEquals(listOf("001_sr.png"), gallery.findFile("_super_resolution")!!.findFile("Chapter")!!.listFiles()!!.map { it.name })
     }
 
     @Test fun widePageStreamsAcrossMultipleBands() = runBlocking {
@@ -86,7 +86,7 @@ class SuperResolutionExportTest {
         }
         job.join()
         assertTrue(job.isCancelled)
-        val directory = File(root, "_suepr_resolution")
+        val directory = File(root, "_super_resolution")
         assertEquals(listOf("001_sr.png"), directory.list()!!.toList())
         assertEquals("previous", File(directory, "001_sr.png").readText())
         try {

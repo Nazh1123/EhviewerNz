@@ -61,7 +61,7 @@ class GalleryResultImporterTest {
         val original = png(File(gallery, "00000001.png"))
         val provider = Provider(listOf("00000001"), mapOf("00000001" to original))
         val overlay = png(File(gallery, "_translated/00000001_tl.png"))
-        val enhanced = png(File(gallery, "_suepr_resolution/00000001_sr.png"), 32, 24)
+        val enhanced = png(File(gallery, "_super_resolution/00000001_sr.png"), 32, 24)
         val bytes = overlay.openInputStream().use { it.readBytes() }
         val report = import(provider)
         assertEquals(1, report.translated); assertEquals(1, report.enhanced); assertEquals(0, report.failed)
@@ -166,7 +166,7 @@ class GalleryResultImporterTest {
         val truncated = File(gallery, "_translated/00000001_tl.png")
         png(truncated)
         truncated.writeBytes(truncated.readBytes().dropLast(12).toByteArray())
-        val enhanced = png(File(gallery, "_suepr_resolution/00000001_sr.png"), 16, 12)
+        val enhanced = png(File(gallery, "_super_resolution/00000001_sr.png"), 16, 12)
         val report = import(provider)
         assertEquals(1, report.failed); assertEquals(1, report.ignored)
         assertTrue(truncated.isFile); assertTrue(enhanced.isFile)

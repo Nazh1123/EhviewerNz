@@ -126,7 +126,7 @@ class GallerySuperResolutionSessionTest {
             session.pageChanged(0); session.enable()
             await { !session.working && session.states.size == 2 }
             assertTrue(session.states.values.all { it == R.string.sr_done })
-            assertFalse(File(gallery, "_suepr_resolution").exists())
+            assertFalse(File(gallery, "_super_resolution").exists())
         } finally { close(session) }
     }
 
@@ -153,7 +153,7 @@ class GallerySuperResolutionSessionTest {
             session.pageChanged(0); session.enable()
             await { !session.working && session.states.size == 2 }
             assertTrue(session.states.values.all { it == R.string.sr_done })
-            assertFalse(File(gallery, "_suepr_resolution").exists())
+            assertFalse(File(gallery, "_super_resolution").exists())
             assertFalse(File(context.noBackupFilesDir, "super-resolution-pages").exists())
         } finally { close(session) }
     }

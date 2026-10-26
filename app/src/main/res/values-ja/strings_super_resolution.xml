@@ -42,11 +42,11 @@
     <string name="sr_ahead">先読み処理するページ数</string>
     <string name="sr_ahead_summary">現在のページ + 後続 %1$s ページ</string>
     <string name="sr_persist">超解像の結果を保持</string>
-    <string name="sr_persist_help">ダウンロード一覧にあり、利用可能なローカルフォルダーを持つギャラリーのみ、結果を _suepr_resolution サブフォルダーに保存します。それ以外の結果は一時キャッシュに保存します。元のファイルは保持されます。</string>
+    <string name="sr_persist_help">ダウンロード一覧にあり、利用可能なローカルフォルダーを持つギャラリーのみ、結果を _super_resolution サブフォルダーに保存します。それ以外の結果は一時キャッシュに保存します。元のファイルは保持されます。</string>
     <string name="sr_cache_limit">一時キャッシュの上限</string>
     <string name="sr_clear_cache">超解像の一時キャッシュを消去</string>
     <string name="sr_clear_saved">保存済みの超解像結果を削除</string>
-    <string name="sr_clear_saved_help">アプリの専用ストレージにあるすべてのギャラリーの超解像結果を削除しますか？_suepr_resolution に書き出した PNG、原画像、翻訳結果は保持されます。</string>
+    <string name="sr_clear_saved_help">アプリの専用ストレージにあるすべてのギャラリーの超解像結果を削除しますか？_super_resolution に書き出した PNG、原画像、翻訳結果は保持されます。</string>
     <string name="sr_full_gallery">ギャラリー全体を超解像</string>
     <string name="sr_stop_full">ギャラリー全体の超解像を停止</string>
     <string name="sr_stop_all">超解像タスクを停止</string>
