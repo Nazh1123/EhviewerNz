@@ -392,6 +392,27 @@ public class SearchRatingLoadingTest {
         assertTrue(checked.subscriptionRawGalleries.stream().allMatch(g -> g.uploader == null));
     }
 
+    @Test public void reusableCheckPreparesFullDisplayBeforeFilteringNewCandidates() throws Throwable {
+        var doc = org.jsoup.Jsoup.parse(html);
+        doc.select(".glhide a, .gl3e a").remove();
+        html = doc.outerHtml();
+        Settings.putBoolean("show_gallery_pages", true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        for (GallerySeenState cursor : java.util.List.of(cursorAt("2030-01-01 00:00"), GallerySeenState.empty())) {
+            var checked = EhEngine.getGalleryList(null, client(false), FIRST, ListUrlBuilder.MODE_NORMAL,
+                    true, true, 450, false, null, cursor, true);
+            assertTrue(checked.galleryInfoList.isEmpty());
+            assertNotNull(checked.subscriptionDisplayGalleries);
+            assertEquals(checked.rawResultCount, checked.subscriptionDisplayGalleries.size());
+            assertTrue(checked.subscriptionDisplayGalleries.stream().allMatch(g -> "tester".equals(g.uploader)
+                    && g.pages == 10 && g.simpleTags != null && g.firstGid != null));
+        }
+        assertEquals(2, listRequests.get());
+        // The second check shares the metadata fetched while preparing the first display.
+        assertEquals(1, apiRequests.get());
+    }
+
     @Test public void checkStillResolvesMissingUploadersForEnabledBlockFilter() throws Throwable {
         var doc = org.jsoup.Jsoup.parse(html);
         doc.select(".glhide a, .gl3e a").remove();

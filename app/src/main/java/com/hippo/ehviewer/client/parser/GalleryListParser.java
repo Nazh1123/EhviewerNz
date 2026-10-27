@@ -90,6 +90,8 @@ public class GalleryListParser {
         public List<GalleryInfo> galleryInfoList = new ArrayList<>();
         // Background checks filter only new candidates; retain the full page for later browsing.
         public List<GalleryInfo> subscriptionRawGalleries;
+        // Display-ready full pages let update-check results open without another metadata request.
+        public List<GalleryInfo> subscriptionDisplayGalleries;
         public List<GalleryInfo> ratingMetadata;
     }
 

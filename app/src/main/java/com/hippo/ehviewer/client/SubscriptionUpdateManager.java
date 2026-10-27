@@ -690,7 +690,7 @@ public final class SubscriptionUpdateManager {
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
                     .setArgs(SearchRating.withoutServerFilter(url), source.builder.getMode(), true,
                             source.plan != null && source.plan.isMergedUploaderSearch(),
-                            source.ratingMinimumHundredths, false, null, source.cursor)
+                            source.ratingMinimumHundredths, false, null, source.cursor, true)
                     .setCallback(new EhClient.Callback<GalleryListParser.Result>() {
                         @Override
                         public void onSuccess(GalleryListParser.Result result) {
@@ -732,8 +732,10 @@ public final class SubscriptionUpdateManager {
             source.initialResultCount = result.rawResultCount;
         }
         if (source.homepageScan == null) {
-            source.requiresDisplayPreparation |= result.subscriptionRawGalleries != null;
-            source.galleryInfoList.addAll(result.subscriptionRawGalleries != null
+            source.requiresDisplayPreparation |= result.subscriptionRawGalleries != null
+                    && result.subscriptionDisplayGalleries == null;
+            source.galleryInfoList.addAll(result.subscriptionDisplayGalleries != null
+                    ? result.subscriptionDisplayGalleries : result.subscriptionRawGalleries != null
                     ? result.subscriptionRawGalleries : result.galleryInfoList);
         }
         if (result.customErrorString != null) {

@@ -76,7 +76,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -342,9 +344,19 @@ public class EhEngine {
             OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
             boolean requireUploader, int minRatingHundredths, boolean allowExtraPage,
             @Nullable List<GalleryInfo> previousPopular, @Nullable GallerySeenState checkCursor) throws Throwable {
+        return getGalleryList(task, okHttpClient, url, mode, subscriptionSearch, requireUploader,
+                minRatingHundredths, allowExtraPage, previousPopular, checkCursor, false);
+    }
+
+    public static GalleryListParser.Result getGalleryList(@Nullable EhClient.Task task,
+            OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
+            boolean requireUploader, int minRatingHundredths, boolean allowExtraPage,
+            @Nullable List<GalleryInfo> previousPopular, @Nullable GallerySeenState checkCursor,
+            boolean prepareSubscriptionDisplay) throws Throwable {
         if (subscriptionSearch) okHttpClient = SubscriptionPageCall.boundedClient(okHttpClient);
         GalleryListParser.Result result = getGalleryListPage(task, okHttpClient, url, mode,
-                subscriptionSearch, requireUploader, minRatingHundredths, checkCursor);
+                subscriptionSearch, requireUploader, minRatingHundredths, checkCursor, null, null,
+                prepareSubscriptionDisplay);
         if (mode == ListUrlBuilder.MODE_WHATS_HOT
                 && minRatingHundredths > 0 && previousPopular != null && !previousPopular.isEmpty()) {
             fillGalleryListByApi(task, okHttpClient, previousPopular, url);
@@ -369,7 +381,7 @@ public class EhEngine {
             OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
             boolean requireUploader, int minRatingHundredths, @Nullable GallerySeenState checkCursor) throws Throwable {
         return getGalleryListPage(task, okHttpClient, url, mode, subscriptionSearch,
-                requireUploader, minRatingHundredths, checkCursor, null, null);
+                requireUploader, minRatingHundredths, checkCursor, null, null, false);
     }
 
     public static GalleryListParser.Result getSubscriptionHomepagePage(@Nullable EhClient.Task task,
@@ -381,14 +393,14 @@ public class EhEngine {
             OkHttpClient client, String url, SubscriptionHomepageMatcher matcher,
             @Nullable SubscriptionHomepageScan scan) throws Throwable {
         return getGalleryListPage(task, SubscriptionPageCall.boundedClient(client), url, ListUrlBuilder.MODE_NORMAL,
-                true, false, 0, null, matcher, scan);
+                true, false, 0, null, matcher, scan, false);
     }
 
     private static GalleryListParser.Result getGalleryListPage(@Nullable EhClient.Task task,
             OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
             boolean requireUploader, int minRatingHundredths, @Nullable GallerySeenState checkCursor,
             @Nullable SubscriptionHomepageMatcher homepageMatcher,
-            @Nullable SubscriptionHomepageScan homepageScan) throws Throwable {
+            @Nullable SubscriptionHomepageScan homepageScan, boolean prepareSubscriptionDisplay) throws Throwable {
         if (subscriptionSearch || SearchRating.isClientOnlyMode(mode)) {
             url = SearchRating.withoutServerFilter(url);
         }
@@ -442,12 +454,24 @@ public class EhEngine {
             }
             result.galleryInfoList.removeIf(gallery -> gallery.firstGid < 0 || !homepageMatcher.matches(gallery));
         }
+        Set<Long> newSubscriptionGids = new HashSet<>();
         if (checkCursor != null) {
             result.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
-            result.galleryInfoList.removeIf(gallery -> !checkCursor.isNew(gallery));
+            if (prepareSubscriptionDisplay) {
+                for (GalleryInfo gallery : result.galleryInfoList) {
+                    if (checkCursor.isNew(gallery)) newSubscriptionGids.add(gallery.gid);
+                }
+            } else {
+                result.galleryInfoList.removeIf(gallery -> !checkCursor.isNew(gallery));
+            }
         }
         prepareGalleryList(task, okHttpClient, requestUrl, mode, result, subscriptionScope,
-                requireUploader && checkCursor == null, minRatingHundredths, checkCursor != null || homepageMatcher != null);
+                requireUploader && (checkCursor == null || prepareSubscriptionDisplay), minRatingHundredths,
+                (checkCursor != null && !prepareSubscriptionDisplay) || homepageMatcher != null);
+        if (checkCursor != null && prepareSubscriptionDisplay) {
+            result.subscriptionDisplayGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
+            result.galleryInfoList.removeIf(gallery -> !newSubscriptionGids.contains(gallery.gid));
+        }
 
         if (code == 200 && url.equals("https://exhentai.org/") && body.isEmpty()) {
             result.customErrorString = GetText.getString(R.string.error_igneous_wrong);

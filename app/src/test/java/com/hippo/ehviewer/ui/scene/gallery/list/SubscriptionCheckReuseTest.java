@@ -348,6 +348,58 @@ public class SubscriptionCheckReuseTest {
         assertEquals(false, args[5]);
         assertTrue(args[7] instanceof GallerySeenState);
         assertTrue(((GallerySeenState) args[7]).initialized());
+        assertEquals(true, args[8]);
+    }
+
+    @Test public void preparedCheckResultsOpenImmediatelyWithoutAnotherDisplayRequest() {
+        enableBookmark();
+        start(true);
+        for (int i = 0; i < 2; i++) {
+            var checked = page(200 - i, null);
+            checked.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(checked.galleryInfoList);
+            checked.subscriptionDisplayGalleries = SubscriptionGallerySnapshot.copy(checked.galleryInfoList);
+            checked.galleryInfoList.clear(); // No new candidates still leaves a complete display page.
+            succeed(i, checked);
+        }
+        var cached = manager.getRecentCheckResult(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        assertNotNull(cached);
+        for (var source : cached.sources) assertFalse(source.requiresDisplayPreparation);
+        refresh(false, cached);
+        refresh(true, manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertEquals(2, requests.size());
+    }
+
+    @Test public void filteredCacheShowsItsAvailablePrefixBeforeLoadingAnotherPage() {
+        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        start(true);
+        var checked = datedPage(200, "2026-09-21 00:00", "https://e-hentai.org/watched?next=90");
+        checked.rawResultCount = 25;
+        checked.rawTailPosted = "2026-09-19 00:00";
+        checked.rawTailGid = 90;
+        checked.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(checked.galleryInfoList);
+        checked.subscriptionDisplayGalleries = SubscriptionGallerySnapshot.copy(checked.galleryInfoList);
+        succeed(0, checked);
+        assertFalse(manager.isChecking());
+        List<Long> displayed = new ArrayList<>();
+        var coordinator = new BookmarkSubscriptionCoordinator(client,
+                new BookmarkSubscriptionCoordinator.Listener() {
+                    @Override public void onBookmarkSubscriptionBatch(int taskId, List<GalleryInfo> data,
+                            boolean hasMore, boolean refresh, boolean noSubscriptions, boolean partialFailure) {
+                        assertTrue(hasMore);
+                        for (var gallery : data) displayed.add(gallery.gid);
+                    }
+                    @Override public void onBookmarkSubscriptionFailure(int taskId, Exception error) {
+                        throw new AssertionError(error);
+                    }
+                });
+        coordinator.refresh(1, bookmarks, true,
+                manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertEquals(Collections.singletonList(200L), displayed);
+        assertEquals(1, requests.size());
+        coordinator.loadMore(2);
+        assertEquals(2, requests.size());
+        assertEquals("https://e-hentai.org/watched?next=90", requests.get(1).getArgs()[0]);
+        coordinator.cancel();
     }
 
     private SubscriptionUpdateManager.RecentCheckResult lightweightCheck() {

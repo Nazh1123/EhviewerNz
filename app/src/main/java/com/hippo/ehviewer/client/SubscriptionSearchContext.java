@@ -26,7 +26,17 @@ public final class SubscriptionSearchContext {
                 && Settings.getShowThumbnailInfoDetails()));
         for (Cookie cookie : EhApplication.getEhCookieStore(EhApplication.getInstance())
                 .loadForRequest(HttpUrl.parse(EhUrl.getHost()))) {
-            parts.add(cookie.name() + "=" + cookie.value());
+            // Session/challenge cookies can rotate in an ordinary search response. Only
+            // account identity and search preferences define the reusable result scope.
+            String name = cookie.name();
+            if (EhCookieStore.KEY_IPD_MEMBER_ID.equals(name)
+                    || EhCookieStore.KEY_IPD_PASS_HASH.equals(name)
+                    || EhCookieStore.KEY_IGNEOUS.equals(name)
+                    || EhConfig.KEY_UCONFIG.equals(name)
+                    || EhConfig.KEY_CONTENT_WARNING.equals(name)
+                    || "sp".equals(name)) {
+                parts.add(name + "=" + cookie.value());
+            }
         }
         EhFilter filters = EhFilter.getInstance();
         synchronized (filters) {

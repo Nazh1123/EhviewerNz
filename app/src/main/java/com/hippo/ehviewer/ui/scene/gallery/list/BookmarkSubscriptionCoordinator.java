@@ -154,6 +154,7 @@ final class BookmarkSubscriptionCoordinator {
     private final Set<Long> mBookmarkGids = new HashSet<>();
     private boolean mRefresh;
     private boolean mLoading;
+    private boolean mHasCachedInitialSource;
     @Nullable private Exception mFirstFailure;
     private String mSubscriptionFingerprint = "";
 
@@ -382,8 +383,10 @@ final class BookmarkSubscriptionCoordinator {
             SubscriptionUpdateManager.RecentCheckSource cachedSource =
                     findCachedSource(recentResult, source);
             if (cachedSource != null && !cachedSource.requiresDisplayPreparation) {
+                mHasCachedInitialSource = true;
                 applyCachedSource(source, cachedSource);
             } else {
+                mHasCachedInitialSource |= cachedSource != null;
                 source.cachedCheck = cachedSource;
                 mInitialRequestsRemaining++;
                 enqueue(source, true);
@@ -417,6 +420,7 @@ final class BookmarkSubscriptionCoordinator {
         mUnresolvedQuickSearches.clear();
         mLoading = false;
         mRefresh = false;
+        mHasCachedInitialSource = false;
         mRequestQueue.clear();
         mActiveRequests = 0;
         mInitialRequestsRemaining = 0;
@@ -673,6 +677,13 @@ final class BookmarkSubscriptionCoordinator {
             Source visibleSource = findNewestVisibleSource();
             Source blockingSource = findBlockingUnknownSource(visibleSource);
             if (blockingSource != null) {
+                if (mRefresh && mHasCachedInitialSource
+                        && (!mPendingBatch.isEmpty() || visibleSource == null)) {
+                    // Show the safely ordered cached prefix immediately. Pagination can
+                    // fill the rest instead of delaying entry to reach the raw page size.
+                    finishBatch();
+                    return;
+                }
                 if (blockingSource.ratingBatchEmpty) {
                     // The engine already tried the one extra page for this request.
                     finishBatch();

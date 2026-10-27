@@ -183,7 +183,8 @@ public class EhClient {
                                 params.length > 4 ? (int) params[4] : com.hippo.ehviewer.Settings.getPersistentMinRatingHundredths(),
                                 params.length > 5 && Boolean.TRUE.equals(params[5]),
                                 params.length > 6 ? (List<GalleryInfo>) params[6] : null,
-                                params.length > 7 ? (GallerySeenState) params[7] : null);
+                                params.length > 7 ? (GallerySeenState) params[7] : null,
+                                params.length > 8 && Boolean.TRUE.equals(params[8]));
                     /* Homepage scanning request dispatch is disabled.
                     case METHOD_GET_SUBSCRIPTION_HOMEPAGE:
                         return EhEngine.getSubscriptionHomepagePage(this, mOkHttpClient,
