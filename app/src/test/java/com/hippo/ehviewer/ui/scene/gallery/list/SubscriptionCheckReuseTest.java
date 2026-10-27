@@ -203,7 +203,7 @@ public class SubscriptionCheckReuseTest {
 
     @Test public void freshnessStartsAtRequestAndIsRecheckedByConsumers() {
         start(true);
-        ShadowSystemClock.advanceBy(Duration.ofSeconds(29));
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(59));
         succeed(0, page(200, null));
         SubscriptionUpdateManager.RecentCheckResult cached =
                 manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);

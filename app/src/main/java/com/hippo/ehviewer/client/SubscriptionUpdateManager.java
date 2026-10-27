@@ -48,7 +48,7 @@ import java.util.concurrent.ExecutorService;
 public final class SubscriptionUpdateManager {
 
     public static final long CANCEL_RETRY_DELAY_MS = 3L * 60L * 1000L;
-    public static final long CHECK_REUSE_WINDOW_MS = 30L * 1000L;
+    public static final long CHECK_REUSE_WINDOW_MS = 60L * 1000L;
 
     private static final int MAX_CONCURRENT_REQUESTS = 8;
     private static final String KEY_HOMEPAGE_CHECKPOINT = "subscription_homepage_checkpoint_v1";
