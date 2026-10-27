@@ -74,6 +74,7 @@ import com.hippo.lib.yorozuya.AssertUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -120,7 +121,9 @@ public class EhEngine {
 
     private static void doThrowException(Call call, int code, @Nullable Headers headers,
                                          @Nullable String body, Throwable e) throws Throwable {
-        if (call.isCanceled()) {
+        // OkHttp also cancels its transport when callTimeout expires. Report that
+        // IOException to the retry policy instead of silently treating it as user cancellation.
+        if (call.isCanceled() && !(e instanceof InterruptedIOException)) {
             throw new CancelledException();
         }
 
@@ -339,6 +342,7 @@ public class EhEngine {
             OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch,
             boolean requireUploader, int minRatingHundredths, boolean allowExtraPage,
             @Nullable List<GalleryInfo> previousPopular, @Nullable GallerySeenState checkCursor) throws Throwable {
+        if (subscriptionSearch) okHttpClient = SubscriptionPageCall.boundedClient(okHttpClient);
         GalleryListParser.Result result = getGalleryListPage(task, okHttpClient, url, mode,
                 subscriptionSearch, requireUploader, minRatingHundredths, checkCursor);
         if (mode == ListUrlBuilder.MODE_WHATS_HOT
@@ -376,7 +380,7 @@ public class EhEngine {
     public static GalleryListParser.Result getSubscriptionHomepagePage(@Nullable EhClient.Task task,
             OkHttpClient client, String url, SubscriptionHomepageMatcher matcher,
             @Nullable SubscriptionHomepageScan scan) throws Throwable {
-        return getGalleryListPage(task, client, url, ListUrlBuilder.MODE_NORMAL,
+        return getGalleryListPage(task, SubscriptionPageCall.boundedClient(client), url, ListUrlBuilder.MODE_NORMAL,
                 true, false, 0, null, matcher, scan);
     }
 
@@ -393,7 +397,8 @@ public class EhEngine {
         String referer = EhUrl.getReferer();
         Log.d(TAG, url);
         Request request = new EhRequestBuilder(url, referer).build();
-        Call call = okHttpClient.newCall(request);
+        Call call = subscriptionSearch ? new SubscriptionPageCall(okHttpClient, request)
+                : okHttpClient.newCall(request);
 
         // Put call
         if (null != task) {
@@ -457,7 +462,7 @@ public class EhEngine {
             boolean requireUploader, int minRatingHundredths) throws Throwable {
         GalleryListParser.Result result = new GalleryListParser.Result();
         result.galleryInfoList = SubscriptionGallerySnapshot.copy(rawGalleries);
-        prepareGalleryList(task, client, url, ListUrlBuilder.MODE_NORMAL, result, SubscriptionSearchContext.key(),
+        prepareGalleryList(task, SubscriptionPageCall.boundedClient(client), url, ListUrlBuilder.MODE_NORMAL, result, SubscriptionSearchContext.key(),
                 requireUploader, minRatingHundredths, false);
         return result;
     }

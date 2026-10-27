@@ -126,11 +126,11 @@ public class EhClient {
 
         // Called in Job thread
         public void setCall(Call call) throws CancelledException {
+            mCall.set(call);
             if (mStop.get()) {
                 // Stopped Job thread
+                call.cancel();
                 throw new CancelledException();
-            } else {
-                mCall.lazySet(call);
             }
         }
 
@@ -184,10 +184,12 @@ public class EhClient {
                                 params.length > 5 && Boolean.TRUE.equals(params[5]),
                                 params.length > 6 ? (List<GalleryInfo>) params[6] : null,
                                 params.length > 7 ? (GallerySeenState) params[7] : null);
+                    /* Homepage scanning request dispatch is disabled.
                     case METHOD_GET_SUBSCRIPTION_HOMEPAGE:
                         return EhEngine.getSubscriptionHomepagePage(this, mOkHttpClient,
                                 (String) params[0], (SubscriptionHomepageMatcher) params[1],
                                 params.length > 2 ? (SubscriptionHomepageScan) params[2] : null);
+                    */
                     case METHOD_PREPARE_SUBSCRIPTION_LIST:
                         return EhEngine.prepareSubscriptionList(this, mOkHttpClient,
                                 (String) params[0], (List<GalleryInfo>) params[1],

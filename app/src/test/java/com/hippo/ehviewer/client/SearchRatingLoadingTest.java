@@ -124,6 +124,32 @@ public class SearchRatingLoadingTest {
         assertEquals(AFTER_NEXT, result.nextHref);
     }
 
+    @Test public void metadataCallTimeoutIsRetryableFailureRatherThanSilentCancellation() throws Throwable {
+        try (okhttp3.mockwebserver.MockWebServer server = new okhttp3.mockwebserver.MockWebServer()) {
+            server.start();
+            server.enqueue(new okhttp3.mockwebserver.MockResponse()
+                    .setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.NO_RESPONSE));
+            OkHttpClient client = new OkHttpClient.Builder().callTimeout(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .retryOnConnectionFailure(false).addInterceptor(chain -> {
+                        if (chain.request().method().equals("GET")) {
+                            return new Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
+                                    .code(200).message("OK").body(ResponseBody.create(MediaType.parse("text/html"), html)).build();
+                        }
+                        return chain.proceed(chain.request().newBuilder().url(server.url("/api.php")).build());
+                    }).build();
+            try {
+                EhEngine.getGalleryList(null, client, FIRST, ListUrlBuilder.MODE_NORMAL,
+                        true, false, 451, false);
+                fail("Stalled metadata succeeded");
+            } catch (java.io.InterruptedIOException expected) {
+                assertEquals(2000, SubscriptionRetry.delayMillis(expected, 0));
+            } finally {
+                client.connectionPool().evictAll();
+            }
+            assertEquals(1, server.getRequestCount());
+        }
+    }
+
     @Test public void defaultEngineThresholdFiltersButExplicitZeroBypassesIt() throws Throwable {
         Settings.putPersistentMinRatingHundredths(451);
         GalleryListParser.Result result = EhEngine.getGalleryList(null, client(false), FIRST,

@@ -54,8 +54,9 @@ public final class SubscriptionUpdatePreferences {
     public static AlertDialog showDialog(Context context, Runnable onSaved) {
         View view = LayoutInflater.from(context).inflate(
                 R.layout.dialog_subscription_update_settings, null);
-        SwitchCompat homepage = view.findViewById(R.id.subscription_homepage_scan);
-        homepage.setChecked(Settings.getSubscriptionHomepageScan());
+        // Homepage scanning is disabled along with its settings controls.
+        // SwitchCompat homepage = view.findViewById(R.id.subscription_homepage_scan);
+        // homepage.setChecked(Settings.getSubscriptionHomepageScan());
         SwitchCompat automatic = view.findViewById(R.id.auto_subscription_updates);
         SwitchCompat eh = view.findViewById(R.id.auto_subscription_updates_eh);
         SwitchCompat bookmark = view.findViewById(R.id.auto_subscription_updates_bookmark);
@@ -91,7 +92,7 @@ public final class SubscriptionUpdatePreferences {
                 interval.requestFocus();
                 return;
             }
-            Settings.putBoolean(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN, homepage.isChecked());
+            // Settings.putBoolean(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN, homepage.isChecked());
             Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES,
                     automatic.isChecked());
             Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH,

@@ -121,20 +121,23 @@ public class SubscriptionUpdatePreferencesTest {
         host.finish();
     }
 
-    @Test public void homepageModeIsAvailableForManualChecksAndSavesOnlyOnConfirmation() {
-        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
-        SwitchCompat homepage = dialog.findViewById(R.id.subscription_homepage_scan);
-        assertTrue(homepage.isEnabled());
-        assertFalse(homepage.isChecked());
-        homepage.setChecked(true);
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+    @Test public void homepageModeIsAbsentAndLegacyEnabledPreferenceIsIgnored() {
+        Settings.putBoolean(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN, true);
         assertFalse(Settings.getSubscriptionHomepageScan());
-        dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
-        ((SwitchCompat) dialog.findViewById(R.id.subscription_homepage_scan)).setChecked(true);
+        FragmentActivity host = Robolectric.buildActivity(FragmentActivity.class).setup().get();
+        host.setTheme(R.style.AppTheme);
+        Harness fragment = new Harness();
+        host.getSupportFragmentManager().beginTransaction()
+                .replace(android.R.id.content, fragment).commitNow();
+        assertNull(fragment.findPreference(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN));
+        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
+        String resourcePackage = activity.getResources().getResourcePackageName(R.id.auto_subscription_updates);
+        assertEquals(0, activity.getResources().getIdentifier("subscription_homepage_scan", "id", resourcePackage));
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-        assertTrue(Settings.getSubscriptionHomepageScan());
+        assertFalse(Settings.getSubscriptionHomepageScan());
         assertFalse(Settings.getAutoSubscriptionUpdates());
         assertEquals(1, saves.get());
+        host.finish();
     }
 
     public static class Harness extends PreferenceFragmentCompat {

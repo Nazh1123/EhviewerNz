@@ -561,6 +561,8 @@ public final class SubscriptionUpdateManager {
                     restoreSourceProgress(source);
                     nativeSources.add(source);
                 }
+                // Homepage scanning is disabled; every bookmark source remains a native search.
+                /*
                 if (Settings.getSubscriptionHomepageScan() && shouldUseHomepageScan(
                         quickSearches.size(), getLastCheckTime(), System.currentTimeMillis())) {
                     List<QuickSearch> homepageBookmarks = new ArrayList<>();
@@ -601,6 +603,7 @@ public final class SubscriptionUpdateManager {
                         nativeSources.removeAll(homepageSources);
                     }
                 }
+                */
                 for (Source source : nativeSources) {
                     addSource(source);
                     mBookmarkSourceCount++;
@@ -688,10 +691,12 @@ public final class SubscriptionUpdateManager {
                             // Cancellation invalidates the generation before cancelling requests.
                         }
                     });
+            /* Homepage request entry disabled.
             if (source.homepageScan != null) {
                 request.setMethod(EhClient.METHOD_GET_SUBSCRIPTION_HOMEPAGE)
                         .setArgs(SearchRating.withoutServerFilter(url), source.homepageMatcher, source.homepageScan);
             }
+            */
             source.request = request;
             mActiveRequests++;
             mClient.execute(request);

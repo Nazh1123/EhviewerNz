@@ -466,6 +466,23 @@ public class SubscriptionCheckReuseTest {
         return page;
     }
 
+    @Test public void legacyHomepagePreferenceUsesOrdinarySearchForManualAndAutomaticChecks() {
+        enableHomepage();
+        assertFalse(Settings.getSubscriptionHomepageScan());
+        for (boolean manual : new boolean[]{true, false}) {
+            int before = requests.size();
+            start(manual);
+            // The nine identical subscriptions still merge into one ordinary search.
+            assertEquals(before + 1, requests.size());
+            assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(before).getMethod());
+            assertEquals(ListUrlBuilder.MODE_NORMAL, requests.get(before).getArgs()[1]);
+            succeed(before, page(manual ? 100 : 200, null));
+            assertFalse(manager.isChecking());
+            assertNotNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+        }
+    }
+
+    /* Historical integration cases for the disabled homepage entry points.
     @Test public void homepageModeSeedsThenCountsMatchesOnBothSidesOfAnchorAndExtraPage() {
         enableHomepage();
         start(true);
@@ -754,6 +771,8 @@ public class SubscriptionCheckReuseTest {
         assertEquals(checkpoint, Settings.getString("subscription_homepage_checkpoint_v1", ""));
         assertEquals(0, manager.getSnapshot().bookmarkCount);
     }
+
+    */
 
     private static GalleryListParser.Result datedPage(long gid, String posted, String next) {
         GalleryListParser.Result result = page(gid, next);

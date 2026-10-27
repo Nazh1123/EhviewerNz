@@ -42,8 +42,8 @@ public class EhSSLSocketFactoryLowSDK extends SSLSocketFactory {
         }
         InetAddress address = s.getInetAddress();
         Log.d("EhSSLSocketFactory", "Host: " + host + " Address: " + address.getHostAddress());
-        if (autoClose) s.close();
-        return enableTLSOnSocket(mSSLSocketFactory.createSocket(address, port));
+        return enableTLSOnSocket(mSSLSocketFactory.createSocket(
+                s, address.getHostAddress(), port, autoClose));
     }
 
     @Override

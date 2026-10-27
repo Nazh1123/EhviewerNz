@@ -44,8 +44,10 @@ public class EhSSLSocketFactory extends SSLSocketFactory {
                 Log.d("EhSSLSocketFactory", "Host: " + host + " Address: " + hostAddress);
             }
         }
-        if (autoClose) s.close();
-        return getDefault().createSocket(address, port);
+        // Layer TLS over OkHttp's connected socket. Opening another TCP socket here
+        // loses its connect timeout and prevents cancellation while that connect stalls.
+        return ((SSLSocketFactory) getDefault()).createSocket(
+                s, address.getHostAddress(), port, autoClose);
     }
 
     @Override

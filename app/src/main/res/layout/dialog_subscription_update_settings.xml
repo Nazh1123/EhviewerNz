@@ -64,6 +64,7 @@
 
         </LinearLayout>
 
+        <!-- Homepage scanning is disabled; retain the controls for reference.
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/subscription_homepage_scan"
             android:layout_width="match_parent"
@@ -77,6 +78,7 @@
             android:layout_height="wrap_content"
             android:text="@string/settings_subscription_homepage_scan_summary"
             android:textAppearance="?android:attr/textAppearanceSmall" />
+        -->
 
     </LinearLayout>
 </ScrollView>

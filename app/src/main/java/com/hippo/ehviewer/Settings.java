@@ -589,7 +589,9 @@ public class Settings {
     public static final int DEFAULT_AUTO_SUBSCRIPTION_UPDATE_INTERVAL = 60;
 
     public static boolean getSubscriptionHomepageScan() {
-        return getBoolean(KEY_SUBSCRIPTION_HOMEPAGE_SCAN, false);
+        // Disabled even for installations that previously enabled homepage scanning.
+        // return getBoolean(KEY_SUBSCRIPTION_HOMEPAGE_SCAN, false);
+        return false;
     }
 
     public static boolean getAutoSubscriptionUpdates() {
