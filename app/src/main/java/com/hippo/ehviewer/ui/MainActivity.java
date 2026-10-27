@@ -695,9 +695,6 @@ public final class MainActivity extends StageActivity
     protected void onStart() {
         super.onStart();
         mSubscriptionUpdatesStarted = true;
-        if (mSubscriptionUpdateManager != null) {
-            mSubscriptionUpdateManager.setListener(mSubscriptionUpdateListener);
-        }
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
         if (!Settings.getCloseAutoUpdate()){
@@ -892,6 +889,10 @@ public final class MainActivity extends StageActivity
     protected void onResume() {
         super.onResume();
 
+        if (mSubscriptionUpdateManager != null) {
+            mSubscriptionUpdateManager.setListener(mSubscriptionUpdateListener);
+        }
+
         setNavCheckedItem(mNavCheckedItem);
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
@@ -931,13 +932,18 @@ public final class MainActivity extends StageActivity
     }
 
     @Override
+    protected void onPause() {
+        if (mSubscriptionUpdateManager != null) {
+            mSubscriptionUpdateManager.setListener(null);
+        }
+        super.onPause();
+    }
+
+    @Override
     protected void onStop() {
         mSubscriptionUpdatesStarted = false;
         mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
         stopSubscriptionUpdateCountdown();
-        if (mSubscriptionUpdateManager != null) {
-            mSubscriptionUpdateManager.setListener(null);
-        }
         super.onStop();
     }
 

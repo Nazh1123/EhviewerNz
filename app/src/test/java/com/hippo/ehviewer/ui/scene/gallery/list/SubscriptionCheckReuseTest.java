@@ -100,6 +100,52 @@ public class SubscriptionCheckReuseTest {
         for (EhRequest request : requests) assertTrue(request.isBackground());
     }
 
+    @Test public void checkFinishedWithoutVisibleActivityIsDeliveredOnceOnReturn() {
+        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        List<SubscriptionUpdateManager.CheckResult> delivered = new ArrayList<>();
+        SubscriptionUpdateManager.Listener listener = listener(delivered);
+        manager.setListener(listener);
+        start(false);
+        manager.setListener(null);
+        succeed(0, page(200, null));
+        assertTrue(delivered.isEmpty());
+        manager.setListener(listener);
+        assertEquals(1, delivered.size());
+        assertEquals(1, delivered.get(0).newEhCount);
+        assertTrue(delivered.get(0).hasNewGalleries());
+        manager.setListener(null);
+        manager.setListener(listener);
+        assertEquals(1, delivered.size());
+    }
+
+    @Test public void returningAfterReadingOrChangingAccountDoesNotReplayStaleCounts() {
+        for (boolean changeAccount : new boolean[]{false, true}) {
+            manager.recordEhPageViewed(page(100, null).galleryInfoList);
+            start(true);
+            succeed(requests.size() - 1, page(200, null));
+            if (changeAccount) contextKey = "account-b";
+            else manager.onSubscriptionOpened(ListUrlBuilder.MODE_SUBSCRIPTION);
+            List<SubscriptionUpdateManager.CheckResult> delivered = new ArrayList<>();
+            manager.setListener(listener(delivered));
+            if (changeAccount) assertTrue(delivered.isEmpty());
+            else {
+                assertEquals(1, delivered.size());
+                assertFalse(delivered.get(0).hasNewGalleries());
+                assertEquals(0, delivered.get(0).snapshot.ehCount);
+            }
+            manager.setListener(null);
+        }
+    }
+
+    private static SubscriptionUpdateManager.Listener listener(
+            List<SubscriptionUpdateManager.CheckResult> delivered) {
+        return new SubscriptionUpdateManager.Listener() {
+            @Override public void onSubscriptionUpdateStateChanged() { }
+            @Override public void onSubscriptionUpdateCheckFinished(
+                    SubscriptionUpdateManager.CheckResult result) { delivered.add(result); }
+        };
+    }
+
     @Test public void manualAndAutomaticChecksAreReusableByGlobalEntryOnly() {
         for (boolean manual : new boolean[]{false, true}) {
             assertTrue(manager.checkForUpdates(manual));

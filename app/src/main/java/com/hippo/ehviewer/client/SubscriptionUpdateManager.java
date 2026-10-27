@@ -264,6 +264,8 @@ public final class SubscriptionUpdateManager {
     private int mOldBookmarkCount;
 
     @Nullable private Listener mListener;
+    @Nullable private CheckResult mPendingCheckResult;
+    @Nullable private String mPendingCheckContext;
     @Nullable private RecentCheckResult mRecentCheckResult;
     private long mRecentCheckCompletedRealtime;
     private String mRatingPolicy;
@@ -311,6 +313,20 @@ public final class SubscriptionUpdateManager {
 
     public void setListener(@Nullable Listener listener) {
         mListener = listener;
+        dispatchPendingCheckResult();
+    }
+
+    private void dispatchPendingCheckResult() {
+        Listener listener = mListener;
+        CheckResult result = mPendingCheckResult;
+        if (listener == null || result == null) return;
+        mPendingCheckResult = null;
+        if (!SubscriptionSearchContext.key().equals(mPendingCheckContext)) return;
+        // A subscription may have been opened while this activity was stopped.
+        Snapshot snapshot = getSnapshot();
+        listener.onSubscriptionUpdateCheckFinished(new CheckResult(result.manual, result.failed,
+                Math.min(result.newEhCount, snapshot.ehCount),
+                Math.min(result.newBookmarkCount, snapshot.bookmarkCount), snapshot));
     }
 
     public boolean isChecking() {
@@ -886,10 +902,9 @@ public final class SubscriptionUpdateManager {
                 !ehSuccess || !bookmarkSuccess, newEhCount, newBookmarkCount,
                 getSnapshot());
         notifyStateChanged();
-        Listener listener = mListener;
-        if (listener != null) {
-            listener.onSubscriptionUpdateCheckFinished(result);
-        }
+        mPendingCheckResult = result;
+        mPendingCheckContext = mSearchContext;
+        dispatchPendingCheckResult();
     }
 
     private int mCompletedSourcesFor(@NonNull Group group) {
