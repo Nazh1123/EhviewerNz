@@ -33,6 +33,7 @@ import androidx.annotation.Nullable;
 
 import com.alibaba.fastjson.JSONObject;
 import com.hippo.ehviewer.client.EhConfig;
+import com.hippo.ehviewer.client.SearchPresetQuery;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.FavListUrlBuilder;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -47,8 +48,13 @@ import com.hippo.lib.yorozuya.FileUtils;
 import com.hippo.lib.yorozuya.MathUtils;
 import com.hippo.lib.yorozuya.NumberUtils;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Locale;
@@ -1054,6 +1060,7 @@ public class Settings {
     }
 
     public static final String KEY_SEARCH_PRESET_TAG_1 = "search_preset_tag_1";
+    public static final String KEY_SEARCH_PRESET_TAGS = "search_preset_tags";
     public static final String KEY_ENABLE_SEARCH_PRESET_TAGS = "enable_search_preset_tags";
     public static final String KEY_ENABLE_PRECISE_RATING_FILTER = "enable_precise_rating_filter";
     public static final String KEY_PERSISTENT_MIN_RATING = "persistent_min_rating_hundredths";
@@ -1088,6 +1095,46 @@ public class Settings {
     @NonNull
     public static String getSearchPresetTag2() {
         return getString(KEY_SEARCH_PRESET_TAG_2, "o:\"ai generated$\"");
+    }
+
+    /** Ordered presets. Migrate the two legacy slots once, including custom values. */
+    @NonNull
+    public static List<String> getSearchPresetTags() {
+        String saved = getString(KEY_SEARCH_PRESET_TAGS, null);
+        if (saved != null) {
+            try {
+                JSONArray array = new JSONArray(saved);
+                List<String> tags = new ArrayList<>();
+                Set<String> identities = new HashSet<>();
+                for (int i = 0; i < array.length(); i++) {
+                    String tag = array.optString(i).trim();
+                    String identity = SearchPresetQuery.identity(tag);
+                    if (identity != null && identities.add(identity)) tags.add(tag);
+                }
+                return tags;
+            } catch (JSONException ignored) { /* Recover from a damaged preference. */ }
+        }
+        List<String> tags = new ArrayList<>();
+        Set<String> identities = new HashSet<>();
+        for (String tag : new String[]{getSearchPresetTag1(), getSearchPresetTag2()}) {
+            String identity = SearchPresetQuery.identity(tag);
+            if (identity != null && identities.add(identity)) tags.add(tag.trim());
+        }
+        putSearchPresetTags(tags);
+        return tags;
+    }
+
+    public static void putSearchPresetTags(@NonNull List<String> tags) {
+        JSONArray array = new JSONArray();
+        Set<String> identities = new HashSet<>();
+        for (String tag : tags) {
+            String identity = SearchPresetQuery.identity(tag);
+            if (identity == null || !identities.add(identity)) {
+                throw new IllegalArgumentException("Invalid or duplicate search preset");
+            }
+            array.put(tag.trim());
+        }
+        putString(KEY_SEARCH_PRESET_TAGS, array.toString());
     }
 
     @NonNull

@@ -31,26 +31,19 @@
 
 
 
-    <LinearLayout
+    <HorizontalScrollView
         android:id="@+id/search_preset_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:baselineAligned="false">
+        android:scrollbars="none">
 
-        <com.hippo.ehviewer.widget.SearchPresetSwitch
-            android:id="@+id/search_preset_tag_1"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:id="@+id/search_preset_chips"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp" />
-
-        <com.hippo.ehviewer.widget.SearchPresetSwitch
-            android:id="@+id/search_preset_tag_2"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1" />
-    </LinearLayout>
+            android:orientation="horizontal"
+            android:baselineAligned="false" />
+    </HorizontalScrollView>
 
     <LinearLayout
         android:id="@+id/search_rating_row"

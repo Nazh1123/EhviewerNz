@@ -29,6 +29,14 @@ public class SearchQueryTokenizerTest {
         assertEquals("parody:example", SearchQueryTokenizer.parseTag("series:example", false).identity());
     }
 
+    @Test public void normalizesSuggestionFragmentsWithoutRequiringCompleteSyntax() {
+        assertEquals("artist:ali", SearchQueryTokenizer.suggestionKeyword("a:ali"));
+        assertEquals("other:full color", SearchQueryTokenizer.suggestionKeyword(" ~o:\"full color$\" "));
+        assertEquals("location:", SearchQueryTokenizer.suggestionKeyword("LOC:"));
+        assertEquals("中文", SearchQueryTokenizer.suggestionKeyword("中文"));
+        assertEquals("", SearchQueryTokenizer.suggestionKeyword("  "));
+    }
+
     @Test public void doesNotGuessTagsFromOrdinaryTextOrOtherSearchQualifiers() {
         for (String raw : new String[]{"chinese", "title:chinese", "uploader:alice", "gid:123",
                 "weak:l:chinese", "http://example.org", "l:", "l:$", "l:\"\"", "--l:chinese", "l:chi\"nese"}) {

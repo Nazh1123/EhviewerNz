@@ -2,20 +2,17 @@ package com.hippo.ehviewer.ui.fragment;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.widget.Toast;
 import android.widget.EditText;
 import android.text.InputType;
 import android.view.inputmethod.EditorInfo;
 import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
-import androidx.preference.EditTextPreference;
 import androidx.preference.Preference;
 import androidx.appcompat.app.AlertDialog;
 
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
-import com.hippo.ehviewer.client.SearchPresetQuery;
 import com.hippo.ehviewer.client.SearchRating;
 
 public final class SearchFragment extends BasePreferenceFragmentCompat {
@@ -28,10 +25,17 @@ public final class SearchFragment extends BasePreferenceFragmentCompat {
                 return true;
             });
         }
-        bindSearchPreset(Settings.KEY_SEARCH_PRESET_TAG_1, Settings.getSearchPresetTag1());
-        bindSearchPreset(Settings.KEY_SEARCH_PRESET_TAG_2, Settings.getSearchPresetTag2());
         bindPersistentRating();
         ThumbnailInfoBarPreferences.bind(this, this::notifySettingsChanged);
+    }
+
+    @Override public void onResume() {
+        super.onResume();
+        if (getActivity() instanceof com.hippo.ehviewer.ui.SettingsActivity activity) {
+            activity.setSettingsTitle(R.string.settings_search);
+        }
+        Preference presets = findPreference(Settings.KEY_SEARCH_PRESET_TAGS);
+        presets.setSummary(getString(R.string.settings_search_presets_count, Settings.getSearchPresetTags().size()));
     }
 
     private void notifySettingsChanged() {
@@ -82,23 +86,4 @@ public final class SearchFragment extends BasePreferenceFragmentCompat {
         });
     }
 
-    private void bindSearchPreset(String key, String value) {
-        EditTextPreference preference = findPreference(key);
-        preference.setText(value);
-        preference.setOnBindEditTextListener(editText -> {
-            editText.setSingleLine(true);
-            editText.setSelectAllOnFocus(true);
-            editText.setInputType(android.text.InputType.TYPE_CLASS_TEXT
-                    | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        });
-        preference.setOnPreferenceChangeListener((ignored, newValue) -> {
-            if (!SearchPresetQuery.isValid((String) newValue)) {
-                Toast.makeText(requireContext(), R.string.settings_search_preset_tag_invalid,
-                        Toast.LENGTH_LONG).show();
-                return false;
-            }
-            notifySettingsChanged();
-            return true;
-        });
-    }
 }

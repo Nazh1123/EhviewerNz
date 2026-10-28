@@ -9,6 +9,17 @@ public class SearchPresetQueryTest {
     private static final String LANGUAGE = "l:\"chinese$\"";
     private static final String AI = "o:\"ai generated$\"";
 
+    @Test public void formatsDictionarySuggestionsAsSingleExactPresetTags() {
+        assertEquals("o:\"ai generated$\"", SearchPresetQuery.formatSuggestion("other:ai generated"));
+        assertEquals("a:\"alice$\"", SearchPresetQuery.formatSuggestion("artist:alice"));
+        assertEquals("loc:\"beach$\"", SearchPresetQuery.formatSuggestion("location:beach"));
+        assertNull(SearchPresetQuery.formatSuggestion("plain text"));
+        assertNull(SearchPresetQuery.formatSuggestion("artist:"));
+        assertNull(SearchPresetQuery.formatSuggestion("artist:bad\"quote"));
+        assertNull(SearchPresetQuery.formatSuggestion("rows:artist"));
+        assertNull(SearchPresetQuery.formatSuggestion("misc:keyword"));
+    }
+
     @Test public void recognizesQuotedUnquotedAndFullNamespaceForms() {
         for (String token : new String[]{"l:chinese", "l:\"chinese\"", LANGUAGE,
                 "language:Chinese$", "LANGUAGE:\"CHINESE$\""}) {

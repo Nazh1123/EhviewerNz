@@ -7,7 +7,7 @@ import android.content.res.XmlResourceParser;
 import android.view.ContextThemeWrapper;
 import android.view.View;
 import androidx.fragment.app.FragmentActivity;
-import androidx.preference.EditTextPreference;
+import androidx.preference.Preference;
 import androidx.preference.PreferenceManager;
 import androidx.preference.TwoStatePreference;
 import com.hippo.ehviewer.R;
@@ -45,8 +45,7 @@ public class SearchSettingsPreferencesTest {
     }
 
     @Test public void settingsAreAccessibleOnlyThroughSearchAndKeepExistingValues() throws Exception {
-        String[] moved = {Settings.KEY_POPULAR_UPDATES_ONLY, Settings.KEY_SEARCH_PRESET_TAG_1,
-                Settings.KEY_SEARCH_PRESET_TAG_2, Settings.KEY_THUMB_SIZE, Settings.KEY_PREVIEW_THUMB_SIZE,
+        String[] moved = {Settings.KEY_POPULAR_UPDATES_ONLY, Settings.KEY_SEARCH_PRESET_TAGS, Settings.KEY_THUMB_SIZE, Settings.KEY_PREVIEW_THUMB_SIZE,
                 Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, Settings.KEY_SHOW_THUMBNAIL_INFO_TITLE,
                 Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT,
                 Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE, Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD,
@@ -59,7 +58,12 @@ public class SearchSettingsPreferencesTest {
                 assertFalse(key, keys(resource).contains(key));
             }
         }
-        assertEquals("f:stockings", ((EditTextPreference) fragment.findPreference(Settings.KEY_SEARCH_PRESET_TAG_1)).getText());
+        assertEquals("f:stockings", Settings.getSearchPresetTags().get(0));
+        assertNull(fragment.findPreference("search_preset_item_0"));
+        assertNull(fragment.findPreference("search_preset_add"));
+        Preference management = fragment.findPreference(Settings.KEY_SEARCH_PRESET_TAGS);
+        assertEquals(SearchPresetsFragment.class.getName(), management.getFragment());
+        assertTrue(management.getSummary().toString().contains("2"));
         assertEquals(105, Settings.getThumbSize());
         assertTrue(((TwoStatePreference) fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS)).isChecked());
         try (XmlResourceParser xml = RuntimeEnvironment.getApplication().getResources().getXml(R.xml.settings_headers)) {
@@ -88,7 +92,7 @@ public class SearchSettingsPreferencesTest {
         layout.syncPresetTags("f:stockings");
         assertEquals(View.GONE, presets.getVisibility());
         assertEquals(View.VISIBLE, rating.getVisibility());
-        assertFalse(fragment.findPreference(Settings.KEY_SEARCH_PRESET_TAG_1).isEnabled());
+        assertFalse(fragment.findPreference(Settings.KEY_SEARCH_PRESET_TAGS).isEnabled());
         change(Settings.KEY_ENABLE_PRECISE_RATING_FILTER, false);
         layout.syncPresetTags("f:stockings");
         assertEquals(View.GONE, rating.getVisibility());
@@ -106,10 +110,7 @@ public class SearchSettingsPreferencesTest {
         assertEquals("f:stockings", Settings.getSearchPresetTag1());
     }
 
-    @Test public void movedControlsRetainValidationAndThumbnailDependencies() {
-        EditTextPreference preset = fragment.findPreference(Settings.KEY_SEARCH_PRESET_TAG_1);
-        assertFalse(preset.callChangeListener("not a tag"));
-        assertTrue(preset.callChangeListener("l:chinese"));
+    @Test public void movedControlsRetainThumbnailDependencies() {
         change(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, false);
         assertFalse(Settings.getShowThumbnailInfoDetails());
         assertTrue(fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE).isVisible());
@@ -149,6 +150,24 @@ public class SearchSettingsPreferencesTest {
         change(Settings.KEY_ENABLE_PRECISE_RATING_FILTER, true);
         assertTrue(rating.isEnabled());
         assertEquals(400, Settings.getPersistentMinRatingHundredths());
+    }
+
+    @Test public void bubblesSwitchDisablesPresetSubfeatureWithoutDeletingListOrQueries() throws Exception {
+        change(Settings.KEY_ENABLE_SEARCH_TAG_CHIPS, false);
+        assertFalse(fragment.findPreference(Settings.KEY_ENABLE_SEARCH_PRESET_TAGS).isEnabled());
+        assertFalse(fragment.findPreference(Settings.KEY_SEARCH_PRESET_TAGS).isEnabled());
+        SearchLayout layout = new SearchLayout(new ContextThemeWrapper(
+                RuntimeEnvironment.getApplication(), R.style.AppTheme_Main), null);
+        View normal = ReflectionHelpers.getField(layout, "mNormalView");
+        assertEquals(View.GONE, normal.findViewById(R.id.search_preset_row).getVisibility());
+        ListUrlBuilder builder = new ListUrlBuilder();
+        layout.formatListUrlBuilder(builder, "-f:stockings");
+        assertEquals("-f:stockings", builder.getKeyword());
+        change(Settings.KEY_ENABLE_SEARCH_TAG_CHIPS, true);
+        layout.syncPresetTags(builder.getKeyword());
+        assertEquals(View.VISIBLE, normal.findViewById(R.id.search_preset_row).getVisibility());
+        assertTrue(fragment.findPreference(Settings.KEY_SEARCH_PRESET_TAGS).isEnabled());
+        assertEquals("f:stockings", Settings.getSearchPresetTags().get(0));
     }
 
     private android.widget.EditText findInput(View view) {

@@ -10,6 +10,21 @@
         app:allowDividerAbove="false" />
 
     <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:dependency="enable_search_tag_chips"
+        android:key="enable_search_preset_tags"
+        android:title="@string/settings_enable_search_preset_tags"
+        android:summary="@string/settings_search_preset_bubbles_summary"
+        app:allowDividerAbove="false" />
+
+    <Preference
+        android:key="search_preset_tags"
+        android:dependency="enable_search_preset_tags"
+        android:title="@string/settings_search_preset_tags"
+        app:fragment="com.hippo.ehviewer.ui.fragment.SearchPresetsFragment"
+        app:allowDividerAbove="false" />
+
+    <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="show_viewed_galleries"
         android:title="@string/settings_show_viewed_galleries"
@@ -22,28 +37,6 @@
         android:title="@string/settings_popular_updates_only"
         android:summary="@string/settings_popular_updates_only_summary"
         app:allowDividerAbove="true" />
-
-    <com.hippo.preference.SwitchPreference
-        android:defaultValue="true"
-        android:key="enable_search_preset_tags"
-        android:title="@string/settings_enable_search_preset_tags"
-        app:allowDividerAbove="true" />
-
-    <androidx.preference.EditTextPreference
-        android:dependency="enable_search_preset_tags"
-        android:key="search_preset_tag_1"
-        android:title="@string/settings_search_preset_tag_1"
-        android:dialogMessage="@string/settings_search_preset_tag_hint"
-        app:useSimpleSummaryProvider="true"
-        app:allowDividerAbove="false" />
-
-    <androidx.preference.EditTextPreference
-        android:dependency="enable_search_preset_tags"
-        android:key="search_preset_tag_2"
-        android:title="@string/settings_search_preset_tag_2"
-        android:dialogMessage="@string/settings_search_preset_tag_hint"
-        app:useSimpleSummaryProvider="true"
-        app:allowDividerAbove="false" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="true"

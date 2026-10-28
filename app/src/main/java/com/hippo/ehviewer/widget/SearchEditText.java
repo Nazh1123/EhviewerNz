@@ -49,7 +49,6 @@ import com.hippo.ehviewer.client.SearchQueryTokenizer.Tag;
 import com.hippo.util.ExceptionUtils;
 
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Set;
 
 public class SearchEditText extends AppCompatEditText {
@@ -237,7 +236,7 @@ public class SearchEditText extends AppCompatEditText {
             boolean editing = editStart >= 0 && term.start() <= editEnd && term.end() >= editStart;
             boolean atCaret = caret >= term.start() && caret <= term.end();
             if (!commitCurrent && (editing || atCaret && !existed && hasFocus())) continue;
-            String label = chipLabel(tag, database);
+            String label = SearchTagChipSpan.labelFor(tag, database);
             float labelWidth = firstRow != null && term.start() == 0
                     ? Math.max(0, Math.min(maxWidth, contentWidth - firstRow.left - firstRow.right
                     - SearchTagChipSpan.horizontalSpace(density))) : maxWidth;
@@ -247,18 +246,6 @@ public class SearchEditText extends AppCompatEditText {
         requestLayout();
         invalidate();
         updateFirstRowLayout();
-    }
-
-    private String chipLabel(Tag tag, EhTagDatabase database) {
-        String namespace = tag.namespace();
-        String value = tag.value();
-        String prefix = EhTagDatabase.namespaceToPrefix(namespace);
-        if (prefix == null || prefix.isEmpty()) prefix = namespace + ":";
-        if (database != null) {
-            String translated = database.getTranslation(prefix + value.toLowerCase(Locale.ROOT));
-            if (translated != null) value = translated;
-        }
-        return prefix + " " + value;
     }
 
     private void scheduleRefresh() {
@@ -418,11 +405,7 @@ public class SearchEditText extends AppCompatEditText {
             if (text.getSpanStart(chip) == range.start() && text.getSpanEnd(chip) == range.end()) return "";
         }
         String keyword = text.subSequence(range.start(), range.end()).toString();
-        if (!keyword.isEmpty() && "-+~".indexOf(keyword.charAt(0)) >= 0) keyword = keyword.substring(1);
-        int colon = keyword.indexOf(':');
-        if (colon >= 0) keyword = SearchQueryTokenizer.canonicalNamespace(keyword.substring(0, colon))
-                + keyword.substring(colon);
-        return keyword.replace("\"", "").replace("$", "").trim();
+        return SearchQueryTokenizer.suggestionKeyword(keyword);
     }
 
     public void replaceSuggestion(String tag) {

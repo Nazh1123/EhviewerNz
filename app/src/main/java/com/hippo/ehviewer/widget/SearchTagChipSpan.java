@@ -9,6 +9,9 @@ import android.text.style.ReplacementSpan;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
+import com.hippo.ehviewer.client.EhTagDatabase;
+import com.hippo.ehviewer.client.SearchQueryTokenizer.Tag;
+import java.util.Locale;
 
 /** A visual replacement only: the Editable still contains the complete English query. */
 final class SearchTagChipSpan extends ReplacementSpan {
@@ -21,13 +24,31 @@ final class SearchTagChipSpan extends ReplacementSpan {
     private final float density;
     private final int accent;
     private final float maxLabelWidth;
+    private final boolean active;
 
     SearchTagChipSpan(String label, char operator, float density, int accent, float maxLabelWidth) {
+        this(label, operator, density, accent, maxLabelWidth, true);
+    }
+
+    SearchTagChipSpan(String label, char operator, float density, int accent, float maxLabelWidth,
+                      boolean active) {
         this.label = label;
         this.operator = operator;
         this.density = density;
         this.accent = accent;
         this.maxLabelWidth = maxLabelWidth;
+        this.active = active;
+    }
+
+    static String labelFor(Tag tag, @Nullable EhTagDatabase database) {
+        String value = tag.value();
+        String prefix = EhTagDatabase.namespaceToPrefix(tag.namespace());
+        if (prefix == null || prefix.isEmpty()) prefix = tag.namespace() + ":";
+        if (database != null) {
+            String translated = database.getTranslation(prefix + value.toLowerCase(Locale.ROOT));
+            if (translated != null) value = translated;
+        }
+        return prefix + " " + value;
     }
 
     float actionWidth() { return ACTION_WIDTH_DP * density; }
@@ -66,8 +87,8 @@ final class SearchTagChipSpan extends ReplacementSpan {
         float width = getSize(original, text, start, end, null);
         float cy = (top + bottom) / 2f;
         float height = Math.min(CHIP_HEIGHT_DP * density, bottom - top);
-        int tint = operator == '-' ? original.getColor() : accent;
-        paint.setColor(ColorUtils.setAlphaComponent(tint, operator == '~' ? 45 : 28));
+        int tint = !active || operator == '-' ? original.getColor() : accent;
+        paint.setColor(ColorUtils.setAlphaComponent(tint, !active ? 12 : operator == '~' ? 45 : 28));
         canvas.drawRoundRect(x, cy - height / 2, x + width, cy + height / 2,
                 height / 2, height / 2, paint);
         paint.setColor(ColorUtils.setAlphaComponent(tint, 65));
@@ -85,6 +106,7 @@ final class SearchTagChipSpan extends ReplacementSpan {
                 x + actionWidth() + LABEL_PADDING_DP * density, baseline, paint);
         float closeX = x + width - actionWidth() / 2;
         // Use the same font and weight as the operator instead of a heavier fixed-width stroke.
-        canvas.drawText("×", closeX - paint.measureText("×") / 2, baseline, paint);
+        String action = active ? "×" : "+";
+        canvas.drawText(action, closeX - paint.measureText(action) / 2, baseline, paint);
     }
 }

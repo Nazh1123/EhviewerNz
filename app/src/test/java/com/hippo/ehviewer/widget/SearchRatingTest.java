@@ -119,7 +119,7 @@ public class SearchRatingTest {
         RatingBar stars = normal.findViewById(R.id.search_rating_stars);
         TextView value = normal.findViewById(R.id.search_rating_value);
         View row = (View) stars.getParent();
-        View preset = normal.findViewById(R.id.search_preset_tag_1).findViewById(R.id.preset_states);
+        View preset = normal.findViewById(R.id.search_preset_row);
         assertEquals(preset.getHeight(), row.getHeight());
         assertTrue(stars.getWidth() > 0);
         assertTrue(stars.getRight() <= value.getLeft());

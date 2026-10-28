@@ -22,6 +22,21 @@ public final class SearchPresetQuery {
         return preset != null && parse(preset.trim()) != null;
     }
 
+    /** Database suggestions contain unquoted English values, which may include spaces. */
+    @Nullable
+    public static String formatSuggestion(@NonNull String english) {
+        int colon = english.indexOf(':');
+        if (colon <= 0) return null;
+        String namespace = SearchQueryTokenizer.canonicalNamespace(english.substring(0, colon));
+        // Namespace headings and plain-text dictionary entries are not preset tag expressions.
+        if ("rows".equals(namespace) || "misc".equals(namespace)) return null;
+        String value = english.substring(colon + 1).trim();
+        String prefix = EhTagDatabase.namespaceToPrefix(namespace);
+        if (prefix == null || prefix.isEmpty()) prefix = namespace + ":";
+        String query = prefix + "\"" + value + "$\"";
+        return isValid(query) ? query : null;
+    }
+
     /** Returns namespace:value with aliases, quotes and the exact-match suffix normalized. */
     @Nullable
     public static String identity(@NonNull String preset) {

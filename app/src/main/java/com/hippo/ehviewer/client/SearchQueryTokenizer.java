@@ -27,6 +27,15 @@ public final class SearchQueryTokenizer {
         return Character.isWhitespace(ch) || ch == ',';
     }
 
+    /** Normalize a typed tag fragment for the local tag database, including unfinished quotes. */
+    public static String suggestionKeyword(String keyword) {
+        keyword = keyword.trim();
+        if (!keyword.isEmpty() && "-+~".indexOf(keyword.charAt(0)) >= 0) keyword = keyword.substring(1);
+        int colon = keyword.indexOf(':');
+        if (colon >= 0) keyword = canonicalNamespace(keyword.substring(0, colon)) + keyword.substring(colon);
+        return keyword.replace("\"", "").replace("$", "").trim();
+    }
+
     public static List<Term> terms(CharSequence query) {
         List<Term> result = new ArrayList<>();
         boolean quoted = false;

@@ -38,6 +38,7 @@ import android.widget.EditText;
 import android.widget.RatingBar;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.LinearLayout;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -59,6 +60,8 @@ import com.hippo.widget.RadioGridGroup;
 import com.hippo.lib.yorozuya.ViewUtils;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Collections;
+import java.util.List;
 
 public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnCheckedChangeListener,
         View.OnClickListener, ImageSearchLayout.Helper {
@@ -100,8 +103,8 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     private RadioGridGroup mNormalSearchMode;
     private ImageView mNormalSearchModeHelp;
     private SwitchCompat mEnableAdvanceSwitch;
-    private SearchPresetSwitch mPresetTag1;
-    private SearchPresetSwitch mPresetTag2;
+    private LinearLayout mPresetChips;
+    private List<String> mPresets = Collections.emptyList();
     private String mSearchQuery = "";
     private int mMinRatingHundredths;
     private boolean mRatingOverride;
@@ -172,10 +175,7 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
         mRatingOverride = false;
         updateRatingDisplay();
         mCategoryTable = (CategoryTable) normalView.findViewById(R.id.search_category_table);
-        mPresetTag1 = normalView.findViewById(R.id.search_preset_tag_1);
-        mPresetTag2 = normalView.findViewById(R.id.search_preset_tag_2);
-        mPresetTag1.setOnStateChangedListener(state -> changePreset(Settings.getSearchPresetTag1(), state));
-        mPresetTag2.setOnStateChangedListener(state -> changePreset(Settings.getSearchPresetTag2(), state));
+        mPresetChips = normalView.findViewById(R.id.search_preset_chips);
         syncPresetTags("");
         mNormalSearchMode = (RadioGridGroup) normalView.findViewById(R.id.normal_search_mode);
         mNormalSearchModeHelp = (ImageView) normalView.findViewById(R.id.normal_search_mode_help);
@@ -297,24 +297,36 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     public void syncPresetTags(String query) {
         syncSearchOptionVisibility();
         mSearchQuery = query == null ? "" : query;
-        syncPreset(mPresetTag1, Settings.getSearchPresetTag1());
-        syncPreset(mPresetTag2, Settings.getSearchPresetTag2());
+        List<String> presets = Settings.getSearchPresetTags();
+        if (!presets.equals(mPresets)) {
+            mPresets = presets;
+            mPresetChips.removeAllViews();
+            int gap = Math.round(6 * getResources().getDisplayMetrics().density);
+            for (String preset : presets) {
+                SearchPresetChip chip = new SearchPresetChip(getContext(), preset,
+                        state -> changePreset(preset, state));
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (mPresetChips.getChildCount() > 0) params.setMarginStart(gap);
+                mPresetChips.addView(chip, params);
+            }
+        }
+        for (int i = 0; i < mPresetChips.getChildCount(); i++) {
+            SearchPresetChip chip = (SearchPresetChip) mPresetChips.getChildAt(i);
+            chip.setState(SearchPresetQuery.getState(mSearchQuery, chip.getPreset()));
+        }
     }
 
     private void syncSearchOptionVisibility() {
         mNormalView.findViewById(R.id.search_preset_row).setVisibility(
-                Settings.getEnableSearchPresetTags() ? View.VISIBLE : View.GONE);
+                Settings.getEnableSearchTagChips() && Settings.getEnableSearchPresetTags()
+                        && !Settings.getSearchPresetTags().isEmpty() ? View.VISIBLE : View.GONE);
         mNormalView.findViewById(R.id.search_rating_row).setVisibility(
                 Settings.getEnablePreciseRatingFilter() ? View.VISIBLE : View.GONE);
         if (mTableAdvanceSearch != null) {
             mTableAdvanceSearch.setPreciseRatingEnabled(Settings.getEnablePreciseRatingFilter());
         }
         updateRatingDisplay();
-    }
-
-    private void syncPreset(SearchPresetSwitch button, String preset) {
-        button.setLabel(SearchPresetSwitch.labelFor(getContext(), preset));
-        button.setState(SearchPresetQuery.getState(mSearchQuery, preset));
     }
 
     private void changePreset(String preset, int state) {

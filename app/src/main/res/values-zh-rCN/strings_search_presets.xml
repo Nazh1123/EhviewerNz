@@ -8,4 +8,17 @@
     <string name="search_preset_exclude">关闭（排除）</string>
     <string name="search_preset_normal">普通</string>
     <string name="search_preset_include">开启（包含）</string>
+    <string name="settings_search_preset_bubbles_summary">在更多搜索条件中显示预设气泡。点击气泡添加或移除关键词，点击左侧符号切换包含、排除和“或”。</string>
+    <string name="settings_search_preset_tags">预设关键词气泡</string>
+    <string name="settings_search_preset_add">添加预设标签</string>
+    <string name="settings_search_preset_edit">编辑预设标签</string>
+    <string name="settings_search_preset_remove">删除预设</string>
+    <string name="settings_search_preset_duplicate">预设列表中已有此标签。</string>
+    <string name="search_preset_absent">搜索栏中未添加</string>
+    <string name="search_preset_add">添加标签%1$s</string>
+    <string name="settings_search_presets_count">已有 %1$d 个标签 · 点击添加、编辑或删除</string>
+    <string name="settings_search_presets_description">管理更多搜索条件中显示的预设气泡。修改后立即保存，可通过标签右侧的按钮编辑或删除。</string>
+    <string name="settings_search_presets_empty">还没有预设标签，点击下方按钮添加。</string>
+    <string name="settings_search_preset_remove_confirm">删除预设 %1$s？当前搜索栏中的关键词将保留。</string>
+    <string name="search_preset_input_hint">输入关键词或标签表达式</string>
 </resources>
