@@ -121,6 +121,23 @@ static int calculate_total_duration(GIF* gif)
   return duration;
 }
 
+static void generate_seek_index(GIF* gif)
+{
+  if (gif->gif_file == NULL || gif->frame_info_array == NULL) return;
+  int replay_start = 0;
+  for (int i = 0; i < gif->gif_file->ImageCount; ++i) {
+    GIF_FRAME_INFO* frame = &gif->frame_info_array[i];
+    const GifImageDesc* desc = &gif->gif_file->SavedImages[i].ImageDesc;
+    const bool opaque_canvas = frame->tran < 0 && desc->Left == 0 && desc->Top == 0
+        && desc->Width == gif->gif_file->SWidth && desc->Height == gif->gif_file->SHeight;
+    // DISPOSE_PREVIOUS needs its pre-frame backup even if this frame covers
+    // the entire canvas, so it cannot begin a new independent composition.
+    if (i == 0 || (frame->disposal != DISPOSE_PREVIOUS
+        && (frame->prepare == IMAGE_GIF_PREPARE_BACKGROUND || opaque_canvas))) replay_start = i;
+    frame->replay_start = replay_start;
+  }
+}
+
 static void fix_gif_file(GifFileType* gif_file) {
   if (gif_file->ImageCount == 0) {
     return;
@@ -268,6 +285,7 @@ void* GIF_decode(JNIEnv* env, PatchHeadInputStream* patch_head_input_stream, boo
   gif->frame_prepared = false;
   gif->prepared_looped = false;
   gif->total_duration = calculate_total_duration(gif);
+  generate_seek_index(gif);
 
   if (pthread_mutex_init(&gif->frame_buffer_mutex, NULL) != 0) {
     if (gif->patch_head_input_stream != NULL) {
@@ -295,6 +313,7 @@ bool GIF_complete(JNIEnv* env, GIF* gif)
   if (!gif->partially) {
     return true;
   }
+  image_seek_cache_clear(&gif->seek_cache);
 
   if (gif->gif_file == NULL || gif->patch_head_input_stream == NULL) {
     LOGE(MSG("Some stuff is NULL"));
@@ -328,6 +347,7 @@ bool GIF_complete(JNIEnv* env, GIF* gif)
   generate_prepare(gif->frame_info_array, gif->gif_file->ImageCount);
 
   gif->total_duration = calculate_total_duration(gif);
+  generate_seek_index(gif);
 
   return true;
 }
@@ -356,35 +376,36 @@ int GIF_get_byte_count(GIF* gif)
 {
   int i;
   SavedImage saved_image;
-  int size = 0;
+  size_t size = 0;
   // Add buffer size
   if (gif->buffer != NULL) {
-    size += gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
+    size += (size_t) gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
   }
   // Add backup size
   if (gif->backup != NULL) {
-    size += gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
+    size += (size_t) gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
   }
   // Add shown buffer size
   if (gif->shown_buffer != NULL) {
-    size += gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
+    size += (size_t) gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
   }
   if (gif->prepared_buffer != NULL) {
-    size += gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
+    size += (size_t) gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
   }
   if (gif->prepared_backup != NULL) {
-    size += gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
+    size += (size_t) gif->gif_file->SWidth * gif->gif_file->SHeight * 4;
   }
   // Add frames size
   if (gif->gif_file->SavedImages != NULL) {
     for (i = 0; i < gif->gif_file->ImageCount; i++) {
       saved_image = gif->gif_file->SavedImages[i];
       if (saved_image.RasterBits != NULL) {
-        size += saved_image.ImageDesc.Width * saved_image.ImageDesc.Height * 1;
+        size += (size_t) saved_image.ImageDesc.Width * saved_image.ImageDesc.Height;
       }
     }
   }
-  return size;
+  size += image_seek_cache_size(&gif->seek_cache);
+  return size > INT_MAX ? INT_MAX : (int) size;
 }
 
 void GIF_render(GIF* gif, int src_x, int src_y,
@@ -673,13 +694,7 @@ void GIF_advance(GIF* gif)
   GIF_advance_and_get_looped(gif);
 }
 
-int GIF_seek_to(GIF* gif, int position_ms,
-                ImageSeekCancelled cancelled, void* context)
-{
-  if (gif == NULL || gif->gif_file == NULL || gif->frame_info_array == NULL ||
-      gif->gif_file->ImageCount <= 1 || gif->total_duration <= 0) {
-    return IMAGE_SEEK_FAILED;
-  }
+static int gif_frame_at_position(GIF* gif, int position_ms) {
   if (position_ms < 0) position_ms = 0;
   if (position_ms >= gif->total_duration) position_ms = gif->total_duration - 1;
 
@@ -690,6 +705,63 @@ int GIF_seek_to(GIF* gif, int position_ms,
     if (gif->frame_info_array[middle].start <= position_ms) target = middle;
     else end = middle;
   }
+  return target;
+}
+
+int GIF_seek_step(GIF* gif, int position_ms)
+{
+  if (gif == NULL || gif->gif_file == NULL || gif->frame_info_array == NULL || gif->partially
+      || gif->gif_file->ImageCount <= 1 || gif->total_duration <= 0) return IMAGE_SEEK_FAILED;
+  const int target = gif_frame_at_position(gif, position_ms);
+  const size_t canvas_size = get_canvas_size(gif);
+  gif->frame_prepared = false;
+  if (gif->buffer_index >= 0) {
+    image_seek_cache_store(&gif->seek_cache, (unsigned int) gif->buffer_index,
+                           gif->buffer, gif->backup, canvas_size);
+  }
+  if (gif->buffer_index != target) {
+    const int base = gif->frame_info_array[target].replay_start;
+    const bool can_continue = gif->buffer_index >= base && gif->buffer_index <= target;
+    const unsigned int first = (unsigned int) (can_continue ? gif->buffer_index + 1 : base);
+    const unsigned int restored = image_seek_cache_restore(&gif->seek_cache, first,
+        (unsigned int) target, gif->buffer, &gif->backup, canvas_size);
+    if (restored != IMAGE_SEEK_CACHE_MISS) gif->buffer_index = (int) restored;
+    if (gif->buffer_index != target) {
+      const int next = gif->buffer_index >= base && gif->buffer_index < target
+          ? gif->buffer_index + 1 : base;
+      if (gif->buffer_index >= base && next == gif->buffer_index + 1) {
+        if (!advance_buffer(gif, NULL)) return IMAGE_SEEK_FAILED;
+      } else {
+        free(gif->backup);
+        gif->backup = NULL;
+        if (next == 0) {
+          // Match the decoder's original zeroed pre-frame state, including
+          // the backup taken by a DISPOSE_PREVIOUS frame zero.
+          memset(gif->buffer, 0, canvas_size);
+          gif->buffer_index = -1;
+          if (!advance_buffer(gif, NULL)) return IMAGE_SEEK_FAILED;
+        } else {
+          clear_bg(gif->gif_file, gif->buffer);
+          blend(gif->gif_file, next, gif->buffer, gif->frame_info_array[next].tran);
+          gif->buffer_index = next;
+        }
+      }
+      image_seek_cache_store(&gif->seek_cache, (unsigned int) gif->buffer_index,
+                             gif->buffer, gif->backup, canvas_size);
+    }
+  }
+  GIF_lock_pixels(gif);
+  memcpy(gif->shown_buffer, gif->buffer, canvas_size);
+  GIF_unlock_pixels(gif);
+  return gif->frame_info_array[gif->buffer_index].start;
+}
+
+int GIF_seek_to(GIF* gif, int position_ms,
+                ImageSeekCancelled cancelled, void* context)
+{
+  if (gif == NULL || gif->gif_file == NULL || gif->frame_info_array == NULL ||
+      gif->gif_file->ImageCount <= 1 || gif->total_duration <= 0) return IMAGE_SEEK_FAILED;
+  const int target = gif_frame_at_position(gif, position_ms);
   const int frame_start = gif->frame_info_array[target].start;
   if (cancelled != NULL && cancelled(context)) return IMAGE_SEEK_CANCELLED;
 
@@ -748,6 +820,7 @@ bool GIF_is_opaque(GIF* gif)
 void GIF_recycle(JNIEnv* env, GIF* gif)
 {
   if (gif == NULL) return;
+  image_seek_cache_clear(&gif->seek_cache);
   DGifCloseFile(gif->gif_file, &error_code);
   gif->gif_file = NULL;
 

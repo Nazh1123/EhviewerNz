@@ -45,6 +45,7 @@ typedef struct {
   unsigned int height;
   int duration;
   int start;
+  unsigned int replay_start;
   WebPMuxAnimDispose dispose_method;
   WebPMuxAnimBlend blend_method;
   bool has_alpha;
@@ -73,6 +74,7 @@ typedef struct {
   pthread_mutex_t frame_buffer_mutex;
   bool frame_buffer_mutex_initialized;
   WEBP_FRAME_INFO* frames;
+  ImageSeekCache seek_cache;
   int total_duration;
   unsigned int prepared_frame;
   bool frame_prepared;
@@ -109,6 +111,8 @@ bool WEBP_prepare_next_frame(WEBP* webp);
 bool WEBP_present_prepared_frame(WEBP* webp);
 int WEBP_seek_to(WEBP* webp, int position_ms,
                  ImageSeekCancelled cancelled, void* context);
+// Publishes at most one newly decoded frame, retaining the cursor for the next call.
+int WEBP_seek_step(WEBP* webp, int position_ms);
 int WEBP_get_current_position(WEBP* webp);
 int WEBP_get_total_duration(WEBP* webp);
 int WEBP_get_delay(WEBP* webp);

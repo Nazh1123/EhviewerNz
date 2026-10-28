@@ -307,6 +307,8 @@ class Image private constructor(
     fun seekTo(positionMs: Int, cancelled: BooleanSupplier? = null): Int =
         mNativeImage?.seekTo(positionMs, cancelled) ?: Image1.SEEK_FAILED
 
+    fun seekStep(positionMs: Int): Int = mNativeImage?.seekStep(positionMs) ?: Image1.SEEK_FAILED
+
     val currentFramePosition: Int
         get() = mNativeImage?.currentPosition ?: 0
 

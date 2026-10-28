@@ -17,6 +17,7 @@ project(image C)
 
 set(IMAGE_SOURCES
         image.c
+        image_seek.c
         image_utils.c
         image_plain.c
         image_jpeg.c

@@ -323,6 +323,13 @@ Java_com_hippo_lib_image_Image1_nativeSeekTo(JNIEnv* env,
 }
 
 JNIEXPORT jint JNICALL
+Java_com_hippo_lib_image_Image1_nativeSeekStep(JNIEnv* env, jclass clazz,
+                                             jlong ptr, jint format, jint position_ms)
+{
+  return (jint) seek_step((void*) (intptr_t) ptr, format, position_ms);
+}
+
+JNIEXPORT jint JNICALL
 Java_com_hippo_lib_image_Image1_nativeGetCurrentPosition(JNIEnv* env,
                                                          jclass clazz, jlong ptr,
                                                          jint format)

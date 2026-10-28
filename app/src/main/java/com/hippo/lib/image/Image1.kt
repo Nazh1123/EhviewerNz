@@ -152,6 +152,12 @@ class Image1 private constructor(
         return nativeSeekTo(mNativePtr, format, positionMs, cancelled)
     }
 
+    /** Publishes one resumable seek step and returns its actual frame start. */
+    fun seekStep(positionMs: Int): Int {
+        checkRecycled()
+        return nativeSeekStep(mNativePtr, format, positionMs)
+    }
+
     val currentPosition: Int
         get() {
             checkRecycled()
@@ -352,6 +358,8 @@ class Image1 private constructor(
             nativePtr: Long, format: Int, positionMs: Int,
             cancelled: BooleanSupplier?,
         ): Int
+        @JvmStatic
+        private external fun nativeSeekStep(nativePtr: Long, format: Int, positionMs: Int): Int
         @JvmStatic
         private external fun nativeGetCurrentPosition(nativePtr: Long, format: Int): Int
         @JvmStatic

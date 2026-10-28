@@ -120,4 +120,50 @@ class AnimationSeekDeviceTest {
             image.recycle()
         }
     }
+
+    @Test fun seekStepsPublishValidFramesAndAcceptReversalAtFrameBoundaries() {
+        for ((name, sample) in listOf("disposal.gif" to 1, "blend.webp" to 1, "blend.webp" to 2)) {
+            val image = decode(name, sample)
+            val frames = mutableListOf<Bitmap>()
+            val starts = mutableListOf<Int>()
+            try {
+                var position = 0
+                repeat(image.frameCount) {
+                    starts += position
+                    frames += snapshot(image)
+                    position += image.delay
+                    image.advanceAndGetLooped()
+                }
+                fun checkPublishedFrame(start: Int) {
+                    assertTrue("$name failed a seek step", start >= 0)
+                    val index = starts.indexOf(start)
+                    assertTrue("$name published an unknown frame start: $start", index >= 0)
+                    val actual = snapshot(image)
+                    try { assertTrue("$name sample=$sample frame=$index", frames[index].sameAs(actual)) }
+                    finally { actual.recycle() }
+                }
+                fun reach(target: Int) {
+                    repeat(image.frameCount + 1) {
+                        val start = image.seekStep(target)
+                        checkPublishedFrame(start)
+                        if (target >= start && target.toLong() < start.toLong() + image.delay) return
+                    }
+                    fail("$name did not reach the latest target")
+                }
+                // Change direction after just one step of a distant seek.
+                checkPublishedFrame(image.seekStep(image.totalDuration - 1))
+                reach(starts[1])
+                reach(starts.last())
+                for (index in listOf(7, 2, 15, 3, 7, 15, 0)) reach(starts[index])
+                // Reuse cached compositions, then verify normal disposal state
+                // still advances correctly after the seek has completed.
+                reach(starts[7] + 1)
+                image.advanceAndGetLooped()
+                checkPublishedFrame(starts[8])
+            } finally {
+                frames.forEach(Bitmap::recycle)
+                image.recycle()
+            }
+        }
+    }
 }

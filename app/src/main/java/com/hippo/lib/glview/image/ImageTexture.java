@@ -29,7 +29,6 @@ import com.hippo.lib.glview.glrenderer.GLCanvas;
 import com.hippo.lib.glview.glrenderer.NativeTexture;
 import com.hippo.lib.glview.glrenderer.Texture;
 import com.hippo.lib.glview.view.GLRoot;
-import com.hippo.lib.image.Image1;
 import com.hippo.lib.yorozuya.thread.InfiniteThreadExecutor;
 import com.hippo.lib.yorozuya.thread.PVLock;
 import com.hippo.lib.yorozuya.thread.PriorityThreadFactory;
@@ -745,10 +744,7 @@ public class ImageTexture implements Texture, Animatable {
     private boolean mPlaybackPlaying = true;
     private float mPlaybackSpeed = 1.0f;
     private int mPendingSeek = -1;
-    private volatile long mSeekGeneration;
-    private volatile long mSeekCancellationGeneration;
-    private int mActiveSeekPosition = -1;
-    private long mActiveSeekGeneration;
+    private long mSeekGeneration;
     private long mCompletedSeekGeneration;
     private long mPlaybackGeneration;
     private int mPlaybackFramePosition;
@@ -1003,25 +999,18 @@ public class ImageTexture implements Texture, Animatable {
 
     /** Returns a request ID; only the worker can acknowledge its completion. */
     public long seekTo(int positionMs) {
-        return requestSeek(positionMs, true);
+        return requestSeek(positionMs);
     }
 
-    /** Keep the current preview moving while coalescing newer drag positions. */
+    /** Updates the same live target used by committed seeks, without queuing a replay. */
     public long previewSeekTo(int positionMs) {
-        return requestSeek(positionMs, false);
+        return requestSeek(positionMs);
     }
 
-    private long requestSeek(int positionMs, boolean cancelActive) {
+    private long requestSeek(int positionMs) {
         if (!mControllableAnimation || mPlaybackDuration <= 0 || mPlaybackDecodeFailed) return 0L;
         synchronized (mPlaybackLock) {
             int target = Math.max(0, Math.min(mPlaybackDuration - 1, positionMs));
-            // Releasing at the active preview's target must not restart the
-            // same expensive replay just to turn it into a committed seek.
-            if (mPendingSeek < 0 && mActiveSeekPosition == target
-                    && mActiveSeekGeneration == mSeekGeneration) {
-                return mActiveSeekGeneration;
-            }
-            if (cancelActive) ++mSeekCancellationGeneration;
             if (mPendingSeek == target) return mSeekGeneration;
             mPendingSeek = target;
             ++mSeekGeneration;
@@ -1054,11 +1043,15 @@ public class ImageTexture implements Texture, Animatable {
 
     private void updateElapsedLocked() {
         long now = SystemClock.uptimeMillis();
-        if (mPlaybackPlaying && mRunning.get()) {
+        if (mPlaybackPlaying && mRunning.get() && mPendingSeek < 0) {
             mPlaybackFrameElapsed = Math.min(mPlaybackFrameDelay,
                     mPlaybackFrameElapsed + (now - mPlaybackFrameStart) * mPlaybackSpeed);
         }
         mPlaybackFrameStart = now;
+    }
+
+    private static boolean containsFramePosition(int position, int frameStart, int frameDelay) {
+        return position >= frameStart && (long) position < (long) frameStart + frameDelay;
     }
 
     private void notifyPlaybackChanged(boolean frameChanged) {
@@ -1305,18 +1298,13 @@ public class ImageTexture implements Texture, Animatable {
     }
 
     public void recycle() {
-        if (mControllableAnimation) {
-            synchronized (mImage) {
-                mNeedRelease.set(true);
-                mRunning.set(false);
-                synchronized (mPlaybackLock) {
-                    ++mPlaybackGeneration;
-                    mPlaybackLock.notifyAll();
-                }
-            }
+        synchronized (mImage) {
+            if (mNeedRelease.getAndSet(true)) return;
+            mRunning.set(false);
+            mRequestAnimation.set(false);
         }
-        mRunning.lazySet(false);
         synchronized (mPlaybackLock) {
+            if (mControllableAnimation) ++mPlaybackGeneration;
             mPlaybackLock.notifyAll();
         }
         mPlaybackListener = null;
@@ -1325,23 +1313,19 @@ public class ImageTexture implements Texture, Animatable {
             mTile.free();
         }
 
-        boolean releaseNow;
+        releaseImageIfNeeded();
+    }
 
+    private void releaseImageIfNeeded() {
         synchronized (mImage) {
-            if (!mImageBusy) {
-                releaseNow = true;
-                mImageBusy = true;
-            } else {
-                releaseNow = false;
-                mNeedRelease.lazySet(true);
-            }
+            if (!mNeedRelease.get() || mImageBusy || !mReleased.compareAndSet(false, true)) return;
+            // Claim this texture's reference before calling release(). The
+            // recycler and exiting worker may both reach this handoff.
+            mImageBusy = true;
         }
-
-        if (releaseNow) {
-            if (!mReleased.get()) {
-                mImage.release();
-                mReleased.lazySet(true);
-            }
+        try {
+            mImage.release();
+        } finally {
             synchronized (mImage) {
                 mImageBusy = false;
             }
@@ -1508,9 +1492,8 @@ public class ImageTexture implements Texture, Animatable {
             while (mRunning.get() && !mReleased.get() && !mImage.isImageRecycled() &&
                     !mNeedRelease.get()) {
                 int seekPosition;
-                long seekGeneration;
-                long seekCancellationGeneration;
                 long playbackGeneration;
+                boolean seekAlreadyDisplayed = false;
                 boolean prepareFrame = false;
                 float prepareSpeed = 1.0f;
                 float availablePlaybackMs = 0f;
@@ -1523,14 +1506,16 @@ public class ImageTexture implements Texture, Animatable {
                     }
                     if (!mRunning.get()) break;
                     seekPosition = mPendingSeek;
-                    seekGeneration = mSeekGeneration;
-                    seekCancellationGeneration = mSeekCancellationGeneration;
-                    mPendingSeek = -1;
-                    if (seekPosition >= 0) {
-                        mActiveSeekPosition = seekPosition;
-                        mActiveSeekGeneration = seekGeneration;
-                    }
-                    if (seekPosition < 0) {
+                    if (seekPosition >= 0 && containsFramePosition(seekPosition,
+                            mPlaybackFramePosition, mPlaybackFrameDelay)) {
+                        // Timeline changes inside one displayed frame need
+                        // only a clock adjustment, even if the request ID changed.
+                        mPlaybackFrameElapsed = seekPosition - mPlaybackFramePosition;
+                        mPlaybackFrameStart = SystemClock.uptimeMillis();
+                        mCompletedSeekGeneration = mSeekGeneration;
+                        mPendingSeek = -1;
+                        seekAlreadyDisplayed = true;
+                    } else if (seekPosition < 0) {
                         updateElapsedLocked();
                         if (!mPlaybackFramePrepared) {
                             prepareFrame = true;
@@ -1539,6 +1524,11 @@ public class ImageTexture implements Texture, Animatable {
                                     mPlaybackFrameDelay - mPlaybackFrameElapsed);
                         }
                     }
+                }
+
+                if (seekAlreadyDisplayed) {
+                    notifyPlaybackChanged(true);
+                    continue;
                 }
 
                 // Decode the following frame while the current canvas remains on
@@ -1551,11 +1541,15 @@ public class ImageTexture implements Texture, Animatable {
                         mImageBusy = true;
                     }
                     long decodeStarted = SystemClock.uptimeMillis();
-                    boolean prepared = mImage.prepareNextFrame();
-                    long decodeElapsed = SystemClock.uptimeMillis() - decodeStarted;
-                    synchronized (mImage) {
-                        mImageBusy = false;
+                    boolean prepared;
+                    try {
+                        prepared = mImage.prepareNextFrame();
+                    } finally {
+                        synchronized (mImage) {
+                            mImageBusy = false;
+                        }
                     }
+                    long decodeElapsed = SystemClock.uptimeMillis() - decodeStarted;
                     synchronized (mPlaybackLock) {
                         mPlaybackFramePrepared = prepared;
                     }
@@ -1599,59 +1593,48 @@ public class ImageTexture implements Texture, Animatable {
                 long decodeStarted = SystemClock.uptimeMillis();
                 boolean looped = false;
                 int framePosition;
-                if (seekPosition >= 0) {
-                    framePosition = mImage.seekTo(seekPosition,
-                            () -> !mRunning.get() || mNeedRelease.get()
-                                    || mSeekCancellationGeneration != seekCancellationGeneration);
-                } else {
-                    boolean prepared;
-                    synchronized (mPlaybackLock) {
-                        prepared = mPlaybackFramePrepared;
-                    }
-                    looped = prepared
-                            ? mImage.presentPreparedFrame()
-                            : mImage.advanceFrame();
-                    framePosition = mImage.getCurrentPosition();
-                }
-                int frameDelay = framePosition >= 0 ? mImage.getDelay() : 0;
-                long decodeElapsed = SystemClock.uptimeMillis() - decodeStarted;
-                synchronized (mImage) {
-                    mImageBusy = false;
-                }
-                if (seekPosition >= 0) {
-                    synchronized (mPlaybackLock) {
-                        mActiveSeekPosition = -1;
-                    }
-                }
-                if (seekPosition >= 0 && framePosition == Image1.SEEK_CANCELLED) {
-                    synchronized (mPlaybackLock) {
-                        mPlaybackFramePrepared = false;
-                        // A visibility stop cancels replay too. Retry it on the
-                        // next start unless a newer request has replaced it.
-                        if (mSeekGeneration == seekGeneration && mPendingSeek < 0) {
-                            mPendingSeek = seekPosition;
+                int frameDelay;
+                try {
+                    if (seekPosition >= 0) {
+                        // A seek step publishes a complete frame and retains
+                        // its composition state. Sample the live target again
+                        // before composing another frame, including on reversal.
+                        framePosition = mImage.seekStep(seekPosition);
+                    } else {
+                        boolean prepared;
+                        synchronized (mPlaybackLock) {
+                            prepared = mPlaybackFramePrepared;
                         }
+                        looped = prepared
+                                ? mImage.presentPreparedFrame()
+                                : mImage.advanceFrame();
+                        framePosition = mImage.getCurrentPosition();
                     }
-                    continue;
+                    frameDelay = framePosition >= 0 ? mImage.getDelay() : 0;
+                } finally {
+                    synchronized (mImage) {
+                        mImageBusy = false;
+                    }
                 }
+                long decodeElapsed = SystemClock.uptimeMillis() - decodeStarted;
                 if (framePosition < 0) {
                     failPlayback();
                     break;
                 }
                 synchronized (mPlaybackLock) {
                     mPlaybackFramePrepared = false;
-                    // A completed preview is still useful while a newer drag
-                    // target waits. Publish it instead of starving the display.
                     mPlaybackFramePosition = framePosition;
                     mPlaybackFrameDelay = frameDelay;
-                    mPlaybackFrameElapsed = seekPosition >= 0
-                            ? Math.min(frameDelay, Math.max(0, seekPosition - framePosition))
-                            // Never skip or shorten a decoded frame. If decoding missed
-                            // its deadline, the old frame stays visible and playback
-                            // resumes from the new frame once it is ready.
-                            : 0f;
+                    // Progress frames are visible immediately. Only a frame
+                    // containing the latest target acknowledges that request.
+                    mPlaybackFrameElapsed = 0f;
+                    if (seekPosition >= 0 && mPendingSeek >= 0
+                            && containsFramePosition(mPendingSeek, framePosition, frameDelay)) {
+                        mPlaybackFrameElapsed = mPendingSeek - framePosition;
+                        mCompletedSeekGeneration = mSeekGeneration;
+                        mPendingSeek = -1;
+                    }
                     mPlaybackFrameStart = SystemClock.uptimeMillis();
-                    if (seekPosition >= 0) mCompletedSeekGeneration = seekGeneration;
                 }
                 if (seekPosition < 0 && decodeElapsed > 0) {
                     float speed;
@@ -1760,9 +1743,8 @@ public class ImageTexture implements Texture, Animatable {
                     failPlayback();
                     throw error;
                 } finally {
+                    releaseImageIfNeeded();
                     synchronized (mImage) {
-                        mImageBusy = false;
-                        releaseIfNeeded();
                         if (mAnimateRunnable == this) {
                             mAnimateRunnable = null;
                             startControllableWorkerLocked();
@@ -1773,36 +1755,7 @@ public class ImageTexture implements Texture, Animatable {
             }
             doRun();
 
-            releaseIfNeeded();
-        }
-
-        private void releaseIfNeeded() {
-            while (mNeedRelease.get()) {
-                // Obtain
-                synchronized (mImage) {
-                    // Check released
-                    if (mReleased.get() || mImage.isImageRecycled()) {
-                        break;
-                    }
-                    // Check image busy
-                    if (mImageBusy) {
-                        // Image is busy, means it is recycling
-                        break;
-                    }
-                    // Obtain image
-                    mImageBusy = true;
-                }
-
-                if (!mReleased.get()) {
-                    mImage.release();
-                    mReleased.lazySet(true);
-                }
-
-                synchronized (mImage) {
-                    // Release image
-                    mImageBusy = false;
-                }
-            }
+            releaseImageIfNeeded();
         }
     }
 

@@ -419,6 +419,16 @@ int seek_to(void *image, int format, int position_ms,
     return IMAGE_SEEK_FAILED;
 }
 
+int seek_step(void* image, int format, int position_ms) {
+#ifdef IMAGE_SUPPORT_GIF
+    if (format == IMAGE_FORMAT_GIF) return GIF_seek_step((GIF*) image, position_ms);
+#endif
+#ifdef IMAGE_SUPPORT_WEBP
+    if (format == IMAGE_FORMAT_WEBP) return WEBP_seek_step((WEBP*) image, position_ms);
+#endif
+    return IMAGE_SEEK_FAILED;
+}
+
 int get_current_position(void *image, int format) {
 #ifdef IMAGE_SUPPORT_GIF
     if (format == IMAGE_FORMAT_GIF) {

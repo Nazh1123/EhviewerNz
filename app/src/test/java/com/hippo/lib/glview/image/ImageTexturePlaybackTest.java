@@ -29,6 +29,7 @@ import static org.junit.Assert.*;
 public class ImageTexturePlaybackTest {
     private TestImage image;
     private ImageTexture texture;
+    private ImageTexture.PlaybackListener listener;
 
     @Before public void setup() {
         image = new TestImage();
@@ -77,34 +78,36 @@ public class ImageTexturePlaybackTest {
         assertFalse(texture.hasPlaybackDecodeFailed());
     }
 
-    @Test public void newerSeekCancelsReplayAndOnlyAcknowledgesItsOwnResult() throws Exception {
-        image.blockFirstSeek = true;
+    @Test public void newerSeekReplacesLiveTargetAtTheNextFrameBoundary() throws Exception {
+        image.blockFirstStep = true;
         texture.setPlaybackPlaying(false);
         long first = texture.seekTo(200);
         texture.start();
         assertTrue(image.seekEntered.await(2, TimeUnit.SECONDS));
         assertFalse(texture.hasCompletedSeek(first));
         long second = texture.seekTo(700);
-        assertTrue(image.seekCancelled.await(2, TimeUnit.SECONDS));
+        image.allowSeek.countDown();
         await(() -> texture.hasCompletedSeek(second));
         assertFalse(texture.hasCompletedSeek(first));
         assertEquals(700, texture.getPlaybackPosition());
         assertEquals(2, image.seekCalls.get());
     }
 
-    @Test public void visibilityStopCancelsSeekAndRestartRetriesUnfinishedRequest() throws Exception {
-        image.blockFirstSeek = true;
+    @Test public void visibilityStopRetainsTheCursorAndLatestTargetForRestart() throws Exception {
+        image.blockFirstStep = true;
+        image.advanceOneFrame = true;
         texture.setPlaybackPlaying(false);
         long request = texture.seekTo(800);
         texture.start();
         assertTrue(image.seekEntered.await(2, TimeUnit.SECONDS));
         texture.stop();
-        assertTrue(image.seekCancelled.await(2, TimeUnit.SECONDS));
+        image.allowSeek.countDown();
         await(this::workerIdle);
         assertFalse(texture.hasCompletedSeek(request));
         texture.start();
         await(() -> texture.hasCompletedSeek(request));
         assertEquals(800, texture.getPlaybackPosition());
+        assertEquals(100, (int) image.startingPositions.get(1));
     }
 
     @Test public void failedSeekStopsDecoderWithoutAcknowledgingIt() throws Exception {
@@ -121,10 +124,10 @@ public class ImageTexturePlaybackTest {
         assertFalse(texture.isRunning());
     }
 
-    @Test public void continuousPreviewRequestsPublishFramesInsteadOfCancellingEachOther() throws Exception {
-        image.blockPreview = true;
+    @Test public void continuousPreviewRequestsPublishFramesAndCoalesceTargets() throws Exception {
+        image.blockFirstStep = true;
         CopyOnWriteArrayList<Integer> shown = new CopyOnWriteArrayList<>();
-        ImageTexture.PlaybackListener listener = new ImageTexture.PlaybackListener() {
+        listener = new ImageTexture.PlaybackListener() {
             @Override public void onPlaybackChanged(ImageTexture source, boolean changed) {
                 if (changed) shown.add(source.getPlaybackPosition());
             }
@@ -138,39 +141,88 @@ public class ImageTexturePlaybackTest {
         assertTrue(image.seekEntered.await(2, TimeUnit.SECONDS));
         texture.previewSeekTo(400);
         long latest = texture.previewSeekTo(700);
-        assertFalse("Dragging cancelled the only preview in progress", image.firstSeekCancellation.getAsBoolean());
         image.allowSeek.countDown();
         await(() -> texture.hasCompletedSeek(latest) && shown.size() == 2);
         assertEquals(java.util.List.of(200, 700), shown);
         assertEquals(2, image.seekCalls.get());
     }
 
-    @Test public void committedSeekPreemptsOldPreviewAndSkipsIntermediateTargets() throws Exception {
-        image.blockFirstSeek = true;
+    @Test public void committedSeekUsesTheNextFrameBoundaryAndSkipsIntermediateTargets() throws Exception {
+        image.blockFirstStep = true;
         texture.setPlaybackPlaying(false);
         texture.previewSeekTo(200);
         texture.start();
         assertTrue(image.seekEntered.await(2, TimeUnit.SECONDS));
         texture.previewSeekTo(400);
         long committed = texture.seekTo(900);
-        assertTrue(image.seekCancelled.await(2, TimeUnit.SECONDS));
+        image.allowSeek.countDown();
         await(() -> texture.hasCompletedSeek(committed));
         assertEquals(900, texture.getPlaybackPosition());
         assertEquals(2, image.seekCalls.get());
+        assertEquals(java.util.List.of(200, 900), image.targets);
     }
 
     @Test public void committingActivePreviewAtSamePositionDoesNotRestartReplay() throws Exception {
-        image.blockPreview = true;
+        image.blockFirstStep = true;
         texture.setPlaybackPlaying(false);
         long preview = texture.previewSeekTo(600);
         texture.start();
         assertTrue(image.seekEntered.await(2, TimeUnit.SECONDS));
         long committed = texture.seekTo(600);
         assertEquals(preview, committed);
-        assertFalse(image.firstSeekCancellation.getAsBoolean());
         image.allowSeek.countDown();
         await(() -> texture.hasCompletedSeek(committed));
         assertEquals(1, image.seekCalls.get());
+    }
+
+    @Test public void committingAnotherTimeInTheSameFrameReusesTheDecodedCanvas() throws Exception {
+        image.blockFirstStep = true;
+        texture.setPlaybackPlaying(false);
+        long preview = texture.previewSeekTo(550);
+        texture.start();
+        assertTrue(image.seekEntered.await(2, TimeUnit.SECONDS));
+        long committed = texture.seekTo(551);
+        image.allowSeek.countDown();
+        await(() -> texture.hasCompletedSeek(committed));
+        assertFalse(texture.hasCompletedSeek(preview));
+        assertEquals(551, texture.getPlaybackPosition());
+        assertEquals(1, image.seekCalls.get());
+    }
+
+    @Test public void reversingTargetDoesNotFinishTheOldDependencyChain() throws Exception {
+        image.blockFirstStep = true;
+        image.advanceOneFrame = true;
+        texture.setPlaybackPlaying(false);
+        texture.previewSeekTo(900);
+        texture.start();
+        assertTrue(image.seekEntered.await(2, TimeUnit.SECONDS));
+        long reversed = texture.previewSeekTo(50);
+        image.allowSeek.countDown();
+        await(() -> texture.hasCompletedSeek(reversed));
+        assertEquals(java.util.List.of(900, 50), image.targets);
+        assertEquals(50, texture.getPlaybackPosition());
+    }
+
+    @Test public void intermediateFramesArePublishedBeforeTheTargetIsAcknowledged() throws Exception {
+        image.advanceOneFrame = true;
+        texture.setPlaybackPlaying(false);
+        long request = texture.previewSeekTo(900);
+        java.util.concurrent.atomic.AtomicBoolean progressBeforeCompletion =
+                new java.util.concurrent.atomic.AtomicBoolean();
+        listener = new ImageTexture.PlaybackListener() {
+            @Override public void onPlaybackChanged(ImageTexture source, boolean changed) {
+                if (changed && source.getPlaybackPosition() == 100) {
+                    progressBeforeCompletion.set(!source.hasCompletedSeek(request));
+                }
+            }
+            @Override public void onPlaybackCycleCompleted(ImageTexture source, long generation) {}
+            @Override public void onPlaybackStalled(ImageTexture source) { fail("Unexpected decoder failure"); }
+        };
+        texture.setPlaybackListener(listener);
+        texture.start();
+        await(() -> texture.hasCompletedSeek(request));
+        assertTrue(progressBeforeCompletion.get());
+        assertEquals(9, image.seekCalls.get());
     }
 
     private boolean workerIdle() {
@@ -189,13 +241,13 @@ public class ImageTexturePlaybackTest {
         final CountDownLatch prepareEntered = new CountDownLatch(1);
         final CountDownLatch allowPrepare = new CountDownLatch(1);
         final CountDownLatch seekEntered = new CountDownLatch(1);
-        final CountDownLatch seekCancelled = new CountDownLatch(1);
         final CountDownLatch allowSeek = new CountDownLatch(1);
         final AtomicInteger seekCalls = new AtomicInteger();
-        volatile boolean blockFirstSeek;
+        final CopyOnWriteArrayList<Integer> targets = new CopyOnWriteArrayList<>();
+        final CopyOnWriteArrayList<Integer> startingPositions = new CopyOnWriteArrayList<>();
+        volatile boolean blockFirstStep;
         volatile boolean failSeek;
-        volatile boolean blockPreview;
-        volatile BooleanSupplier firstSeekCancellation;
+        volatile boolean advanceOneFrame;
         private int position;
 
         TestImage() {
@@ -207,7 +259,7 @@ public class ImageTexturePlaybackTest {
         @Override public boolean canUseDirectTexture() { return false; }
         @Override public int getTotalDuration() { return 1001; }
         @Override public int getCurrentPosition() { return position; }
-        @Override public int getDelay() { return 1000; }
+        @Override public int getDelay() { return 100; }
 
         @Override public boolean prepareNextFrame() {
             prepareEntered.countDown();
@@ -218,29 +270,22 @@ public class ImageTexturePlaybackTest {
             }
         }
 
-        @Override public int seekTo(int target, BooleanSupplier cancelled) {
+        @Override public int seekStep(int target) {
             int call = seekCalls.incrementAndGet();
-            if (call == 1) firstSeekCancellation = cancelled;
+            targets.add(target);
+            startingPositions.add(position);
             seekEntered.countDown();
-            if (blockPreview && call == 1) {
+            if (blockFirstStep && call == 1) {
                 try {
                     if (!allowSeek.await(3, TimeUnit.SECONDS)) throw new AssertionError("Preview was not released");
                 } catch (InterruptedException error) {
                     throw new AssertionError(error);
                 }
             }
-            if (blockFirstSeek && call == 1) {
-                try {
-                    await(cancelled);
-                } catch (Exception error) {
-                    throw new AssertionError(error);
-                }
-                seekCancelled.countDown();
-                return -2;
-            }
             if (failSeek) return -1;
-            position = target;
-            return target;
+            int frame = target / 100 * 100;
+            position = advanceOneFrame && frame > position ? Math.min(frame, position + 100) : frame;
+            return position;
         }
     }
 }

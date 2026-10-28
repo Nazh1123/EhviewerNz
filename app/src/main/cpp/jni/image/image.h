@@ -64,6 +64,7 @@ bool prepare_next_frame(void* image, int format);
 bool present_prepared_frame(void* image, int format);
 int seek_to(void* image, int format, int position_ms,
             ImageSeekCancelled cancelled, void* context);
+int seek_step(void* image, int format, int position_ms);
 int get_current_position(void* image, int format);
 int get_total_duration(void* image, int format);
 int get_delay(void* image, int format);

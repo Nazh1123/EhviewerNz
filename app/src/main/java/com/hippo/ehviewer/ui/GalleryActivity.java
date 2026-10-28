@@ -323,10 +323,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private long mAnimatedWebpSeekRequestId;
     private volatile boolean mAnimatedWebpProgressVisible;
     private int mAnimatedWebpRequestedPosition;
-    private long mAnimatedWebpLastPreviewAt;
-    private static final long ANIMATED_WEBP_PREVIEW_INTERVAL_MS = 50L;
-    private ImageTexture mAnimatedWebpPreviewTexture;
-    private boolean mAnimatedWebpPreviewScheduled;
     private boolean mAnimatedWebpTouchCandidate;
     private boolean mAnimatedWebpTouchDragging;
     private float mAnimatedWebpTouchDownX;
@@ -395,7 +391,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private int mAnimatedWebpUiUpdateGeneration;
     private long mAnimatedWebpLastUiUpdateAt;
     private final Runnable mAnimatedWebpUiUpdater = this::dispatchAnimatedWebpUiUpdate;
-    private final Runnable mAnimatedWebpPreviewUpdater = this::dispatchAnimatedWebpSeekPreview;
     private final Runnable mAnimatedWebpLongPressNoticeUpdater =
             this::updateAnimatedWebpLongPressNotice;
     private final ValueAnimator.AnimatorUpdateListener mUpdateSliderListener = new ValueAnimator.AnimatorUpdateListener() {
@@ -3266,7 +3261,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (!mAnimatedWebpSeeking) {
             mAnimatedWebpSeeking = true;
             mAnimatedWebpSeekAwaitingFrame = false;
-            mAnimatedWebpLastPreviewAt = -ANIMATED_WEBP_PREVIEW_INTERVAL_MS;
             texture.setPlaybackPlaying(false);
         }
     }
@@ -3281,32 +3275,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpSeek.setProgress(target);
         }
         updateAnimatedWebpTime(target, duration);
-        long now = SystemClock.uptimeMillis();
-        long remaining = ANIMATED_WEBP_PREVIEW_INTERVAL_MS - (now - mAnimatedWebpLastPreviewAt);
-        if (force || remaining <= 0L) {
-            mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpPreviewUpdater);
-            mAnimatedWebpPreviewTexture = null;
-            mAnimatedWebpPreviewScheduled = false;
-            mAnimatedWebpLastPreviewAt = now;
-            mAnimatedWebpSeekRequestId = force ? texture.seekTo(target) : texture.previewSeekTo(target);
-        } else {
-            // Send the last drag position even if the finger stops moving
-            // before the throttle interval expires.
-            mAnimatedWebpPreviewTexture = texture;
-            if (!mAnimatedWebpPreviewScheduled) {
-                mAnimatedWebpPreviewScheduled = true;
-                mAnimatedWebpHandler.postDelayed(mAnimatedWebpPreviewUpdater, remaining);
-            }
-        }
-    }
-
-    private void dispatchAnimatedWebpSeekPreview() {
-        ImageTexture texture = mAnimatedWebpPreviewTexture;
-        mAnimatedWebpPreviewTexture = null;
-        mAnimatedWebpPreviewScheduled = false;
-        if (texture != null && texture == mAnimatedWebpTexture && mAnimatedWebpSeeking) {
-            requestAnimatedWebpSeekPreview(mAnimatedWebpRequestedPosition, false);
-        }
+        // All motion events update one live target. Decoding samples it at
+        // frame boundaries, so there are no replay jobs or trailing timers.
+        mAnimatedWebpSeekRequestId = force ? texture.seekTo(target) : texture.previewSeekTo(target);
     }
 
     private void finishAnimatedWebpSeek(int position) {
@@ -3657,8 +3628,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpUiUpdateTexture = null;
             mAnimatedWebpUiStateChanged = false;
             mAnimatedWebpProgressVisible = false;
-            mAnimatedWebpPreviewTexture = null;
-            mAnimatedWebpPreviewScheduled = false;
         }
     }
 

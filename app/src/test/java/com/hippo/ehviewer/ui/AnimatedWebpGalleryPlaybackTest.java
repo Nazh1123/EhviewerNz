@@ -562,7 +562,7 @@ public class AnimatedWebpGalleryPlaybackTest {
     }
 
     @Test @LooperMode(LooperMode.Mode.PAUSED)
-    public void previewThrottleFlushesLastDragPositionAndReleaseCancelsTrailingUpdate() {
+    public void dragUpdatesOneLiveTargetImmediatelyAndReleaseKeepsTheFinalPosition() {
         ImageTexture texture = texture();
         ReflectionHelpers.setField(texture, "mPlaybackDuration", 1001);
         ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
@@ -571,21 +571,17 @@ public class AnimatedWebpGalleryPlaybackTest {
         preview(200);
         preview(400);
         preview(700);
-        assertEquals(200, (int) ReflectionHelpers.getField(texture, "mPendingSeek"));
-        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(50));
         assertEquals(700, (int) ReflectionHelpers.getField(texture, "mPendingSeek"));
-        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpPreviewScheduled"));
 
         preview(800);
         ReflectionHelpers.callInstanceMethod(activity, "finishAnimatedWebpSeek",
                 ClassParameter.from(int.class, 900));
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
         assertEquals(900, (int) ReflectionHelpers.getField(texture, "mPendingSeek"));
-        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpPreviewScheduled"));
     }
 
     @Test @LooperMode(LooperMode.Mode.PAUSED)
-    public void trailingPreviewDoesNotSeekAnotherPageAfterSwitchingTextures() {
+    public void previousPageInputDoesNotScheduleDelayedWorkForAnotherPage() {
         ImageTexture first = texture();
         ImageTexture next = texture();
         ReflectionHelpers.setField(first, "mPlaybackDuration", 1001);
@@ -597,7 +593,7 @@ public class AnimatedWebpGalleryPlaybackTest {
         preview(700);
         ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", next);
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
-        assertEquals(200, (int) ReflectionHelpers.getField(first, "mPendingSeek"));
+        assertEquals(700, (int) ReflectionHelpers.getField(first, "mPendingSeek"));
         assertEquals(-1, (int) ReflectionHelpers.getField(next, "mPendingSeek"));
     }
 
