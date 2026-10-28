@@ -90,6 +90,28 @@ class GalleryResultIndex private constructor(
     }
     private fun row(json: JSONObject, source: Source, kind: Kind) =
         json.getJSONObject("pages").optJSONObject(source.name)?.optJSONObject(kind.key)
+    internal data class Entry(val state: String, val stamp: String, val width: Int, val height: Int,
+                              val scale: Int, val locator: String, val persistent: Boolean)
+    internal data class Snapshot(val pages: Map<String, Map<Kind, List<Entry>>>) {
+        fun contains(source: Source, kind: Kind) = pages[source.name]?.containsKey(kind) == true
+    }
+    /** Copy metadata only. Never resolves result files or enumerates source pages. */
+    internal fun snapshot(refresh: Boolean = false, names: Set<String>? = null): Snapshot = synchronized(guard) {
+        val directories = listOfNotNull(localDirectory()?.let { it to true }, cacheDirectory to false)
+        if (refresh) directories.forEach { documents.remove(it.first.uri.toString()) }
+        val pages = mutableMapOf<String, MutableMap<Kind, MutableList<Entry>>>()
+        for ((directory, persistent) in directories) {
+            val manifest = manifest(directory).getJSONObject("pages")
+            for (name in names ?: manifest.keys().asSequence().toSet()) for (kind in Kind.entries) {
+                val entry = manifest.optJSONObject(name)?.optJSONObject(kind.key) ?: continue
+                pages.getOrPut(name) { mutableMapOf() }.getOrPut(kind) { mutableListOf() }.add(
+                    Entry(entry.optString("state", "complete"), entry.optString("stamp"),
+                        entry.optInt("width"), entry.optInt("height"), entry.optInt("scale", 1),
+                        entry.optString("uri"), persistent))
+            }
+        }
+        Snapshot(pages)
+    }
     private fun file(directory: UniFile, source: Source, kind: Kind, entry: JSONObject): UniFile? {
         val locator = entry.getString("uri")
         return if (locator == "done") directory.findFile(kind.directory)?.findFile(filename(source.name, kind, entry.getString("format")))

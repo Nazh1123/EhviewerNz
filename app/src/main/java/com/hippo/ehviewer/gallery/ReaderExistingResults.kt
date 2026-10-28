@@ -2,10 +2,8 @@ package com.hippo.ehviewer.gallery
 
 import android.content.Context
 import androidx.preference.PreferenceManager
-import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.superresolution.EnhancedTilePage
-import com.hippo.ehviewer.translation.TranslationStorage
 import com.hippo.ehviewer.translation.NativeMemoryPolicy
 import com.hippo.lib.image.Image
 import com.hippo.unifile.UniFile
@@ -18,7 +16,7 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var job: Job? = null
-    private var indexTask: Deferred<GalleryResultIndex?>? = null
+    val resultIndex = ReaderResultIndex(context, provider, info)
     private var maintenance: Job? = null
     private val loads = mutableMapOf<Int, Job>()
     private val loaded = mutableSetOf<Int>()
@@ -39,7 +37,6 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
     private val changed: (GalleryResultIndex.Companion.Change) -> Unit = { event ->
         if (event.identity == GalleryResultIndex.identity(provider, info)) {
             noResults = false
-            if (indexTask?.isCompleted == true && indexTask?.isCancelled == false && sources.isEmpty()) indexTask = null
             for ((position, source) in sources.toMap()) if (source.name == event.source) {
                 loads.remove(position)?.cancel()
                 loaded.remove(position)
@@ -60,22 +57,15 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
     }
     // Original readiness must not discard decoded overlays or cancel an in-flight restore.
     fun onPageReady(index: Int) { if (index == page && index !in loaded && loads[index]?.isActive != true) refresh() }
-    fun resume() { active = true; reset(); refresh() }
+    fun resume() { active = true; reset(); resultIndex.reload(); refresh() }
     fun pause() { active = false; reset() }
     private fun reset() {
         generation++
-        job?.cancel(); indexTask?.cancel(); maintenance?.cancel()
+        job?.cancel(); maintenance?.cancel()
         loads.values.forEach { it.cancel() }; loads.clear()
         loaded.clear(); sources.clear()
-        indexTask = null; maintenance = null; noResults = false
+        maintenance = null; noResults = false
     }
-    private fun index(): Deferred<GalleryResultIndex?> = indexTask ?: scope.async(Dispatchers.IO) {
-        GalleryResultIndex.dropMemory()
-        val download = info?.let { EhApplication.getDownloadManager(app).getDownloadInfo(it.gid) }
-        val directory = TranslationStorage.resultDirectory(app, download, provider, false)
-        GalleryResultIndex.open(app, GalleryResultIndex.identity(provider, info), info?.gid, directory, false)
-            .takeIf { it.hasEntries() }
-    }.also { indexTask = it }
 
     private fun refresh() {
         val enabled = preferences.getBoolean(GalleryResultIndex.PREFER_EXISTING, false)
@@ -93,20 +83,22 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
         val epoch = generation
         job = scope.launch {
             try {
-                val index = index().await()
+                val hasResults = resultIndex.hasResults()
                 if (epoch != generation || current != page) return@launch
-                if (index == null || !withContext(Dispatchers.IO) { index.hasEntries() }) {
+                if (!hasResults) {
                     noResults = true
-                    indexTask = null
                     provider.clearExistingResults()
                     return@launch
                 }
-                load(index, current)?.join()
+                load(current)?.join()
                 if (current != page) return@launch
-                if (next in 0 until provider.size()) load(index, next)?.join()
+                if (next in 0 until provider.size()) load(next)?.join()
                 // Full local reconciliation follows visible-page publication, never blocks it.
-                if (maintenance == null) maintenance = scope.launch(Dispatchers.IO) {
-                    try { index.reconcile(provider) }
+                if (maintenance == null) maintenance = scope.launch {
+                    try {
+                        val index = resultIndex.index()
+                        withContext(Dispatchers.IO) { index.reconcile(provider) }
+                    }
                     catch (cancel: CancellationException) { throw cancel }
                     catch (error: Exception) { android.util.Log.w("ExistingResults", "Cannot reconcile results", error) }
                 }
@@ -115,22 +107,21 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
         }
     }
 
-    private fun load(index: GalleryResultIndex, position: Int): Job? {
+    private fun load(position: Int): Job? {
         if (position in loaded) return null
         loads[position]?.takeIf { it.isActive }?.let { return it }
         val epoch = generation
         return scope.launch(start = CoroutineStart.LAZY) {
             var complete = true
             try {
-                val source = sources[position] ?: withContext(Dispatchers.IO) {
-                    GalleryResultIndex.source(provider, position, info?.gid)
-                }.also { sources[position] = it }
+                val saved = resultIndex.page(position)
+                saved.source?.let { sources[position] = it }
                 supervisorScope {
                     launch {
                         var tiles: EnhancedTilePage? = null
                         try {
                             withContext(Dispatchers.IO) {
-                                index.find(source, GalleryResultIndex.Kind.SR)?.takeIf {
+                                saved.enhanced?.takeIf {
                                     it.state == "complete" && it.scale in listOf(2, 4, 8)
                                 }?.let { hit ->
                                     EnhancedTilePage(File(app.cacheDir, "result-reader"), hit.width / hit.scale,
@@ -159,7 +150,7 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
                         var translated: Image? = null
                         try {
                             withContext(Dispatchers.IO) {
-                                val hit = index.find(source, GalleryResultIndex.Kind.TL)?.takeIf { it.state == "complete" }
+                                val hit = saved.translation?.takeIf { it.state == "complete" }
                                 // A large speculative decode must not evict the visible overlay.
                                 if (position != page && hit != null && !provider.canPrefetchTranslationResult(page,
                                         hit.width.toLong() * hit.height * 4)) complete = false
@@ -184,6 +175,7 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
     override fun close() {
         GalleryResultIndex.listeners.remove(changed)
         provider.setExistingResultLoader(null)
+        resultIndex.close()
         scope.cancel()
     }
 }

@@ -2053,6 +2053,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mPagePreview == null && mGalleryProvider != null && strip != null) {
             mPagePreview = new ReaderPagePreview(this, strip, mGalleryProvider,
                     this::onPreviewPageSelected, this::onPreviewPageBrowsed);
+            if (mExistingResults != null) mPagePreview.setResultIndex(mExistingResults.getResultIndex());
             updateSlider();
         }
     }
