@@ -1095,6 +1095,121 @@ public class OfflineGalleryDetailSceneTest {
         }
     }
 
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void ratingStarsKeepTheirPositionWhenRatingTextChanges() {
+        View ratingGroup = content.findViewById(R.id.rating_group);
+        View actions = (View) ratingGroup.getParent();
+        View rating = content.findViewById(R.id.rating);
+        View stars = (View) rating.getParent();
+        TextView ratingText = content.findViewById(R.id.rating_text);
+        String pending = ReflectionHelpers.callInstanceMethod(scene, "getPendingRatingText",
+                ReflectionHelpers.ClassParameter.from(float.class, 4.5f));
+        List<String> labels = new ArrayList<>();
+        labels.add("");
+        labels.add(pending);
+        for (int count : new int[]{1, 123, Integer.MAX_VALUE}) {
+            labels.add(ReflectionHelpers.callInstanceMethod(scene, "getAllRatingText",
+                    ReflectionHelpers.ClassParameter.from(float.class, 4.5f),
+                    ReflectionHelpers.ClassParameter.from(int.class, count)));
+        }
+        labels.add("Exceptional rating with a very long description (4.50, 2147483647)".repeat(3));
+        float density = context.getResources().getDisplayMetrics().density;
+        for (int widthDp : new int[]{280, 320, 360, 600}) {
+            int width = Math.round(widthDp * density);
+            Integer initialLeft = null;
+            Integer initialTop = null;
+            for (String label : labels) {
+                ratingText.setText(label);
+                actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                actions.layout(0, 0, actions.getMeasuredWidth(), actions.getMeasuredHeight());
+                int left = ratingGroup.getLeft() + stars.getLeft() + rating.getLeft();
+                int top = ratingGroup.getTop() + stars.getTop() + rating.getTop();
+                if (initialLeft == null) {
+                    initialLeft = left;
+                    initialTop = top;
+                }
+                assertEquals("Star horizontal position at " + widthDp + "dp: " + label,
+                        initialLeft.intValue(), left);
+                assertEquals("Star vertical position at " + widthDp + "dp: " + label,
+                        initialTop.intValue(), top);
+            }
+        }
+    }
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void pendingAndLoadedRatingTextStayCenteredInRemainingSpace() {
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        TextView ratingText = content.findViewById(R.id.rating_text);
+        View actions = content.findViewById(R.id.actions);
+        float density = context.getResources().getDisplayMetrics().density;
+        for (int widthDp : new int[]{600, 360, 320, 280}) {
+            GalleryInfo summary = source();
+            summary.rating = 4.5f;
+            ReflectionHelpers.setField(scene, "mGalleryInfo", summary);
+            ReflectionHelpers.setField(scene, "mGalleryDetail", null);
+            bindPendingHeader();
+            int width = Math.round(widthDp * density);
+            actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            actions.layout(0, 0, width, actions.getMeasuredHeight());
+            float pendingTextCenter = ratingText.getLeft() + ratingText.getTotalPaddingLeft()
+                    + (ratingText.getLayout().getLineLeft(0) + ratingText.getLayout().getLineRight(0)) / 2;
+            assertEquals("Pending rating text center at " + widthDp + "dp",
+                    (ratingText.getLeft() + ratingText.getRight()) / 2f, pendingTextCenter, 1f);
+            int pendingBaseline = ratingText.getTop() + ratingText.getBaseline();
+
+            GalleryDetail detail = online();
+            detail.rating = summary.rating;
+            detail.ratingCount = 123;
+            scene.onGetGalleryDetailSuccess(detail);
+            actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            actions.layout(0, 0, width, actions.getMeasuredHeight());
+            assertEquals("Loaded rating text center at " + widthDp + "dp", pendingTextCenter,
+                    ratingText.getLeft() + ratingText.getTotalPaddingLeft()
+                            + (ratingText.getLayout().getLineLeft(0) + ratingText.getLayout().getLineRight(0)) / 2, 1f);
+            assertEquals("Rating text baseline at " + widthDp + "dp", pendingBaseline,
+                    ratingText.getTop() + ratingText.getBaseline());
+        }
+    }
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void localizedRatingsStayWithinTheInsetRow() {
+        for (String language : new String[]{"en", "zh-CN", "zh-TW", "zh-HK", "ja", "ko", "fr", "de", "es", "th"}) {
+            android.content.res.Configuration configuration =
+                    new android.content.res.Configuration(context.getResources().getConfiguration());
+            configuration.setLocale(java.util.Locale.forLanguageTag(language));
+            scene.themeContext = new ContextThemeWrapper(context.createConfigurationContext(configuration), R.style.AppTheme);
+            View actions = LayoutInflater.from(scene.themeContext).inflate(R.layout.gallery_detail_actions, null);
+            View ratingGroup = actions.findViewById(R.id.rating_group);
+            com.hippo.ripple.Ripple.addRipple(ratingGroup, false);
+            TextView ratingText = actions.findViewById(R.id.rating_text);
+            View stars = (View) actions.findViewById(R.id.rating).getParent();
+            float density = scene.themeContext.getResources().getDisplayMetrics().density;
+            for (int widthDp : new int[]{280, 320, 360, 600}) {
+                int width = Math.round(widthDp * density);
+                for (int score = 0; score <= 10; score++) {
+                    ratingText.setText(ReflectionHelpers.<String>callInstanceMethod(scene, "getAllRatingText",
+                            ReflectionHelpers.ClassParameter.from(float.class, score / 2f),
+                            ReflectionHelpers.ClassParameter.from(int.class, Integer.MAX_VALUE)));
+                    actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                    actions.layout(0, 0, width, actions.getMeasuredHeight());
+                    String message = language + ", " + widthDp + "dp, rating " + score / 2f;
+                    assertEquals(message, Math.round(40 * density), stars.getLeft());
+                    assertTrue(message, ratingText.getWidth() > 0);
+                    assertTrue(message, ratingText.getLeft() >= stars.getRight());
+                    assertTrue(message, ratingText.getRight() <= ratingGroup.getWidth() - ratingGroup.getPaddingRight());
+                    assertTrue(message, ratingText.getLayout().getLineLeft(0) >= 0);
+                    assertTrue(message, ratingText.getLayout().getLineRight(0) <= ratingText.getWidth());
+                    assertEquals(message, ratingText.getWidth() / 2f,
+                            (ratingText.getLayout().getLineLeft(0) + ratingText.getLayout().getLineRight(0)) / 2, 1f);
+                }
+            }
+        }
+    }
+
     @Test public void refreshingKeepsKnownSummaryVisible() {
         bindPendingHeader();
         ReflectionHelpers.callInstanceMethod(scene, "refreshDetail");

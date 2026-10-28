@@ -1698,6 +1698,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         ((View) mRating.getParent()).setVisibility(mRating.getVisibility());
         mRatingText.setVisibility(offline || Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
         mRatingText.setSingleLine(!offline);
+        // Center within the available width, including after setSingleLine enables scrolling.
+        mRatingText.setHorizontallyScrolling(false);
         mRatingText.setGravity(Gravity.CENTER);
         int textPadding = offline ? getResources().getDimensionPixelSize(R.dimen.keyline_margin) : 0;
         mRatingText.setPadding(textPadding, 0, textPadding, 0);
