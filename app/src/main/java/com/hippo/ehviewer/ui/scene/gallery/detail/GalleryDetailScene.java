@@ -2240,8 +2240,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         AlertDialog dialog = new AlertDialog.Builder(context)
                 .setTitle(R.string.title_keyword_search)
                 .setView(content)
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(R.string.keyword_search, null)
+                .setNeutralButton(android.R.string.cancel, null)
+                .setNegativeButton(android.R.string.copy, null)
+                .setPositiveButton(R.string.title_keyword_search_action, null)
                 .create();
         dialog.setOnShowListener(ignored -> {
             GradientDrawable background = new GradientDrawable();
@@ -2253,17 +2254,25 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             }
 
             Button searchButton = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
+            Button copyButton = dialog.getButton(DialogInterface.BUTTON_NEGATIVE);
             searchButton.setEnabled(false);
-            chipGroup.setOnCheckedStateChangeListener((group, checkedIds) ->
-                    searchButton.setEnabled(!checkedIds.isEmpty()));
-            searchButton.setOnClickListener(button -> {
-                List<String> selected = new ArrayList<>();
-                for (int i = 0; i < chipGroup.getChildCount(); i++) {
-                    View child = chipGroup.getChildAt(i);
-                    if (child instanceof Chip chip && chip.isChecked()) {
-                        selected.add(String.valueOf(chip.getTag()));
-                    }
+            copyButton.setEnabled(false);
+            chipGroup.setOnCheckedStateChangeListener((group, checkedIds) -> {
+                boolean hasSelection = !checkedIds.isEmpty();
+                searchButton.setEnabled(hasSelection);
+                copyButton.setEnabled(hasSelection);
+            });
+            copyButton.setOnClickListener(button -> {
+                List<String> selected = getSelectedTitleKeywords(chipGroup);
+                if (selected.isEmpty()) {
+                    return;
                 }
+                ClipboardUtil.copyText(TextUtils.join(" ", selected));
+                showTip(R.string.copied_to_clipboard, LENGTH_SHORT);
+                dialog.dismiss();
+            });
+            searchButton.setOnClickListener(button -> {
+                List<String> selected = getSelectedTitleKeywords(chipGroup);
                 if (selected.isEmpty()) {
                     return;
                 }
@@ -2276,6 +2285,17 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             });
         });
         dialog.show();
+    }
+
+    private static List<String> getSelectedTitleKeywords(ChipGroup chipGroup) {
+        List<String> selected = new ArrayList<>();
+        for (int i = 0; i < chipGroup.getChildCount(); i++) {
+            View child = chipGroup.getChildAt(i);
+            if (child instanceof Chip chip && chip.isChecked()) {
+                selected.add(String.valueOf(chip.getTag()));
+            }
+        }
+        return selected;
     }
 
     private static String buildTitleKeywordSearchQuery(List<String> selected) {

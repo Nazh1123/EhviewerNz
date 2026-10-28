@@ -385,6 +385,7 @@
     <string name="cannot_get_local_gallery_path">Can\'t get the local gallery path</string>
     <string name="gallery_artist">Artist</string>
     <string name="title_keyword_search">Select search keywords</string>
+    <string name="title_keyword_search_action">Search keywords</string>
     <string name="title_keyword_search_empty">No searchable title parts were found</string>
     <string name="search_cover">Search Cover</string>
     <string name="no_tags">No tags</string>

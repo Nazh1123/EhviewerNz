@@ -296,6 +296,7 @@
     <string name="cannot_get_local_gallery_path">无法获取画廊本地路径</string>
     <string name="gallery_artist">作者</string>
     <string name="title_keyword_search">选择搜索关键词</string>
+    <string name="title_keyword_search_action">搜索关键词</string>
     <string name="title_keyword_search_empty">标题中没有可供搜索的内容</string>
     <string name="search_cover">搜索封面</string>
     <string name="no_tags">暂无标签</string>
