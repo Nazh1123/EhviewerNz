@@ -24,7 +24,7 @@
     <string name="gallery_update_log_versions">查看版本鏈歷史</string>
     <string name="gallery_update_log_loading">正在加載更新記錄…</string>
     <string name="gallery_update_log_unavailable">更新記錄已不可用</string>
-    <string name="gallery_update_reader_progress">更新 %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_reader_progress">更新 %1$d/%2$d · p%3$d/%4$d</string>
     <string name="gallery_update_finalizing">正在完成畫廊更新</string>
     <string name="gallery_update_finalization_failed">下載已完成，但更新收尾失敗。請在畫廊詳情頁重試。</string>
     <string-array name="gallery_update_record_limit_entries">

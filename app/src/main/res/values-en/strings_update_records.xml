@@ -24,7 +24,7 @@
     <string name="gallery_update_log_versions">View version chain history</string>
     <string name="gallery_update_log_loading">Loading update record…</string>
     <string name="gallery_update_log_unavailable">Update record is no longer available</string>
-    <string name="gallery_update_reader_progress">Updates %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_reader_progress">Updates %1$d/%2$d · p%3$d/%4$d</string>
     <string name="gallery_update_finalizing">Finishing gallery update</string>
     <string name="gallery_update_finalization_failed">Download completed, but update finalization failed. Retry from the gallery detail page.</string>
     <string-array name="gallery_update_record_limit_entries">

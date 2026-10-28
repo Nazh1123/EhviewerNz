@@ -104,6 +104,7 @@ public class UpdatedLocalGalleryProviderTest {
         assertEquals("00000003.png", files[1].getName());
         assertEquals(0, provider.getSourcePage(0));
         assertEquals(2, provider.getSourcePage(1));
+        assertEquals(6, provider.getSourcePageCount());
         assertEquals(1, provider.getStartPage()); // The first historical addition X was reordered.
         assertEquals("400-latest-00000003", provider.getImageFilename(1));
         assertEquals("00000003", provider.getTranslationFilename(1));

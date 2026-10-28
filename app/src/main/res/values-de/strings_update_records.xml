@@ -23,7 +23,7 @@
     <string name="gallery_update_log_versions">Verlauf der Versionskette anzeigen</string>
     <string name="gallery_update_log_loading">Aktualisierungsdatensatz wird geladen…</string>
     <string name="gallery_update_log_unavailable">Aktualisierungsdatensatz nicht mehr verfügbar</string>
-    <string name="gallery_update_reader_progress">Neue Seiten %1$d/%2$d · S. %3$d</string>
+    <string name="gallery_update_reader_progress">Neue Seiten %1$d/%2$d · S. %3$d/%4$d</string>
     <string name="gallery_update_finalizing">Galerie-Aktualisierung wird abgeschlossen</string>
     <string name="gallery_update_finalization_failed">Download abgeschlossen, aber Abschluss der Aktualisierung fehlgeschlagen. Auf der Galeriedetailseite erneut versuchen.</string>
     <string-array name="gallery_update_record_limit_entries">

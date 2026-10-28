@@ -72,7 +72,7 @@ public class GalleryHeader extends ViewGroup {
     if (view == battery) {
       left = paddingLeft + lp.leftMargin;
     } else if (view == progress) {
-      left = paddingLeft + (width - paddingLeft - paddingRight) / 2 - view.getMeasuredWidth() / 2;
+      left = (width - view.getMeasuredWidth()) / 2;
     } else {
       left = width - paddingRight - lp.rightMargin - view.getMeasuredWidth();
     }

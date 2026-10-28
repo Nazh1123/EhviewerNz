@@ -23,7 +23,7 @@
     <string name="gallery_update_log_versions">ดูประวัติลำดับเวอร์ชัน</string>
     <string name="gallery_update_log_loading">กำลังโหลดบันทึกการอัปเดต…</string>
     <string name="gallery_update_log_unavailable">บันทึกการอัปเดตไม่พร้อมใช้งานแล้ว</string>
-    <string name="gallery_update_reader_progress">หน้าที่เพิ่ม %1$d/%2$d · หน้า %3$d</string>
+    <string name="gallery_update_reader_progress">หน้าที่เพิ่ม %1$d/%2$d · หน้า %3$d/%4$d</string>
     <string name="gallery_update_finalizing">กำลังดำเนินการอัปเดตแกลเลอรีให้เสร็จ</string>
     <string name="gallery_update_finalization_failed">ดาวน์โหลดเสร็จแล้ว แต่ดำเนินการอัปเดตขั้นสุดท้ายไม่สำเร็จ ลองใหม่จากหน้ารายละเอียดแกลเลอรี</string>
     <string-array name="gallery_update_record_limit_entries">

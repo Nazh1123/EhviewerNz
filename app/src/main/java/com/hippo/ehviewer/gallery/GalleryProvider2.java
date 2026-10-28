@@ -24,6 +24,9 @@ import com.hippo.unifile.UniFile;
 
 public abstract class GalleryProvider2 extends GalleryProvider {
 
+    /** Total pages in the source gallery, before filtering to a subset. */
+    public int getSourcePageCount() { return size(); }
+
     /** Called only by the preview worker; never requests or decodes a reader page. */
     @Nullable
     public UniFile getPreviewFile(int index) { return null; }

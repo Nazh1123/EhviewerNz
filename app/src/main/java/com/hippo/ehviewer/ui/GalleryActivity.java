@@ -1799,9 +1799,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mProgress.setText(null);
         } else {
             if (mUpdateRecordTime > 0 && mGalleryProvider != null) {
-                mProgress.setText(getString(R.string.gallery_update_reader_progress,
+                mProgress.setText(com.hippo.ehviewer.widget.ReaderProgressText.centerSeparator(
+                        getString(R.string.gallery_update_reader_progress,
                         mCurrentIndex + 1, mSize,
-                        mGalleryProvider.getSourcePage(mCurrentIndex) + 1));
+                        mGalleryProvider.getSourcePage(mCurrentIndex) + 1,
+                        mGalleryProvider.getSourcePageCount())));
             } else {
                 mProgress.setText((mCurrentIndex + 1) + "/" + mSize);
             }

@@ -23,7 +23,7 @@
     <string name="gallery_update_log_versions">Ver historial de la cadena de versiones</string>
     <string name="gallery_update_log_loading">Cargando registro de actualización…</string>
     <string name="gallery_update_log_unavailable">El registro de actualización ya no está disponible</string>
-    <string name="gallery_update_reader_progress">Añadidas %1$d/%2$d · p. %3$d</string>
+    <string name="gallery_update_reader_progress">Añadidas %1$d/%2$d · p. %3$d/%4$d</string>
     <string name="gallery_update_finalizing">Finalizando actualización de la galería</string>
     <string name="gallery_update_finalization_failed">La descarga terminó, pero no se pudo finalizar la actualización. Reinténtalo desde los detalles de la galería.</string>
     <string-array name="gallery_update_record_limit_entries">

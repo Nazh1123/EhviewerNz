@@ -23,7 +23,7 @@
     <string name="gallery_update_log_versions">버전 계보 기록 보기</string>
     <string name="gallery_update_log_loading">업데이트 기록 불러오는 중…</string>
     <string name="gallery_update_log_unavailable">업데이트 기록을 더 이상 사용할 수 없음</string>
-    <string name="gallery_update_reader_progress">추가 %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_reader_progress">추가 %1$d/%2$d · p%3$d/%4$d</string>
     <string name="gallery_update_finalizing">갤러리 업데이트 마무리 중</string>
     <string name="gallery_update_finalization_failed">다운로드는 완료되었지만 업데이트 마무리에 실패했습니다. 갤러리 상세 화면에서 다시 시도하세요.</string>
     <string-array name="gallery_update_record_limit_entries">

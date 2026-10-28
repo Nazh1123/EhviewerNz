@@ -23,6 +23,7 @@ public final class UpdatedGalleryProvider extends DirGalleryProvider {
     private final long recordGid;
     private final long recordTime;
     private volatile int[] sourcePages = new int[0];
+    private volatile int sourcePageCount;
     private volatile int[] addedPositions = new int[0];
     private volatile int startPage;
     private volatile UniFile directory;
@@ -75,6 +76,7 @@ public final class UpdatedGalleryProvider extends DirGalleryProvider {
                 return null;
             }
             sourcePages = pages.stream().mapToInt(Integer::intValue).toArray();
+            sourcePageCount = current.pages;
             addedPositions = positions.stream().mapToInt(Integer::intValue).toArray();
             startPage = resumePosition(record.readingPage, addedPositions);
             return files.toArray(new UniFile[0]);
@@ -96,6 +98,7 @@ public final class UpdatedGalleryProvider extends DirGalleryProvider {
 
     @Override public String getError() { return error; }
     @Override public int getStartPage() { return startPage; }
+    @Override public int getSourcePageCount() { return sourcePageCount; }
     @Override public int getSourcePage(int index) {
         int[] pages = sourcePages;
         return index >= 0 && index < pages.length ? pages[index] : index;

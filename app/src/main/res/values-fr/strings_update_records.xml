@@ -23,7 +23,7 @@
     <string name="gallery_update_log_versions">Voir l’historique de la chaîne de versions</string>
     <string name="gallery_update_log_loading">Chargement de l’enregistrement de mise à jour…</string>
     <string name="gallery_update_log_unavailable">L’enregistrement de mise à jour n’est plus disponible</string>
-    <string name="gallery_update_reader_progress">Ajouts %1$d/%2$d · p. %3$d</string>
+    <string name="gallery_update_reader_progress">Ajouts %1$d/%2$d · p. %3$d/%4$d</string>
     <string name="gallery_update_finalizing">Finalisation de la mise à jour de la galerie</string>
     <string name="gallery_update_finalization_failed">Téléchargement terminé, mais la finalisation a échoué. Réessayez depuis les détails de la galerie.</string>
     <string-array name="gallery_update_record_limit_entries">
