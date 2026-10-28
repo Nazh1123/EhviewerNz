@@ -171,17 +171,6 @@
         android:fitsSystemWindows="true"
         android:orientation="vertical">
 
-        <ImageView
-            android:id="@+id/auto_transfer"
-            android:layout_width="45dp"
-            android:layout_height="45dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="12dp"
-            android:importantForAccessibility="no"
-            android:visibility="invisible"
-            android:layout_gravity="end"
-            android:src="@drawable/ic_start_play_24" />
-
         <com.hippo.ehviewer.widget.ReaderPreviewRecyclerView
             android:id="@+id/page_preview_strip"
             android:layout_width="match_parent"
@@ -200,7 +189,6 @@
             android:background="?attr/gallerySliderBackgroundColor"
             android:orientation="horizontal"
             android:paddingLeft="16dp"
-            android:paddingRight="16dp"
             android:visibility="invisible">
 
             <TextView
@@ -229,6 +217,17 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_vertical"
                 android:gravity="center_horizontal" />
+
+            <ImageButton
+                android:id="@+id/auto_transfer"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_gravity="center_vertical"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/settings_animated_webp_auto_transfer_button"
+                android:padding="12dp"
+                app:srcCompat="@drawable/v_play_x24"
+                app:tint="?attr/colorPrimary" />
 
         </com.hippo.ehviewer.widget.SeekBarPanel>
     </LinearLayout>

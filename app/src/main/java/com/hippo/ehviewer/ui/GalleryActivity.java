@@ -257,7 +257,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private View mSeekBarPanel;
     @Nullable
-    private ImageView mAutoTransferPanel;
+    private ImageView mAutoTransferButton;
     @Nullable
     private TextView mLeftText;
     @Nullable
@@ -360,7 +360,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private boolean mPageSliderAnimatedTintApplied;
 
     private ObjectAnimator mSeekBarPanelAnimator;
-    private ObjectAnimator mAutoTransferAnimator;
     private ObjectAnimator mQuickSettingsAnimator;
     @Nullable
     private AnimatorSet mSaveNoticeAnimator;
@@ -393,9 +392,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             if (null != mSeekBarPanel) {
                 mSeekBarPanel.requestLayout();
             }
-            if (null != mAutoTransferPanel) {
-                mAutoTransferPanel.requestLayout();
-            }
             if (null != mQuickSettingsPanel) {
                 mQuickSettingsPanel.requestLayout();
             }
@@ -407,7 +403,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         @Override
         public void onAnimationEnd(Animator animation) {
             mSeekBarPanelAnimator = null;
-            mAutoTransferAnimator = null;
             mQuickSettingsAnimator = null;
         }
     };
@@ -420,10 +415,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mSeekBarPanelAnimator = null;
             if (mSeekBarPanel != null) {
                 mSeekBarPanel.setVisibility(View.INVISIBLE);
-            }
-            mAutoTransferAnimator = null;
-            if (mAutoTransferPanel != null) {
-                mAutoTransferPanel.setVisibility(View.INVISIBLE);
             }
             mQuickSettingsAnimator = null;
             if (mQuickSettingsPanel != null) {
@@ -441,7 +432,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         public void run() {
             if (mSeekBarPanel != null) {
                 hideSlider(mSeekBarPanel, mSeekBarPanelAnimator);
-                hideSlider(mAutoTransferPanel, mAutoTransferAnimator);
                 hideSlider(mQuickSettingsPanel, mQuickSettingsAnimator);
             }
         }
@@ -875,7 +865,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSeekBarPanel = ViewUtils.$$(this, R.id.seek_bar_panel);
         setQuickSettingsBackgroundAlpha(mSeekBarPanel, 190);
         setQuickSettingsBackgroundAlpha(findViewById(R.id.page_preview_strip), 190);
-        mAutoTransferPanel = (ImageView) ViewUtils.$$(this, R.id.auto_transfer);
+        mAutoTransferButton = (ImageView) ViewUtils.$$(mSeekBarPanel, R.id.auto_transfer);
         mLeftText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.left);
         mRightText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.right);
         mSeekBar = (ReversibleSeekBar) ViewUtils.$$(mSeekBarPanel, R.id.seek_bar);
@@ -894,7 +884,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mSeekBar.getThumb() != null) {
             mPageSliderDefaultThumbDrawableState = mSeekBar.getThumb().getConstantState();
         }
-        mAutoTransferPanel.setOnClickListener(this::autoRead);
+        mAutoTransferButton.setOnClickListener(this::autoRead);
 
         mSaveNotice = ViewUtils.$$(this, R.id.save_notice);
         mSaveNoticeIcon = (ImageView) ViewUtils.$$(this, R.id.save_notice_icon);
@@ -1112,7 +1102,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         // mQuickPageTurn = null;
         mQuickAnimatedWebp = null;
         mSeekBarPanel = null;
-        mAutoTransferPanel = null;
+        mAutoTransferButton = null;
         mLeftText = null;
         mRightText = null;
         mSeekBar = null;
@@ -1320,15 +1310,15 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void autoRead(View view) {
         autoTransferring = !autoTransferring;
-        if (mAutoTransferPanel == null) {
+        if (mAutoTransferButton == null) {
             return;
         }
 
         if (!autoTransferring) {
-            mAutoTransferPanel.setImageResource(R.drawable.ic_start_play_24);
+            mAutoTransferButton.setImageResource(R.drawable.v_play_x24);
             transferService.shutdown();
         } else {
-            mAutoTransferPanel.setImageResource(R.drawable.ic_pause_circle);
+            mAutoTransferButton.setImageResource(R.drawable.v_pause_x24);
             if (transferService.isShutdown()) {
                 transferService = Executors.newSingleThreadScheduledExecutor();
             }
@@ -2017,7 +2007,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public void onStartTrackingTouch(SeekBar seekBar) {
         SimpleHandler.getInstance().removeCallbacks(mHideSliderRunnable);
         mPageSeeking = true;
-        if (autoTransferring) autoRead(mAutoTransferPanel);
+        if (autoTransferring) autoRead(mAutoTransferButton);
         if (Settings.getReaderPagePreview() && mPagePreview != null) mPagePreview.show(seekBar.getProgress(), mSize,
                 mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
         updateAnimatedWebpUi();
@@ -2250,7 +2240,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     public void onAutoTransferDone() {
         if (autoTransferring) {
-            autoRead(mAutoTransferPanel);
+            autoRead(mAutoTransferButton);
         }
     }
 
@@ -2289,10 +2279,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (null != animator) {
             animator.cancel();
         }
-        if (sliderPanel == mAutoTransferPanel) {
-            sliderPanel.setTranslationX(sliderPanel.getWidth());
-            animator = ObjectAnimator.ofFloat(sliderPanel, "translationX", 0.0f);
-        } else if (sliderPanel == mQuickSettingsPanel) {
+        if (sliderPanel == mQuickSettingsPanel) {
             setQuickSettingsBackgroundAlpha(sliderPanel, getStatusBarBackgroundAlpha(getWindow()));
             sliderPanel.setTranslationY(-sliderPanel.getHeight());
             animator = ObjectAnimator.ofFloat(sliderPanel, "translationY", 0.0f);
@@ -2323,9 +2310,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (null != animator) {
             animator.cancel();
         }
-        if (sliderPanel == mAutoTransferPanel) {
-            animator = ObjectAnimator.ofFloat(sliderPanel, "translationX", sliderPanel.getWidth());
-        } else if (sliderPanel == mQuickSettingsPanel) {
+        if (sliderPanel == mQuickSettingsPanel) {
             animator = ObjectAnimator.ofFloat(sliderPanel, "translationY", -sliderPanel.getHeight());
         } else {
             animator = ObjectAnimator.ofFloat(sliderPanel, "translationY", sliderPanel.getHeight());
@@ -3513,8 +3498,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpPanel.setVisibility(visible && !mPageSeeking ? View.VISIBLE : View.GONE);
         }
         if (!visible) {
-            if (mAutoTransferPanel != null && sliderVisible) {
-                mAutoTransferPanel.setVisibility(View.VISIBLE);
+            if (mAutoTransferButton != null && sliderVisible) {
+                mAutoTransferButton.setVisibility(View.VISIBLE);
             }
             return;
         }
@@ -3568,8 +3553,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpSequential.setVisibility(
                     showControlButtons ? View.VISIBLE : View.INVISIBLE);
         }
-        if (mAutoTransferPanel != null && sliderVisible) {
-            mAutoTransferPanel.setVisibility(Settings.getAnimatedWebpAutoTransferButton()
+        if (mAutoTransferButton != null && sliderVisible) {
+            mAutoTransferButton.setVisibility(Settings.getAnimatedWebpAutoTransferButton()
                     ? View.VISIBLE : View.INVISIBLE);
         }
         updateAnimatedWebpSpeedButton(mAnimatedWebpGallerySpeed);
@@ -3851,7 +3836,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         private void onTapSliderArea() {
             if (mSeekBarPanel == null || mSize <= 0 || mCurrentIndex < 0
-                    || mAutoTransferPanel == null || mQuickSettingsPanel == null) {
+                    || mAutoTransferButton == null || mQuickSettingsPanel == null) {
                 return;
             }
 
@@ -3859,12 +3844,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
             if (mSeekBarPanel.getVisibility() == View.VISIBLE) {
                 hideSlider(mSeekBarPanel, mSeekBarPanelAnimator);
-                hideSlider(mAutoTransferPanel, mAutoTransferAnimator);
                 hideSlider(mQuickSettingsPanel, mQuickSettingsAnimator);
             } else {
                 updateQuickSettingsButtons();
                 showSlider(mSeekBarPanel, mSeekBarPanelAnimator);
-                showSlider(mAutoTransferPanel, mAutoTransferAnimator);
                 showSlider(mQuickSettingsPanel, mQuickSettingsAnimator);
                 updateAnimatedWebpUi();
                 SimpleHandler.getInstance().postDelayed(mHideSliderRunnable, HIDE_SLIDER_DELAY);
