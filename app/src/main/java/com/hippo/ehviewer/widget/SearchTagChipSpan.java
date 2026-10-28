@@ -17,7 +17,7 @@ import java.util.Locale;
 final class SearchTagChipSpan extends ReplacementSpan {
     private static final int ACTION_WIDTH_DP = 20;
     private static final int LABEL_PADDING_DP = 2;
-    private static final int CHIP_HEIGHT_DP = 32;
+    static final int CHIP_HEIGHT_DP = 32;
     static final int ROW_HEIGHT_DP = 40;
     final String label;
     final char operator;
@@ -66,18 +66,9 @@ final class SearchTagChipSpan extends ReplacementSpan {
                        @Nullable Paint.FontMetricsInt fm) {
         if (fm != null) {
             paint.getFontMetricsInt(fm);
-            expandLineHeight(fm, Math.round(ROW_HEIGHT_DP * density));
         }
         return Math.round(horizontalSpace(density)
                 + paint.measureText(displayLabel(paint).toString()));
-    }
-
-    static void expandLineHeight(Paint.FontMetricsInt fm, int height) {
-        int extra = Math.max(0, height - (fm.descent - fm.ascent));
-        fm.ascent -= extra / 2;
-        fm.top = Math.min(fm.top, fm.ascent);
-        fm.descent += extra - extra / 2;
-        fm.bottom = Math.max(fm.bottom, fm.descent);
     }
 
     @Override
@@ -85,8 +76,9 @@ final class SearchTagChipSpan extends ReplacementSpan {
                      float x, int top, int y, int bottom, @NonNull Paint original) {
         Paint paint = new Paint(original);
         float width = getSize(original, text, start, end, null);
-        float cy = (top + bottom) / 2f;
-        float height = Math.min(CHIP_HEIGHT_DP * density, bottom - top);
+        // Keep ordinary font metrics for the native cursor. Row spacing lives in the TextView.
+        float cy = Math.round(y + (paint.ascent() + paint.descent()) / 2);
+        float height = CHIP_HEIGHT_DP * density;
         int tint = !active || operator == '-' ? original.getColor() : accent;
         paint.setColor(ColorUtils.setAlphaComponent(tint, !active ? 12 : operator == '~' ? 45 : 28));
         canvas.drawRoundRect(x, cy - height / 2, x + width, cy + height / 2,

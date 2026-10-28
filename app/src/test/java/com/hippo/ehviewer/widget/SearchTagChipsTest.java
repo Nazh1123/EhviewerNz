@@ -235,23 +235,28 @@ public class SearchTagChipsTest {
         layoutBar(bar);
         Layout textLayout = edit.getLayout();
         assertTrue(textLayout.getLineCount() >= 4);
-        Bitmap rows = Bitmap.createBitmap(edit.getWidth(), textLayout.getHeight(), Bitmap.Config.ARGB_8888);
-        textLayout.draw(new Canvas(rows));
+        Bitmap rows = Bitmap.createBitmap(edit.getWidth(), textLayout.getHeight()
+                + edit.getPaddingTop() + edit.getPaddingBottom(), Bitmap.Config.ARGB_8888);
+        Canvas rowCanvas = new Canvas(rows);
+        rowCanvas.translate(0, edit.getPaddingTop());
+        textLayout.draw(rowCanvas);
         int previousInkBottom = -1;
         for (int line = 0; line < textLayout.getLineCount(); line++) {
-            int center = (textLayout.getLineTop(line) + textLayout.getLineBottom(line)) / 2;
+            int center = Math.round(edit.getPaddingTop() + textLayout.getLineBaseline(line)
+                    + (edit.getPaint().ascent() + edit.getPaint().descent()) / 2);
             assertTrue("Each row must actually render a bubble", rowHasPixels(rows, center));
-            int inkTop = textLayout.getLineTop(line);
+            int inkTop = Math.max(0, center - 18);
             while (!rowHasPixels(rows, inkTop)) inkTop++;
-            int inkBottom = textLayout.getLineBottom(line) - 1;
+            int inkBottom = Math.min(rows.getHeight() - 1, center + 18);
             while (!rowHasPixels(rows, inkBottom)) inkBottom--;
             if (line > 0) {
                 assertEquals("All row gaps must equal the first gap", 8, inkTop - previousInkBottom - 1);
             }
             previousInkBottom = inkBottom;
         }
-        assertEquals(2, edit.getPaddingBottom());
-        assertEquals(24, edit.getTotalPaddingTop() + textLayout.getLineBottom(0) / 2);
+        assertEquals(2, rows.getHeight() - previousInkBottom - 1);
+        assertEquals(24, Math.round(edit.getPaddingTop() + textLayout.getLineBaseline(0)
+                + (edit.getPaint().ascent() + edit.getPaint().descent()) / 2), 1);
         File root = new File(System.getProperty("user.dir"));
         if (root.getName().equals("app")) root = root.getParentFile();
         File output = new File(root, "artifacts/search-tag-chips/compact-lines.png");
@@ -270,34 +275,13 @@ public class SearchTagChipsTest {
     }
 
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    public void cursorRetainsOrdinaryInputHeightInsideTallerChipRows() {
-        androidx.appcompat.widget.AppCompatEditText plain = new androidx.appcompat.widget.AppCompatEditText(activity);
-        plain.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,
-                activity.getResources().getDimension(R.dimen.text_little_small));
-        plain.setSingleLine(true);
-        plain.setText("normal");
-        plain.measure(View.MeasureSpec.makeMeasureSpec(280, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-        int normalHeight = plain.getLayout().getHeight();
-        android.graphics.drawable.Drawable drawable = activity.getDrawable(R.drawable.search_text_cursor);
-        assertTrue(drawable instanceof SearchTextCursorDrawable);
-        android.graphics.drawable.Drawable cursor = ((SearchTextCursorDrawable) drawable).getDrawable();
-        android.graphics.Rect padding = new android.graphics.Rect();
-        cursor.getPadding(padding);
-        for (int rowHeight : new int[]{40, 48, 80}) {
-            drawable.setBounds(0, 0, Math.max(1, drawable.getIntrinsicWidth()), rowHeight);
-            assertEquals(normalHeight, cursor.getBounds().height() - padding.top - padding.bottom);
-            assertEquals(rowHeight / 2f, cursor.getBounds().exactCenterY(), 0.5f);
-        }
-    }
-
-    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
     public void bothChipDividersAreShortAndSymmetric() {
         SearchTagChipSpan chip = new SearchTagChipSpan("a: bravo", '+', 1,
                 android.graphics.Color.BLUE, 200);
         int width = chip.getSize(edit.getPaint(), "x", 0, 1, null);
         Bitmap bitmap = Bitmap.createBitmap(width, 40, Bitmap.Config.ARGB_8888);
-        chip.draw(new Canvas(bitmap), "x", 0, 1, 0, 0, 30, 40, edit.getPaint());
+        int baseline = Math.round(20 - (edit.getPaint().ascent() + edit.getPaint().descent()) / 2);
+        chip.draw(new Canvas(bitmap), "x", 0, 1, 0, 0, baseline, 40, edit.getPaint());
         int leftLine = bitmap.getPixel(17, 15) >>> 24;
         int rightLine = bitmap.getPixel(width - 18, 15) >>> 24;
         assertEquals("The separators must mirror one another", leftLine, rightLine);

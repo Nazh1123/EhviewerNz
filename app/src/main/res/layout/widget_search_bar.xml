@@ -60,7 +60,6 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="top"
                 android:textSize="@dimen/text_little_small"
-                android:textCursorDrawable="@drawable/search_text_cursor"
                 android:background="@null"
                 android:minHeight="48dp"
                 android:gravity="center_vertical"

@@ -12,7 +12,6 @@ import android.text.StaticLayout;
 import android.text.TextUtils;
 import android.text.method.TransformationMethod;
 import android.text.style.LeadingMarginSpan;
-import android.text.style.LineHeightSpan;
 import android.view.View;
 
 /** Same-length display wrapping: a separator is displayed as a newline, never inserted in the query. */
@@ -21,7 +20,6 @@ final class SearchFirstRow implements TransformationMethod {
     final int right;
     private int after = -1;
     private LeadingMarginSpan margin;
-    private RowHeight rowHeight;
 
     SearchFirstRow(int left, int right) {
         this.left = left;
@@ -30,9 +28,7 @@ final class SearchFirstRow implements TransformationMethod {
 
     void clear(Spannable text) {
         if (margin != null) text.removeSpan(margin);
-        if (rowHeight != null) text.removeSpan(rowHeight);
         margin = null;
-        rowHeight = null;
         after = -1;
     }
 
@@ -67,9 +63,6 @@ final class SearchFirstRow implements TransformationMethod {
         margin = new RowMargin(rightPadding > 0 ? 0 : left);
         text.setSpan(margin, 0, separator >= 0 ? separator + 1 : text.length(),
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        rowHeight = new RowHeight(Math.round(SearchTagChipSpan.ROW_HEIGHT_DP
-                * input.getResources().getDisplayMetrics().density));
-        text.setSpan(rowHeight, 0, text.length(), Spanned.SPAN_INCLUSIVE_INCLUSIVE);
     }
 
     @Override public CharSequence getTransformation(CharSequence source, View view) {
@@ -121,12 +114,4 @@ final class SearchFirstRow implements TransformationMethod {
                 boolean first, Layout layout) {}
     }
 
-    private static final class RowHeight implements LineHeightSpan {
-        private final int height;
-        RowHeight(int height) { this.height = height; }
-        @Override public void chooseHeight(CharSequence text, int start, int end,
-                int spanStartVertical, int lineTop, Paint.FontMetricsInt fm) {
-            SearchTagChipSpan.expandLineHeight(fm, height);
-        }
-    }
 }

@@ -21,6 +21,9 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.SharedPreferences;
 import android.graphics.Rect;
+import android.graphics.Paint;
+import android.graphics.Canvas;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.Spanned;
@@ -66,7 +69,12 @@ public class SearchEditText extends AppCompatEditText {
     private int originalPaddingTop;
     private int originalPaddingBottom;
     private int originalGravity;
+    private final float originalLineSpacingExtra;
+    private final float originalLineSpacingMultiplier;
+    private final boolean originalFallbackLineSpacing;
+    private final boolean originalLocaleLineHeight;
     private boolean updatingRows;
+    private boolean drawingText;
     private boolean scrollingChip;
     private SearchTagChipSpan touchedChip;
     private MotionEvent touchDown;
@@ -94,6 +102,10 @@ public class SearchEditText extends AppCompatEditText {
 
     public SearchEditText(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        originalLineSpacingExtra = getLineSpacingExtra();
+        originalLineSpacingMultiplier = getLineSpacingMultiplier();
+        originalFallbackLineSpacing = Build.VERSION.SDK_INT >= 28 && isFallbackLineSpacing();
+        originalLocaleLineHeight = Build.VERSION.SDK_INT >= 35 && isLocalePreferredLineHeightForMinimumUsed();
         ready = true;
         updateTagChipMode();
         addTextChangedListener(new TextWatcher() {
@@ -153,8 +165,7 @@ public class SearchEditText extends AppCompatEditText {
         if (updatingRows || firstRow == null || !multilineChips) return;
         updatingRows = true;
         try {
-            setGravity(length() == 0 ? originalGravity
-                    : (originalGravity & ~Gravity.VERTICAL_GRAVITY_MASK) | Gravity.TOP);
+            setGravity((originalGravity & ~Gravity.VERTICAL_GRAVITY_MASK) | Gravity.TOP);
             firstRow.update(this);
             // Rebuild only when the query or its display changes, never while scrolling.
             setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
@@ -172,12 +183,30 @@ public class SearchEditText extends AppCompatEditText {
         setMaxLines(multilineChips ? 4 : 1);
         setHorizontallyScrolling(!multilineChips);
         setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+        if (Build.VERSION.SDK_INT >= 35) {
+            // Locale minimum metrics can enlarge only the first paragraph. Use the same
+            // native font metrics on every chip row, restoring the default in plain mode.
+            setLocalePreferredLineHeightForMinimumUsed(!multilineChips && originalLocaleLineHeight);
+        }
+        Paint.FontMetricsInt metrics = rowFontMetrics();
+        int fontHeight = metrics.descent - metrics.ascent;
+        float density = getResources().getDisplayMetrics().density;
+        // Native cursors exclude lineSpacingExtra, unlike enlarged font metrics / LineHeightSpan.
+        setLineSpacing(multilineChips ? Math.max(0, SearchTagChipSpan.ROW_HEIGHT_DP * density - fontHeight)
+                : originalLineSpacingExtra, multilineChips ? 1 : originalLineSpacingMultiplier);
+        if (Build.VERSION.SDK_INT >= 28) {
+            setFallbackLineSpacing(!multilineChips && originalFallbackLineSpacing);
+        }
         if (firstRow != null) {
             setIncludeFontPadding(multilineChips ? false : firstRowFontPadding);
             if (getText() != null) firstRow.clear(getText());
-            float density = getResources().getDisplayMetrics().density;
-            setPadding(firstRow.left, multilineChips ? Math.round(4 * density) : originalPaddingTop,
-                    firstRow.right, multilineChips ? Math.round(2 * density) : originalPaddingBottom);
+            int center = Math.round(-metrics.ascent + (getPaint().ascent() + getPaint().descent()) / 2);
+            int top = Math.max(0, Math.round(Math.max(getMinimumHeight(),
+                    SearchTagChipSpan.CHIP_HEIGHT_DP * density) / 2) - center);
+            int overhang = Math.max(0, (int) Math.ceil(SearchTagChipSpan.CHIP_HEIGHT_DP * density / 2
+                    + center - fontHeight));
+            setPadding(firstRow.left, multilineChips ? top : originalPaddingTop,
+                    firstRow.right, multilineChips ? overhang + Math.round(2 * density) : originalPaddingBottom);
             setGravity(originalGravity);
             if (multilineChips) setTransformationMethod(firstRow);
         }
@@ -189,6 +218,46 @@ public class SearchEditText extends AppCompatEditText {
         Editable text = getText();
         return text == null ? new SearchTagChipSpan[0]
                 : text.getSpans(0, text.length(), SearchTagChipSpan.class);
+    }
+
+    private Paint.FontMetricsInt rowFontMetrics() {
+        Paint.FontMetricsInt metrics = getPaint().getFontMetricsInt();
+        if (Build.VERSION.SDK_INT >= 35) {
+            Paint.FontMetrics minimum = getMinimumFontMetrics();
+            if (minimum != null) {
+                metrics.ascent = Math.min(metrics.ascent, (int) Math.floor(minimum.ascent));
+                metrics.descent = Math.max(metrics.descent, (int) Math.ceil(minimum.descent));
+            }
+        }
+        return metrics;
+    }
+
+    @Override protected void onMeasure(int widthSpec, int heightSpec) {
+        super.onMeasure(widthSpec, heightSpec);
+        if (!multilineChips || firstRow == null || getLayout() == null) return;
+        int last = Math.min(4, getLayout().getLineCount()) - 1;
+        Paint.FontMetricsInt metrics = rowFontMetrics();
+        // maxLines otherwise includes trailing line spacing when more text is below the viewport.
+        int height = getPaddingTop() + getLayout().getLineBaseline(last) + metrics.descent + getPaddingBottom();
+        setMeasuredDimension(getMeasuredWidthAndState(), resolveSizeAndState(
+                Math.max(getSuggestedMinimumHeight(), height), heightSpec, 0));
+    }
+
+    @Override protected void onDraw(Canvas canvas) {
+        drawingText = true;
+        try {
+            super.onDraw(canvas);
+        } finally {
+            drawingText = false;
+        }
+    }
+
+    @Override public int getExtendedPaddingBottom() {
+        int padding = super.getExtendedPaddingBottom();
+        // Let chip backgrounds extend beyond the normal font box; native scrolling still
+        // uses the full padding so the last bubble can scroll completely into view.
+        return drawingText && multilineChips && firstRow != null
+                ? Math.min(padding, Math.round(2 * getResources().getDisplayMetrics().density)) : padding;
     }
 
     /** Changes spans only, so search listeners and the query history always see the raw query. */
