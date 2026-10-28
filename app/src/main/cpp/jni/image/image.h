@@ -26,6 +26,7 @@
 #include "com_hippo_lib_image_Image.h"
 #include "config.h"
 #include "input_stream.h"
+#include "image_seek.h"
 
 #define IMAGE_FORMAT_UNKNOWN com_hippo_lib_image_Image_FORMAT_UNKNOWN
 #ifdef IMAGE_SUPPORT_PLAIN
@@ -61,7 +62,8 @@ void advance(void* image, int format);
 bool advance_and_get_looped(void* image, int format);
 bool prepare_next_frame(void* image, int format);
 bool present_prepared_frame(void* image, int format);
-int seek_to(void* image, int format, int position_ms);
+int seek_to(void* image, int format, int position_ms,
+            ImageSeekCancelled cancelled, void* context);
 int get_current_position(void* image, int format);
 int get_total_duration(void* image, int format);
 int get_delay(void* image, int format);

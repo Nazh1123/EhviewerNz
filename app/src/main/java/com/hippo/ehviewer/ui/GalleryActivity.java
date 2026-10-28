@@ -319,9 +319,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private volatile boolean mAnimatedWebpLifecycleResumed;
     private volatile int mAnimatedWebpLifecycleGeneration;
     private volatile boolean mAnimatedWebpSeeking;
-    private boolean mAnimatedWebpSeekAwaitingFrame;
+    private volatile boolean mAnimatedWebpSeekAwaitingFrame;
+    private long mAnimatedWebpSeekRequestId;
+    private volatile boolean mAnimatedWebpProgressVisible;
     private int mAnimatedWebpRequestedPosition;
     private long mAnimatedWebpLastPreviewAt;
+    private static final long ANIMATED_WEBP_PREVIEW_INTERVAL_MS = 50L;
+    private ImageTexture mAnimatedWebpPreviewTexture;
+    private boolean mAnimatedWebpPreviewScheduled;
     private boolean mAnimatedWebpTouchCandidate;
     private boolean mAnimatedWebpTouchDragging;
     private float mAnimatedWebpTouchDownX;
@@ -384,6 +389,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private ScheduledExecutorService transferService = Executors.newSingleThreadScheduledExecutor();
     private final Handler transHandle = new Handler(Looper.getMainLooper());
     private final Handler mAnimatedWebpHandler = new Handler(Looper.getMainLooper());
+    private final Object mAnimatedWebpUiUpdateLock = new Object();
+    private ImageTexture mAnimatedWebpUiUpdateTexture;
+    private boolean mAnimatedWebpUiStateChanged;
+    private int mAnimatedWebpUiUpdateGeneration;
+    private long mAnimatedWebpLastUiUpdateAt;
+    private final Runnable mAnimatedWebpUiUpdater = this::dispatchAnimatedWebpUiUpdate;
+    private final Runnable mAnimatedWebpPreviewUpdater = this::dispatchAnimatedWebpSeekPreview;
     private final Runnable mAnimatedWebpLongPressNoticeUpdater =
             this::updateAnimatedWebpLongPressNotice;
     private final ValueAnimator.AnimatorUpdateListener mUpdateSliderListener = new ValueAnimator.AnimatorUpdateListener() {
@@ -1065,7 +1077,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mLocalGalleryHistorySnackbar.dismiss();
             mLocalGalleryHistorySnackbar = null;
         }
-        mAnimatedWebpHandler.removeCallbacksAndMessages(null);
+        clearAnimatedWebpCallbacks();
         restoreAnimatedWebpLongPressPlayback();
         synchronized (this) {
             mAnimatedPagePlayback.clear();
@@ -1167,7 +1179,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         persistReadingHistoryProgressNow();
         restoreAnimatedWebpLongPressPlayback();
         updateAllAnimatedPagePlayback();
-        mAnimatedWebpHandler.removeCallbacksAndMessages(null);
+        clearAnimatedWebpCallbacks();
         super.onPause();
 
         if (mGLRootView != null) {
@@ -3254,6 +3266,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (!mAnimatedWebpSeeking) {
             mAnimatedWebpSeeking = true;
             mAnimatedWebpSeekAwaitingFrame = false;
+            mAnimatedWebpLastPreviewAt = -ANIMATED_WEBP_PREVIEW_INTERVAL_MS;
             texture.setPlaybackPlaying(false);
         }
     }
@@ -3269,9 +3282,30 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         updateAnimatedWebpTime(target, duration);
         long now = SystemClock.uptimeMillis();
-        if (force || now - mAnimatedWebpLastPreviewAt >= 120L) {
+        long remaining = ANIMATED_WEBP_PREVIEW_INTERVAL_MS - (now - mAnimatedWebpLastPreviewAt);
+        if (force || remaining <= 0L) {
+            mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpPreviewUpdater);
+            mAnimatedWebpPreviewTexture = null;
+            mAnimatedWebpPreviewScheduled = false;
             mAnimatedWebpLastPreviewAt = now;
-            texture.seekTo(target);
+            mAnimatedWebpSeekRequestId = force ? texture.seekTo(target) : texture.previewSeekTo(target);
+        } else {
+            // Send the last drag position even if the finger stops moving
+            // before the throttle interval expires.
+            mAnimatedWebpPreviewTexture = texture;
+            if (!mAnimatedWebpPreviewScheduled) {
+                mAnimatedWebpPreviewScheduled = true;
+                mAnimatedWebpHandler.postDelayed(mAnimatedWebpPreviewUpdater, remaining);
+            }
+        }
+    }
+
+    private void dispatchAnimatedWebpSeekPreview() {
+        ImageTexture texture = mAnimatedWebpPreviewTexture;
+        mAnimatedWebpPreviewTexture = null;
+        mAnimatedWebpPreviewScheduled = false;
+        if (texture != null && texture == mAnimatedWebpTexture && mAnimatedWebpSeeking) {
+            requestAnimatedWebpSeekPreview(mAnimatedWebpRequestedPosition, false);
         }
     }
 
@@ -3280,8 +3314,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (texture == null || !mAnimatedWebpSeeking) return;
         requestAnimatedWebpSeekPreview(position, true);
         mAnimatedWebpSeeking = false;
-        mAnimatedWebpSeekAwaitingFrame = true;
+        mAnimatedWebpSeekAwaitingFrame = mAnimatedWebpSeekRequestId > 0L;
         updateAllAnimatedPagePlayback();
+        // A fast decoder may finish before awaitingFrame was set, including
+        // while hidden controls were dropping ordinary frame callbacks.
+        updateAnimatedWebpProgress(texture);
     }
 
     private void toggleAnimatedWebpPlayback() {
@@ -3353,14 +3390,16 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void updateAnimatedWebpProgress(ImageTexture texture) {
         if (texture != mAnimatedWebpTexture) return;
-        int duration = texture.getPlaybackDuration();
-        int position = texture.getPlaybackPosition();
         if (mAnimatedWebpSeekAwaitingFrame &&
-                Math.abs(position - mAnimatedWebpRequestedPosition) <=
-                        Math.max(150, texture.getPlaybackFrameDelay())) {
+                (texture.hasCompletedSeek(mAnimatedWebpSeekRequestId)
+                        || texture.hasPlaybackDecodeFailed())) {
             mAnimatedWebpSeekAwaitingFrame = false;
         }
         if (!mAnimatedWebpSeeking && !mAnimatedWebpSeekAwaitingFrame) {
+            // Read position after the acknowledgement, so an old position
+            // cannot be paired with a seek that completed between the reads.
+            int duration = texture.getPlaybackDuration();
+            int position = texture.getPlaybackPosition();
             if (mAnimatedWebpTime != null &&
                     mAnimatedWebpTime.getVisibility() == View.VISIBLE) {
                 updateAnimatedWebpTime(position, duration);
@@ -3498,6 +3537,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mAnimatedWebpPanel != null) {
             mAnimatedWebpPanel.setVisibility(visible && !mPageSeeking ? View.VISIBLE : View.GONE);
         }
+        mAnimatedWebpProgressVisible = visible && !mPageSeeking
+                && mAnimatedWebpPanel != null
+                && (mAnimatedWebpSeek != null || (showTime && mAnimatedWebpTime != null));
         if (!visible) {
             if (mAutoTransferButton != null && sliderVisible) {
                 mAutoTransferButton.setVisibility(View.VISIBLE);
@@ -3565,30 +3607,75 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     public void onPlaybackChanged(ImageTexture texture, boolean frameChanged) {
-        boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
-        int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
-        mAnimatedWebpHandler.post(() -> {
-            if (!lifecycleResumed || !mAnimatedWebpLifecycleResumed ||
-                    lifecycleGeneration != mAnimatedWebpLifecycleGeneration ||
-                    texture != mAnimatedWebpTexture) return;
-            if (frameChanged) {
-                updateAnimatedWebpProgress(texture);
-            } else {
-                updateAnimatedWebpUi();
+        synchronized (mAnimatedWebpUiUpdateLock) {
+            if (!mAnimatedWebpLifecycleResumed || texture != mAnimatedWebpTexture) return;
+            if (frameChanged && !mAnimatedWebpProgressVisible
+                    && !mAnimatedWebpSeekAwaitingFrame) return;
+            boolean pending = mAnimatedWebpUiUpdateTexture != null;
+            if (pending && (mAnimatedWebpUiUpdateTexture != texture
+                    || mAnimatedWebpUiUpdateGeneration != mAnimatedWebpLifecycleGeneration)) {
+                mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiUpdater);
+                mAnimatedWebpUiStateChanged = false;
+                pending = false;
             }
-        });
+            mAnimatedWebpUiUpdateTexture = texture;
+            mAnimatedWebpUiUpdateGeneration = mAnimatedWebpLifecycleGeneration;
+            mAnimatedWebpUiStateChanged |= !frameChanged;
+            if (!pending || !frameChanged) {
+                mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiUpdater);
+                long delay = frameChanged && !mAnimatedWebpSeekAwaitingFrame
+                        ? Math.max(0L, 50L - (SystemClock.uptimeMillis() - mAnimatedWebpLastUiUpdateAt))
+                        : 0L;
+                mAnimatedWebpHandler.postDelayed(mAnimatedWebpUiUpdater, delay);
+            }
+        }
+    }
+
+    private void dispatchAnimatedWebpUiUpdate() {
+        ImageTexture texture;
+        boolean stateChanged;
+        int generation;
+        synchronized (mAnimatedWebpUiUpdateLock) {
+            texture = mAnimatedWebpUiUpdateTexture;
+            stateChanged = mAnimatedWebpUiStateChanged;
+            generation = mAnimatedWebpUiUpdateGeneration;
+            mAnimatedWebpUiUpdateTexture = null;
+            mAnimatedWebpUiStateChanged = false;
+            mAnimatedWebpLastUiUpdateAt = SystemClock.uptimeMillis();
+        }
+        if (!mAnimatedWebpLifecycleResumed || generation != mAnimatedWebpLifecycleGeneration
+                || texture == null || texture != mAnimatedWebpTexture) return;
+        if (stateChanged) updateAnimatedWebpUi();
+        else if (mAnimatedWebpProgressVisible || mAnimatedWebpSeekAwaitingFrame) {
+            updateAnimatedWebpProgress(texture);
+        }
+    }
+
+    private void clearAnimatedWebpCallbacks() {
+        synchronized (mAnimatedWebpUiUpdateLock) {
+            mAnimatedWebpHandler.removeCallbacksAndMessages(null);
+            mAnimatedWebpUiUpdateTexture = null;
+            mAnimatedWebpUiStateChanged = false;
+            mAnimatedWebpProgressVisible = false;
+            mAnimatedWebpPreviewTexture = null;
+            mAnimatedWebpPreviewScheduled = false;
+        }
     }
 
     @Override
-    public void onPlaybackCycleCompleted(ImageTexture texture) {
+    public void onPlaybackCycleCompleted(ImageTexture texture, long playbackGeneration) {
         boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
         int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
+        boolean seeking = mAnimatedWebpSeeking;
+        boolean playing = texture.isPlaybackPlaying();
         // The decoder callback can outlive a swipe before the main thread handles it.
         boolean swipeInProgress = mGalleryView != null && mGalleryView.isPageSwipeInProgress();
         mAnimatedWebpHandler.post(() -> {
             if (!lifecycleResumed || !mAnimatedWebpLifecycleResumed ||
                     lifecycleGeneration != mAnimatedWebpLifecycleGeneration ||
-                    texture != mAnimatedWebpTexture) return;
+                    texture != mAnimatedWebpTexture || seeking || mAnimatedWebpSeeking ||
+                    !playing || !texture.isPlaybackPlaying() ||
+                    playbackGeneration != texture.getPlaybackGeneration()) return;
             if (Settings.getAnimatedWebpAutoAdvance() && mGalleryView != null &&
                     !mPageSeeking &&
                     !swipeInProgress && !mGalleryView.isPageSwipeInProgress() &&

@@ -26,6 +26,7 @@ import androidx.core.graphics.createBitmap
 import com.hippo.ehviewer.Analytics
 import com.hippo.ehviewer.Settings
 import java.nio.ByteBuffer
+import java.util.function.BooleanSupplier
 
 
 class Image private constructor(
@@ -302,7 +303,9 @@ class Image private constructor(
 
     fun presentPreparedFrame(): Boolean = mNativeImage?.presentPreparedFrame() ?: false
 
-    fun seekTo(positionMs: Int): Int = mNativeImage?.seekTo(positionMs) ?: 0
+    @JvmOverloads
+    fun seekTo(positionMs: Int, cancelled: BooleanSupplier? = null): Int =
+        mNativeImage?.seekTo(positionMs, cancelled) ?: Image1.SEEK_FAILED
 
     val currentFramePosition: Int
         get() = mNativeImage?.currentPosition ?: 0

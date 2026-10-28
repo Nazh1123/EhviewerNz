@@ -115,8 +115,8 @@ static int calculate_total_duration(GIF* gif)
   int duration = 0;
   for (int i = 0; i < gif->gif_file->ImageCount; ++i) {
     const int delay = gif->frame_info_array[i].delay;
-    if (duration > INT_MAX - delay) return INT_MAX;
-    duration += delay;
+    gif->frame_info_array[i].start = duration;
+    duration = duration > INT_MAX - delay ? INT_MAX : duration + delay;
   }
   return duration;
 }
@@ -673,23 +673,25 @@ void GIF_advance(GIF* gif)
   GIF_advance_and_get_looped(gif);
 }
 
-int GIF_seek_to(GIF* gif, int position_ms)
+int GIF_seek_to(GIF* gif, int position_ms,
+                ImageSeekCancelled cancelled, void* context)
 {
   if (gif == NULL || gif->gif_file == NULL || gif->frame_info_array == NULL ||
       gif->gif_file->ImageCount <= 1 || gif->total_duration <= 0) {
-    return 0;
+    return IMAGE_SEEK_FAILED;
   }
   if (position_ms < 0) position_ms = 0;
   if (position_ms >= gif->total_duration) position_ms = gif->total_duration - 1;
 
   int target = 0;
-  int frame_start = 0;
-  for (int i = 0; i < gif->gif_file->ImageCount; ++i) {
-    target = i;
-    if ((long long) position_ms < (long long) frame_start +
-        gif->frame_info_array[i].delay) break;
-    frame_start += gif->frame_info_array[i].delay;
+  int end = gif->gif_file->ImageCount;
+  while (target + 1 < end) {
+    const int middle = target + (end - target) / 2;
+    if (gif->frame_info_array[middle].start <= position_ms) target = middle;
+    else end = middle;
   }
+  const int frame_start = gif->frame_info_array[target].start;
+  if (cancelled != NULL && cancelled(context)) return IMAGE_SEEK_CANCELLED;
 
   gif->frame_prepared = false;
   if (target < gif->buffer_index) {
@@ -698,9 +700,11 @@ int GIF_seek_to(GIF* gif, int position_ms)
     gif->backup = NULL;
   }
   while (gif->buffer_index < target) {
-    if (!advance_buffer(gif, NULL)) return GIF_get_current_position(gif);
+    if (cancelled != NULL && cancelled(context)) return IMAGE_SEEK_CANCELLED;
+    if (!advance_buffer(gif, NULL)) return IMAGE_SEEK_FAILED;
   }
 
+  if (cancelled != NULL && cancelled(context)) return IMAGE_SEEK_CANCELLED;
   GIF_lock_pixels(gif);
   memcpy(gif->shown_buffer, gif->buffer, get_canvas_size(gif));
   GIF_unlock_pixels(gif);
@@ -712,13 +716,7 @@ int GIF_get_current_position(GIF* gif)
   if (gif == NULL || gif->frame_info_array == NULL || gif->buffer_index <= 0) {
     return 0;
   }
-  int position = 0;
-  for (int i = 0; i < gif->buffer_index; ++i) {
-    const int delay = gif->frame_info_array[i].delay;
-    if (position > INT_MAX - delay) return INT_MAX;
-    position += delay;
-  }
-  return position;
+  return gif->frame_info_array[gif->buffer_index].start;
 }
 
 int GIF_get_total_duration(GIF* gif)

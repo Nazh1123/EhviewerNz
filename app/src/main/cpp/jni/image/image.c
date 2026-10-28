@@ -404,18 +404,19 @@ bool present_prepared_frame(void *image, int format) {
     return false;
 }
 
-int seek_to(void *image, int format, int position_ms) {
+int seek_to(void *image, int format, int position_ms,
+            ImageSeekCancelled cancelled, void* context) {
 #ifdef IMAGE_SUPPORT_GIF
     if (format == IMAGE_FORMAT_GIF) {
-        return GIF_seek_to((GIF *) image, position_ms);
+        return GIF_seek_to((GIF *) image, position_ms, cancelled, context);
     }
 #endif
 #ifdef IMAGE_SUPPORT_WEBP
     if (format == IMAGE_FORMAT_WEBP) {
-        return WEBP_seek_to((WEBP *) image, position_ms);
+        return WEBP_seek_to((WEBP *) image, position_ms, cancelled, context);
     }
 #endif
-    return 0;
+    return IMAGE_SEEK_FAILED;
 }
 
 int get_current_position(void *image, int format) {

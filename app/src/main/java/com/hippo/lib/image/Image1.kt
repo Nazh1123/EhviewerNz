@@ -21,6 +21,7 @@ import com.getkeepsafe.relinker.ReLinker
 import java.io.BufferedInputStream
 import java.io.InputStream
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.BooleanSupplier
 
 /**
  * The `Image` is a image which stored pixel data in native heap
@@ -144,9 +145,11 @@ class Image1 private constructor(
         return nativePresentPreparedFrame(mNativePtr, format)
     }
 
-    fun seekTo(positionMs: Int): Int {
+    /** Returns the frame start, SEEK_CANCELLED, or SEEK_FAILED. */
+    @JvmOverloads
+    fun seekTo(positionMs: Int, cancelled: BooleanSupplier? = null): Int {
         checkRecycled()
-        return nativeSeekTo(mNativePtr, format, positionMs)
+        return nativeSeekTo(mNativePtr, format, positionMs, cancelled)
     }
 
     val currentPosition: Int
@@ -229,6 +232,8 @@ class Image1 private constructor(
         get() = mNativePtr == 0L
 
     companion object {
+        const val SEEK_FAILED = -1
+        const val SEEK_CANCELLED = -2
         /**
          * Unknown image format
          */
@@ -343,7 +348,10 @@ class Image1 private constructor(
         @JvmStatic
         private external fun nativePresentPreparedFrame(nativePtr: Long, format: Int): Boolean
         @JvmStatic
-        private external fun nativeSeekTo(nativePtr: Long, format: Int, positionMs: Int): Int
+        private external fun nativeSeekTo(
+            nativePtr: Long, format: Int, positionMs: Int,
+            cancelled: BooleanSupplier?,
+        ): Int
         @JvmStatic
         private external fun nativeGetCurrentPosition(nativePtr: Long, format: Int): Int
         @JvmStatic

@@ -290,12 +290,36 @@ Java_com_hippo_lib_image_Image1_nativePresentPreparedFrame(JNIEnv* env,
   return (jboolean) present_prepared_frame((void*) (intptr_t) ptr, format);
 }
 
+typedef struct {
+  JNIEnv* env;
+  jobject supplier;
+  jmethodID get_as_boolean;
+} SeekCancellation;
+
+static bool seek_cancelled(void* context) {
+  SeekCancellation* cancellation = (SeekCancellation*) context;
+  JNIEnv* env = cancellation->env;
+  const jboolean result = (*env)->CallBooleanMethod(
+      env, cancellation->supplier, cancellation->get_as_boolean);
+  return (*env)->ExceptionCheck(env) || result == JNI_TRUE;
+}
+
 JNIEXPORT jint JNICALL
 Java_com_hippo_lib_image_Image1_nativeSeekTo(JNIEnv* env,
                                              jclass clazz, jlong ptr, jint format,
-                                             jint position_ms)
+                                             jint position_ms, jobject supplier)
 {
-  return (jint) seek_to((void*) (intptr_t) ptr, format, position_ms);
+  if (supplier == NULL) {
+    return (jint) seek_to((void*) (intptr_t) ptr, format, position_ms, NULL, NULL);
+  }
+  jclass supplier_class = (*env)->GetObjectClass(env, supplier);
+  if (supplier_class == NULL) return IMAGE_SEEK_FAILED;
+  jmethodID method = (*env)->GetMethodID(env, supplier_class, "getAsBoolean", "()Z");
+  (*env)->DeleteLocalRef(env, supplier_class);
+  if (method == NULL) return IMAGE_SEEK_FAILED;
+  SeekCancellation cancellation = {env, supplier, method};
+  return (jint) seek_to((void*) (intptr_t) ptr, format, position_ms,
+                       seek_cancelled, &cancellation);
 }
 
 JNIEXPORT jint JNICALL

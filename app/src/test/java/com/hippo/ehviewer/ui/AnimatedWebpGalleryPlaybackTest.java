@@ -5,8 +5,11 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.widget.SeekBar;
 
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.widget.TouchThroughSeekBar;
 import com.hippo.ehviewer.ReaderKeyProfiles;
 import com.hippo.lib.glgallery.GalleryPageView;
 import com.hippo.lib.glgallery.GalleryView;
@@ -36,6 +39,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.ExecutorService;
+import java.time.Duration;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -340,7 +344,7 @@ public class AnimatedWebpGalleryPlaybackTest {
         List<Integer> methods = ReflectionHelpers.getField(view, "mMethodList");
         List<Object[]> args = ReflectionHelpers.getField(view, "mArgsList");
 
-        activity.onPlaybackCycleCompleted(texture);
+        activity.onPlaybackCycleCompleted(texture, texture.getPlaybackGeneration());
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertEquals(1, methods.size());
         assertEquals(1, args.get(0)[0]);
@@ -349,16 +353,257 @@ public class AnimatedWebpGalleryPlaybackTest {
 
         // The swipe ended while the completion callback was waiting in the queue.
         ReflectionHelpers.setField(view, "mPageSwipeInProgress", true);
-        activity.onPlaybackCycleCompleted(texture);
+        activity.onPlaybackCycleCompleted(texture, texture.getPlaybackGeneration());
         ReflectionHelpers.setField(view, "mPageSwipeInProgress", false);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertTrue(methods.isEmpty());
 
         // The swipe began after the callback was queued.
-        activity.onPlaybackCycleCompleted(texture);
+        activity.onPlaybackCycleCompleted(texture, texture.getPlaybackGeneration());
         ReflectionHelpers.setField(view, "mPageSwipeInProgress", true);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertTrue(methods.isEmpty());
+    }
+
+    private GalleryView autoAdvanceGallery(ImageTexture texture) {
+        GalleryView view = new GalleryView.Builder(RuntimeEnvironment.getApplication(),
+                new GalleryView.Adapter() {
+                    @Override public void onBind(GalleryPageView page, int index) {}
+                    @Override public void onUnbind(GalleryPageView page, int index) {}
+                    @Override public String getError() { return null; }
+                    @Override public int size() { return 2; }
+                }).build();
+        ReflectionHelpers.setField(activity, "mGalleryView", view);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        ReflectionHelpers.setField(activity, "mCurrentIndex", 0);
+        ReflectionHelpers.setField(activity, "mSize", 2);
+        Settings.putAnimatedWebpAutoAdvance(true);
+        return view;
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void queuedCycleDoesNotAdvanceAfterPauseEvenIfPlaybackResumes() {
+        ImageTexture texture = texture();
+        GalleryView view = autoAdvanceGallery(texture);
+        activity.onPlaybackCycleCompleted(texture, texture.getPlaybackGeneration());
+        texture.setPlaybackPlaying(false);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(((List<?>) ReflectionHelpers.getField(view, "mMethodList")).isEmpty());
+
+        texture.setPlaybackPlaying(true);
+        activity.onPlaybackCycleCompleted(texture, texture.getPlaybackGeneration());
+        texture.setPlaybackPlaying(false);
+        texture.setPlaybackPlaying(true);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(((List<?>) ReflectionHelpers.getField(view, "mMethodList")).isEmpty());
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void queuedCycleDoesNotAdvanceDuringOrAfterAnimationSeek() {
+        ImageTexture texture = texture();
+        ReflectionHelpers.setField(texture, "mPlaybackDuration", 1001);
+        GalleryView view = autoAdvanceGallery(texture);
+        activity.onPlaybackCycleCompleted(texture, texture.getPlaybackGeneration());
+        ReflectionHelpers.setField(activity, "mAnimatedWebpSeeking", true);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(((List<?>) ReflectionHelpers.getField(view, "mMethodList")).isEmpty());
+
+        ReflectionHelpers.setField(activity, "mAnimatedWebpSeeking", false);
+        activity.onPlaybackCycleCompleted(texture, texture.getPlaybackGeneration());
+        texture.seekTo(500);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(((List<?>) ReflectionHelpers.getField(view, "mMethodList")).isEmpty());
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void oldCycleGenerationIsRejectedEvenWhenDeliveredAfterResume() {
+        ImageTexture texture = texture();
+        GalleryView view = autoAdvanceGallery(texture);
+        long generation = texture.getPlaybackGeneration();
+        texture.setPlaybackPlaying(false);
+        texture.setPlaybackPlaying(true);
+        activity.onPlaybackCycleCompleted(texture, generation);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(((List<?>) ReflectionHelpers.getField(view, "mMethodList")).isEmpty());
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void progressWaitsForMatchingSeekCompletionInsteadOfNearbyPosition() {
+        ImageTexture texture = texture();
+        ReflectionHelpers.setField(texture, "mPlaybackDuration", 1001);
+        ReflectionHelpers.setField(texture, "mPlaybackFramePosition", 500);
+        ReflectionHelpers.setField(texture, "mPlaybackFrameDelay", 100);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        Settings.putAnimatedWebpAllowSeek(true);
+        TouchThroughSeekBar seek = new TouchThroughSeekBar(activity);
+        seek.setMax(1001);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpSeek", seek);
+        ReflectionHelpers.callInstanceMethod(activity, "beginAnimatedWebpSeek");
+        ReflectionHelpers.callInstanceMethod(activity, "finishAnimatedWebpSeek",
+                ClassParameter.from(int.class, 600));
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpProgress",
+                ClassParameter.from(ImageTexture.class, texture));
+        assertTrue(ReflectionHelpers.getField(activity, "mAnimatedWebpSeekAwaitingFrame"));
+        assertEquals(600, seek.getProgress());
+
+        long request = ReflectionHelpers.getField(activity, "mAnimatedWebpSeekRequestId");
+        ReflectionHelpers.setField(texture, "mCompletedSeekGeneration", request - 1);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpProgress",
+                ClassParameter.from(ImageTexture.class, texture));
+        assertTrue(ReflectionHelpers.getField(activity, "mAnimatedWebpSeekAwaitingFrame"));
+
+        ReflectionHelpers.setField(texture, "mCompletedSeekGeneration", request);
+        ReflectionHelpers.setField(texture, "mPlaybackFramePosition", 600);
+        ReflectionHelpers.callInstanceMethod(activity, "updateAnimatedWebpProgress",
+                ClassParameter.from(ImageTexture.class, texture));
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpSeekAwaitingFrame"));
+        assertEquals(600, seek.getProgress());
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void frameCallbacksAreCoalescedAndHiddenProgressDoesNotScheduleWork() {
+        ImageTexture texture = texture();
+        ReflectionHelpers.setField(texture, "mPlaybackDuration", 1001);
+        ReflectionHelpers.setField(texture, "mPlaybackFramePosition", 500);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        TouchThroughSeekBar seek = new TouchThroughSeekBar(activity);
+        seek.setMax(1001);
+        final int[] changes = {0};
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean user) { ++changes[0]; }
+            @Override public void onStartTrackingTouch(SeekBar bar) {}
+            @Override public void onStopTrackingTouch(SeekBar bar) {}
+        });
+        ReflectionHelpers.setField(activity, "mAnimatedWebpSeek", seek);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpProgressVisible", true);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpLastUiUpdateAt", SystemClock.uptimeMillis());
+        for (int i = 0; i < 100; ++i) activity.onPlaybackChanged(texture, true);
+        assertEquals(0, changes[0]);
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(49));
+        assertEquals(0, changes[0]);
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1));
+        assertEquals(1, changes[0]);
+        assertEquals(500, seek.getProgress());
+
+        ReflectionHelpers.setField(activity, "mAnimatedWebpProgressVisible", false);
+        ReflectionHelpers.setField(texture, "mPlaybackFramePosition", 700);
+        for (int i = 0; i < 100; ++i) activity.onPlaybackChanged(texture, true);
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
+        assertEquals(1, changes[0]);
+        assertEquals(500, seek.getProgress());
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void clearingCallbacksAllowsFreshProgressAfterResume() {
+        ImageTexture texture = texture();
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpProgressVisible", true);
+        activity.onPlaybackChanged(texture, true);
+        ReflectionHelpers.callInstanceMethod(activity, "clearAnimatedWebpCallbacks");
+        assertEquals(null, ReflectionHelpers.getField(activity, "mAnimatedWebpUiUpdateTexture"));
+        ReflectionHelpers.setField(activity, "mAnimatedWebpProgressVisible", true);
+        activity.onPlaybackChanged(texture, true);
+        assertEquals(texture, ReflectionHelpers.getField(activity, "mAnimatedWebpUiUpdateTexture"));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
+        assertEquals(null, ReflectionHelpers.getField(activity, "mAnimatedWebpUiUpdateTexture"));
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void stateChangeIsNotDelayedBehindThrottledProgress() {
+        ImageTexture texture = texture();
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpProgressVisible", true);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpLastUiUpdateAt", SystemClock.uptimeMillis());
+        activity.onPlaybackChanged(texture, true);
+        activity.onPlaybackChanged(texture, false);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        // Without an attached gallery page, a full UI update clears the texture.
+        assertEquals(null, ReflectionHelpers.getField(activity, "mAnimatedWebpTexture"));
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void hiddenProgressStillReceivesSeekAcknowledgement() {
+        ImageTexture texture = texture();
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpProgressVisible", false);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpSeekAwaitingFrame", true);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpSeekRequestId", 7L);
+        ReflectionHelpers.setField(texture, "mCompletedSeekGeneration", 7L);
+        activity.onPlaybackChanged(texture, true);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpSeekAwaitingFrame"));
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void fastSeekCompletionIsNotLostWhenProgressIsHidden() {
+        ImageWrapper wrapper = new ImageWrapper(Image.create(
+                Bitmap.createBitmap(4, 4, Bitmap.Config.ARGB_8888)));
+        assertTrue(wrapper.obtain());
+        ImageTexture texture = new ImageTexture(wrapper) {
+            @Override public long seekTo(int position) {
+                long request = super.seekTo(position);
+                ReflectionHelpers.setField(this, "mCompletedSeekGeneration", request);
+                ReflectionHelpers.setField(this, "mPlaybackFramePosition", position);
+                activity.onPlaybackChanged(this, true);
+                return request;
+            }
+        };
+        textures.add(texture);
+        ReflectionHelpers.setField(texture, "mControllableAnimation", true);
+        ReflectionHelpers.setField(texture, "mPlaybackDuration", 1001);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpProgressVisible", false);
+        Settings.putAnimatedWebpAllowSeek(true);
+        ReflectionHelpers.callInstanceMethod(activity, "beginAnimatedWebpSeek");
+        ReflectionHelpers.callInstanceMethod(activity, "finishAnimatedWebpSeek",
+                ClassParameter.from(int.class, 600));
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpSeekAwaitingFrame"));
+        assertEquals(600, texture.getPlaybackPosition());
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void previewThrottleFlushesLastDragPositionAndReleaseCancelsTrailingUpdate() {
+        ImageTexture texture = texture();
+        ReflectionHelpers.setField(texture, "mPlaybackDuration", 1001);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", texture);
+        Settings.putAnimatedWebpAllowSeek(true);
+        ReflectionHelpers.callInstanceMethod(activity, "beginAnimatedWebpSeek");
+        preview(200);
+        preview(400);
+        preview(700);
+        assertEquals(200, (int) ReflectionHelpers.getField(texture, "mPendingSeek"));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(50));
+        assertEquals(700, (int) ReflectionHelpers.getField(texture, "mPendingSeek"));
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpPreviewScheduled"));
+
+        preview(800);
+        ReflectionHelpers.callInstanceMethod(activity, "finishAnimatedWebpSeek",
+                ClassParameter.from(int.class, 900));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
+        assertEquals(900, (int) ReflectionHelpers.getField(texture, "mPendingSeek"));
+        assertFalse(ReflectionHelpers.getField(activity, "mAnimatedWebpPreviewScheduled"));
+    }
+
+    @Test @LooperMode(LooperMode.Mode.PAUSED)
+    public void trailingPreviewDoesNotSeekAnotherPageAfterSwitchingTextures() {
+        ImageTexture first = texture();
+        ImageTexture next = texture();
+        ReflectionHelpers.setField(first, "mPlaybackDuration", 1001);
+        ReflectionHelpers.setField(next, "mPlaybackDuration", 1001);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", first);
+        Settings.putAnimatedWebpAllowSeek(true);
+        ReflectionHelpers.callInstanceMethod(activity, "beginAnimatedWebpSeek");
+        preview(200);
+        preview(700);
+        ReflectionHelpers.setField(activity, "mAnimatedWebpTexture", next);
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
+        assertEquals(200, (int) ReflectionHelpers.getField(first, "mPendingSeek"));
+        assertEquals(-1, (int) ReflectionHelpers.getField(next, "mPendingSeek"));
+    }
+
+    private void preview(int position) {
+        ReflectionHelpers.callInstanceMethod(activity, "requestAnimatedWebpSeekPreview",
+                ClassParameter.from(int.class, position), ClassParameter.from(boolean.class, false));
     }
 
     private ImageTexture texture() {

@@ -25,6 +25,7 @@
 #include <stddef.h>
 
 #include "patch_head_input_stream.h"
+#include "image_seek.h"
 #include "../utils.h"
 #include "webp/decode.h"
 #include "webp/demux.h"
@@ -43,6 +44,7 @@ typedef struct {
   unsigned int width;
   unsigned int height;
   int duration;
+  int start;
   WebPMuxAnimDispose dispose_method;
   WebPMuxAnimBlend blend_method;
   bool has_alpha;
@@ -105,7 +107,8 @@ void WEBP_advance(WEBP* webp);
 bool WEBP_advance_and_get_looped(WEBP* webp);
 bool WEBP_prepare_next_frame(WEBP* webp);
 bool WEBP_present_prepared_frame(WEBP* webp);
-int WEBP_seek_to(WEBP* webp, int position_ms);
+int WEBP_seek_to(WEBP* webp, int position_ms,
+                 ImageSeekCancelled cancelled, void* context);
 int WEBP_get_current_position(WEBP* webp);
 int WEBP_get_total_duration(WEBP* webp);
 int WEBP_get_delay(WEBP* webp);
