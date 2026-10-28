@@ -249,6 +249,11 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
                 }
             }
 
+            ACTION_PRIORITIZE -> {
+                val gid = intent!!.getLongExtra(KEY_GID, -1)
+                if (gid != -1L) mDownloadManager?.prioritizeDownload(gid)
+            }
+
             ACTION_START_GALLERY_UPDATE -> {
                 val gallery = intent!!.getParcelableExtra<GalleryDetail>(KEY_GALLERY_INFO)
                 if (gallery != null) {
@@ -1189,6 +1194,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
 
     companion object {
         const val ACTION_START: String = "start"
+        const val ACTION_PRIORITIZE: String = "prioritize"
         const val ACTION_START_RANGE: String = "start_range"
         const val ACTION_START_ALL: String = "start_all"
         const val ACTION_STOP: String = "stop"

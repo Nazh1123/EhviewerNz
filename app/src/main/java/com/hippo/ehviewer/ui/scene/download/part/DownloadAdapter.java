@@ -1103,7 +1103,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         }
     }
 
-    public class DownloadHolder extends AbstractDraggableItemViewHolder implements View.OnClickListener {
+    public class DownloadHolder extends AbstractDraggableItemViewHolder
+            implements View.OnClickListener, View.OnLongClickListener {
 
         long boundGid = -1L;
         String boundArchiveUri;
@@ -1146,10 +1147,35 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             thumb.setOnClickListener(this);
             start.setOnClickListener(this);
             stop.setOnClickListener(this);
+            start.setOnLongClickListener(this);
+            stop.setOnLongClickListener(this);
 
             boolean isDarkTheme = !AttrResources.getAttrBoolean(mScene.getEHContext(), androidx.appcompat.R.attr.isLightTheme);
             Ripple.addRipple(start, isDarkTheme);
             Ripple.addRipple(stop, isDarkTheme);
+        }
+
+        @Override
+        public boolean onLongClick(View v) {
+            Context context = mScene.getEHContext();
+            EasyRecyclerView recyclerView = mCallback.getRecyclerView();
+            // Consume button long presses so releasing never pauses the selected download.
+            if (context == null || recyclerView == null || recyclerView.isInCustomChoice()) {
+                return true;
+            }
+            int index = recyclerView.getChildAdapterPosition(itemView);
+            if (index < 0) return true;
+            int listPosition = mCallback.positionInList(index);
+            List<DownloadInfo> list = mCallback.getList();
+            if (list == null || listPosition < 0 || listPosition >= list.size()) return true;
+            DownloadInfo info = list.get(listPosition);
+            if (info.gid != boundGid || info.state != DownloadInfo.STATE_WAIT
+                    || info.archiveUri != null) return true;
+            Intent intent = new Intent(context, DownloadService.class);
+            intent.setAction(DownloadService.ACTION_PRIORITIZE);
+            intent.putExtra(DownloadService.KEY_GID, info.gid);
+            context.startService(intent);
+            return true;
         }
 
         @Override

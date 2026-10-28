@@ -106,6 +106,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     private DownloadInfo mCurrentTask;
     @Nullable
     private SpiderQueen mCurrentSpider;
+    private volatile long mDownloadGeneration;
     private final Map<Integer, String> mGalleryUpdatePageErrors = new java.util.TreeMap<>();
 
     private final ConcurrentPool<NotifyTask> mNotifyTaskPool = new ConcurrentPool<>(5);
@@ -578,6 +579,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             SpiderQueen spider = SpiderQueen.obtainSpiderQueen(mContext, info, SpiderQueen.MODE_DOWNLOAD);
             mCurrentTask = info;
             mCurrentSpider = spider;
+            mDownloadGeneration++;
             mGalleryUpdatePageErrors.clear();
             if (GalleryUpdateManager.getPlan(info.gid) != null)
                 GalleryUpdateManager.notifyUpdateStateChanged(info.gid, GalleryUpdateManager.UPDATE_STATE_UPDATING);
@@ -679,6 +681,31 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             // Add it to history
             EhDB.putHistoryInfo(info);
         }
+    }
+
+    /** Starts a waiting gallery immediately, preserving the order of all other downloads. */
+    void prioritizeDownload(long gid) {
+        DownloadInfo info = mAllInfoMap.get(gid);
+        if (info == null || info.state != DownloadInfo.STATE_WAIT || info.archiveUri != null
+                || !mWaitList.remove(info)) {
+            return;
+        }
+
+        // Keep the selected item queued while cancelling, so the service stays alive.
+        mWaitList.addFirst(info);
+        DownloadInfo interrupted = stopCurrentDownloadInternal(false);
+        if (interrupted != null) {
+            interrupted.state = DownloadInfo.STATE_WAIT;
+            mWaitList.add(1, interrupted);
+            EhDB.putDownloadInfo(interrupted);
+            List<DownloadInfo> list = getInfoListForLabel(interrupted.label);
+            if (list != null) {
+                for (DownloadInfoListener listener : mDownloadInfoListeners) {
+                    listener.onUpdate(interrupted, list, mWaitList);
+                }
+            }
+        }
+        ensureDownload();
     }
 
     void startRangeDownload(LongList gidList) {
@@ -1157,6 +1184,10 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     // Update in DB
     // Update mDownloadListener
     private DownloadInfo stopCurrentDownloadInternal() {
+        return stopCurrentDownloadInternal(true);
+    }
+
+    private DownloadInfo stopCurrentDownloadInternal(boolean cancelled) {
         DownloadInfo info = mCurrentTask;
         SpiderQueen spider = mCurrentSpider;
         // Release spider
@@ -1164,6 +1195,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             spider.removeOnSpiderListener(DownloadManager.this);
             SpiderQueen.releaseSpiderQueen(spider, SpiderQueen.MODE_DOWNLOAD);
         }
+        mDownloadGeneration++;
         mCurrentTask = null;
         mCurrentSpider = null;
         // Stop speed reminder
@@ -1176,7 +1208,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         info.state = DownloadInfo.STATE_NONE;
         // Update in DB
         EhDB.putDownloadInfo(info);
-        recordStoppedUpdate(info.gid);
+        if (cancelled) recordStoppedUpdate(info.gid);
         // Listener
         if (mDownloadListener != null) {
             mDownloadListener.onCancel(info);
@@ -1795,6 +1827,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             task = new NotifyTask();
         }
         task.setOnGetPagesData(pages);
+        task.mGeneration = mDownloadGeneration;
         SimpleHandler.getInstance().post(task);
     }
 
@@ -1805,6 +1838,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             task = new NotifyTask();
         }
         task.setOnGet509Data(index);
+        task.mGeneration = mDownloadGeneration;
         SimpleHandler.getInstance().post(task);
     }
 
@@ -1815,6 +1849,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             task = new NotifyTask();
         }
         task.setOnPageDownloadData(index, contentLength, receivedSize, bytesRead);
+        task.mGeneration = mDownloadGeneration;
         SimpleHandler.getInstance().post(task);
     }
 
@@ -1825,6 +1860,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             task = new NotifyTask();
         }
         task.setOnPageSuccessData(index, finished, downloaded, total);
+        task.mGeneration = mDownloadGeneration;
         SimpleHandler.getInstance().post(task);
     }
 
@@ -1835,6 +1871,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             task = new NotifyTask();
         }
         task.setOnPageFailureDate(index, error, finished, downloaded, total);
+        task.mGeneration = mDownloadGeneration;
         SimpleHandler.getInstance().post(task);
     }
 
@@ -1845,6 +1882,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             task = new NotifyTask();
         }
         task.setOnFinishDate(finished, downloaded, total);
+        task.mGeneration = mDownloadGeneration;
         SimpleHandler.getInstance().post(task);
     }
 
@@ -1868,6 +1906,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         public static final int TYPE_ON_FINISH = 5;
 
         private int mType;
+        private long mGeneration;
         private int mPages;
         private int mIndex;
         private long mContentLength;
@@ -1923,6 +1962,11 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
         @Override
         public void run() {
+            // Spider callbacks posted before a switch must not update the next gallery.
+            if (mGeneration != mDownloadGeneration) {
+                mNotifyTaskPool.push(this);
+                return;
+            }
             switch (mType) {
                 case TYPE_ON_GET_PAGES: {
                     DownloadInfo info = mCurrentTask;
@@ -2005,6 +2049,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                         spider.removeOnSpiderListener(DownloadManager.this);
                         SpiderQueen.releaseSpiderQueen(spider, SpiderQueen.MODE_DOWNLOAD);
                     }
+                    mDownloadGeneration++;
                     // Check null
                     if (info == null || spider == null) {
                         Log.e(TAG, "Current stuff is null, but it should not be");

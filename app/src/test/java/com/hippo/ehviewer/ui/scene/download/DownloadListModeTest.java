@@ -21,6 +21,8 @@ import androidx.appcompat.app.AlertDialog;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.h6ah4i.android.widget.advrecyclerview.draggable.RecyclerViewDragDropManager;
+import com.hippo.conaco.Conaco;
+import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
@@ -28,11 +30,13 @@ import com.hippo.ehviewer.dao.DaoMaster;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadAdapter;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadBatchActions;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadChoiceListener;
 import com.hippo.ehviewer.widget.MyEasyRecyclerView;
+import com.hippo.lib.image.Image;
 import com.hippo.widget.FabLayout;
 import com.hippo.widget.recyclerview.AutoStaggeredGridLayoutManager;
 
@@ -46,6 +50,8 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.ConscryptMode;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
 import org.robolectric.shadows.ShadowDialog;
 import org.robolectric.util.ReflectionHelpers;
 
@@ -403,6 +409,86 @@ public class DownloadListModeTest {
         makeSmallSections();
         for (DownloadLabel label : scene.getDownloadManager().getLabelList()) {
             Settings.setDownloadLabelExpanded(label.getId(), label.getLabel(), true);
+        }
+    }
+
+    @Test
+    @Config(shadows = ButtonAppShadow.class)
+    public void waitingDownloadButtonLongPressRequestsPriorityInOrdinaryList() {
+        assertPriorityButton(false);
+    }
+
+    @Test
+    @Config(shadows = ButtonAppShadow.class)
+    public void waitingDownloadButtonLongPressResolvesGalleryInGroupedList() {
+        assertPriorityButton(true);
+    }
+
+    @Test
+    @Config(shadows = ButtonAppShadow.class)
+    public void downloadButtonLongPressDoesNothingForNonWaitingGalleryOrDuringSelection() {
+        installButtonAdapter();
+        DownloadAdapter.DownloadHolder holder = (DownloadAdapter.DownloadHolder)
+                recycler.findViewHolderForAdapterPosition(0);
+        assertNotNull(holder);
+        DownloadInfo info = scene.getList().get(scene.positionInList(0));
+        info.state = DownloadInfo.STATE_DOWNLOAD;
+        assertTrue(holder.stop.performLongClick());
+        assertNull(Shadows.shadowOf(RuntimeEnvironment.getApplication()).getNextStartedService());
+        info.state = DownloadInfo.STATE_WAIT;
+        recycler.setChoiceMode(MyEasyRecyclerView.CHOICE_MODE_MULTIPLE_CUSTOM);
+        recycler.intoCustomChoiceMode();
+        assertTrue(recycler.isInCustomChoice());
+        assertTrue(holder.stop.performLongClick());
+        assertNull(Shadows.shadowOf(RuntimeEnvironment.getApplication()).getNextStartedService());
+    }
+
+    private void assertPriorityButton(boolean grouped) {
+        if (grouped) {
+            makeExpandedSections();
+            switchMode(true);
+        }
+        installButtonAdapter();
+        int position = grouped ? findHeader("first") + 1 : 0;
+        DownloadInfo info = scene.getList().get(scene.positionInList(position));
+        info.state = DownloadInfo.STATE_WAIT;
+        DownloadAdapter.DownloadHolder holder = (DownloadAdapter.DownloadHolder)
+                recycler.findViewHolderForAdapterPosition(position);
+        assertNotNull(holder);
+        assertTrue(holder.stop.performLongClick());
+        Intent request = Shadows.shadowOf(RuntimeEnvironment.getApplication()).getNextStartedService();
+        assertNotNull(request);
+        assertEquals(DownloadService.ACTION_PRIORITIZE, request.getAction());
+        assertEquals(info.gid, request.getLongExtra(
+                DownloadService.KEY_GID, -1));
+        // A long press must not execute the button's ordinary pause action.
+        assertEquals(DownloadInfo.STATE_WAIT, info.state);
+    }
+
+    private void installButtonAdapter() {
+        DownloadAdapter adapter = new DownloadAdapter(scene, scene) {
+            @Override public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
+                // Exercise actual button listeners and position mapping without image/network work.
+                if (holder instanceof DownloadHolder) {
+                    ReflectionHelpers.setField(holder, "boundGid",
+                            scene.getList().get(scene.positionInList(position)).gid);
+                } else {
+                    super.onBindViewHolder(holder, position);
+                }
+            }
+        };
+        adapter.setHasStableIds(true);
+        recycler.setAdapter(adapter);
+        ReflectionHelpers.setField(scene, "mOriginalAdapter", adapter);
+        ReflectionHelpers.setField(scene, "mAdapter", adapter);
+        layout();
+    }
+
+    @Implements(EhApplication.class)
+    public static class ButtonAppShadow {
+        @Implementation
+        protected static Conaco<Image> getConaco(Context context) {
+            return null;
         }
     }
 
