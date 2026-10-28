@@ -123,6 +123,7 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     private SearchAdapter mAdapter;
 
     private Helper mHelper;
+    private int mSearchBarExtraHeight;
 
     public SearchLayout(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -221,6 +222,16 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
 
     public void setHelper(Helper helper) {
         mHelper = helper;
+    }
+
+    public void setSearchBarExtraHeight(int extraHeight) {
+        int height = Math.max(0, extraHeight);
+        int delta = height - mSearchBarExtraHeight;
+        if (delta == 0) return;
+        mSearchBarExtraHeight = height;
+        setPadding(getPaddingLeft(), getPaddingTop() + delta, getPaddingRight(), getPaddingBottom());
+        // Preserve the viewed conditions' offset relative to the new top inset.
+        offsetChildrenVertical(delta);
     }
 
     public void setMinimumRating(int hundredths) {

@@ -3,11 +3,18 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <com.hippo.preference.SwitchPreference
+        android:defaultValue="true"
+        android:key="enable_search_tag_chips"
+        android:title="@string/settings_enable_search_tag_chips"
+        android:summary="@string/settings_enable_search_tag_chips_summary"
+        app:allowDividerAbove="false" />
+
+    <com.hippo.preference.SwitchPreference
         android:defaultValue="false"
         android:key="show_viewed_galleries"
         android:title="@string/settings_show_viewed_galleries"
         android:summary="@string/settings_show_viewed_galleries_summary"
-        app:allowDividerAbove="false" />
+        app:allowDividerAbove="true" />
 
     <com.hippo.preference.SwitchPreference
         android:defaultValue="false"

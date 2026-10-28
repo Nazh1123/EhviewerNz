@@ -52,16 +52,21 @@ public class SearchOptionsFabTest {
     private SearchLayout options;
     private FloatingActionButton toggle;
     private ViewTransition transition;
+    private View root;
 
     @Before public void setUp() {
         Application app = RuntimeEnvironment.getApplication();
         PreferenceManager.getDefaultSharedPreferences(app).edit().clear().commit();
         Settings.initialize(app);
         Context context = new ContextThemeWrapper(app, R.style.AppTheme_Main);
-        View root = LayoutInflater.from(context).inflate(R.layout.scene_gallery_list, null);
+        root = LayoutInflater.from(context).inflate(R.layout.scene_gallery_list, null);
         scene = new GalleryListScene();
         bar = root.findViewById(R.id.search_bar);
         options = root.findViewById(R.id.search_layout);
+        options.setPadding(options.getPaddingLeft(), options.getPaddingTop()
+                        + context.getResources().getDimensionPixelSize(R.dimen.gallery_padding_top_search_bar),
+                options.getPaddingRight(), options.getPaddingBottom()
+                        + context.getResources().getDimensionPixelSize(R.dimen.gallery_padding_bottom_fab));
         toggle = root.findViewById(R.id.search_options_fab);
         FabLayout menu = root.findViewById(R.id.fab_layout);
         menu.setExpanded(false, false);
@@ -103,6 +108,84 @@ public class SearchOptionsFabTest {
         settle();
         assertEquals(STATE_SEARCH, state());
         assertEquals(1, transition.getShownViewIndex());
+    }
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    public void optionsFollowMultilineInputHeightAndReturnWhenItShrinks() {
+        setState(STATE_SEARCH, false);
+        bar.setText("artist:alice");
+        layoutScene();
+        int initialPadding = options.getPaddingTop();
+        int gap = options.getChildAt(0).getTop() - bar.getBottom();
+        assertTrue(gap >= 0);
+        int bottomPadding = options.getPaddingBottom();
+        bar.setText(longQuery());
+        layoutScene();
+        View input = bar.findViewById(R.id.search_input_container);
+        assertTrue(input.getHeight() > input.getMinimumHeight());
+        assertEquals(initialPadding + input.getHeight() - input.getMinimumHeight(), options.getPaddingTop());
+        assertEquals(gap, options.getChildAt(0).getTop() - bar.getBottom());
+        int expandedPadding = options.getPaddingTop();
+        layoutScene();
+        assertEquals(expandedPadding, options.getPaddingTop());
+        assertEquals(bottomPadding, options.getPaddingBottom());
+        bar.setText("");
+        layoutScene();
+        assertEquals(initialPadding, options.getPaddingTop());
+        assertEquals(gap, options.getChildAt(0).getTop() - bar.getBottom());
+    }
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    public void suggestionsDoNotAddTheirHeightToTheOptionsInset() {
+        setState(STATE_SEARCH, false);
+        String query = longQuery();
+        bar.setText(query);
+        SearchDatabase.getInstance(bar.getContext()).addQuery(query + " extra");
+        layoutScene();
+        int padding = options.getPaddingTop();
+        int height = bar.getHeight();
+        setState(STATE_SEARCH_SHOW_LIST, false);
+        layoutScene();
+        assertTrue(bar.getHeight() > height);
+        assertEquals(padding, options.getPaddingTop());
+        setState(STATE_SEARCH, false);
+        layoutScene();
+        assertEquals(padding, options.getPaddingTop());
+    }
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    public void resizingPreservesTheScrolledConditionsPositionRelativeToTheInset() {
+        setState(STATE_SEARCH, false);
+        bar.setText("artist:alice");
+        layoutScene(420);
+        options.scrollBy(0, 40);
+        int initialPadding = options.getPaddingTop();
+        int position = options.getChildAdapterPosition(options.getChildAt(0));
+        int offset = options.getChildAt(0).getTop() - initialPadding;
+        assertTrue(offset < 0);
+        bar.setText(longQuery());
+        layoutScene(420);
+        assertTrue(options.getPaddingTop() > initialPadding);
+        assertEquals(position, options.getChildAdapterPosition(options.getChildAt(0)));
+        assertEquals(offset, options.getChildAt(0).getTop() - options.getPaddingTop());
+    }
+
+    private String longQuery() {
+        return String.join(" ", java.util.Collections.nCopies(8,
+                "artist:\"a long artist name that takes up a complete row$\""));
+    }
+
+    private void layoutScene() {
+        layoutScene(1000);
+    }
+
+    private void layoutScene(int height) {
+        for (int i = 0; i < 4; i++) {
+            root.measure(View.MeasureSpec.makeMeasureSpec(360, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+            root.layout(0, 0, 360, height);
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(16));
+        }
     }
 
     @Test public void preservesSelectedOptionsWhenCollapsedAndReopened() throws Exception {

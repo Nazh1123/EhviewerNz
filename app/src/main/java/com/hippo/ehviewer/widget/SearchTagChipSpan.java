@@ -12,6 +12,10 @@ import androidx.core.graphics.ColorUtils;
 
 /** A visual replacement only: the Editable still contains the complete English query. */
 final class SearchTagChipSpan extends ReplacementSpan {
+    private static final int ACTION_WIDTH_DP = 20;
+    private static final int LABEL_PADDING_DP = 2;
+    private static final int CHIP_HEIGHT_DP = 32;
+    static final int ROW_HEIGHT_DP = 40;
     final String label;
     final char operator;
     private final float density;
@@ -26,7 +30,11 @@ final class SearchTagChipSpan extends ReplacementSpan {
         this.maxLabelWidth = maxLabelWidth;
     }
 
-    float actionWidth() { return 32 * density; }
+    float actionWidth() { return ACTION_WIDTH_DP * density; }
+
+    static float horizontalSpace(float density) {
+        return (ACTION_WIDTH_DP + LABEL_PADDING_DP) * 2 * density;
+    }
 
     private CharSequence displayLabel(Paint paint) {
         return TextUtils.ellipsize(label, new TextPaint(paint), maxLabelWidth, TextUtils.TruncateAt.END);
@@ -37,14 +45,18 @@ final class SearchTagChipSpan extends ReplacementSpan {
                        @Nullable Paint.FontMetricsInt fm) {
         if (fm != null) {
             paint.getFontMetricsInt(fm);
-            int extra = Math.max(0, (Math.round(32 * density) - (fm.descent - fm.ascent)) / 2);
-            fm.ascent -= extra;
-            fm.top = Math.min(fm.top, fm.ascent);
-            fm.descent += extra;
-            fm.bottom = Math.max(fm.bottom, fm.descent);
+            expandLineHeight(fm, Math.round(ROW_HEIGHT_DP * density));
         }
-        return Math.round(actionWidth() * 2 + 16 * density
+        return Math.round(horizontalSpace(density)
                 + paint.measureText(displayLabel(paint).toString()));
+    }
+
+    static void expandLineHeight(Paint.FontMetricsInt fm, int height) {
+        int extra = Math.max(0, height - (fm.descent - fm.ascent));
+        fm.ascent -= extra / 2;
+        fm.top = Math.min(fm.top, fm.ascent);
+        fm.descent += extra - extra / 2;
+        fm.bottom = Math.max(fm.bottom, fm.descent);
     }
 
     @Override
@@ -53,23 +65,26 @@ final class SearchTagChipSpan extends ReplacementSpan {
         Paint paint = new Paint(original);
         float width = getSize(original, text, start, end, null);
         float cy = (top + bottom) / 2f;
-        float height = Math.min(32 * density, bottom - top);
+        float height = Math.min(CHIP_HEIGHT_DP * density, bottom - top);
         int tint = operator == '-' ? original.getColor() : accent;
         paint.setColor(ColorUtils.setAlphaComponent(tint, operator == '~' ? 45 : 28));
         canvas.drawRoundRect(x, cy - height / 2, x + width, cy + height / 2,
                 height / 2, height / 2, paint);
         paint.setColor(ColorUtils.setAlphaComponent(tint, 65));
-        canvas.drawLine(x + actionWidth(), cy - height / 3,
-                x + actionWidth(), cy + height / 3, paint);
+        paint.setStrokeWidth(0.5f * density);
+        float dividerInset = actionWidth() - LABEL_PADDING_DP * density;
+        for (float position : new float[]{dividerInset, width - dividerInset}) {
+            canvas.drawLine(x + position, cy - 6 * density,
+                    x + position, cy + 6 * density, paint);
+        }
         paint.setColor(original.getColor());
         float baseline = cy - (paint.ascent() + paint.descent()) / 2;
         String sign = operator == '-' ? "−" : String.valueOf(operator);
         canvas.drawText(sign, x + (actionWidth() - paint.measureText(sign)) / 2, baseline, paint);
-        canvas.drawText(displayLabel(paint).toString(), x + actionWidth() + 8 * density, baseline, paint);
+        canvas.drawText(displayLabel(paint).toString(),
+                x + actionWidth() + LABEL_PADDING_DP * density, baseline, paint);
         float closeX = x + width - actionWidth() / 2;
-        paint.setStrokeWidth(1.5f * density);
-        float radius = 3.5f * density;
-        canvas.drawLine(closeX - radius, cy - radius, closeX + radius, cy + radius, paint);
-        canvas.drawLine(closeX - radius, cy + radius, closeX + radius, cy - radius, paint);
+        // Use the same font and weight as the operator instead of a heavier fixed-width stroke.
+        canvas.drawText("×", closeX - paint.measureText("×") / 2, baseline, paint);
     }
 }

@@ -17,6 +17,8 @@
 package com.hippo.ehviewer.widget;
 
 import android.content.Context;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.SharedPreferences;
 import android.graphics.Rect;
 import android.os.Bundle;
@@ -25,6 +27,7 @@ import android.text.Spanned;
 import android.text.TextWatcher;
 import android.util.AttributeSet;
 import android.view.KeyEvent;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -58,15 +61,24 @@ public class SearchEditText extends AppCompatEditText {
     private boolean adjustingSelection;
     private boolean composing;
     private boolean chipsEnabled = true;
+    private boolean multilineChips;
+    private SearchFirstRow firstRow;
+    private boolean firstRowFontPadding;
+    private int originalPaddingTop;
+    private int originalPaddingBottom;
+    private int originalGravity;
+    private boolean updatingRows;
     private boolean scrollingChip;
     private SearchTagChipSpan touchedChip;
     private MotionEvent touchDown;
     private int touchScrollX;
+    private int touchScrollY;
     private boolean moved;
     private int insertedCount;
     private SharedPreferences preferences;
     private final SharedPreferences.OnSharedPreferenceChangeListener translationListener = (prefs, key) -> {
-        if (Settings.KEY_SHOW_TAG_TRANSLATIONS.equals(key)) refreshTagChips(false);
+        if (Settings.KEY_ENABLE_SEARCH_TAG_CHIPS.equals(key)) updateTagChipMode();
+        else if (Settings.KEY_SHOW_TAG_TRANSLATIONS.equals(key)) refreshTagChips(false);
     };
     private final Runnable refreshAfterSelection = () -> {
         refreshTagChips(false);
@@ -84,8 +96,10 @@ public class SearchEditText extends AppCompatEditText {
     public SearchEditText(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         ready = true;
+        updateTagChipMode();
         addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                if (updatingRows) return;
                 changing = true;
                 insertedCount = after;
                 // A keyboard or paste may replace part of a chip without going through touch.
@@ -100,6 +114,7 @@ public class SearchEditText extends AppCompatEditText {
             }
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable text) {
+                if (updatingRows) return;
                 changing = false;
                 refreshTagChips(insertedCount > 1 && !composing && text.getSpanStart(editingTag) < 0);
                 scheduleRefresh();
@@ -110,6 +125,9 @@ public class SearchEditText extends AppCompatEditText {
     /** Programmatic queries (history, presets, restored searches) are already committed. */
     public void setQueryText(String query) {
         composing = false;
+        updatingRows = true;
+        scrollTo(0, 0);
+        updatingRows = false;
         if (getText() != null) getText().removeSpan(editingTag);
         setText(query);
         refreshTagChips(true);
@@ -117,6 +135,54 @@ public class SearchEditText extends AppCompatEditText {
 
     public void setTagChipsEnabled(boolean enabled) {
         chipsEnabled = enabled;
+        updateTagChipMode();
+    }
+
+    public void setFirstRowInsets(int left, int right) {
+        if (firstRow == null) {
+            firstRowFontPadding = getIncludeFontPadding();
+            originalPaddingTop = getPaddingTop();
+            originalPaddingBottom = getPaddingBottom();
+            originalGravity = getGravity();
+        }
+        if (firstRow != null && getText() != null) firstRow.clear(getText());
+        firstRow = new SearchFirstRow(left, right);
+        updateTagChipMode();
+    }
+
+    private void updateFirstRowLayout() {
+        if (updatingRows || firstRow == null || !multilineChips) return;
+        updatingRows = true;
+        try {
+            setGravity(length() == 0 ? originalGravity
+                    : (originalGravity & ~Gravity.VERTICAL_GRAVITY_MASK) | Gravity.TOP);
+            firstRow.update(this);
+            // Rebuild only when the query or its display changes, never while scrolling.
+            setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
+            requestLayout();
+            invalidate();
+        } finally {
+            updatingRows = false;
+        }
+    }
+
+    private void updateTagChipMode() {
+        updatingRows = true;
+        multilineChips = chipsEnabled && Settings.getEnableSearchTagChips();
+        setSingleLine(!multilineChips);
+        setMaxLines(multilineChips ? 4 : 1);
+        setHorizontallyScrolling(!multilineChips);
+        setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+        if (firstRow != null) {
+            setIncludeFontPadding(multilineChips ? false : firstRowFontPadding);
+            if (getText() != null) firstRow.clear(getText());
+            float density = getResources().getDisplayMetrics().density;
+            setPadding(firstRow.left, multilineChips ? Math.round(4 * density) : originalPaddingTop,
+                    firstRow.right, multilineChips ? Math.round(2 * density) : originalPaddingBottom);
+            setGravity(originalGravity);
+            if (multilineChips) setTransformationMethod(firstRow);
+        }
+        updatingRows = false;
         refreshTagChips(true);
     }
 
@@ -128,15 +194,21 @@ public class SearchEditText extends AppCompatEditText {
 
     /** Changes spans only, so search listeners and the query history always see the raw query. */
     public void refreshTagChips(boolean commitCurrent) {
-        if (!ready || changing) return;
+        if (!ready || changing || updatingRows) return;
         Editable text = getText();
         if (text == null) return;
         SearchTagChipSpan[] old = chips();
-        if (!chipsEnabled) {
+        if (!chipsEnabled || !Settings.getEnableSearchTagChips()) {
             for (SearchTagChipSpan chip : old) text.removeSpan(chip);
+            text.removeSpan(editingTag);
+            requestLayout();
+            invalidate();
             return;
         }
-        if (composing || BaseInputConnection.getComposingSpanStart(text) >= 0) return;
+        if (composing || BaseInputConnection.getComposingSpanStart(text) >= 0) {
+            updateFirstRowLayout();
+            return;
+        }
         int caret = getSelectionEnd();
         int editStart = text.getSpanStart(editingTag), editEnd = text.getSpanEnd(editingTag);
         if (commitCurrent || caret < editStart || caret > editEnd) {
@@ -147,8 +219,11 @@ public class SearchEditText extends AppCompatEditText {
                 ? EhTagDatabase.getInstance(getContext()) : null;
         float density = getResources().getDisplayMetrics().density;
         int accent = AttrResources.getAttrColor(getContext(), androidx.appcompat.R.attr.colorAccent);
-        float maxWidth = Math.max(48 * density,
-                Math.min(200 * density, (getWidth() > 0 ? getWidth() : 300 * density) - 96 * density));
+        float contentWidth = getWidth() > 0
+                ? getWidth() - (firstRow != null && multilineChips ? 0
+                : getTotalPaddingLeft() + getTotalPaddingRight()) : 300 * density;
+        float maxWidth = Math.max(0,
+                Math.min(200 * density, contentWidth - SearchTagChipSpan.horizontalSpace(density)));
         Set<Term> committedRanges = new HashSet<>();
         for (SearchTagChipSpan chip : old) {
             committedRanges.add(new Term(text.getSpanStart(chip), text.getSpanEnd(chip)));
@@ -163,25 +238,27 @@ public class SearchEditText extends AppCompatEditText {
             boolean atCaret = caret >= term.start() && caret <= term.end();
             if (!commitCurrent && (editing || atCaret && !existed && hasFocus())) continue;
             String label = chipLabel(tag, database);
-            text.setSpan(new SearchTagChipSpan(label, tag.operator(), density, accent, maxWidth),
+            float labelWidth = firstRow != null && term.start() == 0
+                    ? Math.max(0, Math.min(maxWidth, contentWidth - firstRow.left - firstRow.right
+                    - SearchTagChipSpan.horizontalSpace(density))) : maxWidth;
+            text.setSpan(new SearchTagChipSpan(label, tag.operator(), density, accent, labelWidth),
                     term.start(), term.end(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
         requestLayout();
         invalidate();
+        updateFirstRowLayout();
     }
 
     private String chipLabel(Tag tag, EhTagDatabase database) {
         String namespace = tag.namespace();
         String value = tag.value();
+        String prefix = EhTagDatabase.namespaceToPrefix(namespace);
+        if (prefix == null || prefix.isEmpty()) prefix = namespace + ":";
         if (database != null) {
-            String group = database.getTranslation("n:" + namespace);
-            String prefix = EhTagDatabase.namespaceToPrefix(namespace);
-            String translated = database.getTranslation((prefix == null ? namespace + ":" : prefix)
-                    + value.toLowerCase(Locale.ROOT));
-            if (group != null) namespace = group;
+            String translated = database.getTranslation(prefix + value.toLowerCase(Locale.ROOT));
             if (translated != null) value = translated;
         }
-        return namespace + ":" + value;
+        return prefix + " " + value;
     }
 
     private void scheduleRefresh() {
@@ -193,7 +270,7 @@ public class SearchEditText extends AppCompatEditText {
         super.onAttachedToWindow();
         preferences = PreferenceManager.getDefaultSharedPreferences(getContext());
         preferences.registerOnSharedPreferenceChangeListener(translationListener);
-        refreshTagChips(false);
+        updateTagChipMode();
     }
 
     @Override protected void onDetachedFromWindow() {
@@ -215,7 +292,7 @@ public class SearchEditText extends AppCompatEditText {
 
     @Override protected void onSelectionChanged(int start, int end) {
         super.onSelectionChanged(start, end);
-        if (!ready || changing || adjustingSelection || scrollingChip || start < 0 || end < 0) return;
+        if (!ready || changing || updatingRows || adjustingSelection || scrollingChip || start < 0 || end < 0) return;
         Editable text = getText();
         if (text == null) return;
         int low = Math.min(start, end), high = Math.max(start, end);
@@ -277,6 +354,8 @@ public class SearchEditText extends AppCompatEditText {
 
     @Override public InputConnection onCreateInputConnection(EditorInfo info) {
         InputConnection connection = super.onCreateInputConnection(info);
+        // Wrap visually, while retaining the keyboard's Search action on multiline inputs.
+        info.imeOptions &= ~EditorInfo.IME_FLAG_NO_ENTER_ACTION;
         if (connection == null) return null;
         return new InputConnectionWrapper(connection, false) {
             @Override public boolean setComposingText(CharSequence text, int cursor) {
@@ -388,14 +467,17 @@ public class SearchEditText extends AppCompatEditText {
 
     private float chipLeft(SearchTagChipSpan chip) {
         int start = getText().getSpanStart(chip);
-        int end = getText().getSpanEnd(chip);
-        return Math.min(getLayout().getPrimaryHorizontal(start), getLayout().getPrimaryHorizontal(end));
+        return getLayout().getPrimaryHorizontal(start);
     }
 
     private SearchTagChipSpan chipAt(float x, float y) {
         if (getLayout() == null || y < 0 || y > getHeight()) return null;
         float local = x + getScrollX() - getTotalPaddingLeft();
+        float localY = y + getScrollY() - getTotalPaddingTop();
+        if (localY < 0 || localY >= getLayout().getHeight()) return null;
+        int line = getLayout().getLineForVertical((int) localY);
         for (SearchTagChipSpan chip : chips()) {
+            if (getLayout().getLineForOffset(getText().getSpanStart(chip)) != line) continue;
             float left = chipLeft(chip);
             float width = chip.getSize(getPaint(), getText(), 0, 0, null);
             if (local >= left && local <= left + width) return chip;
@@ -411,6 +493,21 @@ public class SearchEditText extends AppCompatEditText {
 
     public void setSearchEditTextListener(SearchEditTextListener listener) {
         mListener = listener;
+    }
+
+    @Override public boolean onTextContextMenuItem(int id) {
+        String selected = null;
+        if (firstRow != null && (id == android.R.id.copy || id == android.R.id.cut)
+                && getSelectionStart() >= 0 && getSelectionEnd() >= 0) {
+            selected = getText().subSequence(Math.min(getSelectionStart(), getSelectionEnd()),
+                    Math.max(getSelectionStart(), getSelectionEnd())).toString();
+        }
+        boolean handled = super.onTextContextMenuItem(id);
+        if (handled && selected != null) {
+            ClipboardManager clipboard = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            clipboard.setPrimaryClip(ClipData.newPlainText("", selected));
+        }
+        return handled;
     }
 
     @Override
@@ -453,6 +550,7 @@ public class SearchEditText extends AppCompatEditText {
                 if (touchedChip != null) {
                     touchDown = MotionEvent.obtain(event);
                     touchScrollX = getScrollX();
+                    touchScrollY = getScrollY();
                     return true;
                 }
             }
@@ -464,13 +562,20 @@ public class SearchEditText extends AppCompatEditText {
                         moved = true;
                         scrollingChip = true;
                     }
-                    if (moved && Math.abs(event.getX() - touchDown.getX())
-                            > Math.abs(event.getY() - touchDown.getY())) {
+                    if (moved && getLayout() != null) {
                         if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
-                        int maxScroll = Math.max(0, (int) Math.ceil(getLayout().getLineWidth(0))
-                                - (getWidth() - getTotalPaddingLeft() - getTotalPaddingRight()));
-                        scrollTo(Math.max(0, Math.min(maxScroll,
-                                Math.round(touchScrollX + touchDown.getX() - event.getX()))), getScrollY());
+                        if (multilineChips) {
+                            int maxScroll = Math.max(0, getLayout().getHeight()
+                                    - (getHeight() - getTotalPaddingTop() - getTotalPaddingBottom()));
+                            scrollTo(0, Math.max(0, Math.min(maxScroll,
+                                    Math.round(touchScrollY + touchDown.getY() - event.getY()))));
+                        } else if (Math.abs(event.getX() - touchDown.getX())
+                                > Math.abs(event.getY() - touchDown.getY())) {
+                            int maxScroll = Math.max(0, (int) Math.ceil(getLayout().getLineWidth(0))
+                                    - (getWidth() - getTotalPaddingLeft() - getTotalPaddingRight()));
+                            scrollTo(Math.max(0, Math.min(maxScroll,
+                                    Math.round(touchScrollX + touchDown.getX() - event.getX()))), getScrollY());
+                        }
                     }
                     return true;
                 }

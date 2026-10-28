@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_search">Search</string>
+    <string name="settings_enable_search_tag_chips">Keyword tag bubbles</string>
+    <string name="settings_enable_search_tag_chips_summary">Show keyword tags as editable bubbles and expand the search bar to up to 4 lines. Turn off to use a single line of plain text.</string>
     <string name="settings_enable_search_preset_tags">Enable search preset tags</string>
     <string name="settings_enable_precise_rating_filter">Enable precise rating filter</string>
     <string name="settings_persistent_min_rating">Persistent rating filter</string>

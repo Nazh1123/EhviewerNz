@@ -1047,6 +1047,12 @@ public class Settings {
     }
     */
 
+    public static final String KEY_ENABLE_SEARCH_TAG_CHIPS = "enable_search_tag_chips";
+
+    public static boolean getEnableSearchTagChips() {
+        return getBoolean(KEY_ENABLE_SEARCH_TAG_CHIPS, true);
+    }
+
     public static final String KEY_SEARCH_PRESET_TAG_1 = "search_preset_tag_1";
     public static final String KEY_ENABLE_SEARCH_PRESET_TAGS = "enable_search_preset_tags";
     public static final String KEY_ENABLE_PRECISE_RATING_FILTER = "enable_precise_rating_filter";

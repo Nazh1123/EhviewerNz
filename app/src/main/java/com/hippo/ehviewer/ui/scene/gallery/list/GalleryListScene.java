@@ -3060,6 +3060,11 @@ public class GalleryListScene extends BaseScene
     }
 
     @Override
+    public void onSearchInputResize(int extraHeight) {
+        if (mSearchLayout != null) mSearchLayout.setSearchBarExtraHeight(extraHeight);
+    }
+
+    @Override
     public void onSearchQueryChanged(String query) {
         if (mSearchLayout != null) mSearchLayout.syncPresetTags(query);
     }

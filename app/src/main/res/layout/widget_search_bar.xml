@@ -23,14 +23,16 @@
         android:orientation="vertical">
 
         <FrameLayout
+            android:id="@+id/search_input_container"
             android:layout_width="match_parent"
-            android:layout_height="48dp">
+            android:layout_height="wrap_content"
+            android:minHeight="48dp">
 
             <ImageView
                 android:id="@+id/search_menu"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_gravity="left|center_vertical"
+                android:layout_gravity="left|top"
                 android:padding="12dp"/>
 
             <TextView
@@ -49,17 +51,16 @@
                 android:id="@+id/search_action"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
-                android:layout_gravity="right|center_vertical"
+                android:layout_gravity="right|top"
                 android:padding="12dp"/>
 
             <com.hippo.ehviewer.widget.SearchEditText
                 android:id="@+id/search_edit_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
-                android:layout_marginLeft="48dp"
-                android:layout_marginRight="48dp"
+                android:layout_gravity="top"
                 android:textSize="@dimen/text_little_small"
+                android:textCursorDrawable="@drawable/search_text_cursor"
                 android:background="@null"
                 android:minHeight="48dp"
                 android:gravity="center_vertical"

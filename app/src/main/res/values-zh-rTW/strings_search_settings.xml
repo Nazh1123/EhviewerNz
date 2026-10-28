@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_search">搜尋</string>
+    <string name="settings_enable_search_tag_chips">關鍵字標籤氣泡</string>
+    <string name="settings_enable_search_tag_chips_summary">將關鍵字標籤顯示為可編輯氣泡，搜尋欄隨內容增高，最多顯示 4 行；關閉後使用單行文字。</string>
     <string name="settings_enable_search_preset_tags">啟用搜尋預設標籤</string>
     <string name="settings_enable_precise_rating_filter">啟用精確評分篩選</string>
     <string name="settings_persistent_min_rating">常駐篩選評分</string>

@@ -24,6 +24,8 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.InsetDrawable;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.text.Editable;
@@ -83,6 +85,8 @@ public class SearchBar extends CardView implements View.OnClickListener,
     private TextView mTitleTextView;
     private ImageView mActionButton;
     private SearchEditText mEditText;
+    private View mInputContainer;
+    private int mInputExtraHeight = -1;
     private ListView mListView;
     private View mListContainer;
     private View mListHeader;
@@ -127,6 +131,14 @@ public class SearchBar extends CardView implements View.OnClickListener,
         mTitleTextView = (TextView) ViewUtils.$$(this, R.id.search_title);
         mActionButton = (ImageView) ViewUtils.$$(this, R.id.search_action);
         mEditText = (SearchEditText) ViewUtils.$$(this, R.id.search_edit_text);
+        mInputContainer = ViewUtils.$$(this, R.id.search_input_container);
+        int iconWidth = mMenuButton.getLayoutParams().width;
+        mEditText.setFirstRowInsets(iconWidth, iconWidth);
+        // Compact rounded covers remain above scrolling chips; touch targets stay 48dp.
+        setIconBackground(mMenuButton);
+        setIconBackground(mActionButton);
+        mMenuButton.bringToFront();
+        mActionButton.bringToFront();
         mListContainer = ViewUtils.$$(this, R.id.list_container);
         mListView = (ListView) ViewUtils.$$(mListContainer, R.id.search_bar_list);
         mListHeader = ViewUtils.$$(mListContainer, R.id.list_header);
@@ -152,6 +164,18 @@ public class SearchBar extends CardView implements View.OnClickListener,
             mSuggestionList.get(position).onLongClick();
             return true;
         });
+    }
+
+    private void setIconBackground(ImageView button) {
+        float density = getResources().getDisplayMetrics().density;
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(getCardBackgroundColor().getDefaultColor());
+        background.setCornerRadius(6 * density);
+        Rect padding = new Rect(button.getPaddingLeft(), button.getPaddingTop(),
+                button.getPaddingRight(), button.getPaddingBottom());
+        button.setBackground(new InsetDrawable(background, Math.round(8 * density)));
+        // InsetDrawable reports padding; keep the icon's existing 24dp size.
+        button.setPadding(padding.left, padding.top, padding.right, padding.bottom);
     }
 
     private void addListHeader() {
@@ -295,10 +319,7 @@ public class SearchBar extends CardView implements View.OnClickListener,
     }
 
     public void setEditTextMargin(int left, int right) {
-        MarginLayoutParams lp = (MarginLayoutParams) mEditText.getLayoutParams();
-        lp.leftMargin = left;
-        lp.rightMargin = right;
-        mEditText.setLayoutParams(lp);
+        mEditText.setFirstRowInsets(left, right);
     }
 
     public void setIsComeFromDownload(boolean isComeFromDownload){
@@ -482,6 +503,13 @@ public class SearchBar extends CardView implements View.OnClickListener,
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
+        // Suggestion animations start below the current (possibly multiline) input row.
+        mBaseHeight = mInputContainer.getHeight() + getPaddingTop() + getPaddingBottom();
+        int extraHeight = Math.max(0, mInputContainer.getHeight() - mInputContainer.getMinimumHeight());
+        if (mHelper != null && extraHeight != mInputExtraHeight) {
+            mInputExtraHeight = extraHeight;
+            mHelper.onSearchInputResize(extraHeight);
+        }
         if (mListContainer.getVisibility() == View.VISIBLE) {
             mWidth = right - left;
             mHeight = bottom - top;
@@ -563,6 +591,8 @@ public class SearchBar extends CardView implements View.OnClickListener,
 
     public interface Helper {
         default void onSearchQueryChanged(String query) {}
+        /** Extra input height above the single-line row, excluding the suggestions list. */
+        default void onSearchInputResize(int extraHeight) {}
 
         void onClickTitle();
 

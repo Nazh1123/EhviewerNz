@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="settings_search">搜索</string>
+    <string name="settings_enable_search_tag_chips">关键词标签气泡</string>
+    <string name="settings_enable_search_tag_chips_summary">将关键词标签显示为可编辑气泡，搜索栏随内容增高，最多显示 4 行；关闭后使用单行文本。</string>
     <string name="settings_enable_search_preset_tags">启用搜索预设标签</string>
     <string name="settings_enable_precise_rating_filter">启用精确评分筛选</string>
     <string name="settings_persistent_min_rating">常驻筛选评分</string>
