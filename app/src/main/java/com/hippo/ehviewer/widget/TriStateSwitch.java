@@ -45,6 +45,7 @@ public class TriStateSwitch extends View {
     private int clickTarget = 2;
     private ValueAnimator animator;
     private IntConsumer listener;
+    private boolean notifyOnReselect;
 
     public TriStateSwitch(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -71,6 +72,10 @@ public class TriStateSwitch extends View {
         this.listener = listener;
     }
 
+    public void setNotifyOnReselect(boolean enabled) {
+        notifyOnReselect = enabled;
+    }
+
     private void setState(int value, boolean fromUser) {
         int next = Math.max(-1, Math.min(1, value));
         boolean changed = next != state;
@@ -90,7 +95,7 @@ public class TriStateSwitch extends View {
             invalidate();
         }
         updateStateDescription();
-        if (changed && fromUser) {
+        if ((changed || notifyOnReselect) && fromUser) {
             sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_SELECTED);
             if (listener != null) listener.accept(state);
         }

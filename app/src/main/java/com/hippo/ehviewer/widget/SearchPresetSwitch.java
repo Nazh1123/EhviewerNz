@@ -15,6 +15,8 @@ import java.util.function.IntConsumer;
 public class SearchPresetSwitch extends LinearLayout {
     private final TextView label;
     private final TriStateSwitch states;
+    private String labelText = "";
+    private boolean or;
 
     public SearchPresetSwitch(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -28,12 +30,23 @@ public class SearchPresetSwitch extends LinearLayout {
     }
 
     public void setLabel(String text) {
-        label.setText(text);
+        labelText = text;
+        updateLabel();
         states.setContentDescription(text);
     }
 
+    private void updateLabel() {
+        label.setText(or ? getContext().getString(R.string.search_tag_or_label, labelText) : labelText);
+        if (or) androidx.core.view.ViewCompat.setStateDescription(states,
+                getContext().getString(R.string.search_tag_or));
+    }
+
     public void setState(int state) {
-        if (state != states.getState()) states.setState(state);
+        or = state == SearchPresetQuery.OR;
+        states.setNotifyOnReselect(or);
+        // OR is an active inclusion. Keep the existing three-position control and label it explicitly.
+        states.setState(or ? SearchPresetQuery.INCLUDE : state);
+        updateLabel();
     }
 
     public void setOnStateChangedListener(IntConsumer listener) {

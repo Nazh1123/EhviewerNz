@@ -102,6 +102,26 @@ public class SearchPresetsTest {
         assertChecked(language, NORMAL);
     }
 
+    @Test public void orIsShownAsActiveAndCanBeReplacedByAnOrdinaryInclusion() {
+        SearchLayout layout = new SearchLayout(context, null);
+        View normal = ReflectionHelpers.getField(layout, "mNormalView");
+        SearchPresetSwitch language = normal.findViewById(R.id.search_preset_tag_1);
+        String[] query = {"~l:chinese"};
+        layout.setHelper(new SearchLayout.Helper() {
+            public void onSearchPresetQueryChanged(String value) { query[0] = value; }
+            public void onChangeSearchMode() {}
+            public void onSelectImage() {}
+            public void onOpenTagSelector() {}
+        });
+        layout.syncPresetTags(query[0]);
+        assertChecked(language, INCLUDE);
+        TextView label = language.findViewById(R.id.preset_label);
+        assertTrue(label.getText().toString().contains("或"));
+        tap(language, INCLUDE);
+        assertEquals("l:\"chinese$\"", query[0]);
+        assertFalse(label.getText().toString().contains("或"));
+    }
+
     @Test public void labelMatchesSearchOptionTypographyAndSharesTheSwitchRow() {
         SearchLayout layout = new SearchLayout(context, null);
         View normal = ReflectionHelpers.getField(layout, "mNormalView");

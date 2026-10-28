@@ -3,20 +3,18 @@ package com.hippo.ehviewer.client;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+
+import com.hippo.ehviewer.client.SearchQueryTokenizer.Term;
+
+import static com.hippo.ehviewer.client.SearchQueryTokenizer.terms;
 
 /** Controls one namespaced tag without changing unrelated search terms. */
 public final class SearchPresetQuery {
     public static final int EXCLUDE = -1;
     public static final int NORMAL = 0;
     public static final int INCLUDE = 1;
-
-    private static final Pattern TAG = Pattern.compile(
-            "([^-+~\\s:,\"]+):(?:\"([^\"\\r\\n]+)\"|([^\\s,\"]+))");
+    public static final int OR = 2;
 
     private SearchPresetQuery() {}
 
@@ -32,25 +30,9 @@ public final class SearchPresetQuery {
 
     @Nullable
     private static String parse(String token) {
-        Matcher matcher = TAG.matcher(token);
-        if (!matcher.matches()) return null;
-        String namespace = matcher.group(1).toLowerCase(Locale.ROOT);
-        namespace = switch (namespace) {
-            case "l" -> "language";
-            case "o" -> "other";
-            case "f" -> "female";
-            case "m" -> "male";
-            case "a" -> "artist";
-            case "c" -> "character";
-            case "g" -> "group";
-            case "p" -> "parody";
-            case "r" -> "reclass";
-            default -> namespace;
-        };
-        String value = matcher.group(2) != null ? matcher.group(2) : matcher.group(3);
-        if (value.endsWith("$")) value = value.substring(0, value.length() - 1);
-        if (value.trim().isEmpty()) return null;
-        return namespace + ":" + value.toLowerCase(Locale.ROOT);
+        if (token.isEmpty() || "-+~".indexOf(token.charAt(0)) >= 0) return null;
+        SearchQueryTokenizer.Tag tag = SearchQueryTokenizer.parseTag(token, true);
+        return tag == null ? null : tag.identity();
     }
 
     public static int getState(@Nullable String query, @NonNull String preset) {
@@ -58,11 +40,12 @@ public final class SearchPresetQuery {
         if (identity == null || query == null) return NORMAL;
         int state = NORMAL;
         for (Term term : terms(query)) {
-            String token = query.substring(term.start, term.end);
+            String token = query.substring(term.start(), term.end());
             boolean excluded = token.startsWith("-");
-            if (excluded || token.startsWith("+")) token = token.substring(1);
+            boolean or = token.startsWith("~");
+            if (excluded || or || token.startsWith("+")) token = token.substring(1);
             // If both signs were entered manually, the last occurrence controls the button.
-            if (identity.equals(parse(token))) state = excluded ? EXCLUDE : INCLUDE;
+            if (identity.equals(parse(token))) state = excluded ? EXCLUDE : or ? OR : INCLUDE;
         }
         return state;
     }
@@ -79,8 +62,8 @@ public final class SearchPresetQuery {
         boolean commaSeparated = hasCommaSeparator(source);
         for (int i = 0; i < terms.size(); i++) {
             Term term = terms.get(i);
-            String token = source.substring(term.start, term.end);
-            String unsigned = token.startsWith("-") || token.startsWith("+")
+            String token = source.substring(term.start(), term.end());
+            String unsigned = token.startsWith("-") || token.startsWith("+") || token.startsWith("~")
                     ? token.substring(1) : token;
             if (identity.equals(parse(unsigned))) {
                 removed = true;
@@ -88,7 +71,7 @@ public final class SearchPresetQuery {
             }
             if (previous >= 0) {
                 result.append(previous == i - 1
-                        ? source.substring(terms.get(previous).end, term.start)
+                        ? source.substring(terms.get(previous).end(), term.start())
                         : commaSeparated ? ", " : " ");
             }
             result.append(token);
@@ -96,26 +79,8 @@ public final class SearchPresetQuery {
         }
         String updated = removed ? result.toString() : source.trim();
         if (state == NORMAL) return removed ? updated : source;
-        String token = (state == EXCLUDE ? "-" : "") + preset.trim();
+        String token = (state == EXCLUDE ? "-" : state == OR ? "~" : "") + preset.trim();
         return updated.isEmpty() ? token : updated + (commaSeparated ? ", " : " ") + token;
-    }
-
-    private static List<Term> terms(String query) {
-        List<Term> result = new ArrayList<>();
-        boolean quoted = false;
-        int start = -1;
-        for (int i = 0; i < query.length(); i++) {
-            char ch = query.charAt(i);
-            if (!quoted && (Character.isWhitespace(ch) || ch == ',')) {
-                if (start >= 0) result.add(new Term(start, i));
-                start = -1;
-            } else {
-                if (start < 0) start = i;
-                if (ch == '"') quoted = !quoted;
-            }
-        }
-        if (start >= 0) result.add(new Term(start, query.length()));
-        return result;
     }
 
     private static boolean hasCommaSeparator(String query) {
@@ -128,5 +93,4 @@ public final class SearchPresetQuery {
         return false;
     }
 
-    private record Term(int start, int end) {}
 }

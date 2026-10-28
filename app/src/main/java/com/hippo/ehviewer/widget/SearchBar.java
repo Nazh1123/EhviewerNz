@@ -101,8 +101,6 @@ public class SearchBar extends CardView implements View.OnClickListener,
 
     private boolean mInAnimation;
 
-    private boolean showTranslation;
-
     private boolean isComeFromDownload = false;
 
     public SearchBar(Context context) {
@@ -121,7 +119,6 @@ public class SearchBar extends CardView implements View.OnClickListener,
     }
 
     private void init(Context context) {
-        showTranslation = Settings.getShowTagTranslations();
         mSearchDatabase = SearchDatabase.getInstance(getContext());
 
         LayoutInflater inflater = LayoutInflater.from(context);
@@ -192,33 +189,12 @@ public class SearchBar extends CardView implements View.OnClickListener,
 
         EhTagDatabase ehTagDatabase = EhTagDatabase.getInstance(getContext());
         if (!TextUtils.isEmpty(text) && ehTagDatabase != null) {
-            String[] s = text.split(" ");
-            if (s.length > 0) {
-                // String keyword = s[s.length - 1];
-                String keyword = "";
-                for (int i = s.length - 1; i >= 0; i--) {
-                    if (s[i].contains(":") || s[i].contains("$")) {
-                        break;
-                    } else {
-                        if(keyword.isEmpty())
-                            keyword = s[i];
-                        else
-                            keyword = s[i] + " " + keyword;
-                    }
-                }
-                keyword = keyword.trim();
-
-                if(!keyword.isEmpty()) 
-                {
-                    List<Pair<String, String>> searchHints = ehTagDatabase.suggest(keyword);
-
-                    for (Pair<String, String> searchHint : searchHints) {
-                        if (showTranslation) {
-                            mSuggestionList.add(new TagSuggestion(searchHint.first, searchHint.second));
-                        } else {
-                            mSuggestionList.add(new TagSuggestion(null, searchHint.second));
-                        }
-                    }
+            String keyword = mEditText.getSuggestionKeyword();
+            if (!keyword.isEmpty()) {
+                List<Pair<String, String>> searchHints = ehTagDatabase.suggest(keyword);
+                for (Pair<String, String> hint : searchHints) {
+                    mSuggestionList.add(new TagSuggestion(
+                            Settings.getShowTagTranslations() ? hint.first : null, hint.second));
                 }
             }
         }
@@ -264,7 +240,7 @@ public class SearchBar extends CardView implements View.OnClickListener,
     }
 
     public void setText(String text) {
-        mEditText.setText(text);
+        mEditText.setQueryText(text);
     }
 
     public String getText() {
@@ -289,7 +265,7 @@ public class SearchBar extends CardView implements View.OnClickListener,
 
     public void setSearch(String search) {
         mTitleTextView.setText(search);
-        mEditText.setText(search);
+        mEditText.setQueryText(search);
     }
 
     public void setLeftDrawable(Drawable drawable) {
@@ -327,14 +303,16 @@ public class SearchBar extends CardView implements View.OnClickListener,
 
     public void setIsComeFromDownload(boolean isComeFromDownload){
         this.isComeFromDownload = isComeFromDownload;
+        // Local download searches have their own matching grammar.
+        mEditText.setTagChipsEnabled(!isComeFromDownload);
     }
 
     private void applySearch() {
         if( mEditText.getText()==null){
             return;
         }
-        String query = mEditText.getText().toString().trim();
-        query.replaceAll("\n","");
+        mEditText.refreshTagChips(true);
+        String query = mEditText.getText().toString().replace('\n', ' ').trim();
         if (!mAllowEmptySearch && TextUtils.isEmpty(query)) {
             return;
         }
@@ -435,6 +413,7 @@ public class SearchBar extends CardView implements View.OnClickListener,
 
 
     public void showImeAndSuggestionsList(boolean animation) {
+        mEditText.refreshTagChips(false);
         // A condition field may still own focus when returning from the search options.
         mEditText.requestFocus();
         // Show ime
@@ -553,6 +532,11 @@ public class SearchBar extends CardView implements View.OnClickListener,
     @Override
     public void onClick() {
         mHelper.onSearchEditTextClick();
+    }
+
+    @Override
+    public void onCursorChanged() {
+        if (mSuggestionList != null) updateSuggestions(false);
     }
 
     @Override
@@ -687,59 +671,9 @@ public class SearchBar extends CardView implements View.OnClickListener,
             return show;
         }
 
-        /**
-         * 无法替换中文
-         * @param text1
-         * @param text2
-         * @return
-         */
-        public String removeCommonSubstring(String text1, String text2) {
-            int m = text1.length();
-            int n = text2.length();
-            String match = "";
-
-            for (int i = m - 1; i >= 0; i--) {
-                String tmp = text1.substring(i, m);
-                if (!text2.contains(tmp)) {
-                    break;
-                } else {
-                    match = tmp;
-                }
-            }
-
-            String result = text1.substring(0, m - match.length());
-            return result;
-        }
-
-        public String replaceCommonSubstring(String tagKey, Editable editable) {
-            String key = tagKey;
-            if (editable.toString().contains(" ")) {
-                StringBuilder builder = new StringBuilder(editable);
-                char c = ' ';
-                while (builder.charAt(builder.length() - 1) != c) {
-                    builder.deleteCharAt(builder.length() - 1);
-                }
-
-                while (builder.length() != 0 && builder.charAt(builder.length() - 1) == c) {
-                    builder.deleteCharAt(builder.length() - 1);
-                }
-
-                builder.append("  ").append(tagKey);
-                key = builder.toString();
-            }
-            return key;
-        }
-
         @Override
         public void onClick() {
-            Editable editable = mEditText.getText();
-            if (editable != null) {
-                String tagKey = rebuildKeyword(mKeyword);
-//                String newText = removeCommonSubstring(editable.toString(), mKeyword)+" "+tagKey;
-                String newText = replaceCommonSubstring(tagKey,editable);
-                mEditText.setText(newText);
-                mEditText.setSelection(mEditText.getText().length());
-            }
+            mEditText.replaceSuggestion(rebuildKeyword(mKeyword));
         }
 
         private String rebuildKeyword(String key) {
@@ -793,7 +727,7 @@ public class SearchBar extends CardView implements View.OnClickListener,
 
         @Override
         public void onClick() {
-            mEditText.setText(mQuery);
+            mEditText.setQueryText(mQuery);
             mEditText.setSelection(mEditText.getText().length());
         }
 

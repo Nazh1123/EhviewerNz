@@ -42,10 +42,19 @@ public class SearchPresetQueryTest {
     }
 
     @Test public void doesNotMatchSubstringsOtherNamespacesOrQuotedSearchText() {
-        String query = "l:chinese_test other:chinese title:\"l:chinese\" ~l:chinese";
+        String query = "l:chinese_test other:chinese title:\"l:chinese\"";
         assertEquals(NORMAL, getState(query, LANGUAGE));
         assertEquals(query, setState(query, LANGUAGE, NORMAL));
         assertEquals("f:\"stockings\"", setState("f:\"stockings\"", LANGUAGE, NORMAL));
+    }
+
+    @Test public void recognizesAndReplacesOrWithoutLeavingAConflictingTerm() {
+        assertEquals(OR, getState("hello ~language:\"chinese$\"", LANGUAGE));
+        assertEquals("hello -" + LANGUAGE, setState("hello ~l:chinese", LANGUAGE, EXCLUDE));
+        assertEquals("hello", setState("hello ~l:chinese", LANGUAGE, NORMAL));
+        assertEquals("hello ~" + LANGUAGE, setState("hello", LANGUAGE, OR));
+        assertEquals(INCLUDE, getState("cosplayer:alice", "cos:alice"));
+        assertEquals(INCLUDE, getState("lang:chinese", LANGUAGE));
     }
 
     @Test public void presetsOperateIndependentlyAndSupportCustomNamespaces() {
