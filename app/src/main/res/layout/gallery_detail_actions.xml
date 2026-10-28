@@ -21,7 +21,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:paddingTop="@dimen/keyline_margin"
+    android:paddingTop="@dimen/gallery_detail_action_spacing"
     android:paddingBottom="6dp">
 
     <HorizontalScrollView
@@ -38,7 +38,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:divider="@drawable/spacer_keyline"
+            android:divider="@drawable/spacer_gallery_detail_action"
             android:showDividers="middle">
 
             <FrameLayout
@@ -52,7 +52,7 @@
                     android:layout_height="wrap_content"
                     android:gravity="center_horizontal"
                     android:text="@string/favorited"
-                    android:drawablePadding="8dp"
+                    android:drawablePadding="6dp"
                     android:textColor="?android:attr/textColorPrimary"/>
 
                 <TextView
@@ -61,7 +61,7 @@
                     android:layout_height="wrap_content"
                     android:gravity="center_horizontal"
                     android:text="@string/not_favorited"
-                    android:drawablePadding="8dp"
+                    android:drawablePadding="6dp"
                     android:textColor="?android:attr/textColorPrimary"/>
 
             </FrameLayout>
@@ -72,7 +72,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
                 android:text="@string/share"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -81,7 +81,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
                 android:text="@string/similar_gallery"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -90,7 +90,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
                 android:text="@string/gallery_artist"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -98,7 +98,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -107,7 +107,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/archiver"
                 android:gravity="center_horizontal"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -116,7 +116,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/h_h"
                 android:gravity="center_horizontal"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -125,7 +125,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
                 android:text="@string/search_cover"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
         </LinearLayout>

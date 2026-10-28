@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <size
+        android:width="@dimen/gallery_detail_action_spacing"
+        android:height="@dimen/gallery_detail_action_spacing" />
+
+    <solid android:color="@android:color/transparent" />
+
+</shape>

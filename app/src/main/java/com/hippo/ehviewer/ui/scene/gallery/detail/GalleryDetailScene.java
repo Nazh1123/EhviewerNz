@@ -1213,7 +1213,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void setActionDrawable(TextView text, Drawable drawable) {
-        drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
+        int size = LayoutUtils.dp2pix(text.getContext(), 42);
+        drawable.setBounds(0, 0, size, size);
         text.setCompoundDrawables(null, drawable, null, null);
     }
 

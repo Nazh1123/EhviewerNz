@@ -18,6 +18,7 @@
 <resources>
 
     <dimen name="keyline_margin">24dp</dimen>
+    <dimen name="gallery_detail_action_spacing">18dp</dimen>
     <dimen name="single_max_width">480dp</dimen>
 
     <!-- 8dp - 4dp, 4dp for card padding -->
