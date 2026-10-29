@@ -31,6 +31,7 @@ import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.InputType;
@@ -727,6 +728,26 @@ public class GalleryListScene extends BaseScene
             return resources.getString(R.string.global_subscription);
         } else if (ListUrlBuilder.MODE_WHATS_HOT == urlBuilder.getMode()) {
             return resources.getString(R.string.whats_hot);
+        } else if (ListUrlBuilder.MODE_TOP_LIST == urlBuilder.getMode()) {
+            String topList = Uri.parse("?" + urlBuilder.getFollow()).getQueryParameter("tl");
+            int period;
+            switch (topList == null ? "" : topList) {
+                case "11":
+                    period = R.string.all_time_top_list;
+                    break;
+                case "12":
+                    period = R.string.past_year_top_list;
+                    break;
+                case "13":
+                    period = R.string.past_month_top_list;
+                    break;
+                case "15":
+                    period = R.string.yesterday_top_list;
+                    break;
+                default:
+                    return resources.getString(R.string.top_lists);
+            }
+            return resources.getString(R.string.top_list_period_title, resources.getString(period));
         } else if (!TextUtils.isEmpty(keyword)) {
             return keyword;
         } else if (MathUtils.hammingWeight(category) == 1) {
@@ -809,6 +830,8 @@ public class GalleryListScene extends BaseScene
             checkedItemId = R.id.nav_global_subscription;
         } else if (ListUrlBuilder.MODE_WHATS_HOT == builder.getMode()) {
             checkedItemId = R.id.nav_whats_hot;
+        } else if (ListUrlBuilder.MODE_TOP_LIST == builder.getMode()) {
+            checkedItemId = R.id.nav_top_lists;
         } else {
             checkedItemId = 0;
         }

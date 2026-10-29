@@ -627,6 +627,12 @@ public final class MainActivity extends StageActivity
                         !Settings.getPopularUpdatesOnly());
                 startSceneFirstly(new Announcer(GalleryListScene.class).setArgs(args));
                 break;
+            case R.id.nav_top_lists:
+                ListUrlBuilder topList = new ListUrlBuilder();
+                topList.setMode(ListUrlBuilder.MODE_TOP_LIST);
+                topList.setFollow("tl=15");
+                startSceneFirstly(GalleryListScene.getStartAnnouncer(topList));
+                break;
             case R.id.nav_bookmark_subscription:
             case R.id.nav_global_subscription:
                 startScene(new Announcer(QuickSearchScene.class));

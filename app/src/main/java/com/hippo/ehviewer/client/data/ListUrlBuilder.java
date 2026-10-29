@@ -105,6 +105,7 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         mPageIndex = 0;
         mCategory = EhUtils.NONE;
         mKeyword = null;
+        mFollow = null;
         mAdvanceSearch = -1;
         mMinRating = -1;
         mPageFrom = -1;
@@ -159,6 +160,10 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
 
     public void setFollow(String follow) {
         mFollow = follow;
+    }
+
+    public String getFollow() {
+        return mFollow;
     }
 
     public int getAdvanceSearch() {
@@ -787,6 +792,7 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         dest.writeByte(mShowExpunged ? (byte) 1 : (byte) 0);
         dest.writeInt(mMinRatingHundredths);
         dest.writeByte(mRatingOverride ? (byte) 1 : (byte) 0);
+        dest.writeString(mFollow);
     }
 
     public ListUrlBuilder() {
@@ -808,6 +814,7 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         this.mShowExpunged = in.readByte() != 0;
         this.mMinRatingHundredths = in.readInt();
         this.mRatingOverride = in.readByte() != 0;
+        this.mFollow = in.readString();
     }
 
     public static final Creator<ListUrlBuilder> CREATOR = new Creator<>() {

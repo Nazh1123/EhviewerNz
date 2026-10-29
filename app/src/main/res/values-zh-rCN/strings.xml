@@ -1008,11 +1008,12 @@
     <string name="cleanup_toplists">整理 排行榜</string>
     <string name="rating_reviewing_toplists">等级&#038;审核 排行榜</string>
     <string name="top_list">排行榜</string>
+    <string name="top_list_period_title">%1$s 排行榜</string>
 
     <string name="all_time_top_list">有史以来</string>
     <string name="past_year_top_list">过去一年</string>
     <string name="past_month_top_list">过去一个月</string>
-    <string name="yesterday_top_list">昨天</string>
+    <string name="yesterday_top_list">昨日</string>
 
 
     <!--  侧滑栏头像和背景修改  -->

@@ -1094,6 +1094,7 @@
     <string name="cleanup_toplists">Cleanup Toplists</string>
     <string name="rating_reviewing_toplists">Rating&#038;Reviewing Toplists</string>
     <string name="top_list">Top Lists</string>
+    <string name="top_list_period_title">%1$s</string>
 
     <string name="all_time_top_list">All Time TopList</string>
     <string name="past_year_top_list">Past Year TopList</string>
