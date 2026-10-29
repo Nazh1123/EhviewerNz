@@ -415,6 +415,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private long mGalleryUpdateSessionGid = -1L;
     private int mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_AVAILABLE;
     private int mRequestId = IntIdGenerator.INVALID_ID;
+    private int mPendingSummaryGeneration;
+    private boolean mRefreshingCachedDetail;
+    private long mLastAutomaticRefresh = -1L;
 
     @Nullable
     private TorrentDownloadController torrentDownloadController;
@@ -650,6 +653,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mGid = savedInstanceState.getLong(KEY_GID);
         mToken = savedInstanceState.getString(KEY_TOKEN);
         mGalleryDetail = savedInstanceState.getParcelable(KEY_GALLERY_DETAIL);
+        if (mGalleryDetail != null) mGalleryDetail.fetchedAtElapsed = savedInstanceState.getLong("detail_fetched_time", -1L);
         mKnownReadProgressGid = savedInstanceState.getLong(KEY_KNOWN_PROGRESS_GID, -1L);
         mKnownReadProgress = savedInstanceState.containsKey(KEY_KNOWN_START_PAGE)
                 ? savedInstanceState.getInt(KEY_KNOWN_START_PAGE) : null;
@@ -657,6 +661,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mOffline = savedInstanceState.getBoolean(KEY_OFFLINE);
         mOfflineError = savedInstanceState.getString(KEY_OFFLINE_ERROR);
         mRequestId = savedInstanceState.getInt(KEY_REQUEST_ID);
+        mRefreshingCachedDetail = savedInstanceState.getBoolean("detail_background_refresh");
+        mLastAutomaticRefresh = savedInstanceState.getLong("detail_automatic_refresh_time", -1L);
         mGalleryUpdateSessionGid = savedInstanceState.getLong(
                 KEY_GALLERY_UPDATE_SESSION_GID, -1L);
         mGalleryUpdateButtonState = savedInstanceState.getInt(
@@ -679,8 +685,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         if (mGalleryDetail != null) {
             outState.putParcelable(KEY_GALLERY_DETAIL, mGalleryDetail);
+            outState.putLong("detail_fetched_time", mGalleryDetail.fetchedAtElapsed);
         }
         outState.putInt(KEY_REQUEST_ID, mRequestId);
+        outState.putBoolean("detail_background_refresh", mRefreshingCachedDetail);
+        outState.putLong("detail_automatic_refresh_time", mLastAutomaticRefresh);
         outState.putBoolean(KEY_OFFLINE, mOffline);
         if (mKnownReadProgress != null) {
             outState.putLong(KEY_KNOWN_PROGRESS_GID, mKnownReadProgressGid);
@@ -977,6 +986,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             adjustViewVisibility(STATE_FAILED, false);
         }
 
+        if (mGalleryDetail == null && !mOffline) loadPendingSummary();
+        else maybeRefreshCachedDetail();
         EhApplication.getDownloadManager(context).addDownloadInfoListener(this);
         GalleryUpdateManager.addUpdateStateListener(this);
         if (myUpdateDialog == null) {
@@ -1010,6 +1021,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mVersionProgressSourceGid = -1L;
         mVersionProgressGeneration++;
         updateGalleryVersionActionsVisibility();
+        maybeRefreshCachedDetail();
     }
 
     @Override public void onPause() {
@@ -1019,6 +1031,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     @Override
     public void onDestroyView() {
+        ++mPendingSummaryGeneration;
         cancelLoadingIndicator();
         cancelPreviewLoads();
         mPendingDetailActions.clear();
@@ -1171,7 +1184,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
 
         // Get from cache
-        mGalleryDetail = EhApplication.getGalleryDetailCache(context).get(gid);
+        GalleryDetail cached = EhApplication.getGalleryDetailCache(context).get(gid);
+        if (cached != null && TextUtils.equals(cached.token, getToken())) mGalleryDetail = cached;
         if (mGalleryDetail != null) {
             return true;
         }
@@ -1207,8 +1221,21 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private boolean request() {
+        mRefreshingCachedDetail = false;
         String url = getGalleryDetailUrl();
         return request(url, GetGalleryDetailListener.RESULT_DETAIL);
+    }
+
+    private void maybeRefreshCachedDetail() {
+        if (mOffline || mGalleryDetail == null || mTitle == null || isDetailRequestPending()) return;
+        long now = SystemClock.elapsedRealtime();
+        if (com.hippo.ehviewer.client.data.GalleryDetailState.isFresh(mGalleryDetail, now)) return;
+        // A failing network must not cause a request on every short resume/settings round trip.
+        if (mLastAutomaticRefresh >= 0 && now >= mLastAutomaticRefresh && now - mLastAutomaticRefresh < 30_000) return;
+        if (request()) {
+            mLastAutomaticRefresh = now;
+            mRefreshingCachedDetail = true;
+        }
     }
 
     private void setActionDrawable(TextView text, Drawable drawable) {
@@ -1392,7 +1419,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Resources resources = getResources2();
         if (resources == null) return;
 
-        if ((ACTION_GALLERY_INFO.equals(mAction) || ACTION_DOWNLOAD_GALLERY_INFO.equals(mAction)) && mGalleryInfo != null) {
+        if (mGalleryInfo != null) {
             GalleryInfo gi = mGalleryInfo;
             bindCover(gi);
             mTitle.setText(EhUtils.getSuitableTitle(gi));
@@ -1545,6 +1572,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void bindViewSecond() {
+        bindViewSecond(null);
+    }
+
+    private void bindViewSecond(@Nullable GalleryDetail previous) {
         GalleryDetail gd = mGalleryDetail;
         if (gd == null) {
             return;
@@ -1594,8 +1625,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         updateFavoriteDrawable();
         bindArchiverProgress(gd);
         bindTags(gd.tags);
-        bindComments(gd.comments.comments);
-        bindPreviews(gd);
+        if (!com.hippo.ehviewer.client.data.GalleryDetailState.sameComments(previous, gd))
+            bindComments(gd.comments.comments);
+        if (!com.hippo.ehviewer.client.data.GalleryDetailState.samePreviews(previous, gd)) bindPreviews(gd);
     }
 
     public void bindArchiverProgress(GalleryDetail gd) {
@@ -1622,6 +1654,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void refreshDetail() {
+        mRefreshingCachedDetail = false;
         if (isDetailRequestPending()) return;
         mOfflineGeneration++;
         if (request()) {
@@ -1636,8 +1669,44 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
     }
 
+    private void loadPendingSummary() {
+        Context context = getEHContext();
+        final long gid = getGid();
+        if (context == null || gid <= 0 || mGalleryDetail != null || mOffline) return;
+        final String token = getToken();
+        final GalleryInfo entry = mGalleryInfo == null ? null : LocalGallerySummary.copy(mGalleryInfo);
+        final int generation = ++mPendingSummaryGeneration;
+        final Context app = context.getApplicationContext();
+        EhApplication.getExecutorService(app).execute(() -> {
+            try {
+                LocalGallerySummary.Snapshot snapshot = LocalGallerySummary.read(app, gid, token, entry);
+                handler.post(() -> {
+                    if (generation != mPendingSummaryGeneration || mTitle == null || mGalleryDetail != null
+                            || mOffline || getGid() != gid || !TextUtils.equals(getToken(), token)) return;
+                    GalleryInfo info = mGalleryInfo == null ? snapshot.info() : LocalGallerySummary.copy(mGalleryInfo);
+                    LocalGallerySummary.fillMissing(info, snapshot.info());
+                    if (TextUtils.isEmpty(info.title) && TextUtils.isEmpty(info.titleJpn)
+                            && TextUtils.isEmpty(info.thumb) && getKnownTags(info).length == 0) return;
+                    mGalleryInfo = info;
+                    if (mKnownReadProgressGid != gid || mKnownReadProgress == null) {
+                        mKnownReadProgressGid = gid;
+                        mKnownReadProgress = snapshot.startPage();
+                    }
+                    mKnownPageCount = info.pages;
+                    if (mFavoriteOverride != null) applyFavoriteStatus(mFavoriteOverride);
+                    bindViewFirst();
+                    adjustViewVisibility(STATE_REFRESH_HEADER, false);
+                    if (TextUtils.isEmpty(token) && !TextUtils.isEmpty(info.token) && !isDetailRequestPending()) request();
+                });
+            } catch (Exception error) {
+                android.util.Log.w("GalleryDetailScene", "Local summary unavailable", error);
+            }
+        });
+    }
+
     /** Disk and database work stays off the UI thread; stale results cannot replace an online success. */
     private void loadOfflineDetail(@Nullable Exception error) {
+        ++mPendingSummaryGeneration;
         Context context = getEHContext();
         if (context == null || mTip == null) return;
         if (error != null) mOfflineError = ExceptionUtils.getReadableString(error);
@@ -3739,6 +3808,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     protected void onGetGalleryDetailSuccess(GalleryDetail result) {
+        GalleryDetail previous = mRefreshingCachedDetail ? mGalleryDetail : null;
+        mRefreshingCachedDetail = false;
+        result.fetchedAtElapsed = SystemClock.elapsedRealtime();
+        ++mPendingSummaryGeneration;
         ++mOfflineGeneration;
         mOffline = false;
         mOfflineError = null;
@@ -3765,7 +3838,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mGalleryDetail = result;
         if (mFavoriteOverride != null) applyFavoriteStatus(mFavoriteOverride);
         updateDownloadState();
-        bindViewSecond();
+        bindViewSecond(previous);
         adjustViewVisibility(STATE_NORMAL, true);
         Context context = getEHContext();
         if (context != null) {
@@ -3777,12 +3850,14 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     protected void onGetGalleryDetailFailure(Exception e) {
+        boolean background = mRefreshingCachedDetail;
+        mRefreshingCachedDetail = false;
         mPendingDetailActions.clear();
         e.printStackTrace();
         if (mGalleryDetail != null && !mOffline) {
             ++mOfflineGeneration;
             adjustViewVisibility(STATE_NORMAL, false);
-            showTip(ExceptionUtils.getReadableString(e), LENGTH_LONG);
+            if (!background) showTip(ExceptionUtils.getReadableString(e), LENGTH_LONG);
             return;
         }
         Context context = getEHContext();

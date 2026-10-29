@@ -178,6 +178,43 @@ class ReaderExistingResultsTest {
             assertNotNull(provider.getTranslationOverlay(0))
         } finally { reader.close(); provider.stop() }
     }
+    @Test fun evictedTranslationRestoresOnBackNavigation() {
+        provider.pageCount = 2
+        seed(GalleryResultIndex.Kind.TL, page = 0)
+        seed(GalleryResultIndex.Kind.TL, page = 1)
+        shadowOf(Looper.getMainLooper()).idle()
+        val cache = ReflectionHelpers.getField<android.util.LruCache<Int, com.hippo.lib.glview.image.ImageWrapper>>(provider, "mTranslatedCache")
+        cache.resize(2048) // Only one overlay fits.
+        val reader = ReaderExistingResults(app, provider, null)
+        fun idleLoad() = await { ReflectionHelpers.getField<Job?>(reader, "job")?.isCompleted == true }
+        try {
+            reader.onPageChanged(0); idleLoad()
+            assertTrue(provider.hasTranslatedPage(0))
+            reader.onPageChanged(1); idleLoad()
+            assertTrue(provider.hasTranslatedPage(1))
+            assertFalse(provider.hasTranslatedPage(0))
+            reader.onPageChanged(0); idleLoad()
+            assertTrue(provider.hasTranslatedPage(0))
+        } finally { reader.close(); provider.stop() }
+    }
+    @Test fun failedTranslationRetriesWithoutReplacingSuccessfulEnhancement() {
+        seed(GalleryResultIndex.Kind.TL); seed(GalleryResultIndex.Kind.SR, 2)
+        shadowOf(Looper.getMainLooper()).idle()
+        val reader = ReaderExistingResults(app, provider, null)
+        val decode = reader.decodeTranslation
+        reader.decodeTranslation = { throw java.io.IOException("Temporarily unavailable") }
+        try {
+            reader.onPageChanged(0)
+            await { ReflectionHelpers.getField<Job?>(reader, "job")?.isCompleted == true }
+            assertFalse(provider.hasTranslatedPage(0))
+            val enhanced = provider.getEnhancedTiles(0)
+            assertNotNull(enhanced)
+            reader.decodeTranslation = decode
+            reader.onPageReady(0)
+            await { provider.hasTranslatedPage(0) }
+            assertSame(enhanced, provider.getEnhancedTiles(0))
+        } finally { reader.close(); provider.stop() }
+    }
     private fun await(done: () -> Boolean) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
         while (!done()) {

@@ -557,6 +557,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
                 return;
             }
             // Put gallery detail to cache
+            result.fetchedAtElapsed = android.os.SystemClock.elapsedRealtime();
             EhApplication.getGalleryDetailCache(context).put(result.gid, result);
             if (downloadInfo.gid == result.gid && !downloadInfo.thumb.equals(result.thumb)) {
                 downloadInfo.updateInfo(result);

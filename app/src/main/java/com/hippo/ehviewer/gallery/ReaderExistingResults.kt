@@ -19,7 +19,8 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
     val resultIndex = ReaderResultIndex(context, provider, info)
     private var maintenance: Job? = null
     private val loads = mutableMapOf<Int, Job>()
-    private val loaded = mutableSetOf<Int>()
+    // A successful lookup may outlive its decoded pixels. Zero flags memoize a missing result.
+    private val loaded = mutableMapOf<Int, Int>()
     private val sources = mutableMapOf<Int, GalleryResultIndex.Source>()
     @Volatile private var page = -1
     private var direction = 1
@@ -51,12 +52,12 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
         if (page != index && page >= 0) direction = if (index > page) 1 else -1
         page = index
         provider.retainExistingResults(index)
-        loaded.removeAll { kotlin.math.abs(it - index) > 1 }
+        loaded.keys.removeAll { kotlin.math.abs(it - index) > 1 }
         sources.keys.removeAll { kotlin.math.abs(it - index) > 1 }
         refresh()
     }
     // Original readiness must not discard decoded overlays or cancel an in-flight restore.
-    fun onPageReady(index: Int) { if (index == page && index !in loaded && loads[index]?.isActive != true) refresh() }
+    fun onPageReady(index: Int) { if (index == page && !isLoaded(index) && loads[index]?.isActive != true) refresh() }
     fun resume() { active = true; reset(); resultIndex.reload(); refresh() }
     fun pause() { active = false; reset() }
     private fun reset() {
@@ -107,12 +108,17 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
         }
     }
 
+    private fun hasResults(position: Int, flags: Int): Boolean =
+        (flags and ReaderResultIndex.TRANSLATION == 0 || provider.hasTranslatedPage(position)) &&
+            (flags and ReaderResultIndex.SUPER_RESOLUTION == 0 || provider.hasEnhancedPage(position))
+
+    private fun isLoaded(position: Int): Boolean = loaded[position]?.let { hasResults(position, it) } == true
+
     private fun load(position: Int): Job? {
-        if (position in loaded) return null
+        if (isLoaded(position)) return null
         loads[position]?.takeIf { it.isActive }?.let { return it }
         val epoch = generation
         return scope.launch(start = CoroutineStart.LAZY) {
-            var complete = true
             try {
                 val saved = resultIndex.page(position)
                 saved.source?.let { sources[position] = it }
@@ -122,7 +128,7 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
                         try {
                             withContext(Dispatchers.IO) {
                                 saved.enhanced?.takeIf {
-                                    it.state == "complete" && it.scale in listOf(2, 4, 8)
+                                    it.state == "complete" && it.scale in listOf(2, 4, 8) && !provider.hasEnhancedPage(position)
                                 }?.let { hit ->
                                     EnhancedTilePage(File(app.cacheDir, "result-reader"), hit.width / hit.scale,
                                         hit.height / hit.scale, hit.scale).apply {
@@ -152,9 +158,9 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
                             withContext(Dispatchers.IO) {
                                 val hit = saved.translation?.takeIf { it.state == "complete" }
                                 // A large speculative decode must not evict the visible overlay.
-                                if (position != page && hit != null && !provider.canPrefetchTranslationResult(page,
-                                        hit.width.toLong() * hit.height * 4)) complete = false
-                                else if (!provider.hasTranslatedPage(position)) translated = hit?.file?.let(decodeTranslation)
+                                if (!provider.hasTranslatedPage(position) && hit != null &&
+                                    (position == page || provider.canPrefetchTranslationResult(page,
+                                        hit.width.toLong() * hit.height * 4))) translated = hit.file?.let(decodeTranslation)
                             }
                             ensureActive()
                             if (epoch == generation && kotlin.math.abs(position - page) <= 1 && !provider.hasTranslatedPage(position)) {
@@ -166,7 +172,7 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
                         finally { translated?.recycle() }
                     }
                 }
-                if (epoch == generation && complete) loaded += position
+                if (epoch == generation && hasResults(position, saved.flags)) loaded[position] = saved.flags
             } finally {
                 if (loads[position] === currentCoroutineContext()[Job]) loads.remove(position)
             }

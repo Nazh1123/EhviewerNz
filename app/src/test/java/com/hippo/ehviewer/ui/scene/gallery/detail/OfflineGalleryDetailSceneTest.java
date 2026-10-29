@@ -721,6 +721,96 @@ public class OfflineGalleryDetailSceneTest {
         assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
     }
 
+    @Test public void staleDetailsRefreshOnceWithoutHidingCachedBodyAndKeepUnchangedPreviewViews() {
+        GalleryDetail original = online();
+        NormalPreviewSet previews = new NormalPreviewSet();
+        previews.addItem(0, "https://example.invalid/preview", 0, 0, 100, 150, "https://example.invalid/page");
+        original.previewSet = previews; original.previewPages = 1;
+        scene.onGetGalleryDetailSuccess(original);
+        ViewGroup grid = content.findViewById(R.id.grid_layout);
+        View first = grid.getChildAt(0);
+        requests.clear();
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertTrue(requests.isEmpty());
+        advanceMillis(180_000);
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertEquals(1, requests.size());
+        assertSame(first, grid.getChildAt(0));
+        assertEquals(View.GONE, sceneView.findViewById(R.id.progress).getVisibility());
+        GalleryDetail updated = online(); updated.previewSet = previews; updated.previewPages = 1; updated.rating = 4.5f;
+        scene.onGetGalleryDetailSuccess(updated);
+        assertSame(first, grid.getChildAt(0));
+        assertEquals(4.5f, ((RatingBar) content.findViewById(R.id.rating)).getRating(), 0f);
+    }
+
+    @Test public void failedAutomaticRefreshRetainsDetailsAndThrottlesImmediateRetry() {
+        GalleryDetail detail = online();
+        scene.onGetGalleryDetailSuccess(detail);
+        detail.fetchedAtElapsed = -1;
+        requests.clear();
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertEquals(1, requests.size());
+        ((EhApplication) context.getApplicationContext()).removeGlobalStuff(requests.get(0).getCallback());
+        scene.onGetGalleryDetailFailure(new IOException("offline"));
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertEquals(1, requests.size());
+        assertSame(detail, ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertEquals(View.GONE, sceneView.findViewById(R.id.progress).getVisibility());
+        advanceMillis(30_000);
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertEquals(2, requests.size());
+    }
+
+    @Test public void linkEntryUsesLocalSummaryWhileHtmlIsPending() throws Exception {
+        GalleryInfo saved = source(); saved.uploader = "Local uploader";
+        saved.simpleTags = new String[]{"artist:local"};
+        EhDB.putHistoryInfo(saved);
+        com.hippo.ehviewer.dao.GalleryTags tags = new com.hippo.ehviewer.dao.GalleryTags(123);
+        tags.artist = "local";
+        EhDB.insertGalleryTags(tags);
+        cacheProgress(4);
+        ReflectionHelpers.setField(scene, "mAction", GalleryDetailScene.ACTION_GID_TOKEN);
+        ReflectionHelpers.setField(scene, "mGid", 123L);
+        ReflectionHelpers.setField(scene, "mToken", "token");
+        ReflectionHelpers.setField(scene, "mGalleryInfo", null);
+        ReflectionHelpers.callInstanceMethod(scene, "loadPendingSummary");
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryInfo"));
+        executor.runAll(); ShadowLooper.idleMainLooper();
+        assertEquals("Local uploader", text(R.id.uploader));
+        assertEquals("5/12P", text(R.id.pages));
+        GalleryInfo summary = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        assertArrayEquals(new String[]{"artist:local"}, summary.simpleTags);
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertFalse(ReflectionHelpers.<Boolean>getField(scene, "mOffline"));
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void localSummaryCannotReplaceOnlineSuccessOrDestroyedView() {
+        EhDB.putHistoryInfo(source());
+        ReflectionHelpers.callInstanceMethod(scene, "loadPendingSummary");
+        GalleryDetail detail = online();
+        scene.onGetGalleryDetailSuccess(detail);
+        executor.runAll(); ShadowLooper.idleMainLooper();
+        assertSame(detail, ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertEquals("Online title", ((TextView) sceneView.findViewById(R.id.title)).getText().toString());
+        ReflectionHelpers.setField(scene, "mGalleryDetail", null);
+        ReflectionHelpers.callInstanceMethod(scene, "loadPendingSummary");
+        ReflectionHelpers.setField(scene, "mTitle", null);
+        executor.runAll(); ShadowLooper.idleMainLooper();
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryDetail"));
+    }
+
+    @Test public void localSummaryFillsHolesWithoutOverwritingEntryOrCrossingTokens() {
+        GalleryInfo entry = source(); entry.pages = 0; entry.title = "Current title";
+        GalleryInfo saved = source(); saved.title = "Older title"; saved.pages = 99;
+        LocalGallerySummary.fillMissing(entry, saved);
+        assertEquals("Current title", entry.title); assertEquals(99, entry.pages);
+        entry.pages = 0; saved.token = "different";
+        LocalGallerySummary.fillMissing(entry, saved);
+        assertEquals(0, entry.pages);
+    }
+
     @Test public void completeHtmlProvidedAsArgumentsIsReusedWithoutAnotherDetailRequest() {
         GalleryDetail detail = online();
         ReflectionHelpers.setField(scene, "mGalleryInfo", detail);

@@ -614,7 +614,7 @@ public class EhApplication extends RecordingApplication {
     public static LruCache<Long, GalleryDetail> getGalleryDetailCache(@NonNull Context context) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mGalleryDetailCache == null) {
-            // Max size 25, 3 min timeout
+            // Keep stale entries for immediate rendering; details revalidate after three minutes.
             application.mGalleryDetailCache = new LruCache<>(25);
             getFavouriteStatusRouter().addListener((gid, slot) -> {
                 GalleryDetail gd = application.mGalleryDetailCache.get(gid);
