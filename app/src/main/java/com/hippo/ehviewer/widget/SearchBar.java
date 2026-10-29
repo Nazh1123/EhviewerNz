@@ -199,6 +199,10 @@ public class SearchBar extends CardView implements View.OnClickListener,
         }
 
 
+        if (!isComeFromDownload && text.matches("[0-9]+")) {
+            mSuggestionList.add(new GidSuggestion(text));
+        }
+
         if (mSuggestionProvider != null) {
             List<Suggestion> suggestions = mSuggestionProvider.providerSuggestions(text);
             if (suggestions != null && !suggestions.isEmpty()) {
@@ -732,6 +736,35 @@ public class SearchBar extends CardView implements View.OnClickListener,
             mSearchDatabase.deleteQuery(mKeyword);
             updateSuggestions(false);
         }
+    }
+
+    private class GidSuggestion extends Suggestion {
+
+        private final String mGid;
+
+        public GidSuggestion(String gid) {
+            mGid = gid;
+        }
+
+        @Override
+        public CharSequence getText(float textSize) {
+            return "gid: " + mGid;
+        }
+
+        @Override
+        public CharSequence getText(TextView textView) {
+            return textView.getId() == R.id.hintView ? "gid: " + mGid : null;
+        }
+
+        @Override
+        public void onClick() {
+            setText("gid:" + mGid);
+            cursorToEnd();
+            applySearch(true);
+        }
+
+        @Override
+        public void onLongClick() {}
     }
 
     private class HistorySuggestion extends Suggestion {
