@@ -5,6 +5,7 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.text.GetChars;
 import android.text.Layout;
+import android.text.NoCopySpan;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.Spanned;
@@ -19,7 +20,6 @@ final class SearchFirstRow implements TransformationMethod {
     final int left;
     final int right;
     private int after = -1;
-    private LeadingMarginSpan margin;
 
     SearchFirstRow(int left, int right) {
         this.left = left;
@@ -27,8 +27,11 @@ final class SearchFirstRow implements TransformationMethod {
     }
 
     void clear(Spannable text) {
-        if (margin != null) text.removeSpan(margin);
-        margin = null;
+        // Editing can restore spans from an earlier text snapshot. Remove every owned
+        // margin so a restored marker cannot stack with the current first-row inset.
+        for (RowMargin margin : text.getSpans(0, text.length(), RowMargin.class)) {
+            text.removeSpan(margin);
+        }
         after = -1;
     }
 
@@ -60,7 +63,7 @@ final class SearchFirstRow implements TransformationMethod {
         int rightPadding = end < text.length() && separator < 0 ? right : 0;
         input.setPadding(rightPadding > 0 ? left : 0, input.getPaddingTop(), rightPadding, input.getPaddingBottom());
         after = separator;
-        margin = new RowMargin(rightPadding > 0 ? 0 : left);
+        RowMargin margin = new RowMargin(rightPadding > 0 ? 0 : left);
         text.setSpan(margin, 0, separator >= 0 ? separator + 1 : text.length(),
                 Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
@@ -104,8 +107,8 @@ final class SearchFirstRow implements TransformationMethod {
         }
     }
 
-    // Display geometry must not be serialized with the saved query text.
-    private static final class RowMargin implements LeadingMarginSpan {
+    // Display geometry belongs to this view, not copied or saved query text.
+    private static final class RowMargin implements LeadingMarginSpan, NoCopySpan {
         private final int width;
         RowMargin(int width) { this.width = width; }
         @Override public int getLeadingMargin(boolean first) { return first ? width : 0; }
