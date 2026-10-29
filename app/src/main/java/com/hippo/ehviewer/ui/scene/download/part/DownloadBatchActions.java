@@ -16,8 +16,6 @@
 
 package com.hippo.ehviewer.ui.scene.download.part;
 
-import static com.hippo.ehviewer.spider.SpiderDen.getExistingGalleryDownloadDir;
-import static com.hippo.ehviewer.spider.SpiderDen.getGalleryDownloadDir;
 import static com.hippo.ehviewer.ui.scene.download.part.DownloadAdapter.DRAG_ENABLE;
 
 import android.app.Activity;
@@ -25,7 +23,6 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Resources;
-import android.os.AsyncTask;
 import android.util.SparseBooleanArray;
 import android.widget.Toast;
 
@@ -35,28 +32,23 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.res.ResourcesCompat;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.hippo.app.CheckBoxDialogBuilder;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.R;
-import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.Settings;
-import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.DownloadLabel;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
+import com.hippo.ehviewer.ui.DownloadRemovalDialog;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.widget.MyEasyRecyclerView;
 import com.hippo.lib.yorozuya.collect.LongList;
-import com.hippo.unifile.UniFile;
-import com.hippo.util.IoThreadPoolExecutor;
 import com.hippo.widget.FabLayout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -140,7 +132,7 @@ public class DownloadBatchActions {
 
             LongList gidList = null;
             List<DownloadInfo> downloadInfoList = null;
-            boolean collectGid = position == 1 || position == 2 || position == 3; // Start, Stop, Delete
+            boolean collectGid = position == 1 || position == 2; // Start, Stop
             boolean collectDownloadInfo = position == 3 || position == FAB_MOVE
                     || position == FAB_QUICK_ORGANIZE || position == FAB_DELETE_TRANSLATIONS;
             if (collectGid) {
@@ -195,23 +187,11 @@ public class DownloadBatchActions {
                     if (downloadInfoList.isEmpty()) {
                         break;
                     }
-                    boolean containsRegularGallery = false;
-                    for (DownloadInfo info : downloadInfoList) {
-                        if (!isImportedGallery(info)) {
-                            containsRegularGallery = true;
-                            break;
-                        }
+                    DownloadManager manager = mHost.getDownloadManager();
+                    if (manager != null) {
+                        DownloadRemovalDialog.show(context, downloadInfoList, manager,
+                                recyclerView::outOfCustomChoiceMode);
                     }
-                    CheckBoxDialogBuilder builder = new CheckBoxDialogBuilder(context,
-                            mHost.getString(R.string.download_remove_dialog_message_2, gidList.size()),
-                            mHost.getString(R.string.download_remove_dialog_check_text),
-                            Settings.getRemoveImageFiles());
-                    builder.setCheckBoxVisible(containsRegularGallery);
-                    DeleteRangeDialogHelper helper = new DeleteRangeDialogHelper(
-                            downloadInfoList, gidList, builder, recyclerView, mHost.getDownloadManager());
-                    builder.setTitle(R.string.download_remove_dialog_title)
-                            .setPositiveButton(android.R.string.ok, helper)
-                            .show();
                     break;
                 }
                 case FAB_MOVE: {// Move
@@ -310,133 +290,6 @@ public class DownloadBatchActions {
         mHost.launchGalleryActivity(intent);
     }
 
-    static void deleteFileAsync(UniFile... files) {
-        new AsyncTask<UniFile, Void, Void>() {
-            @Override
-            protected Void doInBackground(UniFile... params) {
-                for (UniFile file : params) {
-                    if (file != null) {
-                        file.delete();
-                    }
-                }
-                return null;
-            }
-        }.executeOnExecutor(IoThreadPoolExecutor.Companion.getInstance(), files);
-    }
-
-    static void deleteGalleryFilesAsync(List<? extends GalleryInfo> galleryInfoList) {
-        new AsyncTask<List<? extends GalleryInfo>, Void, Void>() {
-            @Override
-            protected Void doInBackground(List<? extends GalleryInfo>... params) {
-                for (GalleryInfo info : params[0]) {
-                    if (isImportedGallery(info)) continue;
-                    UniFile file = getGalleryDownloadDir(info);
-                    EhDB.removeDownloadDirname(info.gid);
-                    if (file != null) {
-                        file.delete();
-                    }
-                }
-                return null;
-            }
-        }.executeOnExecutor(IoThreadPoolExecutor.Companion.getInstance(), galleryInfoList);
-    }
-
-    /**
-     * 画廊详情页使用的单条删除对话框，与下载列表共用文件删除逻辑。
-     */
-    public static class DeleteDialogHelper implements DialogInterface.OnClickListener {
-
-        private final GalleryInfo mGalleryInfo;
-        private final CheckBoxDialogBuilder mBuilder;
-        @Nullable
-        private final DownloadManager mDownloadManager;
-
-        public DeleteDialogHelper(GalleryInfo galleryInfo, CheckBoxDialogBuilder builder,
-                                  @Nullable DownloadManager downloadManager) {
-            mGalleryInfo = galleryInfo;
-            mBuilder = builder;
-            mDownloadManager = downloadManager;
-        }
-
-        @Override
-        public void onClick(DialogInterface dialog, int which) {
-            if (which != DialogInterface.BUTTON_POSITIVE) {
-                return;
-            }
-
-            // Delete
-            if (null != mDownloadManager) {
-                mDownloadManager.deleteDownload(mGalleryInfo.gid);
-            }
-
-            // Delete image files
-            boolean checked = !isImportedGallery(mGalleryInfo) && mBuilder.isChecked();
-            if (!isImportedGallery(mGalleryInfo)) Settings.putRemoveImageFiles(checked);
-            if (checked) {
-                UniFile file = getExistingGalleryDownloadDir(mGalleryInfo);
-                EhDB.removeDownloadDirname(mGalleryInfo.gid);
-                if (file != null) {
-                    deleteFileAsync(file);
-                } else {
-                    deleteGalleryFilesAsync(Collections.singletonList(mGalleryInfo));
-                }
-            }
-        }
-    }
-
-    public static class DeleteRangeDialogHelper implements DialogInterface.OnClickListener {
-
-        private final List<DownloadInfo> mDownloadInfoList;
-        private final LongList mGidList;
-        private final CheckBoxDialogBuilder mBuilder;
-        @Nullable
-        private final MyEasyRecyclerView mRecyclerView;
-        @Nullable
-        private final DownloadManager mDownloadManager;
-
-        public DeleteRangeDialogHelper(List<DownloadInfo> downloadInfoList,
-                                       LongList gidList, CheckBoxDialogBuilder builder,
-                                       @Nullable MyEasyRecyclerView recyclerView,
-                                       @Nullable DownloadManager downloadManager) {
-            mDownloadInfoList = downloadInfoList;
-            mGidList = gidList;
-            mBuilder = builder;
-            mRecyclerView = recyclerView;
-            mDownloadManager = downloadManager;
-        }
-
-        @Override
-        public void onClick(DialogInterface dialog, int which) {
-            if (which != DialogInterface.BUTTON_POSITIVE) {
-                return;
-            }
-
-            // Cancel check mode
-            if (mRecyclerView != null) {
-                mRecyclerView.outOfCustomChoiceMode();
-            }
-
-            // Delete
-            if (null != mDownloadManager) {
-                mDownloadManager.deleteRangeDownload(mGidList);
-            }
-
-            // Delete image files
-            boolean containsRegularGallery = false;
-            for (DownloadInfo info : mDownloadInfoList) {
-                if (!isImportedGallery(info)) {
-                    containsRegularGallery = true;
-                    break;
-                }
-            }
-            boolean checked = containsRegularGallery && mBuilder.isChecked();
-            if (containsRegularGallery) Settings.putRemoveImageFiles(checked);
-            if (checked) {
-                deleteGalleryFilesAsync(mDownloadInfoList);
-            }
-        }
-    }
-
     public static class MoveDialogHelper implements DialogInterface.OnClickListener {
 
         private final String[] mLabels;
@@ -473,13 +326,5 @@ public class DownloadBatchActions {
             }
             EhApplication.getDownloadManager(context).changeLabel(mDownloadInfoList, label);
         }
-    }
-    private static boolean isImportedGallery(@Nullable GalleryInfo info) {
-        if (!(info instanceof DownloadInfo)) {
-            return false;
-        }
-        String archiveUri = ((DownloadInfo) info).archiveUri;
-        return LocalFolderGallerySource.isLocalFolderGallery(archiveUri)
-                || archiveUri != null && archiveUri.startsWith("content://");
     }
 }

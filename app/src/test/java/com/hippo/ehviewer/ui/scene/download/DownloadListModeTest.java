@@ -228,7 +228,7 @@ public class DownloadListModeTest {
         batchActions().onClickSecondaryFab(null, null, 3);
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
         assertNotNull(dialog);
-        dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick();
+        dialog.findViewById(R.id.download_remove_record).performClick();
         Shadows.shadowOf(Looper.getMainLooper()).idle();
 
         DownloadManager manager = scene.getDownloadManager();

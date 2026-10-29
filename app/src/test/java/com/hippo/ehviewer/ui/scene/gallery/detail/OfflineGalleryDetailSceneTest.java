@@ -11,7 +11,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.CheckBox;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.RatingBar;
 
@@ -38,10 +38,12 @@ import com.hippo.ehviewer.client.exception.EhException;
 import com.hippo.ehviewer.dao.DaoMaster;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.download.GalleryUpdateManager;
 import com.hippo.ehviewer.download.GalleryUpdateRecord;
 import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.ui.MainActivity;
+import com.hippo.ehviewer.ui.DownloadRemovalDialog;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.scene.GalleryInfoScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
@@ -1408,32 +1410,32 @@ public class OfflineGalleryDetailSceneTest {
         assertTrue(text(R.id.rating_text).endsWith("\nAnother error"));
     }
 
-    @Test public void downloadedClickWithoutCheckboxRemovesRecordAndKeepsLocalFiles() throws Exception {
+    @Test public void removeRecordButtonKeepsLocalFilesRegardlessOfOldPreference() throws Exception {
         File directory = prepareDownloadedGallery();
         Settings.putRemoveImageFiles(true);
         scene.onClick(content.findViewById(R.id.download));
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
-        CheckBox checkbox = dialog.findViewById(R.id.checkbox);
-        assertEquals(context.getString(R.string.download_remove_dialog_check_text), checkbox.getText().toString());
-        assertTrue(checkbox.isChecked());
-        checkbox.setChecked(false);
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertNull(dialog.findViewById(R.id.checkbox));
+        View recordButton = dialog.findViewById(R.id.download_remove_record);
+        LinearLayout buttons = (LinearLayout) recordButton.getParent();
+        assertEquals(LinearLayout.VERTICAL, buttons.getOrientation());
+        assertEquals(3, buttons.getChildCount());
+        assertEquals(R.id.download_redownload, buttons.getChildAt(1).getId());
+        assertEquals(R.id.download_remove_files, buttons.getChildAt(2).getId());
+        recordButton.performClick();
         ShadowLooper.idleMainLooper();
         assertFalse(manager.containDownloadInfo(123));
         assertTrue(new File(directory, "001.jpg").exists());
         assertEquals(directory.getName(), EhDB.getDownloadDirname(123));
-        assertFalse(Settings.getRemoveImageFiles());
+        assertTrue(Settings.getRemoveImageFiles());
     }
 
-    @Test public void downloadedClickWithCheckboxAlsoDeletesLocalFiles() throws Exception {
+    @Test public void removeFilesButtonDeletesRecordAndLocalFiles() throws Exception {
         File directory = prepareDownloadedGallery();
         Settings.putRemoveImageFiles(false);
         scene.onClick(content.findViewById(R.id.download));
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
-        CheckBox checkbox = dialog.findViewById(R.id.checkbox);
-        assertFalse(checkbox.isChecked());
-        checkbox.setChecked(true);
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        dialog.findViewById(R.id.download_remove_files).performClick();
         ShadowLooper.idleMainLooper();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (directory.exists() && System.nanoTime() < deadline) {
@@ -1443,7 +1445,7 @@ public class OfflineGalleryDetailSceneTest {
         assertFalse(manager.containDownloadInfo(123));
         assertFalse(directory.exists());
         assertNull(EhDB.getDownloadDirname(123));
-        assertTrue(Settings.getRemoveImageFiles());
+        assertFalse(Settings.getRemoveImageFiles());
     }
 
     @Test public void dismissingDownloadedDeleteDialogKeepsRecordFilesAndPreference() throws Exception {
@@ -1451,13 +1453,69 @@ public class OfflineGalleryDetailSceneTest {
         Settings.putRemoveImageFiles(false);
         scene.onClick(content.findViewById(R.id.download));
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
-        ((CheckBox) dialog.findViewById(R.id.checkbox)).setChecked(true);
         dialog.cancel();
         ShadowLooper.idleMainLooper();
         assertTrue(manager.containDownloadInfo(123));
         assertTrue(new File(directory, "001.jpg").exists());
         assertEquals(directory.getName(), EhDB.getDownloadDirname(123));
         assertFalse(Settings.getRemoveImageFiles());
+    }
+
+    @Test public void redownloadRemovesRecordThenQueuesGalleryWithOriginalLabelAndKeepsFiles() throws Exception {
+        File directory = prepareDownloadedGallery();
+        DownloadInfo original = manager.getDownloadInfo(123);
+        manager.addLabel("saved-label");
+        manager.changeLabel(List.of(original), "saved-label");
+        scene.onClick(content.findViewById(R.id.download));
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        dialog.findViewById(R.id.download_redownload).performClick();
+        assertFalse(manager.containDownloadInfo(123));
+        assertTrue(new File(directory, "001.jpg").exists());
+        assertEquals(directory.getName(), EhDB.getDownloadDirname(123));
+        Intent intent = org.robolectric.Shadows.shadowOf(RuntimeEnvironment.getApplication())
+                .getNextStartedService();
+        assertNotNull(intent);
+        assertEquals(DownloadService.ACTION_START, intent.getAction());
+        assertEquals(DownloadService.class.getName(), intent.getComponent().getClassName());
+        assertEquals("saved-label", intent.getStringExtra(DownloadService.KEY_LABEL));
+        GalleryInfo gallery = intent.getParcelableExtra(DownloadService.KEY_GALLERY_INFO);
+        assertEquals(123, gallery.gid);
+        assertEquals(original.token, gallery.token);
+    }
+
+    @Test public void batchRedownloadSnapshotsSelectionAndPreservesEachLabel() {
+        DownloadInfo first = addKnownDownload(123, null, DownloadInfo.STATE_FINISH);
+        DownloadInfo second = addKnownDownload(456, null, DownloadInfo.STATE_NONE);
+        manager.addLabel("first-label");
+        manager.addLabel("second-label");
+        manager.changeLabel(List.of(first), "first-label");
+        manager.changeLabel(List.of(second), "second-label");
+        List<DownloadInfo> selected = new ArrayList<>(List.of(first, second));
+        DownloadRemovalDialog.show(context, selected, manager, selected::clear);
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        dialog.findViewById(R.id.download_redownload).performClick();
+        assertTrue(selected.isEmpty());
+        assertFalse(manager.containDownloadInfo(123));
+        assertFalse(manager.containDownloadInfo(456));
+        for (DownloadInfo expected : List.of(first, second)) {
+            Intent intent = org.robolectric.Shadows.shadowOf(RuntimeEnvironment.getApplication())
+                    .getNextStartedService();
+            assertNotNull(intent);
+            GalleryInfo gallery = intent.getParcelableExtra(DownloadService.KEY_GALLERY_INFO);
+            assertEquals(expected.gid, gallery.gid);
+            assertEquals(expected.label, intent.getStringExtra(DownloadService.KEY_LABEL));
+        }
+    }
+
+    @Test public void importedGalleryOnlyAllowsRemovingRecord() {
+        DownloadInfo imported = addKnownDownload(123, null, DownloadInfo.STATE_FINISH);
+        imported.archiveUri = "content://test/local-gallery";
+        DownloadRemovalDialog.show(context, imported, manager);
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertFalse(dialog.findViewById(R.id.download_redownload).isEnabled());
+        assertFalse(dialog.findViewById(R.id.download_remove_files).isEnabled());
+        dialog.findViewById(R.id.download_remove_record).performClick();
+        assertFalse(manager.containDownloadInfo(123));
     }
 
     private File prepareDownloadedGallery() throws Exception {

@@ -72,7 +72,6 @@ import androidx.transition.TransitionInflater;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 import com.hippo.android.resource.AttrResources;
-import com.hippo.app.CheckBoxDialogBuilder;
 import com.hippo.beerbelly.BeerBelly;
 import com.hippo.content.FileProvider;
 import com.hippo.drawable.RoundSideRectDrawable;
@@ -131,7 +130,7 @@ import com.hippo.ehviewer.ui.scene.GalleryPreviewsScene;
 import com.hippo.ehviewer.widget.HoldThumbnailPreview;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
 import com.hippo.ehviewer.ui.scene.download.DownloadsScene;
-import com.hippo.ehviewer.ui.scene.download.part.DownloadBatchActions.DeleteDialogHelper;
+import com.hippo.ehviewer.ui.DownloadRemovalDialog;
 import com.hippo.ehviewer.ui.scene.download.part.ThumbDataContainer;
 import com.hippo.ehviewer.ui.scene.gallery.list.FavoritesScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
@@ -2879,14 +2878,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             if (EhApplication.getDownloadManager(mContext).getDownloadState(galleryInfo.gid) == DownloadInfo.STATE_INVALID) {
                 CommonOperations.startDownload(activity, galleryInfo, false);
             } else {
-                CheckBoxDialogBuilder builder = new CheckBoxDialogBuilder(mContext,
-                        getString(R.string.download_remove_dialog_message, galleryInfo.title),
-                        getString(R.string.download_remove_dialog_check_text),
-                        Settings.getRemoveImageFiles());
-                builder.setTitle(R.string.download_remove_dialog_title)
-                        .setPositiveButton(android.R.string.ok, new DeleteDialogHelper(
-                                galleryInfo, builder, EhApplication.getDownloadManager(mContext)))
-                        .show();
+                DownloadRemovalDialog.show(mContext, galleryInfo,
+                        EhApplication.getDownloadManager(mContext));
             }
         }
     }

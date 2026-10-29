@@ -113,8 +113,8 @@ import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
-import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.ui.CommonOperations;
+import com.hippo.ehviewer.ui.DownloadRemovalDialog;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.TagSelectorActivity;
@@ -139,7 +139,6 @@ import com.hippo.refreshlayout.RefreshLayout;
 import com.hippo.ripple.Ripple;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.SceneFragment;
-import com.hippo.unifile.UniFile;
 import com.hippo.util.AppHelper;
 import com.hippo.util.DrawableManager;
 import com.hippo.view.ViewTransition;
@@ -1923,11 +1922,7 @@ public class GalleryListScene extends BaseScene
                             break;
                         case 1: // Download
                             if (downloaded) {
-                                new AlertDialog.Builder(context)
-                                        .setTitle(R.string.download_remove_dialog_title)
-                                        .setMessage(getString(R.string.download_remove_dialog_message, gi.title))
-                                        .setPositiveButton(android.R.string.ok, (dialog1, which1) -> mDownloadManager.deleteDownload(gi.gid))
-                                        .show();
+                                DownloadRemovalDialog.show(context, gi, mDownloadManager);
                             } else {
                                 CommonOperations.startDownload(activity, gi, false);
                             }
@@ -2377,45 +2372,14 @@ public class GalleryListScene extends BaseScene
 
     private void showBatchDeleteDownloadDialog(@NonNull Context context) {
         List<DownloadInfo> downloadInfos = new ArrayList<>();
-        LongList gids = new LongList();
         for (long gid : mSelectedGids) {
             DownloadInfo downloadInfo = mDownloadManager.getDownloadInfo(gid);
             if (downloadInfo != null) {
                 downloadInfos.add(downloadInfo);
-                gids.add(gid);
             }
         }
-        if (gids.isEmpty()) {
-            return;
-        }
-
-        CheckBoxDialogBuilder builder = new CheckBoxDialogBuilder(context,
-                getString(R.string.download_remove_dialog_message_2, gids.size()),
-                getString(R.string.download_remove_dialog_check_text),
-                Settings.getRemoveImageFiles());
-        builder.setTitle(R.string.download_remove_dialog_title)
-                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    boolean removeFiles = builder.isChecked();
-                    Settings.putRemoveImageFiles(removeFiles);
-                    exitMultiSelectMode();
-                    mDownloadManager.deleteRangeDownload(gids);
-                    if (removeFiles) {
-                        deleteGalleryFilesAsync(downloadInfos);
-                    }
-                })
-                .show();
-    }
-
-    private void deleteGalleryFilesAsync(@NonNull List<DownloadInfo> downloadInfos) {
-        executorService.execute(() -> {
-            for (DownloadInfo downloadInfo : downloadInfos) {
-                UniFile directory = SpiderDen.getExistingGalleryDownloadDir(downloadInfo);
-                EhDB.removeDownloadDirname(downloadInfo.gid);
-                if (directory != null) {
-                    directory.delete();
-                }
-            }
-        });
+        DownloadRemovalDialog.show(context, downloadInfos, mDownloadManager,
+                this::exitMultiSelectMode);
     }
 
     private void searchMatchingBookmarks(ListUrlBuilder builder) {
