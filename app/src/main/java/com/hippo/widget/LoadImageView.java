@@ -19,6 +19,7 @@ package com.hippo.widget;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.drawable.Animatable;
 import android.graphics.drawable.AnimatedImageDrawable;
 import android.graphics.drawable.ColorDrawable;
@@ -73,6 +74,7 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
     private DataContainer mDataContainer;
     private boolean mUseNetwork;
     private boolean mHardware;
+    private final Rect mVisibleImageRect = new Rect();
     private boolean mKeepImageWhileLoading;
     private String mImageKey;
     private String mImageUrl;
@@ -423,7 +425,11 @@ public class LoadImageView extends FixedAspectImageView implements Unikery<Image
         mImageUrl = mUrl;
         onPreSetImageDrawable(drawable, true);
         if (!(mKeepImageWhileLoading && previous != null) && animateImageChanges()
-                && (source == Conaco.SOURCE_DISK || source == Conaco.SOURCE_NETWORK) && isShown()) {
+                && (source == Conaco.SOURCE_DISK || source == Conaco.SOURCE_NETWORK)
+                && isShown() && getGlobalVisibleRect(mVisibleImageRect)) {
+            // isShown() also includes thumbnails below a ScrollView's viewport. Their first
+            // display list can record the transparent start of a transition while subsequent
+            // invalidations are clipped out, leaving a loaded image blank when scrolled in.
             Drawable[] layers = new Drawable[2];
             layers[0] = new ColorDrawable(Color.TRANSPARENT);
             layers[1] = drawable;

@@ -178,6 +178,47 @@ public class HoldThumbnailPreviewTest {
         assertEquals(1, clicks);
     }
 
+    @Test @Config(shadows = {PreviewAppShadow.class, ThumbnailLoaderShadow.class})
+    public void delayedSpriteThumbnailsRenderAfterLoadingOutsideViewport() {
+        root.removeAllViews();
+        android.widget.ScrollView scroll = new android.widget.ScrollView(activity);
+        com.hippo.widget.SimpleGridLayout grid = new com.hippo.widget.SimpleGridLayout(activity);
+        grid.setColumnCount(3);
+        scroll.addView(grid);
+        root.addView(scroll);
+        Bitmap sprite = Bitmap.createBitmap(4000, 150, Bitmap.Config.ARGB_8888);
+        sprite.eraseColor(Color.RED);
+        Image loaded = Image.create(sprite);
+        LoadImageView[] thumbnails = new LoadImageView[40];
+        for (int i = 0; i < thumbnails.length; i++) {
+            View item = LayoutInflater.from(activity).inflate(R.layout.item_gallery_preview, grid, false);
+            thumbnails[i] = item.findViewById(R.id.image);
+            grid.addView(item);
+        }
+        layout(root, 480, 800);
+        for (int i = 0; i < thumbnails.length; i++) {
+            idle(i < 12 ? 0 : 50);
+            LoadImageView thumbnail = thumbnails[i];
+            thumbnail.setClip(i * 100, 0, 100, 150);
+            assertTrue(thumbnail.onGetValue(loaded, Conaco.SOURCE_NETWORK));
+        }
+        assertTrue("Visible thumbnails retain their fade",
+                thumbnails[0].getDrawable() instanceof android.graphics.drawable.TransitionDrawable);
+        layout(root, 480, 800);
+        scroll.scrollTo(0, grid.getHeight());
+        Bitmap frame = Bitmap.createBitmap(480, 800, Bitmap.Config.ARGB_8888);
+        root.draw(new Canvas(frame));
+        idle(400);
+        root.draw(new Canvas(frame));
+        for (int i = 21; i < thumbnails.length; i++) {
+            LoadImageView thumbnail = thumbnails[i];
+            Bitmap tile = Bitmap.createBitmap(thumbnail.getWidth(), thumbnail.getHeight(), Bitmap.Config.ARGB_8888);
+            thumbnail.draw(new Canvas(tile));
+            assertEquals("Blank thumbnail " + (i + 1), Color.RED,
+                    tile.getPixel(tile.getWidth() / 2, tile.getHeight() / 2));
+        }
+    }
+
     @Implements(EhApplication.class)
     public static class PreviewAppShadow extends org.robolectric.shadows.ShadowApplication {
         @Implementation protected static Conaco<Image> getConaco(Context context) {
