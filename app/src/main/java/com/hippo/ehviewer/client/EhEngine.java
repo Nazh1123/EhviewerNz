@@ -233,6 +233,12 @@ public class EhEngine {
     private static void fillGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
             List<GalleryInfo> list, String url, boolean filter, @Nullable String subscriptionScope,
             boolean preciseRating, boolean checkOnly) throws Throwable {
+        fillGalleryList(task, okHttpClient, list, url, filter, subscriptionScope, preciseRating, checkOnly, false);
+    }
+
+    private static void fillGalleryList(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
+            List<GalleryInfo> list, String url, boolean filter, @Nullable String subscriptionScope,
+            boolean preciseRating, boolean checkOnly, boolean deferDisplay) throws Throwable {
         // Filter title and uploader
         if (filter) {
             for (int i = 0, n = list.size(); i < n; i++) {
@@ -245,34 +251,14 @@ public class EhEngine {
             }
         }
 
-        boolean hasTags = false;
-        boolean hasPages = false;
-        boolean allHaveTags = !list.isEmpty();
-        boolean allHavePages = !list.isEmpty();
-        boolean hasRated = false;
+        List<GalleryInfo> required = new ArrayList<>();
         for (GalleryInfo gi : list) {
-            if (gi.simpleTags != null) {
-                hasTags = true;
-            } else {
-                allHaveTags = false;
-            }
-            if (gi.pages != 0) {
-                hasPages = true;
-            } else {
-                allHavePages = false;
-            }
-            if (gi.rated) {
-                hasRated = true;
+            if (preciseRating || gi.rated || (filter &&
+                    ((sEhFilter.needTags() && gi.simpleTags == null)
+                    || (sEhFilter.needUploader() && TextUtils.isEmpty(gi.uploader))))) {
+                required.add(gi);
             }
         }
-
-        boolean needThumbnailInfo = Settings.isThumbnailInfoBarEffective()
-                && Settings.getShowThumbnailInfoDetails()
-                && (!allHaveTags || !allHavePages);
-        boolean needApi = preciseRating || (filter && sEhFilter.needTags() && !hasTags) ||
-                (Settings.getShowGalleryPages() && !hasPages) ||
-                hasRated ||
-                needThumbnailInfo;
         if (checkOnly) {
             // Display settings must not make an unread check fetch metadata for the whole page.
             boolean needTags = sEhFilter.needSubscriptionTags();
@@ -286,12 +272,26 @@ public class EhEngine {
                 SUBSCRIPTION_METADATA.fill(subscriptionScope, missing,
                         items -> fillGalleryListByApi(task, okHttpClient, items, url));
             }
-        } else if (needApi) {
+        } else if (!required.isEmpty()) {
             if (subscriptionScope != null) {
-                SUBSCRIPTION_METADATA.fill(subscriptionScope, list,
+                SUBSCRIPTION_METADATA.fill(subscriptionScope, required,
                         items -> fillGalleryListByApi(task, okHttpClient, items, url));
             } else {
-                fillGalleryListByApi(task, okHttpClient, list, url);
+                fillGalleryListByApi(task, okHttpClient, required, url);
+            }
+        }
+
+        // The browsing adapter fills optional fields after the HTML list is visible.
+        // Other consumers retain their synchronous contract, but optional failures cannot hide a list.
+        if (!checkOnly && !deferDisplay) {
+            List<GalleryInfo> missing = new ArrayList<>();
+            for (GalleryInfo info : list) if (GalleryDisplayMetadataLoader.needsMetadata(info)) missing.add(info);
+            if (!missing.isEmpty()) try {
+                fillDisplayMetadata(task, okHttpClient, missing, SubscriptionSearchContext.key());
+            } catch (com.hippo.ehviewer.client.exception.CancelledException e) {
+                throw e;
+            } catch (Exception e) {
+                Log.w(TAG, "Optional gallery metadata unavailable", e);
             }
         }
 
@@ -535,7 +535,7 @@ public class EhEngine {
             }
         }
         fillGalleryList(task, okHttpClient, result.galleryInfoList, requestUrl, true, subscriptionScope,
-                minRatingHundredths > 0, checkOnly);
+                minRatingHundredths > 0, checkOnly, true);
         // Popular history must retain the entire snapshot; its UI projection applies the threshold.
         if (minRatingHundredths > 0 && mode != ListUrlBuilder.MODE_WHATS_HOT) {
             boolean hadGalleries = !result.galleryInfoList.isEmpty();
@@ -565,6 +565,13 @@ public class EhEngine {
     }
 
     // At least, GalleryInfo contain valid gid and token
+    public static List<GalleryInfo> fillDisplayMetadata(@Nullable EhClient.Task task, OkHttpClient client,
+            List<GalleryInfo> items, String scope) throws Throwable {
+        SUBSCRIPTION_METADATA.fill(scope, items,
+                missing -> fillGalleryListByApi(task, client, missing, EhUrl.getReferer()));
+        return items;
+    }
+
     public static List<GalleryInfo> fillGalleryListByApi(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
                                                          List<GalleryInfo> galleryInfoList, String referer) throws Throwable {
         // We can only request 25 items one time at most

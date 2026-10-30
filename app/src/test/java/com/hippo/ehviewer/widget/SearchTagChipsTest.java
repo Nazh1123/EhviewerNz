@@ -431,6 +431,53 @@ public class SearchTagChipsTest {
     }
 
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    @Config(sdk = {28, 36})
+    public void firstChipStaysLeftAlignedForSingleAndWrappedQueries() {
+        SearchBar bar = attachSearchBar();
+        edit = bar.findViewById(R.id.search_edit_text);
+        for (String query : new String[]{"f:a", "artist:alice", "f:aaa m:bbb",
+                "artist:alice artist:bravo artist:charlie", "f:a ",
+                "artist:\"a very long artist name that must stay inside one compact chip$\"",
+                "artist:\"a very long artist name that must stay inside one compact chip$\" f:a",
+                "f:a"}) {
+            bar.setText(query);
+            layoutBar(bar);
+            edit.setSelection(edit.length());
+            layoutBar(bar);
+            assertEquals(query, 48f, edit.getTotalPaddingLeft()
+                    + edit.getLayout().getPrimaryHorizontal(0) - edit.getScrollX(), 0.1f);
+            Bitmap bitmap = Bitmap.createBitmap(edit.getWidth(), 48, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(bitmap);
+            canvas.translate(edit.getTotalPaddingLeft() - edit.getScrollX(), edit.getTotalPaddingTop());
+            edit.getLayout().draw(canvas);
+            int y = Math.round(edit.getTotalPaddingTop() + edit.getLayout().getLineBaseline(0)
+                    + (edit.getPaint().ascent() + edit.getPaint().descent()) / 2);
+            int firstPixel = 0;
+            while (firstPixel < bitmap.getWidth() && (bitmap.getPixel(firstPixel, y) >>> 24) == 0) firstPixel++;
+            assertEquals(query, 48, firstPixel);
+            bitmap.recycle();
+        }
+    }
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    @Config(sdk = {28, 36})
+    public void editingWithAnEarlierTextSnapshotDoesNotDuplicateTheFirstRowIndent() {
+        SearchBar bar = attachSearchBar();
+        edit = bar.findViewById(R.id.search_edit_text);
+        bar.setText("f:aaa artist:bravo artist:charlie");
+        layoutBar(bar);
+        CharSequence snapshot = new android.text.SpannableString(edit.getText());
+        edit.getText().append(" ");
+        layoutBar(bar);
+        edit.getText().replace(0, edit.length(), snapshot);
+        edit.refreshTagChips(true);
+        edit.setSelection(0);
+        layoutBar(bar);
+        assertEquals(48f, edit.getTotalPaddingLeft()
+                + edit.getLayout().getPrimaryHorizontal(0) - edit.getScrollX(), 0.1f);
+    }
+
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
     public void buttonsStayInFirstRowAndLaterRowsUseBothSidesWithoutChangingCopiedQuery() {
         SearchBar bar = attachSearchBar();
         edit = bar.findViewById(R.id.search_edit_text);

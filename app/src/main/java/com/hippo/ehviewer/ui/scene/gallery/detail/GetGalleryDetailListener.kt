@@ -20,6 +20,7 @@ class GetGalleryDetailListener(
             return
         }
         // Put gallery detail to cache
+        result.fetchedAtElapsed = android.os.SystemClock.elapsedRealtime()
         EhApplication.getGalleryDetailCache(application).put(result.gid, result)
 
         // Persist independently; a database lock must not delay displaying received details.

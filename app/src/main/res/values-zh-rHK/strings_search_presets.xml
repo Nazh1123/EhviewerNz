@@ -9,7 +9,8 @@
     <string name="search_preset_normal">普通</string>
     <string name="search_preset_include">開啟（包含）</string>
     <string name="settings_search_preset_bubbles_summary">在更多搜尋條件中顯示預設氣泡。點擊氣泡新增或移除關鍵詞，點擊左側符號切換包含、排除和「或」。</string>
-    <string name="settings_search_preset_tags">預設關鍵詞氣泡</string>
+    <string name="settings_search_preset_tags">預設關鍵詞</string>
+    <string name="settings_search_preset_reorder">拖曳以調整 %1$s 的順序</string>
     <string name="settings_search_preset_add">新增預設標籤</string>
     <string name="settings_search_preset_edit">編輯預設標籤</string>
     <string name="settings_search_preset_remove">刪除預設</string>
@@ -17,7 +18,7 @@
     <string name="search_preset_absent">搜尋列中未新增</string>
     <string name="search_preset_add">新增標籤%1$s</string>
     <string name="settings_search_presets_count">已有 %1$d 個標籤 · 點擊新增、編輯或刪除</string>
-    <string name="settings_search_presets_description">管理更多搜尋條件中顯示的預設氣泡。修改後立即儲存，可透過標籤右側的按鈕編輯或刪除。</string>
+    <string name="settings_search_presets_description">管理更多搜尋條件中顯示的預設關鍵詞。拖曳左側手柄調整順序，點擊右側按鈕編輯或刪除，修改後立即儲存。</string>
     <string name="settings_search_presets_empty">還沒有預設標籤，點擊下方按鈕新增。</string>
     <string name="settings_search_preset_remove_confirm">刪除預設 %1$s？目前搜尋列中的關鍵詞將保留。</string>
     <string name="search_preset_input_hint">輸入關鍵詞或標籤表達式</string>

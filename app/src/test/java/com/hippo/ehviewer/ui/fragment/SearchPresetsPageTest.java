@@ -10,6 +10,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.FragmentManager;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceManager;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
@@ -154,6 +155,43 @@ public class SearchPresetsPageTest {
         assertEquals(activity.getString(R.string.settings_search_preset_tags), activity.getSupportActionBar().getTitle());
     }
 
+    @Test public void dragHandleStartsReorderAndMovesPersistWithCorrectEditTargetAfterRotation() {
+        Settings.putSearchPresetTags(List.of("a:alpha", "a:bravo", "a:charlie", "a:delta"));
+        page.onResume();
+        layout();
+        assertEquals("预设关键词", activity.getSupportActionBar().getTitle());
+        ItemTouchHelper helper = org.robolectric.util.ReflectionHelpers.getField(page, "touchHelper");
+        RecyclerView.ViewHolder source = list().findViewHolderForAdapterPosition(0);
+        View handle = source.itemView.findViewById(R.id.search_preset_drag);
+        android.view.MotionEvent down = android.view.MotionEvent.obtain(0, 0,
+                android.view.MotionEvent.ACTION_DOWN, 1, 1, 0);
+        handle.dispatchTouchEvent(down);
+        down.recycle();
+        assertSame(source, org.robolectric.util.ReflectionHelpers.getField(helper, "mSelected"));
+        ItemTouchHelper.Callback callback = org.robolectric.util.ReflectionHelpers.getField(helper, "mCallback");
+        assertTrue(callback.onMove(list(), source, list().findViewHolderForAdapterPosition(2)));
+        assertEquals(List.of("a:bravo", "a:charlie", "a:alpha", "a:delta"), Settings.getSearchPresetTags());
+        // A second move upward must insert the row, preserving the other rows' relative order.
+        assertTrue(callback.onMove(list(), source, list().findViewHolderForAdapterPosition(1)));
+        List<String> expected = List.of("a:bravo", "a:alpha", "a:charlie", "a:delta");
+        assertEquals(expected, Settings.getSearchPresetTags());
+        controller.recreate();
+        activity = controller.get();
+        page = (SearchPresetsFragment) activity.getSupportFragmentManager().findFragmentById(R.id.settings);
+        layout();
+        assertEquals(expected, Settings.getSearchPresetTags());
+        for (int i = 0; i < expected.size(); i++) {
+            assertEquals(expected.get(i), ((TextView) row(i).findViewById(R.id.search_preset_query)).getText().toString());
+        }
+        row(1).findViewById(R.id.search_preset_edit).performClick();
+        page.getChildFragmentManager().executePendingTransactions();
+        assertEquals("a:alpha", ((EditText) editor().findViewById(R.id.search_preset_input)).getText().toString());
+        ((EditText) editor().findViewById(R.id.search_preset_input)).setText("a:edited");
+        editor().getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        idle();
+        assertEquals(List.of("a:bravo", "a:edited", "a:charlie", "a:delta"), Settings.getSearchPresetTags());
+    }
+
     @Test public void longListScrollsWhileAddButtonStaysOutsideList() {
         java.util.ArrayList<String> tags = new java.util.ArrayList<>();
         for (int i = 0; i < 30; i++) tags.add("a:artist" + i);
@@ -181,6 +219,8 @@ public class SearchPresetsPageTest {
             page = (SearchPresetsFragment) activity.getSupportFragmentManager().findFragmentById(R.id.settings);
             layout();
             View first = row(0);
+            assertTrue(first.findViewById(R.id.search_preset_drag).getRight()
+                    <= first.findViewById(R.id.search_preset_details).getLeft());
             assertTrue(first.findViewById(R.id.search_preset_details).getRight()
                     <= first.findViewById(R.id.search_preset_edit).getLeft());
             assertTrue(first.findViewById(R.id.search_preset_edit).getRight()

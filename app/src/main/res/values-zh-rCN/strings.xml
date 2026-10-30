@@ -418,6 +418,9 @@
     <string name="download_remove_dialog_message">从下载列表移除 %s ？</string>
     <string name="download_remove_dialog_message_2">从下载列表移除 %d 项？</string>
     <string name="download_remove_dialog_check_text">删除图片文件</string>
+    <string name="download_remove_record">仅删除记录</string>
+    <string name="download_redownload">重新下载</string>
+    <string name="download_remove_files">删除记录和本地文件</string>
     <string name="download_delete_empty_labels">删除空标签</string>
     <string name="download_delete_empty_labels_message">删除 %d 个没有画廊的下载标签？</string>
     <string name="download_delete_empty_labels_none">没有空下载标签</string>
@@ -1005,11 +1008,12 @@
     <string name="cleanup_toplists">整理 排行榜</string>
     <string name="rating_reviewing_toplists">等级&#038;审核 排行榜</string>
     <string name="top_list">排行榜</string>
+    <string name="top_list_period_title">%1$s 排行榜</string>
 
     <string name="all_time_top_list">有史以来</string>
     <string name="past_year_top_list">过去一年</string>
     <string name="past_month_top_list">过去一个月</string>
-    <string name="yesterday_top_list">昨天</string>
+    <string name="yesterday_top_list">昨日</string>
 
 
     <!--  侧滑栏头像和背景修改  -->

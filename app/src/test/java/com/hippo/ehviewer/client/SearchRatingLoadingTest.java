@@ -114,6 +114,25 @@ public class SearchRatingLoadingTest {
         }).build();
     }
 
+    @Test public void optionalInfoDoesNotDelayListAndRequiredTagsFetchOnlyMissingRows() throws Throwable {
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        GalleryInfo missing = new GalleryInfo(); missing.gid = 1; missing.token = "token";
+        GalleryInfo complete = new GalleryInfo(); complete.gid = 2; complete.token = "token";
+        missing.thumb = complete.thumb = "https://example.org/thumb.jpg";
+        complete.simpleTags = new String[0]; complete.pages = 20;
+        var method = EhEngine.class.getDeclaredMethod("fillGalleryList", EhClient.Task.class, OkHttpClient.class,
+                java.util.List.class, String.class, boolean.class, String.class, boolean.class, boolean.class, boolean.class);
+        method.setAccessible(true);
+        var rows = new java.util.ArrayList<>(java.util.List.of(missing, complete));
+        method.invoke(null, null, client(false), rows, FIRST, true, null, false, false, true);
+        assertEquals(0, apiRequests.get()); assertEquals(2, rows.size());
+        EhEngine.sEhFilter.addFilter(new com.hippo.ehviewer.dao.Filter(null, EhFilter.MODE_TAG, "blocked", true));
+        method.invoke(null, null, client(false), rows, FIRST, true, null, false, false, true);
+        assertEquals(java.util.Set.of(1L), apiGids);
+        assertEquals(20, complete.pages);
+    }
+
     @Test public void usesApiDecimalsAndAdvancesPastExactlyOneEmptyBatch() throws Throwable {
         GalleryListParser.Result result = EhEngine.getGalleryList(null, client(true), FIRST,
                 ListUrlBuilder.MODE_NORMAL, false, false, 451, true);

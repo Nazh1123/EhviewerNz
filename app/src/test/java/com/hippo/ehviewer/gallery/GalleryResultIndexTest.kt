@@ -36,6 +36,39 @@ class GalleryResultIndexTest {
         return try { ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray() }
         finally { bitmap.recycle() }
     }
+    @Test fun encodingDoesNotBlockReadingSameOrOtherGalleryAndDeleteWinsBeforePublication() {
+        val index = GalleryResultIndex.open(app, "gallery:991", 991, UniFile.fromFile(gallery), true)
+        val other = GalleryResultIndex.open(app, "other", null, null, false)
+        val bytes = png()
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val writing = pool.submit<Boolean> {
+                try {
+                    index.write(source, tl, "png") {
+                        entered.countDown()
+                        check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                        it.write(bytes)
+                    }
+                    true
+                } catch (expected: IllegalStateException) { false }
+            }
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            pool.submit<Boolean> {
+                assertNull(index.find(source, tl))
+                assertNull(other.find(source, sr))
+                GalleryResultIndex.deleteKind(app, 991, UniFile.fromFile(gallery), tl)
+                true
+            }.get(3, java.util.concurrent.TimeUnit.SECONDS)
+            release.countDown()
+            assertFalse("Deletion must invalidate encoded-but-unpublished results", writing.get(5, java.util.concurrent.TimeUnit.SECONDS))
+            assertNull(index.find(source, tl))
+            assertFalse(File(gallery, "_translated").exists())
+            assertTrue(app.cacheDir.listFiles().orEmpty().none { it.name.startsWith("gallery-result-") })
+        } finally { release.countDown(); pool.shutdownNow() }
+    }
+
     @Test fun missesDoNotCreateAnyFilesEvenAcrossManyPages() {
         val index = index()
         repeat(100) { assertNull(index.find(GalleryResultIndex.Source("$it"), tl)) }
@@ -121,7 +154,7 @@ class GalleryResultIndexTest {
         assertTrue(root.isDirectory); assertTrue(manifest.isFile); assertTrue(other.isFile)
     }
 
-    @Test fun deletionWaitsForAnOppositeIndexedWriteAndPreservesItsPublishedResult() {
+    @Test fun deletionDoesNotWaitForOppositeEncodingAndPreservesItsLaterPublishedResult() {
         val root = UniFile.fromFile(gallery)!!.createDirectory("book.zip.results")!!
         val index = GalleryResultIndex.open(app, "gallery:85", 85, root, true)
         index.write(source, tl, "skip") { it.write("skipped".toByteArray()) }
@@ -146,7 +179,7 @@ class GalleryResultIndexTest {
         try {
             assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
             cleaner.start()
-            assertFalse(deleted.await(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+            assertTrue(deleted.await(3, java.util.concurrent.TimeUnit.SECONDS))
         } finally { release.countDown(); writer.join(5000); cleaner.join(5000) }
         assertNull(failure.get()); assertFalse(writer.isAlive); assertFalse(cleaner.isAlive)
         assertTrue(root.isDirectory); assertNull(index.find(source, tl)); assertNotNull(index.find(source, sr))

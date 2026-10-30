@@ -53,12 +53,22 @@ final class SearchTagChipSpan extends ReplacementSpan {
 
     float actionWidth() { return ACTION_WIDTH_DP * density; }
 
+    float height() { return CHIP_HEIGHT_DP * density; }
+
+    static float centerY(Paint paint, int baseline) {
+        return Math.round(baseline + (paint.ascent() + paint.descent()) / 2);
+    }
+
     static float horizontalSpace(float density) {
         return (ACTION_WIDTH_DP + LABEL_PADDING_DP) * 2 * density;
     }
 
-    private CharSequence displayLabel(Paint paint) {
-        return TextUtils.ellipsize(label, new TextPaint(paint), maxLabelWidth, TextUtils.TruncateAt.END);
+    private String displayLabel(Paint paint) {
+        return TextUtils.ellipsize(label, new TextPaint(paint), maxLabelWidth, TextUtils.TruncateAt.END).toString();
+    }
+
+    private int width(Paint paint, String displayLabel) {
+        return Math.round(horizontalSpace(density) + paint.measureText(displayLabel));
     }
 
     @Override
@@ -67,18 +77,18 @@ final class SearchTagChipSpan extends ReplacementSpan {
         if (fm != null) {
             paint.getFontMetricsInt(fm);
         }
-        return Math.round(horizontalSpace(density)
-                + paint.measureText(displayLabel(paint).toString()));
+        return width(paint, displayLabel(paint));
     }
 
     @Override
     public void draw(@NonNull Canvas canvas, CharSequence text, int start, int end,
                      float x, int top, int y, int bottom, @NonNull Paint original) {
         Paint paint = new Paint(original);
-        float width = getSize(original, text, start, end, null);
+        String displayLabel = displayLabel(original);
+        float width = width(original, displayLabel);
         // Keep ordinary font metrics for the native cursor. Row spacing lives in the TextView.
-        float cy = Math.round(y + (paint.ascent() + paint.descent()) / 2);
-        float height = CHIP_HEIGHT_DP * density;
+        float cy = centerY(original, y);
+        float height = height();
         int tint = !active || operator == '-' ? original.getColor() : accent;
         paint.setColor(ColorUtils.setAlphaComponent(tint, !active ? 12 : operator == '~' ? 45 : 28));
         canvas.drawRoundRect(x, cy - height / 2, x + width, cy + height / 2,
@@ -86,15 +96,14 @@ final class SearchTagChipSpan extends ReplacementSpan {
         paint.setColor(ColorUtils.setAlphaComponent(tint, 65));
         paint.setStrokeWidth(0.5f * density);
         float dividerInset = actionWidth() - LABEL_PADDING_DP * density;
-        for (float position : new float[]{dividerInset, width - dividerInset}) {
-            canvas.drawLine(x + position, cy - 6 * density,
-                    x + position, cy + 6 * density, paint);
-        }
+        canvas.drawLine(x + dividerInset, cy - 6 * density, x + dividerInset, cy + 6 * density, paint);
+        canvas.drawLine(x + width - dividerInset, cy - 6 * density,
+                x + width - dividerInset, cy + 6 * density, paint);
         paint.setColor(original.getColor());
         float baseline = cy - (paint.ascent() + paint.descent()) / 2;
         String sign = operator == '-' ? "−" : String.valueOf(operator);
         canvas.drawText(sign, x + (actionWidth() - paint.measureText(sign)) / 2, baseline, paint);
-        canvas.drawText(displayLabel(paint).toString(),
+        canvas.drawText(displayLabel,
                 x + actionWidth() + LABEL_PADDING_DP * density, baseline, paint);
         float closeX = x + width - actionWidth() / 2;
         // Use the same font and weight as the operator instead of a heavier fixed-width stroke.

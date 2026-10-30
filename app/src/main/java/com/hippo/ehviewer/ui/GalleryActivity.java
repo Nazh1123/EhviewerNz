@@ -849,6 +849,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mQuickSettingsPanel, R.id.quick_animated_webp);
         mQuickScreenOrientation.setOnClickListener(this::toggleQuickScreenOrientation);
         mQuickReadingDirection.setOnClickListener(this::toggleQuickReadingDirection);
+        mQuickReadingDirection.setOnLongClickListener(view -> {
+            setQuickReadingDirection(GalleryView.LAYOUT_TOP_TO_BOTTOM);
+            return true;
+        });
         // mQuickDirectSave.setOnClickListener(this::toggleQuickDirectSave);
         // mQuickPageTurn.setOnClickListener(this::toggleQuickPageTurn);
         mQuickAnimatedWebp.setOnClickListener(this::toggleQuickAnimatedWebp);
@@ -1926,6 +1930,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             // The quick action intentionally toggles only the two horizontal modes. Entering it
             // from top-to-bottom (or an invalid persisted value) starts at left-to-right.
             newDirection = GalleryView.LAYOUT_LEFT_TO_RIGHT;
+        }
+        setQuickReadingDirection(newDirection);
+    }
+
+    private void setQuickReadingDirection(int newDirection) {
+        if (mGalleryView == null) {
+            return;
         }
         Settings.putReadingDirection(newDirection);
         mLayoutMode = newDirection;

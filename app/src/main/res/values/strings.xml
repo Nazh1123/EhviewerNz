@@ -510,6 +510,9 @@
     <string name="download_remove_dialog_message">Remove %s from download list ?</string>
     <string name="download_remove_dialog_message_2">Remove %d items from download list ?</string>
     <string name="download_remove_dialog_check_text">Delete image files</string>
+    <string name="download_remove_record">Remove record only</string>
+    <string name="download_redownload">Download again</string>
+    <string name="download_remove_files">Remove record and local files</string>
     <string name="download_delete_empty_labels">Delete Empty Labels</string>
     <string name="download_delete_empty_labels_message">Delete %d labels that contain no galleries?</string>
     <string name="download_delete_empty_labels_none">No empty download labels found</string>
@@ -1091,6 +1094,7 @@
     <string name="cleanup_toplists">Cleanup Toplists</string>
     <string name="rating_reviewing_toplists">Rating&#038;Reviewing Toplists</string>
     <string name="top_list">Top Lists</string>
+    <string name="top_list_period_title">%1$s</string>
 
     <string name="all_time_top_list">All Time TopList</string>
     <string name="past_year_top_list">Past Year TopList</string>

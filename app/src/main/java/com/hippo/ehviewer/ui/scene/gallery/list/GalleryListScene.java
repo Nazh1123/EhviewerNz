@@ -31,6 +31,7 @@ import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.InputType;
@@ -116,8 +117,8 @@ import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
-import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.ui.CommonOperations;
+import com.hippo.ehviewer.ui.DownloadRemovalDialog;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.TagSelectorActivity;
@@ -142,7 +143,6 @@ import com.hippo.refreshlayout.RefreshLayout;
 import com.hippo.ripple.Ripple;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.SceneFragment;
-import com.hippo.unifile.UniFile;
 import com.hippo.util.AppHelper;
 import com.hippo.util.DrawableManager;
 import com.hippo.view.ViewTransition;
@@ -737,6 +737,26 @@ public class GalleryListScene extends BaseScene
             return resources.getString(R.string.global_subscription);
         } else if (ListUrlBuilder.MODE_WHATS_HOT == urlBuilder.getMode()) {
             return resources.getString(R.string.whats_hot);
+        } else if (ListUrlBuilder.MODE_TOP_LIST == urlBuilder.getMode()) {
+            String topList = Uri.parse("?" + urlBuilder.getFollow()).getQueryParameter("tl");
+            int period;
+            switch (topList == null ? "" : topList) {
+                case "11":
+                    period = R.string.all_time_top_list;
+                    break;
+                case "12":
+                    period = R.string.past_year_top_list;
+                    break;
+                case "13":
+                    period = R.string.past_month_top_list;
+                    break;
+                case "15":
+                    period = R.string.yesterday_top_list;
+                    break;
+                default:
+                    return resources.getString(R.string.top_lists);
+            }
+            return resources.getString(R.string.top_list_period_title, resources.getString(period));
         } else if (!TextUtils.isEmpty(keyword)) {
             return keyword;
         } else if (MathUtils.hammingWeight(category) == 1) {
@@ -819,6 +839,8 @@ public class GalleryListScene extends BaseScene
             checkedItemId = R.id.nav_global_subscription;
         } else if (ListUrlBuilder.MODE_WHATS_HOT == builder.getMode()) {
             checkedItemId = R.id.nav_whats_hot;
+        } else if (ListUrlBuilder.MODE_TOP_LIST == builder.getMode()) {
+            checkedItemId = R.id.nav_top_lists;
         } else {
             checkedItemId = 0;
         }
@@ -1932,11 +1954,7 @@ public class GalleryListScene extends BaseScene
                             break;
                         case 1: // Download
                             if (downloaded) {
-                                new AlertDialog.Builder(context)
-                                        .setTitle(R.string.download_remove_dialog_title)
-                                        .setMessage(getString(R.string.download_remove_dialog_message, gi.title))
-                                        .setPositiveButton(android.R.string.ok, (dialog1, which1) -> mDownloadManager.deleteDownload(gi.gid))
-                                        .show();
+                                DownloadRemovalDialog.show(context, gi, mDownloadManager);
                             } else {
                                 CommonOperations.startDownload(activity, gi, false);
                             }
@@ -2386,45 +2404,14 @@ public class GalleryListScene extends BaseScene
 
     private void showBatchDeleteDownloadDialog(@NonNull Context context) {
         List<DownloadInfo> downloadInfos = new ArrayList<>();
-        LongList gids = new LongList();
         for (long gid : mSelectedGids) {
             DownloadInfo downloadInfo = mDownloadManager.getDownloadInfo(gid);
             if (downloadInfo != null) {
                 downloadInfos.add(downloadInfo);
-                gids.add(gid);
             }
         }
-        if (gids.isEmpty()) {
-            return;
-        }
-
-        CheckBoxDialogBuilder builder = new CheckBoxDialogBuilder(context,
-                getString(R.string.download_remove_dialog_message_2, gids.size()),
-                getString(R.string.download_remove_dialog_check_text),
-                Settings.getRemoveImageFiles());
-        builder.setTitle(R.string.download_remove_dialog_title)
-                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    boolean removeFiles = builder.isChecked();
-                    Settings.putRemoveImageFiles(removeFiles);
-                    exitMultiSelectMode();
-                    mDownloadManager.deleteRangeDownload(gids);
-                    if (removeFiles) {
-                        deleteGalleryFilesAsync(downloadInfos);
-                    }
-                })
-                .show();
-    }
-
-    private void deleteGalleryFilesAsync(@NonNull List<DownloadInfo> downloadInfos) {
-        executorService.execute(() -> {
-            for (DownloadInfo downloadInfo : downloadInfos) {
-                UniFile directory = SpiderDen.getExistingGalleryDownloadDir(downloadInfo);
-                EhDB.removeDownloadDirname(downloadInfo.gid);
-                if (directory != null) {
-                    directory.delete();
-                }
-            }
-        });
+        DownloadRemovalDialog.show(context, downloadInfos, mDownloadManager,
+                this::exitMultiSelectMode);
     }
 
     private void searchMatchingBookmarks(ListUrlBuilder builder) {

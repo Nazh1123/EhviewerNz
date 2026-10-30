@@ -28,6 +28,9 @@ class GalleryResultIndex private constructor(
     private val manifestIdentity get() = if (identity.startsWith("archive:")) "archive" else identity
     internal val applicationContext get() = context
     private val cacheDirectory get() = checkNotNull(UniFile.fromFile(cache))
+    private val locks = ResultIndexLocks.states(listOfNotNull(cacheDirectory.uri.toString(), local?.uri?.toString()))
+    private fun <T> locked(block: () -> T): T = ResultIndexLocks.withStates(locks, block)
+    private fun invalidateWrites(kind: Kind) { locks.forEach { it.deleted[kind.ordinal]++ } }
 
     /** Another stage may finish after empty archive results were deleted, including opaque SAF IDs. */
     private fun localDirectory(create: Boolean = false): UniFile? {
@@ -83,7 +86,7 @@ class GalleryResultIndex private constructor(
         changed(json, source, kind)
     }
     private fun changed(json: JSONObject, source: Source, kind: Kind) {
-        revision++
+        synchronized(documents) { revision++ }
         val changed = identity.ifEmpty { json.optString("gallery", identity) }
         val event = Change(changed, source.name, kind)
         android.os.Handler(android.os.Looper.getMainLooper()).post { listeners.forEach { it(event) } }
@@ -96,7 +99,7 @@ class GalleryResultIndex private constructor(
         fun contains(source: Source, kind: Kind) = pages[source.name]?.containsKey(kind) == true
     }
     /** Copy metadata only. Never resolves result files or enumerates source pages. */
-    internal fun snapshot(refresh: Boolean = false, names: Set<String>? = null): Snapshot = synchronized(guard) {
+    internal fun snapshot(refresh: Boolean = false, names: Set<String>? = null): Snapshot = locked {
         val directories = listOfNotNull(localDirectory()?.let { it to true }, cacheDirectory to false)
         if (refresh) directories.forEach { documents.remove(it.first.uri.toString()) }
         val pages = mutableMapOf<String, MutableMap<Kind, MutableList<Entry>>>()
@@ -121,7 +124,7 @@ class GalleryResultIndex private constructor(
             directory.findFile(parts[0])?.findFile(parts[1])
         }
     }
-    fun find(source: Source, kind: Kind): Hit? = synchronized(guard) {
+    fun find(source: Source, kind: Kind): Hit? = locked {
         for ((directory, persistent) in listOfNotNull(localDirectory()?.let { it to true }, cacheDirectory to false)) {
             val json = manifest(directory)
             val entry = row(json, source, kind) ?: continue
@@ -141,17 +144,34 @@ class GalleryResultIndex private constructor(
                     }
                 }
                 write(source, kind, entry.getString("format"), entry.optInt("scale", 1)) { out -> image.openInputStream().use { it.copyTo(out) } }
-                return@synchronized find(source, kind)
+                return@locked find(source, kind)
             }
-            if (entry.optString("state") == "skip") return@synchronized Hit(null, "skip", 0, 0, 1, persistent)
-            return@synchronized Hit(image, entry.optString("state", "complete"), entry.optInt("width"),
+            if (entry.optString("state") == "skip") return@locked Hit(null, "skip", 0, 0, 1, persistent)
+            return@locked Hit(image, entry.optString("state", "complete"), entry.optInt("width"),
                 entry.optInt("height"), entry.optInt("scale", 1), persistent)
         }
         null
     }
-    /** Atomically publish bytes before advertising the new result. Writers of both kinds share guard. */
-    fun write(source: Source, kind: Kind, format: String, scale: Int = 1, writer: (OutputStream) -> Unit): UniFile = synchronized(guard) {
+    /** Encode outside manifest locks. Deletion invalidates pending bytes before they can be published. */
+    fun write(source: Source, kind: Kind, format: String, scale: Int = 1, writer: (OutputStream) -> Unit): UniFile {
         require(format in setOf("webp", "png", "partial", "regions", "skip"))
+        val epochs = locked { locks.map { it.deleted[kind.ordinal] } to cacheDeleted[kind.ordinal] }
+        val staged = File.createTempFile("gallery-result-", ".part", context.cacheDir)
+        try {
+            staged.outputStream().use(writer)
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            if (format in setOf("png", "webp", "partial")) BitmapFactory.decodeFile(staged.path, bounds)
+            if (format in setOf("png", "webp")) check(bounds.outWidth > 0 && bounds.outHeight > 0) { "Invalid result image" }
+            return locked {
+                check(locks.map { it.deleted[kind.ordinal] } == epochs.first &&
+                    (persist && local != null || cacheDeleted[kind.ordinal] == epochs.second)) { "Result was deleted during encoding" }
+                publish(source, kind, format, scale, staged, bounds)
+            }
+        } finally { staged.delete() }
+    }
+
+    private fun publish(source: Source, kind: Kind, format: String, scale: Int, staged: File,
+                        bounds: BitmapFactory.Options): UniFile {
         val persistent = persist && local != null
         val directory = if (persistent) checkNotNull(localDirectory(true)) { "Result directory unavailable" } else {
             check(cache.isDirectory || cache.mkdirs()); cacheDirectory
@@ -160,13 +180,16 @@ class GalleryResultIndex private constructor(
             else checkNotNull(directory.createDirectory(digest(source.name)))
         val name = if (persistent) filename(source.name, kind, format) else "${kind.key}.$format"
         val temporary = checkNotNull(target.createFile("$name.part"))
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         var backup: UniFile? = null
         var published = false
         try {
-            temporary.openOutputStream(false).use(writer)
-            if (format in setOf("png", "webp", "partial")) temporary.openInputStream().use { BitmapFactory.decodeStream(it, null, bounds) }
-            if (format in setOf("png", "webp")) check(bounds.outWidth > 0 && bounds.outHeight > 0) { "Invalid result image" }
+            // Native files on the same filesystem can publish staged bytes without a second copy.
+            val moved = temporary.uri.takeIf { it.scheme == "file" }?.path?.let { path ->
+                runCatching {
+                    java.nio.file.Files.move(staged.toPath(), File(path).toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                }.isSuccess
+            } == true
+            if (!moved) temporary.openOutputStream(false).use { out -> staged.inputStream().use { it.copyTo(out) } }
             target.findFile(name)?.let {
                 target.findFile("$name.bak")?.let { oldBackup -> check(oldBackup.delete()) }
                 check(it.renameTo("$name.bak")); backup = it
@@ -201,9 +224,10 @@ class GalleryResultIndex private constructor(
             if (!published) temporary.takeIf { it.name?.endsWith(".part") == true }?.delete()
             else backup?.delete()
         }
-        temporary
+        return temporary
     }
-    fun invalidate(source: Source, kind: Kind) = synchronized(guard) {
+    fun invalidate(source: Source, kind: Kind) = locked {
+        invalidateWrites(kind)
         for (directory in listOfNotNull(localDirectory(), cacheDirectory)) {
             val json = manifest(directory)
             if (row(json, source, kind) != null) remove(directory, json, source, kind)
@@ -211,8 +235,8 @@ class GalleryResultIndex private constructor(
     }
     /** Explicit import: merge without replacing a current result or recompressing old pixels. */
     internal fun importComplete(source: Source, kind: Kind, image: UniFile, scale: Int,
-                                persistent: Boolean): Boolean = synchronized(guard) {
-        if (find(source, kind) != null) return@synchronized false
+                                persistent: Boolean): Boolean = locked {
+        if (find(source, kind) != null) return@locked false
         val format = image.name!!.substringAfterLast('.')
         require(format in setOf("png", "webp"))
         val directory = localDirectory(persistent)
@@ -265,7 +289,7 @@ class GalleryResultIndex private constructor(
             source.name, file) }
     }
     /** Local scans already know URI/mtime/size. Renames with stable document IDs are preserved; deletions expire. */
-    fun reconcile(sources: List<Source>) = synchronized(guard) {
+    fun reconcile(sources: List<Source>) = locked {
         val byName = sources.associateBy { it.name }
         val byDocument = sources.filter { it.uri.isNotEmpty() }.groupBy { digest(it.uri) to it.stamp }
         for (directory in listOfNotNull(localDirectory(), cacheDirectory)) {
@@ -303,22 +327,22 @@ class GalleryResultIndex private constructor(
         if (provider is EhGalleryProvider || provider is UpdatedGalleryProvider || provider.size() <= 0) return
         if (hasEntries()) reconcile((0 until provider.size()).map { source(provider, it, gid) })
     }
-    fun hasEntries(): Boolean = synchronized(guard) {
+    fun hasEntries(): Boolean = locked {
         listOfNotNull(localDirectory(), cacheDirectory).any { manifest(it).getJSONObject("pages").length() > 0 }
     }
     companion object {
         const val MANIFEST = ".ehviewer-results.json"
         const val PREFER_EXISTING = "reader_prefer_existing_results"
-        private val guard = Any()
+        private val cacheDeleted = LongArray(2)
         internal data class Change(val identity: String, val source: String, val kind: Kind)
         internal val listeners = java.util.concurrent.CopyOnWriteArraySet<(Change) -> Unit>()
         // Includes negative entries. Bounded so reading many empty galleries cannot grow this indefinitely.
-        private val documents = object : LinkedHashMap<String, JSONObject>(16, .75f, true) {
+        private val documents = java.util.Collections.synchronizedMap(object : LinkedHashMap<String, JSONObject>(16, .75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, JSONObject>?) = size > 48
-        }
+        })
         @Volatile var revision = 0L
             private set
-        internal fun dropMemory() = synchronized(guard) { documents.clear() }
+        internal fun dropMemory() = ResultIndexLocks.exclusive { documents.clear() }
         fun root(context: Context) = File(context.cacheDir, "gallery-results")
         internal fun digest(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray())
             .joinToString("") { "%02x".format(it) }
@@ -348,7 +372,8 @@ class GalleryResultIndex private constructor(
             GalleryResultIndex(context.applicationContext, identity, gid, local, persist)
         fun identity(provider: GalleryProvider2, info: GalleryInfo?) = info?.let { "gallery:${it.gid}" }
             ?: provider.translationIdentity ?: "reader:${System.identityHashCode(provider)}"
-        @JvmStatic fun clearCache(context: Context, kind: Kind) = synchronized(guard) {
+        @JvmStatic fun clearCache(context: Context, kind: Kind) = ResultIndexLocks.exclusive {
+            cacheDeleted[kind.ordinal]++
             for (gallery in root(context).listFiles().orEmpty()) {
                 val index = GalleryResultIndex(context, "", null, null, false)
                 val directory = checkNotNull(UniFile.fromFile(gallery))
@@ -371,6 +396,7 @@ class GalleryResultIndex private constructor(
             if (gallery.listFiles()?.isEmpty() == true) gallery.delete()
         }
         private fun GalleryResultIndex.clearDirectory(directory: UniFile, kind: Kind) {
+            invalidateWrites(kind)
             val json = manifest(directory)
             for (name in json.getJSONObject("pages").keys().asSequence().toList()) remove(directory, json, Source(name), kind)
             // Also retire a pre-existing empty manifest (there may be no rows to visit).
@@ -398,8 +424,8 @@ class GalleryResultIndex private constructor(
             }
         }
 
-        internal fun pruneEmptyDirectories(directory: UniFile) = synchronized(guard) { pruneEmptyTree(directory) }
-        @JvmStatic fun prune(context: Context, kind: Kind, limit: Long) = synchronized(guard) {
+        internal fun pruneEmptyDirectories(directory: UniFile) = ResultIndexLocks.exclusive { pruneEmptyTree(directory) }
+        @JvmStatic fun prune(context: Context, kind: Kind, limit: Long) = ResultIndexLocks.exclusive {
             data class Candidate(val index: GalleryResultIndex, val dir: UniFile, val json: JSONObject, val source: Source, val size: Long, val used: Long)
             val candidates = mutableListOf<Candidate>()
             for (gallery in root(context).listFiles().orEmpty()) {
@@ -423,7 +449,7 @@ class GalleryResultIndex private constructor(
         }
         /** Called only after a pToken-verified original was copied into its new numbered position. */
         @JvmStatic fun copyPage(context: Context, sourceGid: Long, targetGid: Long, oldName: String, newName: String,
-                                sourceDir: UniFile, targetDir: UniFile) = synchronized(guard) {
+                                sourceDir: UniFile, targetDir: UniFile) = ResultIndexLocks.exclusive {
             val source = open(context, "gallery:$sourceGid", sourceGid, sourceDir, false)
             for (kind in Kind.entries) {
                 val hit = source.find(Source(oldName), kind) ?: continue
@@ -437,8 +463,9 @@ class GalleryResultIndex private constructor(
                 target.write(Source(newName), kind, file.name!!.substringAfterLast('.'), hit.scale) { out -> file.openInputStream().use { it.copyTo(out) } }
             }
         }
-        @JvmStatic fun clearCachedGallery(context: Context, gid: Long) = synchronized(guard) {
+        @JvmStatic fun clearCachedGallery(context: Context, gid: Long) = ResultIndexLocks.exclusive {
             val index = open(context, "gallery:$gid", gid, null, false)
+            Kind.entries.forEach(index::invalidateWrites)
             if (index.cache.isDirectory) for (kind in Kind.entries) index.clearDirectory(index.cacheDirectory, kind)
         }
         @JvmStatic fun invalidatePage(context: Context, gid: Long, page: Int, directory: UniFile?) {
@@ -447,8 +474,9 @@ class GalleryResultIndex private constructor(
             for (kind in Kind.entries) index.invalidate(source, kind)
         }
         @JvmStatic @JvmOverloads fun deleteKind(context: Context, gid: Long, directory: UniFile?, kind: Kind,
-                                              deleteEmptyRoot: Boolean = false) = synchronized(guard) {
+                                              deleteEmptyRoot: Boolean = false) = ResultIndexLocks.exclusive {
             val index = open(context, "gallery:$gid", gid, directory, false)
+            index.invalidateWrites(kind)
             directory?.let { index.clearDirectory(it, kind) }
             if (index.cache.isDirectory) index.clearDirectory(index.cacheDirectory, kind)
             directory?.findFile(kind.directory)?.let(::pruneEmptyTree)
@@ -462,15 +490,16 @@ class GalleryResultIndex private constructor(
                 }
             }
         }
-        internal fun deleteCachedKind(context: Context, identity: String, kind: Kind) = synchronized(guard) {
+        internal fun deleteCachedKind(context: Context, identity: String, kind: Kind) = ResultIndexLocks.exclusive {
             val index = open(context, identity, null, null, false)
+            index.invalidateWrites(kind)
             if (index.cache.isDirectory) {
                 index.clearDirectory(index.cacheDirectory, kind)
                 if (index.cache.isDirectory) pruneEmptyTree(index.cacheDirectory)
             }
         }
         internal fun files(context: Context, gid: Long?, directory: UniFile?, kind: Kind,
-                           identity: String = "gallery:$gid"): List<UniFile> = synchronized(guard) {
+                           identity: String = "gallery:$gid"): List<UniFile> = ResultIndexLocks.exclusive {
             val index = open(context, identity, gid, directory, false)
             val files = mutableListOf<UniFile>()
             for (dir in listOfNotNull(directory, index.cacheDirectory)) {
@@ -482,8 +511,9 @@ class GalleryResultIndex private constructor(
             }
             files
         }
-        @JvmStatic fun deleteGallery(context: Context, gid: Long, directory: UniFile?) = synchronized(guard) {
+        @JvmStatic fun deleteGallery(context: Context, gid: Long, directory: UniFile?) = ResultIndexLocks.exclusive {
             val index = open(context, "gallery:$gid", gid, directory, false)
+            Kind.entries.forEach(index::invalidateWrites)
             for (kind in Kind.entries) {
                 directory?.let { index.clearDirectory(it, kind) }
                 if (index.cache.isDirectory) index.clearDirectory(index.cacheDirectory, kind)

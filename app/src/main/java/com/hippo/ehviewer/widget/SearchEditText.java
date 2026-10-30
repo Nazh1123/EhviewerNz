@@ -523,13 +523,15 @@ public class SearchEditText extends AppCompatEditText {
     }
 
     private SearchTagChipSpan chipAt(float x, float y) {
-        if (getLayout() == null || y < 0 || y > getHeight()) return null;
+        if (getLayout() == null || x < 0 || x >= getWidth() || y < 0 || y >= getHeight()) return null;
         float local = x + getScrollX() - getTotalPaddingLeft();
         float localY = y + getScrollY() - getTotalPaddingTop();
-        if (localY < 0 || localY >= getLayout().getHeight()) return null;
-        int line = getLayout().getLineForVertical((int) localY);
         for (SearchTagChipSpan chip : chips()) {
-            if (getLayout().getLineForOffset(getText().getSpanStart(chip)) != line) continue;
+            int line = getLayout().getLineForOffset(getText().getSpanStart(chip));
+            // Bubbles extend beyond native font metrics, including the final layout line.
+            // Use their drawn bounds so row gaps cannot activate a neighbouring chip.
+            float center = SearchTagChipSpan.centerY(getPaint(), getLayout().getLineBaseline(line));
+            if (Math.abs(localY - center) > chip.height() / 2) continue;
             float left = chipLeft(chip);
             float width = chip.getSize(getPaint(), getText(), 0, 0, null);
             if (local >= left && local <= left + width) return chip;

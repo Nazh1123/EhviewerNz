@@ -44,6 +44,7 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhConfig;
 import com.hippo.ehviewer.client.EhUtils;
+import com.hippo.ehviewer.client.GalleryDisplayMetadataLoader;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.gallery.ReadingProgressCache;
@@ -99,6 +100,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private DownloadManager mDownloadManager;
 
     private final ReadingProgressCache mReadingProgress;
+    private final GalleryDisplayMetadataLoader mDisplayMetadata;
+    private static final Object METADATA_PAYLOAD = new Object();
     private final ExecutorService executor;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final LongConsumer mUpdateSnapshotLoaded = this::onUpdateSnapshotLoaded;
@@ -118,6 +121,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                              @NonNull RecyclerView recyclerView, int type, boolean showFavourited, ExecutorService executor, boolean showReadProgress) {
         this.executor = executor;
         android.content.Context context = inflater.getContext().getApplicationContext();
+        mDisplayMetadata = new GalleryDisplayMetadataLoader(request -> EhApplication.getEhClient(context).execute(request));
         mReadingProgress = new ReadingProgressCache(executor,
                 gid -> SpiderQueen.findStartPage(context, gid));
         this.showReadProgress = showReadProgress;
@@ -293,9 +297,12 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     @Override
     public void onBindViewHolder(@NonNull GalleryHolder holder, int position,
                                  @NonNull List<Object> payloads) {
-        if (!payloads.isEmpty() && payloads.stream().allMatch(p -> p == GalleryVersionBadge.PAYLOAD)) {
+        if (!payloads.isEmpty() && payloads.stream().allMatch(p -> p == METADATA_PAYLOAD || p == GalleryVersionBadge.PAYLOAD)) {
             GalleryInfo info = getDataAt(position);
-            if (info != null) bindVersionBadges(holder, info);
+            if (info != null) {
+                bindVersionBadges(holder, info);
+                if (payloads.contains(METADATA_PAYLOAD)) bindMetadata(holder, info);
+            }
         } else {
             onBindViewHolder(holder, position);
         }
@@ -304,6 +311,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     @Override
     public void onBindViewHolder(GalleryAdapterNew.GalleryHolder holder, int position) {
         cancelProgressRequest(holder);
+        if (holder.metadataRequest != null) holder.metadataRequest.cancel();
         GalleryInfo gi = getDataAt(position);
         if (null == gi) {
             holder.boundGid = Long.MIN_VALUE;
@@ -315,6 +323,13 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             return;
         }
         holder.boundGid = gi.gid;
+        if (GalleryDisplayMetadataLoader.needsMetadata(gi)) {
+            holder.metadataRequest = mDisplayMetadata.request(gi, () -> {
+                int current = holder.getBindingAdapterPosition();
+                if (current != RecyclerView.NO_POSITION && getDataAt(current) == gi)
+                    notifyItemChanged(current, METADATA_PAYLOAD);
+            });
+        }
 
         bindVersionBadges(holder, gi);
 
@@ -416,6 +431,22 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         ViewCompat.setTransitionName(holder.thumb, TransitionNameFactory.getThumbTransitionName(gi.gid));
     }
 
+    private void bindMetadata(GalleryHolder holder, GalleryInfo info) {
+        cancelProgressRequest(holder);
+        if (mType == TYPE_GRID && Settings.isThumbnailInfoBarEffective() && Settings.getShowThumbnailInfoDetails()) {
+            boolean highlight = Settings.getShowThumbnailInfoHighlight();
+            String censorship = GalleryListDisplayHelper.resolveCensorship(info.simpleTags, info.tgList,
+                    info.category == EhConfig.COSPLAY);
+            holder.thumbnailCensorship.setText(censorship);
+            holder.thumbnailCensorship.setTextColor(highlight && GalleryListDisplayHelper.isHighlightCensorship(censorship)
+                    ? ColorStateList.valueOf(mInfoMaxRatingColor) : holder.thumbnailInfoTextColors);
+            bindPageProgress(holder, holder.thumbnailPages, info, true, false, highlight);
+        } else if (mType == TYPE_LIST && Settings.getShowGalleryPages() && info.pages > 0) {
+            holder.pages.setVisibility(View.VISIBLE);
+            bindPageProgress(holder, holder.pages, info, showReadProgress, true, false);
+        }
+    }
+
     private void bindVersionBadges(GalleryHolder holder, GalleryInfo info) {
         boolean downloaded = mDownloadManager.containDownloadInfo(info.gid);
         GalleryUpdateRecordStore records = GalleryUpdateRecordStore.get(mInflater.getContext());
@@ -498,6 +529,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     @Override
     public void onViewRecycled(@NonNull GalleryHolder holder) {
         cancelProgressRequest(holder);
+        if (holder.metadataRequest != null) holder.metadataRequest.cancel();
         holder.boundGid = Long.MIN_VALUE;
         super.onViewRecycled(holder);
     }
@@ -505,6 +537,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     @Override
     public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
         mReadingProgress.clear();
+        mDisplayMetadata.clear();
         super.onDetachedFromRecyclerView(recyclerView);
     }
 
@@ -558,6 +591,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         public long boundGid = Long.MIN_VALUE;
         private int progressGeneration;
         @Nullable private ReadingProgressCache.Request progressRequest;
+        @Nullable private GalleryDisplayMetadataLoader.Request metadataRequest;
 
         public GalleryHolder(View itemView,
                              final OnThumbItemClickListener onThumbItemClickListener,

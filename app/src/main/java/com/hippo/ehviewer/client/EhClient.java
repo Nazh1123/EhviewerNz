@@ -76,6 +76,7 @@ public class EhClient {
     public static final int METHOD_VERIFY_BOOKMARK = 31;
     public static final int METHOD_PREPARE_SUBSCRIPTION_LIST = 32;
     public static final int METHOD_GET_SUBSCRIPTION_HOMEPAGE = 33;
+    public static final int METHOD_GET_DISPLAY_METADATA = 34;
 
     private final ThreadPoolExecutor mRequestThreadPool;
     private final OkHttpClient mOkHttpClient;
@@ -175,6 +176,9 @@ public class EhClient {
                 switch (mMethod) {
                     case METHOD_SIGN_IN:
                         return EhEngine.signIn(this, mOkHttpClient, (String) params[0], (String) params[1]);
+                    case METHOD_GET_DISPLAY_METADATA:
+                        return EhEngine.fillDisplayMetadata(this, mOkHttpClient,
+                                (List<GalleryInfo>) params[0], (String) params[1]);
                     case METHOD_GET_GALLERY_LIST:
                         return EhEngine.getGalleryList(this, mOkHttpClient,
                                 (String) params[0], (int) params[1],

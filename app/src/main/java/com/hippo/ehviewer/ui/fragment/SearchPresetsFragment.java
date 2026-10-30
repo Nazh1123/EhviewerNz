@@ -2,6 +2,7 @@ package com.hippo.ehviewer.ui.fragment;
 
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -9,6 +10,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.RecyclerView;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
@@ -21,6 +23,7 @@ import java.util.List;
 public final class SearchPresetsFragment extends Fragment {
     private PresetAdapter adapter;
     private View empty;
+    private ItemTouchHelper touchHelper;
 
     @Override public void onCreate(@Nullable Bundle state) {
         super.onCreate(state);
@@ -38,6 +41,25 @@ public final class SearchPresetsFragment extends Fragment {
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new PresetAdapter();
         list.setAdapter(adapter);
+        touchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
+                ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) {
+            @Override public boolean isLongPressDragEnabled() { return false; }
+
+            @Override public boolean onMove(@NonNull RecyclerView recyclerView,
+                    @NonNull RecyclerView.ViewHolder source, @NonNull RecyclerView.ViewHolder target) {
+                int from = source.getBindingAdapterPosition();
+                int to = target.getBindingAdapterPosition();
+                if (adapter == null || from == RecyclerView.NO_POSITION
+                        || to == RecyclerView.NO_POSITION || from == to) return false;
+                adapter.tags.add(to, adapter.tags.remove(from));
+                Settings.putSearchPresetTags(adapter.tags);
+                adapter.notifyItemMoved(from, to);
+                return true;
+            }
+
+            @Override public void onSwiped(@NonNull RecyclerView.ViewHolder holder, int direction) {}
+        });
+        touchHelper.attachToRecyclerView(list);
         empty = view.findViewById(R.id.search_presets_empty);
         view.findViewById(R.id.search_presets_add).setOnClickListener(ignored -> edit(null));
         refresh();
@@ -52,6 +74,8 @@ public final class SearchPresetsFragment extends Fragment {
     }
 
     @Override public void onDestroyView() {
+        touchHelper.attachToRecyclerView(null);
+        touchHelper = null;
         adapter = null;
         empty = null;
         super.onDestroyView();
@@ -81,6 +105,15 @@ public final class SearchPresetsFragment extends Fragment {
         @Override public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
             String preset = tags.get(position);
             View row = holder.itemView;
+            View drag = row.findViewById(R.id.search_preset_drag);
+            drag.setContentDescription(getString(R.string.settings_search_preset_reorder, preset));
+            drag.setOnTouchListener((view, event) -> {
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN && touchHelper != null
+                        && holder.getBindingAdapterPosition() != RecyclerView.NO_POSITION) {
+                    touchHelper.startDrag(holder);
+                }
+                return false;
+            });
             ((TextView) row.findViewById(R.id.search_preset_preview)).setText(
                     SearchPresetChip.labelFor(requireContext(), preset));
             ((TextView) row.findViewById(R.id.search_preset_query)).setText(preset);

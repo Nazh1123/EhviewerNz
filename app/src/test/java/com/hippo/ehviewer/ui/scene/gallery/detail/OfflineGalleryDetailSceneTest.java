@@ -11,7 +11,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.CheckBox;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.RatingBar;
 
@@ -38,10 +38,12 @@ import com.hippo.ehviewer.client.exception.EhException;
 import com.hippo.ehviewer.dao.DaoMaster;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.download.GalleryUpdateManager;
 import com.hippo.ehviewer.download.GalleryUpdateRecord;
 import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.ui.MainActivity;
+import com.hippo.ehviewer.ui.DownloadRemovalDialog;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.scene.GalleryInfoScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
@@ -717,6 +719,96 @@ public class OfflineGalleryDetailSceneTest {
         assertNull(ReflectionHelpers.getField(scene, "mGalleryUpdateRecord"));
         assertTrue(ReflectionHelpers.<Boolean>getField(scene, "mUpdateRecordLookupPending"));
         assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
+    }
+
+    @Test public void staleDetailsRefreshOnceWithoutHidingCachedBodyAndKeepUnchangedPreviewViews() {
+        GalleryDetail original = online();
+        NormalPreviewSet previews = new NormalPreviewSet();
+        previews.addItem(0, "https://example.invalid/preview", 0, 0, 100, 150, "https://example.invalid/page");
+        original.previewSet = previews; original.previewPages = 1;
+        scene.onGetGalleryDetailSuccess(original);
+        ViewGroup grid = content.findViewById(R.id.grid_layout);
+        View first = grid.getChildAt(0);
+        requests.clear();
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertTrue(requests.isEmpty());
+        advanceMillis(180_000);
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertEquals(1, requests.size());
+        assertSame(first, grid.getChildAt(0));
+        assertEquals(View.GONE, sceneView.findViewById(R.id.progress).getVisibility());
+        GalleryDetail updated = online(); updated.previewSet = previews; updated.previewPages = 1; updated.rating = 4.5f;
+        scene.onGetGalleryDetailSuccess(updated);
+        assertSame(first, grid.getChildAt(0));
+        assertEquals(4.5f, ((RatingBar) content.findViewById(R.id.rating)).getRating(), 0f);
+    }
+
+    @Test public void failedAutomaticRefreshRetainsDetailsAndThrottlesImmediateRetry() {
+        GalleryDetail detail = online();
+        scene.onGetGalleryDetailSuccess(detail);
+        detail.fetchedAtElapsed = -1;
+        requests.clear();
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertEquals(1, requests.size());
+        ((EhApplication) context.getApplicationContext()).removeGlobalStuff(requests.get(0).getCallback());
+        scene.onGetGalleryDetailFailure(new IOException("offline"));
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertEquals(1, requests.size());
+        assertSame(detail, ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertEquals(View.GONE, sceneView.findViewById(R.id.progress).getVisibility());
+        advanceMillis(30_000);
+        ReflectionHelpers.callInstanceMethod(scene, "maybeRefreshCachedDetail");
+        assertEquals(2, requests.size());
+    }
+
+    @Test public void linkEntryUsesLocalSummaryWhileHtmlIsPending() throws Exception {
+        GalleryInfo saved = source(); saved.uploader = "Local uploader";
+        saved.simpleTags = new String[]{"artist:local"};
+        EhDB.putHistoryInfo(saved);
+        com.hippo.ehviewer.dao.GalleryTags tags = new com.hippo.ehviewer.dao.GalleryTags(123);
+        tags.artist = "local";
+        EhDB.insertGalleryTags(tags);
+        cacheProgress(4);
+        ReflectionHelpers.setField(scene, "mAction", GalleryDetailScene.ACTION_GID_TOKEN);
+        ReflectionHelpers.setField(scene, "mGid", 123L);
+        ReflectionHelpers.setField(scene, "mToken", "token");
+        ReflectionHelpers.setField(scene, "mGalleryInfo", null);
+        ReflectionHelpers.callInstanceMethod(scene, "loadPendingSummary");
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryInfo"));
+        executor.runAll(); ShadowLooper.idleMainLooper();
+        assertEquals("Local uploader", text(R.id.uploader));
+        assertEquals("5/12P", text(R.id.pages));
+        GalleryInfo summary = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        assertArrayEquals(new String[]{"artist:local"}, summary.simpleTags);
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertFalse(ReflectionHelpers.<Boolean>getField(scene, "mOffline"));
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void localSummaryCannotReplaceOnlineSuccessOrDestroyedView() {
+        EhDB.putHistoryInfo(source());
+        ReflectionHelpers.callInstanceMethod(scene, "loadPendingSummary");
+        GalleryDetail detail = online();
+        scene.onGetGalleryDetailSuccess(detail);
+        executor.runAll(); ShadowLooper.idleMainLooper();
+        assertSame(detail, ReflectionHelpers.getField(scene, "mGalleryDetail"));
+        assertEquals("Online title", ((TextView) sceneView.findViewById(R.id.title)).getText().toString());
+        ReflectionHelpers.setField(scene, "mGalleryDetail", null);
+        ReflectionHelpers.callInstanceMethod(scene, "loadPendingSummary");
+        ReflectionHelpers.setField(scene, "mTitle", null);
+        executor.runAll(); ShadowLooper.idleMainLooper();
+        assertNull(ReflectionHelpers.getField(scene, "mGalleryDetail"));
+    }
+
+    @Test public void localSummaryFillsHolesWithoutOverwritingEntryOrCrossingTokens() {
+        GalleryInfo entry = source(); entry.pages = 0; entry.title = "Current title";
+        GalleryInfo saved = source(); saved.title = "Older title"; saved.pages = 99;
+        LocalGallerySummary.fillMissing(entry, saved);
+        assertEquals("Current title", entry.title); assertEquals(99, entry.pages);
+        entry.pages = 0; saved.token = "different";
+        LocalGallerySummary.fillMissing(entry, saved);
+        assertEquals(0, entry.pages);
     }
 
     @Test public void completeHtmlProvidedAsArgumentsIsReusedWithoutAnotherDetailRequest() {
@@ -1408,32 +1500,32 @@ public class OfflineGalleryDetailSceneTest {
         assertTrue(text(R.id.rating_text).endsWith("\nAnother error"));
     }
 
-    @Test public void downloadedClickWithoutCheckboxRemovesRecordAndKeepsLocalFiles() throws Exception {
+    @Test public void removeRecordButtonKeepsLocalFilesRegardlessOfOldPreference() throws Exception {
         File directory = prepareDownloadedGallery();
         Settings.putRemoveImageFiles(true);
         scene.onClick(content.findViewById(R.id.download));
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
-        CheckBox checkbox = dialog.findViewById(R.id.checkbox);
-        assertEquals(context.getString(R.string.download_remove_dialog_check_text), checkbox.getText().toString());
-        assertTrue(checkbox.isChecked());
-        checkbox.setChecked(false);
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertNull(dialog.findViewById(R.id.checkbox));
+        View recordButton = dialog.findViewById(R.id.download_remove_record);
+        LinearLayout buttons = (LinearLayout) recordButton.getParent();
+        assertEquals(LinearLayout.VERTICAL, buttons.getOrientation());
+        assertEquals(3, buttons.getChildCount());
+        assertEquals(R.id.download_redownload, buttons.getChildAt(1).getId());
+        assertEquals(R.id.download_remove_files, buttons.getChildAt(2).getId());
+        recordButton.performClick();
         ShadowLooper.idleMainLooper();
         assertFalse(manager.containDownloadInfo(123));
         assertTrue(new File(directory, "001.jpg").exists());
         assertEquals(directory.getName(), EhDB.getDownloadDirname(123));
-        assertFalse(Settings.getRemoveImageFiles());
+        assertTrue(Settings.getRemoveImageFiles());
     }
 
-    @Test public void downloadedClickWithCheckboxAlsoDeletesLocalFiles() throws Exception {
+    @Test public void removeFilesButtonDeletesRecordAndLocalFiles() throws Exception {
         File directory = prepareDownloadedGallery();
         Settings.putRemoveImageFiles(false);
         scene.onClick(content.findViewById(R.id.download));
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
-        CheckBox checkbox = dialog.findViewById(R.id.checkbox);
-        assertFalse(checkbox.isChecked());
-        checkbox.setChecked(true);
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        dialog.findViewById(R.id.download_remove_files).performClick();
         ShadowLooper.idleMainLooper();
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (directory.exists() && System.nanoTime() < deadline) {
@@ -1443,7 +1535,7 @@ public class OfflineGalleryDetailSceneTest {
         assertFalse(manager.containDownloadInfo(123));
         assertFalse(directory.exists());
         assertNull(EhDB.getDownloadDirname(123));
-        assertTrue(Settings.getRemoveImageFiles());
+        assertFalse(Settings.getRemoveImageFiles());
     }
 
     @Test public void dismissingDownloadedDeleteDialogKeepsRecordFilesAndPreference() throws Exception {
@@ -1451,13 +1543,69 @@ public class OfflineGalleryDetailSceneTest {
         Settings.putRemoveImageFiles(false);
         scene.onClick(content.findViewById(R.id.download));
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
-        ((CheckBox) dialog.findViewById(R.id.checkbox)).setChecked(true);
         dialog.cancel();
         ShadowLooper.idleMainLooper();
         assertTrue(manager.containDownloadInfo(123));
         assertTrue(new File(directory, "001.jpg").exists());
         assertEquals(directory.getName(), EhDB.getDownloadDirname(123));
         assertFalse(Settings.getRemoveImageFiles());
+    }
+
+    @Test public void redownloadRemovesRecordThenQueuesGalleryWithOriginalLabelAndKeepsFiles() throws Exception {
+        File directory = prepareDownloadedGallery();
+        DownloadInfo original = manager.getDownloadInfo(123);
+        manager.addLabel("saved-label");
+        manager.changeLabel(List.of(original), "saved-label");
+        scene.onClick(content.findViewById(R.id.download));
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        dialog.findViewById(R.id.download_redownload).performClick();
+        assertFalse(manager.containDownloadInfo(123));
+        assertTrue(new File(directory, "001.jpg").exists());
+        assertEquals(directory.getName(), EhDB.getDownloadDirname(123));
+        Intent intent = org.robolectric.Shadows.shadowOf(RuntimeEnvironment.getApplication())
+                .getNextStartedService();
+        assertNotNull(intent);
+        assertEquals(DownloadService.ACTION_START, intent.getAction());
+        assertEquals(DownloadService.class.getName(), intent.getComponent().getClassName());
+        assertEquals("saved-label", intent.getStringExtra(DownloadService.KEY_LABEL));
+        GalleryInfo gallery = intent.getParcelableExtra(DownloadService.KEY_GALLERY_INFO);
+        assertEquals(123, gallery.gid);
+        assertEquals(original.token, gallery.token);
+    }
+
+    @Test public void batchRedownloadSnapshotsSelectionAndPreservesEachLabel() {
+        DownloadInfo first = addKnownDownload(123, null, DownloadInfo.STATE_FINISH);
+        DownloadInfo second = addKnownDownload(456, null, DownloadInfo.STATE_NONE);
+        manager.addLabel("first-label");
+        manager.addLabel("second-label");
+        manager.changeLabel(List.of(first), "first-label");
+        manager.changeLabel(List.of(second), "second-label");
+        List<DownloadInfo> selected = new ArrayList<>(List.of(first, second));
+        DownloadRemovalDialog.show(context, selected, manager, selected::clear);
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        dialog.findViewById(R.id.download_redownload).performClick();
+        assertTrue(selected.isEmpty());
+        assertFalse(manager.containDownloadInfo(123));
+        assertFalse(manager.containDownloadInfo(456));
+        for (DownloadInfo expected : List.of(first, second)) {
+            Intent intent = org.robolectric.Shadows.shadowOf(RuntimeEnvironment.getApplication())
+                    .getNextStartedService();
+            assertNotNull(intent);
+            GalleryInfo gallery = intent.getParcelableExtra(DownloadService.KEY_GALLERY_INFO);
+            assertEquals(expected.gid, gallery.gid);
+            assertEquals(expected.label, intent.getStringExtra(DownloadService.KEY_LABEL));
+        }
+    }
+
+    @Test public void importedGalleryOnlyAllowsRemovingRecord() {
+        DownloadInfo imported = addKnownDownload(123, null, DownloadInfo.STATE_FINISH);
+        imported.archiveUri = "content://test/local-gallery";
+        DownloadRemovalDialog.show(context, imported, manager);
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertFalse(dialog.findViewById(R.id.download_redownload).isEnabled());
+        assertFalse(dialog.findViewById(R.id.download_remove_files).isEnabled());
+        dialog.findViewById(R.id.download_remove_record).performClick();
+        assertFalse(manager.containDownloadInfo(123));
     }
 
     private File prepareDownloadedGallery() throws Exception {

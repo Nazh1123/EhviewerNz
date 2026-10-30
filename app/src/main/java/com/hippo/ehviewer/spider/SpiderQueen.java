@@ -247,12 +247,21 @@ public final class SpiderQueen implements Runnable {
     }
 
     // Reuse list prefetches when opening details, without reading disk on the UI thread.
-    private record ReadingPosition(int page, boolean authoritative) {}
+    private record ReadingPosition(int page, boolean authoritative, int pages) {}
     private static final android.util.LruCache<Long, ReadingPosition> sStartPages = new android.util.LruCache<>(256);
 
     /** Publish an explicit reader/reset/migration change before a list can reread older storage. */
     public static void recordReadingProgress(long gid, int page) {
-        sStartPages.put(gid, new ReadingPosition(Math.max(0, page), true));
+        synchronized (sStartPages) {
+            ReadingPosition previous = sStartPages.get(gid);
+            sStartPages.put(gid, new ReadingPosition(Math.max(0, page), true, previous != null ? previous.pages : 0));
+        }
+    }
+
+    /** Page count obtained during the same header read as the position; no additional disk access. */
+    public static int peekPageCount(long gid) {
+        ReadingPosition position = sStartPages.get(gid);
+        return position != null ? position.pages : 0;
     }
 
     @Nullable
@@ -301,7 +310,8 @@ public final class SpiderQueen implements Runnable {
             if (current != previous && current != null) return current.page;
             // Unavailable/evicted storage is not evidence that a known position was reset.
             if (downloaded == null && spiderInfo == null) return current != null ? current.page : 0;
-            sStartPages.put(gid, new ReadingPosition(startPage, false));
+            sStartPages.put(gid, new ReadingPosition(startPage, false,
+                    spiderInfo != null && spiderInfo.pages > 0 ? spiderInfo.pages : downloaded != null ? downloaded.pages : 0));
         }
         return startPage;
     }
