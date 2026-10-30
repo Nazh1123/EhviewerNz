@@ -18,12 +18,9 @@ public final class SubscriptionSearchContext {
         // Keep existing ordinary-search checkpoint keys compatible with the disabled mode.
         // parts.add("homepage-scan:" + Settings.getSubscriptionHomepageScan());
         parts.add("homepage-scan:false");
-        parts.add(Settings.getEhConfig().uconfig());
-        parts.add("gallery-pages:" + Settings.getShowGalleryPages());
+        parts.add(searchConfig(Settings.getEhConfig().uconfig()));
         parts.add("default-rating:" + Settings.getPersistentMinRatingHundredths());
         parts.add("precise-rating:" + Settings.getEnablePreciseRatingFilter());
-        parts.add("thumbnail-info-details:" + (Settings.isThumbnailInfoBarEffective()
-                && Settings.getShowThumbnailInfoDetails()));
         for (Cookie cookie : EhApplication.getEhCookieStore(EhApplication.getInstance())
                 .loadForRequest(HttpUrl.parse(EhUrl.getHost()))) {
             // Session/challenge cookies can rotate in an ordinary search response. Only
@@ -35,7 +32,8 @@ public final class SubscriptionSearchContext {
                     || EhConfig.KEY_UCONFIG.equals(name)
                     || EhConfig.KEY_CONTENT_WARNING.equals(name)
                     || "sp".equals(name)) {
-                parts.add(name + "=" + cookie.value());
+                parts.add(name + "=" + (EhConfig.KEY_UCONFIG.equals(name)
+                        ? searchConfig(cookie.value()) : cookie.value()));
             }
         }
         EhFilter filters = EhFilter.getInstance();
@@ -57,5 +55,20 @@ public final class SubscriptionSearchContext {
             for (byte b : hash.digest()) result.append(String.format(Locale.ROOT, "%02x", b & 255));
             return result.toString();
         } catch (Exception error) { throw new IllegalStateException(error); }
+    }
+
+    private static String searchConfig(String config) {
+        List<String> parts = new ArrayList<>();
+        for (String part : config.split("-")) {
+            if (part.matches("(?:cats|xns|xl)_.*")) parts.add(part);
+        }
+        Collections.sort(parts);
+        return String.join("-", parts);
+    }
+
+    public static String cacheKey() {
+        return key() + ":display:" + Settings.getEhConfig().uconfig()
+                + ":" + Settings.getShowGalleryPages() + ":"
+                + (Settings.isThumbnailInfoBarEffective() && Settings.getShowThumbnailInfoDetails());
     }
 }

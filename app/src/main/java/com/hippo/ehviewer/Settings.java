@@ -84,6 +84,10 @@ public class Settings {
         fixDefaultValue();
     }
 
+    public static Context getApplicationContext() {
+        return sContext;
+    }
+
     private static void fixDefaultValue() {
         // Enable builtin hosts if the country is CN
         if (!sSettingsPre.contains(KEY_BUILT_IN_HOSTS)) {

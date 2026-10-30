@@ -9,6 +9,7 @@ import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.GallerySeenState;
+import com.hippo.ehviewer.client.SearchUpdateStore;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.SubscriptionSearchContext;
@@ -62,6 +63,8 @@ public class SubscriptionCheckReuseTest {
         bookmarks.clear();
         contextKey = "account-a";
         Context context = RuntimeEnvironment.getApplication();
+        context.deleteDatabase(SearchUpdateStore.DATABASE);
+        ReflectionHelpers.setStaticField(Settings.class,"sEhConfig",new com.hippo.ehviewer.client.EhConfig());
         context.getSharedPreferences("reuse-test", Context.MODE_PRIVATE).edit().clear().commit();
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 context.getSharedPreferences("reuse-test", Context.MODE_PRIVATE));
@@ -73,9 +76,13 @@ public class SubscriptionCheckReuseTest {
 
     @Test public void dividerSnapshotMatchesActualSidebarCheckAndSurvivesBadgeClearing() {
         enableBookmark();
-        manager.recordGlobalPageViewed(
-                GallerySeenState.empty().observe(page(100, null).galleryInfoList),
-                GallerySeenState.empty().observe(page(100, null).galleryInfoList));
+        seedEh(page(100,null).galleryInfoList);
+        try(SearchUpdateStore store=SearchUpdateStore.open()) {
+            var builder=new ListUrlBuilder();builder.set(bookmarks.get(0));
+            var pass=new SearchUpdateStore.Pass(store.read(contextKey,SearchUpdateStore.queryKey(builder)));
+            pass.observe(page(100,null).galleryInfoList,page(100,null).galleryInfoList,page(100,null).rawTailPosted,false);
+            store.commit(pass,false);
+        }
         start(true);
         succeed(0, page(200, null));
         succeed(1, page(200, null));
@@ -89,6 +96,8 @@ public class SubscriptionCheckReuseTest {
         assertEquals(bookmark.size(), manager.getSnapshot().bookmarkCount);
         assertEquals(global.size(), manager.getSnapshot().globalCount);
         manager.onSubscriptionOpened(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        assertEquals(global,manager.getUnreadGalleryGids(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        seedEh(page(200,null).galleryInfoList);
         assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION).isEmpty());
         assertEquals(Collections.singleton(200L), global);
     }
@@ -101,7 +110,7 @@ public class SubscriptionCheckReuseTest {
     }
 
     @Test public void checkFinishedWithoutVisibleActivityIsDeliveredOnceOnReturn() {
-        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        seedEh(page(100, null).galleryInfoList);
         List<SubscriptionUpdateManager.CheckResult> delivered = new ArrayList<>();
         SubscriptionUpdateManager.Listener listener = listener(delivered);
         manager.setListener(listener);
@@ -120,11 +129,11 @@ public class SubscriptionCheckReuseTest {
 
     @Test public void returningAfterReadingOrChangingAccountDoesNotReplayStaleCounts() {
         for (boolean changeAccount : new boolean[]{false, true}) {
-            manager.recordEhPageViewed(page(100, null).galleryInfoList);
+            seedEh(page(100, null).galleryInfoList);
             start(true);
             succeed(requests.size() - 1, page(200, null));
             if (changeAccount) contextKey = "account-b";
-            else manager.onSubscriptionOpened(ListUrlBuilder.MODE_SUBSCRIPTION);
+            else seedEh(page(200,null).galleryInfoList);
             List<SubscriptionUpdateManager.CheckResult> delivered = new ArrayList<>();
             manager.setListener(listener(delivered));
             if (changeAccount) assertTrue(delivered.isEmpty());
@@ -336,18 +345,25 @@ public class SubscriptionCheckReuseTest {
         for (int i = 4; i < 6; i++) assertEquals(350, requests.get(i).getArgs()[4]);
     }
 
+    private void seedEh(List<GalleryInfo> galleries) {
+        try(SearchUpdateStore store=SearchUpdateStore.open()) {
+            var pass=new SearchUpdateStore.Pass(store.read(contextKey,"eh-subscription"));
+            pass.observe(galleries,galleries,galleries.isEmpty()?null:galleries.get(galleries.size()-1).posted,false);
+            store.commit(pass,true);
+        }
+    }
+
     private void start(boolean manual) {
         assertTrue(manager.checkForUpdates(manual));
         shadowOf(Looper.getMainLooper()).idle();
     }
 
     @Test public void scannerDisablesAutomaticExtraPagesAndPassesItsPublicationCursor() {
-        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        seedEh(page(100, null).galleryInfoList);
         start(true);
         Object[] args = requests.get(0).getArgs();
         assertEquals(false, args[5]);
-        assertTrue(args[7] instanceof GallerySeenState);
-        assertTrue(((GallerySeenState) args[7]).initialized());
+        assertNull(args[7]); // No pre-filtering with a shared cursor before per-query attribution.
         assertEquals(true, args[8]);
     }
 
@@ -370,7 +386,7 @@ public class SubscriptionCheckReuseTest {
     }
 
     @Test public void filteredCacheShowsItsAvailablePrefixBeforeLoadingAnotherPage() {
-        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        seedEh(page(100, null).galleryInfoList);
         start(true);
         var checked = datedPage(200, "2026-09-21 00:00", "https://e-hentai.org/watched?next=90");
         checked.rawResultCount = 25;
@@ -379,6 +395,11 @@ public class SubscriptionCheckReuseTest {
         checked.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(checked.galleryInfoList);
         checked.subscriptionDisplayGalleries = SubscriptionGallerySnapshot.copy(checked.galleryInfoList);
         succeed(0, checked);
+        assertTrue(manager.isChecking());
+        GalleryListParser.Result closing=datedPage(80,"2026-09-18 00:00","https://e-hentai.org/watched?next=80");
+        closing.rawGalleries=new ArrayList<>(closing.galleryInfoList);
+        closing.galleryInfoList.clear();
+        succeed(1,closing);
         assertFalse(manager.isChecking());
         List<Long> displayed = new ArrayList<>();
         var coordinator = new BookmarkSubscriptionCoordinator(client,
@@ -395,15 +416,15 @@ public class SubscriptionCheckReuseTest {
         coordinator.refresh(1, bookmarks, true,
                 manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
         assertEquals(Collections.singletonList(200L), displayed);
-        assertEquals(1, requests.size());
-        coordinator.loadMore(2);
         assertEquals(2, requests.size());
-        assertEquals("https://e-hentai.org/watched?next=90", requests.get(1).getArgs()[0]);
+        coordinator.loadMore(2);
+        assertEquals(3, requests.size());
+        assertEquals("https://e-hentai.org/watched?next=80", requests.get(2).getArgs()[0]);
         coordinator.cancel();
     }
 
     private SubscriptionUpdateManager.RecentCheckResult lightweightCheck() {
-        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        seedEh(page(100, null).galleryInfoList);
         start(true);
         var checked = datedPage(200, "2026-09-21 00:00", "https://e-hentai.org/watched?next=90");
         checked.galleryInfoList.addAll(datedPage(90, "2026-09-19 00:00", null).galleryInfoList);
@@ -414,6 +435,11 @@ public class SubscriptionCheckReuseTest {
         checked.rawTailGid = 90;
         checked.galleryInfoList.clear();
         succeed(0, checked);
+        assertTrue(manager.isChecking());
+        GalleryListParser.Result closing=datedPage(80,"2026-09-18 00:00","https://e-hentai.org/watched?next=80");
+        closing.rawGalleries=new ArrayList<>(closing.galleryInfoList);
+        closing.galleryInfoList.clear();
+        succeed(1,closing);
         assertFalse(manager.isChecking());
         return manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
     }
@@ -436,41 +462,41 @@ public class SubscriptionCheckReuseTest {
                     }
                 });
         coordinator.refresh(1, bookmarks, true, cached, 0);
-        assertEquals(2, requests.size());
-        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(1).getMethod());
-        assertEquals(2, ((List<?>) requests.get(1).getArgs()[1]).size());
+        assertEquals(3, requests.size());
+        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(2).getMethod());
+        assertEquals(2, ((List<?>) requests.get(2).getArgs()[1]).size());
         var prepared = new GalleryListParser.Result();
         prepared.galleryInfoList = SubscriptionGallerySnapshot.copy(cached.sources.get(0).galleryInfoList);
-        succeed(1, prepared);
+        succeed(2, prepared);
         assertEquals(java.util.Arrays.asList(200L, 90L), displayed);
-        assertEquals(2, requests.size());
-        coordinator.loadMore(2);
         assertEquals(3, requests.size());
-        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(2).getMethod());
-        assertEquals("https://e-hentai.org/watched?next=90", requests.get(2).getArgs()[0]);
+        coordinator.loadMore(2);
+        assertEquals(4, requests.size());
+        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(3).getMethod());
+        assertEquals("https://e-hentai.org/watched?next=80", requests.get(3).getArgs()[0]);
         coordinator.cancel();
     }
 
     @Test public void lightweightPreparationRetriesAndCanBeCancelledWithoutLosingRawCache() {
         var cached = lightweightCheck();
         var coordinator = refresh(true, cached);
-        requests.get(1).getCallback().onFailure(new java.io.IOException("offline"));
+        requests.get(2).getCallback().onFailure(new java.io.IOException("offline"));
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
-        assertEquals(3, requests.size());
-        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(2).getMethod());
-        assertEquals(2, ((List<?>) requests.get(2).getArgs()[1]).size());
+        assertEquals(4, requests.size());
+        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(3).getMethod());
+        assertEquals(2, ((List<?>) requests.get(3).getArgs()[1]).size());
         coordinator.cancel();
-        assertTrue(requests.get(2).isCancelled());
-        succeed(2, new GalleryListParser.Result());
+        assertTrue(requests.get(3).isCancelled());
+        succeed(3, new GalleryListParser.Result());
         // Opening again starts a separate consumer and keeps the retained raw page intact.
         refresh(true, cached);
-        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(3).getMethod());
+        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(4).getMethod());
         assertEquals(2, cached.sources.get(0).galleryInfoList.size());
     }
 
     @Test public void scannerUsesPublicationTimeAndScansAcrossSameMinuteAndLowGidTail() {
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
-        manager.recordEhPageViewed(page(100, null).galleryInfoList);
+        seedEh(page(100, null).galleryInfoList);
         start(true);
         GalleryListParser.Result first = page(110, "https://e-hentai.org/watched?next=90");
         first.galleryInfoList.get(0).posted = "2026-09-20 00:01";
@@ -500,7 +526,7 @@ public class SubscriptionCheckReuseTest {
             seed.add(datedPage(100 - i, String.format(java.util.Locale.US,
                     "2026-09-20 00:%02d", 10 - i), null).galleryInfoList.get(0));
         }
-        manager.recordEhPageViewed(seed);
+        seedEh(seed);
         start(true);
         GalleryListParser.Result first = datedPage(110, "2026-09-20 00:11", "https://e-hentai.org/watched?next=90");
         first.galleryInfoList.addAll(datedPage(90, "2026-09-20 00:05", null).galleryInfoList);
@@ -522,14 +548,18 @@ public class SubscriptionCheckReuseTest {
         start(true);
         succeed(0, page(100, null));
         assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION).isEmpty());
-        assertTrue(Settings.getString("subscription_source_progress_v2", "").contains("2;"));
+        try(SearchUpdateStore store=SearchUpdateStore.open()) {
+            assertTrue(store.read(contextKey,"eh-subscription").initialized);
+        }
         assertEquals(9999999, Settings.getLong("subscription_updates_last_checked_eh_gid", 0));
     }
 
     @Test public void firstOpeningCanCompareArrivalsAfterTheInitialBackgroundCheck() {
         start(true);
         succeed(0, page(100, null));
-        assertFalse(SubscriptionUpdateManager.getLastSeenEhState().initialized());
+        try(SearchUpdateStore store=SearchUpdateStore.open()) {
+            assertEquals(0,store.read(contextKey,"eh-subscription").viewed);
+        }
         assertTrue(SubscriptionUpdateManager.getEhDisplayBaseline().initialized());
         assertTrue(SubscriptionUpdateManager.getEhDisplayBaseline().isNew(page(200, null).galleryInfoList.get(0)));
     }

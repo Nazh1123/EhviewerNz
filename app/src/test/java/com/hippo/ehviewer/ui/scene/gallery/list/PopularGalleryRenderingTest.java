@@ -29,6 +29,8 @@ import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
+import com.hippo.ehviewer.client.SearchUpdateStore;
+import com.hippo.ehviewer.client.SubscriptionSearchContext;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.lib.image.Image;
@@ -67,7 +69,8 @@ import static org.robolectric.Shadows.shadowOf;
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = 28, shadows = {
         PopularGalleryRenderingTest.AppShadow.class, PopularGalleryRenderingTest.DownloadShadow.class,
-        PopularGalleryRenderingTest.ImageShadow.class, PopularGalleryRenderingTest.DbShadow.class})
+        PopularGalleryRenderingTest.ImageShadow.class, PopularGalleryRenderingTest.DbShadow.class,
+        PopularGalleryRenderingTest.ContextShadow.class})
 public class PopularGalleryRenderingTest {
     private static final List<QuickSearch> bookmarks = new ArrayList<>();
     private static FavouriteStatusRouter router;
@@ -83,6 +86,9 @@ public class PopularGalleryRenderingTest {
 
     @Before public void setUp() throws Exception {
         Context app = RuntimeEnvironment.getApplication();
+        app.deleteDatabase(SearchUpdateStore.DATABASE);
+        SearchUpdateStore.initialize(app);
+        ReflectionHelpers.setStaticField(Settings.class,"sEhConfig",new com.hippo.ehviewer.client.EhConfig());
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 app.getSharedPreferences("popular-render-test", Context.MODE_PRIVATE));
         bookmarks.clear();
@@ -555,7 +561,7 @@ public class PopularGalleryRenderingTest {
             SubscriptionUpdateManager manager = subscriptionManager(mode, 3, 5);
             assertEquals(new HashSet<>(Arrays.asList(3L, 5L)), manager.getUnreadGalleryGids(mode));
             ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
-            assertTrue(manager.getUnreadGalleryGids(mode).isEmpty());
+            assertEquals(new HashSet<>(Arrays.asList(3L,5L)),manager.getUnreadGalleryGids(mode)); // Opening alone does not acknowledge.
             // A backdated update appears after an old item in server order; GID membership wins.
             refresh(7, 5, 4, 3, 2);
             assertEquals(Arrays.asList(5L, 3L, null, 7L, 4L, 2L), visibleIds());
@@ -675,15 +681,11 @@ public class PopularGalleryRenderingTest {
     private SubscriptionUpdateManager subscriptionManager(int mode, long... gids) {
         Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
         builder.setMode(mode);
+        scene.getContext().deleteDatabase(SearchUpdateStore.DATABASE);
+        String ids=java.util.Arrays.stream(gids).mapToObj(Long::toString).collect(java.util.stream.Collectors.joining(","));
+        Settings.putString("subscription_updates_unread_eh_gids",mode==ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION?"":ids);
+        Settings.putString("subscription_updates_unread_bookmark_gids",mode==ListUrlBuilder.MODE_SUBSCRIPTION?"":ids);
         SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
-        Set<Long> eh = ReflectionHelpers.getField(manager, "mEhUnreadGids");
-        Set<Long> bookmark = ReflectionHelpers.getField(manager, "mBookmarkUnreadGids");
-        eh.clear();
-        bookmark.clear();
-        for (long gid : gids) {
-            if (mode != ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION) eh.add(gid);
-            if (mode != ListUrlBuilder.MODE_SUBSCRIPTION) bookmark.add(gid);
-        }
         ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
         return manager;
     }
@@ -723,7 +725,10 @@ public class PopularGalleryRenderingTest {
         ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
         refresh(5, 4);
         assertEquals(Arrays.asList(5L, 4L), visibleIds());
-        assertEquals(seen(5).minute(), SubscriptionUpdateManager.getLastSeenEhState().minute());
+        try(SearchUpdateStore store=SearchUpdateStore.open()) {
+            var state=store.read(SubscriptionSearchContext.key(),"eh-subscription");
+            assertEquals(seen(5).minute(),state.head);assertTrue(state.viewed>0);
+        }
         assertEquals("", Settings.getString("seen_gallery_searches_v2", ""));
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
         builder.setKeyword("disabled-search");
@@ -765,7 +770,7 @@ public class PopularGalleryRenderingTest {
         assertEquals(Arrays.asList(111L, null, 110L, 109L, 108L), visibleIds());
     }
 
-    @Test public void subscribedBookmarksKeepSharedAcknowledgementTime() {
+    @Test public void subscribedBookmarksKeepIndependentAcknowledgementTime() {
         Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
         builder.setKeyword("subscription-a-characterization");
@@ -780,12 +785,12 @@ public class PopularGalleryRenderingTest {
         ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
         builder.set(first);
         refresh(200);
-        assertEquals(seen(200).minute(), SubscriptionUpdateManager.getLastSeenBookmarkState().minute());
+        assertEquals(seen(200).minute(),com.hippo.ehviewer.client.SeenGalleryHistory.open(builder).baseline().minute());
 
-        // First visit to B inherits A's watermark, despite B never having been opened.
+        // A first visit to B establishes its own baseline instead of inheriting A.
         builder.set(second);
         refresh(190, 180);
-        assertEquals(Arrays.asList(null, 190L, 180L), visibleIds());
+        assertEquals(Arrays.asList(190L, 180L), visibleIds());
     }
 
     @Test public void subscriptionRefreshRecomputesUpdatesAgainstPreviousPublicationState() {
@@ -803,7 +808,8 @@ public class PopularGalleryRenderingTest {
         subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 200);
         ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
         refresh(200, 190);
-        long previous = SubscriptionUpdateManager.getLastSeenEhState().minute();
+        long previous;
+        try(SearchUpdateStore store=SearchUpdateStore.open()) { previous=store.read(SubscriptionSearchContext.key(),"eh-subscription").version; }
         helper.refresh();
         assertTrue(ReflectionHelpers.<Set<Long>>getField(scene, "mSubscriptionNewGids").contains(200L));
         int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
@@ -811,10 +817,10 @@ public class PopularGalleryRenderingTest {
                 ClassParameter.from(Exception.class, new java.io.IOException("offline")),
                 ClassParameter.from(int.class, task));
         assertTrue(ReflectionHelpers.<Set<Long>>getField(scene, "mSubscriptionNewGids").contains(200L));
-        assertEquals(previous, SubscriptionUpdateManager.getLastSeenEhState().minute());
+        try(SearchUpdateStore store=SearchUpdateStore.open()) { assertEquals(previous,store.read(SubscriptionSearchContext.key(),"eh-subscription").version); }
     }
 
-    @Test public void subscribedBookmarkAndGlobalSubscriptionShareViewedMaximum() {
+    @Test public void subscribedBookmarkUsesItsOwnCheckpointAndAcknowledgement() {
         Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
         builder.setKeyword("subscribed-bookmark");
@@ -823,11 +829,11 @@ public class PopularGalleryRenderingTest {
         bookmarks.add(bookmark);
         SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
         ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
-        manager.recordGlobalPageViewed(seen(90), seen(100));
+        refresh(100,95);
         refresh(110, 100, 95);
         assertEquals(Arrays.asList(110L, null, 100L, 95L), visibleIds());
-        assertEquals(seen(110).minute(), SubscriptionUpdateManager.getLastSeenBookmarkState().minute());
-        manager.recordBookmarkPageViewed(seen(120));
+        assertEquals(seen(110).minute(),com.hippo.ehviewer.client.SeenGalleryHistory.open(builder).baseline().minute());
+        builder.setKeyword("another-search");refresh(120);builder.set(bookmark);
         refresh(125, 115, 100);
         assertEquals(Arrays.asList(125L, 115L, null, 100L), visibleIds());
     }
@@ -1146,9 +1152,14 @@ public class PopularGalleryRenderingTest {
         @Implementation protected static FavouriteStatusRouter getFavouriteStatusRouter() { return router; }
         @Implementation protected static Conaco<Image> getConaco(Context context) { return null; }
     }
+    @Implements(SubscriptionSearchContext.class)
+    public static class ContextShadow {
+        @Implementation protected static String key() { return "account/site-"+Settings.getGallerySite(); }
+    }
     @Implements(EhDB.class)
     public static class DbShadow {
         @Implementation protected static List<QuickSearch> getAllQuickSearch() { return bookmarks; }
+        @Implementation protected static List<QuickSearch> getSubscribedQuickSearch() { return bookmarks.stream().filter(q->q.subscribed).toList(); }
     }
     @Implements(DownloadManager.class)
     public static class DownloadShadow {

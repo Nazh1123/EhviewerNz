@@ -125,6 +125,15 @@ public final class BookmarkSubscriptionPlanner {
                 || q.mode == ListUrlBuilder.MODE_TAG || q.mode == ListUrlBuilder.MODE_FILTER);
     }
     public static List<Source> plan(List<QuickSearch> bookmarks) {
+        return plan(bookmarks, false);
+    }
+
+    /** Persistent per-query progress requires exact attribution before any checkpoint commits. */
+    public static List<Source> planExact(List<QuickSearch> bookmarks) {
+        return plan(bookmarks, true);
+    }
+
+    private static List<Source> plan(List<QuickSearch> bookmarks, boolean exact) {
         List<Entry> entries = new ArrayList<>();
         for (QuickSearch q : bookmarks) if (isSupported(q) && q.subscribed) entries.add(entry(q));
         entries.sort(Comparator.comparing((Entry e) -> queryKey(e.builder, true))
@@ -132,7 +141,16 @@ public final class BookmarkSubscriptionPlanner {
         List<Source> sources = new ArrayList<>();
         for (Entry entry : entries) {
             boolean added = false;
-            for (Source source : sources) if (source.add(entry)) { added = true; break; }
+            for (Source source : sources) {
+                // Try on a copy: a failed exact-attribution merge must not mutate the old plan.
+                Source candidate = new Source(source.entries.get(0));
+                for (int i = 1; i < source.entries.size(); i++) candidate.add(source.entries.get(i));
+                if (candidate.add(entry) && (!exact || !candidate.requiresVerification())) {
+                    sources.set(sources.indexOf(source), candidate);
+                    added = true;
+                    break;
+                }
+            }
             if (!added) sources.add(new Source(entry));
         }
         sources.sort(Comparator.comparing(Source::getCacheKey));

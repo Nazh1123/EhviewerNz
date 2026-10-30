@@ -17,6 +17,7 @@
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
 import com.hippo.ehviewer.client.GallerySeenState;
+import com.hippo.ehviewer.client.SearchUpdateSession;
 import android.text.TextUtils;
 import android.os.Handler;
 import android.os.Looper;
@@ -71,6 +72,9 @@ final class BookmarkSubscriptionCoordinator {
         @Nullable final BookmarkSubscriptionPlanner.Source plan;
         final ListUrlBuilder builder = new ListUrlBuilder();
         final ArrayList<GalleryInfo> buffer = new ArrayList<>();
+        final SearchUpdateSession session;
+        boolean responseReady;
+        final Set<String> visitedUrls = new HashSet<>();
 
         int bufferIndex;
         int pageIndex;
@@ -92,6 +96,7 @@ final class BookmarkSubscriptionCoordinator {
             this.plan = plan;
             builder.set(plan.createBuilder());
             builder.setPageIndex(0);
+            session = new SearchUpdateSession(builder, plan);
         }
 
         Source(int id) {
@@ -99,6 +104,7 @@ final class BookmarkSubscriptionCoordinator {
             plan = null;
             builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
             builder.setPageIndex(0);
+            session = new SearchUpdateSession(builder, plan);
         }
 
         boolean hasVisibleItem() {
@@ -123,6 +129,7 @@ final class BookmarkSubscriptionCoordinator {
     private final ArrayList<Source> mSources = new ArrayList<>();
     private final ArrayDeque<PendingRequest> mRequestQueue = new ArrayDeque<>();
     private final Set<Long> mEmittedGids = new HashSet<>();
+    private final Set<Long> mSessionNewGids = new HashSet<>();
     private final Map<Long, LinkedHashSet<QuickSearch>> mMatchingQuickSearches =
             new HashMap<>();
     private final ArrayList<GalleryInfo> mPendingBatch = new ArrayList<>();
@@ -207,10 +214,8 @@ final class BookmarkSubscriptionCoordinator {
     GallerySeenState getLatestEhState() { return mLatestEhState; }
     GallerySeenState getLatestBookmarkState() { return mLatestBookmarkState; }
 
-    boolean isNewGallery(GalleryInfo gallery, GallerySeenState eh,
-                         GallerySeenState bookmark) {
-        return (mEhGids.contains(gallery.gid) && eh.isNew(gallery))
-                || (mBookmarkGids.contains(gallery.gid) && bookmark.isNew(gallery));
+    boolean isNewGallery(GalleryInfo gallery) {
+        return mSessionNewGids.contains(gallery.gid);
     }
 
     @Nullable
@@ -367,7 +372,7 @@ final class BookmarkSubscriptionCoordinator {
         }
 
         for (BookmarkSubscriptionPlanner.Source plan
-                : BookmarkSubscriptionPlanner.plan(quickSearches)) {
+                : SearchUpdateSession.plan(quickSearches)) {
             mSources.add(new Source(mSources.size(), plan));
         }
 
@@ -434,6 +439,7 @@ final class BookmarkSubscriptionCoordinator {
         mSources.clear();
         mPendingBatch.clear();
         mEmittedGids.clear();
+        mSessionNewGids.clear();
         mMatchingQuickSearches.clear();
         mLatestEhState = GallerySeenState.empty();
         mLatestBookmarkState = GallerySeenState.empty();
@@ -472,6 +478,14 @@ final class BookmarkSubscriptionCoordinator {
         source.hasBoundary = cachedSource.hasBoundary;
         source.exhausted = cachedSource.exhausted;
         setSourceGalleryInfos(source, SubscriptionGallerySnapshot.copy(cachedSource.galleryInfoList));
+        GalleryListParser.Result page = new GalleryListParser.Result();
+        page.rawGalleries = cachedSource.rawGalleries;
+        page.rawPublicationTimes.putAll(cachedSource.rawPublicationTimes);
+        page.galleryInfoList = source.buffer;
+        page.rawTailPosted = cachedSource.boundaryPosted;
+        source.session.observe(page, !source.exhausted);
+        source.responseReady = true;
+        mSessionNewGids.addAll(source.session.displayNewGids());
         if (source.plan == null) mLatestEhState = mLatestEhState.merge(cachedSource.observed);
         else mLatestBookmarkState = mLatestBookmarkState.merge(cachedSource.observed);
     }
@@ -518,6 +532,11 @@ final class BookmarkSubscriptionCoordinator {
             }
 
             url = SearchRating.withoutServerFilter(url);
+            if (source.retries == 0 && (source.pageIndex >= 1000 || !source.visitedUrls.add(url))) {
+                onPageFailure(mGeneration, source.id, pending.initial(),
+                        new IllegalStateException("Subscription pagination made no progress"));
+                continue;
+            }
             source.retryUrl = url;
             int generation = mGeneration;
             EhRequest request = new EhRequest()
@@ -559,11 +578,18 @@ final class BookmarkSubscriptionCoordinator {
             return;
         }
         Source source = mSources.get(sourceId);
+        if (result.customErrorString != null) {
+            onPageFailure(generation, sourceId, initial,
+                    new IllegalStateException(result.customErrorString));
+            return;
+        }
         if (source.cachedCheck != null) {
             SubscriptionUpdateManager.RecentCheckSource cached = source.cachedCheck;
             source.pageIndex = cached.pageIndex;
             result.rawResultCount = cached.initialResultCount;
             result.rawSeenState = cached.observed;
+            result.rawGalleries = cached.rawGalleries;
+            result.rawPublicationTimes.putAll(cached.rawPublicationTimes);
             result.rawTailPosted = cached.boundaryPosted;
             result.rawTailGid = cached.boundaryGid;
             result.nextHref = cached.nextHref;
@@ -592,6 +618,9 @@ final class BookmarkSubscriptionCoordinator {
         boolean hasHref = !TextUtils.isEmpty(result.nextHref);
         boolean hasIndexedPage = result.pages > 0 && source.pageIndex + 1 < result.pages;
         source.exhausted = !hasHref && !hasIndexedPage;
+        source.session.observe(result, !source.exhausted);
+        source.responseReady = result.customErrorString == null;
+        mSessionNewGids.addAll(source.session.displayNewGids());
 
         afterRequestFinished();
     }
@@ -863,6 +892,12 @@ final class BookmarkSubscriptionCoordinator {
             return;
         }
 
+        for (Source source : mSources) {
+            if (source.responseReady) {
+                source.session.commit(true);
+                source.responseReady = false;
+            }
+        }
         ArrayList<GalleryInfo> data = new ArrayList<>(mPendingBatch);
         boolean refresh = mRefresh;
         boolean partialFailure = mFirstFailure != null;

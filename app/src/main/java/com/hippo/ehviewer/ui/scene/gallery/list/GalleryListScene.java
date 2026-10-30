@@ -96,6 +96,9 @@ import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.SearchRating;
 import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
 import com.hippo.ehviewer.client.SeenGalleryHistory;
+import com.hippo.ehviewer.client.SearchUpdateSession;
+import com.hippo.ehviewer.client.SearchUpdateStore;
+import com.hippo.ehviewer.client.GallerySeenProjection;
 import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
@@ -396,8 +399,10 @@ public class GalleryListScene extends BaseScene
     private SubscriptionUpdateManager mSubscriptionUpdateManager;
     private final Set<Long> mSubscriptionNewGids = new HashSet<>();
     private SeenGalleryHistory.Search mSeenSearch;
-    private GallerySeenState mSubscriptionEhBaseline = GallerySeenState.empty();
-    private GallerySeenState mSubscriptionBookmarkBaseline = GallerySeenState.empty();
+    private SearchUpdateSession mEhSearchSession;
+    private final Set<Long> mSeenNewGids = new HashSet<>();
+    private final GallerySeenProjection mSeenProjection = new GallerySeenProjection();
+    private boolean mProjectionResetPending;
     private boolean mSubscriptionHasResponse;
     private boolean mSubscriptionPreserveSnapshot;
     private boolean mSubscriptionRefreshPending;
@@ -561,13 +566,14 @@ public class GalleryListScene extends BaseScene
                 ? savedInstanceState.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
         mPopularRepeatedExpanded = savedInstanceState.getBoolean(KEY_POPULAR_REPEATED_EXPANDED);
         mPopularResponseReady = mHasFirstRefresh && isPopularMode();
+        mSeenProjection.restore(savedInstanceState);
+        long[] seenNew = savedInstanceState.getLongArray("seen_search_new_gids");
+        if (seenNew != null) for (long gid : seenNew) mSeenNewGids.add(gid);
         String seenKey = savedInstanceState.getString("seen_search_key");
         if (seenKey != null) mSeenSearch = new SeenGalleryHistory.Search(seenKey,
                 GallerySeenState.parse(savedInstanceState.getString("seen_search_state_v2")),
                 savedInstanceState.getBoolean("seen_search_bookmarked"),
                 savedInstanceState.getBoolean("seen_search_subscribed"));
-        mSubscriptionEhBaseline = GallerySeenState.parse(savedInstanceState.getString("subscription_eh_state_v2"));
-        mSubscriptionBookmarkBaseline = GallerySeenState.parse(savedInstanceState.getString("subscription_bookmark_state_v2"));
         mSubscriptionHasResponse = savedInstanceState.getBoolean("subscription_response_ready_v2");
         mSubscriptionPreserveSnapshot = mSubscriptionHasResponse && !mHasFirstRefresh;
         long[] subscriptionNewGids = savedInstanceState.getLongArray(KEY_SUBSCRIPTION_NEW_GIDS);
@@ -604,14 +610,17 @@ public class GalleryListScene extends BaseScene
             outState.putBoolean(KEY_POPULAR_UPDATES_ONLY, mPopularUpdatesOnlyOverride);
         }
         outState.putBoolean(KEY_POPULAR_REPEATED_EXPANDED, mPopularRepeatedExpanded);
+        mSeenProjection.save(outState);
+        long[] seenNew = new long[mSeenNewGids.size()];
+        int seenIndex = 0;
+        for (long gid : mSeenNewGids) seenNew[seenIndex++] = gid;
+        outState.putLongArray("seen_search_new_gids", seenNew);
         if (mSeenSearch != null) {
             outState.putString("seen_search_key", mSeenSearch.key());
             outState.putString("seen_search_state_v2", mSeenSearch.baseline().serialize());
             outState.putBoolean("seen_search_bookmarked", mSeenSearch.bookmarked());
             outState.putBoolean("seen_search_subscribed", mSeenSearch.subscribed());
         }
-        outState.putString("subscription_eh_state_v2", mSubscriptionEhBaseline.serialize());
-        outState.putString("subscription_bookmark_state_v2", mSubscriptionBookmarkBaseline.serialize());
         outState.putBoolean("subscription_response_ready_v2", mSubscriptionHasResponse);
         long[] subscriptionNewGids = new long[mSubscriptionNewGids.size()];
         int subscriptionIndex = 0;
@@ -3187,23 +3196,32 @@ public class GalleryListScene extends BaseScene
                 result.nextPage = 0;
                 result.firstHref = result.prevHref = result.nextHref = result.lastHref = null;
             }
+            if (result.customErrorString == null && mProjectionResetPending
+                    && mHelper.isCurrentTaskRefresh(taskId)) {
+                mSeenProjection.reset();
+                mSeenNewGids.clear();
+                mProjectionResetPending = false;
+            }
+            boolean hasMoreResults = !TextUtils.isEmpty(result.nextHref)
+                    || mUrlBuilder != null && result.pages > 0 && mUrlBuilder.getPageIndex() + 1 < result.pages;
             if (result.customErrorString == null && mUrlBuilder != null
                     && mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION) {
                 beginSubscriptionResponse(taskId);
-                for (GalleryInfo gallery : result.galleryInfoList) {
-                    if (mSubscriptionEhBaseline.isNew(gallery)) mSubscriptionNewGids.add(gallery.gid);
+                if (mEhSearchSession == null) mEhSearchSession = new SearchUpdateSession(mUrlBuilder, null);
+                mEhSearchSession.observe(result, hasMoreResults);
+                mSubscriptionNewGids.addAll(mEhSearchSession.displayNewGids());
+                mEhSearchSession.commit(true);
+                try (SearchUpdateStore store = SearchUpdateStore.open()) {
+                    store.acknowledgeLegacy(com.hippo.ehviewer.client.SubscriptionSearchContext.key(), "eh");
                 }
-                if (mSubscriptionUpdateManager != null) {
-                    mSubscriptionUpdateManager.recordEhPageViewed(result.galleryInfoList);
-                }
+                if (mSubscriptionUpdateManager != null) mSubscriptionUpdateManager.onSearchStatesChanged();
             }
             if (result.customErrorString == null && SeenGalleryHistory.supports(mUrlBuilder)
-                    && Settings.getShowViewedGalleries() && mSeenSearch != null) {
-                if (SeenGalleryHistory.record(mSeenSearch, result.galleryInfoList)
-                        && mSubscriptionUpdateManager != null) {
-                    mSubscriptionUpdateManager.recordBookmarkPageViewed(
-                            GallerySeenState.empty().observe(result.galleryInfoList));
-                }
+                    && mSeenSearch != null) {
+                if (mSeenSearch.session() == null) mSeenSearch = SeenGalleryHistory.open(mUrlBuilder);
+                SeenGalleryHistory.record(mSeenSearch, result, hasMoreResults);
+                if (mSeenSearch != null) mSeenNewGids.addAll(mSeenSearch.newGids());
+                if (mSubscriptionUpdateManager != null) mSubscriptionUpdateManager.onSearchStatesChanged();
             }
             String emptyString;
             if (result.customErrorString == null) {
@@ -3334,16 +3352,16 @@ public class GalleryListScene extends BaseScene
         if (mBookmarkSubscriptionCoordinator != null) {
             beginSubscriptionResponse(taskId);
             for (GalleryInfo gallery : data) {
-                if (mBookmarkSubscriptionCoordinator.isNewGallery(gallery,
-                        mSubscriptionEhBaseline, mSubscriptionBookmarkBaseline)) {
+                if (mBookmarkSubscriptionCoordinator.isNewGallery(gallery)) {
                     mSubscriptionNewGids.add(gallery.gid);
                 }
             }
-            if (!partialFailure && mSubscriptionUpdateManager != null) {
-                mSubscriptionUpdateManager.recordGlobalPageViewed(
-                        isGlobalSubscriptionMode() ? mBookmarkSubscriptionCoordinator.getLatestEhState() : null,
-                        mBookmarkSubscriptionCoordinator.getLatestBookmarkState());
+            if (!partialFailure) try (SearchUpdateStore store = SearchUpdateStore.open()) {
+                String scope = com.hippo.ehviewer.client.SubscriptionSearchContext.key();
+                store.acknowledgeLegacy(scope, "bookmark");
+                if (isGlobalSubscriptionMode()) store.acknowledgeLegacy(scope, "eh");
             }
+            if (mSubscriptionUpdateManager != null) mSubscriptionUpdateManager.onSearchStatesChanged();
         }
         onGetGalleryListSuccess(result, taskId);
         if (data.isEmpty() && hasMore) {
@@ -3468,20 +3486,14 @@ public class GalleryListScene extends BaseScene
         }
 
         private boolean isNewGallery(GalleryInfo gallery) {
-            return hasSearchBaseline() ? mSeenSearch.baseline().isNew(gallery)
+            return hasSearchBaseline() ? mSeenNewGids.contains(gallery.gid)
                     : mSubscriptionNewGids.contains(gallery.gid);
         }
 
         private void rebuildViewedData() {
             mViewedData.clear();
             if (!hasViewedProjection()) return;
-            // Keep each group's server order, including backdated galleries counted as updates.
-            for (GalleryInfo gallery : mHelper.getData()) {
-                if (isNewGallery(gallery)) mViewedData.add(gallery);
-            }
-            for (GalleryInfo gallery : mHelper.getData()) {
-                if (!isNewGallery(gallery)) mViewedData.add(gallery);
-            }
+            mViewedData.addAll(mSeenProjection.project(mHelper.getData(), this::isNewGallery));
         }
 
         private void rebuildPopularData() {
@@ -3503,7 +3515,7 @@ public class GalleryListScene extends BaseScene
                     && mPopularRepeatedExpanded) {
                 for (int i = 0; i < mPopularNewCount; i++) newGids.add(mPopularData.get(i).gid);
             } else if (hasViewedProjection()) {
-                for (GalleryInfo gallery : mViewedData) if (isNewGallery(gallery)) newGids.add(gallery.gid);
+                for (GalleryInfo gallery : mViewedData) if (mSeenProjection.inPrefix(gallery.gid)) newGids.add(gallery.gid);
             } else {
                 return;
             }
@@ -3743,7 +3755,10 @@ public class GalleryListScene extends BaseScene
 
         private void prepareSeenState(int taskId) {
             if (isCurrentTaskRefresh(taskId)) {
+                mProjectionResetPending = true;
                 mSeenSearch = SeenGalleryHistory.open(mUrlBuilder);
+                if (mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION)
+                    mEhSearchSession = new SearchUpdateSession(mUrlBuilder, null);
                 if (isSubscriptionMode()) {
                     mSubscriptionPendingUnread.clear();
                     if (mSubscriptionHasResponse && !mSubscriptionPreserveSnapshot) {
@@ -3751,10 +3766,6 @@ public class GalleryListScene extends BaseScene
                                 mSubscriptionUpdateManager.getUnreadGalleryGids(mUrlBuilder.getMode()));
                     } else {
                         mSubscriptionPendingUnread.addAll(mSubscriptionNewGids);
-                    }
-                    if (!mSubscriptionPreserveSnapshot) {
-                        mSubscriptionEhBaseline = SubscriptionUpdateManager.getEhDisplayBaseline();
-                        mSubscriptionBookmarkBaseline = SubscriptionUpdateManager.getBookmarkDisplayBaseline();
                     }
                     mSubscriptionRefreshPending = true;
                 }

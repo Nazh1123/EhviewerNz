@@ -19,13 +19,15 @@ import static org.junit.Assert.*;
 import static com.hippo.ehviewer.client.GallerySeenStateTest.*;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(application = Application.class, sdk = 28, shadows = SeenGalleryHistoryTest.DbShadow.class)
+@Config(application = Application.class, sdk = 28, shadows = {SeenGalleryHistoryTest.DbShadow.class, SeenGalleryHistoryTest.ContextShadow.class})
 public class SeenGalleryHistoryTest {
     private static final List<QuickSearch> bookmarks = new ArrayList<>();
     private ListUrlBuilder builder;
 
     @Before public void setUp() {
         Settings.initialize(RuntimeEnvironment.getApplication());
+        RuntimeEnvironment.getApplication().deleteDatabase(SearchUpdateStore.DATABASE);
+        SearchUpdateStore.initialize(RuntimeEnvironment.getApplication());
         Settings.putString("seen_gallery_searches_v2", "");
         Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
         Settings.putGallerySite(0);
@@ -94,37 +96,47 @@ public class SeenGalleryHistoryTest {
         assertEquals(200, marker(SeenGalleryHistory.open(builder).baseline()));
     }
 
-    @Test public void editedSubscribedBookmarkDemotesTheLatestSharedBaseline() {
+    @Test public void subscribedBookmarksUseIndependentQueriesAndEditsDoNotInheritAnotherBaseline() {
         QuickSearch bookmark = builder.toQuickSearch();
-        bookmark.subscribed = true;
-        bookmarks.add(bookmark);
-        Settings.putString("subscription_seen_bookmark_v2_0", state(100).serialize());
+        bookmark.subscribed = true; bookmarks.add(bookmark);
+        SeenGalleryHistory.record(SeenGalleryHistory.open(builder), List.of(gallery(100,100)));
         assertEquals(100, marker(SeenGalleryHistory.open(builder).baseline()));
-        Settings.putString("subscription_seen_bookmark_v2_0", state(200).serialize());
-        bookmark.keyword = "changed-subscription";
+        bookmark.keyword="changed-subscription";
         SeenGalleryHistory.onBookmarksChanged(bookmarks);
         assertFalse(SeenGalleryHistory.open(builder).subscribed());
-        assertEquals(200, marker(SeenGalleryHistory.open(builder).baseline()));
+        assertEquals(100,marker(SeenGalleryHistory.open(builder).baseline()));
         builder.set(bookmark);
-        assertEquals(200, marker(SeenGalleryHistory.open(builder).baseline()));
-        SeenGalleryHistory.Search inFlight = SeenGalleryHistory.open(builder);
-        bookmarks.clear();
-        assertFalse(SeenGalleryHistory.record(inFlight, List.of(gallery(250, 250))));
-        assertEquals(250, marker(SeenGalleryHistory.open(builder).baseline()));
+        assertFalse(SeenGalleryHistory.open(builder).baseline().initialized());
+        SeenGalleryHistory.record(SeenGalleryHistory.open(builder),List.of(gallery(250,250)));
+        assertEquals(250,marker(SeenGalleryHistory.open(builder).baseline()));
     }
 
     @Test public void reducingHistorySizeImmediatelyTrimsOrdinaryRecordsButKeepsBookmarks() {
-        SeenGalleryStore store = new SeenGalleryStore("");
-        for (int i = 0; i < 100; i++) {
-            store.record("0/" + SubscriptionProgressStore.key("search", "q" + i), state(i + 1), false, 500);
+        QuickSearch bookmark=builder.toQuickSearch();bookmarks.add(bookmark);
+        SeenGalleryHistory.record(SeenGalleryHistory.open(builder),List.of(gallery(1000,1000)));
+        for(int i=0;i<100;i++) {
+            builder.setKeyword("query"+i);
+            SeenGalleryHistory.record(SeenGalleryHistory.open(builder),List.of(gallery(i+1,i+1)));
         }
-        store.record("0/" + SubscriptionProgressStore.key("search", "bookmark"), state(1000), true, 500);
-        Settings.putString("seen_gallery_searches_v2", store.serialize());
         Settings.setHistoryInfoSize(100);
-        String serialized = Settings.getString("seen_gallery_searches_v2", "");
-        assertEquals(51, serialized.lines().count());
-        assertEquals(1000, marker(new SeenGalleryStore(serialized)
-                .get("0/" + SubscriptionProgressStore.key("search", "bookmark"))));
+        try(SearchUpdateStore store=SearchUpdateStore.open();
+            android.database.Cursor c=store.getReadableDatabase().rawQuery("SELECT count(*) FROM queries",null)) {
+            c.moveToFirst();assertEquals(51,c.getInt(0));
+        }
+        builder.set(bookmark);
+        assertEquals(1000,marker(SeenGalleryHistory.open(builder).baseline()));
+    }
+
+    @Test public void successfulSearchesContinuouslyEnforceTheOrdinaryHistoryBudget() {
+        Settings.setHistoryInfoSize(100);
+        for(int i=0;i<60;i++) {
+            builder.setKeyword("bounded-query-"+i);
+            SeenGalleryHistory.record(SeenGalleryHistory.open(builder),List.of(gallery(i+1,i+1)));
+        }
+        try(SearchUpdateStore store=SearchUpdateStore.open();
+            android.database.Cursor c=store.getReadableDatabase().rawQuery("SELECT count(*) FROM queries",null)) {
+            c.moveToFirst();assertEquals(50,c.getInt(0));
+        }
     }
 
     @Test public void legacyGidRecordsArePreservedButFirstSuccessSeedsV2() {
@@ -136,8 +148,14 @@ public class SeenGalleryHistoryTest {
         assertEquals(old, Settings.getString("seen_gallery_searches_v1", ""));
     }
 
+    @Implements(SubscriptionSearchContext.class)
+    public static class ContextShadow {
+        @Implementation protected static String key() { return "account/site-"+Settings.getGallerySite(); }
+    }
+
     @Implements(EhDB.class)
     public static class DbShadow {
         @Implementation protected static List<QuickSearch> getAllQuickSearch() { return bookmarks; }
+        @Implementation protected static List<QuickSearch> getSubscribedQuickSearch() { return bookmarks.stream().filter(q->q.subscribed).toList(); }
     }
 }

@@ -372,6 +372,12 @@ public class EhEngine {
             extra.prevHref = result.prevHref;
             extra.rawHeadGid = Math.max(result.rawHeadGid, extra.rawHeadGid);
             extra.rawSeenState = result.rawSeenState.merge(extra.rawSeenState);
+            result.rawPublicationTimes.forEach(extra.rawPublicationTimes::putIfAbsent);
+            if (result.rawGalleries != null && extra.rawGalleries != null) {
+                List<GalleryInfo> raw = new ArrayList<>(result.rawGalleries);
+                raw.addAll(extra.rawGalleries);
+                extra.rawGalleries = raw;
+            }
             return extra;
         }
         return result;
@@ -455,6 +461,10 @@ public class EhEngine {
             result.galleryInfoList.removeIf(gallery -> gallery.firstGid < 0 || !homepageMatcher.matches(gallery));
         }
         Set<Long> newSubscriptionGids = new HashSet<>();
+        boolean queryLocalCheck = checkCursor == null && prepareSubscriptionDisplay;
+        if (queryLocalCheck) {
+            result.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
+        }
         if (checkCursor != null) {
             result.subscriptionRawGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
             if (prepareSubscriptionDisplay) {
@@ -467,7 +477,10 @@ public class EhEngine {
         }
         prepareGalleryList(task, okHttpClient, requestUrl, mode, result, subscriptionScope,
                 requireUploader && (checkCursor == null || prepareSubscriptionDisplay), minRatingHundredths,
-                (checkCursor != null && !prepareSubscriptionDisplay) || homepageMatcher != null);
+                (checkCursor != null && !prepareSubscriptionDisplay) || homepageMatcher != null || queryLocalCheck);
+        if (queryLocalCheck && !needsSubscriptionDisplayMetadata(result.galleryInfoList)) {
+            result.subscriptionDisplayGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
+        }
         if (checkCursor != null && prepareSubscriptionDisplay) {
             result.subscriptionDisplayGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
             result.galleryInfoList.removeIf(gallery -> !newSubscriptionGids.contains(gallery.gid));
@@ -478,6 +491,16 @@ public class EhEngine {
         }
 
         return result;
+    }
+
+    private static boolean needsSubscriptionDisplayMetadata(List<GalleryInfo> galleries) {
+        boolean details = Settings.isThumbnailInfoBarEffective() && Settings.getShowThumbnailInfoDetails();
+        for (GalleryInfo gallery : galleries) {
+            if ((Settings.getShowGalleryPages() || details) && gallery.pages == 0) return true;
+            if (details && gallery.simpleTags == null) return true;
+            if (gallery.rated) return true;
+        }
+        return false;
     }
 
     /** Enrich a retained search response without repeating the HTML request. */

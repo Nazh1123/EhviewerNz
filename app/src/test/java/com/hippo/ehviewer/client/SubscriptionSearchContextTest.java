@@ -86,6 +86,15 @@ public class SubscriptionSearchContextTest {
         assertNotEquals(before, SubscriptionSearchContext.key());
     }
 
+    @Test public void displayAndPageSizeChangesInvalidateCacheButKeepLogicalProgress() {
+        String scope=SubscriptionSearchContext.key(), cache=SubscriptionSearchContext.cacheKey();
+        Settings.getEhConfig().resultCount=com.hippo.ehviewer.client.EhConfig.RESULT_COUNT_100;
+        Settings.getEhConfig().setDirty();
+        Settings.putBoolean("show_gallery_pages",!Settings.getShowGalleryPages());
+        assertEquals(scope,SubscriptionSearchContext.key());
+        assertNotEquals(cache,SubscriptionSearchContext.cacheKey());
+    }
+
     @Implements(EhApplication.class)
     public static class AppShadow {
         @Implementation protected static EhCookieStore getEhCookieStore(Context context) { return store; }
