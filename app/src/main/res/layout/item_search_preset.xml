@@ -11,6 +11,14 @@
     android:paddingBottom="6dp"
     android:orientation="horizontal">
 
+    <androidx.appcompat.widget.AppCompatImageView
+        android:id="@+id/search_preset_drag"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:padding="12dp"
+        app:tint="?android:attr/textColorSecondary"
+        app:srcCompat="@drawable/v_reorder_x24" />
+
     <LinearLayout
         android:id="@+id/search_preset_details"
         android:layout_width="0dp"

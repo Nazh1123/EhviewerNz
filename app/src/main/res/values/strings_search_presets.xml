@@ -9,7 +9,8 @@
     <string name="search_preset_normal">Normal</string>
     <string name="search_preset_include">Include</string>
     <string name="settings_search_preset_bubbles_summary">Show preset bubbles in more search conditions. Tap a bubble to add or remove it; tap its left symbol to cycle Include, Exclude and OR.</string>
-    <string name="settings_search_preset_tags">Preset keyword bubbles</string>
+    <string name="settings_search_preset_tags">Preset keywords</string>
+    <string name="settings_search_preset_reorder">Drag to reorder %1$s</string>
     <string name="settings_search_preset_add">Add preset tag</string>
     <string name="settings_search_preset_edit">Edit preset tag</string>
     <string name="settings_search_preset_remove">Delete preset</string>
@@ -17,7 +18,7 @@
     <string name="search_preset_absent">Not in the search query</string>
     <string name="search_preset_add">Add tag %1$s</string>
     <string name="settings_search_presets_count">Preset tags: %1$d · Add, edit or delete</string>
-    <string name="settings_search_presets_description">Manage the bubbles shown in more search conditions. Changes are saved immediately; use the buttons beside a tag to edit or delete it.</string>
+    <string name="settings_search_presets_description">Manage preset keywords shown in more search conditions. Drag the handle on the left to reorder; use the buttons on the right to edit or delete. Changes are saved immediately.</string>
     <string name="settings_search_presets_empty">No preset tags yet. Tap the button below to add one.</string>
     <string name="settings_search_preset_remove_confirm">Delete preset %1$s? This leaves the current search query unchanged.</string>
     <string name="search_preset_input_hint">Enter a keyword or tag expression</string>
