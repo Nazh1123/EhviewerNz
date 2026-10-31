@@ -310,17 +310,15 @@ public final class SpiderDen {
         int dot = sourceName != null ? sourceName.lastIndexOf('.') : -1;
         String extension = dot >= 0 ? sourceName.substring(dot).toLowerCase(Locale.US) : null;
         extension = fixExtension(extension);
-        UniFile target = dir.createFile(generateImageFilename(index, extension));
-        if (target == null) {
-            return false;
-        }
+        UniFile target = dir.subFile(generateImageFilename(index, extension));
 
         InputStream is = null;
         OutputStream os = null;
         boolean success = false;
         try {
             is = source.openInputStream();
-            os = target.openOutputStream();
+            os = com.hippo.ehviewer.download.GalleryDownloadRangeStore.openImageOutput(
+                    mGid, index, dir, generateImageFilename(index, extension));
             long copied = IOUtils.copy(is, os);
             os.flush();
             success = copied > 0L;
@@ -330,7 +328,7 @@ public final class SpiderDen {
         } finally {
             IOUtils.closeQuietly(is);
             IOUtils.closeQuietly(os);
-            if (!success) {
+            if (!success && target != null) {
                 target.delete();
             }
         }
@@ -343,7 +341,8 @@ public final class SpiderDen {
         }
 
         // Find image file in download dir
-        return findImageFile(dir, index) != null;
+        UniFile file = findImageFile(dir, index);
+        return file != null && isReadableImage(file);
     }
 
     /**
@@ -390,11 +389,8 @@ public final class SpiderDen {
             // Fix extension
             extension = fixExtension(extension);
             // Copy from cache to download dir
-            UniFile file = dir.createFile(generateImageFilename(index, extension));
-            if (file == null) {
-                return false;
-            }
-            os = file.openOutputStream();
+            os = com.hippo.ehviewer.download.GalleryDownloadRangeStore.openImageOutput(
+                    mGid, index, dir, generateImageFilename(index, extension));
             IOUtils.copy(pipe.open(), os);
             return true;
         } catch (IOException e) {
@@ -475,16 +471,25 @@ public final class SpiderDen {
             extension = fixExtension(extension);
         }
 
-        UniFile file = dir.createFile(generateImageFilename(index, extension));
-        if (file != null) {
-            return new UniFileOutputStreamPipe(file);
-        } else {
-            return null;
-        }
+        String filename = generateImageFilename(index, extension);
+        return new OutputStreamPipe() {
+            private OutputStream output;
+            @Override public void obtain() { }
+            @Override public void release() { }
+            @Override public OutputStream open() throws IOException {
+                output = com.hippo.ehviewer.download.GalleryDownloadRangeStore.openImageOutput(mGid, index, dir, filename);
+                return output;
+            }
+            @Override public void close() { IOUtils.closeQuietly(output); output = null; }
+        };
     }
 
     @Nullable
     public OutputStreamPipe openOutputStreamPipe(int index, @Nullable String extension) {
+        // Full-gallery browsing may share a queen with a range download. Outside pages stay cached.
+        if (!com.hippo.ehviewer.download.GalleryDownloadRangeStore.canPersist(mGid, index)) {
+            return openCacheOutputStreamPipe(index);
+        }
         if (mMode == SpiderQueen.MODE_READ) {
             if (shouldSyncDownloadWhileReading() && ensureDownloadDirExists()) {
                 OutputStreamPipe pipe = openDownloadOutputStreamPipe(index, extension);

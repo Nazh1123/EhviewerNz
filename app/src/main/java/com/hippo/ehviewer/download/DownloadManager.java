@@ -113,6 +113,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
     public DownloadManager(Context context) {
         mContext = context;
+        GalleryDownloadRangeStore.get(context);
 
         // Get all labels
         List<DownloadLabel> labels = EhDB.getAllDownloadLabelList();
@@ -324,7 +325,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
     @Nullable
     private String completeGalleryFailure(@Nullable DownloadInfo info) {
-        if (info == null || isImportedGallery(info) || info.state != DownloadInfo.STATE_FINISH
+        if (info == null || isImportedGallery(info) || GalleryDownloadRangeStore.isRange(info.gid)
+                || info.state != DownloadInfo.STATE_FINISH
                 || info.legacy != 0) {
             return mContext.getString(R.string.gallery_update_error_target_incomplete);
         }
@@ -610,6 +612,20 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     }
 
     void startDownload(GalleryInfo galleryInfo, @Nullable String label) {
+        startDownload(galleryInfo, label, false);
+    }
+
+    void startDownload(GalleryInfo galleryInfo, @Nullable String label, boolean keepPageRange) {
+        if (GalleryDownloadRangeStore.isEditing(galleryInfo.gid)) return;
+        GalleryDownloadRangeStore.Entry range = GalleryDownloadRangeStore.peek(galleryInfo.gid);
+        if (range != null && getDownloadInfo(galleryInfo.gid) == null && !keepPageRange) {
+            changePageRange(galleryInfo, null, null);
+            return;
+        }
+        if (range != null && range.pending()) {
+            changePageRange(galleryInfo, range.range(), null);
+            return;
+        }
         if (mCurrentTask != null && mCurrentTask.gid == galleryInfo.gid) {
             // It is current task
             return;
@@ -681,6 +697,67 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             // Add it to history
             EhDB.putHistoryInfo(info);
         }
+    }
+
+    /** Main-thread entry point; edits are serialized with image writers off the UI thread. */
+    public void changePageRange(GalleryInfo gallery, @Nullable GalleryPageRange range,
+                               @Nullable java.util.function.Consumer<String> onError) {
+        changePageRange(gallery, range, onError, null);
+    }
+
+    public void changePageRange(GalleryInfo gallery, @Nullable GalleryPageRange range,
+                               @Nullable java.util.function.Consumer<String> onError,
+                               @Nullable Runnable onReady) {
+        GalleryDownloadRangeStore.Entry previous = GalleryDownloadRangeStore.peek(gallery.gid);
+        DownloadInfo before = getDownloadInfo(gallery.gid);
+        if (range != null && previous != null && !previous.pending() && before != null
+                && before.state == DownloadInfo.STATE_FINISH
+                && range.toString().equals(previous.range().toString())) return;
+        if (gallery.gid <= 0 || (gallery instanceof DownloadInfo local && local.archiveUri != null)
+                || GalleryUpdateManager.getPlan(gallery.gid) != null
+                || !GalleryDownloadRangeStore.beginEdit(gallery.gid)) {
+            if (onError != null) onError.accept(mContext.getString(R.string.range_download_busy));
+            return;
+        }
+        stopDownloadInternal(gallery.gid);
+        DownloadInfo existing = getDownloadInfo(gallery.gid);
+        if (existing == null) addDownload(gallery, null, DownloadInfo.STATE_NONE);
+        DownloadInfo info = getDownloadInfo(gallery.gid);
+        if (info != null) {
+            info.state = DownloadInfo.STATE_NONE;
+            EhDB.putDownloadInfo(info);
+            for (DownloadInfoListener listener : mDownloadInfoListeners) listener.onUpdateAll();
+        }
+        IoThreadPoolExecutor.Companion.getInstance().execute(() -> {
+            String error = null;
+            try {
+                UniFile directory = SpiderDen.getGalleryDownloadDir(gallery);
+                com.hippo.ehviewer.gallery.RangeDownloadProcessing.stop(gallery.gid, directory);
+                GalleryDownloadRangeStore.get(mContext).apply(gallery, range);
+            } catch (Exception e) { error = ExceptionUtils.getReadableString(e); }
+            String failure = error;
+            SimpleHandler.getInstance().post(() -> {
+                GalleryDownloadRangeStore.endEdit(gallery.gid);
+                if (info == null || getDownloadInfo(gallery.gid) != info) return;
+                if (failure != null) {
+                    info.state = DownloadInfo.STATE_FAILED;
+                    info.legacy = Math.max(1, info.legacy);
+                    EhDB.putDownloadInfo(info);
+                    if (onError != null) onError.accept(failure);
+                } else {
+                    info.state = DownloadInfo.STATE_NONE;
+                    info.legacy = -1;
+                    EhDB.putDownloadInfo(info);
+                    Intent intent = new Intent(mContext, DownloadService.class)
+                            .setAction(DownloadService.ACTION_START)
+                            .putExtra(DownloadService.KEY_GALLERY_INFO, info)
+                            .putExtra(DownloadService.KEY_LABEL, info.label);
+                    if (onReady != null) onReady.run();
+                    else mContext.startService(intent);
+                }
+                for (DownloadInfoListener listener : mDownloadInfoListeners) listener.onUpdateAll();
+            });
+        });
     }
 
     /** Starts a waiting gallery immediately, preserving the order of all other downloads. */
@@ -1117,6 +1194,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                         ImportedGalleryProgress.reset(mContext, downloadInfo.gid);
                         continue;
                     }
+                    GalleryDownloadRangeStore.Entry range = GalleryDownloadRangeStore.peek(downloadInfo.gid);
+                    if (range != null) GalleryDownloadRangeStore.get(mContext).saveReadingPage(
+                            downloadInfo.gid, range.range().pages()[0]);
                     galleryInfo.gid = downloadInfo.gid;
                     galleryInfo.token = downloadInfo.token;
                     galleryInfo.title = downloadInfo.title;
@@ -1730,7 +1810,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         long targetGid = targetInfo.gid;
         LongList gids = new LongList();
         for (Long gid : plan.parentGids) {
-            if (gid != null && mAllInfoMap.get(gid) != null) {
+            if (gid != null && mAllInfoMap.get(gid) != null
+                    && !GalleryDownloadRangeStore.isRange(gid) && !GalleryDownloadRangeStore.isEditing(gid)) {
                 gids.add(gid);
             }
         }
@@ -1753,6 +1834,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             try {
                 for (Long gid : plan.parentGids) {
                     if (GalleryUpdateManager.getPlan(targetGid) != plan) return;
+                    if (GalleryDownloadRangeStore.isRange(gid) || GalleryDownloadRangeStore.isEditing(gid)) continue;
                     GalleryInfo placeholder = new GalleryInfo();
                     placeholder.gid = gid;
                     UniFile dir = SpiderDen.getExistingGalleryDownloadDir(placeholder);
@@ -1973,7 +2055,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                     if (info == null) {
                         Log.e(TAG, "Current task is null, but it should not be");
                     } else {
-                        info.total = mPages;
+                        info.total = GalleryDownloadRangeStore.downloadCount(info.gid, mPages);
                         List<DownloadInfo> list = getInfoListForLabel(info.label);
                         if (list != null) {
                             for (DownloadInfoListener l : mDownloadInfoListeners) {

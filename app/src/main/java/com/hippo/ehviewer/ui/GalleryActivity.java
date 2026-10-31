@@ -113,6 +113,8 @@ import com.hippo.ehviewer.gallery.LocalFolderGalleryProvider;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.gallery.SingleImageGalleryProvider;
 import com.hippo.ehviewer.gallery.UpdatedGalleryProvider;
+import com.hippo.ehviewer.gallery.RangeGalleryProvider;
+import com.hippo.ehviewer.download.GalleryDownloadRangeStore;
 import android.provider.DocumentsContract;
 import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
@@ -182,6 +184,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public static final String KEY_CURRENT_INDEX = "current_index";
     public static final String KEY_UPDATE_RECORD_TIME = "update_record_time";
     public static final String KEY_UPDATE_RECORD_GID = "update_record_gid";
+    public static final String KEY_RANGE_READER_MODE = "range_reader_mode";
+    private static final String KEY_RANGE_SOURCE_PAGE = "range_source_page";
+    private boolean mRangeReaderMode;
     private static final String KEY_UPDATE_SOURCE_PAGE = "update_source_page";
     private static final String KEY_READER_UPDATE_RECORD_GID = "reader_update_record_gid";
     private static final String KEY_READER_UPDATE_RECORD_TIME = "reader_update_record_time";
@@ -498,11 +503,19 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         } else if (ACTION_EH.equals(mAction)) {
             if (mGalleryInfo != null) {
+                GalleryDownloadRangeStore.get(this);
+                mRangeReaderMode = mUpdateRecordTime <= 0 && (getIntent().hasExtra(KEY_RANGE_READER_MODE)
+                        ? getIntent().getBooleanExtra(KEY_RANGE_READER_MODE, false)
+                        : GalleryDownloadRangeStore.isRange(mGalleryInfo.gid));
+                getIntent().putExtra(KEY_RANGE_READER_MODE, mRangeReaderMode);
                 mGalleryProvider = mUpdateRecordTime > 0
                         ? new UpdatedGalleryProvider(this, mGalleryInfo,
                                 mUpdateRecordGid, mUpdateRecordTime,
                                 getIntent().getIntExtra(KEY_UPDATE_SOURCE_PAGE, -1))
+                        : mRangeReaderMode ? new RangeGalleryProvider(this, mGalleryInfo,
+                                getIntent().getIntExtra(KEY_RANGE_SOURCE_PAGE, mPage))
                         : new EhGalleryProvider(this, mGalleryInfo);
+                if (mRangeReaderMode) { mPage = -1; mPendingUpdateStart = true; }
                 loadReaderUpdateRecord();
             }
         } else if (Intent.ACTION_VIEW.equals(mAction)) {
@@ -705,6 +718,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mUpdateRecordTime = savedInstanceState.getLong(KEY_UPDATE_RECORD_TIME, 0L);
         mUpdateRecordGid = savedInstanceState.getLong(KEY_UPDATE_RECORD_GID, 0L);
         mPendingUpdateStart = false;
+        if (savedInstanceState.containsKey(KEY_RANGE_SOURCE_PAGE)) getIntent().putExtra(KEY_RANGE_SOURCE_PAGE,
+                savedInstanceState.getInt(KEY_RANGE_SOURCE_PAGE));
         mAnimatedWebpGalleryPlaying = savedInstanceState.getBoolean(
                 KEY_ANIMATED_WEBP_GALLERY_PLAYING, true);
         mAnimatedWebpGallerySpeed = savedInstanceState.getFloat(
@@ -725,6 +740,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         outState.putInt(KEY_CURRENT_INDEX, mCurrentIndex);
         outState.putLong(KEY_UPDATE_RECORD_TIME, mUpdateRecordTime);
         outState.putLong(KEY_UPDATE_RECORD_GID, mUpdateRecordGid);
+        if (mRangeReaderMode && mGalleryProvider != null) outState.putInt(KEY_RANGE_SOURCE_PAGE,
+                mGalleryProvider.getSourcePage(mCurrentIndex));
         outState.putBoolean(KEY_ANIMATED_WEBP_GALLERY_PLAYING,
                 mAnimatedWebpGalleryPlaying);
         outState.putFloat(KEY_ANIMATED_WEBP_GALLERY_SPEED,
@@ -1830,9 +1847,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mSize <= 0 || mCurrentIndex < 0) {
             mProgress.setText(null);
         } else {
-            if (mUpdateRecordTime > 0 && mGalleryProvider != null) {
+            if ((mUpdateRecordTime > 0 || mRangeReaderMode) && mGalleryProvider != null) {
                 mProgress.setText(com.hippo.ehviewer.widget.ReaderProgressText.centerSeparator(
-                        getString(R.string.gallery_update_reader_progress,
+                        getString(mRangeReaderMode ? R.string.range_reader_progress : R.string.gallery_update_reader_progress,
                         mCurrentIndex + 1, mSize,
                         mGalleryProvider.getSourcePage(mCurrentIndex) + 1,
                         mGalleryProvider.getSourcePageCount())));
@@ -2880,8 +2897,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             @Override public boolean hasStableIds() { return true; }
         };
         mPageDialogItems = adapter;
-        if (canSwitchReaderMode()) adapter.add(getString(mUpdateRecordTime > 0
-                ? R.string.gallery_read_full : R.string.gallery_read_updates));
+        addReaderModeActions();
         pageDialogListener(builder, adapter, page);
         builder.setOnDismissListener(dialog -> {
             if (mPageDialogItems == adapter) mPageDialogItems = null;
@@ -2892,6 +2908,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private void pageDialogListener(AlertDialog.Builder builder, ArrayAdapter<CharSequence> items, int page) {
         builder.setAdapter(items, (dialog, which) -> {
             if (mGalleryProvider == null) {
+                return;
+            }
+            if (which >= 6 && !(mGalleryProvider instanceof ArchiveGalleryProvider)) {
+                String action = items.getItem(which).toString();
+                if (action.equals(getString(R.string.range_read_downloaded))
+                        || (mRangeReaderMode && action.equals(getString(R.string.gallery_read_full)))) {
+                    switchRangeReaderMode(page);
+                } else if (canSwitchReaderMode()) switchReaderMode(page);
                 return;
             }
 
@@ -2947,13 +2971,56 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mReaderUpdateRecord = record != null && (time <= 0 || record.completedAt == time)
                         ? record : null;
                 // The first menu may already be open while the initial lookup finishes.
-                if (mPageDialogItems != null && mPageDialogItems.getCount() == 6
-                        && canSwitchReaderMode()) {
-                    mPageDialogItems.add(getString(mUpdateRecordTime > 0
-                            ? R.string.gallery_read_full : R.string.gallery_read_updates));
-                }
+                addReaderModeActions();
             });
         });
+    }
+
+    private void addReaderModeActions() {
+        if (mPageDialogItems == null || !ACTION_EH.equals(mAction) || mGalleryInfo == null) return;
+        if (canSwitchReaderMode()) {
+            String action = getString(mUpdateRecordTime > 0 ? R.string.gallery_read_full : R.string.gallery_read_updates);
+            if (mPageDialogItems.getPosition(action) < 0) mPageDialogItems.add(action);
+        }
+        if (mRangeReaderMode || GalleryDownloadRangeStore.isRange(mGalleryInfo.gid)) {
+            String action = getString(mRangeReaderMode ? R.string.gallery_read_full : R.string.range_read_downloaded);
+            if (mPageDialogItems.getPosition(action) < 0) mPageDialogItems.add(action);
+        }
+    }
+
+    private void switchRangeReaderMode(int page) {
+        if (mGalleryProvider == null || mGalleryInfo == null || mReaderModeSwitchLoading
+                || mPendingReaderModeSwitch != null || page < 0 || page >= mGalleryProvider.size()) return;
+        int sourcePage = mGalleryProvider.getSourcePage(page);
+        if (mRangeReaderMode) { restartReaderForMode(rangeReaderIntent(false, sourcePage)); return; }
+        mReaderModeSwitchLoading = true;
+        GalleryInfo gallery = mGalleryInfo;
+        Context application = getApplicationContext();
+        EhApplication.getExecutorService(application).execute(() -> {
+            boolean valid = false;
+            try { valid = new RangeGalleryProvider(application, gallery, sourcePage).hasReadablePages(); }
+            catch (RuntimeException e) { Log.w(TAG, "Unable to read downloaded range", e); }
+            boolean readable = valid;
+            SimpleHandler.getInstance().post(() -> {
+                mReaderModeSwitchLoading = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (!readable) Toast.makeText(this, R.string.range_download_no_pages, Toast.LENGTH_SHORT).show();
+                else restartReaderForMode(rangeReaderIntent(true, sourcePage));
+            });
+        });
+    }
+
+    private Intent rangeReaderIntent(boolean range, int sourcePage) {
+        Intent intent = new Intent(getIntent()).setAction(ACTION_EH);
+        intent.putExtra(KEY_GALLERY_INFO, mGalleryInfo);
+        intent.removeExtra(DATA_IN_EVENT);
+        intent.putExtra(KEY_RANGE_READER_MODE, range);
+        intent.putExtra(KEY_RANGE_SOURCE_PAGE, sourcePage);
+        intent.putExtra(KEY_PAGE, range ? -1 : sourcePage);
+        intent.putExtra(KEY_UPDATE_RECORD_TIME, 0L);
+        intent.putExtra(KEY_UPDATE_RECORD_GID, 0L);
+        intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.DOWNLOAD);
+        return intent;
     }
 
     private boolean canSwitchReaderMode() {
@@ -3008,6 +3075,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private Intent readerModeIntent(boolean updates, int sourcePage, long gid, long time) {
         Intent intent = new Intent(getIntent());
         intent.setAction(ACTION_EH);
+        intent.putExtra(KEY_RANGE_READER_MODE, false);
         intent.putExtra(KEY_GALLERY_INFO, mGalleryInfo);
         intent.removeExtra(DATA_IN_EVENT);
         intent.putExtra(KEY_READER_UPDATE_RECORD_GID, gid > 0 ? gid : mGalleryInfo.gid);
@@ -4097,6 +4165,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case KEY_SIZE:
                     GalleryActivity.this.mSize = mValue;
+                    if (mGalleryProvider instanceof RangeGalleryProvider range
+                            && !GalleryDownloadRangeStore.isRange(mGalleryInfo.gid)
+                            && EhApplication.getDownloadManager(GalleryActivity.this).containDownloadInfo(mGalleryInfo.gid)
+                            && mPendingReaderModeSwitch == null) {
+                        restartReaderForMode(rangeReaderIntent(false, range.getAnchorSourcePage()));
+                        break;
+                    }
+                    if (mGalleryProvider instanceof RangeGalleryProvider && mValue > 0) {
+                        if (mExistingResults != null) mExistingResults.getResultIndex().reload();
+                        mCurrentIndex = Math.min(mValue - 1, mGalleryProvider.getStartPage());
+                        if (mGalleryView != null) mGalleryView.setCurrentPage(mCurrentIndex);
+                    }
                     if (mPendingUpdateStart && mValue > 0 && mGalleryProvider != null) {
                         mPendingUpdateStart = false;
                         mCurrentIndex = Math.min(mValue - 1, mGalleryProvider.getStartPage());

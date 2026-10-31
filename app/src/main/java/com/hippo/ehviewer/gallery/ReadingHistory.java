@@ -198,12 +198,14 @@ public final class ReadingHistory {
         }
         entry.updateGid = intent.getLongExtra(GalleryActivity.KEY_UPDATE_RECORD_GID, 0L);
         entry.updateTime = intent.getLongExtra(GalleryActivity.KEY_UPDATE_RECORD_TIME, 0L);
+        entry.rangeMode = intent.getBooleanExtra(GalleryActivity.KEY_RANGE_READER_MODE, false);
         entry.readAt = System.currentTimeMillis();
         String target = GalleryActivity.ACTION_EH.equals(entry.action) && entry.gallery != null
                 ? Long.toString(entry.gallery.gid)
                 : entry.uri != null ? entry.uri : entry.filename;
         // Keep separate visits through different entry points for the same gallery.
         entry.key = entry.source + ':' + entry.action + ':' + target;
+        if (entry.rangeMode) entry.key += ":range";
         if (!entry.valid()) return null;
         entry.title = gallery != null ? EhUtils.getSuitableTitle(gallery) : null;
         normalizeLocal(context, entry);
@@ -325,6 +327,7 @@ public final class ReadingHistory {
         public long readAt;
         public long updateGid;
         public long updateTime;
+        public boolean rangeMode;
 
         boolean valid() {
             if (key == null || sourceLabel(source) == 0 || readAt <= 0) return false;
@@ -377,6 +380,7 @@ public final class ReadingHistory {
             intent.putExtra(GalleryActivity.KEY_PAGE, startPage);
             intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_GID, updateGid);
             intent.putExtra(GalleryActivity.KEY_UPDATE_RECORD_TIME, updateTime);
+            intent.putExtra(GalleryActivity.KEY_RANGE_READER_MODE, rangeMode);
             return intent;
         }
     }

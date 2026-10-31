@@ -114,7 +114,9 @@ public class DeleteOldGalleryVersionsPreference extends TaskPreference {
 
                 List<DownloadInfo> old = new ArrayList<>();
                 for (DownloadInfo info : family) {
-                    if (info.gid < keeper.gid && !isActive(info)) {
+                    if (info.gid < keeper.gid && !isActive(info)
+                            && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(info.gid)
+                            && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.isEditing(info.gid)) {
                         old.add(info);
                     }
                 }
@@ -146,7 +148,9 @@ public class DeleteOldGalleryVersionsPreference extends TaskPreference {
                             DownloadInfo current = manager.getDownloadInfo(candidate.gid);
                             if (current != null && current.firstGid != null
                                     && current.firstGid.equals(keeper.firstGid)
-                                    && current.gid < keeper.gid && !isActive(current)) {
+                                    && current.gid < keeper.gid && !isActive(current)
+                                    && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(current.gid)
+                                    && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.isEditing(current.gid)) {
                                 gids.add(current.gid);
                                 old.add(current);
                                 deleted.add(current);
@@ -179,6 +183,8 @@ public class DeleteOldGalleryVersionsPreference extends TaskPreference {
                         application, nearest.gid, family.keeper);
             }
             for (DownloadInfo info : deleted) {
+                if (com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(info.gid)
+                        || com.hippo.ehviewer.download.GalleryDownloadRangeStore.isEditing(info.gid)) continue;
                 UniFile directory = SpiderDen.getExistingGalleryDownloadDir(info);
                 if (directory == null || !directory.exists() || directory.delete()) {
                     EhDB.removeDownloadDirname(info.gid);

@@ -185,6 +185,7 @@ public class EhApplication extends RecordingApplication {
         GetText.initialize(this);
         StatusCodeException.initialize(this);
         Settings.initialize(this);
+        com.hippo.ehviewer.download.GalleryDownloadRangeStore.get(this);
         BrowsingPriority.initialize(this);
         AppUpdateDownload.initialize(this);
         ArchiverDownloader.resumePending(this);

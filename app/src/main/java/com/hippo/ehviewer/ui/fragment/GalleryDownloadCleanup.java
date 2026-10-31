@@ -24,6 +24,8 @@ final class GalleryDownloadCleanup {
 
     static boolean isProtected(@NonNull DownloadInfo info) {
         return DownloadManager.isImportedGallery(info)
+                || com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(info.gid)
+                || com.hippo.ehviewer.download.GalleryDownloadRangeStore.isEditing(info.gid)
                 || info.state == DownloadInfo.STATE_WAIT
                 || info.state == DownloadInfo.STATE_DOWNLOAD
                 || info.state == DownloadInfo.STATE_UPDATE;

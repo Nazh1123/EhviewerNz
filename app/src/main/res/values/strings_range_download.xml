@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="range_download">Range download</string>
+    <string name="range_downloaded">Range downloaded</string>
+    <string name="range_download_badge">Range</string>
+    <string name="range_download_full">Download full gallery</string>
+    <string name="range_read_downloaded">Read downloaded range only</string>
+    <string name="range_download_input_hint">For example: 1,2,6-10,25-</string>
+    <string name="range_download_preview">%1$s · %2$d pages. Images outside this range will be removed from this gallery’s download folder.</string>
+    <string name="range_download_invalid">Enter valid page numbers from 1 to %1$d.</string>
+    <string name="range_download_busy">The gallery is being modified or updated. Try again when it finishes.</string>
+    <string name="range_download_missing_pages">Gallery page count has not loaded yet. Try again shortly.</string>
+    <string name="range_download_no_pages">No readable downloaded pages in this range.</string>
+    <string name="range_reader_progress">Downloaded %1$d/%2$d · p%3$d/%4$d</string>
+</resources>

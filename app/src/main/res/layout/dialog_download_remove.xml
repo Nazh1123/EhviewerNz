@@ -9,6 +9,16 @@
     android:paddingBottom="16dp">
 
     <com.google.android.material.button.MaterialButton
+        android:id="@+id/download_full_gallery"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:minHeight="48dp"
+        android:visibility="gone"
+        android:text="@string/range_download_full" />
+
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/download_remove_record"
         style="@style/Widget.MaterialComponents.Button.OutlinedButton"
         android:layout_width="match_parent"

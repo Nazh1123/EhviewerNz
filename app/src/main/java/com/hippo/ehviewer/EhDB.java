@@ -1077,6 +1077,11 @@ public class EhDB {
                     return false;
                 if (!copyDao(sDaoSession.getGalleryTagsDao(), exportSession.getGalleryTagsDao()))
                     return false;
+                if (!upstreamCompatible) {
+                    java.util.Set<Long> ids = new java.util.HashSet<>();
+                    for (DownloadInfo info : sDaoSession.getDownloadsDao().loadAll()) ids.add(info.gid);
+                    com.hippo.ehviewer.download.GalleryDownloadRangeStore.get(context).exportBackup(db, ids);
+                }
                 if (upstreamCompatible) {
                     makeUpstreamCompatible(db);
                 }
@@ -1205,6 +1210,9 @@ public class EhDB {
             manager.addDownloadLabel(downloadLabelList);
             // Downloads
             List<DownloadInfo> downloadInfoList = session.getDownloadsDao().queryBuilder().list();
+            java.util.Set<Long> acceptedRangeIds = new java.util.HashSet<>();
+            for (DownloadInfo info : downloadInfoList) if (!manager.containDownloadInfo(info.gid)) acceptedRangeIds.add(info.gid);
+            com.hippo.ehviewer.download.GalleryDownloadRangeStore.get(context).importBackup(db, acceptedRangeIds);
             manager.addDownload(downloadInfoList);
 
             sendImportProgress(handler, 50);

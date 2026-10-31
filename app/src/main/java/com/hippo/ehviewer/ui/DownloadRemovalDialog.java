@@ -54,6 +54,17 @@ public final class DownloadRemovalDialog {
         View content = LayoutInflater.from(builder.getContext())
                 .inflate(R.layout.dialog_download_remove, null);
         AlertDialog dialog = builder.setView(content).create();
+        View fullDownload = content.findViewById(R.id.download_full_gallery);
+        boolean showFullDownload = selected.size() == 1
+                && com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(selected.get(0).gid);
+        if (showFullDownload) fullDownload.setVisibility(View.VISIBLE);
+        else ((android.view.ViewGroup) content).removeView(fullDownload);
+        fullDownload.setOnClickListener(view -> {
+            dialog.dismiss();
+            if (onAction != null) onAction.run();
+            manager.changePageRange(selected.get(0), null, error ->
+                    android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_LONG).show());
+        });
         boolean allOnline = true;
         boolean anyOnline = false;
         for (DownloadInfo info : selected) {
@@ -92,6 +103,7 @@ public final class DownloadRemovalDialog {
                 Intent intent = new Intent(context, DownloadService.class)
                         .setAction(DownloadService.ACTION_START)
                         .putExtra(DownloadService.KEY_GALLERY_INFO, info)
+                        .putExtra(DownloadService.KEY_KEEP_PAGE_RANGE, true)
                         .putExtra(DownloadService.KEY_LABEL, info.label);
                 context.startService(intent);
             }
@@ -101,8 +113,10 @@ public final class DownloadRemovalDialog {
                     if (info.archiveUri != null) continue;
                     UniFile directory = SpiderDen.getExistingGalleryDownloadDir(info);
                     if (directory == null) directory = SpiderDen.getGalleryDownloadDir(info);
-                    EhDB.removeDownloadDirname(info.gid);
-                    if (directory != null) directory.delete();
+                    if (directory == null || !directory.exists() || directory.delete()) {
+                        EhDB.removeDownloadDirname(info.gid);
+                        com.hippo.ehviewer.download.GalleryDownloadRangeStore.get(context).remove(info.gid);
+                    }
                 }
             });
         }

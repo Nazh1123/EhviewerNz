@@ -312,6 +312,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private TextView mHaH;
     @Nullable
     private TextView mArchiver;
+    private TextView mRangeDownload;
     @Nullable
     private TextView mShare;
     @Nullable
@@ -897,6 +898,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mTorrent = (TextView) ViewUtils.$$(mActions, R.id.torrent);
         mHaH = (TextView) ViewUtils.$$(mActions, R.id.h_h);
         mArchiver = (TextView) ViewUtils.$$(mActions, R.id.archiver);
+        mRangeDownload = (TextView) ViewUtils.$$(mActions, R.id.range_download);
         mShare = (TextView) ViewUtils.$$(mActions, R.id.share);
         mArtist = (TextView) ViewUtils.$$(mActions, R.id.artist);
         mSimilar = (TextView) ViewUtils.$$(mActions, R.id.similar);
@@ -905,6 +907,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Ripple.addRipple(mTorrent, isDarkTheme);
         Ripple.addRipple(mHaH, isDarkTheme);
         Ripple.addRipple(mArchiver, isDarkTheme);
+        Ripple.addRipple(mRangeDownload, isDarkTheme);
         Ripple.addRipple(mShare, isDarkTheme);
         Ripple.addRipple(mRatingGroup, isDarkTheme);
         Ripple.addRipple(mArtist, isDarkTheme);
@@ -915,6 +918,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mTorrent.setOnClickListener(this);
         mHaH.setOnClickListener(this);
         mArchiver.setOnClickListener(this);
+        mRangeDownload.setOnClickListener(this);
         mShare.setOnClickListener(this);
         mRatingGroup.setOnClickListener(this);
         mArtist.setOnClickListener(this);
@@ -1133,6 +1137,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mTorrent = null;
         mHaH = null;
         mArchiver = null;
+        mRangeDownload = null;
         mShare = null;
         mRatingGroup = null;
         mArtist = null;
@@ -1258,6 +1263,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             setActionDrawable(mTorrent, torrent);
         }
         Drawable archiver = DrawableManager.getVectorDrawable(context, R.drawable.v_archiver_primary_x48);
+        if (mRangeDownload != null) setActionDrawable(mRangeDownload,
+                DrawableManager.getVectorDrawable(context, R.drawable.v_range_download_primary_x48));
         if (mArchiver != null) {
             setActionDrawable(mArchiver, archiver);
         }
@@ -1475,7 +1482,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void setDetailActionsEnabled(boolean enabled) {
-        for (View action : new View[]{mInfo, mHeartGroup, mRatingGroup, mTorrent, mHaH, mArchiver,
+        for (View action : new View[]{mInfo, mHeartGroup, mRatingGroup, mTorrent, mHaH, mArchiver, mRangeDownload,
                 mArtist, mSimilar, mUpdateGallery, mGalleryHistory}) {
             if (action != null) action.setEnabled(enabled);
         }
@@ -1757,6 +1764,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
     private void setOfflineVisibility(boolean offline) {
         setDetailActionsEnabled(true);
+        GalleryInfo rangeInfo = getGalleryInfo();
+        if (mRangeDownload != null) mRangeDownload.setVisibility(getGid() > 0
+                && rangeInfo != null && !TextUtils.isEmpty(rangeInfo.token) ? View.VISIBLE : View.GONE);
         for (View action : new View[]{mHeartGroup, mShare, mTorrent, mArchiver, mHaH, mSearchCover}) {
             action.setVisibility(offline ? View.GONE : View.VISIBLE);
         }
@@ -1818,7 +1828,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mSize.setText(info.size);
         mRatingText.setText("\n" + getString(R.string.offline_gallery_notice)
                 + (TextUtils.isEmpty(mOfflineError) ? "" : "\n" + mOfflineError));
-        mDownload.setText(R.string.refresh);
+        mDownload.setText(com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(info.gid)
+                ? R.string.range_downloaded : R.string.refresh);
         mRead.setEnabled(!local.previews.isEmpty());
         bindTags(info.tags);
         if (info.tags.length == 0) mNoTags.setText(R.string.offline_gallery_no_tags);
@@ -2599,6 +2610,10 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             ListUrlBuilder lub = new ListUrlBuilder();
             lub.setCategory(category);
             GalleryListScene.startScene(this, lub);
+        } else if (mRangeDownload == v) {
+            GalleryInfo info = getGalleryInfo();
+            if (info != null) com.hippo.ehviewer.ui.RangeDownloadDialog.show(mContext, info,
+                    EhApplication.getDownloadManager(mContext));
         } else if (mDownload == v) {
             onDownload();
         } else if (mHaveNewVersion == v) {
@@ -2938,7 +2953,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void onDownload() {
-        if (mOffline) {
+        if (mOffline && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(getGid())) {
             refreshDetail();
             return;
         }
@@ -3279,6 +3294,12 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void updateDownloadText() {
+        if (mDownload != null && com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(getGid())
+                && mDownloadState == DownloadInfo.STATE_FINISH) {
+            mDownload.setText(R.string.range_downloaded);
+            mDownload.setEnabled(true);
+            return;
+        }
         updateLocalActionsVisibility();
         if (null == mDownload) {
             return;

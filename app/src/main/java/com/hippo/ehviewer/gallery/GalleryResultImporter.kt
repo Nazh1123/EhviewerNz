@@ -97,7 +97,7 @@ internal object GalleryResultImporter {
             try {
                 val matches = aliases[candidate.key].orEmpty().distinctBy { it.source.name }
                 val page = matches.singleOrNull() ?: if (matches.isEmpty() &&
-                    (provider is EhGalleryProvider || provider is UpdatedGalleryProvider) && candidate.key.matches(Regex("[0-9]{8}")))
+                    (provider is EhGalleryProvider || provider is UpdatedGalleryProvider || provider is RangeGalleryProvider) && candidate.key.matches(Regex("[0-9]{8}")))
                     Page(GalleryResultIndex.Source(candidate.key), null) else null
                 if (page == null) { report.ignored++; keep += uri; continue }
                 val key = page.source.name to candidate.kind

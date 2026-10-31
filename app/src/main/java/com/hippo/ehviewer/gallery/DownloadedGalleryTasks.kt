@@ -26,6 +26,10 @@ object DownloadedGalleryTasks {
 
     private fun enqueue(context: Context, info: GalleryInfo, enhance: Boolean) {
         val app = context.applicationContext
+        if (com.hippo.ehviewer.download.GalleryDownloadRangeStore.isEditing(info.gid)) {
+            Toast.makeText(app, R.string.range_download_busy, Toast.LENGTH_SHORT).show()
+            return
+        }
         scope.launch {
             // Preserve click order even when resolving one SAF source takes longer than another.
             submissions.withLock {
@@ -61,6 +65,8 @@ object DownloadedGalleryTasks {
     }
 
     internal fun source(context: Context, download: DownloadInfo): GalleryProvider2? {
+        if (com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(download.gid))
+            return RangeGalleryProvider(context, download, -1)
         val folder = LocalFolderGallerySource.parse(download.archiveUri)
         if (folder != null) {
             if (TranslationStorage.sourceDir(context, folder) == null) return null
