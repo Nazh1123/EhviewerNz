@@ -33,6 +33,7 @@ import android.content.pm.ActivityInfo;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -94,6 +95,9 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.ReaderKeyProfiles;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
+import com.hippo.ehviewer.download.GalleryUpdateManager;
+import com.hippo.ehviewer.download.GalleryUpdateRecord;
+import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.event.GalleryActivityEvent;
 import com.hippo.ehviewer.gallery.ArchiveGalleryProvider;
 import com.hippo.ehviewer.gallery.DirGalleryProvider;
@@ -108,6 +112,7 @@ import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.gallery.LocalFolderGalleryProvider;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.gallery.SingleImageGalleryProvider;
+import com.hippo.ehviewer.gallery.UpdatedGalleryProvider;
 import android.provider.DocumentsContract;
 import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
@@ -177,9 +182,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public static final String KEY_CURRENT_INDEX = "current_index";
     public static final String KEY_UPDATE_RECORD_TIME = "update_record_time";
     public static final String KEY_UPDATE_RECORD_GID = "update_record_gid";
+    private static final String KEY_UPDATE_SOURCE_PAGE = "update_source_page";
+    private static final String KEY_READER_UPDATE_RECORD_GID = "reader_update_record_gid";
+    private static final String KEY_READER_UPDATE_RECORD_TIME = "reader_update_record_time";
+    private static final String KEY_READER_MODE_SWITCH = "reader_mode_switch";
     private long mUpdateRecordGid;
     private long mUpdateRecordTime;
     private boolean mPendingUpdateStart;
+    @Nullable private GalleryUpdateRecord mReaderUpdateRecord;
+    private boolean mReaderUpdateRecordLoaded;
+    @Nullable private ArrayAdapter<CharSequence> mPageDialogItems;
+    @Nullable private Intent mPendingReaderModeSwitch;
+    private boolean mReaderModeSwitchLoading;
     private static final String KEY_ANIMATED_WEBP_GALLERY_PLAYING =
             "animated_webp_gallery_playing";
     private static final String KEY_ANIMATED_WEBP_GALLERY_SPEED =
@@ -485,9 +499,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         } else if (ACTION_EH.equals(mAction)) {
             if (mGalleryInfo != null) {
                 mGalleryProvider = mUpdateRecordTime > 0
-                        ? new com.hippo.ehviewer.gallery.UpdatedGalleryProvider(this, mGalleryInfo,
-                                mUpdateRecordGid, mUpdateRecordTime)
+                        ? new UpdatedGalleryProvider(this, mGalleryInfo,
+                                mUpdateRecordGid, mUpdateRecordTime,
+                                getIntent().getIntExtra(KEY_UPDATE_SOURCE_PAGE, -1))
                         : new EhGalleryProvider(this, mGalleryInfo);
+                loadReaderUpdateRecord();
             }
         } else if (Intent.ACTION_VIEW.equals(mAction)) {
             if (mUri != null) {
@@ -713,11 +729,26 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mAnimatedWebpGalleryPlaying);
         outState.putFloat(KEY_ANIMATED_WEBP_GALLERY_SPEED,
                 mAnimatedWebpGallerySpeed);
+        if (mPendingReaderModeSwitch != null) {
+            outState.putParcelable(KEY_READER_MODE_SWITCH, mPendingReaderModeSwitch);
+        }
     }
 
     @Override
     @SuppressWarnings({"WrongConstant"})
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        if (savedInstanceState != null) {
+            Intent modeSwitch = savedInstanceState.getParcelable(KEY_READER_MODE_SWITCH);
+            if (modeSwitch != null) {
+                setIntent(modeSwitch);
+                mAnimatedWebpGalleryPlaying = savedInstanceState.getBoolean(
+                        KEY_ANIMATED_WEBP_GALLERY_PLAYING, true);
+                mAnimatedWebpGallerySpeed = savedInstanceState.getFloat(
+                        KEY_ANIMATED_WEBP_GALLERY_SPEED, 1.0f);
+                // A mode switch opens a new provider and uses its explicit page anchor.
+                savedInstanceState = null;
+            }
+        }
         if (Settings.getReadingFullscreen()) {
             Window w = getWindow();
             w.setFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION, WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
@@ -2838,12 +2869,28 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             items = java.util.Arrays.copyOf(baseItems, baseItems.length + 1);
             items[baseItems.length] = getString(R.string.archive_results_directory);
         } else items = baseItems;
-        pageDialogListener(builder, items, page);
+        // Match AlertDialog.setItems(): both the row layout and Context come from the dialog theme.
+        TypedArray dialogStyle = builder.getContext().obtainStyledAttributes(null,
+                androidx.appcompat.R.styleable.AlertDialog, androidx.appcompat.R.attr.alertDialogStyle, 0);
+        int itemLayout = dialogStyle.getResourceId(androidx.appcompat.R.styleable.AlertDialog_listItemLayout,
+                androidx.appcompat.R.layout.select_dialog_item_material);
+        dialogStyle.recycle();
+        ArrayAdapter<CharSequence> adapter = new ArrayAdapter<>(builder.getContext(), itemLayout,
+                android.R.id.text1, new java.util.ArrayList<>(java.util.Arrays.asList(items))) {
+            @Override public boolean hasStableIds() { return true; }
+        };
+        mPageDialogItems = adapter;
+        if (canSwitchReaderMode()) adapter.add(getString(mUpdateRecordTime > 0
+                ? R.string.gallery_read_full : R.string.gallery_read_updates));
+        pageDialogListener(builder, adapter, page);
+        builder.setOnDismissListener(dialog -> {
+            if (mPageDialogItems == adapter) mPageDialogItems = null;
+        });
         builder.show();
     }
 
-    private void pageDialogListener(AlertDialog.Builder builder, CharSequence[] items, int page) {
-        builder.setItems(items, (dialog, which) -> {
+    private void pageDialogListener(AlertDialog.Builder builder, ArrayAdapter<CharSequence> items, int page) {
+        builder.setAdapter(items, (dialog, which) -> {
             if (mGalleryProvider == null) {
                 return;
             }
@@ -2874,10 +2921,116 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     if (mGalleryProvider instanceof ArchiveGalleryProvider archive) {
                         com.hippo.ehviewer.gallery.ArchiveResultPermission.request(this,
                                 archive.getArchiveUri(), this::onArchiveResultDirectoryChanged);
-                    }
+                    } else if (canSwitchReaderMode()) switchReaderMode(page);
                     break;
             }
         });
+    }
+
+    private void loadReaderUpdateRecord() {
+        if (!ACTION_EH.equals(mAction) || mGalleryInfo == null || mGalleryInfo.gid <= 0) return;
+        Context application = getApplicationContext();
+        long gid = getIntent().getLongExtra(KEY_READER_UPDATE_RECORD_GID,
+                mUpdateRecordGid > 0 ? mUpdateRecordGid : mGalleryInfo.gid);
+        long time = getIntent().getLongExtra(KEY_READER_UPDATE_RECORD_TIME, mUpdateRecordTime);
+        EhApplication.getExecutorService(application).execute(() -> {
+            GalleryUpdateRecord loaded = null;
+            try {
+                loaded = GalleryUpdateRecordStore.get(application).find(gid);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Unable to read reader update record", e);
+            }
+            GalleryUpdateRecord record = loaded;
+            SimpleHandler.getInstance().post(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                mReaderUpdateRecordLoaded = true;
+                mReaderUpdateRecord = record != null && (time <= 0 || record.completedAt == time)
+                        ? record : null;
+                // The first menu may already be open while the initial lookup finishes.
+                if (mPageDialogItems != null && mPageDialogItems.getCount() == 6
+                        && canSwitchReaderMode()) {
+                    mPageDialogItems.add(getString(mUpdateRecordTime > 0
+                            ? R.string.gallery_read_full : R.string.gallery_read_updates));
+                }
+            });
+        });
+    }
+
+    private boolean canSwitchReaderMode() {
+        return ACTION_EH.equals(mAction) && mGalleryInfo != null && mGalleryInfo.gid > 0
+                && (mUpdateRecordTime > 0 || mReaderUpdateRecord != null
+                || (mReaderUpdateRecordLoaded
+                && getIntent().getLongExtra(KEY_READER_UPDATE_RECORD_TIME, 0L) > 0));
+    }
+
+    private void switchReaderMode(int page) {
+        if (!canSwitchReaderMode() || mReaderModeSwitchLoading || mPendingReaderModeSwitch != null
+                || mGalleryProvider == null || page < 0 || page >= mGalleryProvider.size()) return;
+        int sourcePage = mGalleryProvider.getSourcePage(page);
+        if (mUpdateRecordTime > 0) {
+            Intent intent = readerModeIntent(false, sourcePage, mUpdateRecordGid, mUpdateRecordTime);
+            restartReaderForMode(intent);
+            return;
+        }
+        GalleryUpdateRecord record = mReaderUpdateRecord;
+        if (record == null || record.isFailure()) {
+            Toast.makeText(this, R.string.gallery_update_record_invalid, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        mReaderModeSwitchLoading = true;
+        Context application = getApplicationContext();
+        GalleryInfo gallery = mGalleryInfo;
+        EhApplication.getExecutorService(application).execute(() -> {
+            boolean readable = false;
+            try {
+                DownloadInfo local = EhApplication.getDownloadManager(application).getDownloadInfo(gallery.gid);
+                readable = local != null && local.state == DownloadInfo.STATE_FINISH
+                        && local.archiveUri == null && GalleryUpdateManager.getPlan(gallery.gid) == null
+                        && new UpdatedGalleryProvider(application, gallery, record.targetGid,
+                                record.completedAt).hasReadablePages();
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Unable to validate reader update pages", e);
+            }
+            boolean valid = readable;
+            SimpleHandler.getInstance().post(() -> {
+                mReaderModeSwitchLoading = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (!valid) {
+                    Toast.makeText(this, R.string.gallery_update_record_invalid, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                restartReaderForMode(readerModeIntent(true, sourcePage,
+                        record.targetGid, record.completedAt));
+            });
+        });
+    }
+
+    private Intent readerModeIntent(boolean updates, int sourcePage, long gid, long time) {
+        Intent intent = new Intent(getIntent());
+        intent.setAction(ACTION_EH);
+        intent.putExtra(KEY_GALLERY_INFO, mGalleryInfo);
+        intent.removeExtra(DATA_IN_EVENT);
+        intent.putExtra(KEY_READER_UPDATE_RECORD_GID, gid > 0 ? gid : mGalleryInfo.gid);
+        intent.putExtra(KEY_READER_UPDATE_RECORD_TIME, time);
+        intent.putExtra(KEY_UPDATE_RECORD_GID, updates ? gid : 0L);
+        intent.putExtra(KEY_UPDATE_RECORD_TIME, updates ? time : 0L);
+        intent.putExtra(KEY_PAGE, updates ? -1 : sourcePage);
+        if (updates) {
+            intent.putExtra(KEY_UPDATE_SOURCE_PAGE, sourcePage);
+            intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.UPDATE);
+        } else {
+            intent.removeExtra(KEY_UPDATE_SOURCE_PAGE);
+            if (ReadingHistory.UPDATE.equals(intent.getStringExtra(ReadingHistory.KEY_SOURCE))) {
+                intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.DOWNLOAD);
+            }
+        }
+        return intent;
+    }
+
+    void restartReaderForMode(Intent intent) {
+        // Keep the old Intent until onDestroy has saved progress for the old mode.
+        mPendingReaderModeSwitch = intent;
+        recreate();
     }
 
     public void onArchiveResultDirectoryChanged() {

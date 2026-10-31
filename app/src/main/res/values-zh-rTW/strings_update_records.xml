@@ -12,6 +12,8 @@
     <string name="gallery_update_history_missing_token">畫廊 GID %1$d 未保存畫廊 token，無法加載詳情。</string>
     <string name="settings_gallery_update_record_limit">更新記錄數量</string>
     <string name="gallery_read_updates">僅閱讀更新</string>
+    <string name="gallery_read_full">閱讀完整畫廊</string>
+    <string name="gallery_update_record_invalid">更新記錄無效</string>
     <string name="gallery_update_log">更新日誌</string>
     <string name="gallery_update_log_time">更新時間</string>
     <string name="gallery_update_log_target">目標畫廊：%1$d</string>

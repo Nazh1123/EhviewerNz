@@ -134,6 +134,32 @@ public class UpdatedLocalGalleryProviderTest {
         assertEquals(0, UpdatedGalleryProvider.resumePosition(5, new int[]{4, 2, 0}));
     }
 
+    @Test public void switchPositionUsesCurrentThenImmediateNextThenPreviousUpdatePage() {
+        int[] pages = {9, 10, 19, 29};
+        assertEquals(1, UpdatedGalleryProvider.positionForSourcePage(10, pages));
+        assertEquals(2, UpdatedGalleryProvider.positionForSourcePage(18, pages));
+        assertEquals(1, UpdatedGalleryProvider.positionForSourcePage(17, pages));
+        assertEquals(3, UpdatedGalleryProvider.positionForSourcePage(30, pages));
+        assertEquals(0, UpdatedGalleryProvider.positionForSourcePage(4, pages));
+        assertEquals(-1, UpdatedGalleryProvider.positionForSourcePage(4, new int[0]));
+    }
+
+    @Test public void explicitSourceAnchorOverridesSavedProgressAndSkipsUnreadablePages() {
+        // Saved progress points to X (source page 2); switching at Z must still open Z.
+        UpdatedGalleryProvider provider = new UpdatedGalleryProvider(context, gallery, 200, time, 0);
+        assertNotNull(provider.loadImageFiles());
+        assertEquals(0, provider.getStartPage());
+        // Source page 4 is an update, but its local image is corrupt: use source page 2.
+        provider = new UpdatedGalleryProvider(context, gallery, 200, time, 4);
+        assertNotNull(provider.loadImageFiles());
+        assertEquals(1, provider.getStartPage());
+        assertEquals(2, provider.getSourcePage(provider.getStartPage()));
+        // The complete gallery's immediately following page is a readable update.
+        provider = new UpdatedGalleryProvider(context, gallery, 200, time, 1);
+        assertNotNull(provider.loadImageFiles());
+        assertEquals(1, provider.getStartPage());
+    }
+
     @Implements(GalleryUpdateManager.class)
     public static class LocalMetadata {
         @Implementation protected static SpiderInfo readDownloadedSpiderInfo(long gid) { return current; }
