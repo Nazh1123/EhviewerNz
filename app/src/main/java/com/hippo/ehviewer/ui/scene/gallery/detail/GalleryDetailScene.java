@@ -1807,14 +1807,15 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mUploader.setText(info.uploader);
         mCategory.setText(EhUtils.getCategory(info.category));
         mCategory.setTextColor(EhUtils.getCategoryColor(info.category));
-        if (!mThumb.hasImage()) {
+        String coverUrl = local.cover != null ? local.cover.getUri().toString() : info.thumb;
+        if (!mThumb.hasImage() || mCoverGid != info.gid || !TextUtils.equals(mCoverUrl, coverUrl)) {
             mThumb.unload();
             if (local.cover != null) {
                 LocalImageLoader.load(mThumb, local.cover);
-                mCoverGid = info.gid;
-                mCoverUrl = local.cover.getUri().toString();
             }
             else mThumb.load(EhCacheKeyFactory.getThumbKey(info.gid), info.thumb, false);
+            mCoverGid = info.gid;
+            mCoverUrl = coverUrl;
         }
         mKnownReadProgressGid = info.gid;
         mKnownReadProgress = local.startPage;
@@ -1828,8 +1829,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mSize.setText(info.size);
         mRatingText.setText("\n" + getString(R.string.offline_gallery_notice)
                 + (TextUtils.isEmpty(mOfflineError) ? "" : "\n" + mOfflineError));
-        mDownload.setText(com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(info.gid)
-                ? R.string.range_downloaded : R.string.refresh);
+        updateDownloadText();
         mRead.setEnabled(!local.previews.isEmpty());
         bindTags(info.tags);
         if (info.tags.length == 0) mNoTags.setText(R.string.offline_gallery_no_tags);
@@ -3304,7 +3304,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         if (null == mDownload) {
             return;
         }
-        if (mOffline) {
+        if (mOffline && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(getGid())) {
             mDownload.setText(isDetailRequestPending() ? R.string.offline_gallery_refreshing : R.string.refresh);
             mDownload.setEnabled(!isDetailRequestPending());
             return;
@@ -3352,6 +3352,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         mDownloadState = downloadState;
         updateDownloadText();
+        if (mOffline && !isDetailRequestPending() && (downloadState == DownloadInfo.STATE_FINISH
+                || downloadState == DownloadInfo.STATE_FAILED)) loadOfflineDetail(null);
     }
 
     private void updateGalleryVersionActionsVisibility() {

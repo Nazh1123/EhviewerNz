@@ -403,7 +403,8 @@ public final class SpiderDen {
     }
 
     public boolean contain(int index) {
-        if (mMode == SpiderQueen.MODE_READ) {
+        if (mMode == SpiderQueen.MODE_READ
+                || !com.hippo.ehviewer.download.GalleryDownloadRangeStore.canPersist(mGid, index)) {
             return containInCache(index) || containInDownloadDir(index);
         } else if (mMode == SpiderQueen.MODE_DOWNLOAD) {
             return containInDownloadDir(index) || copyFromCacheToDownloadDir(index);
@@ -547,6 +548,10 @@ public final class SpiderDen {
 
     @Nullable
     public InputStreamPipe openInputStreamPipe(int index) {
+        if (!com.hippo.ehviewer.download.GalleryDownloadRangeStore.canPersist(mGid, index)) {
+            InputStreamPipe pipe = openCacheInputStreamPipe(index);
+            return pipe != null ? pipe : openDownloadInputStreamPipeReadOnly(index);
+        }
         if (mMode == SpiderQueen.MODE_READ) {
             if (shouldSyncDownloadWhileReading()) {
                 InputStreamPipe pipe = openDownloadInputStreamPipe(index);
