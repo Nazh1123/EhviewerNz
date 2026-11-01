@@ -55,6 +55,8 @@ import com.hippo.lib.image.Image;
 import com.hippo.unifile.UniFile;
 import com.hippo.view.ViewTransition;
 import com.hippo.widget.LoadImageView;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 
 import org.greenrobot.greendao.database.StandardDatabase;
 import org.junit.After;
@@ -1072,6 +1074,129 @@ public class OfflineGalleryDetailSceneTest {
         ListUrlBuilder similar = scene.opened.getArgs().getParcelable(GalleryListScene.KEY_LIST_URL_BUILDER);
         assertTrue(similar.getKeyword().contains("Example title"));
         assertTrue(requests.isEmpty());
+    }
+
+    @Test public void titleKeywordSearchCombinesBothTitlesInSourceOrder() {
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.title = "[Alice-Smith] First story!";
+        info.titleJpn = "【作家】 日本語タイトル";
+        Settings.putBoolean("show_jpn_title", true);
+        AlertDialog dialog = openTitleKeywordDialog();
+        ChipGroup primary = dialog.findViewById(R.id.title_keyword_group);
+        ChipGroup japanese = dialog.findViewById(R.id.title_keyword_jpn_group);
+        assertEquals("[", ((Chip) primary.getChildAt(0)).getText().toString());
+        assertFalse(dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled());
+        assertFalse(dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled());
+        japanese.check(japanese.getChildAt(3).getId());
+        assertTrue(dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled());
+        for (int i = 4; i >= 0; i--) primary.check(primary.getChildAt(i).getId());
+        primary.clearCheck();
+        assertTrue(dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled());
+        japanese.clearCheck();
+        assertFalse(dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled());
+        assertFalse(dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled());
+        japanese.check(japanese.getChildAt(3).getId());
+        for (int i = 4; i >= 0; i--) primary.check(primary.getChildAt(i).getId());
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        ListUrlBuilder builder = scene.opened.getArgs().getParcelable(GalleryListScene.KEY_LIST_URL_BUILDER);
+        assertEquals("[Alice-Smith] 日本語タイトル", builder.getKeyword());
+        assertEquals(ListUrlBuilder.MODE_NORMAL, builder.getMode());
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void titleKeywordCopyPreservesFormattingAndSearchEscapesQuotes() {
+        ReflectionHelpers.setStaticField(EhApplication.class, "instance", RuntimeEnvironment.getApplication());
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.title = "A\"B\\C  D";
+        info.titleJpn = null;
+        AlertDialog dialog = openTitleKeywordDialog();
+        assertEquals(View.GONE, dialog.findViewById(R.id.title_keyword_jpn_section).getVisibility());
+        assertEquals(View.GONE, dialog.findViewById(R.id.title_keyword_divider).getVisibility());
+        selectAllTitleKeywords(dialog, R.id.title_keyword_group);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+        android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
+                context.getSystemService(Context.CLIPBOARD_SERVICE);
+        assertEquals(info.title, clipboard.getPrimaryClip().getItemAt(0).getText().toString());
+        dialog = openTitleKeywordDialog();
+        selectAllTitleKeywords(dialog, R.id.title_keyword_group);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        ListUrlBuilder builder = scene.opened.getArgs().getParcelable(GalleryListScene.KEY_LIST_URL_BUILDER);
+        assertEquals("A\\\"B\\\\C  D", builder.getKeyword());
+    }
+
+    @Test public void titleKeywordDialogSupportsJapaneseTitleAlone() {
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.title = " \u3000";
+        info.titleJpn = "【作家】 日本語タイトル";
+        AlertDialog dialog = openTitleKeywordDialog();
+        assertEquals(View.GONE, dialog.findViewById(R.id.title_keyword_primary_section).getVisibility());
+        assertEquals(View.VISIBLE, dialog.findViewById(R.id.title_keyword_jpn_section).getVisibility());
+        assertEquals(View.GONE, dialog.findViewById(R.id.title_keyword_divider).getVisibility());
+        selectAllTitleKeywords(dialog, R.id.title_keyword_jpn_group);
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        ListUrlBuilder builder = scene.opened.getArgs().getParcelable(GalleryListScene.KEY_LIST_URL_BUILDER);
+        assertEquals(info.titleJpn, builder.getKeyword());
+    }
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void titleKeywordDialogKeepsChipsCompactAndLongTitlesScrollable() throws Exception {
+        RuntimeEnvironment.setQualifiers("zh-rCN-w360dp-h640dp-mdpi");
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.title = "(C104) [Circle (Alice-Smith)] A story! [Chinese]";
+        info.titleJpn = "(C104) [サークル (作家)] 日本語タイトル！ 第1話";
+        for (boolean dark : new boolean[]{false, true}) {
+            scene.themeContext = new ContextThemeWrapper(context, dark ? R.style.AppTheme_Dark : R.style.AppTheme);
+            AlertDialog dialog = openTitleKeywordDialog();
+            selectAllTitleKeywords(dialog, R.id.title_keyword_jpn_group);
+            ChipGroup primary = dialog.findViewById(R.id.title_keyword_group);
+            for (int i = 3; i <= 10; i++) primary.check(primary.getChildAt(i).getId());
+            saveTitleKeywordPreview(dialog, dark ? "dark" : "light", 360, 600);
+            assertTrue(primary.getChildAt(0).getWidth() < 40);
+            assertTrue(primary.getChildAt(0).getHeight() < 40);
+            dialog.dismiss();
+        }
+        info.title = info.title.repeat(12);
+        info.titleJpn = info.titleJpn.repeat(12);
+        AlertDialog dialog = openTitleKeywordDialog();
+        saveTitleKeywordPreview(dialog, "long-titles", 320, 520);
+        android.widget.ScrollView scroll = dialog.findViewById(R.id.title_keyword_scroll);
+        assertTrue(scroll.getHeight() > 32);
+        assertTrue(scroll.getChildAt(0).getHeight() > scroll.getHeight());
+        android.graphics.Rect visible = new android.graphics.Rect();
+        assertTrue(dialog.getButton(AlertDialog.BUTTON_POSITIVE).getGlobalVisibleRect(visible));
+        scroll.fullScroll(View.FOCUS_DOWN);
+        selectAllTitleKeywords(dialog, R.id.title_keyword_jpn_group);
+        assertTrue(dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled());
+        dialog.dismiss();
+    }
+
+    private AlertDialog openTitleKeywordDialog() {
+        ReflectionHelpers.callInstanceMethod(scene, "showTitleKeywordSearchDialog");
+        ShadowLooper.idleMainLooper();
+        return (AlertDialog) ShadowDialog.getLatestDialog();
+    }
+
+    private void selectAllTitleKeywords(AlertDialog dialog, int groupId) {
+        ChipGroup group = dialog.findViewById(groupId);
+        for (int i = 0; i < group.getChildCount(); i++) group.check(group.getChildAt(i).getId());
+    }
+
+    private void saveTitleKeywordPreview(AlertDialog dialog, String name, int width, int maxHeight)
+            throws Exception {
+        ShadowLooper.idleMainLooper();
+        View decor = dialog.getWindow().getDecorView();
+        decor.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST));
+        decor.layout(0, 0, decor.getMeasuredWidth(), decor.getMeasuredHeight());
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(
+                decor.getWidth(), decor.getHeight(), android.graphics.Bitmap.Config.ARGB_8888);
+        decor.draw(new android.graphics.Canvas(bitmap));
+        File directory = new File("build/title-keyword-previews");
+        assertTrue(directory.isDirectory() || directory.mkdirs());
+        try (java.io.FileOutputStream output = new java.io.FileOutputStream(new File(directory, name + ".png"))) {
+            assertTrue(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output));
+        }
+        bitmap.recycle();
     }
 
     @Test public void ratingDialogOpensImmediatelyAndSubmissionReusesPendingHtmlRequest() {

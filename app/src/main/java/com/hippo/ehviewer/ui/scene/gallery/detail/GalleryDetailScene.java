@@ -2295,9 +2295,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
 
-        String title = EhUtils.getSuitableTitle(galleryDetail);
-        List<String> candidates = GalleryTitleKeywordExtractor.extractSearchCandidates(title);
-        if (candidates.isEmpty()) {
+        List<GalleryTitleKeywordExtractor.SearchToken> candidates =
+                GalleryTitleKeywordExtractor.extractSearchTokens(galleryDetail.title);
+        List<GalleryTitleKeywordExtractor.SearchToken> japaneseCandidates =
+                GalleryTitleKeywordExtractor.extractSearchTokens(galleryDetail.titleJpn);
+        if (candidates.isEmpty() && japaneseCandidates.isEmpty()) {
             showTip(R.string.title_keyword_search_empty, LENGTH_SHORT);
             return;
         }
@@ -2305,16 +2307,17 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         View content = LayoutInflater.from(context)
                 .inflate(R.layout.dialog_title_keyword_selection, null);
         ChipGroup chipGroup = content.findViewById(R.id.title_keyword_group);
-
-        LayoutInflater inflater = LayoutInflater.from(context);
-        for (String candidate : candidates) {
-            Chip chip = (Chip) inflater.inflate(
-                    R.layout.item_title_keyword_chip, chipGroup, false);
-            chip.setId(View.generateViewId());
-            chip.setText(candidate);
-            chip.setTag(candidate);
-            chipGroup.addView(chip);
-        }
+        ChipGroup japaneseChipGroup = content.findViewById(R.id.title_keyword_jpn_group);
+        chipGroup.setTag(galleryDetail.title);
+        japaneseChipGroup.setTag(galleryDetail.titleJpn);
+        addTitleKeywordChips(chipGroup, candidates);
+        addTitleKeywordChips(japaneseChipGroup, japaneseCandidates);
+        content.findViewById(R.id.title_keyword_primary_section)
+                .setVisibility(candidates.isEmpty() ? View.GONE : View.VISIBLE);
+        content.findViewById(R.id.title_keyword_jpn_section)
+                .setVisibility(japaneseCandidates.isEmpty() ? View.GONE : View.VISIBLE);
+        content.findViewById(R.id.title_keyword_divider).setVisibility(
+                candidates.isEmpty() || japaneseCandidates.isEmpty() ? View.GONE : View.VISIBLE);
 
         AlertDialog dialog = new AlertDialog.Builder(context)
                 .setTitle(R.string.title_keyword_search)
@@ -2336,22 +2339,25 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             Button copyButton = dialog.getButton(DialogInterface.BUTTON_NEGATIVE);
             searchButton.setEnabled(false);
             copyButton.setEnabled(false);
-            chipGroup.setOnCheckedStateChangeListener((group, checkedIds) -> {
-                boolean hasSelection = !checkedIds.isEmpty();
+            ChipGroup.OnCheckedStateChangeListener selectionListener = (group, checkedIds) -> {
+                boolean hasSelection = !chipGroup.getCheckedChipIds().isEmpty()
+                        || !japaneseChipGroup.getCheckedChipIds().isEmpty();
                 searchButton.setEnabled(hasSelection);
                 copyButton.setEnabled(hasSelection);
-            });
+            };
+            chipGroup.setOnCheckedStateChangeListener(selectionListener);
+            japaneseChipGroup.setOnCheckedStateChangeListener(selectionListener);
             copyButton.setOnClickListener(button -> {
-                List<String> selected = getSelectedTitleKeywords(chipGroup);
+                String selected = getSelectedTitleKeywords(chipGroup, japaneseChipGroup);
                 if (selected.isEmpty()) {
                     return;
                 }
-                ClipboardUtil.copyText(TextUtils.join(" ", selected));
+                ClipboardUtil.copyText(selected);
                 showTip(R.string.copied_to_clipboard, LENGTH_SHORT);
                 dialog.dismiss();
             });
             searchButton.setOnClickListener(button -> {
-                List<String> selected = getSelectedTitleKeywords(chipGroup);
+                String selected = getSelectedTitleKeywords(chipGroup, japaneseChipGroup);
                 if (selected.isEmpty()) {
                     return;
                 }
@@ -2366,34 +2372,39 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         dialog.show();
     }
 
-    private static List<String> getSelectedTitleKeywords(ChipGroup chipGroup) {
-        List<String> selected = new ArrayList<>();
-        for (int i = 0; i < chipGroup.getChildCount(); i++) {
-            View child = chipGroup.getChildAt(i);
-            if (child instanceof Chip chip && chip.isChecked()) {
-                selected.add(String.valueOf(chip.getTag()));
-            }
+    private static void addTitleKeywordChips(ChipGroup chipGroup,
+            List<GalleryTitleKeywordExtractor.SearchToken> candidates) {
+        LayoutInflater inflater = LayoutInflater.from(chipGroup.getContext());
+        for (GalleryTitleKeywordExtractor.SearchToken candidate : candidates) {
+            Chip chip = (Chip) inflater.inflate(
+                    R.layout.item_title_keyword_chip, chipGroup, false);
+            chip.setId(View.generateViewId());
+            chip.setText(candidate.text);
+            chip.setTag(candidate);
+            chipGroup.addView(chip);
         }
-        return selected;
     }
 
-    private static String buildTitleKeywordSearchQuery(List<String> selected) {
-        StringBuilder query = new StringBuilder();
-        for (String value : selected) {
-            String keyword = value.trim().replace("\\", "\\\\").replace("\"", "\\\"");
-            if (keyword.isEmpty()) {
-                continue;
+    private static String getSelectedTitleKeywords(ChipGroup... chipGroups) {
+        List<String> sections = new ArrayList<>();
+        for (ChipGroup chipGroup : chipGroups) {
+            List<GalleryTitleKeywordExtractor.SearchToken> selected = new ArrayList<>();
+            for (int i = 0; i < chipGroup.getChildCount(); i++) {
+                View child = chipGroup.getChildAt(i);
+                if (child instanceof Chip chip && chip.isChecked()) {
+                    selected.add((GalleryTitleKeywordExtractor.SearchToken) chip.getTag());
+                }
             }
-            if (query.length() > 0) {
-                query.append(' ');
-            }
-            if (keyword.indexOf(' ') >= 0) {
-                query.append('"').append(keyword).append('"');
-            } else {
-                query.append(keyword);
+            if (!selected.isEmpty()) {
+                sections.add(GalleryTitleKeywordExtractor.joinSearchTokens(
+                        (String) chipGroup.getTag(), selected));
             }
         }
-        return query.toString();
+        return TextUtils.join(" ", sections);
+    }
+
+    private static String buildTitleKeywordSearchQuery(String selected) {
+        return selected.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private void showSimilarGalleryList() {
