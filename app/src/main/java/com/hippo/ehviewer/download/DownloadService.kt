@@ -245,7 +245,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
                 val gi = intent!!.getParcelableExtra<GalleryInfo>(KEY_GALLERY_INFO)
                 val label = intent.getStringExtra(KEY_LABEL)
                 if (gi != null && mDownloadManager != null) {
-                    mDownloadManager!!.startDownload(gi, label)
+                    mDownloadManager!!.startDownload(gi, label, intent.getBooleanExtra(KEY_KEEP_PAGE_RANGE, false))
                 }
             }
 
@@ -430,6 +430,13 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
     }
 
     private fun startGalleryUpdate(target: GalleryDetail) {
+        // Updating an existing range target still means obtaining the complete new version.
+        if (GalleryDownloadRangeStore.isRange(target.gid)) {
+            mDownloadManager?.changePageRange(target, null,
+                { error -> showGalleryUpdateFailure(target, error) },
+                { startGalleryUpdate(target) })
+            return
+        }
         if (mGalleryUpdateTasks.containsKey(target.gid)) {
             GalleryUpdateManager.notifyUpdateStateChanged(
                 target.gid, GalleryUpdateManager.UPDATE_STATE_PREPARING
@@ -1208,6 +1215,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
 
         const val KEY_GALLERY_INFO: String = "gallery_info"
         const val KEY_LABEL: String = "label"
+        const val KEY_KEEP_PAGE_RANGE: String = "keep_page_range"
         const val KEY_GID: String = "gid"
         const val KEY_GID_LIST: String = "gid_list"
 

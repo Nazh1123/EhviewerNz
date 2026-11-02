@@ -337,6 +337,9 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             }
 
             String title = EhUtils.getSuitableTitle(info);
+            com.hippo.ehviewer.download.GalleryDownloadRangeStore.Entry range =
+                    com.hippo.ehviewer.download.GalleryDownloadRangeStore.peek(info.gid);
+            if (range != null) title = "[" + mScene.getString(R.string.range_download_badge) + "] " + title;
             if (isImportedLocal) {
                 title = ((isImportedFolder || isLocalAlbum) ? "📁 " : "📦 ") + title;
             }

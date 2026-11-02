@@ -15,6 +15,9 @@ import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.lib.image.Image;
@@ -32,12 +35,15 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.Shadows;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
 import org.robolectric.shadows.ShadowContentResolver;
 import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(application = Application.class, sdk = {28, 30})
+@Config(application = Application.class, sdk = {28, 30},
+        shadows = ExternalImageAccessTest.DescriptorPaths.class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 public class ExternalImageAccessTest {
     private Context context;
@@ -45,6 +51,7 @@ public class ExternalImageAccessTest {
     private Uri uri;
 
     @Before public void setup() throws Exception {
+        DescriptorPaths.path = null;
         context = RuntimeEnvironment.getApplication();
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 context.getSharedPreferences("external-image", Context.MODE_PRIVATE));
@@ -138,6 +145,79 @@ public class ExternalImageAccessTest {
         assertEquals(documents.image, ExternalImageFileResolver.resolve(context, uri));
     }
 
+    @Test public void amazeStyleRootAliasOpensNaturallySortedSiblingsWithoutDataColumn() throws Exception {
+        documents.exposeDescriptorPath = true;
+        // Same root-alias + absolute-path layout as Amaze, using a real temporary file.
+        uri = uri.buildUpon().path("/storage_root" + documents.image.getCanonicalPath()).build();
+        assertResolvedSiblings();
+        assertDescriptorClosed();
+    }
+
+    @Test public void arbitraryProviderWithOpaqueIdOpensSiblingsFromDescriptor() {
+        documents.exposeDescriptorPath = true;
+        assertResolvedSiblings();
+        assertDescriptorClosed();
+    }
+
+    @Test public void descriptorPathPreservesSpacesUnicodeAndLiteralPercentEscapes() throws Exception {
+        File renamed = new File(documents.image.getParentFile(), "图片 100%2F #+.png");
+        assertTrue(documents.image.renameTo(renamed));
+        documents.image = renamed;
+        documents.exposeDescriptorPath = true;
+        uri = uri.buildUpon().path("/arbitrary-root/" + renamed.getName()).build();
+        assertEquals(renamed.getCanonicalFile(), ExternalImageFileResolver.resolve(context, uri));
+        assertDescriptorClosed();
+    }
+
+    @Test public void unavailableProcLinkKeepsSingleImageAndClosesDescriptor() {
+        GalleryActivity activity = reader();
+        assertTrue(ReflectionHelpers.getField(activity, "mGalleryProvider") instanceof SingleImageGalleryProvider);
+        assertDescriptorClosed();
+    }
+
+    @Test public void nonFileDescriptorTargetsDoNotBecomeLocalGalleries() {
+        for (String path : new String[]{"pipe:[1234]", "socket:[1234]",
+                documents.image.getPath() + " (deleted)", documents.image.getParent()}) {
+            DescriptorPaths.path = path;
+            assertNull(ExternalImageFileResolver.resolve(context, uri));
+            assertDescriptorClosed();
+        }
+    }
+
+    @Test public void deniedDescriptorKeepsSingleImageReader() {
+        documents.denyOpen = true;
+        GalleryActivity activity = reader();
+        assertTrue(ReflectionHelpers.getField(activity, "mGalleryProvider") instanceof SingleImageGalleryProvider);
+        assertFalse(activity.isFinishing());
+    }
+
+    private void assertResolvedSiblings() {
+        GalleryActivity activity = reader();
+        DirGalleryProvider provider = ReflectionHelpers.getField(activity, "mGalleryProvider");
+        assertFalse(provider instanceof SingleImageGalleryProvider);
+        UniFile[] files = provider.loadImageFiles();
+        assertEquals(2, files.length);
+        assertEquals("2.png", files[0].getName());
+        assertEquals("10.png", files[1].getName());
+    }
+
+    private void assertDescriptorClosed() {
+        assertNotNull(documents.lastDescriptor);
+        assertThrows(IllegalStateException.class, () -> documents.lastDescriptor.getFd());
+    }
+
+    /** Windows has no /proc; exercise the real descriptor/readability flow with a simulated link. */
+    @Implements(Os.class)
+    public static class DescriptorPaths {
+        static String path;
+
+        @Implementation protected static String readlink(String link) throws ErrnoException {
+            assertTrue(link.startsWith("/proc/self/fd/"));
+            if (path == null) throw new ErrnoException("readlink", OsConstants.EACCES);
+            return path;
+        }
+    }
+
     @Test public void directoryCheckRequiresActualEnumeration() {
         File inaccessible = new File(context.getCacheDir(), "denied") {
             @Override public boolean isDirectory() { return true; }
@@ -182,6 +262,9 @@ public class ExternalImageAccessTest {
         boolean exposePath;
         boolean usePipe;
         boolean omitMetadata;
+        boolean exposeDescriptorPath;
+        boolean denyOpen;
+        ParcelFileDescriptor lastDescriptor;
         @Override public boolean onCreate() { return true; }
         @Override public Cursor query(Uri uri, String[] projection, String selection, String[] args, String order) {
             MatrixCursor result = new MatrixCursor(projection);
@@ -196,6 +279,7 @@ public class ExternalImageAccessTest {
             return result;
         }
         @Override public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
+            if (denyOpen) throw new SecurityException("URI permission denied");
             if (usePipe) {
                 try {
                     ParcelFileDescriptor[] pipe = ParcelFileDescriptor.createPipe();
@@ -209,7 +293,12 @@ public class ExternalImageAccessTest {
                     return pipe[0];
                 } catch (java.io.IOException failure) { throw new FileNotFoundException(failure.toString()); }
             }
-            return ParcelFileDescriptor.open(image, ParcelFileDescriptor.MODE_READ_ONLY);
+            if (exposeDescriptorPath) {
+                try { DescriptorPaths.path = image.getCanonicalPath(); }
+                catch (java.io.IOException failure) { throw new FileNotFoundException(failure.getMessage()); }
+            }
+            lastDescriptor = ParcelFileDescriptor.open(image, ParcelFileDescriptor.MODE_READ_ONLY);
+            return lastDescriptor;
         }
         @Override public String getType(Uri uri) { return omitMetadata ? null : "image/png"; }
         @Override public Uri insert(Uri uri, ContentValues values) { throw new UnsupportedOperationException(); }

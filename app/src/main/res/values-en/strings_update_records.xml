@@ -12,6 +12,8 @@
     <string name="gallery_update_history_missing_token">Gallery GID %1$d has no saved gallery token, so its details cannot be loaded.</string>
     <string name="settings_gallery_update_record_limit">Update record count</string>
     <string name="gallery_read_updates">Read updates only</string>
+    <string name="gallery_read_full">Read full gallery</string>
+    <string name="gallery_update_record_invalid">Invalid update record</string>
     <string name="gallery_update_log">Update log</string>
     <string name="gallery_update_log_time">Updated at</string>
     <string name="gallery_update_log_target">Target gallery: %1$d</string>

@@ -91,6 +91,9 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         return mDir != null ? listAndSortImageFiles(mDir) : null;
     }
 
+    /** Changing local subsets can opt into a cheap revision check on the decoder thread. */
+    protected long imageFilesVersion() { return 0L; }
+
     @Override
     public GalleryProvider2 createTranslationProvider(Context context) {
         return mDir != null ? new DirGalleryProvider(mDir) : null;
@@ -269,6 +272,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     @Override
     public void run() {
         // It may take a long time, so run it in new thread
+        long filesVersion = imageFilesVersion();
         UniFile[] files = loadImageFiles();
 
         if (files == null) {
@@ -294,11 +298,24 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         notifyDataChanged();
 
         while (!Thread.currentThread().isInterrupted()) {
+            long version = imageFilesVersion();
+            if (version != filesVersion) {
+                filesVersion = version;
+                UniFile[] updated = loadImageFiles();
+                if (updated != null && !sameFiles(files, updated)) {
+                    synchronized (mRequests) { mRequests.clear(); }
+                    for (int page = 0; page < files.length; page++) removeCache(page);
+                    files = updated;
+                    mFileList.set(files);
+                    mSize = files.length;
+                    notifyDataChanged();
+                }
+            }
             int index;
             synchronized (mRequests) {
                 if (mRequests.isEmpty()) {
                     try {
-                        mRequests.wait();
+                        mRequests.wait(imageFilesVersion() == 0L ? 0L : 500L);
                     } catch (InterruptedException e) {
                         // Interrupted
                         break;
@@ -335,6 +352,12 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         mFileList.lazySet(null);
 
         Log.i(TAG, "ImageDecoder end");
+    }
+
+    private static boolean sameFiles(UniFile[] left, UniFile[] right) {
+        if (left.length != right.length) return false;
+        for (int i = 0; i < left.length; i++) if (!left[i].getUri().equals(right[i].getUri())) return false;
+        return true;
     }
 
     /** Some URI providers return pipes or generic streams instead of seekable files. */

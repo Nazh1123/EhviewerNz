@@ -24,10 +24,12 @@ import static com.hippo.ehviewer.util.ClipboardUtil.createAnnouncerFromClipboard
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -79,6 +81,7 @@ import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUrlOpener;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
+import com.hippo.ehviewer.client.YesterdayTopListReadState;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.ui.fragment.GalleryVersionMaintenance;
 import com.hippo.ehviewer.ui.fragment.SubscriptionUpdatePreferences;
@@ -133,6 +136,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.time.Clock;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -179,6 +183,10 @@ public final class MainActivity extends StageActivity
     @Nullable
     private TextView mSubscriptionUpdateCountdown;
     @Nullable
+    private TextView mYesterdayTopListBadge;
+    private boolean mYesterdayTopListBadgeRunning;
+    private final Clock mYesterdayTopListClock = Clock.systemUTC();
+    @Nullable
     private AlertDialog mGalleryVersionUpdatePrompt;
     @Nullable
     private AlertDialog mSubscriptionUpdateSettingsDialog;
@@ -204,6 +212,14 @@ public final class MainActivity extends StageActivity
 
     private final Runnable mSubscriptionCountdownRunnable =
             this::renderSubscriptionUpdateCountdown;
+
+    private final Runnable mYesterdayTopListBadgeRunnable = this::renderYesterdayTopListBadge;
+    private final BroadcastReceiver mYesterdayTopListClockReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            renderYesterdayTopListBadge();
+        }
+    };
 
     private final SubscriptionUpdateManager.Listener mSubscriptionUpdateListener =
             new SubscriptionUpdateManager.Listener() {
@@ -467,6 +483,8 @@ public final class MainActivity extends StageActivity
         mSubscriptionUpdateManager =
                 EhApplication.getSubscriptionUpdateManager(this);
         initSubscriptionUpdateBadges();
+        mYesterdayTopListBadge = initNavigationBadge(R.id.nav_top_lists);
+        renderYesterdayTopListBadge();
         mRightDrawer = (FrameLayout) ViewUtils.$$(this, R.id.right_drawer);
         View headerLayout = mNavView.getHeaderView(0);
         configureOneHandedNavigation(headerLayout);
@@ -628,10 +646,10 @@ public final class MainActivity extends StageActivity
                 startSceneFirstly(new Announcer(GalleryListScene.class).setArgs(args));
                 break;
             case R.id.nav_top_lists:
-                ListUrlBuilder topList = new ListUrlBuilder();
-                topList.setMode(ListUrlBuilder.MODE_TOP_LIST);
-                topList.setFollow("tl=15");
-                startSceneFirstly(GalleryListScene.getStartAnnouncer(topList));
+                Bundle nav_top_lists = new Bundle();
+                nav_top_lists.putString(EhTopListScene.KEY_ACTION, EhTopListScene.ACTION_TOP_LIST);
+                startSceneFirstly(new Announcer(EhTopListScene.class)
+                        .setArgs(nav_top_lists));
                 break;
             case R.id.nav_bookmark_subscription:
             case R.id.nav_global_subscription:
@@ -877,6 +895,7 @@ public final class MainActivity extends StageActivity
         mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
         mSubscriptionUpdateHandler.removeCallbacks(
                 mSubscriptionCountdownRunnable);
+        mSubscriptionUpdateHandler.removeCallbacks(mYesterdayTopListBadgeRunnable);
 
         mDrawerLayout = null;
         mNavView = null;
@@ -887,6 +906,7 @@ public final class MainActivity extends StageActivity
         mBookmarkSubscriptionBadge = null;
         mGlobalSubscriptionBadge = null;
         mSubscriptionUpdateCountdown = null;
+        mYesterdayTopListBadge = null;
         mSubscriptionUpdateManager = null;
         super.onDestroy();
     }
@@ -894,6 +914,10 @@ public final class MainActivity extends StageActivity
     @Override
     protected void onResume() {
         super.onResume();
+
+        mYesterdayTopListBadgeRunning = true;
+        registerReceiver(mYesterdayTopListClockReceiver, new IntentFilter(Intent.ACTION_TIME_CHANGED));
+        renderYesterdayTopListBadge();
 
         if (mSubscriptionUpdateManager != null) {
             mSubscriptionUpdateManager.setListener(mSubscriptionUpdateListener);
@@ -939,6 +963,9 @@ public final class MainActivity extends StageActivity
 
     @Override
     protected void onPause() {
+        mYesterdayTopListBadgeRunning = false;
+        unregisterReceiver(mYesterdayTopListClockReceiver);
+        mSubscriptionUpdateHandler.removeCallbacks(mYesterdayTopListBadgeRunnable);
         if (mSubscriptionUpdateManager != null) {
             mSubscriptionUpdateManager.setListener(null);
         }
@@ -1170,17 +1197,17 @@ public final class MainActivity extends StageActivity
         if (mNavView == null) {
             return;
         }
-        mEhSubscriptionBadge = initSubscriptionUpdateBadge(
+        mEhSubscriptionBadge = initNavigationBadge(
                 R.id.nav_subscription);
-        mBookmarkSubscriptionBadge = initSubscriptionUpdateBadge(
+        mBookmarkSubscriptionBadge = initNavigationBadge(
                 R.id.nav_bookmark_subscription);
-        mGlobalSubscriptionBadge = initSubscriptionUpdateBadge(
+        mGlobalSubscriptionBadge = initNavigationBadge(
                 R.id.nav_global_subscription);
         mSubscriptionUpdateCountdown = initSubscriptionUpdateCountdown();
     }
 
     @Nullable
-    private TextView initSubscriptionUpdateBadge(@IdRes int itemId) {
+    private TextView initNavigationBadge(@IdRes int itemId) {
         if (mNavView == null) {
             return null;
         }
@@ -1278,6 +1305,25 @@ public final class MainActivity extends StageActivity
         }
         item.setVisible(true);
         return actionView == null ? null : actionView.findViewById(textId);
+    }
+
+    private void renderYesterdayTopListBadge() {
+        mSubscriptionUpdateHandler.removeCallbacks(mYesterdayTopListBadgeRunnable);
+        if (mYesterdayTopListBadge == null) return;
+        long now = mYesterdayTopListClock.millis();
+        boolean unread = YesterdayTopListReadState.isUnread(now);
+        mYesterdayTopListBadge.setText(unread ? getString(R.string.top_list_new_badge) : null);
+        mYesterdayTopListBadge.setVisibility(unread ? View.VISIBLE : View.GONE);
+        if (mYesterdayTopListBadgeRunning && Settings.getShowYesterdayTopListNewBadge()) {
+            mSubscriptionUpdateHandler.postDelayed(mYesterdayTopListBadgeRunnable,
+                    YesterdayTopListReadState.nextPeriodStartAt(now) - now);
+        }
+    }
+
+    public void onYesterdayTopListRead(long loadedPeriod) {
+        if (YesterdayTopListReadState.markRead(loadedPeriod, mYesterdayTopListClock.millis())) {
+            renderYesterdayTopListBadge();
+        }
     }
 
     private void startSubscriptionUpdateCountdown() {
@@ -1539,10 +1585,10 @@ public final class MainActivity extends StageActivity
                         .setArgs(nav_whats_hot));
                 break;
             case R.id.nav_top_lists:
-                Bundle nav_top_lists = new Bundle();
-                nav_top_lists.putString(EhTopListScene.KEY_ACTION, EhTopListScene.ACTION_TOP_LIST);
-                startSceneFirstly(new Announcer(EhTopListScene.class)
-                        .setArgs(nav_top_lists));
+                ListUrlBuilder topList = new ListUrlBuilder();
+                topList.setMode(ListUrlBuilder.MODE_TOP_LIST);
+                topList.setFollow("tl=15");
+                startSceneFirstly(GalleryListScene.getStartAnnouncer(topList));
                 break;
             case R.id.nav_favourite:
                 startScene(new Announcer(FavoritesScene.class));
@@ -1586,7 +1632,8 @@ public final class MainActivity extends StageActivity
                 || itemId == R.id.nav_subscription
                 || itemId == R.id.nav_bookmark_subscription
                 || itemId == R.id.nav_global_subscription
-                || itemId == R.id.nav_whats_hot;
+                || itemId == R.id.nav_whats_hot
+                || itemId == R.id.nav_top_lists;
     }
 
     @Override
@@ -1610,6 +1657,7 @@ public final class MainActivity extends StageActivity
         if (percent > 0f && isSubscriptionDrawer(drawerView)
                 && !mSubscriptionCountdownRunning) {
             startSubscriptionUpdateCountdown();
+            renderYesterdayTopListBadge();
         }
     }
 
@@ -1617,6 +1665,7 @@ public final class MainActivity extends StageActivity
     public void onDrawerOpened(View drawerView) {
         if (isSubscriptionDrawer(drawerView)) {
             startSubscriptionUpdateCountdown();
+            renderYesterdayTopListBadge();
         }
         if (limitsCountView != null) {
             limitsCountView.onLoadData(drawerView, true);

@@ -32,7 +32,7 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 
-@Config(manifest = Config.NONE)
+@Config(manifest = Config.NONE, application = android.app.Application.class)
 @RunWith(RobolectricTestRunner.class)
 public class TorrentParserTest {
 
@@ -51,5 +51,39 @@ public class TorrentParserTest {
         assertEquals("https://ehtracker.org/get/3905209/713846c3ddf05826d4443790a5b6619eae734d71.torrent", result[1].url);
         assertTrue(result[0].name.contains("Part 2"));
         assertTrue(result[1].name.contains("1280x"));
+        assertEquals("252.0 MiB", result[0].size);
+        assertEquals("13", result[0].seeds);
+        assertEquals("4", result[0].peers);
+        assertEquals("50", result[0].downloads);
+        assertEquals("14.21 MiB", result[1].size);
+        assertEquals("11", result[1].seeds);
+        assertEquals("2", result[1].peers);
+        assertEquals("33", result[1].downloads);
+        assertTrue(!result[0].name.contains("\n"));
+    }
+
+    @Test
+    public void missingFieldsDoNotDropTorrentOrBorrowNextTorrentStats() {
+        String body = "<form><table><tr><td><span>Seeds:</span> 0</td></tr>"
+                + "<tr><td colspan='5'><a href='https://example.org/a.torrent?p=secret'>"
+                + "A &amp; B.zip</a></td></tr></table></form>"
+                + "<form><table><tr><td><span>Seeds:</span> 12</td>"
+                + "<td><span>Peers:</span> 5</td><td><span>Downloads:</span> 1,234</td></tr>"
+                + "<tr><td colspan='5'><a href='https://example.org/b.torrent'>B.zip</a>"
+                + "</td></tr></table></form>";
+
+        TorrentInfo[] result = TorrentParser.parse(body);
+
+        assertEquals(2, result.length);
+        assertEquals("A & B.zip", result[0].name);
+        assertEquals("https://example.org/a.torrent", result[0].url);
+        assertEquals("0", result[0].seeds);
+        assertEquals("", result[0].peers);
+        assertEquals("", result[0].downloads);
+        assertEquals("", result[0].size);
+        assertEquals("", result[0].posted);
+        assertEquals("12", result[1].seeds);
+        assertEquals("5", result[1].peers);
+        assertEquals("1,234", result[1].downloads);
     }
 }

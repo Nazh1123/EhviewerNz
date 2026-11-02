@@ -401,10 +401,12 @@ public final class SpiderQueen implements Runnable {
     }
 
     private void notifyPageSuccess(int index) {
+        if (com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(mGalleryInfo.gid))
+            com.hippo.ehviewer.download.GalleryDownloadRangeStore.changed(mGalleryInfo.gid);
         int size = -1;
         int[] temp = mPageStateArray;
         if (temp != null) {
-            size = temp.length;
+            size = com.hippo.ehviewer.download.GalleryDownloadRangeStore.downloadCount(mGalleryInfo.gid, temp.length);
         }
         synchronized (mSpiderListeners) {
             for (OnSpiderListener listener : mSpiderListeners) {
@@ -417,7 +419,7 @@ public final class SpiderQueen implements Runnable {
         int size = -1;
         int[] temp = mPageStateArray;
         if (temp != null) {
-            size = temp.length;
+            size = com.hippo.ehviewer.download.GalleryDownloadRangeStore.downloadCount(mGalleryInfo.gid, temp.length);
         }
         synchronized (mSpiderListeners) {
             for (OnSpiderListener listener : mSpiderListeners) {
@@ -436,7 +438,7 @@ public final class SpiderQueen implements Runnable {
         int size = -1;
         int[] temp = mPageStateArray;
         if (temp != null) {
-            size = temp.length;
+            size = com.hippo.ehviewer.download.GalleryDownloadRangeStore.downloadCount(mGalleryInfo.gid, temp.length);
         }
         synchronized (mSpiderListeners) {
             for (OnSpiderListener listener : mSpiderListeners) {
@@ -1214,14 +1216,15 @@ public final class SpiderQueen implements Runnable {
             oldState = mPageStateArray[index];
             mPageStateArray[index] = state;
 
-            if (!isStateDone(oldState) && isStateDone(state)) {
+            boolean selected = com.hippo.ehviewer.download.GalleryDownloadRangeStore.includes(mGalleryInfo.gid, index);
+            if (selected && !isStateDone(oldState) && isStateDone(state)) {
                 mDownloadedPages.incrementAndGet();
-            } else if (isStateDone(oldState) && !isStateDone(state)) {
+            } else if (selected && isStateDone(oldState) && !isStateDone(state)) {
                 mDownloadedPages.decrementAndGet();
             }
-            if (oldState != STATE_FINISHED && state == STATE_FINISHED) {
+            if (selected && oldState != STATE_FINISHED && state == STATE_FINISHED) {
                 mFinishedPages.incrementAndGet();
-            } else if (oldState == STATE_FINISHED && state != STATE_FINISHED) {
+            } else if (selected && oldState == STATE_FINISHED && state != STATE_FINISHED) {
                 mFinishedPages.decrementAndGet();
             }
 
@@ -1740,6 +1743,9 @@ public final class SpiderQueen implements Runnable {
                 } else if (!mRequestPageQueue2.isEmpty()) {
                     index = mRequestPageQueue2.remove();
                 } else if (mDownloadPage >= 0 && mDownloadPage < size) {
+                    while (mDownloadPage < size && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.includes(
+                            mGalleryInfo.gid, mDownloadPage)) mDownloadPage++;
+                    if (mDownloadPage >= size) return false;
                     index = mDownloadPage;
                     mDownloadPage++;
                 } else {
@@ -1752,6 +1758,8 @@ public final class SpiderQueen implements Runnable {
                     // Invalid index
                     return true;
                 }
+                if (mReadReference <= 0 && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.includes(
+                        mGalleryInfo.gid, index)) return true;
             }
 
             synchronized (mPageStateLock) {

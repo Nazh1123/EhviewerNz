@@ -18,41 +18,42 @@ package com.hippo.ehviewer.client.parser;
 
 import com.hippo.ehviewer.client.data.TorrentInfo;
 
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
+
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class TorrentParser {
 
-    private static final Pattern PATTERN_TORRENT_BLOCK = Pattern.compile("<form\\b[^>]*>.*?</form>", Pattern.DOTALL);
-    private static final Pattern PATTERN_POSTED = Pattern.compile("<span[^>]*>\\s*Posted:\\s*</span>\\s*<span>([^<]+)</span>", Pattern.DOTALL);
-    private static final Pattern PATTERN_TORRENT = Pattern.compile("<td colspan=\"5\">\\s*&nbsp;\\s*<a href=\"([^\"]+)\"[^<]*>([^<]+)</a></td>", Pattern.DOTALL);
-
     public static TorrentInfo[] parse(String body) {
         List<TorrentInfo> torrentList = new ArrayList<>();
-        Matcher blockMatcher = PATTERN_TORRENT_BLOCK.matcher(body);
-        while (blockMatcher.find()) {
-            String block = blockMatcher.group();
-            Matcher torrentMatcher = PATTERN_TORRENT.matcher(block);
-            if (!torrentMatcher.find()) {
+        for (Element block : Jsoup.parse(body).select("form")) {
+            Element link = block.selectFirst("td[colspan=5] a[href]");
+            if (link == null) {
                 continue;
             }
             // Remove ?p= to make torrent redistributable
-            String url = ParserUtils.trim(torrentMatcher.group(1));
+            String url = link.attr("href").trim();
             int index = url.indexOf("?p=");
             if (index != -1) {
                 url = url.substring(0, index);
             }
-            String name = ParserUtils.trim(torrentMatcher.group(2));
-            String posted = "";
-            Matcher postedMatcher = PATTERN_POSTED.matcher(block);
-            if (postedMatcher.find()) {
-                posted = ParserUtils.trim(postedMatcher.group(1));
-            }
-            TorrentInfo item = new TorrentInfo(url, name, posted);
+            TorrentInfo item = new TorrentInfo(url, link.text(), field(block, "Posted:"),
+                    field(block, "Size:"), field(block, "Seeds:"), field(block, "Peers:"),
+                    field(block, "Downloads:"));
             torrentList.add(item);
         }
         return torrentList.toArray(new TorrentInfo[0]);
+    }
+
+    private static String field(Element block, String label) {
+        for (Element cell : block.select("td")) {
+            String text = cell.text();
+            if (text.startsWith(label)) {
+                return text.substring(label.length()).trim();
+            }
+        }
+        return "";
     }
 }

@@ -21,7 +21,6 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.Settings;
-import com.hippo.ehviewer.adapter.GalleryAdapterNew;
 import com.hippo.ehviewer.client.*;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
@@ -61,7 +60,7 @@ public class SearchUpdatesDeviceTest {
     private String phase = "setup";
     private static final long ORIGIN = 1767225600000L;
 
-    @Test(timeout=240000) public void deterministicDeviceFlows() throws Exception {
+    @Test(timeout=240000) public void deterministicDeviceFlows() throws Throwable {
         Assume.assumeTrue("Pass searchUpdates=true", "true".equals(InstrumentationRegistry.getArguments().getString("searchUpdates")));
         app=in.getTargetContext().getApplicationContext();
         evidence=new File(app.getExternalFilesDir(null),"search-updates-device");
@@ -98,7 +97,7 @@ public class SearchUpdatesDeviceTest {
                 @Override public Context getApplicationContext(){return this;}
                 @Override public File getDatabasePath(String name){return new File(dbRoot,name);}
                 @Override public SQLiteDatabase openOrCreateDatabase(String name,int mode,SQLiteDatabase.CursorFactory factory){return SQLiteDatabase.openOrCreateDatabase(getDatabasePath(name),factory);}
-                @Override public SQLiteDatabase openOrCreateDatabase(String name,int mode,SQLiteDatabase.CursorFactory factory,DatabaseErrorHandler handler){return SQLiteDatabase.openOrCreateDatabase(getDatabasePath(name),factory,handler);}
+                @Override public SQLiteDatabase openOrCreateDatabase(String name,int mode,SQLiteDatabase.CursorFactory factory,DatabaseErrorHandler handler){return SQLiteDatabase.openOrCreateDatabase(getDatabasePath(name).getPath(),factory,handler);}
             };
             SearchUpdateStore.initialize(isolated);
             site.png=thumbnail();
@@ -113,7 +112,7 @@ public class SearchUpdatesDeviceTest {
         } catch(Throwable failure) {
             report.put("success",false).put("phase",phase).put("failure",failure.toString());
             try{screenshot("failure.png");}catch(Throwable ignored){}
-            throw failure instanceof Exception ? (Exception)failure : new AssertionError(failure);
+            throw failure;
         } finally {
             report.put("phase",phase).put("http",site.requests);
             try(FileOutputStream out=new FileOutputStream(new File(evidence,"report.json"))){out.write(report.toString(2).getBytes(StandardCharsets.UTF_8));}
@@ -200,7 +199,7 @@ public class SearchUpdatesDeviceTest {
                 .put("restoredTagDoesNotRenotify",!deep).put("frozenDivider",true));
     }
 
-    private void capacityAndMinuteFlows(OkHttpClient http) throws Exception {
+    private void capacityAndMinuteFlows(OkHttpClient http) throws Throwable {
         phase="capacity-and-minute-boundary";
         for(int size:new int[]{25,50,100}) {
             String marker="qa_capacity_"+size;site.pageSize=size;site.put(marker,rows(800000+size*100,500,"qa_capacity",size));

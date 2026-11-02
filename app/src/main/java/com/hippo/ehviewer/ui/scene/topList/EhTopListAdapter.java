@@ -1,8 +1,11 @@
 package com.hippo.ehviewer.ui.scene.topList;
 
 import android.content.Context;
-import android.graphics.Paint;
 import android.graphics.drawable.GradientDrawable;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.RelativeSizeSpan;
+import android.text.style.UnderlineSpan;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TableLayout;
@@ -39,11 +42,20 @@ abstract class EhTopListAdapter extends RecyclerView.Adapter<EhTopListAdapter.Eh
 
     @Override
     public void onBindViewHolder(@NonNull EhTopListAdapter.EhTopListViewHolder holder, int position) {
-        holder.textView.setText(timeInfoId(position));
-        if (ehTopListInfo.type== EhTopListDetail.ListType.GALLERY){
-            holder.textView.setOnClickListener(v->clickTitle(urlFollow(position)));
-            holder.textView.getPaint().setFlags(Paint.UNDERLINE_TEXT_FLAG);
+        SpannableStringBuilder title = new SpannableStringBuilder(
+                context.getString(timeInfoId(position)));
+        if (ehTopListInfo.type == EhTopListDetail.ListType.GALLERY) {
+            title.setSpan(new UnderlineSpan(), 0, title.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            title.append("  ");
+            int hintStart = title.length();
+            title.append(context.getString(R.string.top_list_click_to_view));
+            title.setSpan(new RelativeSizeSpan(0.65f), hintStart, title.length(),
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            holder.textView.setOnClickListener(v -> clickTitle(urlFollow(position)));
+        } else {
+            holder.textView.setOnClickListener(null);
         }
+        holder.textView.setText(title);
 
         TopListItemArray topListItemArray = ehTopListInfo.get(position);
         for (int i = 0; i < topListItemArray.length(); i++) {

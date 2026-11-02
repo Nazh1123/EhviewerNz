@@ -324,7 +324,7 @@ class GalleryResultIndex private constructor(
     }
     /** Only providers exposing a complete local listing may remove pages absent from that listing. */
     fun reconcile(provider: GalleryProvider2) {
-        if (provider is EhGalleryProvider || provider is UpdatedGalleryProvider || provider.size() <= 0) return
+        if (provider is EhGalleryProvider || provider is UpdatedGalleryProvider || provider is RangeGalleryProvider || provider.size() <= 0) return
         if (hasEntries()) reconcile((0 until provider.size()).map { source(provider, it, gid) })
     }
     fun hasEntries(): Boolean = locked {
@@ -361,7 +361,7 @@ class GalleryResultIndex private constructor(
         }
         fun source(provider: GalleryProvider2, page: Int, gid: Long?): Source {
             val image = provider.getPreviewFile(page)
-            val remote = provider is EhGalleryProvider || provider is UpdatedGalleryProvider
+            val remote = provider is EhGalleryProvider || provider is UpdatedGalleryProvider || provider is RangeGalleryProvider
             val name = if (gid != null && gid > 0) image?.name?.takeIf { it.matches(Regex("\\d{8}\\.[^.]+")) }?.substringBefore('.')
                 ?: if (remote) provider.getTranslationFilename(page) else provider.getResultPageName(page)
                 else provider.getResultPageName(page)

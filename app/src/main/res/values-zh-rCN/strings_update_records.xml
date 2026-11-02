@@ -13,6 +13,8 @@
     <string name="settings_gallery_update_record_limit">更新记录数量</string>
     <string name="settings_fork_category_read">阅读</string>
     <string name="gallery_read_updates">仅阅读更新</string>
+    <string name="gallery_read_full">阅读完整画廊</string>
+    <string name="gallery_update_record_invalid">更新记录无效</string>
     <string name="gallery_update_log">更新日志</string>
     <string name="gallery_update_log_time">更新时间</string>
     <string name="gallery_update_log_target">目标画廊：%1$d</string>

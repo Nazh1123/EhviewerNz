@@ -271,6 +271,12 @@ public class SearchBar extends CardView implements View.OnClickListener,
         mEditText.setQueryText(text);
     }
 
+    public void setTextForEditing(String text) {
+        setText(text);
+        cursorToEnd();
+        mEditText.prepareForEditing();
+    }
+
     public String getText() {
         Editable text = mEditText.getText();
         return text != null ? text.toString() : "";
@@ -401,6 +407,7 @@ public class SearchBar extends CardView implements View.OnClickListener,
                 case STATE_NORMAL:
                     mViewTransition.showView(1, animation);
                     mEditText.requestFocus();
+                    mEditText.prepareForEditing();
 
                     if (state == STATE_SEARCH_LIST) {
                         showImeAndSuggestionsList(animation);
@@ -790,8 +797,7 @@ public class SearchBar extends CardView implements View.OnClickListener,
 
         @Override
         public void onClick() {
-            mEditText.setQueryText(mQuery);
-            mEditText.setSelection(mEditText.getText().length());
+            setTextForEditing(mQuery);
         }
 
         @Override

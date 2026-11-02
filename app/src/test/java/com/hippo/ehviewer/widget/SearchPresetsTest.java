@@ -119,7 +119,15 @@ public class SearchPresetsTest {
         SearchPresetChip language = chip(layout, 0);
         assertEquals(INCLUDE, language.getState());
         tapOperator(language);
-        assertEquals("-l:\"chinese$\"", bar.getText());
+        assertEquals("-l:\"chinese$\" ", bar.getText());
+        SearchEditText input = bar.findViewById(R.id.search_edit_text);
+        assertEquals(input.length(), input.getSelectionEnd());
+        android.view.inputmethod.InputConnection connection = input.onCreateInputConnection(
+                new android.view.inputmethod.EditorInfo());
+        assertNotNull(connection);
+        assertTrue(connection.commitText("new", 1));
+        assertEquals("-l:\"chinese$\" new", bar.getText());
+        assertEquals(EXCLUDE, language.getState());
         bar.setText("~language:chinese unrelated");
         assertEquals(OR, language.getState());
         language.performClick();

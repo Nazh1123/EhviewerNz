@@ -62,6 +62,8 @@ public class GalleryUpdateCleanupTest {
 
     @Before public void setup() throws Exception {
         context = RuntimeEnvironment.getApplication();
+        context.getSharedPreferences("download_page_ranges", Context.MODE_PRIVATE).edit().clear().commit();
+        ReflectionHelpers.setStaticField(GalleryDownloadRangeStore.class, "instance", null);
         ((android.util.LruCache<?, ?>) ReflectionHelpers.getStaticField(SpiderQueen.class, "sStartPages")).evictAll();
         // Android's rename replaces an existing cache file. Java File.renameTo on Windows
         // does not; emulate replacement only in this desktop fixture, keeping real cache I/O.
@@ -100,6 +102,7 @@ public class GalleryUpdateCleanupTest {
     }
 
     @After public void cleanup() {
+        ReflectionHelpers.setStaticField(GalleryDownloadRangeStore.class, "instance", null);
         ((android.util.LruCache<?, ?>) ReflectionHelpers.getStaticField(SpiderQueen.class, "sStartPages")).evictAll();
         GalleryUpdateRecordStore.get(context).close();
         ReflectionHelpers.setStaticField(GalleryUpdateRecordStore.class, "instance", null);
@@ -153,6 +156,32 @@ public class GalleryUpdateCleanupTest {
         }
         fail("Cleanup did not reach state " + state + ": " + GalleryUpdateManager.getUpdateState(200)
                 + " logs: " + org.robolectric.shadows.ShadowLog.getLogs());
+    }
+
+    @Test public void updatingACompleteTargetRetainsRangeParentsAndTheirFiles() throws Exception {
+        disk(sourceDir, metadata(100, 1, "1111111111", "2222222222"));
+        disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
+        GalleryDownloadRangeStore.get(context).apply(manager.getDownloadInfo(100), GalleryPageRange.parse("2", 2));
+        // The new feature must not add a range-specific update eligibility restriction.
+        assertEquals(100, manager.findClosestOlderGalleryVersion(100, 200).gid);
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
+        assertNotNull(manager.getDownloadInfo(100));
+        assertTrue(sourceDir.isDirectory());
+        assertTrue(new File(sourceDir, "00000002.png").isFile());
+        assertTrue(manager.isCompleteUsableGallery(manager.getDownloadInfo(200)));
+    }
+
+    @Test public void aFinishedRangeTargetCannotTriggerParentCleanup() throws Exception {
+        disk(sourceDir, metadata(100, 1, "1111111111", "2222222222"));
+        disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
+        GalleryDownloadRangeStore.get(context).apply(manager.getDownloadInfo(200), GalleryPageRange.parse("1", 3));
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
+        assertNotNull(manager.getDownloadInfo(100));
+        assertTrue(sourceDir.isDirectory());
     }
 
     @Test public void diskMetadataMigratesProgressDeletesSourceAndPublishesAddedPagesWithoutCache() throws Exception {

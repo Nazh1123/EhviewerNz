@@ -177,6 +177,124 @@ public class SearchTagChipsTest {
         assertEquals(2, chips().length);
     }
 
+    @Test public void tagCandidateReusesTrailingSeparatorsAndLeavesCaretOutsideTheChip() throws Exception {
+        installTranslations();
+        SearchBar bar = attachSearchBar();
+        edit = bar.findViewById(R.id.search_edit_text);
+        android.widget.ListView suggestions = bar.findViewById(R.id.search_bar_list);
+        for (String suffix : new String[]{"", " ", ", ", "  "}) {
+            bar.setText("-l:chi" + suffix);
+            assertTrue(edit.performAccessibilityAction(0x02000001, null));
+            edit.setSelection("-l:chi".length());
+            shadowOf(android.os.Looper.getMainLooper()).idle();
+            int candidate = -1;
+            for (int i = 0; i < suggestions.getAdapter().getCount(); i++) {
+                if (suggestions.getAdapter().getItem(i).getClass().getSimpleName().equals("TagSuggestion")) {
+                    candidate = i;
+                    break;
+                }
+            }
+            assertTrue(candidate >= 0);
+            assertTrue(suggestions.performItemClick(null, candidate, candidate));
+            String expected = "-l:\"chinese$\"" + (suffix.isEmpty() ? " " : suffix);
+            assertEquals(expected, bar.getText());
+            assertEquals(edit.length(), edit.getSelectionEnd());
+            InputConnection connection = edit.onCreateInputConnection(new EditorInfo());
+            assertNotNull(connection);
+            assertTrue(connection.commitText("new", 1));
+            assertEquals(expected + "new", bar.getText());
+            assertEquals(1, chips().length);
+        }
+    }
+
+    @Test public void historyCandidateLeavesRoomToAppendToACompletedTag() {
+        SearchBar bar = attachSearchBar();
+        edit = bar.findViewById(R.id.search_edit_text);
+        SearchDatabase database = SearchDatabase.getInstance(activity);
+        database.clearQuery();
+        String query = "unique_history -l:\"chinese$\"";
+        database.addQuery(query);
+        bar.setText("unique_history");
+        android.widget.ListView suggestions = bar.findViewById(R.id.search_bar_list);
+        assertEquals(1, suggestions.getAdapter().getCount());
+        assertTrue(suggestions.performItemClick(null, 0, 0));
+        assertEquals(query + " ", bar.getText());
+        assertEquals(edit.length(), edit.getSelectionEnd());
+        InputConnection connection = edit.onCreateInputConnection(new EditorInfo());
+        assertNotNull(connection);
+        assertTrue(connection.commitText("new", 1));
+        assertEquals(query + " new", bar.getText());
+        assertEquals(1, chips().length);
+        assertArrayEquals(new String[]{query}, database.getSuggestions("", 128));
+        database.clearQuery();
+    }
+
+    @Test public void inputAtCommittedChipEdgesSeparatesTypingCompositionAndPaste() {
+        String query = "l:chinese other:color";
+        edit.setQueryText(query);
+        edit.setSelection("l:chinese".length());
+        InputConnection connection = edit.onCreateInputConnection(new EditorInfo());
+        assertNotNull(connection);
+        assertTrue(connection.setComposingText("n", 1));
+        assertTrue(connection.setComposingText("new", 1));
+        assertTrue(connection.commitText("new", 1));
+        assertEquals("l:chinese new other:color", edit.getText().toString());
+        assertEquals(2, chips().length);
+
+        edit.setQueryText(query);
+        edit.setSelection("l:chinese ".length());
+        for (String letter : new String[]{"n", "e", "w"}) assertTrue(connection.commitText(letter, 1));
+        assertEquals("l:chinese new other:color", edit.getText().toString());
+        assertEquals(2, chips().length);
+
+        edit.setQueryText(query);
+        edit.setSelection(0);
+        assertTrue(connection.setComposingText("n", 1));
+        assertTrue(connection.setComposingText("new", 1));
+        assertTrue(connection.commitText("new", 1));
+        assertEquals("new l:chinese other:color", edit.getText().toString());
+        assertEquals(2, chips().length);
+
+        edit.setQueryText("l:chinese");
+        edit.setSelection(edit.length());
+        ClipboardManager clipboard = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+        clipboard.setPrimaryClip(ClipData.newPlainText("query", "artist:alice"));
+        assertTrue(edit.onTextContextMenuItem(android.R.id.paste));
+        assertEquals("l:chinese artist:alice", edit.getText().toString());
+        assertEquals(2, chips().length);
+
+        // Opening the chip itself still permits changing the original value.
+        edit.setQueryText("l:chinese");
+        assertTrue(edit.performAccessibilityAction(0x02000001, null));
+        assertTrue(connection.commitText("_edited", 1));
+        assertEquals("l:chinese_edited", edit.getText().toString());
+        assertEquals(0, chips().length);
+    }
+
+    @Test public void chipModeChangesAndDeletingTheLastChipStillAllowAppending() {
+        edit.setQueryText("l:chinese");
+        edit.setSelection(edit.length());
+        assertTrue(edit.performAccessibilityAction(0x02000000, null));
+        InputConnection connection = edit.onCreateInputConnection(new EditorInfo());
+        assertNotNull(connection);
+        assertTrue(connection.commitText("new", 1));
+        assertEquals("-l:chinese new", edit.getText().toString());
+        assertEquals(1, chips().length);
+
+        edit.setQueryText("l:chinese artist:alice");
+        edit.setSelection(edit.length());
+        assertTrue(edit.performAccessibilityAction(0x02000005, null));
+        assertTrue(connection.commitText("new", 1));
+        assertEquals("l:chinese new", edit.getText().toString());
+        assertEquals(1, chips().length);
+
+        edit.setTagChipsEnabled(false);
+        edit.setQueryText("l:chinese");
+        edit.setSelection(edit.length());
+        assertTrue(connection.commitText("new", 1));
+        assertEquals("l:chinesenew", edit.getText().toString());
+    }
+
     @Test public void translationSettingRefreshesDisplayAndFallsBackWithoutChangingQuery() throws Exception {
         installTranslations();
         assertTrue(EhTagDatabase.isPossible(activity));
@@ -306,6 +424,81 @@ public class SearchTagChipsTest {
         edit.setTagChipsEnabled(false);
         assertEquals(0, chips().length);
         assertEquals(query, edit.getText().toString());
+    }
+
+    @Test public void reopeningSubmittedSearchSeparatesNewInputFromTheFinalChip() {
+        SearchBar bar = attachSearchBar();
+        SearchEditText input = bar.findViewById(R.id.search_edit_text);
+        String[] submitted = {null};
+        bar.setHelper(new SearchBar.Helper() {
+            public void onClickTitle() {}
+            public void onClickLeftIcon() {}
+            public void onClickRightIcon() {}
+            public void onSearchEditTextClick() {}
+            public void onSearchEditTextBackPressed() {}
+            public void onApplySearch(String query) {
+                submitted[0] = query;
+                // GalleryListScene restores the submitted query and closes the editor.
+                bar.setText(query);
+                bar.cursorToEnd();
+                bar.setState(SearchBar.STATE_NORMAL, false);
+            }
+        });
+        for (String query : new String[]{"l:chinese", "hello -l:\"chinese$\" ~artist:\"a b$\""}) {
+            bar.setText(query + " ");
+            bar.cursorToEnd();
+            bar.setState(SearchBar.STATE_SEARCH_LIST, false);
+            bar.applySearch(false);
+            assertEquals(query, submitted[0]);
+            assertEquals(query, bar.getText());
+
+            bar.setState(SearchBar.STATE_SEARCH_LIST, false);
+            assertEquals(query + " ", bar.getText());
+            assertEquals(input.length(), input.getSelectionStart());
+            assertEquals(input.length(), input.getSelectionEnd());
+            int chipCount = input.getText().getSpans(0, input.length(), SearchTagChipSpan.class).length;
+            InputConnection connection = input.onCreateInputConnection(new EditorInfo());
+            assertNotNull(connection);
+            assertTrue(connection.setComposingText("new", 1));
+            assertTrue(connection.commitText("new", 1));
+            assertEquals(query + " new", bar.getText());
+            assertEquals(chipCount, input.getText().getSpans(0, input.length(), SearchTagChipSpan.class).length);
+            bar.applySearch(false);
+            assertEquals(query + " new", submitted[0]);
+        }
+    }
+
+    @Test public void reopeningSearchOnlyAddsAMissingSeparatorAfterAFinalChip() {
+        SearchBar bar = attachSearchBar();
+        SearchEditText input = bar.findViewById(R.id.search_edit_text);
+        for (String query : new String[]{"", "plain keyword", "l:chinese tail", "l:chinese ", "l:chinese,"}) {
+            bar.setText(query);
+            bar.cursorToEnd();
+            bar.setState(SearchBar.STATE_SEARCH, false);
+            assertEquals(query, bar.getText());
+            bar.setState(SearchBar.STATE_NORMAL, false);
+        }
+        bar.setText("l:chinese");
+        bar.cursorToEnd();
+        bar.setState(SearchBar.STATE_SEARCH, false);
+        bar.setState(SearchBar.STATE_NORMAL, false);
+        bar.setState(SearchBar.STATE_SEARCH_LIST, false);
+        assertEquals("l:chinese ", bar.getText());
+
+        bar.setState(SearchBar.STATE_NORMAL, false);
+        bar.setText("l:chinese");
+        input.selectAll();
+        bar.setState(SearchBar.STATE_SEARCH_LIST, false);
+        assertEquals("l:chinese", bar.getText());
+        assertEquals(0, input.getSelectionStart());
+        assertEquals(input.length(), input.getSelectionEnd());
+
+        bar.setState(SearchBar.STATE_NORMAL, false);
+        bar.setIsComeFromDownload(true);
+        bar.setText("l:chinese");
+        bar.cursorToEnd();
+        bar.setState(SearchBar.STATE_SEARCH_LIST, false);
+        assertEquals("l:chinese", bar.getText());
     }
 
     @Test public void searchBarCallbacksCannotInvalidateTheTappedChipAndSubmissionUsesRawText() {

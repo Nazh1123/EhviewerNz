@@ -34,7 +34,10 @@ import com.hippo.ehviewer.client.EhUrl
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.client.parser.ComicInfoParser
 import com.hippo.ehviewer.client.parser.GalleryDetailUrlParser
+import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.download.DownloadManager
+import com.hippo.ehviewer.download.GalleryDownloadRangeStore
+import com.hippo.ehviewer.spider.SpiderDen
 import com.hippo.ehviewer.spider.SpiderInfo
 import com.hippo.ehviewer.spider.SpiderQueen
 import com.hippo.unifile.UniFile
@@ -135,6 +138,7 @@ class RestoreDownloadPreference : Preference {
             if (gid < 0L || token.isNullOrEmpty()) {
                 return null
             }
+            GalleryDownloadRangeStore.get(mApplication).restore(gid, file)
             if (mManager.containDownloadInfo(gid)) {
                 return null
             }
@@ -142,6 +146,13 @@ class RestoreDownloadPreference : Preference {
             restoreItem.gid = gid
             restoreItem.token = token
             restoreItem.dirname = file.getName()
+            GalleryDownloadRangeStore.peek(gid)?.let { entry ->
+                restoreItem.rangeTotal = entry.range().size()
+                restoreItem.rangeFinished = entry.range().pages().count { page ->
+                    SpiderDen.findImageFile(file, page)?.let(SpiderDen::isReadableImage) == true
+                }
+                restoreItem.rangeReady = !entry.pending()
+            }
             return restoreItem
         }
 
@@ -274,7 +285,16 @@ class RestoreDownloadPreference : Preference {
                             item.title = item.dirname?.takeIf { it.isNotEmpty() }
                                 ?: item.gid.toString()
                         }
-                        mManager.addDownload(item, null)
+                        mManager.addDownload(item, null,
+                            if (item.rangeReady && item.rangeTotal > 0 && item.rangeFinished == item.rangeTotal)
+                                DownloadInfo.STATE_FINISH else DownloadInfo.STATE_NONE)
+                        if (item.rangeTotal > 0) mManager.getDownloadInfo(item.gid)?.let { restored ->
+                            restored.total = item.rangeTotal
+                            restored.finished = item.rangeFinished
+                            restored.downloaded = item.rangeFinished
+                            restored.legacy = item.rangeTotal - item.rangeFinished
+                            EhDB.putDownloadInfo(restored)
+                        }
                         EhDB.putDownloadDirname(item.gid, item.dirname)
                         count++
                         i++
@@ -298,6 +318,9 @@ class RestoreDownloadPreference : Preference {
 
     private class RestoreItem : GalleryInfo {
         var dirname: String? = null
+        var rangeTotal = 0
+        var rangeFinished = 0
+        var rangeReady = false
 
         override fun describeContents(): Int {
             return 0
@@ -306,12 +329,14 @@ class RestoreDownloadPreference : Preference {
         override fun writeToParcel(dest: Parcel, flags: Int) {
             super.writeToParcel(dest, flags)
             dest.writeString(this.dirname)
+            dest.writeInt(rangeTotal); dest.writeInt(rangeFinished); dest.writeInt(if (rangeReady) 1 else 0)
         }
 
         constructor()
 
         protected constructor(`in`: Parcel) : super(`in`) {
             this.dirname = `in`.readString()
+            rangeTotal = `in`.readInt(); rangeFinished = `in`.readInt(); rangeReady = `in`.readInt() != 0
         }
 
         companion object {

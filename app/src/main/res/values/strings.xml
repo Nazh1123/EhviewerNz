@@ -108,6 +108,11 @@
     <string name="search_corresponding_bookmarks">Search corresponding bookmarks</string>
     <string name="whats_hot">What\'s hot</string>
     <string name="top_lists">Top Lists</string>
+    <string name="top_list_click_to_view">Tap to view</string>
+    <string name="top_list_new_badge" translatable="false">New!</string>
+    <string name="settings_yesterday_top_list_new_badge">Yesterday ranking reminder</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">Show New! beside Top Lists until yesterday’s ranking is viewed. Resets daily at 00:05 UTC.</string>
+    <string name="navigation_long_press_hint">Long press buttons for special actions</string>
     <string name="favourite">Favourite</string>
     <string name="history">History</string>
     <string name="downloads">Downloads</string>
