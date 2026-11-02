@@ -162,6 +162,30 @@ public class ReaderRangeModeTest {
         input.setText("-5,25-"); dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
         assertTrue(changed); assertEquals("1-5,25-30", submitted.toString());
     }
+    @Test public void rangeDialogUsesAnInlinePlaceholderAcrossAppThemes() {
+        for (int theme : new int[]{R.style.AppTheme_Main, R.style.AppTheme_Main_Dark, R.style.AppTheme_Main_Black}) {
+            TestReader reader = reader(false); reader.setTheme(theme);
+            RangeDownloadDialog.show(reader, info, new DownloadManager(context));
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+            EditText input = findInput(dialog.getWindow().getDecorView()); assertNotNull(input);
+            assertEquals(androidx.appcompat.widget.AppCompatEditText.class, input.getClass());
+            assertTrue(input.getParent() instanceof android.widget.LinearLayout);
+            assertEquals(reader.getString(R.string.range_download_input_hint), input.getHint().toString());
+            input.setText("");
+            input.requestFocus();
+            assertTrue(input.getText().toString().isEmpty());
+            input.setText("0,40"); dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            assertTrue(dialog.isShowing());
+            assertNotNull(input.getError());
+            input.setText("1-30");
+            assertNull(input.getError());
+            assertEquals("1-30", input.getText().toString());
+            input.setText("");
+            assertEquals(reader.getString(R.string.range_download_input_hint), input.getHint().toString());
+            dialog.dismiss();
+        }
+    }
     @Test public void fullDownloadActionIsAboveTheThreeOriginalRemovalActionsOnlyForRanges() {
         TestReader reader = reader(false);
         DownloadRemovalDialog.show(reader, info, new DownloadManager(context));

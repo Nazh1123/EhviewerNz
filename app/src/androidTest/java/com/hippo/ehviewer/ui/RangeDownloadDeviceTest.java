@@ -125,10 +125,16 @@ public class RangeDownloadDeviceTest {
                     .contains(main.getString(R.string.offline_gallery_notice)));
             click(main.getString(R.string.range_download));
             phase = "create range from full download";
+            screenshot("range-dialog-placeholder-empty.png");
             editInput(null, "0,37");
             click(main.getString(R.string.download));
             assertFalse(GalleryDownloadRangeStore.isRange(info.gid));
+            screenshot("range-dialog-error.png");
             editInput(null, "10,11,20,30");
+            screenshot("range-dialog-filled.png");
+            editInput("10,11,20,30", "");
+            screenshot("range-dialog-placeholder-cleared.png");
+            editInput("", "10,11,20,30");
             click(main.getString(R.string.download));
             await(() -> completed(4));
             assertSame(original, manager.getDownloadInfo(info.gid));
@@ -349,7 +355,8 @@ public class RangeDownloadDeviceTest {
         while (!queue.isEmpty()) {
             AccessibilityNodeInfo node = queue.remove();
             if (node.isEditable()) {
-                if (expected != null) assertEquals(expected, node.getText().toString());
+                if (expected != null) assertEquals(expected,
+                        node.isShowingHintText() ? "" : node.getText().toString());
                 Bundle args = new Bundle(); args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, replacement);
                 assertTrue(node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args));
                 in.waitForIdleSync(); return;

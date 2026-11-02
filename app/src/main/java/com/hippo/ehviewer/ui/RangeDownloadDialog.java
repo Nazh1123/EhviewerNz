@@ -7,8 +7,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
-import com.google.android.material.textfield.TextInputEditText;
-import com.google.android.material.textfield.TextInputLayout;
+import androidx.appcompat.widget.AppCompatEditText;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.download.DownloadManager;
@@ -25,13 +24,11 @@ public final class RangeDownloadDialog {
         LinearLayout content = new LinearLayout(themed);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(padding, padding / 2, padding, 0);
-        TextInputLayout inputLayout = new TextInputLayout(themed);
-        inputLayout.setHint(themed.getString(R.string.range_download_input_hint));
-        TextInputEditText input = new TextInputEditText(themed);
+        AppCompatEditText input = new AppCompatEditText(themed);
+        input.setHint(R.string.range_download_input_hint);
         input.setSingleLine(true);
         input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        inputLayout.addView(input, new LinearLayout.LayoutParams(-1, -2));
-        content.addView(inputLayout, new LinearLayout.LayoutParams(-1, -2));
+        content.addView(input, new LinearLayout.LayoutParams(-1, -2));
         TextView preview = new TextView(themed);
         preview.setTextAppearance(androidx.appcompat.R.style.TextAppearance_AppCompat_Small);
         preview.setPadding(0, padding / 2, 0, padding / 2);
@@ -48,7 +45,7 @@ public final class RangeDownloadDialog {
             @Override public void afterTextChanged(Editable text) {
                 try {
                     GalleryPageRange range = GalleryPageRange.parse(text.toString(), total);
-                    inputLayout.setError(null);
+                    input.setError(null);
                     preview.setText(themed.getString(R.string.range_download_preview, range.toString(), range.size()));
                 } catch (IllegalArgumentException e) {
                     preview.setText(null);
@@ -65,7 +62,7 @@ public final class RangeDownloadDialog {
                         error -> Toast.makeText(context, error, Toast.LENGTH_LONG).show());
                 dialog.dismiss();
             } catch (IllegalArgumentException e) {
-                inputLayout.setError(themed.getString(R.string.range_download_invalid, total));
+                input.setError(themed.getString(R.string.range_download_invalid, total));
             }
         }));
         dialog.show();
