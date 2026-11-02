@@ -17,6 +17,7 @@
 package com.hippo.ehviewer.ui;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 
 import androidx.annotation.NonNull;
@@ -44,6 +45,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 public final class CommonOperations {
 
@@ -206,6 +208,14 @@ public final class CommonOperations {
             return;
         }
 
+        selectDownloadLabel(activity, dm, forceDefault, label -> {
+            enqueueDownloads(activity, dm, toAdd, restartExisting, label);
+            notifyDownloadEnqueued(activity, callback, true);
+        });
+    }
+
+    static void selectDownloadLabel(Context context, DownloadManager dm, boolean forceDefault,
+                                    Consumer<String> onSelected) {
         boolean justStart = forceDefault;
         String label = null;
         // Get default download label
@@ -221,19 +231,17 @@ public final class CommonOperations {
 
         if (justStart) {
             // Got default label
-            enqueueDownloads(activity, dm, toAdd, restartExisting, label);
-            // Notify
-            notifyDownloadEnqueued(activity, callback, true);
+            onSelected.accept(label);
         } else {
             // Let use chose label
             List<DownloadLabel> list = dm.getLabelList();
             final String[] items = new String[list.size() + 1];
-            items[0] = activity.getString(R.string.default_download_label_name);
+            items[0] = context.getString(R.string.default_download_label_name);
             for (int i = 0, n = list.size(); i < n; i++) {
                 items[i + 1] = list.get(i).getLabel();
             }
 
-            new ListCheckBoxDialogBuilder(activity, items,
+            new ListCheckBoxDialogBuilder(context, items,
                     (builder, dialog, position) -> {
                         String label1;
                         if (position == 0) {
@@ -245,7 +253,7 @@ public final class CommonOperations {
                             }
                         }
                         // Start download
-                        enqueueDownloads(activity, dm, toAdd, restartExisting, label1);
+                        onSelected.accept(label1);
                         // Save settings
                         if (builder.isChecked()) {
                             Settings.putHasDefaultDownloadLabel(true);
@@ -253,9 +261,7 @@ public final class CommonOperations {
                         } else {
                             Settings.putHasDefaultDownloadLabel(false);
                         }
-                        // Notify
-                        notifyDownloadEnqueued(activity, callback, true);
-                    }, activity.getString(R.string.remember_download_label), false)
+                    }, context.getString(R.string.remember_download_label), false)
                     .setTitle(R.string.download)
                     .show();
         }

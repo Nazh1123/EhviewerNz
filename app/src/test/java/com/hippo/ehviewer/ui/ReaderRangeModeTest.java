@@ -221,6 +221,7 @@ public class ReaderRangeModeTest {
     @Implements(DownloadManager.class) public static class Downloads {
         @Implementation protected void __constructor__(Context context) { }
         @Implementation protected DownloadInfo getDownloadInfo(long gid) { return info; }
+        @Implementation protected boolean containDownloadInfo(long gid) { return info != null && info.gid == gid; }
         @Implementation protected void changePageRange(GalleryInfo gallery, GalleryPageRange range, java.util.function.Consumer<String> error) {
             changed = true; submitted = range;
         }

@@ -619,11 +619,11 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         if (GalleryDownloadRangeStore.isEditing(galleryInfo.gid)) return;
         GalleryDownloadRangeStore.Entry range = GalleryDownloadRangeStore.peek(galleryInfo.gid);
         if (range != null && getDownloadInfo(galleryInfo.gid) == null && !keepPageRange) {
-            changePageRange(galleryInfo, null, null);
+            changePageRange(galleryInfo, null, label, null, null);
             return;
         }
         if (range != null && range.pending()) {
-            changePageRange(galleryInfo, range.range(), null);
+            changePageRange(galleryInfo, range.range(), label, null, null);
             return;
         }
         if (mCurrentTask != null && mCurrentTask.gid == galleryInfo.gid) {
@@ -708,6 +708,14 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
     public void changePageRange(GalleryInfo gallery, @Nullable GalleryPageRange range,
                                @Nullable java.util.function.Consumer<String> onError,
                                @Nullable Runnable onReady) {
+        changePageRange(gallery, range, null, onError, onReady);
+    }
+
+    /** Uses the selected label for new downloads and preserves the label of existing entries. */
+    public void changePageRange(GalleryInfo gallery, @Nullable GalleryPageRange range,
+                               @Nullable String label,
+                               @Nullable java.util.function.Consumer<String> onError,
+                               @Nullable Runnable onReady) {
         GalleryDownloadRangeStore.Entry previous = GalleryDownloadRangeStore.peek(gallery.gid);
         DownloadInfo before = getDownloadInfo(gallery.gid);
         if (range != null && previous != null && !previous.pending() && before != null
@@ -721,7 +729,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
         stopDownloadInternal(gallery.gid);
         DownloadInfo existing = getDownloadInfo(gallery.gid);
-        if (existing == null) addDownload(gallery, null, DownloadInfo.STATE_NONE);
+        if (existing == null) addDownload(gallery, label, DownloadInfo.STATE_NONE);
         DownloadInfo info = getDownloadInfo(gallery.gid);
         if (info != null) {
             info.state = DownloadInfo.STATE_NONE;

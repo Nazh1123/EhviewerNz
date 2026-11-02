@@ -58,8 +58,14 @@ public final class RangeDownloadDialog {
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
             try {
                 GalleryPageRange range = GalleryPageRange.parse(input.getText().toString(), total);
-                manager.changePageRange(gallery, range,
-                        error -> Toast.makeText(context, error, Toast.LENGTH_LONG).show());
+                if (manager.containDownloadInfo(gallery.gid)) {
+                    manager.changePageRange(gallery, range,
+                            error -> Toast.makeText(context, error, Toast.LENGTH_LONG).show());
+                } else {
+                    CommonOperations.selectDownloadLabel(context, manager, false,
+                            label -> manager.changePageRange(gallery, range, label,
+                                    error -> Toast.makeText(context, error, Toast.LENGTH_LONG).show(), null));
+                }
                 dialog.dismiss();
             } catch (IllegalArgumentException e) {
                 input.setError(themed.getString(R.string.range_download_invalid, total));
