@@ -41,10 +41,11 @@ public class GalleryApiParser {
             }
             gi.firstGid = resolveFirstGid(gid, g.optString("first_gid"),
                     g.optString("error"));
-            if (gi.firstGid < 0L) {
+            if (gi.firstGid < 0L || g.has("error") || g.isNull("title")) {
                 // The request reached the gallery API, but this individual gallery is no
                 // longer readable (removed, invalid, and so on). Keep this distinct from a
                 // transport failure, for which parse() is never called and the value stays null.
+                gi.firstGid = -1L;
                 continue;
             }
             gi.title = ParserUtils.trim(g.getString("title"));
