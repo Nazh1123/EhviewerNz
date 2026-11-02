@@ -5,13 +5,18 @@ import static com.hippo.ehviewer.client.EhConfig.TORRENT_PATH;
 
 import android.annotation.SuppressLint;
 import android.app.Dialog;
+import android.content.ActivityNotFoundException;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -25,6 +30,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 
+import com.hippo.content.FileProvider;
+import com.hippo.ehviewer.BuildConfig;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.client.EhClient;
@@ -37,6 +44,7 @@ import com.hippo.util.ExceptionUtils;
 import com.hippo.util.FileUtils;
 import com.hippo.widget.ProgressView;
 
+import java.io.File;
 import java.lang.ref.WeakReference;
 
 import okhttp3.OkHttpClient;
@@ -148,11 +156,14 @@ class TorrentDownloadController {
             TextView state = torrentDownloadView.findViewById(R.id.download_state);
             TextView path = torrentDownloadView.findViewById(R.id.download_path);
             Button leftButton = torrentDownloadView.findViewById(R.id.leader);
+            Button openButton = torrentDownloadView.findViewById(R.id.torrent_open);
             Button rightButton = torrentDownloadView.findViewById(R.id.action);
 
             path.setText(context.getString(R.string.download_torrent_path, message.path));
             rightButton.setText(R.string.sure);
             rightButton.setOnClickListener(l -> dismissTorrentDialog());
+            openButton.setVisibility(success ? View.VISIBLE : View.GONE);
+            openButton.setOnClickListener(success ? l -> openTorrent(context, message.path) : null);
 
             if (success) {
                 leftButton.setText(R.string.open_directory);
@@ -203,6 +214,24 @@ class TorrentDownloadController {
         }
     }
 
+    private void openTorrent(@NonNull Context context, @Nullable String path) {
+        try {
+            if (path == null || !new File(path).isFile()) {
+                Toast.makeText(context, R.string.torrent_cannot_open, Toast.LENGTH_LONG).show();
+                return;
+            }
+            Uri uri = FileProvider.getUriForFile(context, BuildConfig.FILE_PROVIDER_AUTHORITY,
+                    new File(path));
+            Intent intent = new Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(uri, "application/x-bittorrent")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.setClipData(ClipData.newRawUri("torrent", uri));
+            context.startActivity(intent);
+        } catch (ActivityNotFoundException | IllegalArgumentException | SecurityException e) {
+            Toast.makeText(context, R.string.torrent_cannot_open, Toast.LENGTH_LONG).show();
+        }
+    }
+
     private void dismissTorrentDialog() {
         if (downLoadAlertDialog == null) {
             return;
@@ -219,6 +248,39 @@ class TorrentDownloadController {
             ExceptionUtils.throwIfFatal(e);
         }
         downLoadAlertDialog = null;
+    }
+
+    static class TorrentListAdapter extends ArrayAdapter<TorrentInfo> {
+
+        TorrentListAdapter(@NonNull Context context, @NonNull TorrentInfo[] data) {
+            super(context, 0, data);
+        }
+
+        @NonNull
+        @Override
+        public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+            View view = convertView != null ? convertView
+                    : LayoutInflater.from(getContext()).inflate(R.layout.item_torrent, parent, false);
+            TorrentInfo item = getItem(position);
+            if (item != null) {
+                ((TextView) view.findViewById(R.id.torrent_name)).setText(item.name);
+                ((TextView) view.findViewById(R.id.torrent_seeds)).setText(
+                        getContext().getString(R.string.torrent_seeds, available(item.seeds)));
+                ((TextView) view.findViewById(R.id.torrent_peers)).setText(
+                        getContext().getString(R.string.torrent_peers, available(item.peers)));
+                ((TextView) view.findViewById(R.id.torrent_downloads)).setText(
+                        getContext().getString(R.string.torrent_downloads, available(item.downloads)));
+                ((TextView) view.findViewById(R.id.torrent_posted)).setText(
+                        available(GalleryTimeFormatter.format(item.posted)));
+                ((TextView) view.findViewById(R.id.torrent_size)).setText(available(item.size));
+            }
+            return view;
+        }
+
+        private String available(@Nullable String value) {
+            return value == null || value.isEmpty()
+                    ? getContext().getString(R.string.torrent_unavailable) : value;
+        }
     }
 
     private static class TorrentDownloadHandler extends Handler {
@@ -306,15 +368,10 @@ class TorrentDownloadController {
                 mListView.setVisibility(View.GONE);
                 mErrorText.setText(R.string.no_torrents);
             } else {
-                String[] nameArray = new String[data.length];
-                String postedLabel = mDialog.getContext().getString(R.string.key_posted);
-                for (int i = 0, n = data.length; i < n; i++) {
-                    nameArray[i] = data[i].name + "\n" + postedLabel + ": " + GalleryTimeFormatter.format(data[i].posted);
-                }
                 mProgressView.setVisibility(View.GONE);
                 mErrorText.setVisibility(View.GONE);
                 mListView.setVisibility(View.VISIBLE);
-                mListView.setAdapter(new ArrayAdapter<>(mDialog.getContext(), R.layout.item_select_dialog, nameArray));
+                mListView.setAdapter(new TorrentListAdapter(mDialog.getContext(), data));
             }
         }
 

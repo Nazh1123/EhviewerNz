@@ -244,6 +244,17 @@
         <!--        <item name="android:textColor">@color/text_color_chip_state_list</item>-->
     </style>
 
+    <style name="TorrentDownloadButton" parent="">
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:paddingLeft">6dp</item>
+        <item name="android:paddingRight">6dp</item>
+        <item name="android:paddingStart">6dp</item>
+        <item name="android:paddingEnd">6dp</item>
+        <item name="android:singleLine">false</item>
+        <item name="android:gravity">center</item>
+    </style>
+
     <style name="ThemeChangeButtonStyleLight" parent="@style/Widget.AppCompat.Button.Borderless.Colored">
         <item name="textColor">@color/colorAccent</item>
         <item name="backgroundColor">@color/white</item>

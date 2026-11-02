@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="torrent_seeds">Seeds %1$s</string>
+    <string name="torrent_peers">Peers %1$s</string>
+    <string name="torrent_downloads">Downloads %1$s</string>
+    <string name="torrent_open">Open</string>
+    <string name="torrent_cannot_open">Unable to open this torrent. Check that the file exists and a compatible app is installed.</string>
+    <string name="torrent_unavailable" translatable="false">—</string>
+</resources>

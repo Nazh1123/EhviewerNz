@@ -21,10 +21,19 @@ public class TorrentInfo {
     public final String url;
     public final String name;
     public final String posted;
+    public final String size;
+    public final String seeds;
+    public final String peers;
+    public final String downloads;
 
-    public TorrentInfo(String url, String name, String posted) {
+    public TorrentInfo(String url, String name, String posted, String size,
+                       String seeds, String peers, String downloads) {
         this.url = url;
         this.name = name;
         this.posted = posted;
+        this.size = size;
+        this.seeds = seeds;
+        this.peers = peers;
+        this.downloads = downloads;
     }
 }
