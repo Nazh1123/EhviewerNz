@@ -16,7 +16,7 @@
 
 package com.hippo.ehviewer.ui.scene.gallery.detail;
 
-final class GalleryDetailSwipeState {
+final class GalleryDetailPreviewPosition {
 
     private boolean mActivationViewVisible;
     private boolean mActivationViewSeen;
@@ -24,10 +24,6 @@ final class GalleryDetailSwipeState {
     void observeActivationView(boolean visible) {
         mActivationViewVisible = visible;
         mActivationViewSeen |= visible;
-    }
-
-    boolean hasSeenActivationView() {
-        return mActivationViewSeen;
     }
 
     boolean canJumpToNewContent(boolean nearContentBottom) {

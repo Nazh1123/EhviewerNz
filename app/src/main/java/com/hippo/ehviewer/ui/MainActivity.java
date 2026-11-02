@@ -99,6 +99,7 @@ import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
 import com.hippo.ehviewer.ui.scene.GalleryInfoScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
 import com.hippo.ehviewer.ui.scene.GalleryPreviewsScene;
+import com.hippo.ehviewer.widget.EhDrawerView;
 import com.hippo.ehviewer.ui.scene.gallery.list.SubscriptionsScene;
 import com.hippo.ehviewer.ui.scene.sign.GetProfileScene;
 import com.hippo.ehviewer.ui.scene.topList.EhTopListScene;
@@ -1051,6 +1052,9 @@ public final class MainActivity extends StageActivity
 
         if (scene instanceof BaseScene && mRightDrawer != null && mDrawerLayout != null) {
             BaseScene baseScene = (BaseScene) scene;
+            EhDrawerView rightDrawer = (EhDrawerView) mRightDrawer;
+            if (rightDrawer.isFullWidth()) mDrawerLayout.closeRightDrawerImmediately();
+            rightDrawer.setFullWidth(baseScene.isDrawerFullWidth());
             mRightDrawer.removeAllViews();
             View drawerView = baseScene.createDrawerView(
                     baseScene.getLayoutInflater2(), mRightDrawer, savedInstanceState);
@@ -1669,6 +1673,9 @@ public final class MainActivity extends StageActivity
         }
         if (limitsCountView != null) {
             limitsCountView.onLoadData(drawerView, true);
+        }
+        if (drawerView == mRightDrawer && getTopScene() instanceof BaseScene scene) {
+            scene.onDrawerOpened();
         }
     }
 

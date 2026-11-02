@@ -26,6 +26,24 @@ public class EhDrawerView extends DrawerView implements DrawerLayoutChild {
 
     private int mWindowPaddingTop;
     private int mWindowPaddingBottom;
+    private boolean mFullWidth;
+
+    public void setFullWidth(boolean fullWidth) {
+        mFullWidth = fullWidth;
+        requestLayout();
+    }
+
+    public boolean isFullWidth() {
+        return mFullWidth;
+    }
+
+    @Override
+    protected void onMeasure(int widthSpec, int heightSpec) {
+        if (mFullWidth && getParent() instanceof android.view.View parent) {
+            widthSpec = MeasureSpec.makeMeasureSpec(parent.getMeasuredWidth(), MeasureSpec.EXACTLY);
+        }
+        super.onMeasure(widthSpec, heightSpec);
+    }
 
     public EhDrawerView(Context context) {
         super(context);

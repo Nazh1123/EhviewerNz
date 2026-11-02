@@ -173,17 +173,11 @@ public class GalleryDetailPreviewPullTest {
         assertTrue(scrollView.getScrollY() > 0);
     }
 
-    @Test public void horizontalSwipeAtBottomStillReachesScrollView() {
-        int[] swipes = {0};
-        scrollView.setOnSwipeLeftListener(new GalleryDetailScrollView.OnSwipeLeftListener() {
-            @Override public void onSwipeLeftReadyChanged(boolean ready) {}
-            @Override public void onSwipeLeft(boolean canJumpToNewContent) { swipes[0]++; }
-        });
+    @Test public void horizontalSwipeDoesNotTriggerIndependentNavigationOrFooterPull() {
         touch(MotionEvent.ACTION_DOWN, 400, 700);
         touch(MotionEvent.ACTION_MOVE, 380, 690);
         touch(MotionEvent.ACTION_MOVE, 160, 675);
         touch(MotionEvent.ACTION_UP, 160, 675);
-        assertEquals(1, swipes[0]);
         assertEquals(0, scene.launches);
         assertEquals(0f, progress(), 0.001f);
     }

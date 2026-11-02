@@ -19,48 +19,22 @@ package com.hippo.ehviewer.ui.scene.gallery.detail;
 import android.content.Context;
 import android.graphics.Rect;
 import android.util.AttributeSet;
-import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.widget.ScrollView;
 
 import androidx.annotation.Nullable;
 
-/**
- * Observes touch events without taking them away from vertical scrolling and child views.
- * A left swipe is reported only after the finger is lifted and the full distance threshold
- * has been reached.
- */
+/** Tracks preview scroll position for the optional jump past already displayed previews. */
 public class GalleryDetailScrollView extends ScrollView {
 
-    private static final float MIN_DISTANCE_FRACTION = 0.20f;
-    private static final float CANCEL_DISTANCE_FRACTION =
-            MIN_DISTANCE_FRACTION * 0.25f;
-    private static final float REARM_DISTANCE_FRACTION =
-            MIN_DISTANCE_FRACTION * 0.3125f;
-    private static final float HORIZONTAL_BIAS = 1.5f;
     private static final float BOTTOM_ACTIVATION_RANGE_DP = 120f;
 
-    private final int mTouchSlop;
     private final float mBottomActivationRange;
     private final Rect mVisibleRect = new Rect();
-    private final GalleryDetailSwipeState mSwipeState = new GalleryDetailSwipeState();
+    private final GalleryDetailPreviewPosition mPreviewPosition = new GalleryDetailPreviewPosition();
 
     @Nullable
-    private OnSwipeLeftListener mOnSwipeLeftListener;
-    @Nullable
-    private View mSwipeExclusionView;
-    @Nullable
-    private View mSwipeActivationView;
-    private int mActivePointerId = MotionEvent.INVALID_POINTER_ID;
-    private float mDownX;
-    private float mDownY;
-    private float mSwipeStateAnchorX;
-    private boolean mTrackingSwipe;
-    private boolean mHadMultiplePointers;
-    private boolean mSwipeReady;
-    private boolean mSwipeReadyChanged;
-    private boolean mSwipeHasArmed;
+    private View mPreviewEndView;
 
     public GalleryDetailScrollView(Context context) {
         this(context, null);
@@ -72,37 +46,28 @@ public class GalleryDetailScrollView extends ScrollView {
 
     public GalleryDetailScrollView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         mBottomActivationRange = BOTTOM_ACTIVATION_RANGE_DP
                 * getResources().getDisplayMetrics().density;
     }
 
-    public void setOnSwipeLeftListener(@Nullable OnSwipeLeftListener listener) {
-        mOnSwipeLeftListener = listener;
-    }
-
-    public void setSwipeExclusionView(@Nullable View view) {
-        mSwipeExclusionView = view;
-    }
-
-    public void setSwipeActivationView(@Nullable View view) {
-        if (mSwipeActivationView != view) {
-            mSwipeState.resetActivationViewSeen();
+    public void setPreviewEndView(@Nullable View view) {
+        if (mPreviewEndView != view) {
+            mPreviewPosition.resetActivationViewSeen();
         }
-        mSwipeActivationView = view;
-        updateSwipeActivationState();
+        mPreviewEndView = view;
+        updatePreviewPosition();
     }
 
     public boolean canJumpToNewContent() {
-        updateSwipeActivationState();
-        return mSwipeState.canJumpToNewContent(isNearContentBottom());
+        updatePreviewPosition();
+        return mPreviewPosition.canJumpToNewContent(isNearContentBottom());
     }
 
-    private void updateSwipeActivationState() {
-        View activationView = mSwipeActivationView;
+    private void updatePreviewPosition() {
+        View activationView = mPreviewEndView;
         boolean activationViewVisible = activationView != null && activationView.isShown()
                 && activationView.getGlobalVisibleRect(mVisibleRect);
-        mSwipeState.observeActivationView(activationViewVisible);
+        mPreviewPosition.observeActivationView(activationViewVisible);
     }
 
     private boolean isNearContentBottom() {
@@ -111,159 +76,14 @@ public class GalleryDetailScrollView extends ScrollView {
             return false;
         }
         int viewportHeight = getHeight() - getPaddingTop() - getPaddingBottom();
-        return GalleryDetailSwipeState.isWithinBottomRange(
+        return GalleryDetailPreviewPosition.isWithinBottomRange(
                 getScrollY(), viewportHeight, content.getHeight(), mBottomActivationRange);
     }
 
     @Override
     protected void onScrollChanged(int l, int t, int oldl, int oldt) {
         super.onScrollChanged(l, t, oldl, oldt);
-        updateSwipeActivationState();
+        updatePreviewPosition();
     }
 
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        boolean completedSwipe = trackSwipe(event);
-        boolean swipeReadyChanged = mSwipeReadyChanged;
-        boolean swipeReady = mSwipeReady;
-        boolean handled = super.dispatchTouchEvent(event);
-        if (mOnSwipeLeftListener != null) {
-            if (swipeReadyChanged) {
-                mOnSwipeLeftListener.onSwipeLeftReadyChanged(swipeReady);
-            }
-            if (completedSwipe) {
-                mOnSwipeLeftListener.onSwipeLeft(canJumpToNewContent());
-            }
-        }
-        return handled;
-    }
-
-    private boolean trackSwipe(MotionEvent event) {
-        mSwipeReadyChanged = false;
-        switch (event.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                mActivePointerId = event.getPointerId(0);
-                mDownX = event.getX(0);
-                mDownY = event.getY(0);
-                mTrackingSwipe = !isPointInsideExclusionView(mDownX, mDownY);
-                mHadMultiplePointers = false;
-                mSwipeHasArmed = false;
-                mSwipeStateAnchorX = mDownX;
-                setSwipeReady(false);
-                break;
-            case MotionEvent.ACTION_POINTER_DOWN:
-                mHadMultiplePointers = true;
-                setSwipeReady(false);
-                break;
-            case MotionEvent.ACTION_MOVE:
-                updateSwipeReady(event);
-                break;
-            case MotionEvent.ACTION_UP:
-                updateSwipeReady(event);
-                boolean completed = mSwipeReady;
-                if (completed) {
-                    // Completion owns the indicator fade-out, so don't emit a separate retreat.
-                    mSwipeReady = false;
-                    mSwipeReadyChanged = false;
-                } else {
-                    setSwipeReady(false);
-                }
-                resetSwipeTracking();
-                return completed;
-            case MotionEvent.ACTION_CANCEL:
-                setSwipeReady(false);
-                resetSwipeTracking();
-                break;
-            default:
-                break;
-        }
-        return false;
-    }
-
-    private void updateSwipeReady(MotionEvent event) {
-        int pointerIndex = event.findPointerIndex(mActivePointerId);
-        if (!mTrackingSwipe || mHadMultiplePointers || pointerIndex < 0) {
-            setSwipeReady(false);
-            return;
-        }
-
-        float distanceX = event.getX(pointerIndex) - mDownX;
-        float distanceY = event.getY(pointerIndex) - mDownY;
-        float requiredDistance = Math.max(
-                getWidth() * MIN_DISTANCE_FRACTION, mTouchSlop * 8f);
-        float currentX = event.getX(pointerIndex);
-        boolean horizontalSwipe = Math.abs(distanceX)
-                > Math.abs(distanceY) * HORIZONTAL_BIAS;
-
-        if (!mSwipeHasArmed) {
-            if (distanceX <= -requiredDistance && horizontalSwipe) {
-                mSwipeHasArmed = true;
-                mSwipeStateAnchorX = currentX;
-                setSwipeReady(true);
-            }
-            return;
-        }
-
-        if (!horizontalSwipe) {
-            mSwipeStateAnchorX = currentX;
-            setSwipeReady(false);
-            return;
-        }
-
-        if (mSwipeReady) {
-            // A 5%-width rightward reversal cancels even after a long initial swipe.
-            mSwipeStateAnchorX = Math.min(mSwipeStateAnchorX, currentX);
-            if (currentX - mSwipeStateAnchorX
-                    >= getWidth() * CANCEL_DISTANCE_FRACTION) {
-                mSwipeStateAnchorX = currentX;
-                setSwipeReady(false);
-            }
-        } else {
-            // Once cancelled, a 6.25%-width leftward reversal re-arms the same gesture.
-            mSwipeStateAnchorX = Math.max(mSwipeStateAnchorX, currentX);
-            if (mSwipeStateAnchorX - currentX
-                    >= getWidth() * REARM_DISTANCE_FRACTION) {
-                mSwipeStateAnchorX = currentX;
-                setSwipeReady(true);
-            }
-        }
-    }
-
-    private void setSwipeReady(boolean ready) {
-        if (mSwipeReady != ready) {
-            mSwipeReady = ready;
-            mSwipeReadyChanged = true;
-        }
-    }
-
-    private boolean isPointInsideExclusionView(float x, float y) {
-        if (mSwipeExclusionView == null || !mSwipeExclusionView.isShown()) {
-            return false;
-        }
-
-        int[] scrollLocation = new int[2];
-        int[] exclusionLocation = new int[2];
-        getLocationOnScreen(scrollLocation);
-        mSwipeExclusionView.getLocationOnScreen(exclusionLocation);
-        float screenX = scrollLocation[0] + x;
-        float screenY = scrollLocation[1] + y;
-        return screenX >= exclusionLocation[0]
-                && screenX < exclusionLocation[0] + mSwipeExclusionView.getWidth()
-                && screenY >= exclusionLocation[1]
-                && screenY < exclusionLocation[1] + mSwipeExclusionView.getHeight();
-    }
-
-    private void resetSwipeTracking() {
-        mActivePointerId = MotionEvent.INVALID_POINTER_ID;
-        mTrackingSwipe = false;
-        mHadMultiplePointers = false;
-        mSwipeHasArmed = false;
-        mSwipeStateAnchorX = 0f;
-    }
-
-    public interface OnSwipeLeftListener {
-        void onSwipeLeftReadyChanged(boolean ready);
-
-        void onSwipeLeft(boolean canJumpToNewContent);
-    }
 }

@@ -57,15 +57,6 @@
         android:drawablePadding="8dp"
         style="@style/TextAppearance.AppCompat.Medium"/>
 
-    <View
-        android:id="@+id/swipe_preview_indicator"
-        android:layout_width="4dp"
-        android:layout_height="0dp"
-        android:layout_gravity="end|center_vertical"
-        android:layout_marginEnd="12dp"
-        android:alpha="0"
-        android:visibility="invisible"/>
-
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/back_to_top"
         style="@style/Widget.Design.FloatingActionButton"

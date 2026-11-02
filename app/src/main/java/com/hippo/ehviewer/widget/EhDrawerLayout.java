@@ -49,6 +49,16 @@ public class EhDrawerLayout extends DrawerLayout {
         super(context, attrs, defStyle);
     }
 
+    /** Remove the completed transition shell when its destination scene takes over. */
+    public void closeRightDrawerImmediately() {
+        View drawer = findViewById(R.id.right_drawer);
+        if (drawer != null && isDrawerOpen(drawer)) {
+            // At the closed position the existing closeDrawer updates state without animating.
+            drawer.offsetLeftAndRight(getWidth() - drawer.getLeft());
+            closeDrawer(drawer);
+        }
+    }
+
     @Override
     public boolean onInterceptTouchEvent(MotionEvent event) {
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
