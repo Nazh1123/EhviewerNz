@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_results_delete_title">Supprimer les résultats de traitement</string>
+    <string name="gallery_results_delete_sr">Supprimer les résultats SR</string>
+    <string name="gallery_results_calculating">Calcul de l’espace occupé par les galeries sélectionnées…</string>
+    <string name="gallery_results_delete_summary">%1$d galeries sélectionnées\n\n%6$s\nTraductions : %2$d images, %3$s\nSuper-résolution : %4$d images, %5$s\n\nLe nombre de traductions et de résultats SR ne comprend que les résultats complets enregistrés ; l’espace occupé inclut les caches et les résultats incomplets. Les archives sont comptées selon la taille du fichier archive. Supprimez tous les résultats du type choisi en conservant les originaux et les résultats de l’autre type.</string>
+    <string name="gallery_results_originals">Originaux : %1$d images, %2$s</string>
+    <string name="gallery_results_originals_unavailable">Originaux : certaines images sources sont inaccessibles</string>
+    <string name="gallery_results_inspect_failed">Certains résultats n’ont pas pu être examinés. Vérifiez l’accès au stockage ou réessayez plus tard.</string>
+    <string name="gallery_results_deleted">Résultats du type sélectionné supprimés</string>
+    <string name="gallery_results_delete_failed">Certains résultats n’ont pas pu être supprimés. Vérifiez l’accès au stockage ou réessayez.</string>
+</resources>

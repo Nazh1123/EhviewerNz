@@ -99,10 +99,10 @@
     <string name="translation_target_mlkit_help">Prepare the selected source and target packs. Chinese uses the shared zh model; English needs no separate pack.</string>
     <string name="translation_target_reset">The current target language is unsupported by this engine. Switched to Simplified Chinese.</string>
     <string name="translation_ahead">Pages to translate ahead</string>
-    <string name="translation_ahead_help">Automatically translate the current page and the specified number of following pages. Set 0–10 pages.</string>
-    <string name="translation_ahead_summary">Next %1$d pages</string>
+    <string name="translation_ahead_help">Automatically translate the current page and the specified number of following pages. Set 0–6 pages.</string>
+    <string name="translation_ahead_summary">Current page + %1$s following pages</string>
     <string name="translation_current_only">Translate current page only</string>
-    <string name="translation_ahead_range">Enter an integer from 0 to 10</string>
+    <string name="translation_ahead_range">Enter an integer from 0 to 6</string>
     <string name="translation_model_status">Manga model status</string>
     <string name="translation_checking_models">Checking…</string>
     <string name="translation_models_available">Text detection, OCR and text removal models are ready. Automatically validated when translation starts.</string>
@@ -127,7 +127,9 @@
     <string name="translation_progress_page_distance">Reading position is %1$d pages ahead of the page being translated</string>
     <string name="translation_show">Enable automatic translation</string>
     <string name="translation_hide">Stop translation</string>
-    <string name="translation_full_gallery">Translate the entire gallery</string>
+    <string name="translation_full_gallery">Translate all pages in this gallery</string>
+    <string name="translation_gallery">Translate this gallery</string>
+    <string name="translation_gallery_submitted">Gallery translation task submitted</string>
     <string name="translation_stop_full">Stop full gallery translation</string>
     <string name="translation_service_label">Gallery translation</string>
     <string name="translation_notification_progress">Processed %1$d / %2$d pages · Failed %3$d pages</string>

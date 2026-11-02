@@ -27,7 +27,8 @@ import org.json.JSONObject
 /** The embedded manifest is the authority for both imported and downloaded weights. */
 class TranslationModels internal constructor(private val context: Context, manifestOverride: String? = null,
                                              directoryName: String = "translation-models",
-                                             private val readOnly: Boolean = false) {
+                                             private val readOnly: Boolean = false,
+                                             private val managesTranslationRuntime: Boolean = true) {
     private val dir = File(context.noBackupFilesDir, directoryName).apply { mkdirs() }
     private val manifest = JSONObject(manifestOverride ?: context.assets.open("translation-models.json")
         .bufferedReader().use { it.readText() })
@@ -102,7 +103,7 @@ class TranslationModels internal constructor(private val context: Context, manif
                 }
             }
             check(remaining.isEmpty()) { "Incomplete manga model bundle" }
-            TranslationRuntime.withModelMaintenance { publish(staged) }
+            publishWithMaintenance(staged)
         } finally { staged.forEach { it.first.delete() } }
     }
 
@@ -145,7 +146,17 @@ class TranslationModels internal constructor(private val context: Context, manif
         val old = references.all()
         references.replace(old.filterKeys { name -> staged.none { it.second.name == name } })
         old.values.forEach { references.releaseUnused(it.uri) }
-        if (!hasReferences()) verifiedStamps = stamps()
+        // Incremental downloads publish one file at a time. Only a complete, freshly
+        // verified set can seed the hash cache; companions may not exist yet.
+        if (!hasReferences() && staged.map { it.second.name }.containsAll(requiredNames)) {
+            verifiedStamps = stamps()
+        }
+    }
+
+    /** Other image engines own their own inference lock and must not dispose translation models. */
+    private suspend fun publishWithMaintenance(staged: List<Pair<File, File>>) {
+        if (managesTranslationRuntime) TranslationRuntime.withModelMaintenance { publish(staged) }
+        else publish(staged)
     }
 
     internal suspend fun installFile(name: String, input: InputStream, progress: (String, Long, Long) -> Unit) {
@@ -153,7 +164,7 @@ class TranslationModels internal constructor(private val context: Context, manif
         val staged = mutableListOf<Pair<File, File>>()
         try {
             copyVerified(input, entry, staged) { progress(name, it, entry.size) }
-            TranslationRuntime.withModelMaintenance { publish(staged) }
+            publishWithMaintenance(staged)
         } finally { staged.forEach { it.first.delete() } }
     }
 

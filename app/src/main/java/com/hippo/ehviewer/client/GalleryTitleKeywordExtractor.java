@@ -86,26 +86,78 @@ public final class GalleryTitleKeywordExtractor {
      * candidates, while every punctuation or symbol code point becomes its own candidate.
      */
     public static List<String> extractSearchCandidates(String title) {
+        List<String> result = new ArrayList<>();
+        for (SearchToken token : extractSearchTokens(title)) {
+            result.add(token.text);
+        }
+        return result;
+    }
+
+    /** Keeps source offsets so adjacent selected tokens can retain the title's formatting. */
+    public static List<SearchToken> extractSearchTokens(String title) {
         if (title == null || title.isEmpty()) {
             return Collections.emptyList();
         }
 
-        List<String> result = new ArrayList<>();
-        StringBuilder word = new StringBuilder();
+        List<SearchToken> result = new ArrayList<>();
+        int wordStart = -1;
         for (int offset = 0; offset < title.length(); ) {
+            int start = offset;
             int codePoint = title.codePointAt(offset);
             offset += Character.charCount(codePoint);
-            if (Character.isWhitespace(codePoint)) {
-                addSearchCandidate(result, word);
-            } else if (isSearchWordCodePoint(codePoint)) {
-                word.appendCodePoint(codePoint);
-            } else {
-                addSearchCandidate(result, word);
-                result.add(new String(Character.toChars(codePoint)));
+            if (isSearchWordCodePoint(codePoint)) {
+                if (wordStart < 0) wordStart = start;
+                continue;
+            }
+            if (wordStart >= 0) {
+                result.add(new SearchToken(title, wordStart, start));
+                wordStart = -1;
+            }
+            if (!isSearchWhitespace(codePoint)) {
+                result.add(new SearchToken(title, start, offset));
             }
         }
-        addSearchCandidate(result, word);
+        if (wordStart >= 0) {
+            result.add(new SearchToken(title, wordStart, title.length()));
+        }
         return result;
+    }
+
+    /**
+     * Joins selections in source order. Only whitespace between selected tokens is retained;
+     * omitted words or punctuation are replaced with a single space.
+     */
+    public static String joinSearchTokens(String title, List<SearchToken> selected) {
+        List<SearchToken> ordered = new ArrayList<>(selected);
+        ordered.sort((left, right) -> Integer.compare(left.start, right.start));
+        StringBuilder result = new StringBuilder();
+        SearchToken previous = null;
+        for (SearchToken token : ordered) {
+            if (previous != null) {
+                String gap = title.substring(previous.end, token.start);
+                result.append(gap.codePoints().allMatch(GalleryTitleKeywordExtractor::isSearchWhitespace)
+                        ? gap : " ");
+            }
+            result.append(token.text);
+            previous = token;
+        }
+        return result.toString();
+    }
+
+    private static boolean isSearchWhitespace(int codePoint) {
+        return Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint);
+    }
+
+    public static final class SearchToken {
+        public final String text;
+        private final int start;
+        private final int end;
+
+        private SearchToken(String title, int start, int end) {
+            this.text = title.substring(start, end);
+            this.start = start;
+            this.end = end;
+        }
     }
 
     private static boolean isSearchWordCodePoint(int codePoint) {
@@ -114,13 +166,6 @@ public final class GalleryTitleKeywordExtractor {
                 || type == Character.NON_SPACING_MARK
                 || type == Character.COMBINING_SPACING_MARK
                 || type == Character.ENCLOSING_MARK;
-    }
-
-    private static void addSearchCandidate(List<String> result, StringBuilder word) {
-        if (word.length() > 0) {
-            result.add(word.toString());
-            word.setLength(0);
-        }
     }
 
     private static Range findFirstPair(String text, Bracket bracket, int fromIndex) {
@@ -293,6 +338,14 @@ public final class GalleryTitleKeywordExtractor {
                 || "Fanbox".equalsIgnoreCase(candidate)
                 || "Animated".equalsIgnoreCase(candidate)
                 || "Artist".equalsIgnoreCase(candidate)
+                || "English".equalsIgnoreCase(candidate)
+                || "Chinese".equalsIgnoreCase(candidate)
+                || "Japanese".equalsIgnoreCase(candidate)
+                || "Korean".equalsIgnoreCase(candidate)
+                || "Spanish".equalsIgnoreCase(candidate)
+                || "French".equalsIgnoreCase(candidate)
+                || "German".equalsIgnoreCase(candidate)
+                || "Russian".equalsIgnoreCase(candidate)
                 || PART_NUMBER_PATTERN.matcher(candidate).matches()
                 || NUMBER_P_PATTERN.matcher(candidate).matches()
                 || NUMBER_OR_SYMBOL_PATTERN.matcher(candidate).matches();

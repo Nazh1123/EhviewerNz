@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_eh_use_local_timezone">Usar la zona horaria del dispositivo</string>
+    <string name="settings_eh_use_local_timezone_summary">Muestra las fechas de subida de las galerías y otras horas del sitio en la zona horaria del dispositivo. Desactiva esta opción para usar UTC.</string>
+</resources>

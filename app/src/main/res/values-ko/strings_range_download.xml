@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="range_download">범위 다운로드</string>
+    <string name="range_downloaded">범위 다운로드됨</string>
+    <string name="range_download_badge">범위</string>
+    <string name="range_download_full">전체 갤러리 다운로드</string>
+    <string name="range_read_downloaded">다운로드한 범위만 읽기</string>
+    <string name="range_download_input_hint">예: 1,2,6-10,25-</string>
+    <string name="range_download_preview">%1$s · %2$d페이지. 이 범위 밖의 이미지는 이 갤러리의 다운로드 폴더에서 삭제됩니다.</string>
+    <string name="range_download_invalid">1~%1$d 사이의 올바른 페이지 번호를 입력하세요.</string>
+    <string name="range_download_busy">갤러리를 수정하거나 업데이트하는 중입니다. 완료 후 다시 시도하세요.</string>
+    <string name="range_download_missing_pages">갤러리의 페이지 수를 아직 불러오지 못했습니다. 잠시 후 다시 시도하세요.</string>
+    <string name="range_download_no_pages">이 범위에 읽을 수 있는 다운로드된 페이지가 없습니다.</string>
+    <string name="range_reader_progress">다운로드 %1$d/%2$d · 페이지 %3$d/%4$d</string>
+</resources>

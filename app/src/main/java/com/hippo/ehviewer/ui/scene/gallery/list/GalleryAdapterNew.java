@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
+import com.hippo.ehviewer.util.GalleryTimeFormatter;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
@@ -43,9 +44,11 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhConfig;
 import com.hippo.ehviewer.client.EhUtils;
+import com.hippo.ehviewer.client.GalleryDisplayMetadataLoader;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.gallery.ReadingProgressCache;
+import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.ui.scene.TransitionNameFactory;
 import com.hippo.ehviewer.widget.SimpleRatingView;
 import com.hippo.ehviewer.widget.TileThumbNew;
@@ -55,7 +58,9 @@ import com.hippo.lib.yorozuya.ViewUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.function.LongConsumer;
 
 import com.hippo.ehviewer.spider.SpiderQueen;
 
@@ -85,6 +90,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private final int mInfoTeal;
     private final ColorStateList mInfoDownloadedTint;
     private final ColorStateList mInfoUpdateTint;
+    private final ColorStateList mInfoUpdatedTint;
     private final boolean showReadProgress;
     private int mType = TYPE_INVALID;
     private boolean mShowFavourite;
@@ -94,12 +100,28 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private DownloadManager mDownloadManager;
 
     private final ReadingProgressCache mReadingProgress;
+    private final GalleryDisplayMetadataLoader mDisplayMetadata;
+    private static final Object METADATA_PAYLOAD = new Object();
+    private final ExecutorService executor;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final LongConsumer mUpdateSnapshotLoaded = this::onUpdateSnapshotLoaded;
+
+    private void onUpdateSnapshotLoaded(long gid) {
+        handler.post(() -> {
+            if (!GalleryVersionBadge.hasUpdateRecord(GalleryUpdateRecordStore.get(mInflater.getContext()), gid)) return;
+            for (int position = 0; position < getItemCount(); position++) {
+                GalleryInfo info = getDataAt(position);
+                if (info != null && info.gid == gid) notifyItemChanged(position, GalleryVersionBadge.PAYLOAD);
+            }
+        });
+    }
 
 
     public GalleryAdapterNew(@NonNull LayoutInflater inflater, @NonNull Resources resources,
                              @NonNull RecyclerView recyclerView, int type, boolean showFavourited, ExecutorService executor, boolean showReadProgress) {
+        this.executor = executor;
         android.content.Context context = inflater.getContext().getApplicationContext();
+        mDisplayMetadata = new GalleryDisplayMetadataLoader(request -> EhApplication.getEhClient(context).execute(request));
         mReadingProgress = new ReadingProgressCache(executor,
                 gid -> SpiderQueen.findStartPage(context, gid));
         this.showReadProgress = showReadProgress;
@@ -115,6 +137,8 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 inflater.getContext().getTheme());
         mInfoDownloadedTint = ColorStateList.valueOf(mInfoMaxRatingColor);
         mInfoUpdateTint = ColorStateList.valueOf(mInfoTeal);
+        mInfoUpdatedTint = ColorStateList.valueOf(
+                GalleryListDisplayHelper.ratingHighlightColor(3.85f, mDarkTheme));
         mRecyclerView = recyclerView;
         mLayoutManager = new AutoStaggeredGridLayoutManager(0, StaggeredGridLayoutManager.VERTICAL);
         mPaddingTopSB = resources.getDimensionPixelOffset(R.dimen.gallery_padding_top_search_bar);
@@ -271,8 +295,23 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     }
 
     @Override
+    public void onBindViewHolder(@NonNull GalleryHolder holder, int position,
+                                 @NonNull List<Object> payloads) {
+        if (!payloads.isEmpty() && payloads.stream().allMatch(p -> p == METADATA_PAYLOAD || p == GalleryVersionBadge.PAYLOAD)) {
+            GalleryInfo info = getDataAt(position);
+            if (info != null) {
+                bindVersionBadges(holder, info);
+                if (payloads.contains(METADATA_PAYLOAD)) bindMetadata(holder, info);
+            }
+        } else {
+            onBindViewHolder(holder, position);
+        }
+    }
+
+    @Override
     public void onBindViewHolder(GalleryAdapterNew.GalleryHolder holder, int position) {
         cancelProgressRequest(holder);
+        if (holder.metadataRequest != null) holder.metadataRequest.cancel();
         GalleryInfo gi = getDataAt(position);
         if (null == gi) {
             holder.boundGid = Long.MIN_VALUE;
@@ -284,13 +323,15 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             return;
         }
         holder.boundGid = gi.gid;
+        if (GalleryDisplayMetadataLoader.needsMetadata(gi)) {
+            holder.metadataRequest = mDisplayMetadata.request(gi, () -> {
+                int current = holder.getBindingAdapterPosition();
+                if (current != RecyclerView.NO_POSITION && getDataAt(current) == gi)
+                    notifyItemChanged(current, METADATA_PAYLOAD);
+            });
+        }
 
-        boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
-        boolean updateAvailable = !downloaded && gi.firstGid != null && gi.firstGid > 0L
-                && mDownloadManager.hasOlderGalleryVersion(gi.firstGid, gi.gid);
-        bindVersionBadge(holder.downloaded, updateAvailable,
-                mType == TYPE_GRID ? getGridDownloadBadgeDrawableRes()
-                        : R.drawable.v_download_x16);
+        bindVersionBadges(holder, gi);
 
         holder.selectionOutline.setVisibility(
                 isGallerySelected(gi) ? View.VISIBLE : View.GONE);
@@ -313,7 +354,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     category.setText(newCategoryText);
                     category.setBackgroundColor(EhUtils.getCategoryColor(gi.category));
                 }
-                holder.posted.setText(gi.posted);
+                holder.posted.setText(GalleryTimeFormatter.format(gi.posted));
                 if (gi.pages == 0 || !Settings.getShowGalleryPages()) {
                     holder.pages.setText(null);
                     holder.pages.setVisibility(View.GONE);
@@ -330,8 +371,6 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     holder.simpleLanguage.setVisibility(View.VISIBLE);
                 }
                 holder.favourite.setVisibility((mShowFavourite && gi.favoriteSlot >= -1 && gi.favoriteSlot <= 10) ? View.VISIBLE : View.GONE);
-                holder.downloaded.setVisibility(
-                        downloaded || updateAvailable ? View.VISIBLE : View.GONE);
                 break;
             }
             case TYPE_GRID: {
@@ -349,11 +388,6 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 holder.simpleLanguage.setText(gi.simpleLanguage);
                 boolean showInfoBar = Settings.isThumbnailInfoBarEffective();
                 holder.thumbnailInfoBar.setVisibility(showInfoBar ? View.VISIBLE : View.GONE);
-                holder.downloaded.setVisibility((!showInfoBar
-                        || !Settings.getShowThumbnailInfoDetails()) &&
-                        Settings.getShowThumbnailDownloadBadge()
-                                && (downloaded || updateAvailable)
-                        ? View.VISIBLE : View.GONE);
                 if (showInfoBar) {
                     boolean showTitle = Settings.getShowThumbnailInfoTitle();
                     boolean showDetails = Settings.getShowThumbnailInfoDetails();
@@ -365,7 +399,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     if (showDetails) {
                         boolean highlightColors = Settings.getShowThumbnailInfoHighlight();
                         holder.thumbnailPosted.setText(
-                                GalleryListDisplayHelper.formatCompactPosted(gi.posted));
+                                GalleryListDisplayHelper.formatCompactPosted(GalleryTimeFormatter.format(gi.posted)));
                         holder.thumbnailRating.setText(
                                 GalleryListDisplayHelper.formatRating(gi.rating));
                         if (highlightColors && !Float.isNaN(gi.rating)
@@ -387,15 +421,6 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                         } else {
                             holder.thumbnailCensorship.setTextColor(holder.thumbnailInfoTextColors);
                         }
-                        holder.thumbnailDownloaded.setVisibility(
-                                downloaded || updateAvailable ? View.VISIBLE : View.GONE);
-                        bindVersionBadge(holder.thumbnailDownloaded, updateAvailable,
-                                highlightColors ? R.drawable.v_download_tintable_x16
-                                        : R.drawable.v_download_x16);
-                        holder.thumbnailDownloaded.setImageTintList(
-                                highlightColors && (downloaded || updateAvailable)
-                                        ? (updateAvailable ? mInfoUpdateTint : mInfoDownloadedTint)
-                                        : null);
                         bindPageProgress(holder, holder.thumbnailPages, gi, true, false,
                                 highlightColors);
                     }
@@ -406,12 +431,45 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         ViewCompat.setTransitionName(holder.thumb, TransitionNameFactory.getThumbTransitionName(gi.gid));
     }
 
-    private void bindVersionBadge(@NonNull ImageView badge, boolean updateAvailable,
-                                  int downloadedDrawableRes) {
-        badge.setImageResource(updateAvailable
-                ? R.drawable.v_updatable_x24 : downloadedDrawableRes);
-        badge.setContentDescription(mResources.getString(updateAvailable
-                ? R.string.gallery_update_available : R.string.download_state_downloaded));
+    private void bindMetadata(GalleryHolder holder, GalleryInfo info) {
+        cancelProgressRequest(holder);
+        if (mType == TYPE_GRID && Settings.isThumbnailInfoBarEffective() && Settings.getShowThumbnailInfoDetails()) {
+            boolean highlight = Settings.getShowThumbnailInfoHighlight();
+            String censorship = GalleryListDisplayHelper.resolveCensorship(info.simpleTags, info.tgList,
+                    info.category == EhConfig.COSPLAY);
+            holder.thumbnailCensorship.setText(censorship);
+            holder.thumbnailCensorship.setTextColor(highlight && GalleryListDisplayHelper.isHighlightCensorship(censorship)
+                    ? ColorStateList.valueOf(mInfoMaxRatingColor) : holder.thumbnailInfoTextColors);
+            bindPageProgress(holder, holder.thumbnailPages, info, true, false, highlight);
+        } else if (mType == TYPE_LIST && Settings.getShowGalleryPages() && info.pages > 0) {
+            holder.pages.setVisibility(View.VISIBLE);
+            bindPageProgress(holder, holder.pages, info, showReadProgress, true, false);
+        }
+    }
+
+    private void bindVersionBadges(GalleryHolder holder, GalleryInfo info) {
+        boolean downloaded = mDownloadManager.containDownloadInfo(info.gid);
+        GalleryUpdateRecordStore records = GalleryUpdateRecordStore.get(mInflater.getContext());
+        if (downloaded) records.prefetchActionSnapshot(info.gid, executor, mUpdateSnapshotLoaded);
+        boolean updated = downloaded && GalleryVersionBadge.hasUpdateRecord(records, info.gid);
+        boolean updateAvailable = !downloaded && info.firstGid != null && info.firstGid > 0L
+                && mDownloadManager.hasOlderGalleryVersion(info.firstGid, info.gid);
+        boolean visible = downloaded || updateAvailable;
+        GalleryVersionBadge.bind(holder.downloaded, updateAvailable, updated,
+                mType == TYPE_GRID ? getGridDownloadBadgeDrawableRes() : R.drawable.v_download_x16);
+        boolean showDetails = mType == TYPE_GRID && Settings.isThumbnailInfoBarEffective()
+                && Settings.getShowThumbnailInfoDetails();
+        holder.downloaded.setVisibility(visible && (mType != TYPE_GRID
+                || (!showDetails && Settings.getShowThumbnailDownloadBadge())) ? View.VISIBLE : View.GONE);
+        if (mType == TYPE_GRID && holder.thumbnailDownloaded != null) {
+            boolean highlight = Settings.getShowThumbnailInfoHighlight();
+            GalleryVersionBadge.bind(holder.thumbnailDownloaded, updateAvailable, updated,
+                    highlight ? R.drawable.v_download_tintable_x16 : R.drawable.v_download_x16);
+            holder.thumbnailDownloaded.setVisibility(showDetails && visible ? View.VISIBLE : View.GONE);
+            holder.thumbnailDownloaded.setImageTintList(highlight && visible
+                    ? (updated ? mInfoUpdatedTint : updateAvailable ? mInfoUpdateTint : mInfoDownloadedTint)
+                    : null);
+        }
     }
 
     private void bindPageProgress(@NonNull GalleryHolder holder,
@@ -433,29 +491,31 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             return;
         }
 
-        target.setText(appendPageSuffix
-                ? gi.pages + "P"
-                : GalleryListDisplayHelper.formatPageProgress(0, gi.pages, false));
+        Integer knownPage = SpiderQueen.peekStartPage(gi.gid);
+        if (knownPage == null) knownPage = mReadingProgress.peek(gi.gid);
+        target.setText(GalleryListDisplayHelper.formatPageProgress(
+                knownPage != null ? knownPage : 0, gi.pages, appendPageSuffix));
+        if (highlightReadProgress && knownPage != null && knownPage > 0) {
+            target.setTextColor(mInfoHighlightYellow);
+        }
         long gid = gi.gid;
         int pages = gi.pages;
         int generation = holder.progressGeneration;
         holder.progressRequest = mReadingProgress.request(gid, startPage -> {
-            String text = GalleryListDisplayHelper.formatPageProgress(
-                    startPage, pages, appendPageSuffix);
             handler.post(() -> {
                 if (holder.boundGid == gid && holder.progressGeneration == generation) {
-                    target.setText(text);
-                    if (highlightReadProgress && startPage > 0) {
-                        target.setTextColor(mInfoHighlightYellow);
+                    // An adapter cache hit or a queued callback can predate a reader/reset.
+                    Integer current = SpiderQueen.peekStartPage(gid);
+                    int page = current != null ? current : startPage;
+                    target.setText(GalleryListDisplayHelper.formatPageProgress(
+                            page, pages, appendPageSuffix));
+                    if (highlightReadProgress) {
+                        if (page > 0) target.setTextColor(mInfoHighlightYellow);
+                        else target.setTextColor(holder.thumbnailInfoTextColors);
                     }
                 }
             });
         });
-    }
-
-    public void invalidateReadingProgress() {
-        mReadingProgress.clear();
-        notifyDataSetChanged();
     }
 
     private void cancelProgressRequest(@NonNull GalleryHolder holder) {
@@ -469,6 +529,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     @Override
     public void onViewRecycled(@NonNull GalleryHolder holder) {
         cancelProgressRequest(holder);
+        if (holder.metadataRequest != null) holder.metadataRequest.cancel();
         holder.boundGid = Long.MIN_VALUE;
         super.onViewRecycled(holder);
     }
@@ -476,6 +537,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     @Override
     public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
         mReadingProgress.clear();
+        mDisplayMetadata.clear();
         super.onDetachedFromRecyclerView(recyclerView);
     }
 
@@ -529,6 +591,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         public long boundGid = Long.MIN_VALUE;
         private int progressGeneration;
         @Nullable private ReadingProgressCache.Request progressRequest;
+        @Nullable private GalleryDisplayMetadataLoader.Request metadataRequest;
 
         public GalleryHolder(View itemView,
                              final OnThumbItemClickListener onThumbItemClickListener,

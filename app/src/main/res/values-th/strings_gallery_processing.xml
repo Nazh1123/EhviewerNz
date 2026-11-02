@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_processing_service">การประมวลผลแกลเลอรี</string>
+    <string name="gallery_processing_queued">แกลเลอรีในคิว: %1$d</string>
+    <string name="gallery_processing_stop">หยุดแกลเลอรีนี้</string>
+</resources>

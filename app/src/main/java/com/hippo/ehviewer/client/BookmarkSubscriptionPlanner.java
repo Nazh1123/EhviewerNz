@@ -125,6 +125,15 @@ public final class BookmarkSubscriptionPlanner {
                 || q.mode == ListUrlBuilder.MODE_TAG || q.mode == ListUrlBuilder.MODE_FILTER);
     }
     public static List<Source> plan(List<QuickSearch> bookmarks) {
+        return plan(bookmarks, false);
+    }
+
+    /** Persistent per-query progress requires exact attribution before any checkpoint commits. */
+    public static List<Source> planExact(List<QuickSearch> bookmarks) {
+        return plan(bookmarks, true);
+    }
+
+    private static List<Source> plan(List<QuickSearch> bookmarks, boolean exact) {
         List<Entry> entries = new ArrayList<>();
         for (QuickSearch q : bookmarks) if (isSupported(q) && q.subscribed) entries.add(entry(q));
         entries.sort(Comparator.comparing((Entry e) -> queryKey(e.builder, true))
@@ -132,7 +141,16 @@ public final class BookmarkSubscriptionPlanner {
         List<Source> sources = new ArrayList<>();
         for (Entry entry : entries) {
             boolean added = false;
-            for (Source source : sources) if (source.add(entry)) { added = true; break; }
+            for (Source source : sources) {
+                // Try on a copy: a failed exact-attribution merge must not mutate the old plan.
+                Source candidate = new Source(source.entries.get(0));
+                for (int i = 1; i < source.entries.size(); i++) candidate.add(source.entries.get(i));
+                if (candidate.add(entry) && (!exact || !candidate.requiresVerification())) {
+                    sources.set(sources.indexOf(source), candidate);
+                    added = true;
+                    break;
+                }
+            }
             if (!added) sources.add(new Source(entry));
         }
         sources.sort(Comparator.comparing(Source::getCacheKey));
@@ -161,6 +179,8 @@ public final class BookmarkSubscriptionPlanner {
         if (terms != null && q.mode != ListUrlBuilder.MODE_NORMAL) {
             builder.reset();
             builder.setMode(ListUrlBuilder.MODE_NORMAL);
+            builder.setMinRatingHundredths(q.minRatingHundredths);
+            if (!q.ratingOverride && q.minRatingHundredths == 0) builder.clearRatingOverride();
         }
         if (terms != null) {
             List<String> words = new ArrayList<>();
@@ -203,6 +223,30 @@ public final class BookmarkSubscriptionPlanner {
         Collections.sort(terms);
         return terms;
     }
+    /** Exact metadata predicates supported by homepage checks; null keeps the native search. */
+    static List<String> homepageTerms(QuickSearch bookmark) {
+        if (!isSupported(bookmark) || !bookmark.subscribed) return null;
+        // These options depend on information/search visibility absent from gallery metadata.
+        if (bookmark.mode == ListUrlBuilder.MODE_NORMAL && bookmark.advanceSearch != -1
+                && (bookmark.advanceSearch & ~ListUrlBuilder.DEFAULT_ADVANCE) != 0) return null;
+        Entry entry = entry(bookmark);
+        if (entry.terms == null) {
+            return bookmark.mode == ListUrlBuilder.MODE_NORMAL
+                    && (bookmark.keyword == null || bookmark.keyword.trim().isEmpty())
+                    ? Collections.emptyList() : null;
+        }
+        List<String> result = new ArrayList<>();
+        for (Term term : entry.terms) {
+            if (term.field.equals("title") || term.field.equals("tag")) return null;
+            if (!term.field.equals("uploader") && !term.value.endsWith("$")) return null;
+            String value = term.field.equals("uploader") ? term.value
+                    : term.value.substring(0, term.value.length() - 1);
+            if (value.isEmpty()) return null;
+            result.add((term.negative ? "-" : "") + term.field + ":" + value);
+        }
+        return result;
+    }
+
     private static boolean safeUploader(@Nullable String value) {
         if (value == null || value.isEmpty() || !value.equals(value.trim())) return false;
         for (char c : value.toCharArray()) if (Character.isISOControl(c) || "\"\\~*$%:".indexOf(c) >= 0) return false;
@@ -221,6 +265,7 @@ public final class BookmarkSubscriptionPlanner {
     }
     private static String queryKey(ListUrlBuilder b, boolean includeQuery) {
         String filters = b.getMode() + ":" + b.getAdvanceSearch() + ":" + b.getMinRating()
+                + ":" + b.getRequestedMinRatingHundredths()
                 + ":" + b.getPageFrom() + ":" + b.getPageTo();
         String keyword = b.getKeyword();
         return includeQuery ? filters + ":" + b.getCategory() + ":"

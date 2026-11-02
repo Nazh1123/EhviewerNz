@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="gallery_updated">已更新</string>
     <string name="gallery_update_history_missing_gallery_title">GID: %1$d\n画廊已被删除或更新</string>
     <string name="gallery_update_history_title">画廊更新历史</string>
     <string name="gallery_update_history_all_empty">暂无保存的画廊更新记录</string>
@@ -12,6 +13,8 @@
     <string name="settings_gallery_update_record_limit">更新记录数量</string>
     <string name="settings_fork_category_read">阅读</string>
     <string name="gallery_read_updates">仅阅读更新</string>
+    <string name="gallery_read_full">阅读完整画廊</string>
+    <string name="gallery_update_record_invalid">更新记录无效</string>
     <string name="gallery_update_log">更新日志</string>
     <string name="gallery_update_log_time">更新时间</string>
     <string name="gallery_update_log_target">目标画廊：%1$d</string>
@@ -24,7 +27,7 @@
     <string name="gallery_update_log_versions">查看版本链历史</string>
     <string name="gallery_update_log_loading">正在加载更新记录…</string>
     <string name="gallery_update_log_unavailable">更新记录已不可用</string>
-    <string name="gallery_update_reader_progress">更新 %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_reader_progress">更新 %1$d/%2$d · p%3$d/%4$d</string>
     <string name="gallery_update_finalizing">正在完成画廊更新</string>
     <string name="gallery_update_finalization_failed">下载已完成，但更新收尾失败。请在画廊详情页重试。</string>
     <string name="gallery_update_error_log">错误日志</string>

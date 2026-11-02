@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_method">Método de actualización</string>
+    <string name="app_update_method_description">Abre la página del lanzamiento o descarga aquí el APK y abre el instalador al terminar.</string>
+    <string name="app_update_open_release">Abrir lanzamiento</string>
+    <string name="app_update_direct_download">Descarga directa</string>
+    <string name="app_update_no_apk">Este lanzamiento no ofrece un único APK descargable. Descárgalo desde la página del lanzamiento.</string>
+    <string name="app_update_download_title">Actualización de EhViewerNz</string>
+    <string name="app_update_downloading">Descargando actualización…</string>
+    <string name="app_update_progress">Descargando actualización: %1$d%%</string>
+    <string name="app_update_waiting_network">Descarga en pausa. Esperando la red o un reintento del sistema…</string>
+    <string name="app_update_ready">Descarga completada. Listo para instalar.</string>
+    <string name="app_update_install">Instalar</string>
+    <string name="app_update_install_permission">Permite a esta aplicación instalar aplicaciones desconocidas en los ajustes del sistema y vuelve para continuar.</string>
+    <string name="app_update_install_failed">No se pudo abrir el instalador. Reinténtalo o descarga desde la página del lanzamiento.</string>
+    <string name="app_update_download_failed">Error de descarga. Comprueba la conexión y el almacenamiento, y reinténtalo o abre la página del lanzamiento.</string>
+    <string name="app_update_retry">Reintentar descarga</string>
+</resources>

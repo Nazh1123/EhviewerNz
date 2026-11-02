@@ -24,6 +24,7 @@ public class EhRequest {
     private Object[] mArgs;
     private EhClient.Callback mCallback;
     private EhConfig mEhConfig;
+    private boolean mBackground;
 
     EhClient.Task task;
 
@@ -52,6 +53,14 @@ public class EhRequest {
     public int getMethod() {
         return mMethod;
     }
+
+    /** Background scans must not claim the interactive browsing network budget. */
+    public EhRequest setBackground(boolean background) {
+        mBackground = background;
+        return this;
+    }
+
+    public boolean isBackground() { return mBackground; }
 
     public Object[] getArgs() {
         return mArgs;

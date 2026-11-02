@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search">Suche</string>
+    <string name="settings_enable_search_tag_chips">Suchbegriffe als Tag-Blasen</string>
+    <string name="settings_enable_search_tag_chips_summary">Such-Tags als bearbeitbare Blasen anzeigen und die Suchleiste auf bis zu 4 Zeilen erweitern. Deaktivieren für einzeiligen Klartext.</string>
+    <string name="settings_enable_search_preset_tags">Voreingestellte Such-Tags aktivieren</string>
+    <string name="settings_enable_precise_rating_filter">Präzisen Bewertungsfilter aktivieren</string>
+    <string name="settings_persistent_min_rating">Dauerhafter Bewertungsfilter</string>
+    <string name="settings_persistent_min_rating_description">Standard-Mindestbewertung für jede Suche festlegen. Galerien mit niedrigerer Bewertung werden standardmäßig ausgeblendet.</string>
+    <string name="settings_persistent_min_rating_value">Aktuell: %1$s (0.00 deaktiviert den Filter)</string>
+</resources>

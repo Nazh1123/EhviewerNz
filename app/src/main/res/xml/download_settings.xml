@@ -46,6 +46,12 @@
         app:entryValues="@array/multi_thread_download_entry_values"
         app:iconSpaceReserved="false" />
 
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="mobile_browsing_priority"
+        android:summary="@string/settings_download_mobile_browsing_priority_summary"
+        android:title="@string/settings_download_mobile_browsing_priority" />
+
     <com.hippo.preference.ListPreference
         android:defaultValue="5"
         android:key="preload_image"

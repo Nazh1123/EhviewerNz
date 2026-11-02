@@ -8,6 +8,7 @@ import android.net.Uri;
 
 import com.alibaba.fastjson.JSON;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.ui.GalleryActivity;
@@ -19,12 +20,17 @@ import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
 import org.robolectric.util.ReflectionHelpers;
 
 import java.util.List;
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 import com.hippo.unifile.UniFile;
 
 import static org.junit.Assert.*;
@@ -157,7 +163,8 @@ public class ReadingHistoryTest {
     }
 
     @Test public void evictsOldestUsingReadingHistoryLimitAndClearPreservesLocalResumeProgress() {
-        Settings.setHistoryInfoSize(500);
+        // This reader-history test does not initialize the separate seen-gallery database.
+        settings.edit().putString(Settings.KEY_HISTORY_INFO_SIZE, "500").apply();
         for (int i = 1; i <= 100; i++) {
             ReadingHistory.Entry entry = ReadingHistory.fromIntent(context, online(i, ReadingHistory.DETAIL));
             entry.readAt = i;
@@ -332,7 +339,9 @@ public class ReadingHistoryTest {
         assertTrue(ReadingHistory.list(context).isEmpty());
     }
 
-    @Test public void providerCreationRecordsOnceAndConfigurationRestoreDoesNotAddVisit() {
+    @Test
+    @Config(shadows = ReaderApplicationShadow.class)
+    public void providerCreationRecordsOnceAndConfigurationRestoreDoesNotAddVisit() {
         GalleryActivity activity = Robolectric.buildActivity(GalleryActivity.class, online(7, ReadingHistory.DOWNLOAD)).get();
         ReflectionHelpers.callInstanceMethod(activity, "onInit");
         assertEquals(1, ReadingHistory.list(context).size());
@@ -348,6 +357,20 @@ public class ReadingHistoryTest {
         ReflectionHelpers.callInstanceMethod(restored, "onRestore",
                 ReflectionHelpers.ClassParameter.from(android.os.Bundle.class, state));
         assertTrue(ReadingHistory.list(context).isEmpty());
+    }
+
+    @Implements(EhApplication.class)
+    public static class ReaderApplicationShadow {
+        @Implementation protected static ExecutorService getExecutorService(Context context) {
+            return new AbstractExecutorService() {
+                @Override public void execute(Runnable command) { command.run(); }
+                @Override public void shutdown() { }
+                @Override public List<Runnable> shutdownNow() { return List.of(); }
+                @Override public boolean isShutdown() { return false; }
+                @Override public boolean isTerminated() { return false; }
+                @Override public boolean awaitTermination(long timeout, TimeUnit unit) { return true; }
+            };
+        }
     }
 
     private Intent online(long gid, String source) {

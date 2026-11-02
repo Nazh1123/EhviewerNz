@@ -236,6 +236,11 @@ class FavoritesScene : BaseScene(), EasyRecyclerView.OnItemClickListener,
         outState.putIntArray(KEY_FAV_COUNT_ARRAY, mFavCountArray)
     }
 
+    override fun onResume() {
+        super.onResume()
+        mAdapter?.notifyDataSetChanged()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
 
@@ -597,7 +602,7 @@ class FavoritesScene : BaseScene(), EasyRecyclerView.OnItemClickListener,
                 args.putParcelable(GalleryDetailScene.KEY_GALLERY_INFO, gi)
                 val announcer = Announcer(GalleryDetailScene::class.java).setArgs(args)
                 val thumb: View?
-                if (null != (view.findViewById<View?>(R.id.thumb).also { thumb = it })) {
+                if (null != (EnterGalleryDetailTransaction.findCover(view).also { thumb = it })) {
                     announcer.setTranHelper(EnterGalleryDetailTransaction(thumb))
                 }
                 startScene(announcer)
@@ -1578,7 +1583,7 @@ class FavoritesScene : BaseScene(), EasyRecyclerView.OnItemClickListener,
         var mOkHttpClient: OkHttpClient? = null
 
         internal constructor(context: Context) {
-            mOkHttpClient = EhApplication.getOkHttpClient(context)
+            mOkHttpClient = EhApplication.getBrowsingOkHttpClient(context)
         }
 
         constructor()

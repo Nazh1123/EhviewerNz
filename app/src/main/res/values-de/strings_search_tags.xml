@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_tag_or">Beliebige Übereinstimmung (ODER)</string>
+    <string name="search_tag_or_label">%1$s (ODER)</string>
+    <string name="search_tag_change_mode">%1$s: zu %2$s wechseln</string>
+    <string name="search_tag_edit">Tag %1$s bearbeiten</string>
+    <string name="search_tag_delete">Tag %1$s löschen</string>
+</resources>

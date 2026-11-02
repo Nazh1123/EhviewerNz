@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_results_directory">アーカイブの処理結果フォルダー</string>
+    <string name="archive_results_permission_message">このアーカイブがあるフォルダーを選び、読み書きを許可してください。翻訳・超解像の結果は隣の「アーカイブの完全なファイル名.results」フォルダーに保存され、再度開いた際に利用できます。キャンセルしても通常の閲覧や画像の個別保存には影響しません。</string>
+    <string name="archive_results_choose_parent">アーカイブがあるフォルダーを選択</string>
+    <string name="archive_results_wrong_parent">フォルダーへのアクセスが許可されませんでした。このアーカイブを直接含むフォルダーを選び、読み書きを許可してください。</string>
+</resources>

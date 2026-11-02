@@ -158,6 +158,8 @@
     <string name="image_search">Suche nach einem Bild</string>
     <string name="search_normal">Normale Suche</string>
     <string name="search_advance">Erweiterte Optionen</string>
+    <string name="search_more_options">Weitere Suchoptionen</string>
+    <string name="search_hide_options">Suchoptionen ausblenden</string>
     <string name="search_image">Suche nach einem Bild</string>
     <string name="search_normal_search">Normale Suche</string>
     <string name="search_subscription_search">Suche in gefolgten Etiketten</string>
@@ -460,8 +462,6 @@
     <string name="settings_eh_default_categories_summary">Auf Startseite angezeigte Standard-Kategorie</string>
     <string name="settings_eh_excluded_languages">Ausgeschlossene Sprachen</string>
     <string name="settings_advanced_app_language_title">Sprache der App (Language)</string>
-    <string name="settings_search_language">Suchsprachen-Tag</string>
-    <string name="settings_search_language_disabled">Aus</string>
     <string name="torrent_count">Torrent (%d)</string>
     <string name="settings_eh_excluded_languages_summary">Galerie von den ausgeschlossenen Sprachen werden in der Galerieliste und der Suchen versteckt</string>
     <string name="settings_eh_excluded_tag_namespaces">Ausgeschlossene Namensraum-Etiketten</string>
@@ -930,8 +930,8 @@
     <string name="settings_animated_webp_progress_control_summary" formatted="false">Durch Wischen im unteren Viertel des Bildschirms kann die Wiedergabeposition geändert werden</string>
     <string name="settings_animated_webp_sequential_playback_summary">Öffnet nach dem Wiedergabeende automatisch das nächste Bild</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">Zeigt die Wiedergabe-/Pause-Schaltfläche für automatisches Umblättern an, wenn der Seitenschieberegler sichtbar ist</string>
-    <string name="settings_animated_webp_long_press_speed_summary">%1$sx – Langes Drücken im unteren mittleren Bildschirmbereich spielt mit %1$sx ab; bei 1.0 öffnet langes Drücken stattdessen das Menü; nach langem Drücken horizontal ziehen, um die Geschwindigkeit zu ändern</string>
-    <string name="animated_webp_long_press_speed_hint">%1$sx, zum Ändern ziehen</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx – Langes Drücken im unteren mittleren Bildschirmbereich spielt mit %1$sx ab; bei 1.0 öffnet langes Drücken stattdessen das Menü; nach langem Drücken horizontal ziehen, um die Geschwindigkeit zu ändern; nach oben wischen, um die aktuelle Geschwindigkeit sofort zu sperren</string>
+    <string name="animated_webp_long_press_speed_hint">%1$sx, horizontal ziehen zum Ändern, nach oben zum Sperren</string>
     <string name="animated_webp_long_press_speed_value">%1$sx</string>
     <string name="animated_webp_stall_warning">Die GIF-Wiedergabe bleibt hängen. Klicken Sie, um den Dekodierungsaufwand zu reduzieren</string>
     <string name="bookmark_subscription_disable">Lesezeichen-Abonnement entfernen</string>
@@ -1052,7 +1052,7 @@
     <string name="settings_fork_delete_empty_galleries">Leere Galerie löschen</string>
     <string name="settings_fork_download_label_continuous_browse">Kontinuierliches Surfen auf der Registerkarte „Download“.</string>
     <string name="settings_fork_download_label_continuous_browse_summary">Zeigt die Download-Galerie kontinuierlich von oben nach unten nach Tag auf der Download-Seite an</string>
-    <string name="settings_fork_features">Sonstige Fork-Funktionen</string>
+    <string name="settings_fork_features">Fork – Sonstiges</string>
     <string name="settings_fork_gallery_immediate_jump">Jetzt in die Galerie springen</string>
     <string name="settings_fork_long_press_save_summary">Drücken Sie lange auf den Umblätterbereich, um das aktuelle Bild lokal zu speichern</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Lange drücken, um erfolgreich zu speichern und automatisch zur nächsten Seite zu wechseln.</string>
@@ -1178,4 +1178,16 @@
     <string name="sync_folder_label_removed">Synchronisierung abgebrochen: Downloadlabel wurde entfernt</string>
     <string name="settings_show_viewed_galleries">Angesehene Galerien anzeigen</string>
     <string name="settings_show_viewed_galleries_summary">Die neueste Galerie der Suchergebnisse speichern, um bei einer erneuten Suche mit denselben Bedingungen bereits angesehene Galerien zu markieren.</string>
+    <string name="top_list_click_to_view">Zum Anzeigen tippen</string>
+    <string name="settings_yesterday_top_list_new_badge">Erinnerung an die gestrige Rangliste</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">Zeigt New! neben den Ranglisten, bis die gestrige Rangliste angesehen wurde. Wird täglich um 00:05 UTC zurückgesetzt.</string>
+    <string name="navigation_long_press_hint">Tasten für Sonderaktionen gedrückt halten</string>
+    <string name="title_keyword_search_action">Suchbegriffe suchen</string>
+    <string name="download_remove_record">Nur Eintrag entfernen</string>
+    <string name="download_redownload">Erneut herunterladen</string>
+    <string name="download_remove_files">Eintrag und lokale Dateien entfernen</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">Startseite nach Abonnement-Updates durchsuchen</string>
+    <string name="settings_subscription_homepage_scan_summary">Durchsucht bei manuellen und automatischen Update-Prüfungen die Startseite, wenn die Anzahl abonnierter Lesezeichen N &gt; 8, die Minuten seit dem letzten Update T &lt; 400 und T × 0,3 &lt; N sind. Sonst und bei komplexen Suchanfragen wird die Lesezeichensuche verwendet. Beim Wechsel bleibt der Prüffortschritt erhalten. Das Durchsuchen der Lesezeichen-Abonnements bleibt unverändert.</string>
+    <string name="open_image_folder">Bilder in diesem Ordner öffnen</string>
 </resources>

@@ -47,6 +47,12 @@ public final class ReadingProgressCache {
         this.clock = clock;
     }
 
+    /** Last successful result, also usable while an expired entry is being refreshed. */
+    public synchronized Integer peek(long gid) {
+        Entry entry = cache.get(gid);
+        return entry != null ? entry.page : null;
+    }
+
     public Request request(long gid, IntConsumer callback) {
         Request request = new Request(callback);
         Load load;
@@ -105,10 +111,11 @@ public final class ReadingProgressCache {
             }
             requests = new ArrayList<>(load.requests);
         }
-        for (Request request : requests) request.deliver(page);
+        // Keep the displayed position on storage/executor failure instead of inventing unread.
+        if (success) for (Request request : requests) request.deliver(page);
     }
 
-    /** Invalidate on return from reading, and cancel callbacks when the adapter is detached. */
+    /** Release cached values and callbacks when the adapter is detached. */
     public synchronized void clear() {
         cache.clear();
         for (Load load : pending.values()) {

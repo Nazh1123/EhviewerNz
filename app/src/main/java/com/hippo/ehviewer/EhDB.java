@@ -195,6 +195,14 @@ public class EhDB {
             db.execSQL("ALTER TABLE \"QUICK_SEARCH\" ADD COLUMN "
                     + "\"SUBSCRIBED\" INTEGER NOT NULL DEFAULT 0");
         }
+        if (!hasColumn(db, "QUICK_SEARCH", "MIN_RATING_HUNDREDTHS")) {
+            db.execSQL("ALTER TABLE \"QUICK_SEARCH\" ADD COLUMN "
+                    + "\"MIN_RATING_HUNDREDTHS\" INTEGER NOT NULL DEFAULT 0");
+        }
+        if (!hasColumn(db, "QUICK_SEARCH", "RATING_OVERRIDE")) {
+            db.execSQL("ALTER TABLE \"QUICK_SEARCH\" ADD COLUMN "
+                    + "\"RATING_OVERRIDE\" INTEGER NOT NULL DEFAULT 0");
+        }
         if (!hasColumn(db, "DOWNLOADS", "FIRST_GID")) {
             db.execSQL("ALTER TABLE \"DOWNLOADS\" ADD COLUMN \"FIRST_GID\" INTEGER");
         }
@@ -535,6 +543,13 @@ public class EhDB {
             // Insert
             dao.insert(downloadInfo);
         }
+    }
+
+    /** Only persist the same live entity; delayed saves cannot restore deleted/replaced downloads. */
+    public static synchronized void updateDownloadInfoIfPresent(DownloadInfo downloadInfo) {
+        DownloadsDao dao = sDaoSession.getDownloadsDao();
+        // The session identity scope keeps the manager's live entity until deletion/replacement.
+        if (dao.load(downloadInfo.gid) == downloadInfo) dao.update(downloadInfo);
     }
 
     public static synchronized void putDownloadInfo(@NonNull List<DownloadInfo> downloadInfoList) {
@@ -1062,6 +1077,11 @@ public class EhDB {
                     return false;
                 if (!copyDao(sDaoSession.getGalleryTagsDao(), exportSession.getGalleryTagsDao()))
                     return false;
+                if (!upstreamCompatible) {
+                    java.util.Set<Long> ids = new java.util.HashSet<>();
+                    for (DownloadInfo info : sDaoSession.getDownloadsDao().loadAll()) ids.add(info.gid);
+                    com.hippo.ehviewer.download.GalleryDownloadRangeStore.get(context).exportBackup(db, ids);
+                }
                 if (upstreamCompatible) {
                     makeUpstreamCompatible(db);
                 }
@@ -1190,6 +1210,9 @@ public class EhDB {
             manager.addDownloadLabel(downloadLabelList);
             // Downloads
             List<DownloadInfo> downloadInfoList = session.getDownloadsDao().queryBuilder().list();
+            java.util.Set<Long> acceptedRangeIds = new java.util.HashSet<>();
+            for (DownloadInfo info : downloadInfoList) if (!manager.containDownloadInfo(info.gid)) acceptedRangeIds.add(info.gid);
+            com.hippo.ehviewer.download.GalleryDownloadRangeStore.get(context).importBackup(db, acceptedRangeIds);
             manager.addDownload(downloadInfoList);
 
             sendImportProgress(handler, 50);

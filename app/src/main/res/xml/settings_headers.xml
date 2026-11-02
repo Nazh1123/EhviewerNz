@@ -24,6 +24,12 @@
         app:fragment="com.hippo.ehviewer.ui.fragment.EhFragment" />
 
     <com.hippo.ehviewer.ui.fragment.BasePreference
+        android:icon="@drawable/v_magnify_primary_x24"
+        android:title="@string/settings_search"
+        app:allowDividerAbove="true"
+        app:fragment="com.hippo.ehviewer.ui.fragment.SearchFragment" />
+
+    <com.hippo.ehviewer.ui.fragment.BasePreference
         android:icon="@drawable/v_book_open_primary_x24"
         android:title="@string/settings_read"
         app:allowDividerAbove="true"
@@ -46,6 +52,12 @@
         android:title="@string/settings_translation"
         app:allowDividerAbove="true"
         app:fragment="com.hippo.ehviewer.ui.fragment.TranslationFragment" />
+
+    <com.hippo.ehviewer.ui.fragment.BasePreference
+        android:icon="@drawable/v_super_resolution_primary_x24"
+        android:title="@string/sr_title"
+        app:allowDividerAbove="true"
+        app:fragment="com.hippo.ehviewer.ui.fragment.SuperResolutionFragment" />
 
     <com.hippo.ehviewer.ui.fragment.BasePreference
         android:icon="@drawable/v_download_primary_x24"

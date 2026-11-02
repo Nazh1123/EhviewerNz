@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_method">Méthode de mise à jour</string>
+    <string name="app_update_method_description">Ouvrez la page de version ou téléchargez l’APK ici, puis ouvrez le programme d’installation à la fin.</string>
+    <string name="app_update_open_release">Ouvrir la page de version</string>
+    <string name="app_update_direct_download">Téléchargement direct</string>
+    <string name="app_update_no_apk">Cette version ne propose pas un APK téléchargeable unique. Téléchargez-le depuis la page de version.</string>
+    <string name="app_update_download_title">Mise à jour d’EhViewerNz</string>
+    <string name="app_update_downloading">Téléchargement de la mise à jour…</string>
+    <string name="app_update_progress">Téléchargement de la mise à jour : %1$d%%</string>
+    <string name="app_update_waiting_network">Téléchargement en pause. En attente du réseau ou d’une nouvelle tentative du système…</string>
+    <string name="app_update_ready">Téléchargement terminé. Prêt à installer.</string>
+    <string name="app_update_install">Installer</string>
+    <string name="app_update_install_permission">Autorisez cette application à installer des applications inconnues dans les paramètres système, puis revenez pour poursuivre l’installation.</string>
+    <string name="app_update_install_failed">Impossible d’ouvrir le programme d’installation. Réessayez ou téléchargez depuis la page de version.</string>
+    <string name="app_update_download_failed">Échec du téléchargement. Vérifiez la connexion et l’espace de stockage, puis réessayez ou ouvrez la page de version.</string>
+    <string name="app_update_retry">Réessayer le téléchargement</string>
+</resources>

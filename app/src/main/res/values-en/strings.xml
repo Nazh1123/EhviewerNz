@@ -23,7 +23,7 @@
     <string name="settings_eh_show_thumbnail_info_details">Date, rating, censorship type, reading progress</string>
     <string name="settings_eh_show_thumbnail_info_highlight">Color highlighting</string>
     <string name="settings_gallery_long_press_quick_download">Gallery long-press quick download</string>
-    <string name="settings_gallery_long_press_quick_download_summary">Long-press a designated area of a gallery item to start downloading it immediately</string>
+    <string name="settings_gallery_long_press_quick_download_summary">When enabled, long-press the cover in list mode to download. In thumbnail mode with an information bar, long-press the lower-left cover or left half of the bar to open a preview, then tap the screen or press Back to close; long-press the lower-right cover or right half of the bar to download. When disabled, the original long-press actions apply.</string>
 
     <!--  排行榜  -->
     <string name="gallery_toplists">Gallery Toplists</string>
@@ -209,6 +209,8 @@
 
     <string name="search_normal">Normal Search</string>
     <string name="search_advance">Advance Options</string>
+    <string name="search_more_options">More search options</string>
+    <string name="search_hide_options">Hide search options</string>
     <string name="search_image">Image Search</string>
     <string name="tag_search_entrance">Tag Selector</string>
     <string name="search_normal_search">Normal search</string>
@@ -411,6 +413,9 @@
     <string name="download_remove_dialog_message">Remove %s from download list ?</string>
     <string name="download_remove_dialog_message_2">Remove %d items from download list ?</string>
     <string name="download_remove_dialog_check_text">Delete image files</string>
+    <string name="download_remove_record">Remove record only</string>
+    <string name="download_redownload">Download again</string>
+    <string name="download_remove_files">Remove record and local files</string>
     <string name="stat_download_action_stop_all">Stop all</string>
     <string name="drawer_download_label_title">Label</string>
     <string name="default_download_label_name">Default</string>
@@ -655,8 +660,6 @@
     <string name="settings_advanced_clear_memory_cache_summary">Clear thumb, gallery info memory cache</string>
     <string name="settings_advanced_read_cache_size">Read cache size</string>
     <string name="settings_advanced_app_language_title">App language</string>
-    <string name="settings_search_language">Search Language Tag</string>
-    <string name="settings_search_language_disabled">Off</string>
     <string name="settings_advanced_proxy">Proxy</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>
@@ -921,7 +924,7 @@
     <string name="offline_gallery_local_size">Local: %1$s</string>
     <string name="offline_gallery_local_pages">%1$d local pages</string>
     <string name="offline_gallery_saved_rating">Saved rating</string>
-    <string name="settings_fork_features">Miscellaneous Fork features</string>
+    <string name="settings_fork_features">Fork Misc</string>
     <string name="settings_fork_category_subscriptions">Subscriptions</string>
     <string name="settings_bookmark_subscription_management">Manage bookmark subscriptions</string>
     <string name="settings_subscription_sidebar_buttons">Sidebar button visibility</string>
@@ -1289,8 +1292,8 @@
     <string name="settings_animated_webp_auto_transfer_button">Auto page-turn button</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">Show the auto page-turn play/pause button when the page slider is visible</string>
     <string name="settings_animated_webp_long_press_speed">Long-press speed</string>
-    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - Long-press the lower-middle area of the screen to play at %1$sx; at 1.0, long-press opens the menu instead; after long-pressing, slide horizontally to change the speed</string>
-    <string name="animated_webp_long_press_speed_hint">%1$sx, drag to change</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - Long-press the lower-middle area of the screen to play at %1$sx; at 1.0, long-press opens the menu instead; after long-pressing, slide horizontally to change the speed; slide up to lock immediately</string>
+    <string name="animated_webp_long_press_speed_hint">%1$sx, drag to change, slide up to lock</string>
     <string name="animated_webp_long_press_speed_value">%1$sx</string>
     <string name="settings_animated_webp_long_press_speed_invalid">Enter a value from 0.1 to 3.0 with at most one decimal place</string>
     <string name="gallery_detail_back_to_top">Back to top</string>
@@ -1301,4 +1304,12 @@
     <string name="sync_folder_label_removed">Sync cancelled: the download label was removed</string>
     <string name="settings_show_viewed_galleries">Show browsed galleries</string>
     <string name="settings_show_viewed_galleries_summary">Record the newest gallery in search results to mark previously browsed galleries when searching with the same conditions again.</string>
+    <string name="settings_subscription_homepage_scan">Scan homepage for subscription updates</string>
+    <string name="settings_subscription_homepage_scan_summary">Automatically scans the homepage during manual and automatic update checks when subscribed bookmarks N &gt; 8, minutes since the last update T &lt; 400, and T × 0.3 &lt; N. Otherwise, and for complex searches, uses bookmark searches. Check progress is preserved when switching. Bookmark subscription browsing is unchanged.</string>
+    <string name="top_list_click_to_view">Tap to view</string>
+    <string name="settings_yesterday_top_list_new_badge">Yesterday ranking reminder</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">Show New! beside Top Lists until yesterday’s ranking is viewed. Resets daily at 00:05 UTC.</string>
+    <string name="navigation_long_press_hint">Long press buttons for special actions</string>
+    <string name="title_keyword_search_action">Search keywords</string>
+    <string name="top_list_period_title">%1$s</string>
 </resources>

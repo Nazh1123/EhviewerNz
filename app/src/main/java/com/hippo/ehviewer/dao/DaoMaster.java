@@ -18,7 +18,7 @@ import org.greenrobot.greendao.identityscope.IdentityScopeType;
  */
 public class DaoMaster extends AbstractDaoMaster {
     // Fork versions use a separate range from upstream. Keep EhDaoGenerator in sync.
-    public static final int SCHEMA_VERSION = 1_000_010;
+    public static final int SCHEMA_VERSION = 1_000_012;
 
     /** Creates underlying database table using DAOs. */
     public static void createAllTables(Database db, boolean ifNotExists) {

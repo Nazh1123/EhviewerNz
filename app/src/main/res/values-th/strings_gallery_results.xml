@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_results_delete_title">ลบผลลัพธ์ที่ประมวลผลแล้ว</string>
+    <string name="gallery_results_delete_sr">ลบผลลัพธ์ SR</string>
+    <string name="gallery_results_calculating">กำลังคำนวณพื้นที่จัดเก็บของแกลเลอรีที่เลือก…</string>
+    <string name="gallery_results_delete_summary">เลือก %1$d แกลเลอรี\n\n%6$s\nผลการแปล: %2$d ภาพ, %3$s\nผลเพิ่มความละเอียด: %4$d ภาพ, %5$s\n\nจำนวนผลการแปลและ SR นับเฉพาะผลลัพธ์ที่สมบูรณ์ที่บันทึกไว้ ส่วนพื้นที่จัดเก็บรวมแคชและผลลัพธ์ที่ยังไม่เสร็จ ไฟล์บีบอัดนับตามขนาดไฟล์ทั้งหมด ลบผลลัพธ์ทั้งหมดของประเภทที่เลือก โดยเก็บภาพต้นฉบับและผลลัพธ์อีกประเภทไว้</string>
+    <string name="gallery_results_originals">ภาพต้นฉบับ: %1$d ภาพ, %2$s</string>
+    <string name="gallery_results_originals_unavailable">ภาพต้นฉบับ: ไม่สามารถเข้าถึงภาพต้นฉบับบางภาพ</string>
+    <string name="gallery_results_inspect_failed">ไม่สามารถตรวจสอบผลลัพธ์บางส่วน โปรดตรวจสอบสิทธิ์เข้าถึงพื้นที่จัดเก็บหรือลองอีกครั้งภายหลัง</string>
+    <string name="gallery_results_deleted">ลบผลลัพธ์ประเภทที่เลือกแล้ว</string>
+    <string name="gallery_results_delete_failed">ไม่สามารถลบผลลัพธ์บางส่วน โปรดตรวจสอบสิทธิ์เข้าถึงพื้นที่จัดเก็บหรือลองอีกครั้ง</string>
+</resources>

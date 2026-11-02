@@ -2,6 +2,22 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <com.hippo.preference.ListPreference
+        android:defaultValue="100"
+        android:key="history_info_size"
+        android:summary="%s"
+        android:title="@string/settings_eh_history_size"
+        app:allowDividerAbove="true"
+        app:entries="@array/history_info_size_entries"
+        app:entryValues="@array/history_info_size_entry_values" />
+        
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="collapse_history_in_sidebar"
+        android:title="@string/settings_collapse_history_in_sidebar"
+        android:summary="@string/settings_collapse_history_in_sidebar_summary"
+        app:allowDividerAbove="false" />
+
     <PreferenceCategory android:title="@string/reading_history">
         <com.hippo.preference.SwitchPreference
             android:defaultValue="true"
@@ -25,6 +41,13 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/settings_history_category_updates">
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="false"
+            android:key="show_update_history_in_sidebar"
+            android:title="@string/settings_show_update_history_in_sidebar"
+            android:summary="@string/settings_show_update_history_in_sidebar_summary"
+            app:allowDividerAbove="false" />
+
         <Preference
             android:key="view_gallery_update_history"
             android:title="@string/settings_view_update_history"

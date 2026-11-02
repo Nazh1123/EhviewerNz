@@ -9,7 +9,7 @@ if (file('google-services.json').exists()) {
 }
 
 
-def baseVersionName = "2.0.2.6.0"
+def baseVersionName = "2.0.2.7.1"
 
 
 def releaseKeystoreFile = rootProject.file("ehviewernz.jks")
@@ -204,6 +204,12 @@ dependencies {
     implementation 'com.github.amlcurran.showcaseview:library:5.4.3'
     implementation 'com.github.ybq:Android-SpinKit:1.4.0'
     implementation 'com.alibaba:fastjson:1.2.83'
+
+    // Render Markdown release notes in the update dialog.
+    implementation 'io.noties.markwon:core:4.6.2'
+    implementation 'io.noties.markwon:ext-strikethrough:4.6.2'
+    implementation 'io.noties.markwon:ext-tables:4.6.2'
+    implementation 'io.noties.markwon:ext-tasklist:4.6.2'
 
     implementation 'com.android.support:multidex:1.0.3'
     /**

@@ -23,7 +23,7 @@
     <string name="gallery_update_log_versions">ดูประวัติลำดับเวอร์ชัน</string>
     <string name="gallery_update_log_loading">กำลังโหลดบันทึกการอัปเดต…</string>
     <string name="gallery_update_log_unavailable">บันทึกการอัปเดตไม่พร้อมใช้งานแล้ว</string>
-    <string name="gallery_update_reader_progress">หน้าที่เพิ่ม %1$d/%2$d · หน้า %3$d</string>
+    <string name="gallery_update_reader_progress">หน้าที่เพิ่ม %1$d/%2$d · หน้า %3$d/%4$d</string>
     <string name="gallery_update_finalizing">กำลังดำเนินการอัปเดตแกลเลอรีให้เสร็จ</string>
     <string name="gallery_update_finalization_failed">ดาวน์โหลดเสร็จแล้ว แต่ดำเนินการอัปเดตขั้นสุดท้ายไม่สำเร็จ ลองใหม่จากหน้ารายละเอียดแกลเลอรี</string>
     <string-array name="gallery_update_record_limit_entries">
@@ -79,4 +79,7 @@
     <string name="gallery_update_history_no_pages">ไม่มีหน้าที่เพิ่มจากการอัปเดตนี้ที่ยังอ่านได้ภายใน อาจถูกลบในเวอร์ชันภายหลังหรือไม่มีอยู่ภายใน บันทึกเก่าที่ไม่มีข้อมูลโทเค็นหน้าสามารถอ่านได้เฉพาะในเวอร์ชันภายในเดิม</string>
     <string name="gallery_update_history_incomplete">ข้อมูลหน้าไม่ครบ</string>
     <string name="gallery_update_history_empty">ไม่มีบันทึกการอัปเดตสำหรับลำดับเวอร์ชันนี้ บันทึกเก่าอาจถูกลบเนื่องจากขีดจำกัดจำนวนบันทึก</string>
+    <string name="gallery_updated">อัปเดตแล้ว</string>
+    <string name="gallery_read_full">อ่านทั้งแกลเลอรี</string>
+    <string name="gallery_update_record_invalid">บันทึกการอัปเดตไม่ถูกต้อง</string>
 </resources>

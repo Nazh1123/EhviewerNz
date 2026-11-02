@@ -23,7 +23,7 @@
     <string name="gallery_update_log_versions">버전 계보 기록 보기</string>
     <string name="gallery_update_log_loading">업데이트 기록 불러오는 중…</string>
     <string name="gallery_update_log_unavailable">업데이트 기록을 더 이상 사용할 수 없음</string>
-    <string name="gallery_update_reader_progress">추가 %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_reader_progress">추가 %1$d/%2$d · p%3$d/%4$d</string>
     <string name="gallery_update_finalizing">갤러리 업데이트 마무리 중</string>
     <string name="gallery_update_finalization_failed">다운로드는 완료되었지만 업데이트 마무리에 실패했습니다. 갤러리 상세 화면에서 다시 시도하세요.</string>
     <string-array name="gallery_update_record_limit_entries">
@@ -79,4 +79,7 @@
     <string name="gallery_update_history_no_pages">이 업데이트의 추가 페이지 중 로컬에서 읽을 수 있는 페이지가 없습니다. 이후 버전에서 삭제되었거나 로컬에 없을 수 있습니다. 페이지 토큰 스냅샷이 없는 이전 기록은 원래 로컬 버전에서만 읽을 수 있습니다.</string>
     <string name="gallery_update_history_incomplete">페이지 정보 불완전</string>
     <string name="gallery_update_history_empty">이 버전 계보에 저장된 업데이트 기록이 없습니다. 기록 수 제한으로 이전 기록이 삭제되었을 수 있습니다.</string>
+    <string name="gallery_updated">업데이트됨</string>
+    <string name="gallery_read_full">전체 갤러리 읽기</string>
+    <string name="gallery_update_record_invalid">잘못된 업데이트 기록</string>
 </resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_rating_label">评分</string>
+    <string name="search_rating_title">最低评分</string>
+    <string name="search_rating_hint">0.00–5.00；0.00 表示不限制评分</string>
+    <string name="search_rating_invalid">请输入 0.00–5.00 的数值，最多两位小数</string>
+</resources>

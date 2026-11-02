@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_prefer_existing_results">Mostrar resultados existentes</string>
+    <string name="reader_prefer_existing_results_help">Muestra los resultados guardados aunque el procesamiento esté desactivado. Toca un icono flotante para alternar entre el original y el resultado. Las páginas sin resultados muestran la imagen original; no se inicia ningún modelo.</string>
+    <string name="reader_show_original">Mostrar imagen original</string>
+    <string name="reader_show_translation_result">Mostrar traducción</string>
+    <string name="reader_show_enhanced_result">Mostrar imagen ampliada</string>
+    <string name="result_import">Importar resultados de la carpeta</string>
+    <string name="result_import_running">Importando imágenes completas de traducción y ampliación para esta galería…</string>
+    <string name="result_import_report">Traducciones importadas: %1$d\nAmpliaciones importadas: %2$d\nOmitidas: %3$d\nFallidas: %4$d\n\nSolo se importan imágenes completas con una página de origen confirmada. No se calculan hashes de los originales. Los resultados en caché siguen sujetos a los límites de la caché.</string>
+    <string name="result_import_failed">No se pudieron importar los resultados. Se conservaron las imágenes existentes.</string>
+</resources>

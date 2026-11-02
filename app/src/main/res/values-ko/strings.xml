@@ -198,6 +198,8 @@
 
     <string name="search_normal">일반 검색</string>
     <string name="search_advance">고급 옵션</string>
+    <string name="search_more_options">추가 검색 조건</string>
+    <string name="search_hide_options">검색 조건 접기</string>
     <string name="search_image">이미지 검색</string>
     <string name="search_normal_search">일반 검색</string>
     <string name="search_subscription_search">구독 검색</string>
@@ -674,8 +676,6 @@
     <string name="settings_advanced_clear_memory_cache_summary">섬네일, 갤러리 정보 메모리 캐시 삭제</string>
     <string name="settings_advanced_read_cache_size">읽기 캐시 크기</string>
     <string name="settings_advanced_app_language_title">앱 언어 (Language)</string>
-    <string name="settings_search_language">검색 언어 태그</string>
-    <string name="settings_search_language_disabled">끄기</string>
     <string name="settings_advanced_proxy">프록시</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>
@@ -991,8 +991,8 @@
     <string name="settings_animated_webp_progress_control_summary" formatted="false">화면 하단 25% 영역을 밀어 애니메이션 재생 위치를 변경합니다</string>
     <string name="settings_animated_webp_sequential_playback_summary">재생이 끝나면 다음 이미지를 자동으로 엽니다</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">페이지 슬라이더가 표시될 때 자동 페이지 넘김 재생/일시정지 버튼을 표시합니다</string>
-    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 화면 중앙 하단 영역을 길게 누르면 %1$sx 속도로 재생합니다. 1.0에서는 길게 누르면 메뉴가 열립니다; 길게 누른 후 좌우로 드래그하여 재생 속도를 변경할 수 있습니다</string>
-    <string name="animated_webp_long_press_speed_hint">%1$sx, 드래그하여 변경</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 화면 중앙 하단 영역을 길게 누르면 %1$sx 속도로 재생합니다. 1.0에서는 길게 누르면 메뉴가 열립니다; 길게 누른 후 좌우로 드래그하여 재생 속도를 변경할 수 있습니다; 위로 밀면 현재 속도가 즉시 고정됩니다</string>
+    <string name="animated_webp_long_press_speed_hint">%1$sx, 좌우로 변경, 위로 밀어 고정</string>
     <string name="animated_webp_long_press_speed_value">%1$sx</string>
     <string name="animated_webp_stall_warning">GIF 재생이 중단되었습니다. 디코딩 오버헤드를 줄이려면 클릭하세요.</string>
     <string name="bookmark_subscription_disable">북마크 구독 제거</string>
@@ -1113,7 +1113,7 @@
     <string name="settings_fork_delete_empty_galleries">빈 갤러리 삭제</string>
     <string name="settings_fork_download_label_continuous_browse">다운로드 탭 연속 탐색</string>
     <string name="settings_fork_download_label_continuous_browse_summary">다운로드 페이지의 태그를 통해 다운로드 갤러리를 위에서 아래로 연속적으로 표시합니다.</string>
-    <string name="settings_fork_features">Fork 기타 기능</string>
+    <string name="settings_fork_features">Fork 기타</string>
     <string name="settings_fork_gallery_immediate_jump">지금 갤러리 점프</string>
     <string name="settings_fork_long_press_save_summary">현재 사진을 로컬에 저장하려면 페이지 넘김 영역을 길게 누르세요.</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">길게 누르면 성공적으로 저장되고 자동으로 다음 페이지로 넘어갑니다.</string>
@@ -1263,4 +1263,16 @@
     <string name="sync_folder_label_removed">다운로드 라벨이 삭제되어 동기화가 취소됨</string>
     <string name="settings_show_viewed_galleries">열람한 갤러리 표시</string>
     <string name="settings_show_viewed_galleries_summary">검색 결과의 최신 갤러리를 기록하여 같은 조건으로 다시 검색할 때 이미 열람한 갤러리를 표시합니다.</string>
+    <string name="top_list_click_to_view">탭하여 보기</string>
+    <string name="settings_yesterday_top_list_new_badge">어제 순위 알림</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">어제 순위를 확인할 때까지 순위 옆에 New!를 표시합니다. 매일 UTC 00:05에 초기화됩니다.</string>
+    <string name="navigation_long_press_hint">버튼을 길게 누르면 특수 동작을 실행합니다</string>
+    <string name="title_keyword_search_action">키워드 검색</string>
+    <string name="download_remove_record">기록만 삭제</string>
+    <string name="download_redownload">다시 다운로드</string>
+    <string name="download_remove_files">기록 및 로컬 파일 삭제</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">홈에서 구독 업데이트 검색</string>
+    <string name="settings_subscription_homepage_scan_summary">수동 및 자동 업데이트 확인 시 구독한 북마크 수 N &gt; 8, 마지막 업데이트 후 경과 시간(분) T &lt; 400, T × 0.3 &lt; N이면 홈을 검색합니다. 그 외의 경우와 복잡한 검색에는 북마크 검색을 사용합니다. 방식을 전환해도 확인 진행 상황은 유지됩니다. 북마크 구독 탐색 방식은 바뀌지 않습니다.</string>
+    <string name="open_image_folder">같은 폴더의 이미지 열기</string>
 </resources>

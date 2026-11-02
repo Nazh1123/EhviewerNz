@@ -2,6 +2,8 @@ package com.hippo.ehviewer.translation
 
 /** Recomputed at each dispatch, optionally retaining the unfinished prefix after a small page turn. */
 object TranslationWindow {
+    const val MAX_AHEAD = 6
+
     /** Finish the pending reader prefix, sweep forward, then wrap even after the reader leaves. */
     fun fullPages(current: Int, size: Int, pendingStart: Int = current): List<Int> =
         fullPageSequence(current, size, pendingStart).toList()
@@ -15,7 +17,7 @@ object TranslationWindow {
 
     fun pages(current: Int, size: Int, ahead: Int, pendingStart: Int = current): List<Int> {
         if (current < 0 || current >= size) return emptyList()
-        val end = (current.toLong() + ahead.coerceIn(0, 10)).coerceAtMost(size.toLong() - 1).toInt()
+        val end = (current.toLong() + ahead.coerceIn(0, MAX_AHEAD)).coerceAtMost(size.toLong() - 1).toInt()
         val start = minOf(current, pendingStart.coerceAtLeast(0))
         return (start..end).toList()
     }

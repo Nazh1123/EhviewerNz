@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_method">วิธีอัปเดต</string>
+    <string name="app_update_method_description">เปิดหน้ารีลีส หรือดาวน์โหลด APK ที่นี่แล้วเปิดตัวติดตั้งเมื่อเสร็จสิ้น</string>
+    <string name="app_update_open_release">เปิดหน้ารีลีส</string>
+    <string name="app_update_direct_download">ดาวน์โหลดโดยตรง</string>
+    <string name="app_update_no_apk">รีลีสนี้ไม่มี APK ที่สามารถระบุให้ดาวน์โหลดได้เพียงไฟล์เดียว โปรดดาวน์โหลดจากหน้ารีลีส</string>
+    <string name="app_update_download_title">อัปเดต EhViewerNz</string>
+    <string name="app_update_downloading">กำลังดาวน์โหลดอัปเดต…</string>
+    <string name="app_update_progress">กำลังดาวน์โหลดอัปเดต: %1$d%%</string>
+    <string name="app_update_waiting_network">หยุดดาวน์โหลดชั่วคราว กำลังรอเครือข่ายหรือระบบลองใหม่…</string>
+    <string name="app_update_ready">ดาวน์โหลดเสร็จแล้ว พร้อมติดตั้ง</string>
+    <string name="app_update_install">ติดตั้ง</string>
+    <string name="app_update_install_permission">อนุญาตให้แอปนี้ติดตั้งแอปที่ไม่รู้จักในการตั้งค่าระบบ แล้วกลับมาเพื่อติดตั้งต่อ</string>
+    <string name="app_update_install_failed">เปิดตัวติดตั้งไม่ได้ ลองใหม่หรือดาวน์โหลดจากหน้ารีลีส</string>
+    <string name="app_update_download_failed">ดาวน์โหลดไม่สำเร็จ ตรวจสอบการเชื่อมต่อและพื้นที่จัดเก็บ แล้วลองใหม่หรือเปิดหน้ารีลีส</string>
+    <string name="app_update_retry">ลองดาวน์โหลดใหม่</string>
+</resources>

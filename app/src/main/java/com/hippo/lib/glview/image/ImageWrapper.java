@@ -370,6 +370,14 @@ public class ImageWrapper {
         return mImage.seekTo(positionMs);
     }
 
+    public int seekTo(int positionMs, java.util.function.BooleanSupplier cancelled) {
+        return mImage.seekTo(positionMs, cancelled);
+    }
+
+    public int seekStep(int positionMs) {
+        return mImage.seekStep(positionMs);
+    }
+
     public int getCurrentPosition() {
         return mImage.getCurrentFramePosition();
     }

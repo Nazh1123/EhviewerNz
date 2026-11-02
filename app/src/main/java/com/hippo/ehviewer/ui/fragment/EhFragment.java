@@ -42,13 +42,7 @@ public class EhFragment extends BasePreferenceFragmentCompat
         Preference applyNavBarThemeColor = findPreference(Settings.KEY_APPLY_NAV_BAR_THEME_COLOR);
         Preference gallerySite = findPreference(Settings.KEY_GALLERY_SITE);
         Preference listMode = findPreference(Settings.KEY_LIST_MODE);
-        Preference showThumbnailDownloadBadge =
-                findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
-        Preference galleryLongPressQuickDownload =
-                findPreference(Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD);
         Preference detailSize = findPreference(Settings.KEY_DETAIL_SIZE);
-        Preference thumbSize = findPreference(Settings.KEY_THUMB_SIZE);
-        Preference previewThumbSize = findPreference(Settings.KEY_PREVIEW_THUMB_SIZE);
         Preference historyInfoSize = findPreference(Settings.KEY_HISTORY_INFO_SIZE);
         Preference showTagTranslations = findPreference(Settings.KEY_SHOW_TAG_TRANSLATIONS);
         Preference showGalleryComment = findPreference(Settings.KEY_SHOW_GALLERY_COMMENT);
@@ -65,13 +59,7 @@ public class EhFragment extends BasePreferenceFragmentCompat
         applyNavBarThemeColor.setOnPreferenceChangeListener(this);
         gallerySite.setOnPreferenceChangeListener(this);
         listMode.setOnPreferenceChangeListener(this);
-        showThumbnailDownloadBadge.setOnPreferenceChangeListener(this);
-        ThumbnailInfoBarPreferences.bind(this,
-                () -> getActivity().setResult(Activity.RESULT_OK));
-        galleryLongPressQuickDownload.setOnPreferenceChangeListener(this);
         detailSize.setOnPreferenceChangeListener(this);
-        thumbSize.setOnPreferenceChangeListener(this);
-        previewThumbSize.setOnPreferenceChangeListener(this);
         historyInfoSize.setOnPreferenceChangeListener(this);
         GalleryUpdateRecordPreferences.bind(this);
         showTagTranslations.setOnPreferenceChangeListener(this);
@@ -95,15 +83,10 @@ public class EhFragment extends BasePreferenceFragmentCompat
         } else if (Settings.KEY_GALLERY_SITE.equals(key)) {
             getActivity().setResult(Activity.RESULT_OK);
             return true;
-        } else if (Settings.KEY_LIST_MODE.equals(key) ||
-                Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE.equals(key) ||
-                Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD.equals(key)) {
+        } else if (Settings.KEY_LIST_MODE.equals(key)) {
             getActivity().setResult(Activity.RESULT_OK);
             return true;
         } else if (Settings.KEY_DETAIL_SIZE.equals(key)) {
-            getActivity().setResult(Activity.RESULT_OK);
-            return true;
-        } else if (Settings.KEY_THUMB_SIZE.equals(key) || Settings.KEY_PREVIEW_THUMB_SIZE.equals(key)) {
             getActivity().setResult(Activity.RESULT_OK);
             return true;
         } else if (Settings.KEY_SHOW_TAG_TRANSLATIONS.equals(key)) {

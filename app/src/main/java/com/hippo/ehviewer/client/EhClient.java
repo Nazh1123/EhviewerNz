@@ -23,6 +23,7 @@ import android.util.Log;
 
 import com.hippo.ehviewer.Analytics;
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.userTag.TagPushParam;
 import com.hippo.ehviewer.client.data.userTag.UserTag;
 import com.hippo.ehviewer.client.exception.CancelledException;
@@ -31,6 +32,7 @@ import com.hippo.util.IoThreadPoolExecutor;
 import com.hippo.lib.yorozuya.SimpleHandler;
 
 import java.io.File;
+import java.util.List;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -72,20 +74,28 @@ public class EhClient {
     public static final int METHOD_GET_EDIT_COMMENT = 29;
     public static final int METHOD_GET_GALLERY_CHAIN_METADATA = 30;
     public static final int METHOD_VERIFY_BOOKMARK = 31;
+    public static final int METHOD_PREPARE_SUBSCRIPTION_LIST = 32;
+    public static final int METHOD_GET_SUBSCRIPTION_HOMEPAGE = 33;
+    public static final int METHOD_GET_DISPLAY_METADATA = 34;
 
     private final ThreadPoolExecutor mRequestThreadPool;
     private final OkHttpClient mOkHttpClient;
     private final OkHttpClient mImageOkHttpClient;
+    private final OkHttpClient mBackgroundOkHttpClient;
+    private final OkHttpClient mBackgroundImageOkHttpClient;
 
     public EhClient(Context context) {
         mRequestThreadPool = IoThreadPoolExecutor.Companion.getInstance();
-        mOkHttpClient = EhApplication.getOkHttpClient(context);
-        mImageOkHttpClient = EhApplication.getImageOkHttpClient(context);
+        mOkHttpClient = EhApplication.getBrowsingOkHttpClient(context);
+        mImageOkHttpClient = EhApplication.getBrowsingImageOkHttpClient(context);
+        mBackgroundOkHttpClient = EhApplication.getOkHttpClient(context);
+        mBackgroundImageOkHttpClient = EhApplication.getImageOkHttpClient(context);
     }
 
     public void execute(EhRequest request) {
         if (!request.isCancelled()) {
-            Task task = new Task(request.getMethod(), request.getCallback(), request.getEhConfig());
+            Task task = new Task(request.getMethod(), request.getCallback(), request.getEhConfig(),
+                    request.isBackground());
             task.executeOnExecutor(mRequestThreadPool, request.getArgs());
             request.task = task;
         } else {
@@ -99,23 +109,29 @@ public class EhClient {
         private final int mMethod;
         private Callback mCallback;
         private EhConfig mEhConfig;
+        private final boolean mBackground;
 
         private final AtomicReference<Call> mCall = new AtomicReference<>();
         private final AtomicBoolean mStop = new AtomicBoolean();
 
         public Task(int method, Callback callback, EhConfig ehConfig) {
+            this(method, callback, ehConfig, false);
+        }
+
+        public Task(int method, Callback callback, EhConfig ehConfig, boolean background) {
             mMethod = method;
             mCallback = callback;
             mEhConfig = ehConfig;
+            mBackground = background;
         }
 
         // Called in Job thread
         public void setCall(Call call) throws CancelledException {
+            mCall.set(call);
             if (mStop.get()) {
                 // Stopped Job thread
+                call.cancel();
                 throw new CancelledException();
-            } else {
-                mCall.lazySet(call);
             }
         }
 
@@ -153,16 +169,36 @@ public class EhClient {
 
         @Override
         protected Object doInBackground(Object... params) {
+            OkHttpClient mOkHttpClient = mBackground ? mBackgroundOkHttpClient : EhClient.this.mOkHttpClient;
+            OkHttpClient mImageOkHttpClient = mBackground ? mBackgroundImageOkHttpClient : EhClient.this.mImageOkHttpClient;
             try {
                 Log.i(TAG, "doInBackground: "+mMethod);
                 switch (mMethod) {
                     case METHOD_SIGN_IN:
                         return EhEngine.signIn(this, mOkHttpClient, (String) params[0], (String) params[1]);
+                    case METHOD_GET_DISPLAY_METADATA:
+                        return EhEngine.fillDisplayMetadata(this, mOkHttpClient,
+                                (List<GalleryInfo>) params[0], (String) params[1]);
                     case METHOD_GET_GALLERY_LIST:
                         return EhEngine.getGalleryList(this, mOkHttpClient,
                                 (String) params[0], (int) params[1],
                                 params.length > 2 && Boolean.TRUE.equals(params[2]),
-                                params.length > 3 && Boolean.TRUE.equals(params[3]));
+                                params.length > 3 && Boolean.TRUE.equals(params[3]),
+                                params.length > 4 ? (int) params[4] : com.hippo.ehviewer.Settings.getPersistentMinRatingHundredths(),
+                                params.length > 5 && Boolean.TRUE.equals(params[5]),
+                                params.length > 6 ? (List<GalleryInfo>) params[6] : null,
+                                params.length > 7 ? (GallerySeenState) params[7] : null,
+                                params.length > 8 && Boolean.TRUE.equals(params[8]));
+                    /* Homepage scanning request dispatch is disabled.
+                    case METHOD_GET_SUBSCRIPTION_HOMEPAGE:
+                        return EhEngine.getSubscriptionHomepagePage(this, mOkHttpClient,
+                                (String) params[0], (SubscriptionHomepageMatcher) params[1],
+                                params.length > 2 ? (SubscriptionHomepageScan) params[2] : null);
+                    */
+                    case METHOD_PREPARE_SUBSCRIPTION_LIST:
+                        return EhEngine.prepareSubscriptionList(this, mOkHttpClient,
+                                (String) params[0], (List<GalleryInfo>) params[1],
+                                (boolean) params[2], (int) params[3]);
                     case METHOD_VERIFY_BOOKMARK:
                         return EhEngine.verifyBookmark(this, mOkHttpClient,
                                 (String) params[0], (int) params[1], (long) params[2]);

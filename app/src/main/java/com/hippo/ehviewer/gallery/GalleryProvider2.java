@@ -24,6 +24,9 @@ import com.hippo.unifile.UniFile;
 
 public abstract class GalleryProvider2 extends GalleryProvider {
 
+    /** Total pages in the source gallery, before filtering to a subset. */
+    public int getSourcePageCount() { return size(); }
+
     /** Called only by the preview worker; never requests or decodes a reader page. */
     @Nullable
     public UniFile getPreviewFile(int index) { return null; }
@@ -74,6 +77,14 @@ public abstract class GalleryProvider2 extends GalleryProvider {
     /** Source name without extension; local sources may include a relative directory. */
     @NonNull
     public String getTranslationFilename(int index) { return getImageFilename(index); }
+
+    /** Full source name for result indexing; never a visible/subset page number. */
+    public String getResultPageName(int index) {
+        UniFile source = getPreviewFile(index);
+        return source != null && source.getName() != null ? source.getName() : getTranslationFilename(index);
+    }
+
+    public String getResultSourceStamp(int index) { return ""; }
 
     /** Existing local source folder, also available when opened outside the download list. */
     @Nullable

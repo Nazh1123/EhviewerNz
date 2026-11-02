@@ -19,6 +19,7 @@ package com.hippo.ehviewer.client.data;
 import android.os.Parcel;
 
 import com.hippo.widget.LoadImageView;
+import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.lib.yorozuya.collect.IntList;
 
 import java.util.ArrayList;
@@ -34,19 +35,10 @@ public class NormalPreviewSet extends PreviewSet {
     private IntList mClipHeightList = new IntList();
     private ArrayList<String> mPageUrlList = new ArrayList<>();
 
-    private String getImageKey(String imageUrl) {
-        int index = imageUrl.indexOf('/');
-        if (index >= 0) {
-            return imageUrl.substring(index + 1);
-        } else {
-            return imageUrl;
-        }
-    }
-
     public void addItem(int position, String imageUrl, int xOffset, int yOffset, int width,
             int height, String pageUrl) {
         mPositionList.add(position);
-        mImageKeyList.add(getImageKey(imageUrl));
+        mImageKeyList.add(EhCacheKeyFactory.getNormalPreviewKey(imageUrl));
         mImageUrlList.add(imageUrl);
         mOffsetXList.add(xOffset);
         mOffsetYList.add(yOffset);
@@ -120,6 +112,9 @@ public class NormalPreviewSet extends PreviewSet {
         this.mClipWidthList = in.readParcelable(IntList.class.getClassLoader());
         this.mClipHeightList = in.readParcelable(IntList.class.getClassLoader());
         this.mPageUrlList = in.createStringArrayList();
+        // Saved state can still contain keys written before stable sheet identities were introduced.
+        mImageKeyList = new ArrayList<>(mImageUrlList.size());
+        for (String url : mImageUrlList) mImageKeyList.add(EhCacheKeyFactory.getNormalPreviewKey(url));
     }
 
     public static final Creator<NormalPreviewSet> CREATOR = new Creator<>() {

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_download_mobile_browsing_priority">ให้ความสำคัญกับการเรียกดูเมื่อใช้ข้อมูลมือถือ</string>
+    <string name="settings_download_mobile_browsing_priority_summary">เมื่อใช้ข้อมูลมือถือ จะลดความเร็วการดาวน์โหลดแกลเลอรีและไฟล์บีบอัดระหว่างโหลดข้อมูลแกลเลอรี ภาพย่อ หรือหน้าที่กำลังอ่าน คืนความเร็วปกติเมื่อคำขอเรียกดูเสร็จและไม่มีการใช้งานสักครู่ ไม่มีผลกับ Wi-Fi</string>
+</resources>

@@ -196,6 +196,10 @@ public class EhUrl {
         return getHost() + "s/" + pToken + '/' + gid + '-' + (index + 1);
     }
 
+    public static String getGalleryTorrentUrl(long gid, String token) {
+        return getHost() + "gallerytorrents.php?gid=" + gid + "&t=" + token;
+    }
+
     public static String getAddFavorites(long gid, String token) {
         return getHost() + "gallerypopups.php?gid=" + gid + "&t=" + token + "&act=addfav";
     }

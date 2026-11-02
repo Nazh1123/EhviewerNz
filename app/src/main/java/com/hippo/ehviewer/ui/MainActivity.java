@@ -24,10 +24,12 @@ import static com.hippo.ehviewer.util.ClipboardUtil.createAnnouncerFromClipboard
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -78,8 +80,8 @@ import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUrlOpener;
 import com.hippo.ehviewer.client.EhUtils;
-import com.hippo.ehviewer.client.SearchLanguageQuery;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
+import com.hippo.ehviewer.client.YesterdayTopListReadState;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.ui.fragment.GalleryVersionMaintenance;
 import com.hippo.ehviewer.ui.fragment.SubscriptionUpdatePreferences;
@@ -97,6 +99,7 @@ import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
 import com.hippo.ehviewer.ui.scene.GalleryInfoScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
 import com.hippo.ehviewer.ui.scene.GalleryPreviewsScene;
+import com.hippo.ehviewer.widget.EhDrawerView;
 import com.hippo.ehviewer.ui.scene.gallery.list.SubscriptionsScene;
 import com.hippo.ehviewer.ui.scene.sign.GetProfileScene;
 import com.hippo.ehviewer.ui.scene.topList.EhTopListScene;
@@ -117,7 +120,6 @@ import com.hippo.ehviewer.widget.EhDrawerLayout;
 import com.hippo.ehviewer.widget.LimitsCountView;
 import com.hippo.io.UniFileInputStreamPipe;
 import com.hippo.network.Network;
-import com.hippo.preference.ListPreference;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.SceneFragment;
 import com.hippo.scene.StageActivity;
@@ -135,6 +137,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.time.Clock;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -181,9 +184,11 @@ public final class MainActivity extends StageActivity
     @Nullable
     private TextView mSubscriptionUpdateCountdown;
     @Nullable
-    private AlertDialog mGalleryVersionUpdatePrompt;
+    private TextView mYesterdayTopListBadge;
+    private boolean mYesterdayTopListBadgeRunning;
+    private final Clock mYesterdayTopListClock = Clock.systemUTC();
     @Nullable
-    private ListPreference mSearchLanguagePreference;
+    private AlertDialog mGalleryVersionUpdatePrompt;
     @Nullable
     private AlertDialog mSubscriptionUpdateSettingsDialog;
     private boolean mSubscriptionUpdatesStarted;
@@ -209,6 +214,14 @@ public final class MainActivity extends StageActivity
     private final Runnable mSubscriptionCountdownRunnable =
             this::renderSubscriptionUpdateCountdown;
 
+    private final Runnable mYesterdayTopListBadgeRunnable = this::renderYesterdayTopListBadge;
+    private final BroadcastReceiver mYesterdayTopListClockReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            renderYesterdayTopListBadge();
+        }
+    };
+
     private final SubscriptionUpdateManager.Listener mSubscriptionUpdateListener =
             new SubscriptionUpdateManager.Listener() {
                 @Override
@@ -227,6 +240,7 @@ public final class MainActivity extends StageActivity
             };
 
     private int mNavCheckedItem = 0;
+    private boolean mHistorySidebarExpanded;
 
     GifHandler gifHandler;
 
@@ -259,7 +273,7 @@ public final class MainActivity extends StageActivity
         registerLaunchMode(GalleryInfoScene.class, SceneFragment.LAUNCH_MODE_STANDARD);
         registerLaunchMode(GalleryCommentsScene.class, SceneFragment.LAUNCH_MODE_STANDARD);
         registerLaunchMode(GalleryPreviewsScene.class, SceneFragment.LAUNCH_MODE_STANDARD);
-        registerLaunchMode(DownloadsScene.class, SceneFragment.LAUNCH_MODE_SINGLE_TASK);
+        registerLaunchMode(DownloadsScene.class, SceneFragment.LAUNCH_MODE_SHARED);
         registerLaunchMode(SingleLabelDownloadsScene.class, SceneFragment.LAUNCH_MODE_STANDARD);
         registerLaunchMode(DownloadLabelsScene.class, SceneFragment.LAUNCH_MODE_SINGLE_TASK);
         registerLaunchMode(FavoritesScene.class, SceneFragment.LAUNCH_MODE_SINGLE_TASK);
@@ -470,6 +484,8 @@ public final class MainActivity extends StageActivity
         mSubscriptionUpdateManager =
                 EhApplication.getSubscriptionUpdateManager(this);
         initSubscriptionUpdateBadges();
+        mYesterdayTopListBadge = initNavigationBadge(R.id.nav_top_lists);
+        renderYesterdayTopListBadge();
         mRightDrawer = (FrameLayout) ViewUtils.$$(this, R.id.right_drawer);
         View headerLayout = mNavView.getHeaderView(0);
         configureOneHandedNavigation(headerLayout);
@@ -591,31 +607,65 @@ public final class MainActivity extends StageActivity
         for (int i = 0; i < menuView.getChildCount(); i++) {
             bindNavigationLongPress(menuView.getChildAt(i));
         }
+        // Menu rows can be rebound without being detached. Apply indentation after
+        // layout too, once the presenter has restored its default row padding.
+        menuView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            for (int i = 0; i < menuView.getChildCount(); i++) {
+                updateHistoryNavigationIndent(menuView.getChildAt(i));
+            }
+        });
     }
 
     private void bindNavigationLongPress(View view) {
         // Read the current ID on each gesture because menu rows are recycled.
         view.setOnLongClickListener(v -> onNavigationItemLongClick(v.getId()));
+        updateHistoryNavigationIndent(view);
+    }
+
+    private void updateHistoryNavigationIndent(View view) {
+        if (mNavView == null || mNavView.getMenu().findItem(view.getId()) == null) return;
+        int padding = mNavView.getItemHorizontalPadding();
+        int indent = isHistoryNavigationGrouped() && isHistoryNavigationItem(view.getId())
+                ? Math.round(24 * getResources().getDisplayMetrics().density) : 0;
+        view.setPaddingRelative(padding + indent, view.getPaddingTop(),
+                padding, view.getPaddingBottom());
     }
 
     private boolean onNavigationItemLongClick(@IdRes int itemId) {
         switch (itemId) {
+            case R.id.nav_subscription:
+                startScene(new Announcer(SubscriptionsScene.class));
+                break;
+            case R.id.nav_history_group:
+                startScene(new Announcer(HistoryScene.class));
+                break;
+            case R.id.nav_whats_hot:
+                Bundle args = new Bundle();
+                args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_WHATS_HOT);
+                args.putBoolean(GalleryListScene.KEY_POPULAR_UPDATES_ONLY,
+                        !Settings.getPopularUpdatesOnly());
+                startSceneFirstly(new Announcer(GalleryListScene.class).setArgs(args));
+                break;
+            case R.id.nav_top_lists:
+                Bundle nav_top_lists = new Bundle();
+                nav_top_lists.putString(EhTopListScene.KEY_ACTION, EhTopListScene.ACTION_TOP_LIST);
+                startSceneFirstly(new Announcer(EhTopListScene.class)
+                        .setArgs(nav_top_lists));
+                break;
             case R.id.nav_bookmark_subscription:
             case R.id.nav_global_subscription:
                 startScene(new Announcer(QuickSearchScene.class));
-                if (mDrawerLayout != null) {
-                    mDrawerLayout.closeDrawers();
-                }
-                return true;
+                break;
             case R.id.nav_update_subscription:
                 showSubscriptionUpdateSettings();
-                return true;
-            case R.id.nav_search_language:
-                showSearchLanguageSettings();
                 return true;
             default:
                 return false;
         }
+        if (mDrawerLayout != null) {
+            mDrawerLayout.closeDrawers();
+        }
+        return true;
     }
 
     private void showSubscriptionUpdateSettings() {
@@ -630,50 +680,46 @@ public final class MainActivity extends StageActivity
         dialog.setOnDismissListener(ignored -> mSubscriptionUpdateSettingsDialog = null);
     }
 
-    private void showSearchLanguageSettings() {
-        if (mSearchLanguagePreference == null) {
-            // Use the same preference dialog and resources as the settings screen.
-            ListPreference preference = new ListPreference(this);
-            preference.setKey(Settings.KEY_SEARCH_LANGUAGE);
-            preference.setPersistent(false);
-            preference.setTitle(R.string.settings_search_language);
-            preference.setDialogTitle(R.string.settings_search_language);
-            preference.setEntries(R.array.search_language_entries);
-            preference.setEntryValues(R.array.search_language_entry_values);
-            preference.setOnPreferenceChangeListener((ignored, newValue) -> {
-                Settings.putString(Settings.KEY_SEARCH_LANGUAGE, (String) newValue);
-                updateSearchLanguageNavigationItem();
-                return true;
-            });
-            mSearchLanguagePreference = preference;
-        }
-        mSearchLanguagePreference.setValue(Settings.getSearchLanguage());
-        mSearchLanguagePreference.showDialog();
+    private boolean isHistoryNavigationGrouped() {
+        return Settings.getCollapseHistoryInSidebar()
+                && (Settings.isReadingHistoryEnabled() || Settings.getShowUpdateHistoryInSidebar());
     }
 
-    private void updateSearchLanguageNavigationItem() {
-        if (mNavView != null) {
-            MenuItem item = mNavView.getMenu().findItem(R.id.nav_search_language);
-            if (item != null) {
-                item.setVisible(Settings.isSearchLanguageEnabled());
-            }
-        }
+    private static boolean isHistoryNavigationItem(@IdRes int itemId) {
+        return itemId == R.id.nav_history || itemId == R.id.nav_reading_history
+                || itemId == R.id.nav_update_history;
     }
 
-    private void updateReadingHistoryNavigationItem() {
-        if (mNavView != null) {
-            MenuItem item = mNavView.getMenu().findItem(R.id.nav_reading_history);
-            if (item != null) item.setVisible(Settings.isReadingHistoryEnabled());
-        }
+    private void updateHistoryNavigationItems() {
+        if (mNavView == null) return;
+        boolean grouped = isHistoryNavigationGrouped();
+        boolean expanded = mHistorySidebarExpanded;
+        boolean showChildren = !grouped || expanded;
+        MenuItem group = mNavView.getMenu().findItem(R.id.nav_history_group);
+        group.setContentDescription(grouped ? getString(expanded
+                ? R.string.history_sidebar_collapse : R.string.history_sidebar_expand) : null);
+        group.setVisible(grouped);
+        MenuItem history = mNavView.getMenu().findItem(R.id.nav_history);
+        history.setTitle(grouped ? R.string.browsing_history : R.string.history);
+        history.setVisible(showChildren);
+        mNavView.getMenu().findItem(R.id.nav_reading_history)
+                .setVisible(showChildren && Settings.isReadingHistoryEnabled());
+        mNavView.getMenu().findItem(R.id.nav_update_history)
+                .setVisible(showChildren && Settings.getShowUpdateHistoryInSidebar());
+
+        boolean historySelected = mNavCheckedItem == R.id.nav_history
+                || (mNavCheckedItem == R.id.nav_reading_history && Settings.isReadingHistoryEnabled())
+                || (mNavCheckedItem == R.id.nav_update_history && Settings.getShowUpdateHistoryInSidebar());
+        int checkedId = grouped && !expanded && historySelected
+                ? R.id.nav_history_group : mNavCheckedItem;
+        MenuItem checked = mNavView.getMenu().findItem(checkedId);
+        mNavView.setCheckedItem(checked != null && checked.isVisible() ? checkedId : R.id.nav_stub);
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         mSubscriptionUpdatesStarted = true;
-        if (mSubscriptionUpdateManager != null) {
-            mSubscriptionUpdateManager.setListener(mSubscriptionUpdateListener);
-        }
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
         if (!Settings.getCloseAutoUpdate()){
@@ -842,10 +888,6 @@ public final class MainActivity extends StageActivity
             mSubscriptionUpdateSettingsDialog.dismiss();
             mSubscriptionUpdateSettingsDialog = null;
         }
-        if (mSearchLanguagePreference != null) {
-            mSearchLanguagePreference.onDetached();
-            mSearchLanguagePreference = null;
-        }
         if (mGalleryVersionUpdatePrompt != null) {
             mGalleryVersionUpdatePrompt.dismiss();
             mGalleryVersionUpdatePrompt = null;
@@ -854,6 +896,7 @@ public final class MainActivity extends StageActivity
         mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
         mSubscriptionUpdateHandler.removeCallbacks(
                 mSubscriptionCountdownRunnable);
+        mSubscriptionUpdateHandler.removeCallbacks(mYesterdayTopListBadgeRunnable);
 
         mDrawerLayout = null;
         mNavView = null;
@@ -864,6 +907,7 @@ public final class MainActivity extends StageActivity
         mBookmarkSubscriptionBadge = null;
         mGlobalSubscriptionBadge = null;
         mSubscriptionUpdateCountdown = null;
+        mYesterdayTopListBadge = null;
         mSubscriptionUpdateManager = null;
         super.onDestroy();
     }
@@ -872,9 +916,15 @@ public final class MainActivity extends StageActivity
     protected void onResume() {
         super.onResume();
 
+        mYesterdayTopListBadgeRunning = true;
+        registerReceiver(mYesterdayTopListClockReceiver, new IntentFilter(Intent.ACTION_TIME_CHANGED));
+        renderYesterdayTopListBadge();
+
+        if (mSubscriptionUpdateManager != null) {
+            mSubscriptionUpdateManager.setListener(mSubscriptionUpdateListener);
+        }
+
         setNavCheckedItem(mNavCheckedItem);
-        updateSearchLanguageNavigationItem();
-        updateReadingHistoryNavigationItem();
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
 
@@ -913,13 +963,21 @@ public final class MainActivity extends StageActivity
     }
 
     @Override
+    protected void onPause() {
+        mYesterdayTopListBadgeRunning = false;
+        unregisterReceiver(mYesterdayTopListClockReceiver);
+        mSubscriptionUpdateHandler.removeCallbacks(mYesterdayTopListBadgeRunnable);
+        if (mSubscriptionUpdateManager != null) {
+            mSubscriptionUpdateManager.setListener(null);
+        }
+        super.onPause();
+    }
+
+    @Override
     protected void onStop() {
         mSubscriptionUpdatesStarted = false;
         mSubscriptionUpdateHandler.removeCallbacks(mSubscriptionUpdateRunnable);
         stopSubscriptionUpdateCountdown();
-        if (mSubscriptionUpdateManager != null) {
-            mSubscriptionUpdateManager.setListener(null);
-        }
         super.onStop();
     }
 
@@ -994,6 +1052,9 @@ public final class MainActivity extends StageActivity
 
         if (scene instanceof BaseScene && mRightDrawer != null && mDrawerLayout != null) {
             BaseScene baseScene = (BaseScene) scene;
+            EhDrawerView rightDrawer = (EhDrawerView) mRightDrawer;
+            if (rightDrawer.isFullWidth()) mDrawerLayout.closeRightDrawerImmediately();
+            rightDrawer.setFullWidth(baseScene.isDrawerFullWidth());
             mRightDrawer.removeAllViews();
             View drawerView = baseScene.createDrawerView(
                     baseScene.getLayoutInflater2(), mRightDrawer, savedInstanceState);
@@ -1131,51 +1192,26 @@ public final class MainActivity extends StageActivity
         }
     }
 
-    private void toggleSearchLanguage() {
-        if (!Settings.isSearchLanguageEnabled()) {
-            return;
-        }
-        String language = Settings.getSearchLanguage();
-        SceneFragment topScene = getTopScene();
-        if (topScene instanceof GalleryListScene) {
-            ((GalleryListScene) topScene).toggleSearchLanguage(language);
-        } else {
-            ListUrlBuilder builder = new ListUrlBuilder();
-            builder.setKeyword(SearchLanguageQuery.token(language));
-            Bundle args = new Bundle();
-            args.putString(GalleryListScene.KEY_ACTION,
-                    GalleryListScene.ACTION_LIST_URL_BUILDER);
-            args.putParcelable(GalleryListScene.KEY_LIST_URL_BUILDER, builder);
-            startSceneFirstly(new Announcer(GalleryListScene.class).setArgs(args));
-        }
-    }
-
     public void setNavCheckedItem(@IdRes int resId) {
         mNavCheckedItem = resId;
-        if (mNavView != null) {
-            if (resId == 0) {
-                mNavView.setCheckedItem(R.id.nav_stub);
-            } else {
-                mNavView.setCheckedItem(resId);
-            }
-        }
+        updateHistoryNavigationItems();
     }
 
     private void initSubscriptionUpdateBadges() {
         if (mNavView == null) {
             return;
         }
-        mEhSubscriptionBadge = initSubscriptionUpdateBadge(
+        mEhSubscriptionBadge = initNavigationBadge(
                 R.id.nav_subscription);
-        mBookmarkSubscriptionBadge = initSubscriptionUpdateBadge(
+        mBookmarkSubscriptionBadge = initNavigationBadge(
                 R.id.nav_bookmark_subscription);
-        mGlobalSubscriptionBadge = initSubscriptionUpdateBadge(
+        mGlobalSubscriptionBadge = initNavigationBadge(
                 R.id.nav_global_subscription);
         mSubscriptionUpdateCountdown = initSubscriptionUpdateCountdown();
     }
 
     @Nullable
-    private TextView initSubscriptionUpdateBadge(@IdRes int itemId) {
+    private TextView initNavigationBadge(@IdRes int itemId) {
         if (mNavView == null) {
             return null;
         }
@@ -1273,6 +1309,25 @@ public final class MainActivity extends StageActivity
         }
         item.setVisible(true);
         return actionView == null ? null : actionView.findViewById(textId);
+    }
+
+    private void renderYesterdayTopListBadge() {
+        mSubscriptionUpdateHandler.removeCallbacks(mYesterdayTopListBadgeRunnable);
+        if (mYesterdayTopListBadge == null) return;
+        long now = mYesterdayTopListClock.millis();
+        boolean unread = YesterdayTopListReadState.isUnread(now);
+        mYesterdayTopListBadge.setText(unread ? getString(R.string.top_list_new_badge) : null);
+        mYesterdayTopListBadge.setVisibility(unread ? View.VISIBLE : View.GONE);
+        if (mYesterdayTopListBadgeRunning && Settings.getShowYesterdayTopListNewBadge()) {
+            mSubscriptionUpdateHandler.postDelayed(mYesterdayTopListBadgeRunnable,
+                    YesterdayTopListReadState.nextPeriodStartAt(now) - now);
+        }
+    }
+
+    public void onYesterdayTopListRead(long loadedPeriod) {
+        if (YesterdayTopListReadState.markRead(loadedPeriod, mYesterdayTopListClock.millis())) {
+            renderYesterdayTopListBadge();
+        }
     }
 
     private void startSubscriptionUpdateCountdown() {
@@ -1468,6 +1523,17 @@ public final class MainActivity extends StageActivity
     public boolean onNavigationItemSelected(MenuItem item) {
         int id = item.getItemId();
 
+        if (id == R.id.nav_history_group) {
+            if (isHistoryNavigationGrouped()) {
+                mHistorySidebarExpanded = !mHistorySidebarExpanded;
+                // NavigationView suspends adapter updates during its row-click callback.
+                // Refresh after it resumes, while preserving the current scene selection.
+                if (mNavView != null) mNavView.post(this::updateHistoryNavigationItems);
+            }
+            // This is a disclosure control: keep the drawer open and the scene selected.
+            return false;
+        }
+
         // Selecting the current gallery-list destination again is an explicit refresh. Running
         // its normal navigation branch below delivers fresh arguments to GalleryListScene, which
         // resets that destination's query and calls GalleryListHelper.refresh().
@@ -1523,10 +1589,10 @@ public final class MainActivity extends StageActivity
                         .setArgs(nav_whats_hot));
                 break;
             case R.id.nav_top_lists:
-                Bundle nav_top_lists = new Bundle();
-                nav_top_lists.putString(EhTopListScene.KEY_ACTION, EhTopListScene.ACTION_TOP_LIST);
-                startSceneFirstly(new Announcer(EhTopListScene.class)
-                        .setArgs(nav_top_lists));
+                ListUrlBuilder topList = new ListUrlBuilder();
+                topList.setMode(ListUrlBuilder.MODE_TOP_LIST);
+                topList.setFollow("tl=15");
+                startSceneFirstly(GalleryListScene.getStartAnnouncer(topList));
                 break;
             case R.id.nav_favourite:
                 startScene(new Announcer(FavoritesScene.class));
@@ -1539,8 +1605,10 @@ public final class MainActivity extends StageActivity
                     startScene(new Announcer(ReadingHistoryScene.class));
                 }
                 break;
-            case R.id.nav_search_language:
-                toggleSearchLanguage();
+            case R.id.nav_update_history:
+                if (Settings.getShowUpdateHistoryInSidebar()) {
+                    startScene(new Announcer(GalleryUpdateHistoryScene.class));
+                }
                 break;
             case R.id.nav_downloads:
                 startScene(new Announcer(DownloadsScene.class));
@@ -1568,7 +1636,8 @@ public final class MainActivity extends StageActivity
                 || itemId == R.id.nav_subscription
                 || itemId == R.id.nav_bookmark_subscription
                 || itemId == R.id.nav_global_subscription
-                || itemId == R.id.nav_whats_hot;
+                || itemId == R.id.nav_whats_hot
+                || itemId == R.id.nav_top_lists;
     }
 
     @Override
@@ -1592,6 +1661,7 @@ public final class MainActivity extends StageActivity
         if (percent > 0f && isSubscriptionDrawer(drawerView)
                 && !mSubscriptionCountdownRunning) {
             startSubscriptionUpdateCountdown();
+            renderYesterdayTopListBadge();
         }
     }
 
@@ -1599,9 +1669,13 @@ public final class MainActivity extends StageActivity
     public void onDrawerOpened(View drawerView) {
         if (isSubscriptionDrawer(drawerView)) {
             startSubscriptionUpdateCountdown();
+            renderYesterdayTopListBadge();
         }
         if (limitsCountView != null) {
             limitsCountView.onLoadData(drawerView, true);
+        }
+        if (drawerView == mRightDrawer && getTopScene() instanceof BaseScene scene) {
+            scene.onDrawerOpened();
         }
     }
 
@@ -1614,6 +1688,11 @@ public final class MainActivity extends StageActivity
             limitsCountView.hide();
         }
         if (mNavView != null && drawerView.findViewById(R.id.nav_view) == mNavView) {
+            // Reset while hidden so the next opening starts collapsed without a layout jump.
+            if (mHistorySidebarExpanded) {
+                mHistorySidebarExpanded = false;
+                updateHistoryNavigationItems();
+            }
             RecyclerView menuView = findRecyclerView(mNavView);
             if (menuView != null) {
                 menuView.stopScroll();

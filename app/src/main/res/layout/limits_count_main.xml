@@ -97,6 +97,18 @@
         android:translationZ="-50dp"
         android:visibility="gone" />
 
+    <!-- Keep the hint next to the bottom quota box, below the expanding submenu rows. -->
+    <TextView
+        android:id="@+id/navigation_long_press_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="6dp"
+        android:text="@string/navigation_long_press_hint"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textSize="12sp" />
+
     <FrameLayout
         android:id="@+id/limits_view"
         android:layout_width="match_parent"

@@ -32,8 +32,9 @@ internal object TranslationTasks {
 
     fun active() = sessions.values.filter { it.enabled && it.working }
     fun fullGalleryTasks() = active().filter { it.fullGallery }
-    fun notificationId(session: GalleryTranslationSession) =
-        notificationIds.getOrPut(session.identity) { nextNotificationId++ }
+    fun notificationId(session: GalleryTranslationSession) = notificationId(session.identity)
+    fun notificationId(identity: String) =
+        notificationIds.getOrPut(identity) { nextNotificationId++ }
 
     fun wake(context: Context, session: GalleryTranslationSession) {
         if (sessions[session.identity] !== session || !session.enabled) return
@@ -49,6 +50,10 @@ internal object TranslationTasks {
     }
 
     fun stopAll() = sessions.keys.toList().forEach(::stop)
+    suspend fun stopForResultDeletion(galleryIds: Set<Long>, sourceIdentities: Set<String> = emptySet()) {
+        sessions.values.toList().filter { it.galleryInfo?.gid in galleryIds || it.identity in sourceIdentities }
+            .forEach { it.stopForResultDeletion() }
+    }
     fun stopActive() = active().map { it.identity }.forEach(::stop)
     fun releaseIdleModels() = sessions.values.forEach { it.releaseIdleModels() }
     internal fun takeIdleModels(except: GalleryTranslationSession?) = sessions.values

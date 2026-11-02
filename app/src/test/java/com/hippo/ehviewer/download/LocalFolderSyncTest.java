@@ -14,6 +14,7 @@ import com.hippo.ehviewer.dao.DaoSession;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
+import com.hippo.ehviewer.ui.scene.download.part.DownloadArchiveImporter;
 
 import org.junit.After;
 import org.greenrobot.greendao.database.StandardDatabase;
@@ -120,6 +121,37 @@ public class LocalFolderSyncTest {
         manager.deleteLabel("second");
         manager.addLabel("second");
         assertTrue(manager.getLocalFolderImportTrees("second").isEmpty());
+    }
+
+    @Test
+    public void archiveFolderImportPreservesFullNamesAndSyncsWithoutLosingProgress() {
+        Uri archive = Uri.parse(TREE + "/document/opaque%3A123.zip");
+        DownloadInfo first = DownloadArchiveImporter.createFolderArchiveDownloadInfo(
+                archive, "123.zip", "books", 100, 3);
+        assertTrue(first.gid < 0);
+        assertEquals("123.zip", first.title);
+        assertEquals(archive.toString(), first.archiveUri);
+        assertEquals(DownloadInfo.STATE_FINISH, first.state);
+        assertEquals(3, first.downloaded);
+        assertEquals(1, manager.applyLocalFolderScan(Collections.singletonList(first), "books", false).added);
+        manager.rememberLocalFolderImport("books", TREE);
+        ImportedGalleryProgress.save(context, first.gid, 2, 3);
+
+        DownloadInfo repeated = DownloadArchiveImporter.createFolderArchiveDownloadInfo(
+                archive, "123.zip", "books", 200, 4);
+        assertEquals(first.gid, repeated.gid);
+        assertEquals(0, manager.applyLocalFolderScan(Collections.singletonList(repeated), "books", false).added);
+        DownloadManager.FolderSyncResult result = manager.applyLocalFolderScan(
+                Collections.singletonList(repeated), "books", true);
+        assertEquals(0, result.added);
+        assertEquals(1, result.updated);
+        assertEquals(2, ImportedGalleryProgress.getStartPage(context, first.gid));
+        assertEquals(4, ImportedGalleryProgress.get(context, first.gid).pages);
+        assertEquals("books", manager.getDownloadInfo(first.gid).label);
+        manager.renameLabel("books", "renamed archives");
+        assertEquals(Collections.singleton(TREE), manager.getLocalFolderImportTrees("renamed archives"));
+        assertNotEquals(first.gid, DownloadArchiveImporter.createFolderArchiveDownloadInfo(
+                Uri.parse(TREE + "/document/other.cbz"), "other.cbz", "books", 200, 1).gid);
     }
 
     @Test

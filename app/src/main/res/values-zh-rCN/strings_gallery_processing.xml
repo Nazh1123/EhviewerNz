@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_processing_service">画廊处理</string>
+    <string name="gallery_processing_queued">排队中：%1$d 个画廊</string>
+    <string name="gallery_processing_stop">停止当前画廊任务</string>
+</resources>

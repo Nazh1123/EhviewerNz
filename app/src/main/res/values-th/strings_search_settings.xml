@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search">การค้นหา</string>
+    <string name="settings_enable_search_tag_chips">ฟองแท็กคำสำคัญ</string>
+    <string name="settings_enable_search_tag_chips_summary">แสดงแท็กคำสำคัญเป็นฟองที่แก้ไขได้ และขยายแถบค้นหาได้สูงสุด 4 บรรทัด ปิดเพื่อใช้ข้อความธรรมดาบรรทัดเดียว</string>
+    <string name="settings_enable_search_preset_tags">เปิดใช้แท็กค้นหาที่ตั้งไว้ล่วงหน้า</string>
+    <string name="settings_enable_precise_rating_filter">เปิดใช้ตัวกรองคะแนนแบบละเอียด</string>
+    <string name="settings_persistent_min_rating">ตัวกรองคะแนนถาวร</string>
+    <string name="settings_persistent_min_rating_description">ตั้งคะแนนขั้นต่ำเริ่มต้นสำหรับทุกการค้นหา แกลเลอรีที่มีคะแนนต่ำกว่าจะถูกซ่อนโดยค่าเริ่มต้น</string>
+    <string name="settings_persistent_min_rating_value">ปัจจุบัน: %1$s (0.00 คือปิดตัวกรอง)</string>
+</resources>

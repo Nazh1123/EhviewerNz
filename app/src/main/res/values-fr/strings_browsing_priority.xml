@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_download_mobile_browsing_priority">Priorité à la navigation sur données mobiles</string>
+    <string name="settings_download_mobile_browsing_priority_summary">Sur données mobiles, ralentit les téléchargements de galeries et d’archives pendant le chargement des informations, des miniatures ou de la page lue. Rétablit la vitesse normale après la fin des requêtes de navigation et une courte période d’inactivité. Ne s’applique pas au Wi-Fi.</string>
+</resources>

@@ -31,6 +31,7 @@ import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.InputType;
@@ -84,6 +85,7 @@ import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.FavouriteStatusRouter;
 import com.hippo.ehviewer.R;
+import com.hippo.ehviewer.widget.HoldThumbnailPreview;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.widget.PopularGalleryActions;
 import com.hippo.ehviewer.gallery.ReadingHistory;
@@ -91,9 +93,15 @@ import com.hippo.ehviewer.callBack.SubscriptionCallback;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
-import com.hippo.ehviewer.client.SearchLanguageQuery;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
+import com.hippo.ehviewer.client.YesterdayTopListReadState;
+import com.hippo.ehviewer.client.SearchRating;
+import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
 import com.hippo.ehviewer.client.SeenGalleryHistory;
+import com.hippo.ehviewer.client.SearchUpdateSession;
+import com.hippo.ehviewer.client.SearchUpdateStore;
+import com.hippo.ehviewer.client.GallerySeenProjection;
+import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUtils;
@@ -110,8 +118,8 @@ import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
-import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.ui.CommonOperations;
+import com.hippo.ehviewer.ui.DownloadRemovalDialog;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.TagSelectorActivity;
@@ -136,7 +144,6 @@ import com.hippo.refreshlayout.RefreshLayout;
 import com.hippo.ripple.Ripple;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.SceneFragment;
-import com.hippo.unifile.UniFile;
 import com.hippo.util.AppHelper;
 import com.hippo.util.DrawableManager;
 import com.hippo.view.ViewTransition;
@@ -168,6 +175,7 @@ public class GalleryListScene extends BaseScene
         BookmarkSubscriptionCoordinator.Listener {
 
     private static final String TAG = "GalleryListScene";
+    private final HoldThumbnailPreview mThumbnailPreview = new HoldThumbnailPreview();
 
     @IntDef({STATE_NORMAL, STATE_SIMPLE_SEARCH, STATE_SEARCH, STATE_SEARCH_SHOW_LIST})
     @Retention(RetentionPolicy.SOURCE)
@@ -198,12 +206,14 @@ public class GalleryListScene extends BaseScene
     private static final String KEY_SELECTED_GIDS = "selected_gids";
     private static final String KEY_DOWNLOADED_ONLY_MODE = "downloaded_only_mode";
     private static final String KEY_POPULAR_VIEW_MODE = "popular_view_mode";
+    public static final String KEY_POPULAR_UPDATES_ONLY = "popular_updates_only";
     private static final String KEY_POPULAR_REPEATED_EXPANDED = "popular_repeated_expanded";
     private static final String KEY_SUBSCRIPTION_NEW_GIDS = "subscription_new_gids";
 
     final static int STATE_NORMAL = 0;
     final static int STATE_SIMPLE_SEARCH = 1;
     final static int STATE_SEARCH = 2;
+    // Keep advanced criteria active while hiding the options panel to show suggestions.
     final static int STATE_SEARCH_SHOW_LIST = 3;
 
     private static final int FAB_MULTI_SELECT_DOWNLOAD = 0;
@@ -247,6 +257,12 @@ public class GalleryListScene extends BaseScene
     @Nullable
     private View mSearchFab;
     @Nullable
+    private FloatingActionButton mSearchOptionsFab;
+    @Nullable
+    private AddDeleteDrawable mSearchOptionsDrawable;
+    @Nullable
+    private ObjectAnimator mSearchOptionsIconAnimator;
+    @Nullable
     private FabLayout mFabLayout;
     @Nullable
     private FloatingActionButton mFloatingActionButton;
@@ -262,6 +278,8 @@ public class GalleryListScene extends BaseScene
     private PopularGalleryHistory mPopularHistory;
     private int mPopularHistorySite = -1;
     private int mPopularViewMode = PopularGalleryHistory.CURRENT;
+    @Nullable
+    private Boolean mPopularUpdatesOnlyOverride;
     private boolean mPopularRepeatedExpanded;
     private boolean mPopularResponseReady;
     private boolean mPopularRequestInFlight;
@@ -311,16 +329,6 @@ public class GalleryListScene extends BaseScene
         }
     };
 
-    @Nullable
-    private final Animator.AnimatorListener mSearchFabAnimatorListener = new SimpleAnimatorListener() {
-        @Override
-        public void onAnimationEnd(Animator animation) {
-            if (null != mSearchFab) {
-                mSearchFab.setVisibility(View.INVISIBLE);
-            }
-        }
-    };
-
     private int mHideActionFabSlop;
     private boolean mShowActionFab = true;
 
@@ -353,6 +361,8 @@ public class GalleryListScene extends BaseScene
     private long mPressBackTime = 0;
 
     private boolean mHasFirstRefresh = false;
+    private int mLastRequestedRatingMinimum = -1;
+    private boolean mLastRequestedPreciseRating;
 
     private int mNavCheckedId = 0;
 
@@ -390,8 +400,18 @@ public class GalleryListScene extends BaseScene
     private SubscriptionUpdateManager mSubscriptionUpdateManager;
     private final Set<Long> mSubscriptionNewGids = new HashSet<>();
     private SeenGalleryHistory.Search mSeenSearch;
+    private SearchUpdateSession mEhSearchSession;
+    private final Set<Long> mSeenNewGids = new HashSet<>();
+    private final GallerySeenProjection mSeenProjection = new GallerySeenProjection();
+    private boolean mProjectionResetPending;
+    private boolean mSubscriptionHasResponse;
+    private boolean mSubscriptionPreserveSnapshot;
+    private boolean mSubscriptionRefreshPending;
+    private final Set<Long> mSubscriptionPendingUnread = new HashSet<>();
     @Nullable
     private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
+    private long mYesterdayTopListRequestPeriod = YesterdayTopListReadState.NO_PERIOD;
+    private long mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
 
     @Override
     public int getNavCheckedItem() {
@@ -403,7 +423,13 @@ public class GalleryListScene extends BaseScene
             return;
         }
 
+        mYesterdayTopListRequestPeriod = YesterdayTopListReadState.NO_PERIOD;
+        mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
+
         String action = args.getString(KEY_ACTION);
+        mPopularUpdatesOnlyOverride = ACTION_WHATS_HOT.equals(action)
+                && args.containsKey(KEY_POPULAR_UPDATES_ONLY)
+                ? args.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
         if (ACTION_HOMEPAGE.equals(action)) {
             mUrlBuilder.reset();
         } else if (ACTION_SUBSCRIPTION.equals(action)) {
@@ -542,13 +568,20 @@ public class GalleryListScene extends BaseScene
         mMultiSelectMode = savedInstanceState.getBoolean(KEY_MULTI_SELECT_MODE);
         mDownloadedOnlyMode = savedInstanceState.getBoolean(KEY_DOWNLOADED_ONLY_MODE);
         mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
+        mPopularUpdatesOnlyOverride = savedInstanceState.containsKey(KEY_POPULAR_UPDATES_ONLY)
+                ? savedInstanceState.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
         mPopularRepeatedExpanded = savedInstanceState.getBoolean(KEY_POPULAR_REPEATED_EXPANDED);
         mPopularResponseReady = mHasFirstRefresh && isPopularMode();
+        mSeenProjection.restore(savedInstanceState);
+        long[] seenNew = savedInstanceState.getLongArray("seen_search_new_gids");
+        if (seenNew != null) for (long gid : seenNew) mSeenNewGids.add(gid);
         String seenKey = savedInstanceState.getString("seen_search_key");
         if (seenKey != null) mSeenSearch = new SeenGalleryHistory.Search(seenKey,
-                savedInstanceState.getLong("seen_search_baseline"),
+                GallerySeenState.parse(savedInstanceState.getString("seen_search_state_v2")),
                 savedInstanceState.getBoolean("seen_search_bookmarked"),
                 savedInstanceState.getBoolean("seen_search_subscribed"));
+        mSubscriptionHasResponse = savedInstanceState.getBoolean("subscription_response_ready_v2");
+        mSubscriptionPreserveSnapshot = mSubscriptionHasResponse && !mHasFirstRefresh;
         long[] subscriptionNewGids = savedInstanceState.getLongArray(KEY_SUBSCRIPTION_NEW_GIDS);
         if (subscriptionNewGids != null) {
             for (long gid : subscriptionNewGids) mSubscriptionNewGids.add(gid);
@@ -579,13 +612,22 @@ public class GalleryListScene extends BaseScene
         outState.putBoolean(KEY_MULTI_SELECT_MODE, mMultiSelectMode);
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
         outState.putInt(KEY_POPULAR_VIEW_MODE, mPopularViewMode);
+        if (mPopularUpdatesOnlyOverride != null) {
+            outState.putBoolean(KEY_POPULAR_UPDATES_ONLY, mPopularUpdatesOnlyOverride);
+        }
         outState.putBoolean(KEY_POPULAR_REPEATED_EXPANDED, mPopularRepeatedExpanded);
+        mSeenProjection.save(outState);
+        long[] seenNew = new long[mSeenNewGids.size()];
+        int seenIndex = 0;
+        for (long gid : mSeenNewGids) seenNew[seenIndex++] = gid;
+        outState.putLongArray("seen_search_new_gids", seenNew);
         if (mSeenSearch != null) {
             outState.putString("seen_search_key", mSeenSearch.key());
-            outState.putLong("seen_search_baseline", mSeenSearch.baseline());
+            outState.putString("seen_search_state_v2", mSeenSearch.baseline().serialize());
             outState.putBoolean("seen_search_bookmarked", mSeenSearch.bookmarked());
             outState.putBoolean("seen_search_subscribed", mSeenSearch.subscribed());
         }
+        outState.putBoolean("subscription_response_ready_v2", mSubscriptionHasResponse);
         long[] subscriptionNewGids = new long[mSubscriptionNewGids.size()];
         int subscriptionIndex = 0;
         for (long gid : mSubscriptionNewGids) subscriptionNewGids[subscriptionIndex++] = gid;
@@ -683,7 +725,7 @@ public class GalleryListScene extends BaseScene
                 EhUtils.NONE == category &&
                 TextUtils.isEmpty(keyword) &&
                 urlBuilder.getAdvanceSearch() == -1 &&
-                urlBuilder.getMinRating() == -1 &&
+                urlBuilder.getMinRating() == -1 && urlBuilder.getMinRatingHundredths() == 0 &&
                 urlBuilder.getPageFrom() == -1 &&
                 urlBuilder.getPageTo() == -1) {
             return resources.getString(appName ? R.string.app_name : R.string.homepage);
@@ -691,7 +733,7 @@ public class GalleryListScene extends BaseScene
                 EhUtils.NONE == category &&
                 TextUtils.isEmpty(keyword) &&
                 urlBuilder.getAdvanceSearch() == -1 &&
-                urlBuilder.getMinRating() == -1 &&
+                urlBuilder.getMinRating() == -1 && urlBuilder.getMinRatingHundredths() == 0 &&
                 urlBuilder.getPageFrom() == -1 &&
                 urlBuilder.getPageTo() == -1) {
             return resources.getString(R.string.subscription);
@@ -701,6 +743,26 @@ public class GalleryListScene extends BaseScene
             return resources.getString(R.string.global_subscription);
         } else if (ListUrlBuilder.MODE_WHATS_HOT == urlBuilder.getMode()) {
             return resources.getString(R.string.whats_hot);
+        } else if (ListUrlBuilder.MODE_TOP_LIST == urlBuilder.getMode()) {
+            String topList = Uri.parse("?" + urlBuilder.getFollow()).getQueryParameter("tl");
+            int period;
+            switch (topList == null ? "" : topList) {
+                case "11":
+                    period = R.string.all_time_top_list;
+                    break;
+                case "12":
+                    period = R.string.past_year_top_list;
+                    break;
+                case "13":
+                    period = R.string.past_month_top_list;
+                    break;
+                case "15":
+                    period = R.string.yesterday_top_list;
+                    break;
+                default:
+                    return resources.getString(R.string.top_lists);
+            }
+            return resources.getString(R.string.top_list_period_title, resources.getString(period));
         } else if (!TextUtils.isEmpty(keyword)) {
             return keyword;
         } else if (MathUtils.hammingWeight(category) == 1) {
@@ -746,6 +808,8 @@ public class GalleryListScene extends BaseScene
         mSearchLayout.setNormalSearchMode(builder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION
                 ? R.id.search_subscription_search
                 : R.id.search_normal_search);
+        mSearchLayout.setSourceMode(builder.getMode());
+        mSearchLayout.setRatingFromBuilder(builder);
 
         // Update search edit text
         if (!TextUtils.isEmpty(keyword) && null != mSearchBar) {
@@ -754,6 +818,8 @@ public class GalleryListScene extends BaseScene
             }
             mSearchBar.setText(keyword);
             mSearchBar.cursorToEnd();
+        } else if (SearchRating.isClientOnlyMode(builder.getMode()) && mSearchBar != null) {
+            mSearchBar.setText("");
         }
 
         // Update title
@@ -779,6 +845,8 @@ public class GalleryListScene extends BaseScene
             checkedItemId = R.id.nav_global_subscription;
         } else if (ListUrlBuilder.MODE_WHATS_HOT == builder.getMode()) {
             checkedItemId = R.id.nav_whats_hot;
+        } else if (ListUrlBuilder.MODE_TOP_LIST == builder.getMode()) {
+            checkedItemId = R.id.nav_top_lists;
         } else {
             checkedItemId = 0;
         }
@@ -837,6 +905,7 @@ public class GalleryListScene extends BaseScene
         onFilter(filterOpen, filterTagList.size());
 
         mSearchFab = ViewUtils.$$(mainLayout, R.id.search_fab);
+        mSearchOptionsFab = (FloatingActionButton) ViewUtils.$$(mainLayout, R.id.search_options_fab);
 
         int paddingTopSB = resources.getDimensionPixelOffset(R.dimen.gallery_padding_top_search_bar);
         int paddingBottomFab = resources.getDimensionPixelOffset(R.dimen.gallery_padding_bottom_fab);
@@ -861,6 +930,7 @@ public class GalleryListScene extends BaseScene
         mRecyclerView.setClipToPadding(false);
         mRecyclerView.setOnItemClickListener(this);
         mRecyclerView.setOnItemLongClickListener(this);
+        mThumbnailPreview.attachToRecyclerView(mRecyclerView);
         assert mOnScrollListener != null;
         mRecyclerView.addOnScrollListener(mOnScrollListener);
         mRecyclerView.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
@@ -903,6 +973,7 @@ public class GalleryListScene extends BaseScene
         updateDownloadedOnlyFabState();
 
         mSearchFab.setOnClickListener(this);
+        mSearchOptionsFab.setOnClickListener(this);
 
         mSearchBarMover = new SearchBarMover(this, mSearchBar, mRecyclerView, mSearchLayout);
 
@@ -1135,8 +1206,14 @@ public class GalleryListScene extends BaseScene
                 }).build();
     }
 
+    @Override public void onPause() {
+        mThumbnailPreview.dismiss();
+        super.onPause();
+    }
+
     @Override
     public void onDestroyView() {
+        mThumbnailPreview.dispose();
         super.onDestroyView();
         cancelPopularNoUpdatesNotice();
         if (isPopularMode() && mPopularRequestInFlight) {
@@ -1180,6 +1257,11 @@ public class GalleryListScene extends BaseScene
         mSearchLayout = null;
         mSearchBar = null;
         mSearchFab = null;
+        if (mSearchOptionsFab != null) mSearchOptionsFab.animate().cancel();
+        if (mSearchOptionsIconAnimator != null) mSearchOptionsIconAnimator.cancel();
+        mSearchOptionsIconAnimator = null;
+        mSearchOptionsDrawable = null;
+        mSearchOptionsFab = null;
         mFloatingActionButton = null;
         mMultiSelectFab = null;
         mDownloadedOnlyFab = null;
@@ -1214,10 +1296,6 @@ public class GalleryListScene extends BaseScene
 
     void showAddQuickSearchDialog(final List<QuickSearch> list,
                                   final ArrayAdapter<QuickSearch> adapter, final ListView listView, final TextView tip) {
-        boolean translation = Settings.getShowTagTranslations();
-//        if (translation){
-//            String translationString = getTagCN();
-//        }
         Context context = getEHContext();
         final ListUrlBuilder urlBuilder = mUrlBuilder;
         if (null == context || null == urlBuilder) {
@@ -1264,33 +1342,8 @@ public class GalleryListScene extends BaseScene
             builder.dismiss(() -> {
                 QuickSearch quickSearch = urlBuilder.toQuickSearch();
 
-                //汉化or不汉化
-                if (translation) {
-                    if (ehTags == null) {
-                        ehTags = EhTagDatabase.getInstance(context);
-                    }
-                //根据‘：’分割字符串为组名和标签名
-                //String[] tags = text.split(":");
-                //quickSearch.name = TagTranslationUtil.getTagCN(tags, ehTags);
-//                String[] parts = text.split("(?=(?:(?:[^\"]*\"){2})*[^\"]*$)\\s+");
-                    String[] parts = text.split("  ");
-                    StringBuilder newText = new StringBuilder();
-                    for (String part : parts) {
-                        String[] tags = part.split(":");
-                        for (int j = 0; j < tags.length; j++) {
-                            tags[j] = tags[j].replace("\"", "").replace("$", "");
-                        }
-                        String trans = TagTranslationUtil.getTagCN(tags, ehTags);
-                        if (newText.length() == 0) {
-                            newText.append(trans);
-                        } else {
-                            newText.append("  ").append(trans);
-                        }
-                    }
-                    quickSearch.name = newText.toString();
-                } else {
-                    quickSearch.name = text;
-                }
+                // Keep the user's label verbatim; tag translation belongs to rendering.
+                quickSearch.name = text;
                 EhDB.insertQuickSearch(quickSearch);
                 list.add(quickSearch);
                 adapter.notifyDataSetChanged();
@@ -1436,9 +1489,22 @@ public class GalleryListScene extends BaseScene
     @Override
     public void onResume() {
         super.onResume();
-        if (mAdapter != null) mAdapter.invalidateReadingProgress();
+        markYesterdayTopListReadIfVisible();
+        if (mSearchLayout != null && mSearchBar != null) {
+            mSearchLayout.syncPresetTags(mSearchBar.getText());
+        }
+        // Rebinding below picks up shared per-gallery reader/reset changes without
+        // discarding every successful progress lookup after visiting any detail page.
         if (mAdapter != null && mHelper != null) mAdapter.onSourceDataSetChanged();
-        if (isBookmarkSubscriptionMode() && mBookmarkSubscriptionCoordinator != null
+        boolean ratingPolicyChanged = mLastRequestedRatingMinimum >= 0 && mUrlBuilder != null
+                && (mLastRequestedRatingMinimum != mUrlBuilder.getEffectiveMinRatingHundredths()
+                || mLastRequestedPreciseRating != Settings.getEnablePreciseRatingFilter());
+        if (ratingPolicyChanged && mHelper != null) {
+            // A lower default needs galleries excluded by the earlier request; cached list stars
+            // also cannot supply exact decimals when precise filtering has just been enabled.
+            mHasFirstRefresh = true;
+            mHelper.refresh();
+        } else if (isBookmarkSubscriptionMode() && mBookmarkSubscriptionCoordinator != null
                 && !mBookmarkSubscriptionCoordinator.isLoading()
                 && !mBookmarkSubscriptionCoordinator.matchesSubscriptions(
                 EhDB.getSubscribedQuickSearch(), isGlobalSubscriptionMode()) && mHelper != null) {
@@ -1495,11 +1561,8 @@ public class GalleryListScene extends BaseScene
                 break;
             case STATE_SIMPLE_SEARCH:
             case STATE_SEARCH:
-                setState(STATE_NORMAL);
-                handle = true;
-                break;
             case STATE_SEARCH_SHOW_LIST:
-                setState(STATE_SEARCH);
+                setState(STATE_NORMAL);
                 handle = true;
                 break;
         }
@@ -1535,7 +1598,7 @@ public class GalleryListScene extends BaseScene
         args.putParcelable(GalleryDetailScene.KEY_GALLERY_INFO, gi);
         Announcer announcer = new Announcer(GalleryDetailScene.class).setArgs(args);
         View thumb;
-        if (null != view && null != (thumb = view.findViewById(R.id.thumb))) {
+        if (null != view && null != (thumb = EnterGalleryDetailTransaction.findCover(view))) {
             announcer.setTranHelper(new EnterGalleryDetailTransaction(thumb));
         }
         startScene(announcer);
@@ -1545,6 +1608,16 @@ public class GalleryListScene extends BaseScene
     @Override
     public boolean onItemLongClick(EasyRecyclerView parent, View view, int position, long id) {
         GalleryInfo galleryInfo = mAdapter != null ? mAdapter.getDataAt(position) : null;
+        if (Settings.getGalleryLongPressQuickDownload()
+                && !mMultiSelectMode && galleryInfo != null && mAdapter != null
+                && mAdapter.getType() == GalleryAdapterNew.TYPE_GRID
+                && Settings.isThumbnailInfoBarEffective()
+                && isInThumbnailActionZone(parent, view, true)) {
+            LoadImageViewNew cover = view.findViewById(R.id.thumb_new);
+            // Reserve this area for preview even if its image has not loaded yet.
+            if (cover != null && !cover.mFailed) mThumbnailPreview.show(cover);
+            return true;
+        }
         if (tryStartDownloadFromLongPress(parent, view, galleryInfo)) {
             return true;
         }
@@ -1583,25 +1656,41 @@ public class GalleryListScene extends BaseScene
             return insideCover && startGalleryDownload(galleryInfo);
         }
 
-        boolean insideCoverDownloadZone = insideCover
-                && touchX >= coverBounds.left + coverBounds.width() * 0.5f
-                && touchY >= coverBounds.top + coverBounds.height() * 0.82f;
+        return isInThumbnailActionZone(parent, itemView, false)
+                && startGalleryDownload(galleryInfo);
+    }
 
+    // The bottom 18% of the cover and the entire information bar each split at the midpoint.
+    private static boolean isInThumbnailActionZone(EasyRecyclerView parent, View itemView,
+                                                    boolean leftHalf) {
+        if (itemView == null) return false;
+        float touchX = parent.getTouchStartX();
+        float touchY = parent.getTouchStartY();
+        View cover = itemView.findViewById(R.id.thumb_new);
+        if (cover != null && cover.getWidth() > 0 && cover.getHeight() > 0) {
+            Rect bounds = new Rect();
+            cover.getDrawingRect(bounds);
+            parent.offsetDescendantRectToMyCoords(cover, bounds);
+            if (insideHorizontalHalf(bounds, touchX, leftHalf)
+                    && touchY >= bounds.top + bounds.height() * 0.82f
+                    && touchY < bounds.bottom) return true;
+        }
         View infoBar = itemView.findViewById(R.id.thumbnail_info_bar);
-        boolean insideInfoBarDownloadZone = false;
         if (infoBar != null && infoBar.getVisibility() == View.VISIBLE
                 && infoBar.getWidth() > 0 && infoBar.getHeight() > 0) {
             Rect infoBarBounds = new Rect();
             infoBar.getDrawingRect(infoBarBounds);
             parent.offsetDescendantRectToMyCoords(infoBar, infoBarBounds);
-            insideInfoBarDownloadZone = touchX >= infoBarBounds.left
-                    + infoBarBounds.width() * 0.5f
-                    && touchX < infoBarBounds.right
+            return insideHorizontalHalf(infoBarBounds, touchX, leftHalf)
                     && touchY >= infoBarBounds.top && touchY < infoBarBounds.bottom;
         }
+        return false;
+    }
 
-        return (insideCoverDownloadZone || insideInfoBarDownloadZone)
-                && startGalleryDownload(galleryInfo);
+    private static boolean insideHorizontalHalf(Rect bounds, float x, boolean leftHalf) {
+        float midpoint = bounds.left + bounds.width() * 0.5f;
+        return x >= bounds.left && x < bounds.right
+                && (leftHalf ? x < midpoint : x >= midpoint);
     }
 
     private boolean startGalleryDownload(@Nullable GalleryInfo galleryInfo) {
@@ -1843,11 +1932,7 @@ public class GalleryListScene extends BaseScene
                             break;
                         case 1: // Download
                             if (downloaded) {
-                                new AlertDialog.Builder(context)
-                                        .setTitle(R.string.download_remove_dialog_title)
-                                        .setMessage(getString(R.string.download_remove_dialog_message, gi.title))
-                                        .setPositiveButton(android.R.string.ok, (dialog1, which1) -> mDownloadManager.deleteDownload(gi.gid))
-                                        .show();
+                                DownloadRemovalDialog.show(context, gi, mDownloadManager);
                             } else {
                                 CommonOperations.startDownload(activity, gi, false);
                             }
@@ -2056,6 +2141,8 @@ public class GalleryListScene extends BaseScene
         if (mPopularViewMode == PopularGalleryHistory.UPDATES && mPopularRepeatedExpanded) {
             galleries.addAll(mPopularHistory.repeatedGalleries());
         }
+        galleries.removeIf(gallery -> !SearchRating.matches(
+                gallery.rating, mUrlBuilder.getEffectiveMinRatingHundredths()));
         return galleries;
     }
 
@@ -2295,45 +2382,14 @@ public class GalleryListScene extends BaseScene
 
     private void showBatchDeleteDownloadDialog(@NonNull Context context) {
         List<DownloadInfo> downloadInfos = new ArrayList<>();
-        LongList gids = new LongList();
         for (long gid : mSelectedGids) {
             DownloadInfo downloadInfo = mDownloadManager.getDownloadInfo(gid);
             if (downloadInfo != null) {
                 downloadInfos.add(downloadInfo);
-                gids.add(gid);
             }
         }
-        if (gids.isEmpty()) {
-            return;
-        }
-
-        CheckBoxDialogBuilder builder = new CheckBoxDialogBuilder(context,
-                getString(R.string.download_remove_dialog_message_2, gids.size()),
-                getString(R.string.download_remove_dialog_check_text),
-                Settings.getRemoveImageFiles());
-        builder.setTitle(R.string.download_remove_dialog_title)
-                .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    boolean removeFiles = builder.isChecked();
-                    Settings.putRemoveImageFiles(removeFiles);
-                    exitMultiSelectMode();
-                    mDownloadManager.deleteRangeDownload(gids);
-                    if (removeFiles) {
-                        deleteGalleryFilesAsync(downloadInfos);
-                    }
-                })
-                .show();
-    }
-
-    private void deleteGalleryFilesAsync(@NonNull List<DownloadInfo> downloadInfos) {
-        executorService.execute(() -> {
-            for (DownloadInfo downloadInfo : downloadInfos) {
-                UniFile directory = SpiderDen.getExistingGalleryDownloadDir(downloadInfo);
-                EhDB.removeDownloadDirname(downloadInfo.gid);
-                if (directory != null) {
-                    directory.delete();
-                }
-            }
-        });
+        DownloadRemovalDialog.show(context, downloadInfos, mDownloadManager,
+                this::exitMultiSelectMode);
     }
 
     private void searchMatchingBookmarks(ListUrlBuilder builder) {
@@ -2347,6 +2403,12 @@ public class GalleryListScene extends BaseScene
 
     @Override
     public void onClick(View v) {
+        if (v == mSearchOptionsFab) {
+            if (!mMultiSelectMode && mState != STATE_NORMAL) {
+                setState(mState == STATE_SEARCH ? STATE_SEARCH_SHOW_LIST : STATE_SEARCH);
+            }
+            return;
+        }
         if (STATE_NORMAL != mState && null != mSearchBar) {
             mSearchBar.applySearch(false);
             hideSoftInput();
@@ -2622,20 +2684,14 @@ public class GalleryListScene extends BaseScene
                         .setDuration(ANIMATE_TIME).setStartDelay(0L)
                         .setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR).start();
             }
-            mSearchFab.setVisibility(View.VISIBLE);
-            mSearchFab.setRotation(-45.0f);
-            mSearchFab.animate().scaleX(1.0f).scaleY(1.0f).rotation(0.0f).setListener(null)
-                    .setDuration(ANIMATE_TIME).setStartDelay(delay)
-                    .setInterpolator(AnimationUtils.FAST_SLOW_INTERPOLATOR).start();
+            setSearchFabsVisible(true, true, delay);
         } else {
             mFabLayout.setExpanded(false, false);
             View fab = mFabLayout.getPrimaryFab();
             fab.setVisibility(View.INVISIBLE);
             fab.setScaleX(0.0f);
             fab.setScaleY(0.0f);
-            mSearchFab.setVisibility(View.VISIBLE);
-            mSearchFab.setScaleX(1.0f);
-            mSearchFab.setScaleY(1.0f);
+            setSearchFabsVisible(true, false, 0L);
         }
     }
 
@@ -2652,10 +2708,8 @@ public class GalleryListScene extends BaseScene
                 delay = 0L;
             } else {
                 delay = ANIMATE_TIME;
-                mSearchFab.animate().scaleX(0.0f).scaleY(0.0f).setListener(mSearchFabAnimatorListener)
-                        .setDuration(ANIMATE_TIME).setStartDelay(0L)
-                        .setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR).start();
             }
+            setSearchFabsVisible(false, true, 0L);
             View fab = mFabLayout.getPrimaryFab();
             delay = Math.max(delay, mPopularActions != null ? mPopularActions.primaryShowDelay() : 0L);
             fab.animate().setListener(null);
@@ -2675,14 +2729,77 @@ public class GalleryListScene extends BaseScene
             if (mPopularActions != null) mPopularActions.snapAbovePrimary();
             fab.setScaleX(1.0f);
             fab.setScaleY(1.0f);
-            mSearchFab.setVisibility(View.INVISIBLE);
-            mSearchFab.setScaleX(0.0f);
-            mSearchFab.setScaleY(0.0f);
+            setSearchFabsVisible(false, false, 0L);
+        }
+    }
+
+    private void setSearchFabsVisible(boolean visible, boolean animation, long delay) {
+        for (View fab : new View[]{mSearchFab, mSearchOptionsFab}) {
+            if (fab == null) continue;
+            fab.animate().setListener(null);
+            fab.animate().cancel();
+            float scale = visible ? 1.0f : 0.0f;
+            if (!animation) {
+                fab.setVisibility(visible ? View.VISIBLE : View.INVISIBLE);
+                fab.setScaleX(scale);
+                fab.setScaleY(scale);
+                fab.setRotation(0.0f);
+                continue;
+            }
+            if (visible) {
+                fab.setVisibility(View.VISIBLE);
+                fab.setRotation(-45.0f);
+            }
+            fab.animate().scaleX(scale).scaleY(scale).rotation(0.0f)
+                    .setDuration(ANIMATE_TIME).setStartDelay(delay)
+                    .setInterpolator(visible ? AnimationUtils.FAST_SLOW_INTERPOLATOR
+                            : AnimationUtils.SLOW_FAST_INTERPOLATOR)
+                    .setListener(visible ? null : new SimpleAnimatorListener() {
+                        @Override
+                        public void onAnimationEnd(Animator animator) {
+                            fab.setVisibility(View.INVISIBLE);
+                        }
+                    }).start();
         }
     }
 
     void setState(@State int state) {
         setState(state, true);
+    }
+
+    private void updateSearchOptionsFab(boolean animation) {
+        if (mSearchOptionsFab == null) return;
+        Context context = mSearchOptionsFab.getContext();
+        // Like the search vector, use the FAB theme's tint when present, then iconColor.
+        // AddDeleteDrawable draws with Paint and does not apply image tint lists itself.
+        ColorStateList iconTint = mSearchOptionsFab.getImageTintList();
+        if (iconTint == null) iconTint = mSearchOptionsFab.getSupportImageTintList();
+        int iconColor = iconTint != null
+                ? iconTint.getColorForState(mSearchOptionsFab.getDrawableState(), iconTint.getDefaultColor())
+                : AttrResources.getAttrColor(context, R.attr.iconColor);
+        if (mSearchOptionsDrawable == null) {
+            mSearchOptionsDrawable = new AddDeleteDrawable(context, iconColor);
+            mSearchOptionsFab.setImageDrawable(mSearchOptionsDrawable);
+        } else {
+            mSearchOptionsDrawable.setColor(iconColor);
+        }
+        boolean expanded = mState == STATE_SEARCH;
+        mSearchOptionsFab.setContentDescription(mSearchOptionsFab.getContext().getString(
+                expanded ? R.string.search_hide_options : R.string.search_more_options));
+        // Cancel even at an endpoint: a second tap can arrive before the first animation frame.
+        if (mSearchOptionsIconAnimator != null) {
+            mSearchOptionsIconAnimator.cancel();
+            mSearchOptionsIconAnimator = null;
+        }
+        float progress = expanded ? 1f : 0f;
+        if (animation && mSearchOptionsDrawable.getProgress() != progress) {
+            // Match the search bar's shape animation while retaining the FAB's icon color.
+            mSearchOptionsIconAnimator = ObjectAnimator.ofFloat(mSearchOptionsDrawable, "progress", progress);
+            mSearchOptionsIconAnimator.setDuration(ANIMATE_TIME);
+            mSearchOptionsIconAnimator.start();
+        } else {
+            mSearchOptionsDrawable.setProgress(progress);
+        }
     }
 
     private void setState(@State int state, boolean animation) {
@@ -2708,8 +2825,6 @@ public class GalleryListScene extends BaseScene
                         mSearchBarMover.returnSearchBarPosition();
                         selectSearchFab(animation);
                     } else if (state == STATE_SEARCH_SHOW_LIST) {
-                        mViewTransition.showView(1, animation);
-                        mSearchLayout.scrollSearchContainerToTop();
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                         selectSearchFab(animation);
@@ -2726,8 +2841,6 @@ public class GalleryListScene extends BaseScene
                         mSearchBar.setState(SearchBar.STATE_SEARCH, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     } else if (state == STATE_SEARCH_SHOW_LIST) {
-                        mViewTransition.showView(1, animation);
-                        mSearchLayout.scrollSearchContainerToTop();
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     }
@@ -2743,6 +2856,7 @@ public class GalleryListScene extends BaseScene
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     } else if (state == STATE_SEARCH_SHOW_LIST) {
+                        mViewTransition.showView(0, animation);
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     }
@@ -2758,12 +2872,17 @@ public class GalleryListScene extends BaseScene
                         mSearchBar.setState(SearchBar.STATE_SEARCH_LIST, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     } else if (state == STATE_SEARCH) {
+                        mViewTransition.showView(1, animation);
                         mSearchBar.setState(SearchBar.STATE_SEARCH, animation);
                         mSearchBarMover.returnSearchBarPosition();
                     }
                     break;
             }
         }
+        if (state == STATE_SEARCH || state == STATE_SEARCH_SHOW_LIST) {
+            mSearchLayout.syncPresetTags(mSearchBar.getText());
+        }
+        updateSearchOptionsFab(animation);
         updatePopularActions();
     }
 
@@ -2855,23 +2974,6 @@ public class GalleryListScene extends BaseScene
         setState(STATE_NORMAL);
     }
 
-    public void toggleSearchLanguage(@NonNull String language) {
-        if (mUrlBuilder == null || mHelper == null) {
-            return;
-        }
-
-        String query = (mSearchBar != null && mState != STATE_NORMAL)
-                ? mSearchBar.getText()
-                : mUrlBuilder.getKeyword();
-        String updatedQuery = SearchLanguageQuery.toggle(query, language);
-
-        if (mSearchBar != null) {
-            mSearchBar.setText(updatedQuery);
-            mSearchBar.cursorToEnd();
-        }
-        onApplySearch(updatedQuery);
-    }
-
     @Override
     public void onSearchEditTextBackPressed() {
         onBackPressed();
@@ -2928,6 +3030,23 @@ public class GalleryListScene extends BaseScene
         } else {
             setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED, Gravity.LEFT);
             setDrawerLockMode(DrawerLayout.LOCK_MODE_LOCKED_CLOSED, Gravity.RIGHT);
+        }
+    }
+
+    @Override
+    public void onSearchInputResize(int extraHeight) {
+        if (mSearchLayout != null) mSearchLayout.setSearchBarExtraHeight(extraHeight);
+    }
+
+    @Override
+    public void onSearchQueryChanged(String query) {
+        if (mSearchLayout != null) mSearchLayout.syncPresetTags(query);
+    }
+
+    @Override
+    public void onSearchPresetQueryChanged(String query) {
+        if (mSearchBar != null) {
+            mSearchBar.setTextForEditing(query);
         }
     }
 
@@ -3014,19 +3133,45 @@ public class GalleryListScene extends BaseScene
     }
 
 
+    private void prepareYesterdayTopListRequest(int page) {
+        mYesterdayTopListRequestPeriod = page == 0
+                && YesterdayTopListReadState.isYesterdayTopList(mUrlBuilder)
+                ? YesterdayTopListReadState.periodAt(System.currentTimeMillis())
+                : YesterdayTopListReadState.NO_PERIOD;
+        if (page == 0) mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
+    }
+
+    private void markYesterdayTopListReadIfVisible() {
+        MainActivity activity = getActivity2();
+        if (mLoadedYesterdayTopListPeriod != YesterdayTopListReadState.NO_PERIOD
+                && YesterdayTopListReadState.isYesterdayTopList(mUrlBuilder)
+                && isResumed() && getView() != null && activity != null
+                && activity.getTopScene() == this) {
+            activity.onYesterdayTopListRead(mLoadedYesterdayTopListPeriod);
+        }
+    }
+
     private void onGetGalleryListSuccess(GalleryListParser.Result result, int taskId) {
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
+            long loadedYesterdayPeriod = result.customErrorString == null
+                    && result.galleryInfoList != null && !result.galleryInfoList.isEmpty()
+                    && YesterdayTopListReadState.isYesterdayTopList(mUrlBuilder)
+                    ? mYesterdayTopListRequestPeriod : YesterdayTopListReadState.NO_PERIOD;
             boolean noPopularUpdates = false;
             if (isPopularMode() && mPopularHistory != null && result.customErrorString == null) {
                 mPopularRepeatedExpanded = false;
+                mPopularHistory.updateRatings(result.ratingMetadata);
                 mPopularHistory.record(result.galleryInfoList);
                 mPopularHistory.persist();
                 mPopularResponseReady = true;
                 mPopularRequestInFlight = false;
-                mPopularViewMode = Settings.getPopularUpdatesOnly()
+                boolean updatesOnly = mPopularUpdatesOnlyOverride != null
+                        ? mPopularUpdatesOnlyOverride : Settings.getPopularUpdatesOnly();
+                mPopularViewMode = updatesOnly
                         ? PopularGalleryHistory.UPDATES : PopularGalleryHistory.CURRENT;
-                if (mPopularViewMode == PopularGalleryHistory.UPDATES && mPopularHistory.hasPrevious()
+                if (mPopularUpdatesOnlyOverride == null
+                        && mPopularViewMode == PopularGalleryHistory.UPDATES && mPopularHistory.hasPrevious()
                         && mPopularHistory.galleries(PopularGalleryHistory.UPDATES).isEmpty()) {
                     // Keep the current list readable when the default filter has no new galleries.
                     mPopularViewMode = PopularGalleryHistory.CURRENT;
@@ -3037,20 +3182,32 @@ public class GalleryListScene extends BaseScene
                 result.nextPage = 0;
                 result.firstHref = result.prevHref = result.nextHref = result.lastHref = null;
             }
-            if (mUrlBuilder != null
-                    && mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION
-                    && mHelper.isCurrentTaskRefresh(taskId)
-                    && mSubscriptionUpdateManager != null) {
-                mSubscriptionUpdateManager.recordEhPageViewed(
-                        result.galleryInfoList);
+            if (result.customErrorString == null && mProjectionResetPending
+                    && mHelper.isCurrentTaskRefresh(taskId)) {
+                mSeenProjection.reset();
+                mSeenNewGids.clear();
+                mProjectionResetPending = false;
+            }
+            boolean hasMoreResults = !TextUtils.isEmpty(result.nextHref)
+                    || mUrlBuilder != null && result.pages > 0 && mUrlBuilder.getPageIndex() + 1 < result.pages;
+            if (result.customErrorString == null && mUrlBuilder != null
+                    && mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION) {
+                beginSubscriptionResponse(taskId);
+                if (mEhSearchSession == null) mEhSearchSession = new SearchUpdateSession(mUrlBuilder, null);
+                mEhSearchSession.observe(result, hasMoreResults);
+                mSubscriptionNewGids.addAll(mEhSearchSession.displayNewGids());
+                mEhSearchSession.commit(true);
+                try (SearchUpdateStore store = SearchUpdateStore.open()) {
+                    store.acknowledgeLegacy(com.hippo.ehviewer.client.SubscriptionSearchContext.key(), "eh");
+                }
+                if (mSubscriptionUpdateManager != null) mSubscriptionUpdateManager.onSearchStatesChanged();
             }
             if (result.customErrorString == null && SeenGalleryHistory.supports(mUrlBuilder)
-                    && Settings.getShowViewedGalleries() && mSeenSearch != null) {
-                long maxGid = result.rawHeadGid;
-                for (GalleryInfo gallery : result.galleryInfoList) maxGid = Math.max(maxGid, gallery.gid);
-                if (SeenGalleryHistory.record(mSeenSearch, maxGid) && mSubscriptionUpdateManager != null) {
-                    mSubscriptionUpdateManager.recordBookmarkPageViewed(maxGid);
-                }
+                    && mSeenSearch != null) {
+                if (mSeenSearch.session() == null) mSeenSearch = SeenGalleryHistory.open(mUrlBuilder);
+                SeenGalleryHistory.record(mSeenSearch, result, hasMoreResults);
+                if (mSeenSearch != null) mSeenNewGids.addAll(mSeenSearch.newGids());
+                if (mSubscriptionUpdateManager != null) mSubscriptionUpdateManager.onSearchStatesChanged();
             }
             String emptyString;
             if (result.customErrorString == null) {
@@ -3064,6 +3221,10 @@ public class GalleryListScene extends BaseScene
             mHelper.setEmptyString(emptyString);
 //            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
             mHelper.onGetPageData(taskId, result, result.galleryInfoList);
+            if (loadedYesterdayPeriod != YesterdayTopListReadState.NO_PERIOD) {
+                mLoadedYesterdayTopListPeriod = loadedYesterdayPeriod;
+                markYesterdayTopListReadIfVisible();
+            }
             onDownloadedPageScanPageLoaded();
             if (isPopularMode()) {
                 mPopularRequestInFlight = false;
@@ -3098,7 +3259,13 @@ public class GalleryListScene extends BaseScene
     }
 
     private void markSubscriptionOpened(boolean captureUnread) {
-        if (captureUnread) mSubscriptionNewGids.clear();
+        if (captureUnread) {
+            mSubscriptionNewGids.clear();
+            mSubscriptionHasResponse = false;
+            mSubscriptionPreserveSnapshot = false;
+            mSubscriptionRefreshPending = false;
+            mSubscriptionPendingUnread.clear();
+        }
         if (mUrlBuilder == null || mSubscriptionUpdateManager == null) {
             return;
         }
@@ -3116,6 +3283,16 @@ public class GalleryListScene extends BaseScene
                 || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
             mRecentCheckResult =
                     mSubscriptionUpdateManager.getRecentCheckResult(mode);
+        }
+    }
+
+    /** Keep the displayed update markers intact until a refresh actually succeeds. */
+    private void beginSubscriptionResponse(int taskId) {
+        if (mSubscriptionRefreshPending && mHelper != null && mHelper.isCurrentTaskRefresh(taskId)) {
+            mSubscriptionNewGids.clear();
+            mSubscriptionNewGids.addAll(mSubscriptionPendingUnread);
+            mSubscriptionRefreshPending = false;
+            mSubscriptionHasResponse = true;
         }
     }
 
@@ -3162,18 +3339,24 @@ public class GalleryListScene extends BaseScene
                     ? R.string.global_subscription_partial_failure
                     : R.string.bookmark_subscription_partial_failure, LENGTH_SHORT);
         }
-        if (refresh && !partialFailure && mSubscriptionUpdateManager != null
-                && mBookmarkSubscriptionCoordinator != null) {
-            if (isGlobalSubscriptionMode()) {
-                mSubscriptionUpdateManager.recordGlobalPageViewed(
-                        mBookmarkSubscriptionCoordinator.getLatestEhGid(),
-                        mBookmarkSubscriptionCoordinator.getLatestBookmarkGid());
-            } else {
-                mSubscriptionUpdateManager.recordBookmarkPageViewed(
-                        mBookmarkSubscriptionCoordinator.getLatestBookmarkGid());
+        if (mBookmarkSubscriptionCoordinator != null) {
+            beginSubscriptionResponse(taskId);
+            for (GalleryInfo gallery : data) {
+                if (mBookmarkSubscriptionCoordinator.isNewGallery(gallery)) {
+                    mSubscriptionNewGids.add(gallery.gid);
+                }
             }
+            if (!partialFailure) try (SearchUpdateStore store = SearchUpdateStore.open()) {
+                String scope = com.hippo.ehviewer.client.SubscriptionSearchContext.key();
+                store.acknowledgeLegacy(scope, "bookmark");
+                if (isGlobalSubscriptionMode()) store.acknowledgeLegacy(scope, "eh");
+            }
+            if (mSubscriptionUpdateManager != null) mSubscriptionUpdateManager.onSearchStatesChanged();
         }
         onGetGalleryListSuccess(result, taskId);
+        if (data.isEmpty() && hasMore) {
+            mHelper.showContent();
+        }
     }
 
     @Override
@@ -3201,10 +3384,8 @@ public class GalleryListScene extends BaseScene
         public void onClick() {
             startScene(createAnnouncer());
 
-            if (mState == STATE_SIMPLE_SEARCH) {
+            if (mState == STATE_SIMPLE_SEARCH || mState == STATE_SEARCH_SHOW_LIST) {
                 setState(STATE_NORMAL);
-            } else if (mState == STATE_SEARCH_SHOW_LIST) {
-                setState(STATE_SEARCH);
             }
         }
 
@@ -3291,24 +3472,18 @@ public class GalleryListScene extends BaseScene
         }
 
         private boolean hasSearchBaseline() {
-            return SeenGalleryHistory.supports(mUrlBuilder) && mSeenSearch != null && mSeenSearch.baseline() > 0;
+            return SeenGalleryHistory.supports(mUrlBuilder) && mSeenSearch != null && mSeenSearch.baseline().initialized();
         }
 
         private boolean isNewGallery(GalleryInfo gallery) {
-            return hasSearchBaseline() ? gallery.gid > mSeenSearch.baseline()
+            return hasSearchBaseline() ? mSeenNewGids.contains(gallery.gid)
                     : mSubscriptionNewGids.contains(gallery.gid);
         }
 
         private void rebuildViewedData() {
             mViewedData.clear();
             if (!hasViewedProjection()) return;
-            // Keep each group's server order, including backdated galleries counted as updates.
-            for (GalleryInfo gallery : mHelper.getData()) {
-                if (isNewGallery(gallery)) mViewedData.add(gallery);
-            }
-            for (GalleryInfo gallery : mHelper.getData()) {
-                if (!isNewGallery(gallery)) mViewedData.add(gallery);
-            }
+            mViewedData.addAll(mSeenProjection.project(mHelper.getData(), this::isNewGallery));
         }
 
         private void rebuildPopularData() {
@@ -3316,7 +3491,10 @@ public class GalleryListScene extends BaseScene
             mPopularNewCount = 0;
             if (hasPopularProjection()) {
                 mPopularData.addAll(getPopularDisplayGalleries());
-                mPopularNewCount = mPopularHistory.galleries(PopularGalleryHistory.UPDATES).size();
+                for (GalleryInfo gallery : mPopularHistory.galleries(PopularGalleryHistory.UPDATES)) {
+                    if (SearchRating.matches(gallery.rating,
+                            mUrlBuilder.getEffectiveMinRatingHundredths())) mPopularNewCount++;
+                }
             }
         }
 
@@ -3327,7 +3505,7 @@ public class GalleryListScene extends BaseScene
                     && mPopularRepeatedExpanded) {
                 for (int i = 0; i < mPopularNewCount; i++) newGids.add(mPopularData.get(i).gid);
             } else if (hasViewedProjection()) {
-                for (GalleryInfo gallery : mViewedData) if (isNewGallery(gallery)) newGids.add(gallery.gid);
+                for (GalleryInfo gallery : mViewedData) if (mSeenProjection.inPrefix(gallery.gid)) newGids.add(gallery.gid);
             } else {
                 return;
             }
@@ -3565,13 +3743,36 @@ public class GalleryListScene extends BaseScene
             super.refresh();
         }
 
+        private void prepareSeenState(int taskId) {
+            if (isCurrentTaskRefresh(taskId)) {
+                mProjectionResetPending = true;
+                mSeenSearch = SeenGalleryHistory.open(mUrlBuilder);
+                if (mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION)
+                    mEhSearchSession = new SearchUpdateSession(mUrlBuilder, null);
+                if (isSubscriptionMode()) {
+                    mSubscriptionPendingUnread.clear();
+                    if (mSubscriptionHasResponse && !mSubscriptionPreserveSnapshot) {
+                        if (mSubscriptionUpdateManager != null) mSubscriptionPendingUnread.addAll(
+                                mSubscriptionUpdateManager.getUnreadGalleryGids(mUrlBuilder.getMode()));
+                    } else {
+                        mSubscriptionPendingUnread.addAll(mSubscriptionNewGids);
+                    }
+                    mSubscriptionRefreshPending = true;
+                }
+                mSubscriptionPreserveSnapshot = false;
+            }
+        }
+
         @Override
         protected void getPageData(int taskId, int type, int page) {
-            if (isCurrentTaskRefresh(taskId)) mSeenSearch = SeenGalleryHistory.open(mUrlBuilder);
+            prepareSeenState(taskId);
             MainActivity activity = getActivity2();
             if (null == activity || null == mClient || null == mUrlBuilder) {
                 return;
             }
+            prepareYesterdayTopListRequest(page);
+            mLastRequestedRatingMinimum = mUrlBuilder.getEffectiveMinRatingHundredths();
+            mLastRequestedPreciseRating = Settings.getEnablePreciseRatingFilter();
 
             if (isPopularMode()) {
                 mPopularRequestInFlight = true;
@@ -3584,7 +3785,10 @@ public class GalleryListScene extends BaseScene
                     request.setMethod(EhClient.METHOD_GET_GALLERY_LIST);
                     request.setCallback(new GetGalleryListListener(getContext(),
                             activity.getStageId(), getTag(), taskId));
-                    request.setArgs(url, ListUrlBuilder.MODE_WHATS_HOT);
+                    request.setArgs(url, ListUrlBuilder.MODE_WHATS_HOT, false, false,
+                            mUrlBuilder.getEffectiveMinRatingHundredths(), false,
+                            SubscriptionGallerySnapshot.copy(
+                                    mPopularHistory.galleries(PopularGalleryHistory.CURRENT)));
                     mClient.execute(request);
                 });
                 return;
@@ -3614,7 +3818,8 @@ public class GalleryListScene extends BaseScene
                 request.setMethod(EhClient.METHOD_GET_GALLERY_LIST);
                 request.setCallback(new GetGalleryListListener(getContext(),
                         activity.getStageId(), getTag(), taskId));
-                request.setArgs(url, mUrlBuilder.getMode());
+                request.setArgs(url, mUrlBuilder.getMode(), false, false,
+                        mUrlBuilder.getEffectiveMinRatingHundredths(), true);
                 mClient.execute(request);
             }
         }
@@ -3646,7 +3851,7 @@ public class GalleryListScene extends BaseScene
                             getBookmarkSubscriptionCoordinator();
                     if (coordinator != null) {
                         coordinator.refresh(taskId, subscriptions, includeEhSubscription,
-                                recentCheckResult);
+                                recentCheckResult, mUrlBuilder.getEffectiveMinRatingHundredths());
                     }
                 });
             });
@@ -3663,10 +3868,12 @@ public class GalleryListScene extends BaseScene
             if (null == activity || null == mClient || null == mUrlBuilder) {
                 return;
             }
+            prepareYesterdayTopListRequest(page);
             if (isPopularMode()) {
                 getPageData(taskId, pageAction, page);
                 return;
             }
+            prepareSeenState(taskId);
             if (isBookmarkSubscriptionMode()) {
                 BookmarkSubscriptionCoordinator coordinator =
                         getBookmarkSubscriptionCoordinator();
@@ -3688,7 +3895,8 @@ public class GalleryListScene extends BaseScene
             request.setMethod(EhClient.METHOD_GET_GALLERY_LIST);
             request.setCallback(new GetGalleryListListener(getContext(),
                     activity.getStageId(), getTag(), taskId));
-            request.setArgs(url, mUrlBuilder.getMode());
+            request.setArgs(url, mUrlBuilder.getMode(), false, false,
+                    mUrlBuilder.getEffectiveMinRatingHundredths(), pageAction == GOTO_NEXT_PAGE);
             mClient.execute(request);
         }
 

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_eh_use_local_timezone">Use device time zone</string>
+    <string name="settings_eh_use_local_timezone_summary">Display gallery upload times and other website timestamps in the device time zone. Turn off to use UTC.</string>
+</resources>

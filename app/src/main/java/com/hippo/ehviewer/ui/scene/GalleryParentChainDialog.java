@@ -10,6 +10,7 @@
 
 package com.hippo.ehviewer.ui.scene;
 
+import com.hippo.ehviewer.util.GalleryTimeFormatter;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.drawable.Drawable;
@@ -335,7 +336,7 @@ public final class GalleryParentChainDialog {
             }
 
             holder.sequence.setText(String.format(Locale.getDefault(), "%d", position + 1));
-            holder.posted.setText(posted);
+            holder.posted.setText(GalleryTimeFormatter.format(posted));
             holder.title.setText(title);
             holder.title.setCompoundDrawablesRelativeWithIntrinsicBounds(
                     null, null, downloaded ? downloadedIcon : null, null);

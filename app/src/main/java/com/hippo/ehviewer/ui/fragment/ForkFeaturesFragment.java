@@ -1,6 +1,5 @@
 package com.hippo.ehviewer.ui.fragment;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 
@@ -27,30 +26,6 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
                                     @Nullable String rootKey) {
         addPreferencesFromResource(R.xml.fork_features_settings);
         mManualImageSaveLocation = findPreference(KEY_MANUAL_IMAGE_SAVE_LOCATION);
-        Preference showThumbnailDownloadBadge =
-                findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE);
-        Preference galleryLongPressQuickDownload =
-                findPreference(Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD);
-        Preference.OnPreferenceChangeListener galleryListPreferenceListener =
-                (preference, newValue) -> {
-                if (getActivity() != null) {
-                    getActivity().setResult(Activity.RESULT_OK);
-                }
-                return true;
-            };
-        if (showThumbnailDownloadBadge != null) {
-            showThumbnailDownloadBadge.setOnPreferenceChangeListener(
-                    galleryListPreferenceListener);
-        }
-        ThumbnailInfoBarPreferences.bind(this, () -> {
-            if (getActivity() != null) {
-                getActivity().setResult(Activity.RESULT_OK);
-            }
-        });
-        if (galleryLongPressQuickDownload != null) {
-            galleryLongPressQuickDownload.setOnPreferenceChangeListener(
-                    galleryListPreferenceListener);
-        }
         Preference deleteEmptyGalleries = findPreference(KEY_DELETE_EMPTY_GALLERIES);
         if (deleteEmptyGalleries != null) {
             deleteEmptyGalleries.setOnPreferenceClickListener(preference -> {
@@ -89,6 +64,10 @@ public class ForkFeaturesFragment extends BasePreferenceFragmentCompat {
     public void onResume() {
         super.onResume();
         updateManualSaveLocationSummary();
+        Preference priority = findPreference(Settings.KEY_MOBILE_BROWSING_PRIORITY);
+        if (priority instanceof androidx.preference.TwoStatePreference toggle) {
+            toggle.setChecked(Settings.getMobileBrowsingPriority());
+        }
     }
 
     @Override

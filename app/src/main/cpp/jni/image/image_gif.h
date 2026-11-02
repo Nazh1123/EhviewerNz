@@ -28,6 +28,7 @@
 #include <stdbool.h>
 
 #include "patch_head_input_stream.h"
+#include "image_seek.h"
 #include "gif_lib.h"
 #include "../utils.h"
 
@@ -48,6 +49,8 @@ typedef struct
   int tran;
   int disposal;
   int delay;
+  int start;
+  int replay_start;
   int prepare;
 } GIF_FRAME_INFO;
 
@@ -69,6 +72,7 @@ typedef struct
   bool frame_prepared;
   bool prepared_looped;
   int total_duration;
+  ImageSeekCache seek_cache;
   pthread_mutex_t frame_buffer_mutex;
   bool frame_buffer_mutex_initialized;
   PatchHeadInputStream* patch_head_input_stream;
@@ -88,7 +92,9 @@ void GIF_advance(GIF* gif);
 bool GIF_advance_and_get_looped(GIF* gif);
 bool GIF_prepare_next_frame(GIF* gif);
 bool GIF_present_prepared_frame(GIF* gif);
-int GIF_seek_to(GIF* gif, int position_ms);
+int GIF_seek_to(GIF* gif, int position_ms,
+                ImageSeekCancelled cancelled, void* context);
+int GIF_seek_step(GIF* gif, int position_ms);
 int GIF_get_current_position(GIF* gif);
 int GIF_get_total_duration(GIF* gif);
 void GIF_lock_pixels(GIF* gif);

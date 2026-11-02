@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="torrent_seeds">ผู้ปล่อย %1$s</string>
+    <string name="torrent_peers">ผู้ดาวน์โหลด %1$s</string>
+    <string name="torrent_downloads">ดาวน์โหลดสะสม %1$s</string>
+    <string name="torrent_open">เปิด</string>
+    <string name="torrent_cannot_open">เปิดทอร์เรนต์นี้ไม่ได้ ตรวจสอบว่ามีไฟล์อยู่และติดตั้งแอปที่รองรับแล้ว</string>
+</resources>

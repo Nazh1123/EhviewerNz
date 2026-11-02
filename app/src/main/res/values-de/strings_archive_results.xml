@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_results_directory">Ergebnisordner des Archivs</string>
+    <string name="archive_results_permission_message">Wähle den Ordner mit diesem Archiv und erlaube Lesen und Schreiben. Übersetzungs- und Vergrößerungsergebnisse werden daneben im Ordner „vollständiger Archivdateiname.results“ gespeichert und beim erneuten Öffnen wiederverwendet. Abbrechen beeinträchtigt weder das Lesen noch das Speichern einzelner Bilder.</string>
+    <string name="archive_results_choose_parent">Übergeordneten Ordner auswählen</string>
+    <string name="archive_results_wrong_parent">Kein Ordnerzugriff gewährt. Wähle den Ordner, der dieses Archiv direkt enthält, und erlaube Lesen und Schreiben.</string>
+</resources>

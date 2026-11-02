@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_rating_label">Note</string>
+    <string name="search_rating_title">Note minimale</string>
+    <string name="search_rating_hint">0.00–5.00 ; 0.00 désactive le filtre</string>
+    <string name="search_rating_invalid">Saisissez un nombre entre 0.00 et 5.00 avec au plus deux décimales</string>
+</resources>

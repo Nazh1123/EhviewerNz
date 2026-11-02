@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_rating_label">평점</string>
+    <string name="search_rating_title">최소 평점</string>
+    <string name="search_rating_hint">0.00~5.00, 0.00은 필터 해제</string>
+    <string name="search_rating_invalid">0.00~5.00 사이의 숫자를 소수점 이하 두 자리까지 입력하세요</string>
+</resources>

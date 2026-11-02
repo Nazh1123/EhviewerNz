@@ -19,18 +19,26 @@ package com.hippo.ehviewer.widget;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Resources;
+import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.text.InputType;
 import android.util.AttributeSet;
 import android.util.SparseArray;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.widget.CompoundButton;
 import android.widget.FrameLayout;
+import android.widget.EditText;
+import android.widget.RatingBar;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.LinearLayout;
 import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -41,6 +49,10 @@ import com.hippo.android.resource.AttrResources;
 import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.easyrecyclerview.MarginItemDecoration;
 import com.hippo.ehviewer.R;
+import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.client.SearchPresetQuery;
+import com.hippo.ehviewer.client.SearchRating;
+import com.hippo.ehviewer.client.EhConfig;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.exception.EhException;
 import com.hippo.ripple.Ripple;
@@ -48,6 +60,8 @@ import com.hippo.widget.RadioGridGroup;
 import com.hippo.lib.yorozuya.ViewUtils;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Collections;
+import java.util.List;
 
 public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnCheckedChangeListener,
         View.OnClickListener, ImageSearchLayout.Helper {
@@ -59,6 +73,8 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     private static final String STATE_KEY_SUPER = "super";
     private static final String STATE_KEY_SEARCH_MODE = "search_mode";
     private static final String STATE_KEY_ENABLE_ADVANCE = "enable_advance";
+    private static final String STATE_KEY_RATING = "minimum_rating_hundredths";
+    private static final String STATE_KEY_RATING_OVERRIDE = "rating_override";
 
     public static final int SEARCH_MODE_NORMAL = 0;
     public static final int SEARCH_MODE_IMAGE = 1;
@@ -87,6 +103,14 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     private RadioGridGroup mNormalSearchMode;
     private ImageView mNormalSearchModeHelp;
     private SwitchCompat mEnableAdvanceSwitch;
+    private LinearLayout mPresetChips;
+    private List<String> mPresets = Collections.emptyList();
+    private String mSearchQuery = "";
+    private int mMinRatingHundredths;
+    private boolean mRatingOverride;
+    private int mSourceMode = ListUrlBuilder.MODE_NORMAL;
+    private RatingBar mRatingStars;
+    private TextView mRatingValue;
 
     private View mAdvanceView;
     private AdvanceSearchTable mTableAdvanceSearch;
@@ -102,6 +126,7 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     private SearchAdapter mAdapter;
 
     private Helper mHelper;
+    private int mSearchBarExtraHeight;
 
     public SearchLayout(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -135,7 +160,23 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
         // Create normal view
         View normalView = mInflater.inflate(R.layout.search_normal, null);
         mNormalView = normalView;
+        mRatingStars = normalView.findViewById(R.id.search_rating_stars);
+        mRatingStars.setStepSize(0.01f);
+        mRatingStars.setKeyProgressIncrement(50);
+        mRatingValue = normalView.findViewById(R.id.search_rating_value);
+        mRatingValue.setTextSize(TypedValue.COMPLEX_UNIT_PX, mRatingValue.getTextSize()
+                + TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 2, resources.getDisplayMetrics()));
+        mRatingValue.setPaintFlags(mRatingValue.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
+        mRatingValue.setOnClickListener(v -> showRatingInput());
+        mRatingStars.setOnRatingBarChangeListener((bar, rating, fromUser) -> {
+            if (fromUser) setMinimumRating(Math.round(rating * 2) * 50);
+        });
+        setMinimumRating(0);
+        mRatingOverride = false;
+        updateRatingDisplay();
         mCategoryTable = (CategoryTable) normalView.findViewById(R.id.search_category_table);
+        mPresetChips = normalView.findViewById(R.id.search_preset_chips);
+        syncPresetTags("");
         mNormalSearchMode = (RadioGridGroup) normalView.findViewById(R.id.normal_search_mode);
         mNormalSearchModeHelp = (ImageView) normalView.findViewById(R.id.normal_search_mode_help);
         mEnableAdvanceSwitch = (SwitchCompat) normalView.findViewById(R.id.search_enable_advance);
@@ -147,6 +188,7 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
         // Create advance view
         mAdvanceView = mInflater.inflate(R.layout.search_advance, null);
         mTableAdvanceSearch = (AdvanceSearchTable) mAdvanceView.findViewById(R.id.search_advance_search_table);
+        syncSearchOptionVisibility();
 
         // Create image view
         mImageView = (ImageSearchLayout) mInflater.inflate(R.layout.search_image, null);
@@ -180,6 +222,117 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
 
     public void setHelper(Helper helper) {
         mHelper = helper;
+    }
+
+    public void setSearchBarExtraHeight(int extraHeight) {
+        int height = Math.max(0, extraHeight);
+        int delta = height - mSearchBarExtraHeight;
+        if (delta == 0) return;
+        mSearchBarExtraHeight = height;
+        setPadding(getPaddingLeft(), getPaddingTop() + delta, getPaddingRight(), getPaddingBottom());
+        // Preserve the viewed conditions' offset relative to the new top inset.
+        offsetChildrenVertical(delta);
+    }
+
+    public void setMinimumRating(int hundredths) {
+        mMinRatingHundredths = Math.max(0, Math.min(500, hundredths));
+        mRatingOverride = true;
+        updateRatingDisplay();
+    }
+
+    public void setRatingFromBuilder(ListUrlBuilder builder) {
+        mRatingOverride = builder.hasRatingOverride() || builder.getSearchMinRatingHundredths() > 0;
+        mMinRatingHundredths = builder.getSearchMinRatingHundredths();
+        mTableAdvanceSearch.setMinRating(builder.getMinRating());
+        updateRatingDisplay();
+    }
+
+    private void updateRatingDisplay() {
+        int rating = mRatingOverride ? mMinRatingHundredths : Settings.getPersistentMinRatingHundredths();
+        // RatingBar draws clipped stars; render exact values, but retain half-star touch steps.
+        mRatingStars.setRating(rating / 100f);
+        mRatingValue.setText(SearchRating.format(rating));
+    }
+
+    public void setSourceMode(int mode) {
+        mSourceMode = mode;
+    }
+
+    private void showRatingInput() {
+        EditText input = new EditText(getContext());
+        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        input.setSingleLine(true);
+        input.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        input.setHint(R.string.search_rating_hint);
+        input.setText(mRatingValue.getText());
+        input.selectAll();
+        AlertDialog dialog = new AlertDialog.Builder(getContext())
+                .setTitle(R.string.search_rating_title)
+                .setMessage(R.string.search_rating_hint)
+                .setView(input)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok, null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            View.OnClickListener confirm = v -> {
+                try {
+                    setMinimumRating(SearchRating.parse(input.getText().toString()));
+                    dialog.dismiss();
+                } catch (IllegalArgumentException e) {
+                    input.setError(getContext().getString(R.string.search_rating_invalid));
+                }
+            };
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(confirm);
+            input.setOnEditorActionListener((v, actionId, event) -> {
+                if (actionId != EditorInfo.IME_ACTION_DONE) return false;
+                confirm.onClick(v);
+                return true;
+            });
+            input.requestFocus();
+            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        });
+        dialog.show();
+    }
+
+    public void syncPresetTags(String query) {
+        syncSearchOptionVisibility();
+        mSearchQuery = query == null ? "" : query;
+        List<String> presets = Settings.getSearchPresetTags();
+        if (!presets.equals(mPresets)) {
+            mPresets = presets;
+            mPresetChips.removeAllViews();
+            int gap = Math.round(6 * getResources().getDisplayMetrics().density);
+            for (String preset : presets) {
+                SearchPresetChip chip = new SearchPresetChip(getContext(), preset,
+                        state -> changePreset(preset, state));
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                if (mPresetChips.getChildCount() > 0) params.setMarginStart(gap);
+                mPresetChips.addView(chip, params);
+            }
+        }
+        for (int i = 0; i < mPresetChips.getChildCount(); i++) {
+            SearchPresetChip chip = (SearchPresetChip) mPresetChips.getChildAt(i);
+            chip.setState(SearchPresetQuery.getState(mSearchQuery, chip.getPreset()));
+        }
+    }
+
+    private void syncSearchOptionVisibility() {
+        mNormalView.findViewById(R.id.search_preset_row).setVisibility(
+                Settings.getEnableSearchTagChips() && Settings.getEnableSearchPresetTags()
+                        && !Settings.getSearchPresetTags().isEmpty() ? View.VISIBLE : View.GONE);
+        mNormalView.findViewById(R.id.search_rating_row).setVisibility(
+                Settings.getEnablePreciseRatingFilter() ? View.VISIBLE : View.GONE);
+        if (mTableAdvanceSearch != null) {
+            mTableAdvanceSearch.setPreciseRatingEnabled(Settings.getEnablePreciseRatingFilter());
+        }
+        updateRatingDisplay();
+    }
+
+    private void changePreset(String preset, int state) {
+        String updated = SearchPresetQuery.setState(mSearchQuery, preset, state);
+        syncPresetTags(updated);
+        if (mHelper != null) mHelper.onSearchPresetQueryChanged(updated);
     }
 
     public void scrollSearchContainerToTop() {
@@ -219,6 +372,7 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
         mAdvanceView.restoreHierarchyState(container);
         mImageView.restoreHierarchyState(container);
         mActionView.restoreHierarchyState(container);
+        updateRatingDisplay();
     }
 
     @Override
@@ -227,6 +381,8 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
         state.putParcelable(STATE_KEY_SUPER, super.onSaveInstanceState());
         state.putInt(STATE_KEY_SEARCH_MODE, mSearchMode);
         state.putBoolean(STATE_KEY_ENABLE_ADVANCE, mEnableAdvance);
+        state.putInt(STATE_KEY_RATING, mMinRatingHundredths);
+        state.putBoolean(STATE_KEY_RATING_OVERRIDE, mRatingOverride);
         return state;
     }
 
@@ -237,6 +393,9 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
             super.onRestoreInstanceState(savedState.getParcelable(STATE_KEY_SUPER));
             mSearchMode = savedState.getInt(STATE_KEY_SEARCH_MODE);
             mEnableAdvance = savedState.getBoolean(STATE_KEY_ENABLE_ADVANCE);
+            mMinRatingHundredths = savedState.getInt(STATE_KEY_RATING);
+            mRatingOverride = savedState.getBoolean(STATE_KEY_RATING_OVERRIDE);
+            updateRatingDisplay();
         }
     }
 
@@ -259,7 +418,22 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     }
 
     public void formatListUrlBuilder(ListUrlBuilder urlBuilder, String query) throws EhException {
+        syncSearchOptionVisibility();
         urlBuilder.reset();
+
+        // Editing only the rating on these pages keeps the current feed.
+        // A keyword or another search condition still starts an ordinary search.
+        if (mSearchMode == SEARCH_MODE_NORMAL && SearchRating.isClientOnlyMode(mSourceMode)
+                && mNormalSearchMode.getCheckedRadioButtonId() == R.id.search_normal_search
+                && (query == null || query.trim().isEmpty())
+                && mCategoryTable.getCategory() == EhConfig.ALL_CATEGORY
+                && !mEnableAdvance) {
+            urlBuilder.setMode(mSourceMode);
+            if (Settings.getEnablePreciseRatingFilter() && mRatingOverride) {
+                urlBuilder.setMinRatingHundredths(mMinRatingHundredths);
+            }
+            return;
+        }
 
         switch (mSearchMode) {
             case SEARCH_MODE_NORMAL:
@@ -283,9 +457,14 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
                 urlBuilder.setCategory(mCategoryTable.getCategory());
                 if (mEnableAdvance) {
                     urlBuilder.setAdvanceSearch(mTableAdvanceSearch.getAdvanceSearch());
-                    urlBuilder.setMinRating(mTableAdvanceSearch.getMinRating());
+                    if (!Settings.getEnablePreciseRatingFilter()) {
+                        urlBuilder.setMinRating(mTableAdvanceSearch.getMinRating());
+                    }
                     urlBuilder.setPageFrom(mTableAdvanceSearch.getPageFrom());
                     urlBuilder.setPageTo(mTableAdvanceSearch.getPageTo());
+                }
+                if (Settings.getEnablePreciseRatingFilter() && mRatingOverride) {
+                    urlBuilder.setMinRatingHundredths(mMinRatingHundredths);
                 }
                 break;
             case SEARCH_MODE_IMAGE:
@@ -444,6 +623,7 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     }
 
     public interface Helper {
+        void onSearchPresetQueryChanged(String query);
         void onChangeSearchMode();
         void onSelectImage();
         void onOpenTagSelector();

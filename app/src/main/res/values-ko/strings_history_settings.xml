@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="settings_collapse_history_in_sidebar">기록 항목을 접이식 메뉴로 표시</string>
+    <string name="settings_collapse_history_in_sidebar_summary">켜면 왼쪽 사이드바의 방문 기록, 읽기 기록, 업데이트 기록을 접이식 메뉴로 모읍니다</string>
+    <string name="browsing_history">방문 기록</string>
+    <string name="history_sidebar_expand">기록 메뉴 펼치기</string>
+    <string name="history_sidebar_collapse">기록 메뉴 접기</string>
+    <string name="settings_show_update_history_in_sidebar">사이드바에 버튼 표시</string>
+    <string name="settings_show_update_history_in_sidebar_summary">켜면 왼쪽 사이드바에 ‘업데이트 기록’ 버튼을 표시합니다</string>
     <string name="settings_history">기록</string>
     <string name="settings_history_category_updates">업데이트 기록</string>
     <string name="settings_history_category_gallery_info">갤러리 정보</string>

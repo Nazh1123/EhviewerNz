@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="range_download">區間下載</string>
+    <string name="range_downloaded">已下載區間</string>
+    <string name="range_download_badge">區間</string>
+    <string name="range_download_full">下載完整畫廊</string>
+    <string name="range_read_downloaded">僅閱讀已下載區間</string>
+    <string name="range_download_input_hint">例如：1,2,6-10,25-</string>
+    <string name="range_download_preview">%1$s · %2$d 頁。此區間以外的圖片將從此畫廊的下載資料夾中移除。</string>
+    <string name="range_download_invalid">請輸入 1 至 %1$d 之間的有效頁碼。</string>
+    <string name="range_download_busy">畫廊正在修改或更新，請完成後重試。</string>
+    <string name="range_download_missing_pages">尚未載入畫廊總頁數，請稍後重試。</string>
+    <string name="range_download_no_pages">此區間沒有可閱讀的已下載頁面。</string>
+    <string name="range_reader_progress">已下載 %1$d/%2$d · 原頁碼 %3$d/%4$d</string>
+</resources>

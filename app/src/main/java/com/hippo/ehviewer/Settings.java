@@ -23,6 +23,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
@@ -33,6 +34,7 @@ import androidx.annotation.Nullable;
 
 import com.alibaba.fastjson.JSONObject;
 import com.hippo.ehviewer.client.EhConfig;
+import com.hippo.ehviewer.client.SearchPresetQuery;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.FavListUrlBuilder;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -47,8 +49,13 @@ import com.hippo.lib.yorozuya.FileUtils;
 import com.hippo.lib.yorozuya.MathUtils;
 import com.hippo.lib.yorozuya.NumberUtils;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Locale;
@@ -78,6 +85,10 @@ public class Settings {
         fixDefaultValue();
     }
 
+    public static Context getApplicationContext() {
+        return sContext;
+    }
+
     private static void fixDefaultValue() {
         // Enable builtin hosts if the country is CN
         if (!sSettingsPre.contains(KEY_BUILT_IN_HOSTS)) {
@@ -91,8 +102,11 @@ public class Settings {
                 putDF(true);
             }
         }
-        if (!sSettingsPre.contains(KEY_SEARCH_LANGUAGE)) {
-            putString(KEY_SEARCH_LANGUAGE, getInitialSearchLanguage());
+        if (!sSettingsPre.contains(KEY_SEARCH_PRESET_TAG_1)) {
+            putString(KEY_SEARCH_PRESET_TAG_1, "l:\"" + getInitialSearchLanguage() + "$\"");
+        }
+        if (!sSettingsPre.contains(KEY_SEARCH_PRESET_TAG_2)) {
+            putString(KEY_SEARCH_PRESET_TAG_2, "o:\"ai generated$\"");
         }
         // migrateQuickPageTurnSetting(); // Legacy switches migrate into ReaderKeyProfiles instead.
         migrateThumbnailInfoBarSetting();
@@ -487,6 +501,23 @@ public class Settings {
         return getBoolean(KEY_POPULAR_UPDATES_ONLY, false);
     }
 
+    public static final String KEY_SHOW_YESTERDAY_TOP_LIST_NEW_BADGE =
+            "show_yesterday_top_list_new_badge";
+    private static final String KEY_YESTERDAY_TOP_LIST_READ_PERIOD =
+            "yesterday_top_list_read_period";
+
+    public static boolean getShowYesterdayTopListNewBadge() {
+        return getBoolean(KEY_SHOW_YESTERDAY_TOP_LIST_NEW_BADGE, true);
+    }
+
+    public static long getYesterdayTopListReadPeriod() {
+        return getLong(KEY_YESTERDAY_TOP_LIST_READ_PERIOD, Long.MIN_VALUE);
+    }
+
+    public static void putYesterdayTopListReadPeriod(long period) {
+        putLong(KEY_YESTERDAY_TOP_LIST_READ_PERIOD, period);
+    }
+
     public static final String KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE =
             "show_thumbnail_download_badge";
     private static final boolean DEFAULT_SHOW_THUMBNAIL_DOWNLOAD_BADGE = true;
@@ -582,7 +613,14 @@ public class Settings {
             "auto_subscription_updates_bookmark";
     public static final String KEY_AUTO_SUBSCRIPTION_UPDATE_INTERVAL =
             "auto_subscription_update_interval";
+    public static final String KEY_SUBSCRIPTION_HOMEPAGE_SCAN = "subscription_homepage_scan";
     public static final int DEFAULT_AUTO_SUBSCRIPTION_UPDATE_INTERVAL = 60;
+
+    public static boolean getSubscriptionHomepageScan() {
+        // Disabled even for installations that previously enabled homepage scanning.
+        // return getBoolean(KEY_SUBSCRIPTION_HOMEPAGE_SCAN, false);
+        return false;
+    }
 
     public static boolean getAutoSubscriptionUpdates() {
         return getBoolean(KEY_AUTO_SUBSCRIPTION_UPDATES, false);
@@ -691,6 +729,12 @@ public class Settings {
         return getBoolean(KEY_FIX_THUMB_URL, DEFAULT_FIX_THUMB_URL);
     }
 
+    public static final String KEY_USE_LOCAL_TIMEZONE = "use_local_timezone";
+
+    public static boolean getUseLocalTimezone() {
+        return getBoolean(KEY_USE_LOCAL_TIMEZONE, true);
+    }
+
     private static final String KEY_SHOW_JPN_TITLE = "show_jpn_title";
     private static final boolean DEFAULT_SHOW_JPN_TITLE = false;
 
@@ -706,7 +750,17 @@ public class Settings {
     }
 
     public static final String KEY_GALLERY_UPDATE_RECORD_LIMIT = "gallery_update_record_limit";
+    public static final String KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR = "show_update_history_in_sidebar";
+    public static final String KEY_COLLAPSE_HISTORY_IN_SIDEBAR = "collapse_history_in_sidebar";
     public static final int DEFAULT_GALLERY_UPDATE_RECORD_LIMIT = 200;
+
+    public static boolean getCollapseHistoryInSidebar() {
+        return getBoolean(KEY_COLLAPSE_HISTORY_IN_SIDEBAR, false);
+    }
+
+    public static boolean getShowUpdateHistoryInSidebar() {
+        return getBoolean(KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR, false);
+    }
 
     public static int getGalleryUpdateRecordLimit() {
         int value = getIntFromStr(KEY_GALLERY_UPDATE_RECORD_LIMIT, DEFAULT_GALLERY_UPDATE_RECORD_LIMIT);
@@ -1021,17 +1075,88 @@ public class Settings {
     }
     */
 
-    public static final String KEY_SEARCH_LANGUAGE = "search_language";
-    public static final String SEARCH_LANGUAGE_DISABLED = "disabled";
+    public static final String KEY_ENABLE_SEARCH_TAG_CHIPS = "enable_search_tag_chips";
 
-    public static boolean isSearchLanguageEnabled() {
-        return !SEARCH_LANGUAGE_DISABLED.equals(getSearchLanguage());
+    public static boolean getEnableSearchTagChips() {
+        return getBoolean(KEY_ENABLE_SEARCH_TAG_CHIPS, true);
+    }
+
+    public static final String KEY_SEARCH_PRESET_TAG_1 = "search_preset_tag_1";
+    public static final String KEY_SEARCH_PRESET_TAGS = "search_preset_tags";
+    public static final String KEY_ENABLE_SEARCH_PRESET_TAGS = "enable_search_preset_tags";
+    public static final String KEY_ENABLE_PRECISE_RATING_FILTER = "enable_precise_rating_filter";
+    public static final String KEY_PERSISTENT_MIN_RATING = "persistent_min_rating_hundredths";
+
+    public static int getConfiguredPersistentMinRatingHundredths() {
+        return sSettingsPre == null ? 0 : Math.max(0, Math.min(500, getInt(KEY_PERSISTENT_MIN_RATING, 0)));
+    }
+
+    public static int getPersistentMinRatingHundredths() {
+        return sSettingsPre != null && getEnablePreciseRatingFilter()
+                ? getConfiguredPersistentMinRatingHundredths() : 0;
+    }
+
+    public static void putPersistentMinRatingHundredths(int hundredths) {
+        putInt(KEY_PERSISTENT_MIN_RATING, Math.max(0, Math.min(500, hundredths)));
+    }
+
+    public static boolean getEnableSearchPresetTags() {
+        return getBoolean(KEY_ENABLE_SEARCH_PRESET_TAGS, true);
+    }
+
+    public static boolean getEnablePreciseRatingFilter() {
+        return getBoolean(KEY_ENABLE_PRECISE_RATING_FILTER, true);
+    }
+    public static final String KEY_SEARCH_PRESET_TAG_2 = "search_preset_tag_2";
+
+    @NonNull
+    public static String getSearchPresetTag1() {
+        return getString(KEY_SEARCH_PRESET_TAG_1, "l:\"" + getInitialSearchLanguage() + "$\"");
     }
 
     @NonNull
-    public static String getSearchLanguage() {
-        String language = getString(KEY_SEARCH_LANGUAGE, null);
-        return TextUtils.isEmpty(language) ? getInitialSearchLanguage() : language;
+    public static String getSearchPresetTag2() {
+        return getString(KEY_SEARCH_PRESET_TAG_2, "o:\"ai generated$\"");
+    }
+
+    /** Ordered presets. Migrate the two legacy slots once, including custom values. */
+    @NonNull
+    public static List<String> getSearchPresetTags() {
+        String saved = getString(KEY_SEARCH_PRESET_TAGS, null);
+        if (saved != null) {
+            try {
+                JSONArray array = new JSONArray(saved);
+                List<String> tags = new ArrayList<>();
+                Set<String> identities = new HashSet<>();
+                for (int i = 0; i < array.length(); i++) {
+                    String tag = array.optString(i).trim();
+                    String identity = SearchPresetQuery.identity(tag);
+                    if (identity != null && identities.add(identity)) tags.add(tag);
+                }
+                return tags;
+            } catch (JSONException ignored) { /* Recover from a damaged preference. */ }
+        }
+        List<String> tags = new ArrayList<>();
+        Set<String> identities = new HashSet<>();
+        for (String tag : new String[]{getSearchPresetTag1(), getSearchPresetTag2()}) {
+            String identity = SearchPresetQuery.identity(tag);
+            if (identity != null && identities.add(identity)) tags.add(tag.trim());
+        }
+        putSearchPresetTags(tags);
+        return tags;
+    }
+
+    public static void putSearchPresetTags(@NonNull List<String> tags) {
+        JSONArray array = new JSONArray();
+        Set<String> identities = new HashSet<>();
+        for (String tag : tags) {
+            String identity = SearchPresetQuery.identity(tag);
+            if (identity == null || !identities.add(identity)) {
+                throw new IllegalArgumentException("Invalid or duplicate search preset");
+            }
+            array.put(tag.trim());
+        }
+        putString(KEY_SEARCH_PRESET_TAGS, array.toString());
     }
 
     @NonNull
@@ -1384,6 +1509,12 @@ public class Settings {
 
     private static final String KEY_MULTI_THREAD_DOWNLOAD = "download_thread";
     private static final int DEFAULT_MULTI_THREAD_DOWNLOAD = 3;
+
+    public static final String KEY_MOBILE_BROWSING_PRIORITY = "mobile_browsing_priority";
+
+    public static boolean getMobileBrowsingPriority() {
+        return getBoolean(KEY_MOBILE_BROWSING_PRIORITY, false);
+    }
 
     public static int getMultiThreadDownload() {
         return getIntFromStr(KEY_MULTI_THREAD_DOWNLOAD, DEFAULT_MULTI_THREAD_DOWNLOAD);
@@ -1770,7 +1901,14 @@ public class Settings {
     }
 
     public static void putAppLanguage(String value) {
-        putString(KEY_APP_LANGUAGE, value);
+        Locale locale = "system".equals(value)
+                ? Resources.getSystem().getConfiguration().getLocales().get(0)
+                : Locale.forLanguageTag(value);
+        // Apply both before recreating activities so they see a consistent language choice.
+        sSettingsPre.edit()
+                .putString(KEY_APP_LANGUAGE, value)
+                .putBoolean(KEY_SHOW_TAG_TRANSLATIONS, "zh".equals(locale.getLanguage()))
+                .apply();
     }
 
     private static final String KEY_PROXY_TYPE = "proxy_type";

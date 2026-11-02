@@ -86,10 +86,10 @@
     <string name="translation_target_mlkit_help">Préparez les packs source et cible sélectionnés. Le chinois utilise le modèle commun zh ; aucun pack distinct pour l’anglais.</string>
     <string name="translation_target_reset">La langue cible actuelle n’est pas prise en charge par ce moteur. Passage au chinois simplifié.</string>
     <string name="translation_ahead">Pages à traduire à l’avance</string>
-    <string name="translation_ahead_help">Traduit automatiquement la page actuelle et le nombre indiqué de pages suivantes. Réglable de 0 à 10 pages.</string>
-    <string name="translation_ahead_summary">%1$d pages suivantes</string>
+    <string name="translation_ahead_help">Traduit automatiquement la page actuelle et le nombre indiqué de pages suivantes. Réglable de 0 à 6 pages.</string>
+    <string name="translation_ahead_summary">Page actuelle + %1$s pages suivantes</string>
     <string name="translation_current_only">Traduire uniquement la page actuelle</string>
-    <string name="translation_ahead_range">Saisissez un entier de 0 à 10</string>
+    <string name="translation_ahead_range">Saisissez un entier de 0 à 6</string>
     <string name="translation_model_status">État des modèles manga</string>
     <string name="translation_checking_models">Vérification…</string>
     <string name="translation_models_available">Les modèles de détection de texte, d’OCR et d’effacement sont prêts. Validation automatique au démarrage de la traduction.</string>
@@ -211,4 +211,6 @@
     <string name="translation_model_external_help">Lit le GGUF d’origine sans conserver de copie privée. Ne déplacez, supprimez ni modifiez le fichier. Réimportez en mode copie pour utiliser une copie privée ; référencer le même modèle supprime sa copie privée existante. Supprimer une référence conserve le fichier d’origine.</string>
     <string name="translation_model_external_unsupported">Ce fichier externe ne peut pas être chargé directement. Choisissez « Copier dans le stockage privé de l’application ».</string>
     <string name="translation_model_external_changed">Le modèle externe a changé ou est indisponible. Sélectionnez à nouveau le fichier GGUF.</string>
+    <string name="translation_gallery">Traduire cette galerie</string>
+    <string name="translation_gallery_submitted">Tâche de traduction de galerie envoyée</string>
 </resources>

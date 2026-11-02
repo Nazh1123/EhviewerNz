@@ -16,6 +16,8 @@
 
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
+import com.hippo.ehviewer.client.GallerySeenState;
+import com.hippo.ehviewer.client.SearchUpdateSession;
 import android.text.TextUtils;
 import android.os.Handler;
 import android.os.Looper;
@@ -29,6 +31,7 @@ import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.SubscriptionSearchContext;
 import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
 import com.hippo.ehviewer.client.SubscriptionRetry;
+import com.hippo.ehviewer.client.SearchRating;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
@@ -69,6 +72,9 @@ final class BookmarkSubscriptionCoordinator {
         @Nullable final BookmarkSubscriptionPlanner.Source plan;
         final ListUrlBuilder builder = new ListUrlBuilder();
         final ArrayList<GalleryInfo> buffer = new ArrayList<>();
+        final SearchUpdateSession session;
+        boolean responseReady;
+        final Set<String> visitedUrls = new HashSet<>();
 
         int bufferIndex;
         int pageIndex;
@@ -79,15 +85,18 @@ final class BookmarkSubscriptionCoordinator {
         boolean exhausted;
         boolean queued;
         boolean loading;
+        boolean ratingBatchEmpty;
         @Nullable EhRequest request;
         int retries;
         @Nullable String retryUrl;
+        @Nullable SubscriptionUpdateManager.RecentCheckSource cachedCheck;
 
         Source(int id, BookmarkSubscriptionPlanner.Source plan) {
             this.id = id;
             this.plan = plan;
             builder.set(plan.createBuilder());
             builder.setPageIndex(0);
+            session = new SearchUpdateSession(builder, plan);
         }
 
         Source(int id) {
@@ -95,6 +104,7 @@ final class BookmarkSubscriptionCoordinator {
             plan = null;
             builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
             builder.setPageIndex(0);
+            session = new SearchUpdateSession(builder, plan);
         }
 
         boolean hasVisibleItem() {
@@ -119,6 +129,7 @@ final class BookmarkSubscriptionCoordinator {
     private final ArrayList<Source> mSources = new ArrayList<>();
     private final ArrayDeque<PendingRequest> mRequestQueue = new ArrayDeque<>();
     private final Set<Long> mEmittedGids = new HashSet<>();
+    private final Set<Long> mSessionNewGids = new HashSet<>();
     private final Map<Long, LinkedHashSet<QuickSearch>> mMatchingQuickSearches =
             new HashMap<>();
     private final ArrayList<GalleryInfo> mPendingBatch = new ArrayList<>();
@@ -143,10 +154,14 @@ final class BookmarkSubscriptionCoordinator {
     private int mActiveRequests;
     private int mInitialRequestsRemaining;
     private int mBatchSize = DEFAULT_BATCH_SIZE;
-    private long mLatestEhGid;
-    private long mLatestBookmarkGid;
+    private int mMinRatingHundredths;
+    private GallerySeenState mLatestEhState = GallerySeenState.empty();
+    private GallerySeenState mLatestBookmarkState = GallerySeenState.empty();
+    private final Set<Long> mEhGids = new HashSet<>();
+    private final Set<Long> mBookmarkGids = new HashSet<>();
     private boolean mRefresh;
     private boolean mLoading;
+    private boolean mHasCachedInitialSource;
     @Nullable private Exception mFirstFailure;
     private String mSubscriptionFingerprint = "";
 
@@ -178,6 +193,8 @@ final class BookmarkSubscriptionCoordinator {
                     .append(quickSearch.keyword).append('|')
                     .append(quickSearch.advanceSearch).append('|')
                     .append(quickSearch.minRating).append('|')
+                    .append(quickSearch.minRatingHundredths).append('|')
+                    .append(quickSearch.ratingOverride).append('|')
                     .append(quickSearch.pageFrom).append('|')
                     .append(quickSearch.pageTo).append(';');
         }
@@ -194,12 +211,11 @@ final class BookmarkSubscriptionCoordinator {
         return mLoading;
     }
 
-    long getLatestEhGid() {
-        return mLatestEhGid;
-    }
+    GallerySeenState getLatestEhState() { return mLatestEhState; }
+    GallerySeenState getLatestBookmarkState() { return mLatestBookmarkState; }
 
-    long getLatestBookmarkGid() {
-        return mLatestBookmarkGid;
+    boolean isNewGallery(GalleryInfo gallery) {
+        return mSessionNewGids.contains(gallery.gid);
     }
 
     @Nullable
@@ -222,6 +238,8 @@ final class BookmarkSubscriptionCoordinator {
         int excludedCategories = 0;
         int advanceSearch = 0;
         int minRating = -1;
+        int minRatingHundredths = 0;
+        boolean hasRatingOverride = false;
         int pageFrom = -1;
         int pageTo = -1;
         boolean hasAdvanceSearch = false;
@@ -247,6 +265,8 @@ final class BookmarkSubscriptionCoordinator {
                 hasAdvanceSearch = true;
                 advanceSearch |= quickSearch.advanceSearch;
             }
+            minRatingHundredths = Math.max(minRatingHundredths, quickSearch.minRatingHundredths);
+            hasRatingOverride |= quickSearch.ratingOverride || quickSearch.minRatingHundredths > 0;
             if (quickSearch.minRating != -1) {
                 minRating = Math.max(minRating, quickSearch.minRating);
             }
@@ -260,6 +280,7 @@ final class BookmarkSubscriptionCoordinator {
         }
 
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        if (hasRatingOverride) builder.setMinRatingHundredths(minRatingHundredths);
         builder.setCategory(excludedCategories);
         builder.setKeyword(TextUtils.join(" ", uniqueTerms.values()));
         if (hasAdvanceSearch) {
@@ -302,7 +323,7 @@ final class BookmarkSubscriptionCoordinator {
         builder.set(candidate);
         int generation = mGeneration;
         resolution.request = new EhRequest().setMethod(EhClient.METHOD_VERIFY_BOOKMARK)
-                .setArgs(builder.build(), builder.getMode(), resolution.gid)
+                .setArgs(builder.buildWithoutRatingFilter(), builder.getMode(), resolution.gid)
                 .setCallback(new EhClient.Callback<Boolean>() {
                     @Override public void onSuccess(Boolean matches) {
                         if (generation != mGeneration || mResolution != resolution) return;
@@ -328,7 +349,16 @@ final class BookmarkSubscriptionCoordinator {
     void refresh(int taskId, List<QuickSearch> quickSearches,
                  boolean includeEhSubscription,
                  @Nullable SubscriptionUpdateManager.RecentCheckResult recentResult) {
+        refresh(taskId, quickSearches, includeEhSubscription, recentResult,
+                com.hippo.ehviewer.Settings.getPersistentMinRatingHundredths());
+    }
+
+    void refresh(int taskId, List<QuickSearch> quickSearches,
+                 boolean includeEhSubscription,
+                 @Nullable SubscriptionUpdateManager.RecentCheckResult recentResult,
+                 int minRatingHundredths) {
         cancel();
+        mMinRatingHundredths = minRatingHundredths;
         mTaskId = taskId;
         mRefresh = true;
         mLoading = true;
@@ -342,7 +372,7 @@ final class BookmarkSubscriptionCoordinator {
         }
 
         for (BookmarkSubscriptionPlanner.Source plan
-                : BookmarkSubscriptionPlanner.plan(quickSearches)) {
+                : SearchUpdateSession.plan(quickSearches)) {
             mSources.add(new Source(mSources.size(), plan));
         }
 
@@ -357,9 +387,12 @@ final class BookmarkSubscriptionCoordinator {
         for (Source source : mSources) {
             SubscriptionUpdateManager.RecentCheckSource cachedSource =
                     findCachedSource(recentResult, source);
-            if (cachedSource != null) {
+            if (cachedSource != null && !cachedSource.requiresDisplayPreparation) {
+                mHasCachedInitialSource = true;
                 applyCachedSource(source, cachedSource);
             } else {
+                mHasCachedInitialSource |= cachedSource != null;
+                source.cachedCheck = cachedSource;
                 mInitialRequestsRemaining++;
                 enqueue(source, true);
             }
@@ -381,6 +414,7 @@ final class BookmarkSubscriptionCoordinator {
         mRefresh = false;
         mLoading = true;
         mFirstFailure = null;
+        for (Source source : mSources) source.ratingBatchEmpty = false;
         continueProducing();
     }
 
@@ -391,6 +425,7 @@ final class BookmarkSubscriptionCoordinator {
         mUnresolvedQuickSearches.clear();
         mLoading = false;
         mRefresh = false;
+        mHasCachedInitialSource = false;
         mRequestQueue.clear();
         mActiveRequests = 0;
         mInitialRequestsRemaining = 0;
@@ -404,13 +439,16 @@ final class BookmarkSubscriptionCoordinator {
         mSources.clear();
         mPendingBatch.clear();
         mEmittedGids.clear();
+        mSessionNewGids.clear();
         mMatchingQuickSearches.clear();
-        mLatestEhGid = 0L;
-        mLatestBookmarkGid = 0L;
+        mLatestEhState = GallerySeenState.empty();
+        mLatestBookmarkState = GallerySeenState.empty();
+        mEhGids.clear();
+        mBookmarkGids.clear();
     }
 
     @Nullable
-    private static SubscriptionUpdateManager.RecentCheckSource findCachedSource(
+    private SubscriptionUpdateManager.RecentCheckSource findCachedSource(
             @Nullable SubscriptionUpdateManager.RecentCheckResult recentResult,
             Source source) {
         if (recentResult == null || !recentResult.matchesContext()) {
@@ -418,7 +456,8 @@ final class BookmarkSubscriptionCoordinator {
         }
         for (SubscriptionUpdateManager.RecentCheckSource cachedSource
                 : recentResult.sources) {
-            if (!cachedSource.isFresh()) continue;
+            if (!cachedSource.isFresh() || (!cachedSource.requiresDisplayPreparation
+                    && cachedSource.ratingMinimumHundredths != sourceRatingMinimum(source))) continue;
             if (source.plan == null
                     ? cachedSource.isEhSubscription()
                     : cachedSource.matchesBookmarkSource(source.plan)) {
@@ -439,6 +478,16 @@ final class BookmarkSubscriptionCoordinator {
         source.hasBoundary = cachedSource.hasBoundary;
         source.exhausted = cachedSource.exhausted;
         setSourceGalleryInfos(source, SubscriptionGallerySnapshot.copy(cachedSource.galleryInfoList));
+        GalleryListParser.Result page = new GalleryListParser.Result();
+        page.rawGalleries = cachedSource.rawGalleries;
+        page.rawPublicationTimes.putAll(cachedSource.rawPublicationTimes);
+        page.galleryInfoList = source.buffer;
+        page.rawTailPosted = cachedSource.boundaryPosted;
+        source.session.observe(page, !source.exhausted);
+        source.responseReady = true;
+        mSessionNewGids.addAll(source.session.displayNewGids());
+        if (source.plan == null) mLatestEhState = mLatestEhState.merge(cachedSource.observed);
+        else mLatestBookmarkState = mLatestBookmarkState.merge(cachedSource.observed);
     }
 
     private void enqueue(Source source, boolean initial) {
@@ -447,6 +496,10 @@ final class BookmarkSubscriptionCoordinator {
         }
         source.queued = true;
         mRequestQueue.addLast(new PendingRequest(source, initial));
+    }
+
+    private int sourceRatingMinimum(Source source) {
+        return Math.max(mMinRatingHundredths, source.builder.getSubscriptionMinRatingHundredths());
     }
 
     private void pumpRequests() {
@@ -463,13 +516,13 @@ final class BookmarkSubscriptionCoordinator {
             } else if (pending.initial()) {
                 source.pageIndex = 0;
                 source.builder.setPageIndex(0);
-                url = source.builder.build();
+                url = source.builder.buildWithoutRatingFilter();
             } else if (!TextUtils.isEmpty(source.nextHref)) {
                 url = source.nextHref;
             } else {
                 source.pageIndex++;
                 source.builder.setPageIndex(source.pageIndex);
-                url = source.builder.build();
+                url = source.builder.buildWithoutRatingFilter();
             }
 
             if (TextUtils.isEmpty(url)) {
@@ -478,12 +531,19 @@ final class BookmarkSubscriptionCoordinator {
                 continue;
             }
 
+            url = SearchRating.withoutServerFilter(url);
+            if (source.retries == 0 && (source.pageIndex >= 1000 || !source.visitedUrls.add(url))) {
+                onPageFailure(mGeneration, source.id, pending.initial(),
+                        new IllegalStateException("Subscription pagination made no progress"));
+                continue;
+            }
             source.retryUrl = url;
             int generation = mGeneration;
             EhRequest request = new EhRequest()
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
                     .setArgs(url, source.builder.getMode(), true,
-                            source.plan != null && source.plan.isMergedUploaderSearch())
+                            source.plan != null && source.plan.isMergedUploaderSearch(),
+                            sourceRatingMinimum(source), true)
                     .setCallback(new EhClient.Callback<GalleryListParser.Result>() {
                         @Override
                         public void onSuccess(GalleryListParser.Result result) {
@@ -500,6 +560,12 @@ final class BookmarkSubscriptionCoordinator {
                             // Explicit cancellation increments the generation first.
                         }
                     });
+            if (source.cachedCheck != null) {
+                request.setMethod(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST)
+                        .setArgs(url, source.cachedCheck.galleryInfoList,
+                                source.plan != null && source.plan.isMergedUploaderSearch(),
+                                sourceRatingMinimum(source));
+            }
             source.request = request;
             mActiveRequests++;
             mClient.execute(request);
@@ -512,6 +578,24 @@ final class BookmarkSubscriptionCoordinator {
             return;
         }
         Source source = mSources.get(sourceId);
+        if (result.customErrorString != null) {
+            onPageFailure(generation, sourceId, initial,
+                    new IllegalStateException(result.customErrorString));
+            return;
+        }
+        if (source.cachedCheck != null) {
+            SubscriptionUpdateManager.RecentCheckSource cached = source.cachedCheck;
+            source.pageIndex = cached.pageIndex;
+            result.rawResultCount = cached.initialResultCount;
+            result.rawSeenState = cached.observed;
+            result.rawGalleries = cached.rawGalleries;
+            result.rawPublicationTimes.putAll(cached.rawPublicationTimes);
+            result.rawTailPosted = cached.boundaryPosted;
+            result.rawTailGid = cached.boundaryGid;
+            result.nextHref = cached.nextHref;
+            result.pages = cached.exhausted ? 0 : cached.pageIndex + 2;
+            source.cachedCheck = null;
+        }
         finishRequest(source, initial);
         source.retries = 0;
         source.retryUrl = null;
@@ -520,6 +604,9 @@ final class BookmarkSubscriptionCoordinator {
             mBatchSize = Math.max(mBatchSize, result.rawResultCount);
         }
         setSourceGalleryInfos(source, result.galleryInfoList);
+        if (source.plan == null) mLatestEhState = mLatestEhState.merge(result.rawSeenState);
+        else mLatestBookmarkState = mLatestBookmarkState.merge(result.rawSeenState);
+        source.ratingBatchEmpty = result.ratingFilteredAll;
 
         if (result.rawResultCount > 0) {
             source.boundaryPosted = result.rawTailPosted;
@@ -531,6 +618,9 @@ final class BookmarkSubscriptionCoordinator {
         boolean hasHref = !TextUtils.isEmpty(result.nextHref);
         boolean hasIndexedPage = result.pages > 0 && source.pageIndex + 1 < result.pages;
         source.exhausted = !hasHref && !hasIndexedPage;
+        source.session.observe(result, !source.exhausted);
+        source.responseReady = result.customErrorString == null;
+        mSessionNewGids.addAll(source.session.displayNewGids());
 
         afterRequestFinished();
     }
@@ -539,13 +629,10 @@ final class BookmarkSubscriptionCoordinator {
         source.buffer.clear();
         source.bufferIndex = 0;
         source.buffer.addAll(galleryInfoList);
+        if (source.plan == null) mLatestEhState = mLatestEhState.observe(galleryInfoList);
+        else mLatestBookmarkState = mLatestBookmarkState.observe(galleryInfoList);
         for (GalleryInfo galleryInfo : galleryInfoList) {
-            if (source.plan == null) {
-                mLatestEhGid = Math.max(mLatestEhGid, galleryInfo.gid);
-            } else {
-                mLatestBookmarkGid = Math.max(
-                        mLatestBookmarkGid, galleryInfo.gid);
-            }
+            (source.plan == null ? mEhGids : mBookmarkGids).add(galleryInfo.gid);
             if (source.plan != null) {
                 LinkedHashSet<QuickSearch> matches =
                         mMatchingQuickSearches.get(galleryInfo.gid);
@@ -619,6 +706,18 @@ final class BookmarkSubscriptionCoordinator {
             Source visibleSource = findNewestVisibleSource();
             Source blockingSource = findBlockingUnknownSource(visibleSource);
             if (blockingSource != null) {
+                if (mRefresh && mHasCachedInitialSource
+                        && (!mPendingBatch.isEmpty() || visibleSource == null)) {
+                    // Show the safely ordered cached prefix immediately. Pagination can
+                    // fill the rest instead of delaying entry to reach the raw page size.
+                    finishBatch();
+                    return;
+                }
+                if (blockingSource.ratingBatchEmpty) {
+                    // The engine already tried the one extra page for this request.
+                    finishBatch();
+                    return;
+                }
                 if (!blockingSource.loading && !blockingSource.queued) {
                     enqueue(blockingSource, false);
                     pumpRequests();
@@ -793,6 +892,12 @@ final class BookmarkSubscriptionCoordinator {
             return;
         }
 
+        for (Source source : mSources) {
+            if (source.responseReady) {
+                source.session.commit(true);
+                source.responseReady = false;
+            }
+        }
         ArrayList<GalleryInfo> data = new ArrayList<>(mPendingBatch);
         boolean refresh = mRefresh;
         boolean partialFailure = mFirstFailure != null;

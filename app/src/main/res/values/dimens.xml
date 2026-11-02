@@ -127,6 +127,10 @@
 
     <dimen name="gallery_detail_thumb_width">128dp</dimen>
     <dimen name="gallery_detail_thumb_height">192dp</dimen>
+    <dimen name="gallery_detail_action_spacing">12dp</dimen>
+    <dimen name="gallery_detail_comments_padding_vertical">12dp</dimen>
+    <dimen name="gallery_detail_comment_spacing">24dp</dimen>
+    <dimen name="gallery_detail_comments_more_spacing">6dp</dimen>
 
     <dimen name="gallery_page_text">56sp</dimen>
     <dimen name="gallery_widget_margin_h">12dp</dimen>

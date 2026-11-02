@@ -22,6 +22,8 @@ public class QuickSearch {
 	public int pageTo;
 	public long time;
 	public boolean subscribed;
+	public int minRatingHundredths;
+	public boolean ratingOverride;
 
 	@Generated
 	public QuickSearch() {
@@ -131,6 +133,12 @@ public class QuickSearch {
 		return subscribed;
 	}
 
+	public int getMinRatingHundredths() { return minRatingHundredths; }
+
+	public void setMinRatingHundredths(int value) { minRatingHundredths = value; }
+	public boolean getRatingOverride() { return ratingOverride; }
+	public void setRatingOverride(boolean value) { ratingOverride = value; }
+
 	public void setSubscribed(boolean subscribed) {
 		this.subscribed = subscribed;
 	}
@@ -148,6 +156,8 @@ public class QuickSearch {
 		object.put("keyword", keyword);
 		object.put("advanceSearch", advanceSearch);
 		object.put("minRating", minRating);
+		object.put("minRatingHundredths", minRatingHundredths);
+		object.put("ratingOverride", ratingOverride);
 		object.put("pageFrom", pageFrom);
 		object.put("pageTo", pageTo);
 		object.put("time", time);
@@ -163,6 +173,8 @@ public class QuickSearch {
 		search.keyword = object.getString("keyword");
 		search.advanceSearch = object.getIntValue("advanceSearch");
 		search.minRating = object.getIntValue("minRating");
+		search.minRatingHundredths = object.getIntValue("minRatingHundredths");
+		search.ratingOverride = object.getBooleanValue("ratingOverride");
 		search.pageFrom = object.getIntValue("pageFrom");
 		search.pageTo = object.getIntValue("pageTo");
 		search.time = object.getLongValue("time");

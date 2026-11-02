@@ -39,6 +39,7 @@ public class SubscriptionUpdatePreferencesTest {
     public void setUp() {
         Settings.initialize(RuntimeEnvironment.getApplication());
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES, false);
+        Settings.putBoolean(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN, false);
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, true);
         Settings.putString(Settings.KEY_AUTO_SUBSCRIPTION_UPDATE_INTERVAL, "60");
@@ -117,6 +118,25 @@ public class SubscriptionUpdatePreferencesTest {
         TwoStatePreference automatic = fragment.findPreference(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES);
         automatic.setChecked(false);
         assertFalse(interval.isEnabled());
+        host.finish();
+    }
+
+    @Test public void homepageModeIsAbsentAndLegacyEnabledPreferenceIsIgnored() {
+        Settings.putBoolean(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN, true);
+        assertFalse(Settings.getSubscriptionHomepageScan());
+        FragmentActivity host = Robolectric.buildActivity(FragmentActivity.class).setup().get();
+        host.setTheme(R.style.AppTheme);
+        Harness fragment = new Harness();
+        host.getSupportFragmentManager().beginTransaction()
+                .replace(android.R.id.content, fragment).commitNow();
+        assertNull(fragment.findPreference(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN));
+        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
+        String resourcePackage = activity.getResources().getResourcePackageName(R.id.auto_subscription_updates);
+        assertEquals(0, activity.getResources().getIdentifier("subscription_homepage_scan", "id", resourcePackage));
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertFalse(Settings.getSubscriptionHomepageScan());
+        assertFalse(Settings.getAutoSubscriptionUpdates());
+        assertEquals(1, saves.get());
         host.finish();
     }
 

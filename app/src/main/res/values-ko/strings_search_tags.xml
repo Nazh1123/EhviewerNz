@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_tag_or">하나라도 일치 (OR)</string>
+    <string name="search_tag_or_label">%1$s (OR)</string>
+    <string name="search_tag_change_mode">%1$s: %2$s(으)로 전환</string>
+    <string name="search_tag_edit">태그 %1$s 편집</string>
+    <string name="search_tag_delete">태그 %1$s 삭제</string>
+</resources>

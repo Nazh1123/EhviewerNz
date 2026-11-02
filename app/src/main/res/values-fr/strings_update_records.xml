@@ -23,7 +23,7 @@
     <string name="gallery_update_log_versions">Voir l’historique de la chaîne de versions</string>
     <string name="gallery_update_log_loading">Chargement de l’enregistrement de mise à jour…</string>
     <string name="gallery_update_log_unavailable">L’enregistrement de mise à jour n’est plus disponible</string>
-    <string name="gallery_update_reader_progress">Ajouts %1$d/%2$d · p. %3$d</string>
+    <string name="gallery_update_reader_progress">Ajouts %1$d/%2$d · p. %3$d/%4$d</string>
     <string name="gallery_update_finalizing">Finalisation de la mise à jour de la galerie</string>
     <string name="gallery_update_finalization_failed">Téléchargement terminé, mais la finalisation a échoué. Réessayez depuis les détails de la galerie.</string>
     <string-array name="gallery_update_record_limit_entries">
@@ -79,4 +79,7 @@
     <string name="gallery_update_history_no_pages">Aucune page ajoutée par cette mise à jour n’est encore lisible localement. Elles ont peut-être été supprimées plus tard ou sont absentes localement. Les anciens enregistrements sans instantanés de jetons ne peuvent être lus que dans leur version locale d’origine.</string>
     <string name="gallery_update_history_incomplete">Informations des pages incomplètes</string>
     <string name="gallery_update_history_empty">Aucun enregistrement de mise à jour pour cette chaîne de versions. Les anciens ont peut-être été supprimés à cause de la limite du nombre d’enregistrements.</string>
+    <string name="gallery_updated">Mise à jour</string>
+    <string name="gallery_read_full">Lire toute la galerie</string>
+    <string name="gallery_update_record_invalid">Enregistrement de mise à jour invalide</string>
 </resources>

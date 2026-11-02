@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.client.parser;
 
+import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 
 import android.text.TextUtils;
@@ -36,6 +37,8 @@ import com.hippo.lib.yorozuya.NumberUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -79,11 +82,23 @@ public class GalleryListParser {
         public String lastHref;
         public String customErrorString;
         public boolean noWatchedTags;
+        public boolean ratingFilteredAll;
         public int rawResultCount;
+        public GallerySeenState rawSeenState =
+                GallerySeenState.empty();
         public long rawHeadGid;
         public String rawTailPosted;
         public long rawTailGid;
         public List<GalleryInfo> galleryInfoList = new ArrayList<>();
+        // A separate list, sharing immutable identity/metadata objects before filtering removes rows.
+        public List<GalleryInfo> rawGalleries;
+        // API enrichment mutates GalleryInfo.posted; pagination coverage uses the HTML timestamp.
+        public final Map<Long, String> rawPublicationTimes = new HashMap<>();
+        // Background checks filter only new candidates; retain the full page for later browsing.
+        public List<GalleryInfo> subscriptionRawGalleries;
+        // Display-ready full pages let update-check results open without another metadata request.
+        public List<GalleryInfo> subscriptionDisplayGalleries;
+        public List<GalleryInfo> ratingMetadata;
     }
 
     private static int parsePages(Document d, String body) throws ParseException {
@@ -255,6 +270,9 @@ public class GalleryListParser {
 //                throw new ParseException("No gallery", body);
             }
             result.galleryInfoList = list;
+            result.rawGalleries = new ArrayList<>(list);
+            for (GalleryInfo gallery : list) result.rawPublicationTimes.put(gallery.gid, gallery.posted);
+            result.rawSeenState = result.rawSeenState.observe(list);
             result.rawResultCount = list.size();
             if (!list.isEmpty()) {
                 result.rawHeadGid = list.get(0).gid;

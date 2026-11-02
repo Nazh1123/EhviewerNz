@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">Étiquette de recherche prédéfinie 1</string>
+    <string name="settings_search_preset_tag_2">Étiquette de recherche prédéfinie 2</string>
+    <string name="settings_search_preset_tag_hint">Saisissez un espace de noms:étiquette, par exemple l:\"chinese$\", o:\"ai generated$\" ou f:\"stockings\". Entourez de guillemets les étiquettes contenant des espaces.</string>
+    <string name="settings_search_preset_tag_invalid">Saisissez un espace de noms:étiquette valide. Utilisez des guillemets pour les espaces.</string>
+    <string name="search_preset_ai_generated">Généré par IA</string>
+    <string name="search_preset_exclude">Exclure</string>
+    <string name="search_preset_normal">Normal</string>
+    <string name="search_preset_include">Inclure</string>
+    <string name="settings_search_preset_bubbles_summary">Affiche les bulles prédéfinies dans les options de recherche. Appuyez sur une bulle pour l’ajouter ou la retirer ; son symbole gauche alterne entre inclure, exclure et OU.</string>
+    <string name="settings_search_preset_tags">Mots-clés prédéfinis</string>
+    <string name="settings_search_preset_reorder">Faire glisser pour réordonner %1$s</string>
+    <string name="settings_search_preset_add">Ajouter une étiquette prédéfinie</string>
+    <string name="settings_search_preset_edit">Modifier l’étiquette prédéfinie</string>
+    <string name="settings_search_preset_remove">Supprimer le préréglage</string>
+    <string name="settings_search_preset_duplicate">Cette étiquette figure déjà dans la liste des préréglages.</string>
+    <string name="search_preset_absent">Absent de la requête de recherche</string>
+    <string name="search_preset_add">Ajouter l’étiquette %1$s</string>
+    <string name="settings_search_presets_count">Étiquettes prédéfinies : %1$d · Ajouter, modifier ou supprimer</string>
+    <string name="settings_search_presets_description">Gérez les mots-clés prédéfinis des options de recherche. Faites glisser la poignée gauche pour réordonner ; utilisez les boutons de droite pour modifier ou supprimer. Les changements sont enregistrés immédiatement.</string>
+    <string name="settings_search_presets_empty">Aucune étiquette prédéfinie. Appuyez sur le bouton ci-dessous pour en ajouter une.</string>
+    <string name="settings_search_preset_remove_confirm">Supprimer le préréglage %1$s ? La requête actuelle reste inchangée.</string>
+    <string name="search_preset_input_hint">Saisir un mot-clé ou une expression d’étiquettes</string>
+</resources>

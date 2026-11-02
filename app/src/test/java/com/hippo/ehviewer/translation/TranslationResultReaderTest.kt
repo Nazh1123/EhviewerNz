@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.os.Looper
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.gallery.GalleryProvider2
+import com.hippo.ehviewer.gallery.GalleryResultIndex
 import com.hippo.lib.image.Image
 import com.hippo.unifile.UniFile
 import java.io.File
@@ -157,7 +158,9 @@ class TranslationResultReaderTest {
         val source = png()
         provider.source = source
         val store = TranslationResultStore(TranslationStorage.cacheDir(context),
-            null, session.activeOptions, null, false)
+            null, session.activeOptions, null, false, "3",
+            resultIndex = GalleryResultIndex.open(context, session.identity, null, null, false),
+            indexedSource = GalleryResultIndex.Source("3"))
         val output = store.writeImage(store.key(source)) { out -> source.inputStream().use { it.copyTo(out) } }
         try {
             assertFalse(TranslationModels(context).ready())
@@ -165,7 +168,7 @@ class TranslationResultReaderTest {
             session.onPageChanged(3)
             await { reader.hasTranslatedPage(3) && !session.working }
             assertTrue(session.enabled)
-            assertEquals(1, provider.saves)
+            assertEquals(0, provider.saves)
             assertEquals(R.string.translation_done, session.states[3])
         } finally { output.delete() }
     }
@@ -176,7 +179,9 @@ class TranslationResultReaderTest {
         val source = png()
         provider.source = source
         val results = TranslationResultStore(TranslationStorage.cacheDir(context), null,
-            session.activeOptions.copy(source = "en"), null, false)
+            session.activeOptions.copy(source = "en"), null, false, "3",
+            resultIndex = GalleryResultIndex.open(context, session.identity, null, null, false),
+            indexedSource = GalleryResultIndex.Source("3"))
         val output = results.writeImage(results.key(source)) { out -> source.inputStream().use { it.copyTo(out) } }
         try {
             assertFalse(TranslationModels(context).ready())
@@ -184,7 +189,7 @@ class TranslationResultReaderTest {
             session.onPageChanged(3)
             await { reader.hasTranslatedPage(3) && !session.working }
             assertEquals(R.string.translation_done, session.states[3])
-            assertEquals(1, provider.saves)
+            assertEquals(0, provider.saves)
             assertNull(ReflectionHelpers.getField<GallerySourceLanguage>(session, "sourceLanguage").language)
         } finally { output.delete() }
     }
@@ -192,8 +197,8 @@ class TranslationResultReaderTest {
     @Test fun namedPersistentResultLoadsBeforeRequestingAnUnavailableOriginal() = withSession { session, provider, reader ->
         val directory = temp.newFolder("gallery")
         provider.directory = requireNotNull(UniFile.fromFile(directory))
-        val saved = File(directory, "_translated").apply { mkdirs() }
-        png().copyTo(File(saved, "3_tl.png"))
+        GalleryResultIndex.open(RuntimeEnvironment.getApplication(), session.identity, null, provider.directory, true)
+            .write(GalleryResultIndex.Source("3"), GalleryResultIndex.Kind.TL, "png") { out -> png().inputStream().use { it.copyTo(out) } }
         assertNull(provider.source)
         assertFalse(TranslationModels(RuntimeEnvironment.getApplication()).ready())
         ReflectionHelpers.setField(session, "activated", true)
@@ -203,7 +208,7 @@ class TranslationResultReaderTest {
         assertEquals(0, provider.saves)
     }
 
-    @Test fun oldFullPageCacheIsConvertedToOneSparseOverlayWithoutTranslationModels() = withSession { session, provider, reader ->
+    @Test fun unindexedOldFullPageCacheIsIgnoredWithoutMigration() = withSession { session, provider, reader ->
         val context = RuntimeEnvironment.getApplication()
         val original = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
         val rendered = original.copy(Bitmap.Config.ARGB_8888, true).apply { setPixel(1, 1, android.graphics.Color.BLUE) }
@@ -220,21 +225,18 @@ class TranslationResultReaderTest {
             assertFalse(TranslationModels(context).ready())
             ReflectionHelpers.setField(session, "activated", true)
             session.onPageChanged(3)
-            await { reader.hasTranslatedPage(3) && !session.working }
-            assertFalse(legacy.exists())
-            assertTrue(output.isFile)
-            val overlay = android.graphics.BitmapFactory.decodeFile(output.absolutePath)!!
-            try {
-                assertEquals(android.graphics.Color.TRANSPARENT, overlay.getPixel(0, 0))
-                assertEquals(android.graphics.Color.BLUE, overlay.getPixel(1, 1))
-            } finally { overlay.recycle() }
+            await { session.states[3] == R.string.translation_models_required && !session.working }
+            assertFalse(reader.hasTranslatedPage(3))
+            assertTrue(legacy.isFile)
+            assertFalse(output.exists())
         } finally { original.recycle(); rendered.recycle(); legacy.delete(); output.delete() }
     }
 
     @Test fun namedPersistentNoTextMarkerLoadsWithoutRequestingOriginalOrModels() = withSession { session, provider, _ ->
         val directory = temp.newFolder("gallery")
         provider.directory = requireNotNull(UniFile.fromFile(directory))
-        File(File(directory, "_translated").apply { mkdirs() }, "3_tl.skip").writeText("skipped")
+        GalleryResultIndex.open(RuntimeEnvironment.getApplication(), session.identity, null, provider.directory, true)
+            .write(GalleryResultIndex.Source("3"), GalleryResultIndex.Kind.TL, "skip") { it.write("skipped".toByteArray()) }
         ReflectionHelpers.setField(session, "activated", true)
         session.onPageChanged(3)
         await { session.states[3] == R.string.translation_no_text && !session.working }

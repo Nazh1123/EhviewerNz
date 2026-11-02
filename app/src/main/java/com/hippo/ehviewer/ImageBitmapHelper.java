@@ -21,6 +21,7 @@ import androidx.annotation.Nullable;
 import android.util.Log;
 
 import com.hippo.conaco.ValueHelper;
+import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.lib.image.Image;
 //import com.hippo.lib.image.ImageBitmap;
 import com.hippo.streampipe.InputStreamPipe;
@@ -32,6 +33,7 @@ public class ImageBitmapHelper implements ValueHelper<Image> {
     private static final String TAG = "ImageBitmapHelper";
 
     private static final int MAX_CACHE_SIZE = 512 * 512;
+    public static final int PREVIEW_CACHE_BYTES = 8 * 1024 * 1024;
 
     @Nullable
     @Override
@@ -68,7 +70,7 @@ public class ImageBitmapHelper implements ValueHelper<Image> {
 
     @Override
     public int sizeOf(@NonNull String key, @NonNull Image value) {
-        return value.getWidth() * value.getHeight() * 4 /* value.getByteCount() TODO Update Image */;
+        return (int) Math.min(Integer.MAX_VALUE, (long) value.getWidth() * value.getHeight() * 4);
     }
 
 //    @Override
@@ -89,7 +91,8 @@ public class ImageBitmapHelper implements ValueHelper<Image> {
     @Override
     public boolean useMemoryCache(@NonNull String key, Image value) {
         if (value != null) {
-            return value.getWidth() * value.getHeight() <= MAX_CACHE_SIZE
+            if (EhCacheKeyFactory.isNormalPreviewKey(key)) return sizeOf(key, value) <= PREVIEW_CACHE_BYTES;
+            return (long) value.getWidth() * value.getHeight() <= MAX_CACHE_SIZE
                     /* value.getByteCount() <= MAX_CACHE_BYTE_COUNT TODO Update Image */;
         } else {
             return true;

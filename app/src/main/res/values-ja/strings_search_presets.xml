@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">検索プリセットタグ1</string>
+    <string name="settings_search_preset_tag_2">検索プリセットタグ2</string>
+    <string name="settings_search_preset_tag_hint">名前空間:タグ を1つ入力してください。例：l:\"chinese$\"、o:\"ai generated$\"、f:\"stockings\"。空白を含むタグは二重引用符で囲んでください。</string>
+    <string name="settings_search_preset_tag_invalid">有効な 名前空間:タグ を1つ入力してください。空白を含むタグは二重引用符で囲んでください。</string>
+    <string name="search_preset_ai_generated">AI生成</string>
+    <string name="search_preset_exclude">除外</string>
+    <string name="search_preset_normal">通常</string>
+    <string name="search_preset_include">含める</string>
+    <string name="settings_search_preset_bubbles_summary">詳細な検索条件にプリセットのバブルを表示します。タップで追加・削除し、左の記号で包含・除外・OR を切り替えます。</string>
+    <string name="settings_search_preset_tags">プリセットキーワード</string>
+    <string name="settings_search_preset_reorder">ドラッグして %1$s を並べ替え</string>
+    <string name="settings_search_preset_add">プリセットタグを追加</string>
+    <string name="settings_search_preset_edit">プリセットタグを編集</string>
+    <string name="settings_search_preset_remove">プリセットを削除</string>
+    <string name="settings_search_preset_duplicate">このタグはすでにプリセット一覧にあります。</string>
+    <string name="search_preset_absent">検索条件に含まれていません</string>
+    <string name="search_preset_add">タグ %1$s を追加</string>
+    <string name="settings_search_presets_count">プリセットタグ：%1$d · 追加・編集・削除</string>
+    <string name="settings_search_presets_description">詳細な検索条件に表示するプリセットキーワードを管理します。左のハンドルをドラッグして並べ替え、右のボタンで編集・削除します。変更はすぐに保存されます。</string>
+    <string name="settings_search_presets_empty">プリセットタグはまだありません。下のボタンから追加してください。</string>
+    <string name="settings_search_preset_remove_confirm">プリセット %1$s を削除しますか？現在の検索条件は変わりません。</string>
+    <string name="search_preset_input_hint">キーワードまたはタグ式を入力</string>
+</resources>

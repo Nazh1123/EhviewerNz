@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_results_delete_title">Delete processed results</string>
+    <string name="gallery_results_delete_sr">Delete SR results</string>
+    <string name="gallery_results_calculating">Calculating storage for the selected galleries…</string>
+    <string name="gallery_results_delete_summary">%1$d selected galleries\n\n%6$s\nTranslations: %2$d images, %3$s\nSuper resolution: %4$d images, %5$s\n\nTranslation and SR counts include recorded complete results; storage includes caches and unfinished results. Archives use their container size. Delete all results of the chosen type while keeping originals and the other result type.</string>
+    <string name="gallery_results_originals">Originals: %1$d images, %2$s</string>
+    <string name="gallery_results_originals_unavailable">Originals: some source images could not be accessed</string>
+    <string name="gallery_results_inspect_failed">Some results could not be inspected. Check storage access or try again later.</string>
+    <string name="gallery_results_deleted">Results of the selected type deleted</string>
+    <string name="gallery_results_delete_failed">Some results could not be deleted. Check storage access or retry.</string>
+</resources>

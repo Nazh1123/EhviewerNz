@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search">検索</string>
+    <string name="settings_enable_search_tag_chips">キーワードのタグバブル</string>
+    <string name="settings_enable_search_tag_chips_summary">キーワードタグを編集可能なバブルで表示し、検索バーを最大 4 行に拡張します。オフにすると 1 行の通常テキストになります。</string>
+    <string name="settings_enable_search_preset_tags">検索プリセットタグを有効化</string>
+    <string name="settings_enable_precise_rating_filter">精密な評価フィルターを有効化</string>
+    <string name="settings_persistent_min_rating">常時適用する評価フィルター</string>
+    <string name="settings_persistent_min_rating_description">すべての検索に適用する最低評価を設定します。それ未満のギャラリーは既定で非表示になります。</string>
+    <string name="settings_persistent_min_rating_value">現在：%1$s（0.00 で無効化）</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_results_directory">Dossier des résultats de l’archive</string>
+    <string name="archive_results_permission_message">Sélectionnez le dossier contenant cette archive et autorisez la lecture et l’écriture. Les traductions et agrandissements seront enregistrés à côté dans « nom complet de l’archive.results » et réutilisés à la réouverture. L’annulation n’affecte ni la lecture ni l’enregistrement d’images individuelles.</string>
+    <string name="archive_results_choose_parent">Choisir le dossier contenant l’archive</string>
+    <string name="archive_results_wrong_parent">L’accès au dossier n’a pas été accordé. Sélectionnez le dossier contenant directement cette archive et autorisez la lecture et l’écriture.</string>
+</resources>

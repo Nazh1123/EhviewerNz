@@ -79,6 +79,34 @@ public class HistoryFragmentTest {
         assertHistoryIntent(GalleryUpdateHistoryScene.class);
     }
 
+    @Test public void updateSidebarSwitchIsFirstDefaultsOffAndPersists() {
+        TwoStatePreference toggle = fragment.findPreference(Settings.KEY_SHOW_UPDATE_HISTORY_IN_SIDEBAR);
+        assertNotNull(toggle);
+        assertSame(toggle, toggle.getParent().getPreference(0));
+        assertEquals("在侧边栏显示按钮", toggle.getTitle().toString());
+        assertEquals("开启后在左侧边栏显示“更新记录”按钮", toggle.getSummary().toString());
+        assertFalse(toggle.isChecked());
+        assertFalse(Settings.getShowUpdateHistoryInSidebar());
+        assertTrue(toggle.callChangeListener(true));
+        toggle.setChecked(true);
+        assertTrue(Settings.getShowUpdateHistoryInSidebar());
+        assertEquals(Activity.RESULT_OK, shadowOf(host).getResultCode());
+    }
+
+    @Test public void collapseHistorySwitchIsAtTopDefaultsOffAndPersists() {
+        TwoStatePreference toggle = fragment.findPreference(Settings.KEY_COLLAPSE_HISTORY_IN_SIDEBAR);
+        assertSame(toggle, fragment.getPreferenceScreen().getPreference(0));
+        assertEquals("折叠显示历史入口", toggle.getTitle().toString());
+        assertEquals("开启时将左侧边栏中的“历史”“阅读历史”“更新记录”放到折叠菜单中",
+                toggle.getSummary().toString());
+        assertFalse(toggle.isChecked());
+        assertFalse(Settings.getCollapseHistoryInSidebar());
+        assertTrue(toggle.callChangeListener(true));
+        toggle.setChecked(true);
+        assertTrue(Settings.getCollapseHistoryInSidebar());
+        assertEquals(Activity.RESULT_OK, shadowOf(host).getResultCode());
+    }
+
     private void assertHistoryIntent(Class<?> scene) {
         Intent intent = shadowOf(host).getNextStartedActivity();
         assertNotNull(intent);

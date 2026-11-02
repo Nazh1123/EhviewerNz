@@ -137,8 +137,9 @@ public class GalleryDetailParser {
         galleryDetail.previewPages = parsePreviewPages(document, body);  //获取画廊图片数量
         galleryDetail.previewSet = parsePreviewSet(document, body);//获取画廊浏览参数（如：之前有观看则从上次看到的位置开始）
         galleryDetail.SpiderInfoPages = parsePages(body);
-        galleryDetail.SpiderInfoPreviewPages = parsePreviewPages(body);
-        galleryDetail.SpiderInfoPreviewSet = parsePreviewSet(body);
+        galleryDetail.SpiderInfoPreviewPages = galleryDetail.previewPages;
+        // Both consumers only read this set. Keep SpiderInfo's fields without parsing a second DOM.
+        galleryDetail.SpiderInfoPreviewSet = galleryDetail.previewSet;
         return galleryDetail;
     }
 

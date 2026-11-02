@@ -22,7 +22,9 @@ public final class UpdatedGalleryProvider extends DirGalleryProvider {
     private final GalleryInfo gallery;
     private final long recordGid;
     private final long recordTime;
+    private final int sourceStartPage;
     private volatile int[] sourcePages = new int[0];
+    private volatile int sourcePageCount;
     private volatile int[] addedPositions = new int[0];
     private volatile int startPage;
     private volatile UniFile directory;
@@ -30,10 +32,21 @@ public final class UpdatedGalleryProvider extends DirGalleryProvider {
     private long progressSequence;
 
     public UpdatedGalleryProvider(Context context, GalleryInfo gallery, long recordGid, long recordTime) {
+        this(context, gallery, recordGid, recordTime, -1);
+    }
+
+    public UpdatedGalleryProvider(Context context, GalleryInfo gallery, long recordGid,
+                                  long recordTime, int sourceStartPage) {
         this.context = context.getApplicationContext();
         this.gallery = gallery;
         this.recordGid = recordGid > 0 ? recordGid : gallery.gid;
         this.recordTime = recordTime;
+        this.sourceStartPage = sourceStartPage;
+    }
+
+    /** Worker thread only; use the same local-image validation as the actual reader. */
+    public boolean hasReadablePages() {
+        return loadImageFiles() != null;
     }
 
     @Override protected UniFile[] loadImageFiles() {
@@ -75,14 +88,25 @@ public final class UpdatedGalleryProvider extends DirGalleryProvider {
                 return null;
             }
             sourcePages = pages.stream().mapToInt(Integer::intValue).toArray();
+            sourcePageCount = current.pages;
             addedPositions = positions.stream().mapToInt(Integer::intValue).toArray();
-            startPage = resumePosition(record.readingPage, addedPositions);
+            startPage = sourceStartPage >= 0 ? positionForSourcePage(sourceStartPage, sourcePages)
+                    : resumePosition(record.readingPage, addedPositions);
             return files.toArray(new UniFile[0]);
         } catch (RuntimeException e) {
             Log.w("UpdatedGalleryProvider", "Unable to resolve local update pages", e);
             error = context.getString(R.string.gallery_update_history_no_local);
             return null;
         }
+    }
+
+    static int positionForSourcePage(int page, int[] pages) {
+        if (pages.length == 0) return -1;
+        int position = java.util.Arrays.binarySearch(pages, page);
+        if (position >= 0) return position;
+        int next = -position - 1;
+        if (next < pages.length && pages[next] == page + 1) return next;
+        return Math.max(0, next - 1);
     }
 
     static int resumePosition(int savedAddition, int[] additions) {
@@ -96,6 +120,7 @@ public final class UpdatedGalleryProvider extends DirGalleryProvider {
 
     @Override public String getError() { return error; }
     @Override public int getStartPage() { return startPage; }
+    @Override public int getSourcePageCount() { return sourcePageCount; }
     @Override public int getSourcePage(int index) {
         int[] pages = sourcePages;
         return index >= 0 && index < pages.length ? pages[index] : index;

@@ -61,6 +61,18 @@ final class PopularGalleryHistory {
         current = new ArrayList<>(galleries);
     }
 
+    void updateRatings(List<GalleryInfo> metadata) {
+        if (metadata == null || current == null) return;
+        java.util.Map<Long, Float> ratings = new java.util.HashMap<>();
+        for (GalleryInfo gallery : metadata) {
+            ratings.put(gallery.gid, gallery.firstGid != null && gallery.firstGid > 0 ? gallery.rating : -1f);
+        }
+        for (GalleryInfo gallery : current) {
+            Float rating = ratings.get(gallery.gid);
+            if (rating != null) gallery.rating = rating;
+        }
+    }
+
     boolean hasCurrent() { return current != null; }
     boolean hasPrevious() { return previous != null; }
 

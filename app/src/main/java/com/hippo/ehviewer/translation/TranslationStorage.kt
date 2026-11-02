@@ -8,6 +8,11 @@ import com.hippo.ehviewer.EhDB
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource
+import com.hippo.ehviewer.gallery.ArchiveGalleryProvider
+import com.hippo.ehviewer.gallery.ArchiveResultStorage
+import android.net.Uri
+import com.hippo.ehviewer.gallery.GalleryProvider2
+import com.hippo.ehviewer.gallery.GalleryProcessingProgress
 import com.hippo.ehviewer.spider.SpiderDen
 import com.hippo.unifile.UniFile
 import java.io.File
@@ -18,6 +23,11 @@ object TranslationStorage {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     internal fun cacheDir(context: Context) = File(context.cacheDir, "translated-pages")
     internal fun legacyPersistentDir(context: Context) = File(context.noBackupFilesDir, "translated-galleries")
+
+    internal fun cache(context: Context, limit: Long = 256L * 1024 * 1024) =
+        TranslationCache(cacheDir(context), limit) { files ->
+            GalleryProcessingProgress.forget(context, files.map { android.net.Uri.fromFile(it) })
+        }
 
     internal fun hasGalleryDirectory(info: DownloadInfo) = info.archiveUri.isNullOrEmpty() ||
         LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
@@ -36,6 +46,8 @@ object TranslationStorage {
         val source = LocalFolderGallerySource.parse(info.archiveUri)
         val directory = if (source != null) {
             sourceDir(context, source)
+        } else if (ArchiveResultStorage.isArchiveUri(info.archiveUri)) {
+            ArchiveResultStorage.directory(context, Uri.parse(info.archiveUri), false)
         } else if (!info.archiveUri.isNullOrEmpty()) null
         else {
             val existing = SpiderDen.getExistingGalleryDownloadDir(info)
@@ -47,11 +59,31 @@ object TranslationStorage {
         return directory?.takeIf { it.isDirectory }
     }
 
+    /** Both page-processing pipelines use the same source-folder resolution and failure policy. */
+    internal fun resultDirectory(context: Context, download: DownloadInfo?, provider: GalleryProvider2,
+                                 persist: Boolean): UniFile? {
+        if (provider is ArchiveGalleryProvider) {
+            val directory = ArchiveResultStorage.directory(context, provider.archiveUri, persist)
+            if (persist) checkNotNull(directory) { "Archive result directory unavailable; authorize its parent folder" }
+            return directory
+        }
+        val directory = download?.let { galleryDir(context, it) } ?: provider.translationDirectory
+        if (persist && download?.state == DownloadInfo.STATE_FINISH && hasGalleryDirectory(download)) {
+            checkNotNull(directory) { "Gallery download directory unavailable" }
+        }
+        return directory
+    }
+
     fun pruneCache(context: Context) {
         val app = context.applicationContext
         scope.launch {
             TranslationRuntime.lock.withLock {
-                runCatching { TranslationCache(cacheDir(app), TranslationSettings(app).read().cacheLimitBytes).prune() }
+                runCatching {
+                    val limit = TranslationSettings(app).read().cacheLimitBytes
+                    cache(app, limit).prune()
+                    com.hippo.ehviewer.gallery.GalleryResultIndex.prune(app,
+                        com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL, limit)
+                }
             }
         }
     }
@@ -75,6 +107,7 @@ object TranslationStorage {
                         directoriesAccessible
                 }
             }.getOrDefault(false)
+            GalleryProcessingProgress.removeMissing(app, ids, GalleryProcessingProgress.Kind.TRANSLATION)
             withContext(Dispatchers.Main) {
                 Toast.makeText(app, if (success) R.string.translation_results_deleted
                     else R.string.translation_results_delete_failed, Toast.LENGTH_LONG).show()

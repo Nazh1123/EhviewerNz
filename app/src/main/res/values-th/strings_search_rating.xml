@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_rating_label">คะแนน</string>
+    <string name="search_rating_title">คะแนนขั้นต่ำ</string>
+    <string name="search_rating_hint">0.00–5.00; 0.00 คือปิดตัวกรอง</string>
+    <string name="search_rating_invalid">ป้อนตัวเลขตั้งแต่ 0.00 ถึง 5.00 โดยมีทศนิยมไม่เกินสองตำแหน่ง</string>
+</resources>

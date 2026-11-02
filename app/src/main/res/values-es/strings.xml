@@ -187,6 +187,8 @@
     <string name="image_search">Búsqueda de imagen</string>
     <string name="search_normal">Búsqueda normal</string>
     <string name="search_advance">Opciones avanzadas</string>
+    <string name="search_more_options">Más opciones de búsqueda</string>
+    <string name="search_hide_options">Ocultar opciones de búsqueda</string>
     <string name="search_image">Búsqueda de imágenes</string>
     <string name="search_normal_search">Búsqueda general</string>
     <string name="search_specify_uploader">Uploader específicos</string>
@@ -625,8 +627,6 @@
     <string name="settings_advanced_clear_memory_cache_summary">Borrar vistas previas, información de galería y caché de memoria</string>
     <string name="settings_advanced_read_cache_size">Tamaño del caché (archivos temporales)</string>
     <string name="settings_advanced_app_language_title">Idioma de la aplicación</string>
-    <string name="settings_search_language">Etiqueta de idioma de búsqueda</string>
-    <string name="settings_search_language_disabled">Desactivado</string>
     <string name="settings_advanced_proxy">Proxy</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>
@@ -999,8 +999,8 @@
     <string name="settings_animated_webp_progress_control_summary" formatted="false">Desliza en el cuarto inferior de la pantalla para cambiar la posición de reproducción</string>
     <string name="settings_animated_webp_sequential_playback_summary">Abre automáticamente la imagen siguiente al terminar la reproducción</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">Muestra el botón de reproducción/pausa del cambio automático cuando el control de páginas está visible</string>
-    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - Mantén pulsada la zona central inferior de la pantalla para reproducir a %1$sx; con 1.0, la pulsación larga abre el menú; tras mantener pulsado, desliza horizontalmente para cambiar la velocidad</string>
-    <string name="animated_webp_long_press_speed_hint">%1$sx, arrastra para cambiar</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - Mantén pulsada la zona central inferior de la pantalla para reproducir a %1$sx; con 1.0, la pulsación larga abre el menú; tras mantener pulsado, desliza horizontalmente para cambiar la velocidad; desliza hacia arriba para bloquear la velocidad actual al instante</string>
+    <string name="animated_webp_long_press_speed_hint">%1$sx, arrastra para cambiar, desliza hacia arriba para bloquear</string>
     <string name="animated_webp_long_press_speed_value">%1$sx</string>
     <string name="animated_webp_stall_warning">La reproducción de GIF está bloqueada; haga clic para reducir la sobrecarga de decodificación</string>
     <string name="bookmark_subscription_disable">Eliminar suscripción a favoritos</string>
@@ -1121,7 +1121,7 @@
     <string name="settings_fork_delete_empty_galleries">Eliminar galería vacía</string>
     <string name="settings_fork_download_label_continuous_browse">Descargar pestaña navegación continua</string>
     <string name="settings_fork_download_label_continuous_browse_summary">Mostrar la galería de descargas continuamente de arriba a abajo por etiqueta en la página de descarga</string>
-    <string name="settings_fork_features">Funciones varias del Fork</string>
+    <string name="settings_fork_features">Varios del Fork</string>
     <string name="settings_fork_gallery_immediate_jump">Saltar a la galería ahora</string>
     <string name="settings_fork_long_press_save_summary">Mantenga presionada la zona de cambio de página para guardar la imagen actual localmente</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">Mantenga presionado para guardar correctamente y pasar automáticamente a la página siguiente.</string>
@@ -1241,4 +1241,16 @@
     <string name="sync_folder_label_removed">Sincronización cancelada: se eliminó la etiqueta de descarga</string>
     <string name="settings_show_viewed_galleries">Mostrar galerías vistas</string>
     <string name="settings_show_viewed_galleries_summary">Guarda la galería más reciente de los resultados para marcar las ya vistas al repetir la búsqueda con las mismas condiciones.</string>
+    <string name="top_list_click_to_view">Toca para ver</string>
+    <string name="settings_yesterday_top_list_new_badge">Recordatorio de la clasificación de ayer</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">Muestra New! junto a las clasificaciones hasta que veas la de ayer. Se restablece cada día a las 00:05 UTC.</string>
+    <string name="navigation_long_press_hint">Mantén pulsados los botones para acciones especiales</string>
+    <string name="title_keyword_search_action">Buscar palabras clave</string>
+    <string name="download_remove_record">Eliminar solo el registro</string>
+    <string name="download_redownload">Volver a descargar</string>
+    <string name="download_remove_files">Eliminar registro y archivos locales</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">Buscar actualizaciones de suscripciones en la página principal</string>
+    <string name="settings_subscription_homepage_scan_summary">Explora la página principal al comprobar actualizaciones manual o automáticamente si los marcadores suscritos N &gt; 8, los minutos desde la última actualización T &lt; 400 y T × 0,3 &lt; N. En otros casos y para búsquedas complejas, usa búsquedas de marcadores. Conserva el progreso al cambiar de método. La navegación por suscripciones de marcadores no cambia.</string>
+    <string name="open_image_folder">Abrir imágenes de esta carpeta</string>
 </resources>

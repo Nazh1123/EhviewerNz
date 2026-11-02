@@ -11,6 +11,7 @@ import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.client.data.GalleryInfo
+import com.hippo.ehviewer.client.BrowsingPriority
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Request
@@ -171,7 +172,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
         if (offset > 0) {
             requestBuilder.header("Range", "bytes=$offset-")
         }
-        val call = client.newCall(requestBuilder.build())
+        val call = BrowsingPriority.downloadCall(client, requestBuilder.build()) { false }
         task.call = call
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {

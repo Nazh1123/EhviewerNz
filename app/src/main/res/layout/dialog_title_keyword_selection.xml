@@ -2,6 +2,7 @@
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/title_keyword_scroll"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:fillViewport="true"
@@ -10,14 +11,69 @@
     android:paddingEnd="@dimen/keyline_margin"
     android:paddingBottom="8dp">
 
-    <com.google.android.material.chip.ChipGroup
-        android:id="@+id/title_keyword_group"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:chipSpacingHorizontal="2dp"
-        app:chipSpacingVertical="2dp"
-        app:selectionRequired="false"
-        app:singleLine="false"
-        app:singleSelection="false"/>
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/title_keyword_primary_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:text="@string/key_title"
+                android:textAppearance="@style/TextAppearance.AppCompat.Caption"
+                android:textColor="?android:attr/textColorSecondary"/>
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/title_keyword_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:chipSpacingHorizontal="4dp"
+                app:chipSpacingVertical="4dp"
+                app:selectionRequired="false"
+                app:singleLine="false"
+                app:singleSelection="false"/>
+        </LinearLayout>
+
+        <View
+            android:id="@+id/title_keyword_divider"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
+            android:background="?attr/colorControlHighlight"/>
+
+        <LinearLayout
+            android:id="@+id/title_keyword_jpn_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp"
+                android:text="@string/key_title_jpn"
+                android:textAppearance="@style/TextAppearance.AppCompat.Caption"
+                android:textColor="?android:attr/textColorSecondary"/>
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/title_keyword_jpn_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:chipSpacingHorizontal="4dp"
+                app:chipSpacingVertical="4dp"
+                app:selectionRequired="false"
+                app:singleLine="false"
+                app:singleSelection="false"/>
+        </LinearLayout>
+
+    </LinearLayout>
 
 </ScrollView>

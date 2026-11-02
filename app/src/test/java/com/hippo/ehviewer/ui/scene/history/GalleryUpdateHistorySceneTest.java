@@ -2,6 +2,7 @@ package com.hippo.ehviewer.ui.scene.history;
 
 import android.app.Application;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Rect;
@@ -26,7 +27,10 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.dao.DownloadInfo;
+import com.hippo.ehviewer.download.GalleryUpdateRecord;
 import com.hippo.ehviewer.download.GalleryUpdateRecordStore.Summary;
+import com.hippo.ehviewer.gallery.ReadingHistory;
+import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.scene.download.DownloadsScene;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
@@ -115,7 +119,7 @@ public class GalleryUpdateHistorySceneTest {
         assertEquals("3/5", text(row, R.id.read_progress));
         assertNull(row.itemView.findViewById(R.id.uploader));
         assertNull(row.itemView.findViewById(R.id.rating));
-        row.itemView.performClick();
+        row.itemView.findViewById(R.id.thumb).performClick();
         assertEquals(GalleryDetailScene.class, scene.launched.getClazz());
         assertEquals(GalleryDetailScene.ACTION_DOWNLOAD_GALLERY_INFO,
                 scene.launched.getArgs().getString(GalleryDetailScene.KEY_ACTION));
@@ -153,15 +157,141 @@ public class GalleryUpdateHistorySceneTest {
         assertEquals("+—  -—", text(row, R.id.update_counts));
         assertEquals("失败", text(row, R.id.state));
         assertEquals("—", text(row, R.id.read_progress));
-        row.itemView.performClick();
+        row.itemView.findViewById(R.id.thumb).performClick();
         Bundle args = scene.launched.getArgs();
         assertEquals(GalleryDetailScene.ACTION_GID_TOKEN, args.getString(GalleryDetailScene.KEY_ACTION));
         assertEquals(150, args.getLong(GalleryDetailScene.KEY_GID));
         assertEquals("token150", args.getString(GalleryDetailScene.KEY_TOKEN));
+        scene.launched = null;
+        row.itemView.findViewById(R.id.thumb).performClick();
+        assertEquals(150, scene.launched.getArgs().getLong(GalleryDetailScene.KEY_GID));
+        assertEquals("token150", scene.launched.getArgs().getString(GalleryDetailScene.KEY_TOKEN));
         ((TextView) row.itemView.findViewById(R.id.title)).setTextSize(
                 android.util.TypedValue.COMPLEX_UNIT_PX,
                 context.getResources().getDimension(R.dimen.text_little_small));
         preview(row.itemView, "missing-gallery", text(row, R.id.title));
+        adapter.onViewRecycled(row);
+        assertFalse(row.itemView.findViewById(R.id.thumb).hasOnClickListeners());
+    }
+
+    @Test public void cardReadsThisUpdateAndCoverStillOpensDetails() {
+        TestScene scene = readingScene();
+        RecyclerView.ViewHolder row = bindFirstRow(scene);
+        row.itemView.performClick();
+        ShadowLooper.idleMainLooper();
+        assertNull(scene.launched);
+        assertNotNull(scene.reader);
+        assertEquals(GalleryActivity.class.getName(), scene.reader.getComponent().getClassName());
+        assertEquals(GalleryActivity.ACTION_EH, scene.reader.getAction());
+        assertEquals(ReadingHistory.UPDATE, scene.reader.getStringExtra(ReadingHistory.KEY_SOURCE));
+        assertEquals(200, ((DownloadInfo) scene.reader.getParcelableExtra(GalleryActivity.KEY_GALLERY_INFO)).gid);
+        assertEquals(200, scene.reader.getLongExtra(GalleryActivity.KEY_UPDATE_RECORD_GID, 0));
+        assertEquals(1234, scene.reader.getLongExtra(GalleryActivity.KEY_UPDATE_RECORD_TIME, 0));
+        assertFalse(scene.reader.hasExtra(GalleryActivity.KEY_PAGE)); // Reader restores the record's own progress.
+
+        scene.reader = null;
+        row.itemView.findViewById(R.id.thumb).performClick();
+        assertNull(scene.reader);
+        assertEquals(GalleryDetailScene.class, scene.launched.getClazz());
+    }
+
+    @Test public void removedOriginalFallsBackToDetailsEvenWhenLaterVersionExists() {
+        TestScene scene = readingScene();
+        scene.local.gid = 400;
+        scene.local.token = "latest";
+        bindFirstRow(scene).itemView.performClick();
+        ShadowLooper.idleMainLooper();
+        assertNull(scene.reader);
+        assertEquals(GalleryDetailScene.class, scene.launched.getClazz());
+        assertEquals(200, scene.launched.getArgs().getLong(GalleryDetailScene.KEY_GID));
+        assertEquals("token200", scene.launched.getArgs().getString(GalleryDetailScene.KEY_TOKEN));
+
+        scene.launched = null;
+        scene.local.gid = 200;
+        RecyclerView.ViewHolder row = bindFirstRow(scene);
+        row.itemView.performClick();
+        scene.local = null; // Removed while the update record is being resolved.
+        ShadowLooper.idleMainLooper();
+        assertNull(scene.reader);
+        assertEquals(GalleryDetailScene.class, scene.launched.getClazz());
+        assertEquals(200, scene.launched.getArgs().getLong(GalleryDetailScene.KEY_GID));
+    }
+
+    @Test public void unreadableUpdatesShowReasonWithoutOpeningReaderOrDetails() {
+        TestScene scene = readingScene();
+        RecyclerView.ViewHolder row = bindFirstRow(scene);
+        GalleryUpdateRecord[] records = {
+                null, record(200, 9999, RECORD_JSON),
+                GalleryUpdateRecord.failure(200, 100, 1234, "old", "failed", new long[0]),
+                record(200, 1234, RECORD_JSON.replace("\"complete\":true", "\"complete\":false")),
+                record(200, 1234, RECORD_JSON.replace("\"target_tokens\":[\"A\",\"X\",\"B\",\"Y\"]", "\"target_tokens\":[]")),
+                record(200, 1234, RECORD_JSON.replace("\"added\":[1,3]", "\"added\":[]"))
+        };
+        int[] reasons = {R.string.gallery_update_log_unavailable, R.string.gallery_update_log_unavailable,
+                R.string.gallery_update_log_unavailable, R.string.gallery_update_log_incomplete,
+                R.string.gallery_update_log_legacy_notice, R.string.gallery_update_log_no_added};
+        for (int i = 0; i < records.length; i++) {
+            scene.record = records[i];
+            scene.notice = 0;
+            row.itemView.performClick();
+            ShadowLooper.idleMainLooper();
+            assertEquals(reasons[i], scene.notice);
+            assertNull(scene.reader);
+            assertNull(scene.launched);
+        }
+        scene.record = record(200, 1234, RECORD_JSON);
+        scene.local.state = DownloadInfo.STATE_DOWNLOAD;
+        row.itemView.performClick();
+        ShadowLooper.idleMainLooper();
+        assertEquals(R.string.gallery_update_history_no_local, scene.notice);
+        assertNull(scene.reader);
+    }
+
+    @Test public void coverClickAndLeavingPageCancelPendingReaderLaunch() {
+        TestScene scene = readingScene();
+        RecyclerView.ViewHolder row = bindFirstRow(scene);
+        row.itemView.performClick();
+        row.itemView.findViewById(R.id.thumb).performClick();
+        ShadowLooper.idleMainLooper();
+        assertNotNull(scene.launched);
+        assertNull(scene.reader);
+        row.itemView.performClick();
+        scene.onPause();
+        ShadowLooper.idleMainLooper();
+        assertNull(scene.reader);
+    }
+
+    private static final String RECORD_JSON = "{\"old_pages\":2,\"new_pages\":4,\"complete\":true,"
+            + "\"added\":[1,3],\"deleted\":[],\"target_tokens\":[\"A\",\"X\",\"B\",\"Y\"]}";
+
+    private GalleryUpdateRecord record(long gid, long time, String json) {
+        return ReflectionHelpers.callStaticMethod(GalleryUpdateRecord.class, "fromJson",
+                ReflectionHelpers.ClassParameter.from(long.class, gid),
+                ReflectionHelpers.ClassParameter.from(long.class, 100L),
+                ReflectionHelpers.ClassParameter.from(long.class, time),
+                ReflectionHelpers.ClassParameter.from(int.class, 1),
+                ReflectionHelpers.ClassParameter.from(String.class, json));
+    }
+
+    private TestScene readingScene() {
+        TestScene scene = new TestScene(context);
+        ReflectionHelpers.setField(scene, "mState", 7); // Fragment.RESUMED
+        scene.rows = List.of(new Summary(200, 1234, 1, 2, 0, true, false, "token200"));
+        scene.record = record(200, 1234, RECORD_JSON);
+        scene.local = new DownloadInfo(200);
+        scene.local.token = "token200";
+        scene.local.state = DownloadInfo.STATE_FINISH;
+        return scene;
+    }
+
+    private RecyclerView.ViewHolder bindFirstRow(TestScene scene) {
+        View root = scene.onCreateView3(LayoutInflater.from(context), null, null);
+        ShadowLooper.idleMainLooper();
+        RecyclerView recycler = root.findViewById(R.id.recycler_view);
+        RecyclerView.Adapter adapter = recycler.getAdapter();
+        RecyclerView.ViewHolder row = adapter.createViewHolder(recycler, 0);
+        adapter.bindViewHolder(row, 0);
+        return row;
     }
 
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -252,14 +382,20 @@ public class GalleryUpdateHistorySceneTest {
         private final Context context;
         List<Summary> rows = List.of();
         DownloadInfo local;
+        GalleryUpdateRecord record;
+        Intent reader;
+        int notice;
         Announcer launched;
         TestScene(Context context) { this.context = context; }
         @Override public Context getContext() { return context; }
         @Override public Context getEHContext() { return context; }
         @Override protected Executor executor(Context context) { return Runnable::run; }
         @Override protected List<Summary> loadSummaries(Context context) { return rows; }
+        @Override protected GalleryUpdateRecord loadRecord(Context context, long gid) { return record; }
         @Override protected DownloadInfo findDownload(long gid) { return local != null && local.gid == gid ? local : null; }
         @Override public void startScene(Announcer announcer) { launched = announcer; }
+        @Override public void startActivity(Intent intent) { reader = intent; }
+        @Override public void showTip(int id, int length) { notice = id; }
     }
 
     private static class TestDownloads extends DownloadsScene {

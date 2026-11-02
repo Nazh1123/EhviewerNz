@@ -5,10 +5,13 @@ import java.util.Arrays;
 /** Gallery-local speed selection. All access is guarded by GalleryActivity's monitor. */
 final class AnimatedWebpLongPressSpeed {
     static final float STEP_DP = 32f;
+    static final float LOCK_SWIPE_DP = 32f;
     private final float[] speeds;
     private final float stepPixels;
+    private final float lockSwipePixels;
     private int index;
     private float anchorX;
+    private float startY;
     private long deadline;
     private boolean adjustable;
 
@@ -22,16 +25,24 @@ final class AnimatedWebpLongPressSpeed {
         Arrays.sort(speeds);
         index = Arrays.binarySearch(speeds, configuredTenths / 10f);
         stepPixels = STEP_DP * density;
+        lockSwipePixels = LOCK_SWIPE_DP * density;
     }
 
-    void begin(float x, long now) {
+    void begin(float x, float y, long now) {
         anchorX = x;
+        startY = y;
         deadline = now + 3000;
         adjustable = true;
     }
 
-    boolean move(float x, long now) {
+    // Returns true when the speed or its adjustability changes.
+    boolean move(float x, float y, long now) {
         if (!isAdjustable(now)) return false;
+        // Lock before processing horizontal drift in the same event.
+        if (startY - y >= lockSwipePixels) {
+            adjustable = false;
+            return true;
+        }
         int steps = (int) ((x - anchorX) / stepPixels);
         if (steps == 0) return false;
         int next = Math.max(0, Math.min(speeds.length - 1, index + steps));

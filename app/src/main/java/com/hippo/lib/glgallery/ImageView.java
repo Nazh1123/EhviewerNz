@@ -49,6 +49,9 @@ class ImageView extends GLView implements ImageTexture.Callback {
 
     private ImageTexture mImageTexture;
     private ImageTexture mOverlayTexture;
+    private ImageTexture mEnhancedTexture;
+    private com.hippo.lib.glview.image.EnhancedPageTexture mEnhancedTiles;
+    private final RectF mEnhancedSrc = new RectF();
     private final RectF mOverlaySrc = new RectF();
     private int mTextureWidth;
     private int mTextureHeight;
@@ -171,6 +174,10 @@ class ImageView extends GLView implements ImageTexture.Callback {
                 if (!mValidRect.isEmpty()) mOverlayTexture.start();
                 else mOverlayTexture.stop();
             }
+            if (mEnhancedTexture != null) {
+                if (!mValidRect.isEmpty()) mEnhancedTexture.start();
+                else mEnhancedTexture.stop();
+            }
         }
     }
 
@@ -240,6 +247,30 @@ class ImageView extends GLView implements ImageTexture.Callback {
     }
 
     public ImageTexture getOverlayTexture() { return mOverlayTexture; }
+
+    public ImageTexture getEnhancedTexture() { return mEnhancedTexture; }
+
+    public void setEnhancedTiles(com.hippo.lib.glview.image.EnhancedPageTexture texture) {
+        if (mEnhancedTiles != null) { mEnhancedTiles.setCallback(null); mEnhancedTiles.recycle(); }
+        mEnhancedTiles = texture;
+        if (texture != null) texture.setCallback(this::invalidate);
+        invalidate();
+    }
+
+    /** Keep source geometry, zoom and scroll offsets while changing the displayed pixels. */
+    public void setEnhancedTexture(ImageTexture texture) {
+        if (mEnhancedTexture != null) {
+            mEnhancedTexture.setCallback(null);
+            mEnhancedTexture.stop();
+        }
+        mEnhancedTexture = texture;
+        if (texture != null) {
+            texture.setCallback(this);
+            getValidRect(mValidRect);
+            if (!mValidRect.isEmpty()) texture.start();
+        }
+        invalidate();
+    }
 
     public void setOverlayTexture(ImageTexture texture) {
         if (mOverlayTexture != null) {
@@ -615,7 +646,22 @@ class ImageView extends GLView implements ImageTexture.Callback {
         }
 
         if (!mSrcActual.isEmpty()) {
-            texture.draw(canvas, mSrcActual, mDstActual);
+            if (mEnhancedTiles != null) {
+                texture.draw(canvas, mSrcActual, mDstActual);
+                float sx = (float) mEnhancedTiles.getWidth() / texture.getWidth();
+                float sy = (float) mEnhancedTiles.getHeight() / texture.getHeight();
+                mEnhancedSrc.set(mSrcActual.left * sx, mSrcActual.top * sy,
+                        mSrcActual.right * sx, mSrcActual.bottom * sy);
+                mEnhancedTiles.draw(canvas, mEnhancedSrc, mDstActual);
+            } else if (mEnhancedTexture != null) {
+                float sx = (float) mEnhancedTexture.getWidth() / texture.getWidth();
+                float sy = (float) mEnhancedTexture.getHeight() / texture.getHeight();
+                mEnhancedSrc.set(mSrcActual.left * sx, mSrcActual.top * sy,
+                        mSrcActual.right * sx, mSrcActual.bottom * sy);
+                mEnhancedTexture.draw(canvas, mEnhancedSrc, mDstActual);
+            } else {
+                texture.draw(canvas, mSrcActual, mDstActual);
+            }
             if (mOverlayTexture != null) {
                 float sx = (float) mOverlayTexture.getWidth() / texture.getWidth();
                 float sy = (float) mOverlayTexture.getHeight() / texture.getHeight();

@@ -21,8 +21,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:paddingTop="@dimen/keyline_margin"
-    android:paddingBottom="@dimen/keyline_margin">
+    android:paddingTop="@dimen/gallery_detail_action_spacing"
+    android:paddingBottom="6dp">
 
     <HorizontalScrollView
         android:id="@+id/actions_scroll_view"
@@ -38,7 +38,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:divider="@drawable/spacer_keyline"
+            android:divider="@drawable/spacer_gallery_detail_action"
             android:showDividers="middle">
 
             <FrameLayout
@@ -52,7 +52,7 @@
                     android:layout_height="wrap_content"
                     android:gravity="center_horizontal"
                     android:text="@string/favorited"
-                    android:drawablePadding="8dp"
+                    android:drawablePadding="6dp"
                     android:textColor="?android:attr/textColorPrimary"/>
 
                 <TextView
@@ -61,19 +61,10 @@
                     android:layout_height="wrap_content"
                     android:gravity="center_horizontal"
                     android:text="@string/not_favorited"
-                    android:drawablePadding="8dp"
+                    android:drawablePadding="6dp"
                     android:textColor="?android:attr/textColorPrimary"/>
 
             </FrameLayout>
-
-            <TextView
-                android:id="@+id/rate"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_horizontal"
-                android:text="@string/rate"
-                android:drawablePadding="8dp"
-                android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
                 android:id="@+id/share"
@@ -81,16 +72,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
                 android:text="@string/share"
-                android:drawablePadding="8dp"
-                android:textColor="?android:attr/textColorPrimary"/>
-
-            <TextView
-                android:id="@+id/artist"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:gravity="center_horizontal"
-                android:text="@string/gallery_artist"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -99,25 +81,24 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
                 android:text="@string/similar_gallery"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
-                android:id="@+id/local_delete"
+                android:id="@+id/artist"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
-                android:text="@string/local_delete"
-                android:drawablePadding="8dp"
-                android:textColor="?android:attr/textColorPrimary"
-                android:visibility="gone"/>
+                android:text="@string/gallery_artist"
+                android:drawablePadding="6dp"
+                android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
                 android:id="@+id/torrent"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -126,7 +107,16 @@
                 android:layout_height="wrap_content"
                 android:text="@string/archiver"
                 android:gravity="center_horizontal"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
+                android:textColor="?android:attr/textColorPrimary"/>
+
+            <TextView
+                android:id="@+id/range_download"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/range_download"
+                android:gravity="center_horizontal"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -135,7 +125,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/h_h"
                 android:gravity="center_horizontal"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
             <TextView
@@ -144,26 +134,60 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_horizontal"
                 android:text="@string/search_cover"
-                android:drawablePadding="8dp"
+                android:drawablePadding="6dp"
                 android:textColor="?android:attr/textColorPrimary"/>
 
         </LinearLayout>
     </HorizontalScrollView>
 
-    <androidx.appcompat.widget.AppCompatRatingBar
-        android:id="@+id/rating"
-        android:layout_width="wrap_content"
+    <!-- Keep the stars anchored while the rating label and vote count change. -->
+    <LinearLayout
+        android:id="@+id/rating_group"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:minHeight="48dp"
         android:layout_marginTop="8dp"
-        android:layout_gravity="center_horizontal"
-        android:isIndicator="true"
-        android:theme="@style/RatingBarTheme"/>
+        android:orientation="horizontal"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:paddingEnd="20dp"
+        android:clickable="true"
+        android:focusable="true">
 
-    <TextView
-        android:id="@+id/rating_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:textColor="?android:attr/textColorPrimary"/>
+        <FrameLayout
+            android:layout_width="180dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="40dp"
+            android:layout_marginEnd="10dp">
+
+            <!-- Keep the original 48dp AppCompat stars, scaled to 36dp. -->
+            <androidx.appcompat.widget.AppCompatRatingBar
+                android:id="@+id/rating"
+                android:layout_width="240dp"
+                android:layout_height="48dp"
+                android:layout_gravity="top|left"
+                android:scaleX="0.75"
+                android:scaleY="0.75"
+                android:transformPivotX="0dp"
+                android:transformPivotY="0dp"
+                android:numStars="5"
+                android:isIndicator="true"
+                android:importantForAccessibility="no"
+                android:theme="@style/RatingBarTheme"/>
+
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/rating_text"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:maxLines="1"
+            android:scrollHorizontally="false"
+            android:ellipsize="end"
+            android:textColor="?android:attr/textColorPrimary"/>
+
+    </LinearLayout>
 
 </LinearLayout>

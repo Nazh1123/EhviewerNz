@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">검색 사전 설정 태그 1</string>
+    <string name="settings_search_preset_tag_2">검색 사전 설정 태그 2</string>
+    <string name="settings_search_preset_tag_hint">네임스페이스:태그 하나를 입력하세요. 예: l:\"chinese$\", o:\"ai generated$\", f:\"stockings\". 공백이 있는 태그는 큰따옴표로 묶으세요.</string>
+    <string name="settings_search_preset_tag_invalid">올바른 네임스페이스:태그 하나를 입력하세요. 공백이 있는 태그는 큰따옴표로 묶으세요.</string>
+    <string name="search_preset_ai_generated">AI 생성</string>
+    <string name="search_preset_exclude">제외</string>
+    <string name="search_preset_normal">보통</string>
+    <string name="search_preset_include">포함</string>
+    <string name="settings_search_preset_bubbles_summary">상세 검색 조건에 프리셋 말풍선을 표시합니다. 탭하여 추가하거나 제거하고 왼쪽 기호를 탭하여 포함, 제외, OR를 전환합니다.</string>
+    <string name="settings_search_preset_tags">프리셋 키워드</string>
+    <string name="settings_search_preset_reorder">드래그하여 %1$s 순서 변경</string>
+    <string name="settings_search_preset_add">프리셋 태그 추가</string>
+    <string name="settings_search_preset_edit">프리셋 태그 편집</string>
+    <string name="settings_search_preset_remove">프리셋 삭제</string>
+    <string name="settings_search_preset_duplicate">이 태그는 이미 프리셋 목록에 있습니다.</string>
+    <string name="search_preset_absent">검색어에 없음</string>
+    <string name="search_preset_add">태그 %1$s 추가</string>
+    <string name="settings_search_presets_count">프리셋 태그: %1$d · 추가, 편집 또는 삭제</string>
+    <string name="settings_search_presets_description">상세 검색 조건에 표시할 프리셋 키워드를 관리합니다. 왼쪽 핸들을 드래그하여 순서를 변경하고 오른쪽 버튼으로 편집하거나 삭제하세요. 변경 사항은 즉시 저장됩니다.</string>
+    <string name="settings_search_presets_empty">프리셋 태그가 없습니다. 아래 버튼을 탭하여 추가하세요.</string>
+    <string name="settings_search_preset_remove_confirm">프리셋 %1$s을(를) 삭제할까요? 현재 검색어는 변경되지 않습니다.</string>
+    <string name="search_preset_input_hint">키워드 또는 태그 표현식 입력</string>
+</resources>

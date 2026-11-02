@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_results_directory">โฟลเดอร์ผลลัพธ์ของไฟล์บีบอัด</string>
+    <string name="archive_results_permission_message">เลือกโฟลเดอร์ที่มีไฟล์บีบอัดนี้และอนุญาตให้อ่านและเขียน ผลการแปลและการเพิ่มความละเอียดจะบันทึกไว้ข้างกันในโฟลเดอร์ “ชื่อเต็มของไฟล์บีบอัด.results” และใช้ต่อได้เมื่อเปิดใหม่ การยกเลิกไม่กระทบการอ่านตามปกติหรือการบันทึกภาพทีละภาพ</string>
+    <string name="archive_results_choose_parent">เลือกโฟลเดอร์ที่มีไฟล์</string>
+    <string name="archive_results_wrong_parent">ยังไม่ได้รับสิทธิ์เข้าถึงโฟลเดอร์ เลือกโฟลเดอร์ที่มีไฟล์บีบอัดนี้โดยตรงและอนุญาตให้อ่านและเขียน</string>
+</resources>

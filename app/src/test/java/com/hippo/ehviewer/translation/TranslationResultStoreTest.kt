@@ -26,8 +26,72 @@ class TranslationResultStoreTest {
     private fun TranslationResultStore.write(key: String, text: String) = writeImage(key) { it.write(text.toByteArray()) }
     private fun UniFile.readText() = openInputStream().bufferedReader().use { it.readText() }
 
+    @Test fun webpReplacesPngAndRetainsItsFormatWhenPromotedAndInvalidated() {
+        val cached = store()
+        cached.writeImage("key") { it.write("old PNG".toByteArray()) }
+        val image = cached.writeImage("key", "webp") { it.write("new WebP".toByteArray()) }
+        assertFalse(File(cacheDir, "key_tl.png").exists())
+        assertEquals(image.uri, cached.findResult(listOf("key"))!!.image!!.uri)
+        val saved = store(enabled = true)
+        val retained = saved.retain("key", image)
+        assertEquals("001_tl.webp", retained.name)
+        assertFalse(image.exists())
+        assertEquals(retained.uri, saved.findSavedResult()!!.image!!.uri)
+        assertTrue(TranslationResultStore.isResultFile("001_tl.webp"))
+        saved.invalidate("key")
+        assertFalse(retained.exists())
+    }
+
+    @Test fun failedWebpWriteKeepsTheLegacyPngAvailable() {
+        val saved = store(enabled = true)
+        saved.writeImage("key") { it.write("previous".toByteArray()) }
+        try {
+            saved.writeImage("key", "webp") { it.write(1); error("encoder failed") }
+            fail("Expected failed encoding")
+        } catch (_: IllegalStateException) { }
+        assertEquals("001_tl.png", saved.findSavedResult()!!.image!!.name)
+        assertEquals("previous", saved.findSavedResult()!!.image!!.readText())
+        assertFalse(File(savedDir, "001_tl.webp.part").exists())
+    }
+
     private fun configured(options: TranslationOptions, name: String = "001") =
         TranslationResultStore(cacheDir, UniFile.fromFile(galleryDir), options, 1, true, name)
+
+    @Test fun existingNamedResultIsRegisteredWhenItIsActuallyLookedUp() {
+        store(enabled = true).writeImage("key") { it.write("existing".toByteArray()) }
+        val changes = mutableListOf<UniFile?>()
+        val reopened = TranslationResultStore(cacheDir, UniFile.fromFile(galleryDir),
+            TranslationOptions(persistDownloaded = true), 1, true, "001", resultChanged = { changes.add(it) })
+        assertTrue(changes.isEmpty())
+        val hit = reopened.findSavedResult()!!
+        assertEquals(hit.image, changes.single())
+        reopened.writePartialPreview("key", { it.write("partial".toByteArray()) })
+        changes.clear()
+        assertNotNull(reopened.findSavedResult())
+        assertEquals(listOf<UniFile?>(null), changes)
+    }
+
+    @Test fun progressChangesOnlyAfterPublicationAndDoesNotCountPartialOrSkippedPages() {
+        val changes = mutableListOf<UniFile?>()
+        val results = TranslationResultStore(cacheDir, UniFile.fromFile(galleryDir),
+            TranslationOptions(persistDownloaded = true), 1, true, "001", resultChanged = { changes.add(it) })
+        results.writeImage("key") { it.write("complete".toByteArray()) }
+        assertEquals("001_tl.png", changes.single()!!.name)
+        try {
+            results.writeImage("key") { error("encoder failed") }
+            fail("Publication should fail")
+        } catch (_: IllegalStateException) { }
+        assertEquals(1, changes.size)
+        results.writePartialPreview("key", { it.write("partial".toByteArray()) })
+        assertNull(changes.last())
+        results.writeImage("key") { it.write("complete".toByteArray()) }
+        results.recordSkipped("key")
+        assertNull(changes.last())
+        results.writeImage("key") { it.write("complete".toByteArray()) }
+        results.invalidate("key")
+        assertNull(changes.last())
+        assertEquals(6, changes.size)
+    }
 
     @Test fun automaticModeReopensResolvedCachesWithoutAnotherOcrOrTranslation() {
         val source = temp.newFile().apply { writeText("original pixels") }

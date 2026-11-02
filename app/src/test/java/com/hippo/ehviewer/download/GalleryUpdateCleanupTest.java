@@ -62,6 +62,9 @@ public class GalleryUpdateCleanupTest {
 
     @Before public void setup() throws Exception {
         context = RuntimeEnvironment.getApplication();
+        context.getSharedPreferences("download_page_ranges", Context.MODE_PRIVATE).edit().clear().commit();
+        ReflectionHelpers.setStaticField(GalleryDownloadRangeStore.class, "instance", null);
+        ((android.util.LruCache<?, ?>) ReflectionHelpers.getStaticField(SpiderQueen.class, "sStartPages")).evictAll();
         // Android's rename replaces an existing cache file. Java File.renameTo on Windows
         // does not; emulate replacement only in this desktop fixture, keeping real cache I/O.
         SimpleDiskCache cache = new SimpleDiskCache(temporary.newFolder("cache"), 1024 * 1024) {
@@ -99,6 +102,8 @@ public class GalleryUpdateCleanupTest {
     }
 
     @After public void cleanup() {
+        ReflectionHelpers.setStaticField(GalleryDownloadRangeStore.class, "instance", null);
+        ((android.util.LruCache<?, ?>) ReflectionHelpers.getStaticField(SpiderQueen.class, "sStartPages")).evictAll();
         GalleryUpdateRecordStore.get(context).close();
         ReflectionHelpers.setStaticField(GalleryUpdateRecordStore.class, "instance", null);
         ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null);
@@ -153,11 +158,38 @@ public class GalleryUpdateCleanupTest {
                 + " logs: " + org.robolectric.shadows.ShadowLog.getLogs());
     }
 
+    @Test public void updatingACompleteTargetRetainsRangeParentsAndTheirFiles() throws Exception {
+        disk(sourceDir, metadata(100, 1, "1111111111", "2222222222"));
+        disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
+        GalleryDownloadRangeStore.get(context).apply(manager.getDownloadInfo(100), GalleryPageRange.parse("2", 2));
+        // The new feature must not add a range-specific update eligibility restriction.
+        assertEquals(100, manager.findClosestOlderGalleryVersion(100, 200).gid);
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
+        assertNotNull(manager.getDownloadInfo(100));
+        assertTrue(sourceDir.isDirectory());
+        assertTrue(new File(sourceDir, "00000002.png").isFile());
+        assertTrue(manager.isCompleteUsableGallery(manager.getDownloadInfo(200)));
+    }
+
+    @Test public void aFinishedRangeTargetCannotTriggerParentCleanup() throws Exception {
+        disk(sourceDir, metadata(100, 1, "1111111111", "2222222222"));
+        disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
+        GalleryDownloadRangeStore.get(context).apply(manager.getDownloadInfo(200), GalleryPageRange.parse("1", 3));
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
+        assertNotNull(manager.getDownloadInfo(100));
+        assertTrue(sourceDir.isDirectory());
+    }
+
     @Test public void diskMetadataMigratesProgressDeletesSourceAndPublishesAddedPagesWithoutCache() throws Exception {
         disk(sourceDir, metadata(100, 1, "1111111111", "2222222222"));
         disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
         assertNull(EhApplication.getSpiderInfoCache(context).getInputStreamPipe("100"));
         assertNull(EhApplication.getSpiderInfoCache(context).getInputStreamPipe("200"));
+        assertEquals(0, SpiderQueen.findStartPage(context, 200));
         GalleryUpdateManager.register(200, 100, List.of(100L));
         assertTrue(manager.retryGalleryUpdateCleanup(200));
         awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
@@ -166,11 +198,38 @@ public class GalleryUpdateCleanupTest {
         assertFalse(sourceDir.exists());
         assertTrue(manager.isCompleteUsableGallery(manager.getDownloadInfo(200)));
         assertEquals(2, GalleryUpdateManager.readDownloadedSpiderInfo(200).startPage);
+        assertEquals(Integer.valueOf(2), SpiderQueen.peekStartPage(200));
+        assertEquals(2, SpiderQueen.findStartPage(context, 200));
         GalleryUpdateRecord record = GalleryUpdateRecordStore.get(context).find(200);
         assertNotNull(record); assertTrue(record.complete);
         assertArrayEquals(new int[]{1}, record.addedPages);
         assertArrayEquals(new int[0], record.deletedPages);
         assertNull(GalleryUpdateManager.getPlan(200));
+    }
+
+    @Test public void persistentProgressSurvivesMissingOrStaleCacheAndUnrelatedGalleryReads() throws Exception {
+        disk(targetDir, metadata(200, 1, "1111111111", "2222222222", "3333333333"));
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+        // A separate gallery detail lookup must not change the downloaded gallery's source.
+        assertEquals(0, SpiderQueen.findStartPage(context, 100));
+        cache(metadata(200, 0, "1111111111", "2222222222", "3333333333"));
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+        EhApplication.getSpiderInfoCache(context).remove("200");
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+        assertTrue(new File(targetDir, SpiderQueen.SPIDER_INFO_FILENAME).delete());
+        // Temporary storage loss cannot manufacture an explicit reset.
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+    }
+
+    @Test public void readerBackwardMovementAndExplicitResetWinBeforeDiskWriteCompletes() throws Exception {
+        disk(targetDir, metadata(200, 2, "1111111111", "2222222222", "3333333333"));
+        cache(metadata(200, 2, "1111111111", "2222222222", "3333333333"));
+        assertEquals(2, SpiderQueen.findStartPage(context, 200));
+        SpiderQueen.recordReadingProgress(200, 1);
+        assertEquals(1, SpiderQueen.findStartPage(context, 200));
+        SpiderQueen.resetReadingProgress(200);
+        assertEquals(0, SpiderQueen.findStartPage(context, 200));
+        assertEquals(2, GalleryUpdateManager.readDownloadedSpiderInfo(200).startPage);
     }
 
     @Test public void corruptTargetKeepsSourceAndPlanThenRetryFinishesWithoutRedownload() throws Exception {
@@ -191,6 +250,50 @@ public class GalleryUpdateCleanupTest {
         awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
         assertFalse(sourceDir.exists());
         assertArrayEquals(new int[]{2}, GalleryUpdateRecordStore.get(context).find(200).addedPages);
+    }
+
+    @Test public void completedUpdateReplacesReuseSourcePositionInLabelAndAfterRestart() throws Exception {
+        assertUpdatePosition("saved");
+    }
+
+    @Test public void completedUpdateReplacesReuseSourcePositionInDefaultLabel() throws Exception {
+        assertUpdatePosition(null);
+    }
+
+    private void assertUpdatePosition(String label) throws Exception {
+        if (label != null) EhDB.addDownloadLabel(label);
+        EhDB.addDownloadLabel("other");
+        DownloadInfo source = manager.getDownloadInfo(100);
+        DownloadInfo target = manager.getDownloadInfo(200);
+        source.time = 300; source.label = label;
+        target.time = 600; target.label = label;
+        EhDB.putDownloadInfo(source); EhDB.putDownloadInfo(target);
+        for (long[] row : new long[][]{{300, 500}, {250, 400}, {50, 100}, {80, 200}, {900, 350}}) {
+            DownloadInfo info = download(row[0], 2);
+            info.time = row[1];
+            info.label = info.gid == 900 ? "other" : label;
+            EhDB.putDownloadInfo(info);
+        }
+        manager = new DownloadManager(context);
+        ReflectionHelpers.setField(context, "mDownloadManager", manager);
+        disk(sourceDir, metadata(100, 0, "1111111111", "2222222222"));
+        disk(targetDir, metadata(200, 0, "1111111111", "3333333333", "2222222222"));
+        GalleryUpdateManager.register(200, 100, List.of(80L, 100L));
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
+        assertEquals(300, manager.getDownloadInfo(200).time);
+        assertEquals(List.of(300L, 250L, 200L, 50L), (label == null
+                ? manager.getDefaultDownloadInfoList() : manager.getLabelDownloadInfoList(label))
+                .stream().map(info -> info.gid).toList());
+        assertEquals(List.of(300L, 250L, 900L, 200L, 50L), manager.getAllDownloadInfoList()
+                .stream().map(info -> info.gid).toList());
+        DownloadManager restarted = new DownloadManager(context);
+        assertEquals(300, restarted.getDownloadInfo(200).time);
+        assertEquals(List.of(300L, 250L, 200L, 50L), (label == null
+                ? restarted.getDefaultDownloadInfoList() : restarted.getLabelDownloadInfoList(label))
+                .stream().map(info -> info.gid).toList());
+        assertEquals(List.of(300L, 250L, 900L, 200L, 50L), restarted.getAllDownloadInfoList()
+                .stream().map(info -> info.gid).toList());
     }
 
     @Test public void cachedTargetCannotReplaceMissingDiskMetadata() throws Exception {

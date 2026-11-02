@@ -14,7 +14,6 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.download.DownloadManager;
-import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.lib.yorozuya.collect.LongList;
 import com.hippo.unifile.UniFile;
@@ -43,12 +42,14 @@ final class MissingGalleryCleaner {
         private final Context mContext;
         private final EhApplication mApplication;
         private final DownloadManager mDownloadManager;
+        private final List<DownloadInfo> mDownloads;
         private ProgressDialog mProgressDialog;
 
         CleanTask(@NonNull Context context) {
             mContext = context;
             mApplication = (EhApplication) context.getApplicationContext();
             mDownloadManager = EhApplication.getDownloadManager(mApplication);
+            mDownloads = new ArrayList<>(mDownloadManager.getAllDownloadInfoList());
         }
 
         @Override
@@ -71,13 +72,11 @@ final class MissingGalleryCleaner {
                 return new ScanResult(false, new ArrayList<>());
             }
 
-            List<DownloadInfo> downloads = new ArrayList<>(
-                    mDownloadManager.getAllDownloadInfoList());
             List<DownloadInfo> missingDownloads = new ArrayList<>();
-            int total = downloads.size();
+            int total = mDownloads.size();
             publishProgress(0, total);
             for (int i = 0; i < total; i++) {
-                DownloadInfo info = downloads.get(i);
+                DownloadInfo info = mDownloads.get(i);
                 if (isLocalGalleryMissing(info)) {
                     missingDownloads.add(info);
                 }
@@ -104,7 +103,9 @@ final class MissingGalleryCleaner {
                         Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (result.missingDownloads.isEmpty()) {
+            List<DownloadInfo> removable = filterRemovableDownloads(
+                    mDownloadManager, result.missingDownloads);
+            if (removable.isEmpty()) {
                 Toast.makeText(mApplication,
                         R.string.settings_download_delete_missing_galleries_none,
                         Toast.LENGTH_SHORT).show();
@@ -112,14 +113,14 @@ final class MissingGalleryCleaner {
             }
 
             LongList gidList = new LongList();
-            for (DownloadInfo info : result.missingDownloads) {
+            for (DownloadInfo info : removable) {
                 gidList.add(info.gid);
             }
             mDownloadManager.deleteRangeDownload(gidList);
-            deleteEmptyGalleryDirectories(mApplication, result.missingDownloads);
+            deleteEmptyGalleryDirectories(mApplication, mDownloadManager, removable);
             Toast.makeText(mApplication, mApplication.getString(
                             R.string.settings_download_delete_missing_galleries_done,
-                            result.missingDownloads.size()),
+                            removable.size()),
                     Toast.LENGTH_LONG).show();
         }
 
@@ -138,14 +139,26 @@ final class MissingGalleryCleaner {
         }
     }
 
-    private static boolean isLocalGalleryMissing(@NonNull DownloadInfo info) {
-        if (LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
-                || (info.archiveUri != null && info.archiveUri.startsWith("content://"))) {
+    static boolean isLocalGalleryMissing(@NonNull DownloadInfo info) {
+        if (GalleryDownloadCleanup.isProtected(info)) {
             return false;
         }
         UniFile directory = SpiderDen.getExistingGalleryDownloadDir(info);
         return directory == null || !directory.exists()
                 || isGalleryDirectoryEmpty(directory);
+    }
+
+    /** Called on the main thread immediately before removing the scanned records. */
+    static List<DownloadInfo> filterRemovableDownloads(@NonNull DownloadManager manager,
+            @NonNull List<DownloadInfo> scanned) {
+        List<DownloadInfo> removable = new ArrayList<>();
+        for (DownloadInfo info : scanned) {
+            if (manager.getDownloadInfo(info.gid) == info
+                    && !GalleryDownloadCleanup.isProtected(info)) {
+                removable.add(info);
+            }
+        }
+        return removable;
     }
 
     private static boolean isGalleryDirectoryEmpty(@NonNull UniFile directory) {
@@ -169,9 +182,12 @@ final class MissingGalleryCleaner {
 
     private static void deleteEmptyGalleryDirectories(
             @NonNull Context context,
+            @NonNull DownloadManager manager,
             @NonNull List<DownloadInfo> downloads) {
         EhApplication.getExecutorService(context).execute(() -> {
             for (DownloadInfo info : downloads) {
+                // A new download with the same gid may have been added since record removal.
+                if (manager.getDownloadInfo(info.gid) != null) continue;
                 UniFile directory = SpiderDen.getExistingGalleryDownloadDir(info);
                 EhDB.removeDownloadDirname(info.gid);
                 if (directory != null && directory.exists()

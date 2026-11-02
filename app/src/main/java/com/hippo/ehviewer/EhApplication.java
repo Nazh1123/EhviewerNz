@@ -31,7 +31,6 @@ import android.os.Debug;
 import android.text.method.LinkMovementMethod;
 import android.util.Log;
 import android.view.View;
-import android.webkit.CookieManager;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -46,7 +45,10 @@ import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.conaco.Conaco;
 import com.hippo.content.RecordingApplication;
 import com.hippo.ehviewer.client.EhClient;
+import com.hippo.ehviewer.client.BrowsingPriority;
 import com.hippo.ehviewer.client.EhCookieStore;
+import com.hippo.ehviewer.client.EhCacheKeyFactory;
+import com.hippo.ehviewer.client.WebViewCookieSync;
 import com.hippo.ehviewer.client.EhHosts;
 import com.hippo.ehviewer.client.EhEngine;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
@@ -56,6 +58,7 @@ import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ehviewer.client.data.userTag.UserTagList;
 import com.hippo.ehviewer.download.ArchiverDownloader;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.updater.AppUpdateDownload;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.ui.CommonOperations;
 import com.hippo.lib.image.Image;
@@ -100,7 +103,6 @@ import okhttp3.Cache;
 import okhttp3.ConnectionPool;
 import okhttp3.ConnectionSpec;
 import okhttp3.OkHttpClient;
-import okhttp3.Response;
 
 public class EhApplication extends RecordingApplication {
 
@@ -128,6 +130,8 @@ public class EhApplication extends RecordingApplication {
     private EhProxySelector mEhProxySelector;
     private OkHttpClient mOkHttpClient;
     private OkHttpClient mImageOkHttpClient;
+    private OkHttpClient mBrowsingOkHttpClient;
+    private OkHttpClient mBrowsingImageOkHttpClient;
     private Cache mOkHttpCache;
     private ImageBitmapHelper mImageBitmapHelper;
     private Conaco<Image> mConaco;
@@ -181,6 +185,9 @@ public class EhApplication extends RecordingApplication {
         GetText.initialize(this);
         StatusCodeException.initialize(this);
         Settings.initialize(this);
+        com.hippo.ehviewer.download.GalleryDownloadRangeStore.get(this);
+        BrowsingPriority.initialize(this);
+        AppUpdateDownload.initialize(this);
         ArchiverDownloader.resumePending(this);
         ReadableTime.initialize(this);
         Html.initialize(this);
@@ -415,6 +422,8 @@ public class EhApplication extends RecordingApplication {
             );
             
             OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                    .eventListenerFactory(call -> BrowsingPriority.listener(call, false))
+                    .addInterceptor(BrowsingPriority.downloadInterceptor())
                     .followRedirects(true)
                     .followSslRedirects(true)
                     .connectTimeout(10, TimeUnit.SECONDS)
@@ -435,23 +444,7 @@ public class EhApplication extends RecordingApplication {
                             throw new NullPointerException(e.getMessage());
                         }
                     })
-                    .addNetworkInterceptor(chain -> {
-                        Response response = chain.proceed(chain.request());
-                        // 同步Cookie到WebView
-                        if (response.headers("Set-Cookie") != null) {
-                            try {
-                                CookieManager cookieManager = CookieManager.getInstance();
-                                String url = chain.request().url().toString();
-                                for (String header : response.headers("Set-Cookie")) {
-                                    cookieManager.setCookie(url, header);
-                                }
-                                cookieManager.flush();
-                            } catch (Throwable t) {
-                                Log.e(TAG, "CookieManager/WebView sync skipped", t);
-                            }
-                        }
-                        return response;
-                    })
+                    .addNetworkInterceptor(WebViewCookieSync.getInstance())
                     .proxySelector(getEhProxySelector(application));
             if (Settings.getDF() && AppHelper.checkVPN(context)) {
                 if (Build.VERSION.SDK_INT < 29) {
@@ -502,6 +495,8 @@ public class EhApplication extends RecordingApplication {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mImageOkHttpClient == null) {
             OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                    .eventListenerFactory(call -> BrowsingPriority.listener(call, false))
+                    .addInterceptor(BrowsingPriority.downloadInterceptor())
                     .followRedirects(false)
                     .followSslRedirects(false)
                     .connectTimeout(20, TimeUnit.SECONDS)
@@ -577,16 +572,36 @@ public class EhApplication extends RecordingApplication {
     }
 
     @NonNull
+    public static OkHttpClient getBrowsingOkHttpClient(@NonNull Context context) {
+        EhApplication application = (EhApplication) context.getApplicationContext();
+        if (application.mBrowsingOkHttpClient == null) {
+            application.mBrowsingOkHttpClient = BrowsingPriority.browsingClient(getOkHttpClient(context));
+        }
+        return application.mBrowsingOkHttpClient;
+    }
+
+    @NonNull
+    public static OkHttpClient getBrowsingImageOkHttpClient(@NonNull Context context) {
+        EhApplication application = (EhApplication) context.getApplicationContext();
+        if (application.mBrowsingImageOkHttpClient == null) {
+            application.mBrowsingImageOkHttpClient = BrowsingPriority.browsingClient(getImageOkHttpClient(context));
+        }
+        return application.mBrowsingImageOkHttpClient;
+    }
+
+    @NonNull
     public static Conaco<Image> getConaco(@NonNull Context context) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mConaco == null) {
             Conaco.Builder<Image> builder = new Conaco.Builder<>();
             builder.hasMemoryCache = true;
             builder.memoryCacheMaxSize = getMemoryCacheMaxSize();
+            builder.sharedMemoryCacheMaxSize = ImageBitmapHelper.PREVIEW_CACHE_BYTES;
+            builder.sharedMemoryCacheKey = EhCacheKeyFactory::isNormalPreviewKey;
             builder.hasDiskCache = true;
             builder.diskCacheDir = new File(context.getCacheDir(), "thumb");
             builder.diskCacheMaxSize = 320 * 1024 * 1024; // 320MB
-            builder.okHttpClient = getOkHttpClient(context);
+            builder.okHttpClient = getBrowsingOkHttpClient(context);
 //            builder.okHttpClient = getImageOkHttpClient(context);
             builder.objectHelper = getImageBitmapHelper(context);
             builder.debug = DEBUG_CONACO;
@@ -600,7 +615,7 @@ public class EhApplication extends RecordingApplication {
     public static LruCache<Long, GalleryDetail> getGalleryDetailCache(@NonNull Context context) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mGalleryDetailCache == null) {
-            // Max size 25, 3 min timeout
+            // Keep stale entries for immediate rendering; details revalidate after three minutes.
             application.mGalleryDetailCache = new LruCache<>(25);
             getFavouriteStatusRouter().addListener((gid, slot) -> {
                 GalleryDetail gd = application.mGalleryDetailCache.get(gid);

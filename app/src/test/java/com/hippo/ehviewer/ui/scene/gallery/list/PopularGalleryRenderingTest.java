@@ -3,7 +3,9 @@ package com.hippo.ehviewer.ui.scene.gallery.list;
 import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
+import android.graphics.Rect;
 import android.os.Looper;
+import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.TextView;
@@ -14,6 +16,7 @@ import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.hippo.conaco.Conaco;
+import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.drawable.GalleryCountDrawable;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
@@ -24,7 +27,10 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.client.EhClient;
+import com.hippo.ehviewer.client.GallerySeenState;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
+import com.hippo.ehviewer.client.SearchUpdateStore;
+import com.hippo.ehviewer.client.SubscriptionSearchContext;
 import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.lib.image.Image;
@@ -63,7 +69,8 @@ import static org.robolectric.Shadows.shadowOf;
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = 28, shadows = {
         PopularGalleryRenderingTest.AppShadow.class, PopularGalleryRenderingTest.DownloadShadow.class,
-        PopularGalleryRenderingTest.ImageShadow.class, PopularGalleryRenderingTest.DbShadow.class})
+        PopularGalleryRenderingTest.ImageShadow.class, PopularGalleryRenderingTest.DbShadow.class,
+        PopularGalleryRenderingTest.ContextShadow.class})
 public class PopularGalleryRenderingTest {
     private static final List<QuickSearch> bookmarks = new ArrayList<>();
     private static FavouriteStatusRouter router;
@@ -79,6 +86,9 @@ public class PopularGalleryRenderingTest {
 
     @Before public void setUp() throws Exception {
         Context app = RuntimeEnvironment.getApplication();
+        app.deleteDatabase(SearchUpdateStore.DATABASE);
+        SearchUpdateStore.initialize(app);
+        ReflectionHelpers.setStaticField(Settings.class,"sEhConfig",new com.hippo.ehviewer.client.EhConfig());
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 app.getSharedPreferences("popular-render-test", Context.MODE_PRIVATE));
         bookmarks.clear();
@@ -123,6 +133,43 @@ public class PopularGalleryRenderingTest {
         assertRendered(2);
     }
 
+    @Test @Config(sdk = 34)
+    public void leftCoverAndInfoBarPreviewFollowQuickDownloadSwitchAndRestoreLongPress() {
+        Settings.putString(Settings.KEY_LIST_MODE, "1");
+        Settings.putString(Settings.KEY_THUMB_SIZE, "0");
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        assertTrue(Settings.isThumbnailInfoBarEffective());
+        adapter.setType(GalleryAdapterNew.TYPE_GRID);
+        layout();
+        EasyRecyclerView parent = (EasyRecyclerView) recycler;
+        View item = recycler.findViewHolderForAdapterPosition(0).itemView;
+        GalleryInfo gallery = adapter.getDataAt(0);
+        for (int targetId : new int[]{R.id.thumb_new, R.id.thumbnail_info_bar}) {
+            View target = item.findViewById(targetId);
+            assertEquals(View.VISIBLE, target.getVisibility());
+            assertTrue(target.getWidth() > 0 && target.getHeight() > 0);
+            Rect bounds = new Rect();
+            target.getDrawingRect(bounds);
+            parent.offsetDescendantRectToMyCoords(target, bounds);
+            ReflectionHelpers.setField(parent, "mStartX", bounds.left + bounds.width() * 0.25f);
+            ReflectionHelpers.setField(parent, "mStartY", bounds.top + bounds.height() * 0.9f);
+            for (boolean enabled : new boolean[]{false, true, false}) {
+                Settings.putBoolean(Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD, enabled);
+                int before = scene.originalLongPresses;
+                assertTrue(scene.onItemLongClick(parent, item, 0, gallery.gid));
+                assertEquals(before + (enabled ? 0 : 1), scene.originalLongPresses);
+                if (!enabled) assertSame(gallery, scene.lastLongPressedGallery);
+            }
+            Settings.putBoolean(Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD, true);
+            ReflectionHelpers.setField(scene, "mMultiSelectMode", true);
+            int before = scene.originalLongPresses;
+            assertTrue(scene.onItemLongClick(parent, item, 0, gallery.gid));
+            assertEquals(before + 1, scene.originalLongPresses);
+            ReflectionHelpers.setField(scene, "mMultiSelectMode", false);
+        }
+    }
+
     @Test public void noUpdatesActionsShowTipAndCurrentRefreshAndNewSearchAllRender() {
         toggle(PopularGalleryHistory.UPDATES);
         assertEquals(R.string.popular_page_no_updates, scene.lastTip);
@@ -151,6 +198,67 @@ public class PopularGalleryRenderingTest {
         assertRendered(2);
         toggle(PopularGalleryHistory.PREVIOUS);
         assertRendered(3);
+    }
+
+    @Test public void exactRatingFiltersProjectionWithoutRemovingSnapshotsOrBreakingDividers() {
+        refresh(2, 3, 4);
+        PopularGalleryHistory history = ReflectionHelpers.getField(scene, "mPopularHistory");
+        for (GalleryInfo gallery : history.galleries(PopularGalleryHistory.CURRENT)) {
+            gallery.rating = gallery.gid == 3 ? 4.74f : 4.75f;
+        }
+        builder.setMinRatingHundredths(475);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertRendered(2);
+        assertEquals(3, history.galleries(PopularGalleryHistory.CURRENT).size());
+        toggle(PopularGalleryHistory.UPDATES);
+        assertRendered(1);
+        ReflectionHelpers.setField(scene, "mPopularRepeatedExpanded", true);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertEquals(3, adapter.getItemCount()); // one new, one divider, one repeated gallery
+        assertEquals(1, (int) ReflectionHelpers.<Integer>getField(adapter, "mPopularNewCount"));
+        builder.setMinRatingHundredths(0);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertEquals(3, history.galleries(PopularGalleryHistory.CURRENT).size());
+        assertEquals(4, adapter.getItemCount());
+    }
+
+    @Test public void defaultRatingFiltersPopularSnapshotAndTemporaryZeroRestoresAllItems() {
+        refresh(2, 3, 4);
+        PopularGalleryHistory history = ReflectionHelpers.getField(scene, "mPopularHistory");
+        for (GalleryInfo gallery : history.galleries(PopularGalleryHistory.CURRENT)) {
+            gallery.rating = gallery.gid == 3 ? 3.99f : 4f;
+        }
+        Settings.putPersistentMinRatingHundredths(400);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertRendered(2);
+        builder.setMinRatingHundredths(0);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertRendered(3);
+        assertEquals(400, Settings.getPersistentMinRatingHundredths());
+        assertEquals(3, history.galleries(PopularGalleryHistory.CURRENT).size());
+    }
+
+    @Test public void returningFromSettingsRefetchesChangedDefaultButKeepsBrowseOverride() {
+        List<Integer> requestedRatings = new ArrayList<>();
+        GalleryListScene.GalleryListHelper requestRecorder = scene.new GalleryListHelper() {
+            @Override protected void getPageData(int taskId, int type, int page) {
+                requestedRatings.add(builder.getEffectiveMinRatingHundredths());
+            }
+        };
+        ReflectionHelpers.setField(scene, "mHelper", requestRecorder);
+        content.setHelper(requestRecorder);
+        ReflectionHelpers.setField(scene, "mLastRequestedRatingMinimum", 0);
+        ReflectionHelpers.setField(scene, "mLastRequestedPreciseRating", true);
+        Settings.putPersistentMinRatingHundredths(400);
+        scene.onResume();
+        assertEquals(java.util.List.of(400), requestedRatings);
+        builder.setMinRatingHundredths(0);
+        Settings.putPersistentMinRatingHundredths(350);
+        scene.onResume();
+        assertEquals(java.util.List.of(400), requestedRatings);
+        Settings.putBoolean(Settings.KEY_ENABLE_PRECISE_RATING_FILTER, false);
+        scene.onResume();
+        assertEquals(java.util.List.of(400, 0), requestedRatings);
     }
 
     @Test public void countButtonsFollowVisibleUpdatesAndKeepTheCurrentSnapshotTotal() {
@@ -309,7 +417,7 @@ public class PopularGalleryRenderingTest {
     }
 
     @Test @Config(sdk = 34, qualifiers = "600dpi")
-    public void dividerUsesTwoRoundLinesWithOneDpBetweenThemAtDeviceDensity() {
+    public void dividerUsesConfiguredRoundLinesAndGapAtDeviceDensity() {
         refresh(2, 3, 4);
         toggle(PopularGalleryHistory.UPDATES);
         adapter.setType(GalleryAdapterNew.TYPE_GRID);
@@ -320,9 +428,9 @@ public class PopularGalleryRenderingTest {
         assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
         assertEquals(recycler.getWidth() - recycler.getPaddingLeft() - recycler.getPaddingRight(),
                 divider.getWidth());
-        assertEquals(8, divider.getPaddingTop());
-        assertEquals(8, divider.getPaddingBottom());
-        assertEquals(32, divider.getHeight());
+        assertEquals(11, divider.getPaddingTop());
+        assertEquals(11, divider.getPaddingBottom());
+        assertEquals(46, divider.getHeight());
         assertTrue(divider instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
     }
 
@@ -357,7 +465,8 @@ public class PopularGalleryRenderingTest {
         assertEquals(0, revealScrollCount);
     }
 
-    @Test public void appendingAtTheBottomScrollsDownByTheNormalNextPageDistance() {
+    @Test @Config(qualifiers = "w360dp-h640dp-xxhdpi")
+    public void appendingAtTheBottomScrollsDownByTheNormalNextPageDistance() {
         long[] gids = new long[32];
         for (int i = 0; i < 30; i++) gids[i] = i + 3;
         gids[30] = 2;
@@ -365,9 +474,12 @@ public class PopularGalleryRenderingTest {
         refresh(gids);
         toggle(PopularGalleryHistory.UPDATES);
         layout();
-        recycler.scrollToPosition(29);
+        ((StaggeredGridLayoutManager) recycler.getLayoutManager()).scrollToPositionWithOffset(29, 0);
+        content.requestLayout();
         layout();
-        int oldTop = recycler.findViewHolderForAdapterPosition(29).itemView.getTop();
+        RecyclerView.ViewHolder anchor = recycler.findViewHolderForAdapterPosition(29);
+        assertNotNull("The end-of-list anchor must be laid out before testing the reveal scroll", anchor);
+        int oldTop = anchor.itemView.getTop();
         footer();
         layout();
         assertEquals(oldTop - LayoutUtils.dp2pix(recycler.getContext(), 48),
@@ -449,7 +561,7 @@ public class PopularGalleryRenderingTest {
             SubscriptionUpdateManager manager = subscriptionManager(mode, 3, 5);
             assertEquals(new HashSet<>(Arrays.asList(3L, 5L)), manager.getUnreadGalleryGids(mode));
             ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
-            assertTrue(manager.getUnreadGalleryGids(mode).isEmpty());
+            assertEquals(new HashSet<>(Arrays.asList(3L,5L)),manager.getUnreadGalleryGids(mode)); // Opening alone does not acknowledge.
             // A backdated update appears after an old item in server order; GID membership wins.
             refresh(7, 5, 4, 3, 2);
             assertEquals(Arrays.asList(5L, 3L, null, 7L, 4L, 2L), visibleIds());
@@ -457,7 +569,7 @@ public class PopularGalleryRenderingTest {
             adapter.setType(GalleryAdapterNew.TYPE_GRID);
             layout();
             View divider = recycler.findViewHolderForAdapterPosition(2).itemView;
-            assertEquals(32, divider.getHeight());
+            assertEquals(46, divider.getHeight());
             assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
             assertEquals(3, helper.getAdapterPosition(0));
             assertEquals(1, helper.getDataPosition(0));
@@ -569,15 +681,11 @@ public class PopularGalleryRenderingTest {
     private SubscriptionUpdateManager subscriptionManager(int mode, long... gids) {
         Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
         builder.setMode(mode);
+        scene.getContext().deleteDatabase(SearchUpdateStore.DATABASE);
+        String ids=java.util.Arrays.stream(gids).mapToObj(Long::toString).collect(java.util.stream.Collectors.joining(","));
+        Settings.putString("subscription_updates_unread_eh_gids",mode==ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION?"":ids);
+        Settings.putString("subscription_updates_unread_bookmark_gids",mode==ListUrlBuilder.MODE_SUBSCRIPTION?"":ids);
         SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
-        Set<Long> eh = ReflectionHelpers.getField(manager, "mEhUnreadGids");
-        Set<Long> bookmark = ReflectionHelpers.getField(manager, "mBookmarkUnreadGids");
-        eh.clear();
-        bookmark.clear();
-        for (long gid : gids) {
-            if (mode != ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION) eh.add(gid);
-            if (mode != ListUrlBuilder.MODE_SUBSCRIPTION) bookmark.add(gid);
-        }
         ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
         return manager;
     }
@@ -617,16 +725,102 @@ public class PopularGalleryRenderingTest {
         ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
         refresh(5, 4);
         assertEquals(Arrays.asList(5L, 4L), visibleIds());
-        assertEquals(5, Settings.getLong("subscription_updates_last_seen_eh_gid", 0));
-        assertEquals("", Settings.getString("seen_gallery_searches_v1", ""));
+        try(SearchUpdateStore store=SearchUpdateStore.open()) {
+            var state=store.read(SubscriptionSearchContext.key(),"eh-subscription");
+            assertEquals(seen(5).minute(),state.head);assertTrue(state.viewed>0);
+        }
+        assertEquals("", Settings.getString("seen_gallery_searches_v2", ""));
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
         builder.setKeyword("disabled-search");
         refresh(9, 5);
         assertEquals(Arrays.asList(9L, 5L), visibleIds());
-        assertEquals("", Settings.getString("seen_gallery_searches_v1", ""));
+        assertEquals("", Settings.getString("seen_gallery_searches_v2", ""));
     }
 
-    @Test public void subscribedBookmarkAndGlobalSubscriptionShareViewedMaximum() {
+    @Test public void latePublishedLowerGidAppearsAboveViewedDivider() throws Exception {
+        String resource = "/com/hippo/ehviewer/client/parser/GalleryListUploader.html";
+        org.jsoup.nodes.Document page;
+        try (java.io.InputStream input = getClass().getResourceAsStream(resource)) {
+            assertNotNull(input);
+            page = org.jsoup.Jsoup.parse(input, "UTF-8", "");
+        }
+        // Existing website fixture: publication order is the reverse of GID order.
+        assertEquals("2021-08-31 22:20", page.getElementById("posted_1992853").text());
+        assertEquals("2021-08-31 14:28", page.getElementById("posted_1997697").text());
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("late-publication-characterization");
+        refresh(1997697);
+        assertEquals(Arrays.asList(1997697L), visibleIds());
+
+        // Replay a later response containing that previously absent, later-published GID.
+        // 1999000 is a synthetic newer control. null denotes the section divider.
+        refresh(1992853, 1999000, 1997697);
+        assertEquals(Arrays.asList(1992853L, 1999000L, 1997697L), ids(helper.getData()));
+        assertEquals(Arrays.asList(1992853L, 1999000L, null, 1997697L), visibleIds());
+    }
+
+    @Test public void olderUnknownGalleryOutsideRetainedTimeWindowRemainsBelowDivider() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("unloaded-gallery-characterization");
+        refresh(110, 109);
+        // GID 108 was never returned to this scene, but the maximum already covers it.
+        refresh(111, 110, 109, 108);
+        assertEquals(Arrays.asList(111L, null, 110L, 109L, 108L), visibleIds());
+    }
+
+    @Test public void subscribedBookmarksKeepIndependentAcknowledgementTime() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("subscription-a-characterization");
+        QuickSearch first = builder.toQuickSearch();
+        first.subscribed = true;
+        bookmarks.add(first);
+        builder.setKeyword("subscription-b-characterization");
+        QuickSearch second = builder.toQuickSearch();
+        second.subscribed = true;
+        bookmarks.add(second);
+        SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
+        ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+        builder.set(first);
+        refresh(200);
+        assertEquals(seen(200).minute(),com.hippo.ehviewer.client.SeenGalleryHistory.open(builder).baseline().minute());
+
+        // A first visit to B establishes its own baseline instead of inheriting A.
+        builder.set(second);
+        refresh(190, 180);
+        assertEquals(Arrays.asList(190L, 180L), visibleIds());
+    }
+
+    @Test public void subscriptionRefreshRecomputesUpdatesAgainstPreviousPublicationState() {
+        subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 200);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(200, 190);
+        assertEquals(Arrays.asList(200L, null, 190L), visibleIds());
+
+        // A new successful refresh gets a new comparison snapshot before advancing it.
+        refresh(210, 200, 190);
+        assertEquals(Arrays.asList(210L, null, 200L, 190L), visibleIds());
+    }
+
+    @Test public void failedSubscriptionRefreshKeepsDisplayedUpdatesAndStoredPublicationState() {
+        subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 200);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(200, 190);
+        long previous;
+        try(SearchUpdateStore store=SearchUpdateStore.open()) { previous=store.read(SubscriptionSearchContext.key(),"eh-subscription").version; }
+        helper.refresh();
+        assertTrue(ReflectionHelpers.<Set<Long>>getField(scene, "mSubscriptionNewGids").contains(200L));
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListFailure",
+                ClassParameter.from(Exception.class, new java.io.IOException("offline")),
+                ClassParameter.from(int.class, task));
+        assertTrue(ReflectionHelpers.<Set<Long>>getField(scene, "mSubscriptionNewGids").contains(200L));
+        try(SearchUpdateStore store=SearchUpdateStore.open()) { assertEquals(previous,store.read(SubscriptionSearchContext.key(),"eh-subscription").version); }
+    }
+
+    @Test public void subscribedBookmarkUsesItsOwnCheckpointAndAcknowledgement() {
         Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
         builder.setKeyword("subscribed-bookmark");
@@ -635,13 +829,13 @@ public class PopularGalleryRenderingTest {
         bookmarks.add(bookmark);
         SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
         ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
-        manager.recordGlobalPageViewed(90, 100);
+        refresh(100,95);
         refresh(110, 100, 95);
         assertEquals(Arrays.asList(110L, null, 100L, 95L), visibleIds());
-        assertEquals(110, SubscriptionUpdateManager.getLastSeenBookmarkGid());
-        manager.recordBookmarkPageViewed(120);
+        assertEquals(seen(110).minute(),com.hippo.ehviewer.client.SeenGalleryHistory.open(builder).baseline().minute());
+        builder.setKeyword("another-search");refresh(120);builder.set(bookmark);
         refresh(125, 115, 100);
-        assertEquals(Arrays.asList(125L, null, 115L, 100L), visibleIds());
+        assertEquals(Arrays.asList(125L, 115L, null, 100L), visibleIds());
     }
 
     private void footer() {
@@ -683,6 +877,203 @@ public class PopularGalleryRenderingTest {
         Settings.putBoolean(Settings.KEY_POPULAR_UPDATES_ONLY, enabled);
     }
 
+    @Test public void explicitPopularModeOverridesDefaultUntilAnotherNavigation() {
+        for (boolean defaultUpdates : new boolean[]{false, true}) {
+            setDefaultUpdates(defaultUpdates);
+            Bundle args = new Bundle();
+            args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_WHATS_HOT);
+            args.putBoolean(GalleryListScene.KEY_POPULAR_UPDATES_ONLY, !defaultUpdates);
+            ReflectionHelpers.callInstanceMethod(scene, "handleArgs", ClassParameter.from(Bundle.class, args));
+            refresh(1, 2, 3);
+            assertEquals(defaultUpdates ? PopularGalleryHistory.CURRENT : PopularGalleryHistory.UPDATES,
+                    (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+            assertEquals(defaultUpdates ? Arrays.asList(1L, 2L, 3L) : Arrays.asList(3L), visibleIds());
+            refresh(1, 2, 3, 4);
+            assertEquals(defaultUpdates ? PopularGalleryHistory.CURRENT : PopularGalleryHistory.UPDATES,
+                    (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+            assertEquals(defaultUpdates, Settings.getPopularUpdatesOnly());
+
+            args.remove(GalleryListScene.KEY_POPULAR_UPDATES_ONLY);
+            ReflectionHelpers.callInstanceMethod(scene, "handleArgs", ClassParameter.from(Bundle.class, args));
+            refresh(1, 2, 3, 4, 5);
+            assertEquals(defaultUpdates ? PopularGalleryHistory.UPDATES : PopularGalleryHistory.CURRENT,
+                    (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+            // Restore a known snapshot for the next setting combination.
+            refresh(1, 2);
+        }
+    }
+
+    @Test public void explicitUpdatesModeStaysActiveWhenThereAreNoUpdates() {
+        Bundle args = new Bundle();
+        args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_WHATS_HOT);
+        args.putBoolean(GalleryListScene.KEY_POPULAR_UPDATES_ONLY, true);
+        ReflectionHelpers.callInstanceMethod(scene, "handleArgs", ClassParameter.from(Bundle.class, args));
+        refresh(1, 2);
+        assertEquals(PopularGalleryHistory.UPDATES,
+                (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+        assertTrue(visibleIds().isEmpty());
+    }
+
+    @Test public void explicitPopularModeSurvivesSavedState() {
+        for (boolean updatesOnly : new boolean[]{false, true}) {
+            Bundle args = new Bundle();
+            args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_WHATS_HOT);
+            args.putBoolean(GalleryListScene.KEY_POPULAR_UPDATES_ONLY, updatesOnly);
+            ReflectionHelpers.callInstanceMethod(scene, "handleArgs", ClassParameter.from(Bundle.class, args));
+            Bundle saved = new Bundle();
+            scene.onSaveInstanceState(saved);
+            GalleryListScene restored = new GalleryListScene();
+            ReflectionHelpers.callInstanceMethod(restored, "onRestore", ClassParameter.from(Bundle.class, saved));
+            assertEquals(Boolean.valueOf(updatesOnly),
+                    ReflectionHelpers.<Boolean>getField(restored, "mPopularUpdatesOnlyOverride"));
+        }
+    }
+
+    @Test @Config(sdk = 34)
+    @org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.PAUSED)
+    public void updateSnapshotRefreshesOnlyMatchingBadgeAtItsCurrentPosition() {
+        Settings.putString(Settings.KEY_LIST_MODE, "1");
+        Settings.putString(Settings.KEY_THUMB_SIZE, "0");
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT, true);
+        coldFailureRecord(200);
+        downloadedGids.addAll(List.of(200L, 201L));
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        List<GalleryInfo> data = galleries(200, 201);
+        RecyclerView parent = new RecyclerView(scene.getContext());
+        GalleryAdapterNew badges = new GalleryAdapterNew(LayoutInflater.from(scene.getContext()),
+                scene.getContext().getResources(), parent, GalleryAdapterNew.TYPE_GRID, false, jobs, true) {
+            @Override public int getItemCount() { return data.size(); }
+            @Override public GalleryInfo getDataAt(int position) { return data.get(position); }
+        };
+        List<Integer> changed = new ArrayList<>();
+        badges.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+            @Override public void onItemRangeChanged(int position, int count, Object payload) {
+                assertSame(GalleryVersionBadge.PAYLOAD, payload);
+                assertEquals(1, count);
+                changed.add(position);
+            }
+        });
+        GalleryAdapterNew.GalleryHolder target = badges.onCreateViewHolder(parent, GalleryAdapterNew.TYPE_GRID);
+        GalleryAdapterNew.GalleryHolder other = badges.onCreateViewHolder(parent, GalleryAdapterNew.TYPE_GRID);
+        badges.onBindViewHolder(target, 0);
+        badges.onBindViewHolder(other, 1);
+        assertEquals(0f, target.thumbnailDownloaded.getRotation(), 0f);
+        target.thumbnailPages.setText("Preserved reading progress");
+        java.util.Collections.swap(data, 0, 1); // A pending callback must not retain an old position.
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(List.of(1), changed);
+        badges.onBindViewHolder(target, 1, List.of(GalleryVersionBadge.PAYLOAD));
+        assertEquals(180f, target.thumbnailDownloaded.getRotation(), 0f);
+        assertEquals(scene.getContext().getString(R.string.gallery_updated),
+                target.thumbnailDownloaded.getContentDescription());
+        assertEquals(GalleryListDisplayHelper.ratingHighlightColor(3.85f,
+                        ReflectionHelpers.getField(badges, "mDarkTheme")),
+                target.thumbnailDownloaded.getImageTintList().getDefaultColor());
+        assertEquals("Preserved reading progress", target.thumbnailPages.getText().toString());
+        assertEquals(0f, other.thumbnailDownloaded.getRotation(), 0f);
+        assertTrue(jobs.jobs.isEmpty());
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT, false);
+        badges.onBindViewHolder(target, 1, List.of(GalleryVersionBadge.PAYLOAD));
+        assertNull(target.thumbnailDownloaded.getImageTintList());
+        // Recycled holders must lose the rotation when displaying an ordinary download.
+        badges.onBindViewHolder(target, 0, List.of(GalleryVersionBadge.PAYLOAD));
+        assertEquals(0f, target.thumbnailDownloaded.getRotation(), 0f);
+        assertEquals(scene.getContext().getString(R.string.download_state_downloaded),
+                target.thumbnailDownloaded.getContentDescription());
+    }
+
+    @Test public void legacyListBadgeAlsoUsesFailureRecordsAndOnlyRebindsItsIcon() {
+        coldFailureRecord(200);
+        downloadedGids.add(200L);
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        List<GalleryInfo> data = galleries(200);
+        RecyclerView parent = new RecyclerView(scene.getContext());
+        GalleryAdapter badges = new GalleryAdapter(LayoutInflater.from(scene.getContext()),
+                scene.getContext().getResources(), parent, GalleryAdapter.TYPE_LIST, false, jobs) {
+            @Override public int getItemCount() { return data.size(); }
+            @Override public GalleryInfo getDataAt(int position) { return data.get(position); }
+        };
+        com.hippo.ehviewer.ui.scene.GalleryHolder holder = badges.onCreateViewHolder(parent, GalleryAdapter.TYPE_LIST);
+        holder.title.setText("Preserved title");
+        badges.onBindViewHolder(holder, 0, List.of(GalleryVersionBadge.PAYLOAD));
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        badges.onBindViewHolder(holder, 0, List.of(GalleryVersionBadge.PAYLOAD));
+        assertEquals(180f, holder.downloaded.getRotation(), 0f);
+        assertEquals("Preserved title", holder.title.getText().toString());
+        assertEquals(scene.getContext().getString(R.string.gallery_updated), holder.downloaded.getContentDescription());
+    }
+
+    private void coldFailureRecord(long gid) {
+        com.hippo.ehviewer.download.GalleryUpdateRecordStore records =
+                com.hippo.ehviewer.download.GalleryUpdateRecordStore.get(scene.getContext());
+        assertTrue(records.saveFailure(com.hippo.ehviewer.download.GalleryUpdateRecord.failure(
+                gid, 100, 1234, "Gallery", "Failed", new long[]{100})));
+        android.util.LruCache<?, ?> snapshots = ReflectionHelpers.getField(records, "actionSnapshots");
+        snapshots.evictAll();
+    }
+
+    @Test @Config(sdk = 34)
+    @org.robolectric.annotation.LooperMode(org.robolectric.annotation.LooperMode.Mode.PAUSED)
+    public void unrelatedGalleryReturnAndOlderCallbacksCannotOverrideReaderOrReset() {
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        java.util.concurrent.atomic.AtomicInteger page = new java.util.concurrent.atomic.AtomicInteger(1);
+        GalleryAdapterNew progressAdapter = new GalleryAdapterNew(LayoutInflater.from(scene.getContext()),
+                scene.getContext().getResources(), recycler, GalleryAdapterNew.TYPE_GRID, false, jobs, true) {
+            @Override public int getItemCount() { return 0; }
+        };
+        ReflectionHelpers.setField(progressAdapter, "mReadingProgress",
+                new com.hippo.ehviewer.gallery.ReadingProgressCache(jobs, gid -> page.get()));
+        GalleryInfo gallery = galleries(123).get(0);
+        gallery.pages = 134;
+        android.util.LruCache<?, ?> snapshots = ReflectionHelpers.getStaticField(
+                com.hippo.ehviewer.spider.SpiderQueen.class, "sStartPages");
+        com.hippo.ehviewer.spider.SpiderQueen.recordReadingProgress(gallery.gid, 1);
+        GalleryAdapterNew.GalleryHolder holder = progressAdapter.onCreateViewHolder(recycler, GalleryAdapterNew.TYPE_GRID);
+        holder.boundGid = gallery.gid;
+        bindProgress(progressAdapter, holder, gallery);
+        assertEquals("2/134", holder.thumbnailPages.getText().toString());
+        // Another gallery was visited; the list rebinds without clearing progress.
+        progressAdapter.notifyDataSetChanged();
+        bindProgress(progressAdapter, holder, gallery);
+        assertEquals("2/134", holder.thumbnailPages.getText().toString());
+        jobs.runAll();
+        // The old lookup's UI callback has not run yet when the reader advances.
+        com.hippo.ehviewer.spider.SpiderQueen.recordReadingProgress(gallery.gid, 5);
+        shadowOf(android.os.Looper.getMainLooper()).idle();
+        assertEquals("6/134", holder.thumbnailPages.getText().toString());
+        bindProgress(progressAdapter, holder, gallery);
+        assertEquals("6/134", holder.thumbnailPages.getText().toString());
+        // Explicit reset wins over a still-fresh positive adapter cache entry.
+        com.hippo.ehviewer.spider.SpiderQueen.resetReadingProgress(gallery.gid);
+        shadowOf(android.os.Looper.getMainLooper()).idle();
+        assertEquals("134p", holder.thumbnailPages.getText().toString());
+        snapshots.evictAll();
+    }
+
+    private void bindProgress(GalleryAdapterNew progressAdapter, GalleryAdapterNew.GalleryHolder holder, GalleryInfo gallery) {
+        ReflectionHelpers.callInstanceMethod(progressAdapter, "bindPageProgress",
+                ClassParameter.from(GalleryAdapterNew.GalleryHolder.class, holder),
+                ClassParameter.from(TextView.class, holder.thumbnailPages),
+                ClassParameter.from(GalleryInfo.class, gallery),
+                ClassParameter.from(boolean.class, true), ClassParameter.from(boolean.class, false),
+                ClassParameter.from(boolean.class, true));
+    }
+
+    private static class ManualProgressExecutor extends java.util.concurrent.AbstractExecutorService {
+        final java.util.ArrayDeque<Runnable> jobs = new java.util.ArrayDeque<>();
+        @Override public void execute(Runnable job) { jobs.add(job); }
+        void runAll() { while (!jobs.isEmpty()) jobs.remove().run(); }
+        @Override public void shutdown() {}
+        @Override public List<Runnable> shutdownNow() { return List.of(); }
+        @Override public boolean isShutdown() { return false; }
+        @Override public boolean isTerminated() { return false; }
+        @Override public boolean awaitTermination(long timeout, java.util.concurrent.TimeUnit unit) { return true; }
+    }
+
     private void refresh(long... gids) {
         helper.refresh();
         GalleryListParser.Result result = new GalleryListParser.Result();
@@ -715,11 +1106,20 @@ public class PopularGalleryRenderingTest {
         assertFalse(title.getText().toString().isEmpty());
     }
 
+    private static GallerySeenState seen(long... gids) {
+        return GallerySeenState.empty().observe(galleries(gids));
+    }
+
     private static List<GalleryInfo> galleries(long... gids) {
         List<GalleryInfo> result = new ArrayList<>();
         for (long gid : gids) {
             GalleryInfo gallery = new GalleryInfo();
             gallery.gid = gid;
+            gallery.posted = com.hippo.ehviewer.client.parser.ParserUtils.formatPostedDate(
+                    1767225600000L + gid * 60000L);
+            if (gid == 1992853) gallery.posted = "2021-08-31 22:20";
+            if (gid == 1997697) gallery.posted = "2021-08-31 14:28";
+            if (gid == 1999000) gallery.posted = "2021-08-31 23:00";
             gallery.token = "token" + gid;
             gallery.title = "Gallery " + gid;
             gallery.thumb = "https://example.com/" + gid;
@@ -731,10 +1131,17 @@ public class PopularGalleryRenderingTest {
     private static class TestScene extends GalleryListScene {
         private final Context context;
         int lastTip;
+        int originalLongPresses;
+        GalleryInfo lastLongPressedGallery;
         TestScene(Context context) { this.context = context; }
         @Override public Context getContext() { return context; }
         @Override public Context getEHContext() { return context; }
         @Override public void showTip(int id, int length) { lastTip = id; }
+        @Override public boolean onItemLongClick(GalleryInfo gallery, View view) {
+            originalLongPresses++;
+            lastLongPressedGallery = gallery;
+            return true;
+        }
     }
 
     @Implements(EhApplication.class)
@@ -745,9 +1152,14 @@ public class PopularGalleryRenderingTest {
         @Implementation protected static FavouriteStatusRouter getFavouriteStatusRouter() { return router; }
         @Implementation protected static Conaco<Image> getConaco(Context context) { return null; }
     }
+    @Implements(SubscriptionSearchContext.class)
+    public static class ContextShadow {
+        @Implementation protected static String key() { return "account/site-"+Settings.getGallerySite(); }
+    }
     @Implements(EhDB.class)
     public static class DbShadow {
         @Implementation protected static List<QuickSearch> getAllQuickSearch() { return bookmarks; }
+        @Implementation protected static List<QuickSearch> getSubscribedQuickSearch() { return bookmarks.stream().filter(q->q.subscribed).toList(); }
     }
     @Implements(DownloadManager.class)
     public static class DownloadShadow {

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_results_delete_title">Verarbeitungsergebnisse löschen</string>
+    <string name="gallery_results_delete_sr">SR-Ergebnisse löschen</string>
+    <string name="gallery_results_calculating">Speicherbedarf der ausgewählten Galerien wird berechnet…</string>
+    <string name="gallery_results_delete_summary">%1$d ausgewählte Galerien\n\n%6$s\nÜbersetzungen: %2$d Bilder, %3$s\nSuperauflösung: %4$d Bilder, %5$s\n\nDie Anzahl der Übersetzungs- und SR-Ergebnisse umfasst nur erfasste vollständige Ergebnisse; der Speicherbedarf enthält auch Caches und unvollständige Ergebnisse. Bei Archiven zählt die Größe der Archivdatei. Alle Ergebnisse des gewählten Typs löschen; Originale und Ergebnisse des anderen Typs bleiben erhalten.</string>
+    <string name="gallery_results_originals">Originale: %1$d Bilder, %2$s</string>
+    <string name="gallery_results_originals_unavailable">Originale: Auf einige Quellbilder konnte nicht zugegriffen werden</string>
+    <string name="gallery_results_inspect_failed">Einige Ergebnisse konnten nicht geprüft werden. Speicherzugriff prüfen oder später erneut versuchen.</string>
+    <string name="gallery_results_deleted">Ergebnisse des gewählten Typs gelöscht</string>
+    <string name="gallery_results_delete_failed">Einige Ergebnisse konnten nicht gelöscht werden. Speicherzugriff prüfen oder erneut versuchen.</string>
+</resources>

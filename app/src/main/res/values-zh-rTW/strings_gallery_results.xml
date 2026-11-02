@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_results_delete_title">刪除處理結果</string>
+    <string name="gallery_results_delete_sr">刪除超解析度結果</string>
+    <string name="gallery_results_calculating">正在統計所選畫廊的占用空間…</string>
+    <string name="gallery_results_delete_summary">所選 %1$d 個畫廊\n\n%6$s\n翻譯結果：%2$d 張，占用 %3$s\n超解析度結果：%4$d 張，占用 %5$s\n\n翻譯和超解析度數量僅含已記錄的完整結果，占用包含快取和未完成結果；壓縮檔按檔案大小統計。刪除所選類型的全部結果，保留原圖和另一類結果。</string>
+    <string name="gallery_results_originals">原圖：%1$d 張，占用 %2$s</string>
+    <string name="gallery_results_originals_unavailable">原圖：部分原圖無法讀取</string>
+    <string name="gallery_results_inspect_failed">無法統計部分結果，請檢查儲存空間存取權限或稍後重試。</string>
+    <string name="gallery_results_deleted">所選類型的結果已刪除</string>
+    <string name="gallery_results_delete_failed">部分結果未能刪除，請檢查儲存空間存取權限或重試。</string>
+</resources>

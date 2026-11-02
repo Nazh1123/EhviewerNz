@@ -149,6 +149,92 @@ public class ReaderPageSeekTest {
     private View page(RecyclerView row, int index) { return row.getLayoutManager().findViewByPosition(index); }
     private ImageView image(View card) { return (ImageView) ((LinearLayout) card).getChildAt(0); }
 
+    @Test public void publishedResultsRefreshVisibleIconsWithoutRebindingTheThumbnail() throws Exception {
+        java.io.File folder = new java.io.File(context.getFilesDir(), "preview-results-" + UUID.randomUUID());
+        assertTrue(folder.mkdirs());
+        UniFile directory = UniFile.fromFile(folder);
+        DirGalleryProvider provider = new DirGalleryProvider(directory) {
+            @Override public int size() { return 1000; }
+            @Override public String getResultPageName(int page) { return "source-" + page; }
+            @Override public UniFile getPreviewFile(int page) { return null; }
+        };
+        com.hippo.ehviewer.gallery.ReaderResultIndex session = new com.hippo.ehviewer.gallery.ReaderResultIndex(context, provider, null);
+        com.hippo.ehviewer.gallery.GalleryResultIndex disk = com.hippo.ehviewer.gallery.GalleryResultIndex.Companion.open(
+                context, provider.getTranslationIdentity(), null, directory, true);
+        com.hippo.ehviewer.gallery.GalleryResultIndex.Source source = new com.hippo.ehviewer.gallery.GalleryResultIndex.Source("source-10", "", "");
+        RecyclerView row = strip();
+        Bitmap bitmap = Bitmap.createBitmap(16, 24, Bitmap.Config.ARGB_8888);
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, provider)) {
+            preview.setResultIndex(session);
+            preview.show(10, 1000, false); layout(row);
+            View card = page(row, 10);
+            TextView label = (TextView) ((LinearLayout) card).getChildAt(1);
+            android.graphics.drawable.Drawable thumbnail = new android.graphics.drawable.ColorDrawable(0xFF345678);
+            image(card).setImageDrawable(thumbnail);
+            disk.write(source, com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL, "png", 1, out -> {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out); return kotlin.Unit.INSTANCE;
+            });
+            waitFor(() -> ((Integer) ReflectionHelpers.getField(label, "flags")) == 1);
+            disk.write(source, com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.SR, "png", 2, out -> {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out); return kotlin.Unit.INSTANCE;
+            });
+            waitFor(() -> ((Integer) ReflectionHelpers.getField(label, "flags")) == 3);
+            disk.invalidate(source, com.hippo.ehviewer.gallery.GalleryResultIndex.Kind.TL);
+            waitFor(() -> ((Integer) ReflectionHelpers.getField(label, "flags")) == 2);
+            assertSame(thumbnail, image(card).getDrawable());
+            preview.update(800, 1000, true); layout(row);
+            TextView recycled = (TextView) ((LinearLayout) page(row, 800)).getChildAt(1);
+            assertEquals(0, (int) ReflectionHelpers.getField(recycled, "flags"));
+        } finally { bitmap.recycle(); session.close(); provider.stop(); }
+    }
+
+    @Test
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void resultIconsStayBesideCenteredDigitsAndOnlyRepaintTheLabel() throws Exception {
+        context = new android.view.ContextThemeWrapper(context, com.hippo.ehviewer.R.style.AppTheme_Dark);
+        RecyclerView row = strip();
+        try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+            preview.show(10, 1000, false); layout(row);
+            View card = page(row, 10);
+            TextView label = (TextView) ((LinearLayout) card).getChildAt(1);
+            android.graphics.drawable.Drawable thumbnail = new android.graphics.drawable.ColorDrawable(0xFF345678);
+            image(card).setImageDrawable(thumbnail);
+            Bitmap screenshot = Bitmap.createBitmap(label.getWidth() * 4, label.getHeight(), Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(screenshot);
+            canvas.drawColor(0xFF202020);
+            label.setText("123");
+            for (int flags = 0; flags < 4; flags++) {
+                ReflectionHelpers.callInstanceMethod(label, "setResultFlags", ReflectionHelpers.ClassParameter.from(int.class, flags));
+                canvas.save(); canvas.translate(flags * label.getWidth(), 0); label.draw(canvas); canvas.restore();
+            }
+            android.graphics.drawable.Drawable translation = ReflectionHelpers.getField(label, "translation");
+            android.graphics.drawable.Drawable enhanced = ReflectionHelpers.getField(label, "enhanced");
+            assertEquals(120, translation.getAlpha()); assertEquals(120, enhanced.getAlpha());
+            android.graphics.Rect digits = new android.graphics.Rect();
+            label.getPaint().getTextBounds("0", 0, 1, digits);
+            assertEquals(digits.height(), translation.getBounds().height());
+            assertEquals(translation.getBounds().height(), enhanced.getBounds().height());
+            float halfText = label.getPaint().measureText("123") / 2;
+            assertTrue(translation.getBounds().right < label.getWidth() / 2f - halfText);
+            assertTrue(enhanced.getBounds().left > label.getWidth() / 2f + halfText);
+            assertEquals(label.getWidth() + label.getPaddingLeft() - label.getPaddingRight(),
+                    translation.getBounds().left + enhanced.getBounds().right, 1);
+            int plainPixels = 0, bothPixels = 0;
+            for (int x = 0; x < label.getWidth(); x++) for (int y = 0; y < label.getHeight(); y++) {
+                if (screenshot.getPixel(x, y) != 0xFF202020) plainPixels++;
+                if (screenshot.getPixel(3 * label.getWidth() + x, y) != 0xFF202020) bothPixels++;
+            }
+            assertTrue("Both icons must actually render", bothPixels > plainPixels);
+            ((Runnable) ReflectionHelpers.getField(preview, "resultsChanged")).run();
+            assertSame(thumbnail, image(card).getDrawable());
+            java.io.File output = new java.io.File("build/outputs/reader-result-label-preview.png");
+            output.getParentFile().mkdirs();
+            try (java.io.FileOutputStream stream = new java.io.FileOutputStream(output)) {
+                screenshot.compress(Bitmap.CompressFormat.PNG, 100, stream);
+            } finally { screenshot.recycle(); }
+        }
+    }
+
     @Test @Config(qualifiers = "xxhdpi")
     public void decodeTargetFollowsActualCardSizeWithoutFixedPixelCap() {
         RecyclerView row = strip();

@@ -829,8 +829,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
             if (texture != null && texture.isControllableAnimation()) {
                 if (mListener != null && mListener.onLongPressSliderArea(texture)) {
                     mSliderLongPressHandled = true;
+                    return;
                 }
-                return;
             }
         }
 

@@ -127,7 +127,7 @@ public final class OfflineGalleryDetail {
             if (tag == null) continue;
             int colon = tag.indexOf(':');
             addTag(groups, colon > 0 ? tag.substring(0, colon) : "misc",
-                    colon > 0 ? tag.substring(colon + 1) : tag);
+                    colon >= 0 ? tag.substring(colon + 1) : tag);
         }
         ArrayList<GalleryTagGroup> result = new ArrayList<>();
         for (Map.Entry<String, List<String>> entry : groups.entrySet()) {

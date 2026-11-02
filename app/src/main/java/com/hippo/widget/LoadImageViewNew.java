@@ -56,6 +56,9 @@ public class LoadImageViewNew extends FixedAspectImageView implements Unikery<Im
     private static final String TAG = LoadImageViewNew.class.getSimpleName();
     private int mTaskId = Unikery.INVALID_ID;
     private Conaco<Image> mConaco;
+    private Image mImage;
+    private String mImageKey;
+    private String mImageUrl;
     private String mKey;
     private String mUrl;
     private boolean mUseNetwork;
@@ -110,7 +113,7 @@ public class LoadImageViewNew extends FixedAspectImageView implements Unikery<Im
         if (!mLoadFromDrawable) {
             if (mFailed) {
                 onFailure();
-            } else if (mTaskId == Unikery.INVALID_ID) /* if (!mConaco.isLoading(mTaskId)) TODO Update Conaco */ {
+            } else if (mImage == null && mTaskId == Unikery.INVALID_ID) {
                 load(mKey, mUrl, mUseNetwork);
             }
         }
@@ -155,6 +158,13 @@ public class LoadImageViewNew extends FixedAspectImageView implements Unikery<Im
 
         // Set drawable null
         setImageDrawable(null);
+        if (mImage != null) { mImage.release(); mImage = null; }
+        mImageKey = null;
+        mImageUrl = null;
+    }
+
+    public LoadImageView.ImageSnapshot snapshot() {
+        return LoadImageView.ImageSnapshot.capture(mImage, mImageKey, mImageUrl);
     }
 
     private void clearRetry() {
@@ -288,6 +298,11 @@ public class LoadImageViewNew extends FixedAspectImageView implements Unikery<Im
 
         clearDrawable();
 
+        mImage = value;
+        mImageKey = mKey;
+        mImageUrl = mUrl;
+        Drawable.ConstantState state = drawable.getConstantState();
+        if (state != null) drawable = state.newDrawable();
         if (Integer.MIN_VALUE != mOffsetX) {
             drawable = new PreciselyClipDrawable(drawable, mOffsetX, mOffsetY, mClipWidth, mClipHeight);
         }

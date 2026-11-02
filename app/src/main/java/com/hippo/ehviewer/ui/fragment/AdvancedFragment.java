@@ -35,6 +35,7 @@ import com.hippo.ehviewer.AppConfig;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.R;
+import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.ui.wifi.WiFiClientActivity;
 import com.hippo.ehviewer.ui.wifi.WiFiServerActivity;
 import com.hippo.ehviewer.widget.ProgressHelper;
@@ -54,7 +55,6 @@ public class AdvancedFragment extends BasePreferenceFragmentCompat
 
     private static final String KEY_DUMP_LOGCAT = "dump_logcat";
     private static final String KEY_CLEAR_MEMORY_CACHE = "clear_memory_cache";
-    private static final String KEY_APP_LANGUAGE = "app_language";
     private static final String KEY_IMPORT_DATA = "import_data";
     private static final String KEY_WIFI_SERVER = "wifi_server";
     private static final String KEY_WIFI_CLIENT = "wifi_client";
@@ -70,7 +70,7 @@ public class AdvancedFragment extends BasePreferenceFragmentCompat
 
         Preference dumpLogcat = findPreference(KEY_DUMP_LOGCAT);
         Preference clearMemoryCache = findPreference(KEY_CLEAR_MEMORY_CACHE);
-        Preference appLanguage = findPreference(KEY_APP_LANGUAGE);
+        Preference appLanguage = findPreference(Settings.KEY_APP_LANGUAGE);
         Preference importData = findPreference(KEY_IMPORT_DATA);
         Preference socketData = findPreference(KEY_WIFI_SERVER);
         Preference clientData = findPreference(KEY_WIFI_CLIENT);
@@ -188,7 +188,8 @@ public class AdvancedFragment extends BasePreferenceFragmentCompat
     @Override
     public boolean onPreferenceChange(Preference preference, Object newValue) {
         String key = preference.getKey();
-        if (KEY_APP_LANGUAGE.equals(key)) {
+        if (Settings.KEY_APP_LANGUAGE.equals(key)) {
+            Settings.putAppLanguage((String) newValue);
             ((EhApplication) getActivity().getApplication()).recreate();
             return true;
         }

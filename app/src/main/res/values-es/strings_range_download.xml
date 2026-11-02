@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="range_download">Descargar intervalo</string>
+    <string name="range_downloaded">Intervalo descargado</string>
+    <string name="range_download_badge">Intervalo</string>
+    <string name="range_download_full">Descargar galería completa</string>
+    <string name="range_read_downloaded">Leer solo el intervalo descargado</string>
+    <string name="range_download_input_hint">Por ejemplo: 1,2,6-10,25-</string>
+    <string name="range_download_preview">%1$s · %2$d páginas. Las imágenes fuera del intervalo se eliminarán de la carpeta de descarga de esta galería.</string>
+    <string name="range_download_invalid">Introduce números de página válidos del 1 al %1$d.</string>
+    <string name="range_download_busy">La galería se está modificando o actualizando. Reinténtalo cuando termine.</string>
+    <string name="range_download_missing_pages">Aún no se ha cargado el número de páginas de la galería. Reinténtalo en unos instantes.</string>
+    <string name="range_download_no_pages">No hay páginas descargadas que puedan leerse en este intervalo.</string>
+    <string name="range_reader_progress">Descargadas %1$d/%2$d · pág. %3$d/%4$d</string>
+</resources>

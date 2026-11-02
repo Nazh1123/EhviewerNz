@@ -34,10 +34,12 @@ import androidx.annotation.UiThread;
 import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.ehviewer.Analytics;
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.GetText;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhEngine;
+import com.hippo.ehviewer.client.BrowsingPriority;
 import com.hippo.ehviewer.client.EhRequestBuilder;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -122,6 +124,8 @@ public final class SpiderQueen implements Runnable {
     private final OkHttpClient mHttpClient;
     @NonNull
     private final OkHttpClient mHttpImageClient;
+    private final OkHttpClient mBrowsingHttpClient;
+    private final OkHttpClient mBrowsingImageClient;
     @NonNull
     private final SimpleDiskCache mSpiderInfoCache;
     @NonNull
@@ -147,6 +151,8 @@ public final class SpiderQueen implements Runnable {
     private final Queue<Integer> mRequestPageQueue2 = new LinkedList<>();
     // Store force request page. The index may be invalid
     private final Queue<Integer> mForceRequestPageQueue = new LinkedList<>();
+    // A page already downloading can become the visible reader page without starting another call.
+    private final java.util.Set<Integer> mReadingPages = ConcurrentHashMap.newKeySet();
     private final AtomicInteger mDownloadedPages = new AtomicInteger(0);
     private final AtomicInteger mFinishedPages = new AtomicInteger(0);
     private final Object showKeyLock = new Object();
@@ -160,7 +166,7 @@ public final class SpiderQueen implements Runnable {
     private final int mWorkerMaxCount;
     private final int mPreloadNumber;
     private final int mDownloadDelay;
-    private int mReadReference = 0;
+    private volatile int mReadReference = 0;
     private int mDownloadReference = 0;
     // It mQueenThread is null, failed or stopped
     @Nullable
@@ -179,6 +185,8 @@ public final class SpiderQueen implements Runnable {
     private SpiderQueen(EhApplication application, @NonNull GalleryInfo galleryInfo) {
         mHttpClient = EhApplication.getOkHttpClient(application);
         mHttpImageClient = EhApplication.getImageOkHttpClient(application);
+        mBrowsingHttpClient = EhApplication.getBrowsingOkHttpClient(application);
+        mBrowsingImageClient = EhApplication.getBrowsingImageOkHttpClient(application);
         mSpiderInfoCache = EhApplication.getSpiderInfoCache(application);
         mGalleryInfo = galleryInfo;
         mSpiderDen = new SpiderDen(mGalleryInfo);
@@ -223,6 +231,7 @@ public final class SpiderQueen implements Runnable {
      */
     @UiThread
     public static void resetReadingProgress(long gid) {
+        recordReadingProgress(gid, 0);
         SpiderQueen queen = sQueenMap.get(gid);
         if (queen == null) {
             return;
@@ -233,28 +242,48 @@ public final class SpiderQueen implements Runnable {
         }
     }
 
-//    @UiThread
-//    public static int findStartPage(@NonNull Context context, @NonNull GalleryInfo galleryInfo) {
-//        Log.e("StartTime",System.currentTimeMillis()+"");
-//        SpiderInfo fromDownload = SpiderInfo.getSpiderInfo(galleryInfo);
-//        SpiderInfo fromCache = readSpiderInfoFromCache(context, galleryInfo.gid);
-//
-//        int startPage = 0;
-//        if (isValidSpiderInfo(fromDownload, galleryInfo)) {
-//            startPage = fromDownload.startPage;
-//        }
-//        if (isValidSpiderInfo(fromCache, galleryInfo)) {
-//            startPage = Math.max(startPage, fromCache.startPage);
-//        }
-//        Log.e("EndTime",System.currentTimeMillis()+"");
-//        return startPage;
-//    }
-
     public static int findStartPage(@NonNull Context context, @NonNull GalleryInfo galleryInfo) {
         return findStartPage(context, galleryInfo.gid);
     }
 
+    // Reuse list prefetches when opening details, without reading disk on the UI thread.
+    private record ReadingPosition(int page, boolean authoritative, int pages) {}
+    private static final android.util.LruCache<Long, ReadingPosition> sStartPages = new android.util.LruCache<>(256);
+
+    /** Publish an explicit reader/reset/migration change before a list can reread older storage. */
+    public static void recordReadingProgress(long gid, int page) {
+        synchronized (sStartPages) {
+            ReadingPosition previous = sStartPages.get(gid);
+            sStartPages.put(gid, new ReadingPosition(Math.max(0, page), true, previous != null ? previous.pages : 0));
+        }
+    }
+
+    /** Page count obtained during the same header read as the position; no additional disk access. */
+    public static int peekPageCount(long gid) {
+        ReadingPosition position = sStartPages.get(gid);
+        return position != null ? position.pages : 0;
+    }
+
+    @Nullable
+    public static Integer peekStartPage(long gid) {
+        ReadingPosition position = sStartPages.get(gid);
+        return position != null ? position.page : null;
+    }
+
     public static int findStartPage(@NonNull Context context, long gid) {
+        ReadingPosition previous = sStartPages.get(gid);
+        if (previous != null && previous.authoritative) return previous.page;
+
+        // Downloads are persistent; the Spider cache can be evicted independently.
+        // Read headers only, without loading page-token arrays or creating folders.
+        GalleryInfo placeholder = new GalleryInfo();
+        placeholder.gid = gid;
+        // Never scan the download root for every online list item.
+        UniFile directory = EhDB.getDownloadDirname(gid) != null
+                ? SpiderDen.getExistingGalleryDownloadDir(placeholder) : null;
+        SpiderInfo downloaded = directory != null
+                ? SpiderInfo.readHeader(directory.findFile(SPIDER_INFO_FILENAME)) : null;
+        if (downloaded != null && downloaded.gid != gid) downloaded = null;
         SpiderInfo spiderInfo = null;
         SimpleDiskCache msic;
         EhApplication application = (EhApplication) context.getApplicationContext();
@@ -273,9 +302,16 @@ public final class SpiderQueen implements Runnable {
             }
         }
 
-        int startPage = 0;
-        if (spiderInfo != null) {
-            startPage = spiderInfo.startPage;
+        if (spiderInfo != null && spiderInfo.gid != gid) spiderInfo = null;
+        int startPage = Math.max(downloaded != null ? downloaded.startPage : 0,
+                spiderInfo != null ? spiderInfo.startPage : 0);
+        synchronized (sStartPages) {
+            ReadingPosition current = sStartPages.get(gid);
+            if (current != previous && current != null) return current.page;
+            // Unavailable/evicted storage is not evidence that a known position was reset.
+            if (downloaded == null && spiderInfo == null) return current != null ? current.page : 0;
+            sStartPages.put(gid, new ReadingPosition(startPage, false,
+                    spiderInfo != null && spiderInfo.pages > 0 ? spiderInfo.pages : downloaded != null ? downloaded.pages : 0));
         }
         return startPage;
     }
@@ -365,10 +401,12 @@ public final class SpiderQueen implements Runnable {
     }
 
     private void notifyPageSuccess(int index) {
+        if (com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(mGalleryInfo.gid))
+            com.hippo.ehviewer.download.GalleryDownloadRangeStore.changed(mGalleryInfo.gid);
         int size = -1;
         int[] temp = mPageStateArray;
         if (temp != null) {
-            size = temp.length;
+            size = com.hippo.ehviewer.download.GalleryDownloadRangeStore.downloadCount(mGalleryInfo.gid, temp.length);
         }
         synchronized (mSpiderListeners) {
             for (OnSpiderListener listener : mSpiderListeners) {
@@ -381,7 +419,7 @@ public final class SpiderQueen implements Runnable {
         int size = -1;
         int[] temp = mPageStateArray;
         if (temp != null) {
-            size = temp.length;
+            size = com.hippo.ehviewer.download.GalleryDownloadRangeStore.downloadCount(mGalleryInfo.gid, temp.length);
         }
         synchronized (mSpiderListeners) {
             for (OnSpiderListener listener : mSpiderListeners) {
@@ -400,7 +438,7 @@ public final class SpiderQueen implements Runnable {
         int size = -1;
         int[] temp = mPageStateArray;
         if (temp != null) {
-            size = temp.length;
+            size = com.hippo.ehviewer.download.GalleryDownloadRangeStore.downloadCount(mGalleryInfo.gid, temp.length);
         }
         synchronized (mSpiderListeners) {
             for (OnSpiderListener listener : mSpiderListeners) {
@@ -502,6 +540,7 @@ public final class SpiderQueen implements Runnable {
         switch (mode) {
             case MODE_READ:
                 mReadReference--;
+                if (mReadReference == 0) mReadingPages.clear();
                 break;
             case MODE_DOWNLOAD:
                 mDownloadReference--;
@@ -601,6 +640,7 @@ public final class SpiderQueen implements Runnable {
     }
 
     public void cancelRequest(int index) {
+        mReadingPages.remove(index);
         if (mQueenThread == null) {
             return;
         }
@@ -625,6 +665,8 @@ public final class SpiderQueen implements Runnable {
 
         // Get page state
         int state = getPageState(index);
+
+        if (state != STATE_FINISHED || force) mReadingPages.add(index);
 
         // Fix state for force
         if ((force && (state == STATE_FINISHED || state == STATE_FAILED)) ||
@@ -845,6 +887,7 @@ public final class SpiderQueen implements Runnable {
         }
         if (spiderInfo != null) {
             spiderInfo.startPage = page;
+            recordReadingProgress(mGalleryInfo.gid, page);
             final SpiderInfo infoToWrite = spiderInfo;
             new AsyncTask<Void, Void, Void>() {
                 @Override
@@ -936,7 +979,8 @@ public final class SpiderQueen implements Runnable {
 
             Request request = new EhRequestBuilder(EhUrl.getGalleryDetailUrl(
                     mGalleryInfo.gid, mGalleryInfo.token, 0, false), EhUrl.getReferer()).build();
-            Response response = mHttpClient.newCall(request).execute();
+            Response response = (mReadReference > 0 ? mBrowsingHttpClient : mHttpClient)
+                    .newCall(request).execute();
             String body = response.body().string();
 
             spiderInfo.pages = GalleryDetailParser.parsePages(body);
@@ -977,7 +1021,8 @@ public final class SpiderQueen implements Runnable {
                         ", previewPerPage " + spiderInfo.previewPerPage + ", url " + url);
             }
             Request request = new EhRequestBuilder(url, referer).build();
-            Response response = mHttpClient.newCall(request).execute();
+            Response response = (isReadingPage(index) ? mBrowsingHttpClient : mHttpClient)
+                    .newCall(request).execute();
             String body = response.body().string();
             readPreviews(body, previewIndex, spiderInfo);
 
@@ -1161,20 +1206,25 @@ public final class SpiderQueen implements Runnable {
         return state == STATE_FINISHED || state == STATE_FAILED;
     }
 
+    private boolean isReadingPage(int index) {
+        return mReadReference > 0 && mReadingPages.contains(index);
+    }
+
     private void updatePageState(int index, @State int state, String error) {
         int oldState;
         synchronized (mPageStateLock) {
             oldState = mPageStateArray[index];
             mPageStateArray[index] = state;
 
-            if (!isStateDone(oldState) && isStateDone(state)) {
+            boolean selected = com.hippo.ehviewer.download.GalleryDownloadRangeStore.includes(mGalleryInfo.gid, index);
+            if (selected && !isStateDone(oldState) && isStateDone(state)) {
                 mDownloadedPages.incrementAndGet();
-            } else if (isStateDone(oldState) && !isStateDone(state)) {
+            } else if (selected && isStateDone(oldState) && !isStateDone(state)) {
                 mDownloadedPages.decrementAndGet();
             }
-            if (oldState != STATE_FINISHED && state == STATE_FINISHED) {
+            if (selected && oldState != STATE_FINISHED && state == STATE_FINISHED) {
                 mFinishedPages.incrementAndGet();
-            } else if (oldState == STATE_FINISHED && state != STATE_FINISHED) {
+            } else if (selected && oldState == STATE_FINISHED && state != STATE_FINISHED) {
                 mFinishedPages.decrementAndGet();
             }
 
@@ -1183,6 +1233,7 @@ public final class SpiderQueen implements Runnable {
                 mPageErrorMap.remove(index);
             } else if (state == STATE_FINISHED || state == STATE_FAILED) {
                 mPagePercentMap.remove(index);
+                mReadingPages.remove(index);
             }
 
             // Get default error
@@ -1295,7 +1346,9 @@ public final class SpiderQueen implements Runnable {
         }
 
         private GalleryPageParser.Result fetchPageResultFromHtml(int index, String pageUrl) throws Throwable {
-            GalleryPageParser.Result result = EhEngine.getGalleryPage(null, mHttpClient, pageUrl, mGalleryInfo.gid, mGalleryInfo.token);
+            GalleryPageParser.Result result = EhEngine.getGalleryPage(null,
+                    isReadingPage(index) ? mBrowsingHttpClient : mHttpClient,
+                    pageUrl, mGalleryInfo.gid, mGalleryInfo.token);
             if (StringUtils.endsWith(result.imageUrl, URL_509_SUFFIX_ARRAY)) {
                 // Get 509
                 // Notify listeners
@@ -1307,7 +1360,9 @@ public final class SpiderQueen implements Runnable {
         }
 
         private GalleryPageApiParser.Result fetchPageResultFromApi(long gid, int index, String pToken, String showKey, String previousPToken) throws Throwable {
-            GalleryPageApiParser.Result result = EhEngine.getGalleryPageApi(null, mHttpClient, gid, index, pToken, showKey, previousPToken);
+            GalleryPageApiParser.Result result = EhEngine.getGalleryPageApi(null,
+                    isReadingPage(index) ? mBrowsingHttpClient : mHttpClient,
+                    gid, index, pToken, showKey, previousPToken);
             if (StringUtils.endsWith(result.imageUrl, URL_509_SUFFIX_ARRAY)) {
                 // Get 509
                 // Notify listeners
@@ -1434,12 +1489,10 @@ public final class SpiderQueen implements Runnable {
                         targetImageUrl = targetImageUrl + "?nl=" + skipHathKey;
                     }
 
-                    Call call = mHttpImageClient.newBuilder()
+                    Call call = (isReadingPage(index) ? mBrowsingImageClient : mHttpImageClient).newBuilder()
                             .callTimeout(30, TimeUnit.SECONDS).build()
                             .newCall(new EhRequestBuilder(targetImageUrl, referer).build());
-                    Response response;
-                    try {
-                        response = call.execute();
+                    try (Response response = call.execute()) {
                         targetImageUrl = response.header("location");
                     } catch (IOException | NoSuchElementException e) {
                         error = "GP不足/Insufficient GP";
@@ -1468,9 +1521,10 @@ public final class SpiderQueen implements Runnable {
                     }
 
                     // disable Call Timeout for image-downloading requests
-                    Call call = mHttpClient.newBuilder()
-                            .callTimeout(downloadTimeout, TimeUnit.SECONDS).build()
-                            .newCall(new EhRequestBuilder(targetImageUrl, referer).build());
+                    Call call = BrowsingPriority.downloadCall(mHttpClient.newBuilder()
+                                    .callTimeout(downloadTimeout, TimeUnit.SECONDS).build(),
+                            new EhRequestBuilder(targetImageUrl, referer).build(),
+                            () -> isReadingPage(index));
                     Response response = call.execute();
                     ResponseBody responseBody = response.body();
 
@@ -1689,6 +1743,9 @@ public final class SpiderQueen implements Runnable {
                 } else if (!mRequestPageQueue2.isEmpty()) {
                     index = mRequestPageQueue2.remove();
                 } else if (mDownloadPage >= 0 && mDownloadPage < size) {
+                    while (mDownloadPage < size && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.includes(
+                            mGalleryInfo.gid, mDownloadPage)) mDownloadPage++;
+                    if (mDownloadPage >= size) return false;
                     index = mDownloadPage;
                     mDownloadPage++;
                 } else {
@@ -1701,6 +1758,8 @@ public final class SpiderQueen implements Runnable {
                     // Invalid index
                     return true;
                 }
+                if (mReadReference <= 0 && !com.hippo.ehviewer.download.GalleryDownloadRangeStore.includes(
+                        mGalleryInfo.gid, index)) return true;
             }
 
             synchronized (mPageStateLock) {

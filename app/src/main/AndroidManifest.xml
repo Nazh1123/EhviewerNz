@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" /> <!-- 使用系统自带下载器 -->
     <uses-permission android:name="android.permission.ACCESS_DOWNLOAD_MANAGER" /> <!-- 自动安装apk -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- APK progress is shown by our foreground service, matching gallery downloads. -->
+    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION" />
 
     <uses-feature
         android:glEsVersion="0x00020000"
@@ -220,6 +222,10 @@
             android:configChanges="screenSize|uiMode"
             android:theme="@style/AppTheme.Settings" />
         <activity
+            android:name=".updater.AppUpdateActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
             android:name=".ui.ExcludedLanguagesActivity"
             android:configChanges="screenSize|uiMode"
             android:label="@string/excluded_languages"
@@ -286,6 +292,12 @@
             android:foregroundServiceType="dataSync"
             android:label="@string/download_service_label" />
         <service
+            android:name=".updater.AppUpdateDownloadService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="dataSync"
+            android:label="@string/app_update_download_title" />
+        <service
             android:name=".download.ArchiverDownloadService"
             android:foregroundServiceType="dataSync"
             android:label="@string/archiver_download_service_label" />
@@ -294,7 +306,7 @@
             android:exported="false"
             android:stopWithTask="false"
             android:foregroundServiceType="dataSync"
-            android:label="@string/translation_service_label" />
+            android:label="@string/gallery_processing_service" />
 
         <provider
             android:name="com.hippo.content.FileProvider"

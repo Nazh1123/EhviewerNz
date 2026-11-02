@@ -33,7 +33,10 @@ object TranslationRuntime {
         withContext(Dispatchers.IO) { models.forEach { it.close() } }
     }
 
-    suspend fun <T> withModelMaintenance(block: suspend () -> T): T = lock.withLock {
+    internal suspend fun <T> withTranslationWork(block: suspend () -> T): T =
+        ImageProcessingPriority.work.run(translation = true) { lock.withLock { block() } }
+
+    suspend fun <T> withModelMaintenance(block: suspend () -> T): T = withTranslationWork {
         closeIdleModels()
         currentCoroutineContext().ensureActive()
         trimMemory()

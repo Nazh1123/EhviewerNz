@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
+import com.hippo.ehviewer.util.GalleryTimeFormatter;
 import android.annotation.SuppressLint;
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
@@ -38,6 +39,7 @@ import com.hippo.easyrecyclerview.MarginItemDecoration;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -49,7 +51,9 @@ import com.hippo.widget.recyclerview.AutoStaggeredGridLayoutManager;
 import com.hippo.lib.yorozuya.ViewUtils;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.function.LongConsumer;
 
 import com.hippo.ehviewer.spider.SpiderQueen;
 
@@ -79,6 +83,17 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
 
     private final ExecutorService executor;
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private final LongConsumer mUpdateSnapshotLoaded = this::onUpdateSnapshotLoaded;
+
+    private void onUpdateSnapshotLoaded(long gid) {
+        handler.post(() -> {
+            if (!GalleryVersionBadge.hasUpdateRecord(GalleryUpdateRecordStore.get(mInflater.getContext()), gid)) return;
+            for (int position = 0; position < getItemCount(); position++) {
+                GalleryInfo info = getDataAt(position);
+                if (info != null && info.gid == gid) notifyItemChanged(position, GalleryVersionBadge.PAYLOAD);
+            }
+        });
+    }
 
     public GalleryAdapter(@NonNull LayoutInflater inflater, @NonNull Resources resources,
             @NonNull RecyclerView recyclerView, int type, boolean showFavourited,ExecutorService executor) {
@@ -235,18 +250,24 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
     public abstract GalleryInfo getDataAt(int position);
 
     @Override
+    public void onBindViewHolder(@NonNull GalleryHolder holder, int position,
+                                 @NonNull List<Object> payloads) {
+        if (!payloads.isEmpty() && payloads.stream().allMatch(p -> p == GalleryVersionBadge.PAYLOAD)) {
+            GalleryInfo info = getDataAt(position);
+            if (info != null) bindVersionBadges(holder, info);
+        } else {
+            onBindViewHolder(holder, position);
+        }
+    }
+
+    @Override
     public void onBindViewHolder(@NonNull GalleryHolder holder, int position) {
         GalleryInfo gi = getDataAt(position);
         if (null == gi) {
             return;
         }
 
-        boolean downloaded = mDownloadManager.containDownloadInfo(gi.gid);
-        boolean updateAvailable = !downloaded && gi.firstGid != null && gi.firstGid > 0L
-                && mDownloadManager.hasOlderGalleryVersion(gi.firstGid, gi.gid);
-        bindVersionBadge(holder.downloaded, updateAvailable,
-                mType == TYPE_GRID ? getGridDownloadBadgeDrawableRes()
-                        : R.drawable.v_download_x16);
+        bindVersionBadges(holder, gi);
 
         switch (mType) {
             default:
@@ -261,7 +282,7 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
                     category.setText(newCategoryText);
                     category.setBackgroundColor(EhUtils.getCategoryColor(gi.category));
                 }
-                holder.posted.setText(gi.posted);
+                holder.posted.setText(GalleryTimeFormatter.format(gi.posted));
                 if (gi.pages == 0 || !Settings.getShowGalleryPages()) {
                     holder.pages.setText(null);
                     holder.pages.setVisibility(View.GONE);
@@ -279,7 +300,9 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
                             }
                         });
                     });
-                    holder.pages.setText(new StringBuffer(gi.pages + "P"));
+                    Integer knownPage = SpiderQueen.peekStartPage(gi.gid);
+                    holder.pages.setText(knownPage != null
+                            ? (knownPage > 0 ? knownPage + 1 : 0) + "/" + gi.pages + "P" : gi.pages + "P");
                     holder.pages.setVisibility(View.VISIBLE);
                 }
                 if (TextUtils.isEmpty(gi.simpleLanguage)) {
@@ -290,8 +313,6 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
                     holder.simpleLanguage.setVisibility(View.VISIBLE);
                 }
                 holder.favourited.setVisibility((mShowFavourited && gi.favoriteSlot >= -1 && gi.favoriteSlot <= 10) ? View.VISIBLE : View.GONE);
-                holder.downloaded.setVisibility(
-                        downloaded || updateAvailable ? View.VISIBLE : View.GONE);
                 break;
             }
             case TYPE_GRID: {
@@ -307,10 +328,6 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
                     ((TriangleDrawable) drawable).setColor(color);
                 }
                 holder.simpleLanguage.setText(gi.simpleLanguage);
-                holder.downloaded.setVisibility(
-                        Settings.getShowThumbnailDownloadBadge() &&
-                                (downloaded || updateAvailable)
-                                ? View.VISIBLE : View.GONE);
                 break;
             }
         }
@@ -319,11 +336,16 @@ abstract class GalleryAdapter extends RecyclerView.Adapter<GalleryHolder> {
         ViewCompat.setTransitionName(holder.thumb, TransitionNameFactory.getThumbTransitionName(gi.gid));
     }
 
-    private void bindVersionBadge(@NonNull ImageView badge, boolean updateAvailable,
-                                  int downloadedDrawableRes) {
-        badge.setImageResource(updateAvailable
-                ? R.drawable.v_updatable_x24 : downloadedDrawableRes);
-        badge.setContentDescription(mResources.getString(updateAvailable
-                ? R.string.gallery_update_available : R.string.download_state_downloaded));
+    private void bindVersionBadges(GalleryHolder holder, GalleryInfo info) {
+        boolean downloaded = mDownloadManager.containDownloadInfo(info.gid);
+        GalleryUpdateRecordStore records = GalleryUpdateRecordStore.get(mInflater.getContext());
+        if (downloaded) records.prefetchActionSnapshot(info.gid, executor, mUpdateSnapshotLoaded);
+        boolean updated = downloaded && GalleryVersionBadge.hasUpdateRecord(records, info.gid);
+        boolean updateAvailable = !downloaded && info.firstGid != null && info.firstGid > 0L
+                && mDownloadManager.hasOlderGalleryVersion(info.firstGid, info.gid);
+        GalleryVersionBadge.bind(holder.downloaded, updateAvailable, updated,
+                mType == TYPE_GRID ? getGridDownloadBadgeDrawableRes() : R.drawable.v_download_x16);
+        holder.downloaded.setVisibility((mType != TYPE_GRID || Settings.getShowThumbnailDownloadBadge())
+                && (downloaded || updateAvailable) ? View.VISIBLE : View.GONE);
     }
 }

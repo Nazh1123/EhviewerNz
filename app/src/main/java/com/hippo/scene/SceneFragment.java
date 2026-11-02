@@ -33,13 +33,19 @@ import java.util.List;
 
 public class SceneFragment extends Fragment {
 
-    @IntDef({LAUNCH_MODE_STANDARD, LAUNCH_MODE_SINGLE_TOP, LAUNCH_MODE_SINGLE_TASK})
+    @IntDef({LAUNCH_MODE_STANDARD, LAUNCH_MODE_SINGLE_TOP, LAUNCH_MODE_SINGLE_TASK,
+            LAUNCH_MODE_SHARED})
     @Retention(RetentionPolicy.SOURCE)
     public @interface LaunchMode {}
 
     public static final int LAUNCH_MODE_STANDARD = 0;
     public static final int LAUNCH_MODE_SINGLE_TOP = 1;
     public static final int LAUNCH_MODE_SINGLE_TASK = 2;
+    /**
+     * Stack entries share one scene instance. Retain two visits; further visits
+     * merge the older entries and discard the pages between them.
+     */
+    public static final int LAUNCH_MODE_SHARED = 3;
 
     /** Standard scene result: operation canceled. */
     public static final int RESULT_CANCELED  = 0;

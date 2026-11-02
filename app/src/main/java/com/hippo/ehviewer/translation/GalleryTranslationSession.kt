@@ -1,13 +1,15 @@
 package com.hippo.ehviewer.translation
 
 import android.content.Context
+import com.hippo.ehviewer.image.WebpEncoder
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.client.data.GalleryInfo
-import com.hippo.ehviewer.dao.DownloadInfo
 import com.hippo.ehviewer.gallery.GalleryProvider2
+import com.hippo.ehviewer.gallery.GalleryProcessingProgress
+import com.hippo.ehviewer.gallery.GalleryResultIndex
 import com.hippo.lib.image.Image
 import com.hippo.unifile.UniFile
 import java.io.File
@@ -104,6 +106,19 @@ internal class GalleryTranslationSession(
     private val imageReads = TranslationImageWork()
     private val preparationWork = TranslationImageWork()
     private val navigationSettler = TranslationNavigationSettler()
+    private val pageWork = GalleryPageWorkRegistry.acquire(identity)
+    private val pageQueue = GalleryPageWork.Queue(
+        active = { enabled && (readerOpen || fullGallery) },
+        pages = { pendingPages() }, settled = { isPageSettled(it) },
+        ready = { size > 0 },
+        fullGallery = { fullGallery },
+        foregroundPages = {
+            if (browsing && reader != null) {
+                if (size > 0) TranslationWindow.pages(current, size, activeOptions.ahead)
+                else listOf(current).filter { it >= 0 }
+            } else emptyList()
+        },
+    ).also { pageWork.register(GalleryPageWork.Stage.TRANSLATION, it) }
     private class NativeModels(
         val epoch: Int, val identity: String,
         val engine: ResumablePipeline, val translator: AutoCloseable,
@@ -214,20 +229,34 @@ internal class GalleryTranslationSession(
         return enabled
     }
 
+    private val indexedSources = java.util.concurrent.ConcurrentHashMap<String, GalleryResultIndex.Source>()
+    private var reconciledResults = false
+    private fun resultSourceName(page: Int): String = GalleryResultIndex.source(provider, page, galleryInfo?.gid).let {
+        indexedSources[it.name] = it; it.name
+    }
     private fun resultStore(options: TranslationOptions, sourceName: String? = null): TranslationResultStore {
         val download = galleryInfo?.let { EhApplication.getDownloadManager(context).getDownloadInfo(it.gid) }
-        val directory = download?.let { TranslationStorage.galleryDir(context, it) }
-            ?: provider.translationDirectory
+        val directory = TranslationStorage.resultDirectory(context, download, provider, options.persistDownloaded)
         // An available source folder can retain each completed page while the rest
         // of the gallery is still downloading, paused, or failed.
-        val downloaded = download != null && directory != null
-        if (options.persistDownloaded && download?.state == DownloadInfo.STATE_FINISH &&
-            TranslationStorage.hasGalleryDirectory(download)) {
-            checkNotNull(directory) { "Gallery download directory unavailable" }
+        val downloaded = directory != null && (download != null || provider is com.hippo.ehviewer.gallery.ArchiveGalleryProvider)
+        val index = GalleryResultIndex.open(context, identity, galleryInfo?.gid, directory,
+            options.persistDownloaded && downloaded)
+        if (!reconciledResults && provider.size() > 0) {
+            index.reconcile(provider)
+            reconciledResults = true
         }
         return TranslationResultStore(TranslationStorage.cacheDir(context),
             directory, options, galleryInfo?.gid, downloaded,
-            sourceName, TranslationStorage.legacyPersistentDir(context))
+            sourceName, filesRemoved = { files ->
+                GalleryProcessingProgress.forget(context, files.map { it.uri })
+            }, resultIndex = index,
+            indexedSource = sourceName?.let { indexedSources[it] ?: GalleryResultIndex.Source(it) }) { result ->
+                galleryInfo?.gid?.let { gid ->
+                    if (sourceName != null) GalleryProcessingProgress.record(context, gid,
+                        GalleryProcessingProgress.Kind.TRANSLATION, sourceName, result)
+                }
+            }
     }
 
     /** Settled reader pages bypass inference; still adopt them after persistence is enabled. */
@@ -294,11 +323,18 @@ internal class GalleryTranslationSession(
             val yielded = AtomicBoolean(false)
             var turn: TranslationScheduler.Turn? = null
             try {
+                // A paired SR stage must finish outside both the scheduler turn and
+                // the high-priority inference gate, otherwise SR could never enter.
+                val nextPage = withContext(Dispatchers.Main) {
+                    pageWork.awaitAdmission(GalleryPageWork.Stage.TRANSLATION)
+                    if (size > 0) pageWork.await(GalleryPageWork.Stage.TRANSLATION) else -1
+                }
+                if (nextPage == null && size > 0) return@launch
                 // Assign on Main: cancellation returning to IO must not lose an admitted turn.
                 withContext(Dispatchers.Main) {
                     turn = TranslationTasks.scheduler.acquire { schedulingPriority() }
                 }
-                TranslationRuntime.lock.withLock {
+                TranslationRuntime.withTranslationWork {
                     TranslationRuntime.closeIdleModels(this@GalleryTranslationSession)
                     withContext(Dispatchers.Main) {
                         if (!sourceStarted) {
@@ -314,7 +350,7 @@ internal class GalleryTranslationSession(
                         ensureActive()
                     }
                     check(size > 0) { "Gallery source unavailable" }
-                    withContext(Dispatchers.Main) { knownSize = size }
+                    withContext(Dispatchers.Main) { knownSize = size; changed() }
                     // A foreground native lease can survive queue turns without holding this lock idle.
                     retainCompletedResults(epoch, options)
                     resultStore(options).prune()
@@ -336,7 +372,7 @@ internal class GalleryTranslationSession(
                             val source = File.createTempFile("translation-source-", ".img", context.cacheDir)
                             try {
                                 status(epoch, page, R.string.translation_working)
-                                request.sourceName = provider.getTranslationFilename(page)
+                                request.sourceName = resultSourceName(page)
                                 val savedResults = resultStore(resolvedOptions(options), request.sourceName)
                                 if (!request.force && resultLock.withLock {
                                     val hit = savedResults.findSavedResult() ?: return@withLock false
@@ -375,7 +411,7 @@ internal class GalleryTranslationSession(
                                 }
                                 ensureActive()
                                 request.ensureRelevant()
-                                request.sourceName = provider.getTranslationFilename(page)
+                                request.sourceName = resultSourceName(page)
                                 var pageOptions = resolvedOptions(options)
                                 var results = resultStore(pageOptions, request.sourceName)
                                 withContext(Dispatchers.Main) {
@@ -434,14 +470,14 @@ internal class GalleryTranslationSession(
                                             TranslationOverlay.extract(original, rendered)
                                         } finally { original.recycle() }
                                         val writer: (java.io.OutputStream) -> Unit = {
-                                            check(rendered.compress(Bitmap.CompressFormat.PNG, 100, it))
+                                            WebpEncoder.writeLossless(rendered, it)
                                         }
                                         val checkpoint = results.readResume(legacy.key, legacy.image)
                                         // A partial without a valid checkpoint keeps its partial status.
                                         val migrated = if (TranslationResultStore.isPartial(legacy.image)) {
                                             if (checkpoint != null) results.writePartial(key, checkpoint, writer)
                                             else results.writePartialPreview(key, writer)
-                                        } else results.writeImage(key, writer)
+                                        } else results.writeImage(key, WebpEncoder.losslessExtension(rendered), writer)
                                         results.invalidateLegacy(source)
                                         display(epoch, page, migrated, key, results.persists)
                                     } finally { rendered.recycle() }
@@ -632,7 +668,7 @@ internal class GalleryTranslationSession(
                             }
                         }
                         runTranslationPages(options.pageConcurrency, parallelReady = {
-                            engine != null && (options.source != TranslationLanguages.AUTO_SOURCE || sourceLanguage.language != null)
+                            !pageWork.coupled && engine != null && (options.source != TranslationLanguages.AUTO_SOURCE || sourceLanguage.language != null)
                         }, next = {
                             ensureActive()
                             navigationSettler.await {
@@ -643,7 +679,12 @@ internal class GalleryTranslationSession(
                                 }) {
                                 yielded.set(true)
                                 null
-                            } else withContext(Dispatchers.Main) { nextRequest() }
+                            } else withContext(Dispatchers.Main) {
+                                if (pageWork.coupled && pageWork.next(GalleryPageWork.Stage.TRANSLATION) == null) {
+                                    yielded.set(true)
+                                    null
+                                } else nextRequest(if (pageWork.coupled) pageWork.next(GalleryPageWork.Stage.TRANSLATION) else null)
+                            }
                         }, process = ::process)
                     } catch (cancel: CancellationException) {
                         throw cancel
@@ -750,7 +791,9 @@ internal class GalleryTranslationSession(
             (states[page] !in imageStates || !browsing || reader == null ||
                 if (fullGallery) page !in restorePages else page != current))
 
-    private fun nextRequest(): TranslationPageRequest? {
+    private fun nextRequest(): TranslationPageRequest? = nextRequest(null)
+
+    private fun nextRequest(selectedPage: Int?): TranslationPageRequest? {
         if (!enabled) return null
         val pages = pendingPages()
         if (fullGallery) {
@@ -759,7 +802,9 @@ internal class GalleryTranslationSession(
                 .forEach { states[it] = completedFiles[it]?.let(::imageState) ?: R.string.translation_done }
         }
         val concurrent = activeOptions.backend == TranslationBackend.LLM_API
-        val page = pages.firstOrNull { (!concurrent || it !in activeRequests) && !isPageSettled(it) } ?: return null
+        val page = pages.firstOrNull { (selectedPage == null || selectedPage == it) &&
+            pageWork.admits(GalleryPageWork.Stage.TRANSLATION, it) &&
+            (!concurrent || it !in activeRequests) && !isPageSettled(it) } ?: return null
         val restoring = states[page] in imageStates && restorePages.remove(page)
         val request = TranslationPageRequest(page, forced.remove(page), restoring, partialRetries.remove(page))
         if (!concurrent) activeRequests.clear()
@@ -849,17 +894,29 @@ internal class GalleryTranslationSession(
                                           resume: () -> TranslationResume? = { null },
                                           translate: suspend () -> PageResult): Boolean = withContext(NonCancellable) {
         val result = translate()
+        var renderedImage: Image? = null
         try {
             when (result) {
                 is PageResult.Translated -> {
                     resultLock.withLock {
                         // Download completion may have changed while this page was translating.
-                        val sourceName = request.sourceName ?: provider.getTranslationFilename(request.page)
+                        val sourceName = request.sourceName ?: resultSourceName(request.page)
                         val results = resultStore(options, sourceName)
                         val checkpoint = resume()
                         TranslationOverlay.extract(original, result.page)
-                        val writer: (java.io.OutputStream) -> Unit = { check(result.page.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-                        val output = if (checkpoint == null) results.writeImage(key, writer)
+                        // Hold one encoding lease even if navigation releases the reader's lease.
+                        // Image.create wraps this exact Bitmap; it does not copy the full page.
+                        val image = checkNotNull(Image.create(result.page))
+                        check(image.obtain())
+                        renderedImage = image
+                        val previewReader = withContext(Dispatchers.Main) {
+                            if (enabled && generation == epoch && !request.isObsolete && browsing &&
+                                (!fullGallery || kotlin.math.abs(request.page.toLong() - current) <= activeOptions.ahead))
+                                reader?.also { it.display(request.page, image) }
+                            else null
+                        }
+                        val writer: (java.io.OutputStream) -> Unit = { WebpEncoder.writeLossless(result.page, it) }
+                        val output = if (checkpoint == null) results.writeImage(key, WebpEncoder.losslessExtension(result.page), writer)
                             else results.writePartial(key, checkpoint, writer)
                         val relevant = withContext(Dispatchers.Main) {
                             enabled && generation == epoch && !request.isObsolete
@@ -871,7 +928,9 @@ internal class GalleryTranslationSession(
                                     completedNames[request.page] = sourceName
                                 }
                             }
-                            check(display(epoch, request.page, output, key, results.persists)) { "Cannot decode translated page" }
+                            check(display(epoch, request.page, output, key, results.persists, image, previewReader)) {
+                                "Cannot display translated page"
+                            }
                         }
                         results.prune()
                     }
@@ -879,7 +938,7 @@ internal class GalleryTranslationSession(
                 }
                 is PageResult.Skipped -> {
                     resultLock.withLock {
-                        val sourceName = request.sourceName ?: provider.getTranslationFilename(request.page)
+                        val sourceName = request.sourceName ?: resultSourceName(request.page)
                         val results = resultStore(options, sourceName)
                         results.recordSkipped(key)
                         withContext(Dispatchers.Main) {
@@ -900,12 +959,13 @@ internal class GalleryTranslationSession(
             }
         } finally {
             if (result is PageResult.Translated) {
-                result.page.recycle()
+                if (renderedImage != null) renderedImage?.release() else result.page.recycle()
             }
         }
     }
 
-    private suspend fun display(epoch: Int, page: Int, file: UniFile, key: String, persistent: Boolean): Boolean {
+    private suspend fun display(epoch: Int, page: Int, file: UniFile, key: String, persistent: Boolean,
+                                rendered: Image? = null, previewReader: Reader? = null): Boolean {
         // Background work saves files only; never accumulate gallery bitmaps in memory.
         val needsImage = withContext(Dispatchers.Main) {
             browsing && reader != null && (!fullGallery ||
@@ -914,12 +974,15 @@ internal class GalleryTranslationSession(
         var bitmap: Bitmap? = null
         var transferred = false
         try {
-            if (needsImage) imageReads.run {
+            if (needsImage && rendered == null) imageReads.run {
                 bitmap = file.openInputStream().use { BitmapFactory.decodeStream(it) }
             }
-            if (needsImage && bitmap == null) return false
+            if (needsImage && rendered == null && bitmap == null) return false
             return withContext(Dispatchers.Main) {
                 if (!enabled || generation != epoch || activeRequests[page]?.isObsolete == true) return@withContext false
+                if (rendered != null && needsImage && browsing) reader?.let {
+                    if (it !== previewReader) it.display(page, rendered)
+                }
                 if (bitmap != null && browsing) reader?.let {
                     val image = Image.create(checkNotNull(bitmap)) ?: return@withContext false
                     it.display(page, image)
@@ -935,6 +998,16 @@ internal class GalleryTranslationSession(
                 true
             }
         } finally { if (!transferred) bitmap?.recycle() }
+    }
+
+    suspend fun stopForResultDeletion() {
+        val pending = listOfNotNull(worker, retentionJob, resultLoader)
+        disable()
+        pending.joinAll()
+        clearRememberedResults()
+        states.clear()
+        reader?.clearTranslations()
+        changed()
     }
 
     fun disable() {
@@ -983,6 +1056,8 @@ internal class GalleryTranslationSession(
 
     fun close() {
         disable()
+        pageWork.remove(GalleryPageWork.Stage.TRANSLATION, pageQueue)
+        GalleryPageWorkRegistry.release(identity, pageWork)
         reader = null
         scope.cancel()
         completedFiles.clear()
@@ -1062,7 +1137,10 @@ internal class GalleryTranslationSession(
     private fun forgetUnavailableResult(page: Int, file: UniFile) {
         if (completedFiles[page] !== file) return
         completedFiles.remove(page)
-        completedNames.remove(page)
+        completedNames.remove(page)?.let { name ->
+            galleryInfo?.gid?.let { GalleryProcessingProgress.record(context, it,
+                GalleryProcessingProgress.Kind.TRANSLATION, name, null) }
+        }
         completedKeys.remove(page)?.let { retainedKeys.remove(it) }
         if (page == current) {
             states.remove(page)
@@ -1096,6 +1174,7 @@ internal class GalleryTranslationSession(
     private class YieldTranslationTurn : Exception()
 
     private fun changed() {
+        pageWork.changed()
         reader?.changed()
         TranslationTasks.changed()
     }

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search_preset_tag_1">搜索预设标签1</string>
+    <string name="settings_search_preset_tag_2">搜索预设标签2</string>
+    <string name="settings_search_preset_tag_hint">请输入一个 命名空间:标签，如 l:\"chinese$\"、o:\"ai generated$\" 或 f:\"stockings\"。含空格的标签需加双引号。</string>
+    <string name="settings_search_preset_tag_invalid">请输入有效的 命名空间:标签，含空格的标签需加双引号。</string>
+    <string name="search_preset_ai_generated">AI 生成</string>
+    <string name="search_preset_exclude">关闭（排除）</string>
+    <string name="search_preset_normal">普通</string>
+    <string name="search_preset_include">开启（包含）</string>
+    <string name="settings_search_preset_bubbles_summary">在更多搜索条件中显示预设气泡。点击气泡添加或移除关键词，点击左侧符号切换包含、排除和“或”。</string>
+    <string name="settings_search_preset_tags">预设关键词</string>
+    <string name="settings_search_preset_reorder">拖动以调整 %1$s 的顺序</string>
+    <string name="settings_search_preset_add">添加预设标签</string>
+    <string name="settings_search_preset_edit">编辑预设标签</string>
+    <string name="settings_search_preset_remove">删除预设</string>
+    <string name="settings_search_preset_duplicate">预设列表中已有此标签。</string>
+    <string name="search_preset_absent">搜索栏中未添加</string>
+    <string name="search_preset_add">添加标签%1$s</string>
+    <string name="settings_search_presets_count">已有 %1$d 个标签 · 点击添加、编辑或删除</string>
+    <string name="settings_search_presets_description">管理更多搜索条件中显示的预设关键词。拖动左侧手柄调整顺序，点击右侧按钮编辑或删除，修改后立即保存。</string>
+    <string name="settings_search_presets_empty">还没有预设标签，点击下方按钮添加。</string>
+    <string name="settings_search_preset_remove_confirm">删除预设 %1$s？当前搜索栏中的关键词将保留。</string>
+    <string name="search_preset_input_hint">输入关键词或标签表达式</string>
+</resources>

@@ -33,7 +33,7 @@ public class EhDaoGenerator {
     private static final String DELETE_DIR = OUT_DIR+"/com/hippo/ehviewer/dao";
 
     // Fork schema range; keep DaoMaster.SCHEMA_VERSION in sync.
-    private static final int VERSION = 1_000_010;
+    private static final int VERSION = 1_000_012;
 
     private static final String DOWNLOAD_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/DownloadInfo.java";
     private static final String HISTORY_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/HistoryInfo.java";
@@ -253,6 +253,8 @@ public class EhDaoGenerator {
         entity.addLongProperty("time").notNull();
         // Since 8
         entity.addBooleanProperty("subscribed").notNull();
+        entity.addIntProperty("minRatingHundredths").notNull();
+        entity.addBooleanProperty("ratingOverride").notNull();
     }
 
     private static void addLocalFavorites(Schema schema) {
@@ -522,6 +524,8 @@ public class EhDaoGenerator {
         javaClass.getField("keyword").setPublic();
         javaClass.getField("advanceSearch").setPublic();
         javaClass.getField("minRating").setPublic();
+        javaClass.getField("minRatingHundredths").setPublic();
+        javaClass.getField("ratingOverride").setPublic();
         javaClass.getField("pageFrom").setPublic();
         javaClass.getField("pageTo").setPublic();
         javaClass.getField("time").setPublic();
@@ -541,6 +545,8 @@ public class EhDaoGenerator {
                 "\t\tobject.put(\"keyword\",keyword);\n" +
                 "\t\tobject.put(\"advanceSearch\",advanceSearch);\n" +
                 "\t\tobject.put(\"minRating\",minRating);\n" +
+                "\t\tobject.put(\"minRatingHundredths\",minRatingHundredths);\n" +
+                "\t\tobject.put(\"ratingOverride\",ratingOverride);\n" +
                 "\t\tobject.put(\"pageFrom\",pageFrom);\n" +
                 "\t\tobject.put(\"pageTo\",pageTo);\n" +
                 "\t\tobject.put(\"time\",time);\n" +
@@ -555,6 +561,8 @@ public class EhDaoGenerator {
                 "\t\tsearch.keyword = object.getString(\"keyword\");\n" +
                 "\t\tsearch.advanceSearch = object.getIntValue(\"advanceSearch\");\n" +
                 "\t\tsearch.minRating = object.getIntValue(\"minRating\");\n" +
+                "\t\tsearch.minRatingHundredths = object.getIntValue(\"minRatingHundredths\");\n" +
+                "\t\tsearch.ratingOverride = object.getBooleanValue(\"ratingOverride\");\n" +
                 "\t\tsearch.pageFrom = object.getIntValue(\"pageFrom\");\n" +
                 "\t\tsearch.pageTo = object.getIntValue(\"pageTo\");\n" +
                 "\t\tsearch.time = object.getLongValue(\"time\");\n" +

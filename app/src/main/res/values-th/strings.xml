@@ -198,6 +198,8 @@
 
     <string name="search_normal">ค้นหาแบบธรรมดา</string>
     <string name="search_advance">ตัวเลือกขั้นสูง</string>
+    <string name="search_more_options">เงื่อนไขการค้นหาเพิ่มเติม</string>
+    <string name="search_hide_options">ซ่อนเงื่อนไขการค้นหา</string>
     <string name="search_image">ค้นหาด้วยรูปภาพ</string>
     <string name="search_normal_search">ค้นหาแบบธรรมดา</string>
     <string name="search_subscription_search">ค้นหาการสมัครสมาชิก</string>
@@ -661,8 +663,6 @@
     <string name="settings_advanced_clear_memory_cache_summary">ลบภาพตัวอย่าง และข้อมูลแกลเลอรี่ที่มีการเก็บข้อมูลไว้</string>
     <string name="settings_advanced_read_cache_size">ขนาดในการเก็บไฟล์ชั่วคราวเพื่ออ่าน</string>
     <string name="settings_advanced_app_language_title">ภาษาของแอป</string>
-    <string name="settings_search_language">แท็กภาษาสำหรับการค้นหา</string>
-    <string name="settings_search_language_disabled">ปิด</string>
     <string name="settings_advanced_proxy">พร็อกซี่</string>
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>
@@ -1002,8 +1002,8 @@
     <string name="settings_animated_webp_progress_control_summary" formatted="false">ปัดภายในพื้นที่ 25% ด้านล่างของหน้าจอเพื่อเปลี่ยนตำแหน่งการเล่น</string>
     <string name="settings_animated_webp_sequential_playback_summary">เปิดภาพถัดไปโดยอัตโนมัติเมื่อเล่นจบ</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">แสดงปุ่มเล่น/หยุดชั่วคราวสำหรับการเปลี่ยนหน้าอัตโนมัติเมื่อแถบเลื่อนหน้าแสดงอยู่</string>
-    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - กดค้างบริเวณกึ่งกลางด้านล่างของหน้าจอเพื่อเล่นที่ %1$sx เมื่อตั้งเป็น 1.0 การกดค้างจะเปิดเมนูแทน; หลังจากกดค้าง ให้ลากในแนวนอนเพื่อเปลี่ยนความเร็ว</string>
-    <string name="animated_webp_long_press_speed_hint">%1$sx ลากเพื่อเปลี่ยนความเร็ว</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - กดค้างบริเวณกึ่งกลางด้านล่างของหน้าจอเพื่อเล่นที่ %1$sx เมื่อตั้งเป็น 1.0 การกดค้างจะเปิดเมนูแทน; หลังจากกดค้าง ให้ลากในแนวนอนเพื่อเปลี่ยนความเร็ว; ปัดขึ้นเพื่อล็อกความเร็วปัจจุบันทันที</string>
+    <string name="animated_webp_long_press_speed_hint">%1$sx ลากเพื่อเปลี่ยนความเร็ว ปัดขึ้นเพื่อล็อก</string>
     <string name="animated_webp_long_press_speed_value">%1$sx</string>
     <string name="animated_webp_stall_warning">การเล่น GIF ติดขัด คลิกเพื่อลดค่าใช้จ่ายในการถอดรหัส</string>
     <string name="bookmark_subscription_disable">ลบการสมัครสมาชิกบุ๊กมาร์ก</string>
@@ -1124,7 +1124,7 @@
     <string name="settings_fork_delete_empty_galleries">ลบแกลเลอรีที่ว่างเปล่า</string>
     <string name="settings_fork_download_label_continuous_browse">ดาวน์โหลดแท็บเรียกดูอย่างต่อเนื่อง</string>
     <string name="settings_fork_download_label_continuous_browse_summary">แสดงแกลเลอรีดาวน์โหลดอย่างต่อเนื่องจากบนลงล่างด้วยแท็กในหน้าดาวน์โหลด</string>
-    <string name="settings_fork_features">ฟังก์ชันเบ็ดเตล็ดของ Fork</string>
+    <string name="settings_fork_features">เบ็ดเตล็ดของ Fork</string>
     <string name="settings_fork_gallery_immediate_jump">แกลลอรี่กระโดดตอนนี้</string>
     <string name="settings_fork_long_press_save_summary">กดบริเวณเปลี่ยนหน้าค้างไว้เพื่อบันทึกรูปภาพปัจจุบันในเครื่อง</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">กดค้างเพื่อบันทึกสำเร็จและเปิดหน้าถัดไปโดยอัตโนมัติ</string>
@@ -1251,4 +1251,16 @@
     <string name="sync_folder_label_removed">ยกเลิกการซิงค์: ป้ายกำกับดาวน์โหลดถูกลบ</string>
     <string name="settings_show_viewed_galleries">แสดงแกลเลอรีที่เคยดู</string>
     <string name="settings_show_viewed_galleries_summary">บันทึกแกลเลอรีล่าสุดในผลการค้นหาเพื่อทำเครื่องหมายแกลเลอรีที่เคยดู เมื่อค้นหาด้วยเงื่อนไขเดิมอีกครั้ง</string>
+    <string name="top_list_click_to_view">แตะเพื่อดู</string>
+    <string name="settings_yesterday_top_list_new_badge">แจ้งเตือนอันดับเมื่อวาน</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">แสดง New! ข้างรายการอันดับจนกว่าจะดูอันดับเมื่อวาน รีเซ็ตทุกวันเวลา 00:05 UTC</string>
+    <string name="navigation_long_press_hint">กดปุ่มค้างไว้เพื่อใช้การทำงานพิเศษ</string>
+    <string name="title_keyword_search_action">ค้นหาคำสำคัญ</string>
+    <string name="download_remove_record">ลบเฉพาะรายการ</string>
+    <string name="download_redownload">ดาวน์โหลดอีกครั้ง</string>
+    <string name="download_remove_files">ลบรายการและไฟล์ในเครื่อง</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">สแกนหน้าหลักเพื่อค้นหาอัปเดตการติดตาม</string>
+    <string name="settings_subscription_homepage_scan_summary">สแกนหน้าหลักเมื่อเช็กอัปเดตด้วยตนเองหรืออัตโนมัติ หากจำนวนบุ๊กมาร์กที่ติดตาม N &gt; 8 เวลาหลังอัปเดตครั้งก่อนเป็นนาที T &lt; 400 และ T × 0.3 &lt; N มิฉะนั้น รวมถึงการค้นหาที่ซับซ้อน จะใช้การค้นหาบุ๊กมาร์ก ความคืบหน้าจะคงอยู่เมื่อสลับวิธี และไม่เปลี่ยนวิธีเรียกดูการติดตามบุ๊กมาร์ก</string>
+    <string name="open_image_folder">เปิดภาพในโฟลเดอร์เดียวกัน</string>
 </resources>

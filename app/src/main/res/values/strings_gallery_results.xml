@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_results_delete_title">删除处理结果</string>
+    <string name="gallery_results_delete_sr">删除超分结果</string>
+    <string name="gallery_results_calculating">正在统计所选画廊的占用空间…</string>
+    <string name="gallery_results_delete_summary">所选 %1$d 个画廊\n\n%6$s\n翻译结果：%2$d 张，占用 %3$s\n超分结果：%4$d 张，占用 %5$s\n\n翻译和超分数量仅含已记录的完整结果，占用包含缓存和未完成结果；压缩包按包体积统计。删除所选类型的全部结果，保留原图和另一类结果。</string>
+    <string name="gallery_results_originals">原图：%1$d 张，占用 %2$s</string>
+    <string name="gallery_results_originals_unavailable">原图：部分原图无法读取</string>
+    <string name="gallery_results_inspect_failed">无法统计部分结果，请检查存储权限或稍后重试。</string>
+    <string name="gallery_results_deleted">所选类型的结果已删除</string>
+    <string name="gallery_results_delete_failed">部分结果未能删除，请检查存储权限或重试。</string>
+</resources>

@@ -33,6 +33,7 @@ import android.content.pm.ActivityInfo;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -94,12 +95,16 @@ import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.ReaderKeyProfiles;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
+import com.hippo.ehviewer.download.GalleryUpdateManager;
+import com.hippo.ehviewer.download.GalleryUpdateRecord;
+import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.event.GalleryActivityEvent;
 import com.hippo.ehviewer.gallery.ArchiveGalleryProvider;
 import com.hippo.ehviewer.gallery.DirGalleryProvider;
 import com.hippo.ehviewer.gallery.EhGalleryProvider;
 import com.hippo.ehviewer.gallery.ExternalImageFileResolver;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
+import com.hippo.ehviewer.gallery.GalleryResultIndex;
 import com.hippo.ehviewer.translation.ReaderTranslationController;
 import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.gallery.LocalGalleryHistory;
@@ -107,6 +112,9 @@ import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.gallery.LocalFolderGalleryProvider;
 import com.hippo.ehviewer.gallery.LocalFolderGallerySource;
 import com.hippo.ehviewer.gallery.SingleImageGalleryProvider;
+import com.hippo.ehviewer.gallery.UpdatedGalleryProvider;
+import com.hippo.ehviewer.gallery.RangeGalleryProvider;
+import com.hippo.ehviewer.download.GalleryDownloadRangeStore;
 import android.provider.DocumentsContract;
 import com.hippo.ehviewer.widget.GalleryGuideView;
 import com.hippo.ehviewer.widget.GalleryHeader;
@@ -176,9 +184,21 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public static final String KEY_CURRENT_INDEX = "current_index";
     public static final String KEY_UPDATE_RECORD_TIME = "update_record_time";
     public static final String KEY_UPDATE_RECORD_GID = "update_record_gid";
+    public static final String KEY_RANGE_READER_MODE = "range_reader_mode";
+    private static final String KEY_RANGE_SOURCE_PAGE = "range_source_page";
+    private boolean mRangeReaderMode;
+    private static final String KEY_UPDATE_SOURCE_PAGE = "update_source_page";
+    private static final String KEY_READER_UPDATE_RECORD_GID = "reader_update_record_gid";
+    private static final String KEY_READER_UPDATE_RECORD_TIME = "reader_update_record_time";
+    private static final String KEY_READER_MODE_SWITCH = "reader_mode_switch";
     private long mUpdateRecordGid;
     private long mUpdateRecordTime;
     private boolean mPendingUpdateStart;
+    @Nullable private GalleryUpdateRecord mReaderUpdateRecord;
+    private boolean mReaderUpdateRecordLoaded;
+    @Nullable private ArrayAdapter<CharSequence> mPageDialogItems;
+    @Nullable private Intent mPendingReaderModeSwitch;
+    private boolean mReaderModeSwitchLoading;
     private static final String KEY_ANIMATED_WEBP_GALLERY_PLAYING =
             "animated_webp_gallery_playing";
     private static final String KEY_ANIMATED_WEBP_GALLERY_SPEED =
@@ -222,6 +242,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private GalleryProvider2 mGalleryProvider;
     private ReaderTranslationController mTranslationController;
+    private com.hippo.ehviewer.gallery.ReaderExistingResults mExistingResults;
+    private com.hippo.ehviewer.superresolution.ReaderSuperResolutionController mSuperResolutionController;
     @Nullable
     private GalleryAdapter mGalleryAdapter;
 
@@ -254,7 +276,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private View mSeekBarPanel;
     @Nullable
-    private ImageView mAutoTransferPanel;
+    private ImageView mAutoTransferButton;
     @Nullable
     private TextView mLeftText;
     @Nullable
@@ -312,12 +334,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private boolean mAnimatedWebpLongPressTouchDown;
     private boolean mAnimatedWebpLongPressCaptured;
     private float mAnimatedWebpLongPressTouchX;
+    private float mAnimatedWebpLongPressTouchY;
     private volatile boolean mAnimatedWebpLifecycleResumed;
     private volatile int mAnimatedWebpLifecycleGeneration;
     private volatile boolean mAnimatedWebpSeeking;
-    private boolean mAnimatedWebpSeekAwaitingFrame;
+    private volatile boolean mAnimatedWebpSeekAwaitingFrame;
+    private long mAnimatedWebpSeekRequestId;
+    private volatile boolean mAnimatedWebpProgressVisible;
     private int mAnimatedWebpRequestedPosition;
-    private long mAnimatedWebpLastPreviewAt;
     private boolean mAnimatedWebpTouchCandidate;
     private boolean mAnimatedWebpTouchDragging;
     private float mAnimatedWebpTouchDownX;
@@ -356,7 +380,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private boolean mPageSliderAnimatedTintApplied;
 
     private ObjectAnimator mSeekBarPanelAnimator;
-    private ObjectAnimator mAutoTransferAnimator;
     private ObjectAnimator mQuickSettingsAnimator;
     @Nullable
     private AnimatorSet mSaveNoticeAnimator;
@@ -381,6 +404,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private ScheduledExecutorService transferService = Executors.newSingleThreadScheduledExecutor();
     private final Handler transHandle = new Handler(Looper.getMainLooper());
     private final Handler mAnimatedWebpHandler = new Handler(Looper.getMainLooper());
+    private final Object mAnimatedWebpUiUpdateLock = new Object();
+    private ImageTexture mAnimatedWebpUiUpdateTexture;
+    private boolean mAnimatedWebpUiStateChanged;
+    private int mAnimatedWebpUiUpdateGeneration;
+    private long mAnimatedWebpLastUiUpdateAt;
+    private final Runnable mAnimatedWebpUiUpdater = this::dispatchAnimatedWebpUiUpdate;
     private final Runnable mAnimatedWebpLongPressNoticeUpdater =
             this::updateAnimatedWebpLongPressNotice;
     private final ValueAnimator.AnimatorUpdateListener mUpdateSliderListener = new ValueAnimator.AnimatorUpdateListener() {
@@ -388,9 +417,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         public void onAnimationUpdate(ValueAnimator animation) {
             if (null != mSeekBarPanel) {
                 mSeekBarPanel.requestLayout();
-            }
-            if (null != mAutoTransferPanel) {
-                mAutoTransferPanel.requestLayout();
             }
             if (null != mQuickSettingsPanel) {
                 mQuickSettingsPanel.requestLayout();
@@ -403,7 +429,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         @Override
         public void onAnimationEnd(Animator animation) {
             mSeekBarPanelAnimator = null;
-            mAutoTransferAnimator = null;
             mQuickSettingsAnimator = null;
         }
     };
@@ -416,10 +441,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mSeekBarPanelAnimator = null;
             if (mSeekBarPanel != null) {
                 mSeekBarPanel.setVisibility(View.INVISIBLE);
-            }
-            mAutoTransferAnimator = null;
-            if (mAutoTransferPanel != null) {
-                mAutoTransferPanel.setVisibility(View.INVISIBLE);
             }
             mQuickSettingsAnimator = null;
             if (mQuickSettingsPanel != null) {
@@ -437,7 +458,6 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         public void run() {
             if (mSeekBarPanel != null) {
                 hideSlider(mSeekBarPanel, mSeekBarPanelAnimator);
-                hideSlider(mAutoTransferPanel, mAutoTransferAnimator);
                 hideSlider(mQuickSettingsPanel, mQuickSettingsAnimator);
             }
         }
@@ -483,10 +503,20 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
         } else if (ACTION_EH.equals(mAction)) {
             if (mGalleryInfo != null) {
+                GalleryDownloadRangeStore.get(this);
+                mRangeReaderMode = mUpdateRecordTime <= 0 && (getIntent().hasExtra(KEY_RANGE_READER_MODE)
+                        ? getIntent().getBooleanExtra(KEY_RANGE_READER_MODE, false)
+                        : GalleryDownloadRangeStore.isRange(mGalleryInfo.gid));
+                getIntent().putExtra(KEY_RANGE_READER_MODE, mRangeReaderMode);
                 mGalleryProvider = mUpdateRecordTime > 0
-                        ? new com.hippo.ehviewer.gallery.UpdatedGalleryProvider(this, mGalleryInfo,
-                                mUpdateRecordGid, mUpdateRecordTime)
+                        ? new UpdatedGalleryProvider(this, mGalleryInfo,
+                                mUpdateRecordGid, mUpdateRecordTime,
+                                getIntent().getIntExtra(KEY_UPDATE_SOURCE_PAGE, -1))
+                        : mRangeReaderMode ? new RangeGalleryProvider(this, mGalleryInfo,
+                                getIntent().getIntExtra(KEY_RANGE_SOURCE_PAGE, mPage))
                         : new EhGalleryProvider(this, mGalleryInfo);
+                if (mRangeReaderMode) { mPage = -1; mPendingUpdateStart = true; }
+                loadReaderUpdateRecord();
             }
         } else if (Intent.ACTION_VIEW.equals(mAction)) {
             if (mUri != null) {
@@ -688,6 +718,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mUpdateRecordTime = savedInstanceState.getLong(KEY_UPDATE_RECORD_TIME, 0L);
         mUpdateRecordGid = savedInstanceState.getLong(KEY_UPDATE_RECORD_GID, 0L);
         mPendingUpdateStart = false;
+        if (savedInstanceState.containsKey(KEY_RANGE_SOURCE_PAGE)) getIntent().putExtra(KEY_RANGE_SOURCE_PAGE,
+                savedInstanceState.getInt(KEY_RANGE_SOURCE_PAGE));
         mAnimatedWebpGalleryPlaying = savedInstanceState.getBoolean(
                 KEY_ANIMATED_WEBP_GALLERY_PLAYING, true);
         mAnimatedWebpGallerySpeed = savedInstanceState.getFloat(
@@ -708,15 +740,32 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         outState.putInt(KEY_CURRENT_INDEX, mCurrentIndex);
         outState.putLong(KEY_UPDATE_RECORD_TIME, mUpdateRecordTime);
         outState.putLong(KEY_UPDATE_RECORD_GID, mUpdateRecordGid);
+        if (mRangeReaderMode && mGalleryProvider != null) outState.putInt(KEY_RANGE_SOURCE_PAGE,
+                mGalleryProvider.getSourcePage(mCurrentIndex));
         outState.putBoolean(KEY_ANIMATED_WEBP_GALLERY_PLAYING,
                 mAnimatedWebpGalleryPlaying);
         outState.putFloat(KEY_ANIMATED_WEBP_GALLERY_SPEED,
                 mAnimatedWebpGallerySpeed);
+        if (mPendingReaderModeSwitch != null) {
+            outState.putParcelable(KEY_READER_MODE_SWITCH, mPendingReaderModeSwitch);
+        }
     }
 
     @Override
     @SuppressWarnings({"WrongConstant"})
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        if (savedInstanceState != null) {
+            Intent modeSwitch = savedInstanceState.getParcelable(KEY_READER_MODE_SWITCH);
+            if (modeSwitch != null) {
+                setIntent(modeSwitch);
+                mAnimatedWebpGalleryPlaying = savedInstanceState.getBoolean(
+                        KEY_ANIMATED_WEBP_GALLERY_PLAYING, true);
+                mAnimatedWebpGallerySpeed = savedInstanceState.getFloat(
+                        KEY_ANIMATED_WEBP_GALLERY_SPEED, 1.0f);
+                // A mode switch opens a new provider and uses its explicit page anchor.
+                savedInstanceState = null;
+            }
+        }
         if (Settings.getReadingFullscreen()) {
             Window w = getWindow();
             w.setFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION, WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
@@ -788,8 +837,19 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
 
         setContentView(R.layout.activity_gallery);
+        com.hippo.ehviewer.widget.ReaderProgressLayout progressLayout =
+                new com.hippo.ehviewer.widget.ReaderProgressLayout(this);
         mTranslationController = new ReaderTranslationController(
-                this, mGalleryProvider, findViewById(R.id.quick_translation), mGalleryInfo);
+                this, mGalleryProvider, findViewById(R.id.quick_translation), mGalleryInfo, progressLayout);
+        mSuperResolutionController = new com.hippo.ehviewer.superresolution.ReaderSuperResolutionController(
+                this, mGalleryProvider, findViewById(R.id.quick_super_resolution), mGalleryInfo, progressLayout);
+        mExistingResults = new com.hippo.ehviewer.gallery.ReaderExistingResults(this, mGalleryProvider, mGalleryInfo);
+        if (mGalleryProvider instanceof ArchiveGalleryProvider archive &&
+                androidx.preference.PreferenceManager.getDefaultSharedPreferences(this).getBoolean(
+                        com.hippo.ehviewer.gallery.GalleryResultIndex.PREFER_EXISTING, false)) {
+            com.hippo.ehviewer.gallery.ArchiveResultPermission.request(this,
+                    archive.getArchiveUri(), this::onArchiveResultDirectoryChanged);
+        }
         mGLRootView = (GLRootView) ViewUtils.$$(this, R.id.gl_root_view);
         mGalleryAdapter = new GalleryAdapter(mGLRootView, mGalleryProvider);
         Resources resources = getResources();
@@ -837,6 +897,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mQuickSettingsPanel, R.id.quick_animated_webp);
         mQuickScreenOrientation.setOnClickListener(this::toggleQuickScreenOrientation);
         mQuickReadingDirection.setOnClickListener(this::toggleQuickReadingDirection);
+        mQuickReadingDirection.setOnLongClickListener(view -> {
+            setQuickReadingDirection(GalleryView.LAYOUT_TOP_TO_BOTTOM);
+            return true;
+        });
         // mQuickDirectSave.setOnClickListener(this::toggleQuickDirectSave);
         // mQuickPageTurn.setOnClickListener(this::toggleQuickPageTurn);
         mQuickAnimatedWebp.setOnClickListener(this::toggleQuickAnimatedWebp);
@@ -858,7 +922,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         updateQuickSettingsButtons();
 
         mSeekBarPanel = ViewUtils.$$(this, R.id.seek_bar_panel);
-        mAutoTransferPanel = (ImageView) ViewUtils.$$(this, R.id.auto_transfer);
+        setQuickSettingsBackgroundAlpha(mSeekBarPanel, 190);
+        setQuickSettingsBackgroundAlpha(findViewById(R.id.page_preview_strip), 190);
+        mAutoTransferButton = (ImageView) ViewUtils.$$(mSeekBarPanel, R.id.auto_transfer);
         mLeftText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.left);
         mRightText = (TextView) ViewUtils.$$(mSeekBarPanel, R.id.right);
         mSeekBar = (ReversibleSeekBar) ViewUtils.$$(mSeekBarPanel, R.id.seek_bar);
@@ -877,7 +943,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mSeekBar.getThumb() != null) {
             mPageSliderDefaultThumbDrawableState = mSeekBar.getThumb().getConstantState();
         }
-        mAutoTransferPanel.setOnClickListener(this::autoRead);
+        mAutoTransferButton.setOnClickListener(this::autoRead);
 
         mSaveNotice = ViewUtils.$$(this, R.id.save_notice);
         mSaveNoticeIcon = (ImageView) ViewUtils.$$(this, R.id.save_notice_icon);
@@ -949,6 +1015,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSize = mGalleryProvider.size();
         mCurrentIndex = startPage;
         if (mTranslationController != null) mTranslationController.onPageChanged(startPage);
+        if (mSuperResolutionController != null) mSuperResolutionController.onPageChanged(startPage);
+        if (mExistingResults != null) mExistingResults.onPageChanged(startPage);
         if (mGalleryView != null) {
             mLayoutMode = mGalleryView.getLayoutMode();
         }
@@ -1036,6 +1104,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        if (mExistingResults != null) { mExistingResults.close(); mExistingResults = null; }
+        if (mSuperResolutionController != null) {
+            mSuperResolutionController.close(isFinishing());
+            mSuperResolutionController = null;
+        }
         if (mPagePreview != null) { mPagePreview.close(); mPagePreview = null; }
         if (mTranslationController != null) {
             mTranslationController.close(isFinishing());
@@ -1051,7 +1124,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mLocalGalleryHistorySnackbar.dismiss();
             mLocalGalleryHistorySnackbar = null;
         }
-        mAnimatedWebpHandler.removeCallbacksAndMessages(null);
+        clearAnimatedWebpCallbacks();
         restoreAnimatedWebpLongPressPlayback();
         synchronized (this) {
             mAnimatedPagePlayback.clear();
@@ -1088,7 +1161,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         // mQuickPageTurn = null;
         mQuickAnimatedWebp = null;
         mSeekBarPanel = null;
-        mAutoTransferPanel = null;
+        mAutoTransferButton = null;
         mLeftText = null;
         mRightText = null;
         mSeekBar = null;
@@ -1140,6 +1213,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mDismissingPagePreviewTouch = false;
         cancelPagePreview();
         if (mTranslationController != null) mTranslationController.pause(isFinishing());
+        if (mSuperResolutionController != null) mSuperResolutionController.pause(isFinishing());
+        if (mExistingResults != null) mExistingResults.pause();
         if (mOrientationEventListener != null) {
             mOrientationEventListener.disable();
         }
@@ -1151,7 +1226,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         persistReadingHistoryProgressNow();
         restoreAnimatedWebpLongPressPlayback();
         updateAllAnimatedPagePlayback();
-        mAnimatedWebpHandler.removeCallbacksAndMessages(null);
+        clearAnimatedWebpCallbacks();
         super.onPause();
 
         if (mGLRootView != null) {
@@ -1165,6 +1240,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         applyPagePreviewSetting();
         applyReaderKeyProfile();
         if (mTranslationController != null) mTranslationController.resume();
+        if (mSuperResolutionController != null) mSuperResolutionController.resume();
+        if (mExistingResults != null) mExistingResults.resume();
         if (mOrientationEventListener != null && mOrientationEventListener.canDetectOrientation()) {
             mOrientationEventListener.enable();
         }
@@ -1292,15 +1369,15 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void autoRead(View view) {
         autoTransferring = !autoTransferring;
-        if (mAutoTransferPanel == null) {
+        if (mAutoTransferButton == null) {
             return;
         }
 
         if (!autoTransferring) {
-            mAutoTransferPanel.setImageResource(R.drawable.ic_start_play_24);
+            mAutoTransferButton.setImageResource(R.drawable.v_play_x24);
             transferService.shutdown();
         } else {
-            mAutoTransferPanel.setImageResource(R.drawable.ic_pause_circle);
+            mAutoTransferButton.setImageResource(R.drawable.v_pause_x24);
             if (transferService.isShutdown()) {
                 transferService = Executors.newSingleThreadScheduledExecutor();
             }
@@ -1398,9 +1475,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpLongPressTouchDown = true;
             mAnimatedWebpLongPressCaptured = false;
             mAnimatedWebpLongPressTouchX = event.getX();
+            mAnimatedWebpLongPressTouchY = event.getY();
             return false;
         }
         mAnimatedWebpLongPressTouchX = event.getX();
+        mAnimatedWebpLongPressTouchY = event.getY();
         boolean captured = mAnimatedWebpLongPressCaptured;
         if (captured) {
             clearAnimatedWebpTouchGesture();
@@ -1409,7 +1488,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     && mAnimatedWebpLongPressActive
                     && mAnimatedWebpLongPressSpeedSelection != null
                     && mAnimatedWebpLongPressSpeedSelection.move(
-                            event.getX(), SystemClock.uptimeMillis())) {
+                            event.getX(), event.getY(), SystemClock.uptimeMillis())) {
                 if (mAnimatedWebpLongPressTexture != null) {
                     mAnimatedWebpLongPressTexture.setPlaybackSpeed(
                             mAnimatedWebpLongPressSpeedSelection.getSpeed());
@@ -1621,15 +1700,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 }
                 clearAnimatedWebpTouchGesture();
                 return false;
+            case MotionEvent.ACTION_POINTER_DOWN:
             case MotionEvent.ACTION_CANCEL:
                 if (mAnimatedWebpTouchDragging) {
                     finishAnimatedWebpSeek(mAnimatedWebpRequestedPosition);
                     clearAnimatedWebpTouchGesture();
                     return true;
                 }
-                clearAnimatedWebpTouchGesture();
-                return false;
-            case MotionEvent.ACTION_POINTER_DOWN:
                 clearAnimatedWebpTouchGesture();
                 return false;
             default:
@@ -1770,10 +1847,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mSize <= 0 || mCurrentIndex < 0) {
             mProgress.setText(null);
         } else {
-            if (mUpdateRecordTime > 0 && mGalleryProvider != null) {
-                mProgress.setText(getString(R.string.gallery_update_reader_progress,
+            if ((mUpdateRecordTime > 0 || mRangeReaderMode) && mGalleryProvider != null) {
+                mProgress.setText(com.hippo.ehviewer.widget.ReaderProgressText.centerSeparator(
+                        getString(mRangeReaderMode ? R.string.range_reader_progress : R.string.gallery_update_reader_progress,
                         mCurrentIndex + 1, mSize,
-                        mGalleryProvider.getSourcePage(mCurrentIndex) + 1));
+                        mGalleryProvider.getSourcePage(mCurrentIndex) + 1,
+                        mGalleryProvider.getSourcePageCount())));
             } else {
                 mProgress.setText((mCurrentIndex + 1) + "/" + mSize);
             }
@@ -1900,6 +1979,13 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             // from top-to-bottom (or an invalid persisted value) starts at left-to-right.
             newDirection = GalleryView.LAYOUT_LEFT_TO_RIGHT;
         }
+        setQuickReadingDirection(newDirection);
+    }
+
+    private void setQuickReadingDirection(int newDirection) {
+        if (mGalleryView == null) {
+            return;
+        }
         Settings.putReadingDirection(newDirection);
         mLayoutMode = newDirection;
         mGalleryView.setLayoutMode(newDirection);
@@ -1987,7 +2073,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public void onStartTrackingTouch(SeekBar seekBar) {
         SimpleHandler.getInstance().removeCallbacks(mHideSliderRunnable);
         mPageSeeking = true;
-        if (autoTransferring) autoRead(mAutoTransferPanel);
+        if (autoTransferring) autoRead(mAutoTransferButton);
         if (Settings.getReaderPagePreview() && mPagePreview != null) mPagePreview.show(seekBar.getProgress(), mSize,
                 mLayoutMode == GalleryView.LAYOUT_RIGHT_TO_LEFT);
         updateAnimatedWebpUi();
@@ -2033,6 +2119,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mPagePreview == null && mGalleryProvider != null && strip != null) {
             mPagePreview = new ReaderPagePreview(this, strip, mGalleryProvider,
                     this::onPreviewPageSelected, this::onPreviewPageBrowsed);
+            if (mExistingResults != null) mPagePreview.setResultIndex(mExistingResults.getResultIndex());
             updateSlider();
         }
     }
@@ -2069,6 +2156,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     public void onPageImageReady(int index) {
         SimpleHandler.getInstance().post(() -> {
             if (mTranslationController != null) mTranslationController.onPageReady(index);
+            if (mSuperResolutionController != null) mSuperResolutionController.onPageReady(index);
+            if (mExistingResults != null) mExistingResults.onPageReady(index);
         });
         boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
         int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
@@ -2218,7 +2307,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Override
     public void onAutoTransferDone() {
         if (autoTransferring) {
-            autoRead(mAutoTransferPanel);
+            autoRead(mAutoTransferButton);
         }
     }
 
@@ -2257,10 +2346,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (null != animator) {
             animator.cancel();
         }
-        if (sliderPanel == mAutoTransferPanel) {
-            sliderPanel.setTranslationX(sliderPanel.getWidth());
-            animator = ObjectAnimator.ofFloat(sliderPanel, "translationX", 0.0f);
-        } else if (sliderPanel == mQuickSettingsPanel) {
+        if (sliderPanel == mQuickSettingsPanel) {
             setQuickSettingsBackgroundAlpha(sliderPanel, getStatusBarBackgroundAlpha(getWindow()));
             sliderPanel.setTranslationY(-sliderPanel.getHeight());
             animator = ObjectAnimator.ofFloat(sliderPanel, "translationY", 0.0f);
@@ -2291,9 +2377,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (null != animator) {
             animator.cancel();
         }
-        if (sliderPanel == mAutoTransferPanel) {
-            animator = ObjectAnimator.ofFloat(sliderPanel, "translationX", sliderPanel.getWidth());
-        } else if (sliderPanel == mQuickSettingsPanel) {
+        if (sliderPanel == mQuickSettingsPanel) {
             animator = ObjectAnimator.ofFloat(sliderPanel, "translationY", -sliderPanel.getHeight());
         } else {
             animator = ObjectAnimator.ofFloat(sliderPanel, "translationY", sliderPanel.getHeight());
@@ -2372,33 +2456,30 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             Toast.makeText(this, R.string.error_cant_create_temp_file, Toast.LENGTH_SHORT).show();
             return;
         }
-        UniFile file;
-        if (null == (file = mGalleryProvider.save(page, UniFile.fromFile(dir), mGalleryProvider.getImageFilename(page)))) {
-            Toast.makeText(this, R.string.error_cant_save_image, Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String filename = file.getName();
-        if (filename == null) {
-            Toast.makeText(this, R.string.error_cant_save_image, Toast.LENGTH_SHORT).show();
-            return;
-        }
+        prepareImageExport(page, UniFile.fromFile(dir), file -> {
+            String filename = file.getName();
+            if (filename == null) {
+                Toast.makeText(this, R.string.error_cant_save_image, Toast.LENGTH_SHORT).show();
+                return;
+            }
 
 
-        String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(MimeTypeMap.getFileExtensionFromUrl(filename));
-        if (TextUtils.isEmpty(mimeType)) {
-            mimeType = "image/jpeg";
-        }
+            String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(MimeTypeMap.getFileExtensionFromUrl(filename));
+            if (TextUtils.isEmpty(mimeType)) {
+                mimeType = "image/jpeg";
+            }
 
-        Intent intent = new Intent(Intent.ACTION_SEND);
-        intent.putExtra(Intent.EXTRA_STREAM, file.getUri());
-        intent.setType(mimeType);
+            Intent intent = new Intent(Intent.ACTION_SEND);
+            intent.putExtra(Intent.EXTRA_STREAM, file.getUri());
+            intent.setType(mimeType);
 
-        try {
-            startActivity(Intent.createChooser(intent, getString(R.string.share_image)));
-        } catch (Throwable e) {
-            ExceptionUtils.throwIfFatal(e);
-            Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
-        }
+            try {
+                startActivity(Intent.createChooser(intent, getString(R.string.share_image)));
+            } catch (Throwable e) {
+                ExceptionUtils.throwIfFatal(e);
+                Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private void saveImage(int page) {
@@ -2655,35 +2736,50 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
     }
 
+    private void prepareImageExport(int page, UniFile directory, java.util.function.Consumer<UniFile> ready) {
+        GalleryProvider2 provider = mGalleryProvider;
+        if (provider == null || directory == null || mImageFileOperationPending || mImageFileExecutor.isShutdown()) return;
+        mImageFileOperationPending = true;
+        mImageFileExecutor.execute(() -> {
+            UniFile saved = null;
+            try { saved = provider.save(page, directory, provider.getImageFilename(page)); }
+            catch (RuntimeException failure) { Log.w(TAG, "Unable to export gallery image", failure); }
+            UniFile result = saved;
+            SimpleHandler.getInstance().post(() -> {
+                mImageFileOperationPending = false;
+                if (isFinishing() || isDestroyed() || mGalleryProvider != provider) return;
+                if (result == null) showSaveErrorNotice(getText(R.string.error_cant_save_image));
+                else ready.accept(result);
+            });
+        });
+    }
+
     private void saveImageTo(int page) {
         if (null == mGalleryProvider) {
             return;
         }
         File dir = getCacheDir();
-        UniFile file;
-        if (null == (file = mGalleryProvider.save(page, UniFile.fromFile(dir), mGalleryProvider.getImageFilename(page)))) {
-            showSaveErrorNotice(getText(R.string.error_cant_save_image));
-            return;
-        }
-        String filename = file.getName();
-        if (filename == null) {
-            showSaveErrorNotice(getText(R.string.error_cant_save_image));
-            return;
-        }
-        mCacheFileName = filename;
-        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-        intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("image/*");
-        intent.putExtra(Intent.EXTRA_TITLE, filename);
-        try {
-            startActivityForResult(intent, WRITE_REQUEST_CODE);
-//            registerForActivityResult(intent, WRITE_REQUEST_CODE);
-//            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::saveImageDats)
-//                    .launch(intent);
-        } catch (Throwable e) {
-            ExceptionUtils.throwIfFatal(e);
-            Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
-        }
+        prepareImageExport(page, UniFile.fromFile(dir), file -> {
+            String filename = file.getName();
+            if (filename == null) {
+                showSaveErrorNotice(getText(R.string.error_cant_save_image));
+                return;
+            }
+            mCacheFileName = filename;
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("image/*");
+            intent.putExtra(Intent.EXTRA_TITLE, filename);
+            try {
+                startActivityForResult(intent, WRITE_REQUEST_CODE);
+    //            registerForActivityResult(intent, WRITE_REQUEST_CODE);
+    //            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::saveImageDats)
+    //                    .launch(intent);
+            } catch (Throwable e) {
+                ExceptionUtils.throwIfFatal(e);
+                Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override
@@ -2785,20 +2881,48 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         builder.setTitle(resources.getString(R.string.page_menu_title, page + 1));
 
         final CharSequence[] items;
-        items = new CharSequence[]{getString(R.string.page_menu_refresh), getString(R.string.page_menu_share), getString(R.string.page_menu_save), getString(R.string.page_menu_save_to), getString(R.string.translation_title)};
-        pageDialogListener(builder, items, page);
+        CharSequence[] baseItems = new CharSequence[]{getString(R.string.page_menu_refresh), getString(R.string.page_menu_share), getString(R.string.page_menu_save), getString(R.string.page_menu_save_to), getString(R.string.translation_title), getString(R.string.sr_title)};
+        if (mGalleryProvider instanceof ArchiveGalleryProvider) {
+            items = java.util.Arrays.copyOf(baseItems, baseItems.length + 1);
+            items[baseItems.length] = getString(R.string.archive_results_directory);
+        } else items = baseItems;
+        // Match AlertDialog.setItems(): both the row layout and Context come from the dialog theme.
+        TypedArray dialogStyle = builder.getContext().obtainStyledAttributes(null,
+                androidx.appcompat.R.styleable.AlertDialog, androidx.appcompat.R.attr.alertDialogStyle, 0);
+        int itemLayout = dialogStyle.getResourceId(androidx.appcompat.R.styleable.AlertDialog_listItemLayout,
+                androidx.appcompat.R.layout.select_dialog_item_material);
+        dialogStyle.recycle();
+        ArrayAdapter<CharSequence> adapter = new ArrayAdapter<>(builder.getContext(), itemLayout,
+                android.R.id.text1, new java.util.ArrayList<>(java.util.Arrays.asList(items))) {
+            @Override public boolean hasStableIds() { return true; }
+        };
+        mPageDialogItems = adapter;
+        addReaderModeActions();
+        pageDialogListener(builder, adapter, page);
+        builder.setOnDismissListener(dialog -> {
+            if (mPageDialogItems == adapter) mPageDialogItems = null;
+        });
         builder.show();
     }
 
-    private void pageDialogListener(AlertDialog.Builder builder, CharSequence[] items, int page) {
-        builder.setItems(items, (dialog, which) -> {
+    private void pageDialogListener(AlertDialog.Builder builder, ArrayAdapter<CharSequence> items, int page) {
+        builder.setAdapter(items, (dialog, which) -> {
             if (mGalleryProvider == null) {
+                return;
+            }
+            if (which >= 6 && !(mGalleryProvider instanceof ArchiveGalleryProvider)) {
+                String action = items.getItem(which).toString();
+                if (action.equals(getString(R.string.range_read_downloaded))
+                        || (mRangeReaderMode && action.equals(getString(R.string.gallery_read_full)))) {
+                    switchRangeReaderMode(page);
+                } else if (canSwitchReaderMode()) switchReaderMode(page);
                 return;
             }
 
             switch (which) {
                 case 0: // Refresh
                     if (mTranslationController != null) mTranslationController.onPageReload(page);
+                    if (mSuperResolutionController != null) mSuperResolutionController.onPageReload(page);
                     mGalleryProvider.removeCache(page);
                     mGalleryProvider.forceRequest(page);
                     break;
@@ -2814,8 +2938,171 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 case 4:
                     if (mTranslationController != null) mTranslationController.showMenu(page);
                     break;
+                case 5:
+                    if (mSuperResolutionController != null) mSuperResolutionController.showMenu(page);
+                    break;
+                case 6:
+                    if (mGalleryProvider instanceof ArchiveGalleryProvider archive) {
+                        com.hippo.ehviewer.gallery.ArchiveResultPermission.request(this,
+                                archive.getArchiveUri(), this::onArchiveResultDirectoryChanged);
+                    } else if (canSwitchReaderMode()) switchReaderMode(page);
+                    break;
             }
         });
+    }
+
+    private void loadReaderUpdateRecord() {
+        if (!ACTION_EH.equals(mAction) || mGalleryInfo == null || mGalleryInfo.gid <= 0) return;
+        Context application = getApplicationContext();
+        long gid = getIntent().getLongExtra(KEY_READER_UPDATE_RECORD_GID,
+                mUpdateRecordGid > 0 ? mUpdateRecordGid : mGalleryInfo.gid);
+        long time = getIntent().getLongExtra(KEY_READER_UPDATE_RECORD_TIME, mUpdateRecordTime);
+        EhApplication.getExecutorService(application).execute(() -> {
+            GalleryUpdateRecord loaded = null;
+            try {
+                loaded = GalleryUpdateRecordStore.get(application).find(gid);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Unable to read reader update record", e);
+            }
+            GalleryUpdateRecord record = loaded;
+            SimpleHandler.getInstance().post(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                mReaderUpdateRecordLoaded = true;
+                mReaderUpdateRecord = record != null && (time <= 0 || record.completedAt == time)
+                        ? record : null;
+                // The first menu may already be open while the initial lookup finishes.
+                addReaderModeActions();
+            });
+        });
+    }
+
+    private void addReaderModeActions() {
+        if (mPageDialogItems == null || !ACTION_EH.equals(mAction) || mGalleryInfo == null) return;
+        if (canSwitchReaderMode()) {
+            String action = getString(mUpdateRecordTime > 0 ? R.string.gallery_read_full : R.string.gallery_read_updates);
+            if (mPageDialogItems.getPosition(action) < 0) mPageDialogItems.add(action);
+        }
+        if (mRangeReaderMode || GalleryDownloadRangeStore.isRange(mGalleryInfo.gid)) {
+            String action = getString(mRangeReaderMode ? R.string.gallery_read_full : R.string.range_read_downloaded);
+            if (mPageDialogItems.getPosition(action) < 0) mPageDialogItems.add(action);
+        }
+    }
+
+    private void switchRangeReaderMode(int page) {
+        if (mGalleryProvider == null || mGalleryInfo == null || mReaderModeSwitchLoading
+                || mPendingReaderModeSwitch != null || page < 0 || page >= mGalleryProvider.size()) return;
+        int sourcePage = mGalleryProvider.getSourcePage(page);
+        if (mRangeReaderMode) { restartReaderForMode(rangeReaderIntent(false, sourcePage)); return; }
+        mReaderModeSwitchLoading = true;
+        GalleryInfo gallery = mGalleryInfo;
+        Context application = getApplicationContext();
+        EhApplication.getExecutorService(application).execute(() -> {
+            boolean valid = false;
+            try { valid = new RangeGalleryProvider(application, gallery, sourcePage).hasReadablePages(); }
+            catch (RuntimeException e) { Log.w(TAG, "Unable to read downloaded range", e); }
+            boolean readable = valid;
+            SimpleHandler.getInstance().post(() -> {
+                mReaderModeSwitchLoading = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (!readable) Toast.makeText(this, R.string.range_download_no_pages, Toast.LENGTH_SHORT).show();
+                else restartReaderForMode(rangeReaderIntent(true, sourcePage));
+            });
+        });
+    }
+
+    private Intent rangeReaderIntent(boolean range, int sourcePage) {
+        Intent intent = new Intent(getIntent()).setAction(ACTION_EH);
+        intent.putExtra(KEY_GALLERY_INFO, mGalleryInfo);
+        intent.removeExtra(DATA_IN_EVENT);
+        intent.putExtra(KEY_RANGE_READER_MODE, range);
+        intent.putExtra(KEY_RANGE_SOURCE_PAGE, sourcePage);
+        intent.putExtra(KEY_PAGE, range ? -1 : sourcePage);
+        intent.putExtra(KEY_UPDATE_RECORD_TIME, 0L);
+        intent.putExtra(KEY_UPDATE_RECORD_GID, 0L);
+        intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.DOWNLOAD);
+        return intent;
+    }
+
+    private boolean canSwitchReaderMode() {
+        return ACTION_EH.equals(mAction) && mGalleryInfo != null && mGalleryInfo.gid > 0
+                && (mUpdateRecordTime > 0 || mReaderUpdateRecord != null
+                || (mReaderUpdateRecordLoaded
+                && getIntent().getLongExtra(KEY_READER_UPDATE_RECORD_TIME, 0L) > 0));
+    }
+
+    private void switchReaderMode(int page) {
+        if (!canSwitchReaderMode() || mReaderModeSwitchLoading || mPendingReaderModeSwitch != null
+                || mGalleryProvider == null || page < 0 || page >= mGalleryProvider.size()) return;
+        int sourcePage = mGalleryProvider.getSourcePage(page);
+        if (mUpdateRecordTime > 0) {
+            Intent intent = readerModeIntent(false, sourcePage, mUpdateRecordGid, mUpdateRecordTime);
+            restartReaderForMode(intent);
+            return;
+        }
+        GalleryUpdateRecord record = mReaderUpdateRecord;
+        if (record == null || record.isFailure()) {
+            Toast.makeText(this, R.string.gallery_update_record_invalid, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        mReaderModeSwitchLoading = true;
+        Context application = getApplicationContext();
+        GalleryInfo gallery = mGalleryInfo;
+        EhApplication.getExecutorService(application).execute(() -> {
+            boolean readable = false;
+            try {
+                DownloadInfo local = EhApplication.getDownloadManager(application).getDownloadInfo(gallery.gid);
+                readable = local != null && local.state == DownloadInfo.STATE_FINISH
+                        && local.archiveUri == null && GalleryUpdateManager.getPlan(gallery.gid) == null
+                        && new UpdatedGalleryProvider(application, gallery, record.targetGid,
+                                record.completedAt).hasReadablePages();
+            } catch (RuntimeException e) {
+                Log.w(TAG, "Unable to validate reader update pages", e);
+            }
+            boolean valid = readable;
+            SimpleHandler.getInstance().post(() -> {
+                mReaderModeSwitchLoading = false;
+                if (isFinishing() || isDestroyed()) return;
+                if (!valid) {
+                    Toast.makeText(this, R.string.gallery_update_record_invalid, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                restartReaderForMode(readerModeIntent(true, sourcePage,
+                        record.targetGid, record.completedAt));
+            });
+        });
+    }
+
+    private Intent readerModeIntent(boolean updates, int sourcePage, long gid, long time) {
+        Intent intent = new Intent(getIntent());
+        intent.setAction(ACTION_EH);
+        intent.putExtra(KEY_RANGE_READER_MODE, false);
+        intent.putExtra(KEY_GALLERY_INFO, mGalleryInfo);
+        intent.removeExtra(DATA_IN_EVENT);
+        intent.putExtra(KEY_READER_UPDATE_RECORD_GID, gid > 0 ? gid : mGalleryInfo.gid);
+        intent.putExtra(KEY_READER_UPDATE_RECORD_TIME, time);
+        intent.putExtra(KEY_UPDATE_RECORD_GID, updates ? gid : 0L);
+        intent.putExtra(KEY_UPDATE_RECORD_TIME, updates ? time : 0L);
+        intent.putExtra(KEY_PAGE, updates ? -1 : sourcePage);
+        if (updates) {
+            intent.putExtra(KEY_UPDATE_SOURCE_PAGE, sourcePage);
+            intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.UPDATE);
+        } else {
+            intent.removeExtra(KEY_UPDATE_SOURCE_PAGE);
+            if (ReadingHistory.UPDATE.equals(intent.getStringExtra(ReadingHistory.KEY_SOURCE))) {
+                intent.putExtra(ReadingHistory.KEY_SOURCE, ReadingHistory.DOWNLOAD);
+            }
+        }
+        return intent;
+    }
+
+    void restartReaderForMode(Intent intent) {
+        // Keep the old Intent until onDestroy has saved progress for the old mode.
+        mPendingReaderModeSwitch = intent;
+        recreate();
+    }
+
+    public void onArchiveResultDirectoryChanged() {
+        if (mExistingResults != null) mExistingResults.resume();
     }
 
     private class GalleryMenuHelper implements DialogInterface.OnClickListener {
@@ -2837,6 +3124,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         private final SwitchCompat mShowProgress;
         private final SwitchCompat mShowBattery;
         private final SwitchCompat mShowPageInterval;
+        private final SwitchCompat mPreferExistingResults;
         private final SwitchCompat mVolumePage;
         private final SwitchCompat mReverseVolumePage;
         private final SwitchCompat mReadingFullscreen;
@@ -2880,6 +3168,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mShowProgress = mView.findViewById(R.id.show_progress);
             mShowBattery = mView.findViewById(R.id.show_battery);
             mShowPageInterval = mView.findViewById(R.id.show_page_interval);
+            mPreferExistingResults = mView.findViewById(R.id.prefer_existing_results);
             mVolumePage = mView.findViewById(R.id.volume_page);
             mReverseVolumePage = mView.findViewById(R.id.reverse_volume_page);
             mReadingFullscreen = mView.findViewById(R.id.reading_fullscreen);
@@ -2908,6 +3197,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mShowProgress.setChecked(Settings.getShowProgress());
             mShowBattery.setChecked(Settings.getShowBattery());
             mShowPageInterval.setChecked(Settings.getShowPageInterval());
+            mPreferExistingResults.setChecked(Settings.getBoolean(GalleryResultIndex.PREFER_EXISTING, false));
             mVolumePage.setChecked(Settings.getVolumePage());
             mReverseVolumePage.setChecked(Settings.getReverseVolumePage());
             mReadingFullscreen.setChecked(Settings.getReadingFullscreen());
@@ -3119,6 +3409,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             Settings.putShowProgress(showProgress);
             Settings.putShowBattery(showBattery);
             Settings.putShowPageInterval(showPageInterval);
+            boolean preferExistingResults = mPreferExistingResults.isChecked();
+            if (preferExistingResults != Settings.getBoolean(GalleryResultIndex.PREFER_EXISTING, false)) {
+                Settings.putBoolean(GalleryResultIndex.PREFER_EXISTING, preferExistingResults);
+                if (mExistingResults != null) mExistingResults.resume();
+            }
             Settings.putVolumePage(volumePage);
             Settings.putReadingFullscreen(readingFullscreen);
             Settings.putCustomScreenLightness(customScreenLightness);
@@ -3212,11 +3507,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpSeek.setProgress(target);
         }
         updateAnimatedWebpTime(target, duration);
-        long now = SystemClock.uptimeMillis();
-        if (force || now - mAnimatedWebpLastPreviewAt >= 120L) {
-            mAnimatedWebpLastPreviewAt = now;
-            texture.seekTo(target);
-        }
+        // All motion events update one live target. Decoding samples it at
+        // frame boundaries, so there are no replay jobs or trailing timers.
+        mAnimatedWebpSeekRequestId = force ? texture.seekTo(target) : texture.previewSeekTo(target);
     }
 
     private void finishAnimatedWebpSeek(int position) {
@@ -3224,8 +3517,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (texture == null || !mAnimatedWebpSeeking) return;
         requestAnimatedWebpSeekPreview(position, true);
         mAnimatedWebpSeeking = false;
-        mAnimatedWebpSeekAwaitingFrame = true;
+        mAnimatedWebpSeekAwaitingFrame = mAnimatedWebpSeekRequestId > 0L;
         updateAllAnimatedPagePlayback();
+        // A fast decoder may finish before awaitingFrame was set, including
+        // while hidden controls were dropping ordinary frame callbacks.
+        updateAnimatedWebpProgress(texture);
     }
 
     private void toggleAnimatedWebpPlayback() {
@@ -3297,14 +3593,16 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     private void updateAnimatedWebpProgress(ImageTexture texture) {
         if (texture != mAnimatedWebpTexture) return;
-        int duration = texture.getPlaybackDuration();
-        int position = texture.getPlaybackPosition();
         if (mAnimatedWebpSeekAwaitingFrame &&
-                Math.abs(position - mAnimatedWebpRequestedPosition) <=
-                        Math.max(150, texture.getPlaybackFrameDelay())) {
+                (texture.hasCompletedSeek(mAnimatedWebpSeekRequestId)
+                        || texture.hasPlaybackDecodeFailed())) {
             mAnimatedWebpSeekAwaitingFrame = false;
         }
         if (!mAnimatedWebpSeeking && !mAnimatedWebpSeekAwaitingFrame) {
+            // Read position after the acknowledgement, so an old position
+            // cannot be paired with a seek that completed between the reads.
+            int duration = texture.getPlaybackDuration();
+            int position = texture.getPlaybackPosition();
             if (mAnimatedWebpTime != null &&
                     mAnimatedWebpTime.getVisibility() == View.VISIBLE) {
                 updateAnimatedWebpTime(position, duration);
@@ -3442,9 +3740,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mAnimatedWebpPanel != null) {
             mAnimatedWebpPanel.setVisibility(visible && !mPageSeeking ? View.VISIBLE : View.GONE);
         }
+        mAnimatedWebpProgressVisible = visible && !mPageSeeking
+                && mAnimatedWebpPanel != null
+                && (mAnimatedWebpSeek != null || (showTime && mAnimatedWebpTime != null));
         if (!visible) {
-            if (mAutoTransferPanel != null && sliderVisible) {
-                mAutoTransferPanel.setVisibility(View.VISIBLE);
+            if (mAutoTransferButton != null && sliderVisible) {
+                mAutoTransferButton.setVisibility(View.VISIBLE);
             }
             return;
         }
@@ -3498,8 +3799,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mAnimatedWebpSequential.setVisibility(
                     showControlButtons ? View.VISIBLE : View.INVISIBLE);
         }
-        if (mAutoTransferPanel != null && sliderVisible) {
-            mAutoTransferPanel.setVisibility(Settings.getAnimatedWebpAutoTransferButton()
+        if (mAutoTransferButton != null && sliderVisible) {
+            mAutoTransferButton.setVisibility(Settings.getAnimatedWebpAutoTransferButton()
                     ? View.VISIBLE : View.INVISIBLE);
         }
         updateAnimatedWebpSpeedButton(mAnimatedWebpGallerySpeed);
@@ -3509,30 +3810,73 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     public void onPlaybackChanged(ImageTexture texture, boolean frameChanged) {
-        boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
-        int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
-        mAnimatedWebpHandler.post(() -> {
-            if (!lifecycleResumed || !mAnimatedWebpLifecycleResumed ||
-                    lifecycleGeneration != mAnimatedWebpLifecycleGeneration ||
-                    texture != mAnimatedWebpTexture) return;
-            if (frameChanged) {
-                updateAnimatedWebpProgress(texture);
-            } else {
-                updateAnimatedWebpUi();
+        synchronized (mAnimatedWebpUiUpdateLock) {
+            if (!mAnimatedWebpLifecycleResumed || texture != mAnimatedWebpTexture) return;
+            if (frameChanged && !mAnimatedWebpProgressVisible
+                    && !mAnimatedWebpSeekAwaitingFrame) return;
+            boolean pending = mAnimatedWebpUiUpdateTexture != null;
+            if (pending && (mAnimatedWebpUiUpdateTexture != texture
+                    || mAnimatedWebpUiUpdateGeneration != mAnimatedWebpLifecycleGeneration)) {
+                mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiUpdater);
+                mAnimatedWebpUiStateChanged = false;
+                pending = false;
             }
-        });
+            mAnimatedWebpUiUpdateTexture = texture;
+            mAnimatedWebpUiUpdateGeneration = mAnimatedWebpLifecycleGeneration;
+            mAnimatedWebpUiStateChanged |= !frameChanged;
+            if (!pending || !frameChanged) {
+                mAnimatedWebpHandler.removeCallbacks(mAnimatedWebpUiUpdater);
+                long delay = frameChanged && !mAnimatedWebpSeekAwaitingFrame
+                        ? Math.max(0L, 50L - (SystemClock.uptimeMillis() - mAnimatedWebpLastUiUpdateAt))
+                        : 0L;
+                mAnimatedWebpHandler.postDelayed(mAnimatedWebpUiUpdater, delay);
+            }
+        }
+    }
+
+    private void dispatchAnimatedWebpUiUpdate() {
+        ImageTexture texture;
+        boolean stateChanged;
+        int generation;
+        synchronized (mAnimatedWebpUiUpdateLock) {
+            texture = mAnimatedWebpUiUpdateTexture;
+            stateChanged = mAnimatedWebpUiStateChanged;
+            generation = mAnimatedWebpUiUpdateGeneration;
+            mAnimatedWebpUiUpdateTexture = null;
+            mAnimatedWebpUiStateChanged = false;
+            mAnimatedWebpLastUiUpdateAt = SystemClock.uptimeMillis();
+        }
+        if (!mAnimatedWebpLifecycleResumed || generation != mAnimatedWebpLifecycleGeneration
+                || texture == null || texture != mAnimatedWebpTexture) return;
+        if (stateChanged) updateAnimatedWebpUi();
+        else if (mAnimatedWebpProgressVisible || mAnimatedWebpSeekAwaitingFrame) {
+            updateAnimatedWebpProgress(texture);
+        }
+    }
+
+    private void clearAnimatedWebpCallbacks() {
+        synchronized (mAnimatedWebpUiUpdateLock) {
+            mAnimatedWebpHandler.removeCallbacksAndMessages(null);
+            mAnimatedWebpUiUpdateTexture = null;
+            mAnimatedWebpUiStateChanged = false;
+            mAnimatedWebpProgressVisible = false;
+        }
     }
 
     @Override
-    public void onPlaybackCycleCompleted(ImageTexture texture) {
+    public void onPlaybackCycleCompleted(ImageTexture texture, long playbackGeneration) {
         boolean lifecycleResumed = mAnimatedWebpLifecycleResumed;
         int lifecycleGeneration = mAnimatedWebpLifecycleGeneration;
+        boolean seeking = mAnimatedWebpSeeking;
+        boolean playing = texture.isPlaybackPlaying();
         // The decoder callback can outlive a swipe before the main thread handles it.
         boolean swipeInProgress = mGalleryView != null && mGalleryView.isPageSwipeInProgress();
         mAnimatedWebpHandler.post(() -> {
             if (!lifecycleResumed || !mAnimatedWebpLifecycleResumed ||
                     lifecycleGeneration != mAnimatedWebpLifecycleGeneration ||
-                    texture != mAnimatedWebpTexture) return;
+                    texture != mAnimatedWebpTexture || seeking || mAnimatedWebpSeeking ||
+                    !playing || !texture.isPlaybackPlaying() ||
+                    playbackGeneration != texture.getPlaybackGeneration()) return;
             if (Settings.getAnimatedWebpAutoAdvance() && mGalleryView != null &&
                     !mPageSeeking &&
                     !swipeInProgress && !mGalleryView.isPageSwipeInProgress() &&
@@ -3611,7 +3955,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     speed, getResources().getDisplayMetrics().density);
         }
         mAnimatedWebpLongPressSpeedSelection.begin(
-                mAnimatedWebpLongPressTouchX, SystemClock.uptimeMillis());
+                mAnimatedWebpLongPressTouchX, mAnimatedWebpLongPressTouchY,
+                SystemClock.uptimeMillis());
         mAnimatedWebpLongPressActive = true;
         mAnimatedWebpLongPressCaptured = true;
         applyAnimatedWebpLongPressPlayback(texture,
@@ -3780,7 +4125,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
         private void onTapSliderArea() {
             if (mSeekBarPanel == null || mSize <= 0 || mCurrentIndex < 0
-                    || mAutoTransferPanel == null || mQuickSettingsPanel == null) {
+                    || mAutoTransferButton == null || mQuickSettingsPanel == null) {
                 return;
             }
 
@@ -3788,12 +4133,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
             if (mSeekBarPanel.getVisibility() == View.VISIBLE) {
                 hideSlider(mSeekBarPanel, mSeekBarPanelAnimator);
-                hideSlider(mAutoTransferPanel, mAutoTransferAnimator);
                 hideSlider(mQuickSettingsPanel, mQuickSettingsAnimator);
             } else {
                 updateQuickSettingsButtons();
                 showSlider(mSeekBarPanel, mSeekBarPanelAnimator);
-                showSlider(mAutoTransferPanel, mAutoTransferAnimator);
                 showSlider(mQuickSettingsPanel, mQuickSettingsAnimator);
                 updateAnimatedWebpUi();
                 SimpleHandler.getInstance().postDelayed(mHideSliderRunnable, HIDE_SLIDER_DELAY);
@@ -3822,6 +4165,18 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     break;
                 case KEY_SIZE:
                     GalleryActivity.this.mSize = mValue;
+                    if (mGalleryProvider instanceof RangeGalleryProvider range
+                            && !GalleryDownloadRangeStore.isRange(mGalleryInfo.gid)
+                            && EhApplication.getDownloadManager(GalleryActivity.this).containDownloadInfo(mGalleryInfo.gid)
+                            && mPendingReaderModeSwitch == null) {
+                        restartReaderForMode(rangeReaderIntent(false, range.getAnchorSourcePage()));
+                        break;
+                    }
+                    if (mGalleryProvider instanceof RangeGalleryProvider && mValue > 0) {
+                        if (mExistingResults != null) mExistingResults.getResultIndex().reload();
+                        mCurrentIndex = Math.min(mValue - 1, mGalleryProvider.getStartPage());
+                        if (mGalleryView != null) mGalleryView.setCurrentPage(mCurrentIndex);
+                    }
                     if (mPendingUpdateStart && mValue > 0 && mGalleryProvider != null) {
                         mPendingUpdateStart = false;
                         mCurrentIndex = Math.min(mValue - 1, mGalleryProvider.getStartPage());
@@ -3850,6 +4205,8 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 case KEY_CURRENT_INDEX:
                     GalleryActivity.this.mCurrentIndex = mValue;
                     if (mTranslationController != null) mTranslationController.onPageChanged(mValue);
+                    if (mSuperResolutionController != null) mSuperResolutionController.onPageChanged(mValue);
+                    if (mExistingResults != null) mExistingResults.onPageChanged(mValue);
                     updateLocalGalleryHistoryPage(mValue);
                     updateSlider();
                     updateProgress();

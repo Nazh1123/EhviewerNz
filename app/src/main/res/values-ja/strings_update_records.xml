@@ -23,7 +23,7 @@
     <string name="gallery_update_log_versions">バージョン履歴を表示</string>
     <string name="gallery_update_log_loading">更新履歴を読み込み中…</string>
     <string name="gallery_update_log_unavailable">更新履歴は利用できなくなりました</string>
-    <string name="gallery_update_reader_progress">追加 %1$d/%2$d · p%3$d</string>
+    <string name="gallery_update_reader_progress">追加 %1$d/%2$d · p%3$d/%4$d</string>
     <string name="gallery_update_finalizing">ギャラリー更新を仕上げ中</string>
     <string name="gallery_update_finalization_failed">ダウンロードは完了しましたが、更新の仕上げに失敗しました。ギャラリー詳細から再試行してください。</string>
     <string-array name="gallery_update_record_limit_entries">
@@ -79,4 +79,7 @@
     <string name="gallery_update_history_no_pages">この更新の追加ページはローカルで読めなくなりました。後の版で削除されたか、ローカルにない可能性があります。ページトークンの記録がない古い履歴は、元のローカル版でのみ読めます。</string>
     <string name="gallery_update_history_incomplete">ページ情報が不完全</string>
     <string name="gallery_update_history_empty">このバージョン系列の更新履歴はありません。保存件数の制限で古い履歴が削除された可能性があります。</string>
+    <string name="gallery_updated">更新済み</string>
+    <string name="gallery_read_full">ギャラリー全体を読む</string>
+    <string name="gallery_update_record_invalid">無効な更新記録</string>
 </resources>

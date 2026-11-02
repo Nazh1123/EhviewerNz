@@ -6,7 +6,8 @@ import kotlin.concurrent.read
 import kotlin.concurrent.write
 
 /** A read lease keeps model disposal behind every admitted native inference. */
-internal class ImageModel(files: NcnnModelFiles, threads: Int, halfPrecision: Boolean) : AutoCloseable {
+internal class ImageModel(files: NcnnModelFiles, threads: Int, halfPrecision: Boolean,
+                          useVulkan: Boolean = false) : SuperResolutionTileModel {
     private val lifecycle = ReentrantReadWriteLock()
     private var handle: Long
     @Volatile private var ocrReady = false
@@ -17,10 +18,12 @@ internal class ImageModel(files: NcnnModelFiles, threads: Int, halfPrecision: Bo
                     require(checkNotNull(param).endsWith(".param") && File(param).isFile && File(checkNotNull(bin)).isFile) {
                         "Image model files are missing"
                     }
-                    ImageInference.open(param, bin, threads, halfPrecision)
+                    if (useVulkan) ImageInference.openVulkan(param, bin)
+                    else ImageInference.open(param, bin, threads, halfPrecision)
                 } else {
                     require(graph != null && weights != null) { "Image model sources must use the same storage mode" }
-                    ImageInference.openDescriptors(graph.fd, weights.fd, threads, halfPrecision)
+                    if (useVulkan) ImageInference.openVulkanDescriptors(graph.fd, weights.fd)
+                    else ImageInference.openDescriptors(graph.fd, weights.fd, threads, halfPrecision)
                 }
             }
         }
@@ -53,6 +56,11 @@ internal class ImageModel(files: NcnnModelFiles, threads: Int, halfPrecision: Bo
         }
     }
     fun warmDetect() = detect(FloatArray(256 * 256 * 3), 256, 256, FloatArray(256 * 256), FloatArray(256 * 256))
+    override fun upscale(input: FloatArray, width: Int, height: Int, output: FloatArray) = use {
+        synchronized(ImageInference.parallelLock) {
+            check(ImageInference.upscale(it, input, width, height, output)) { "Super-resolution inference failed" }
+        }
+    }
     fun warmOcr() = recognize(FloatArray(48 * 64 * 3), 64, IntArray(15), FloatArray(15))
     override fun close() = lifecycle.write {
         if (handle != 0L) { ImageInference.close(handle); handle = 0L }
@@ -64,6 +72,9 @@ internal object ImageInference {
     val parallelLock = Any()
     external fun open(param: String, bin: String, threads: Int, halfPrecision: Boolean): Long
     external fun openDescriptors(paramFd: Int, weightsFd: Int, threads: Int, halfPrecision: Boolean): Long
+    external fun openVulkan(param: String, bin: String): Long
+    external fun openVulkanDescriptors(paramFd: Int, weightsFd: Int): Long
+    external fun vulkanDeviceName(): String?
     external fun close(handle: Long)
     external fun supportsFp16(): Boolean
     external fun detect(handle: Long, input: FloatArray, width: Int, height: Int,
@@ -71,4 +82,5 @@ internal object ImageInference {
     external fun recognize(handle: Long, input: FloatArray, width: Int,
                            indices: IntArray, probabilities: FloatArray): Boolean
     external fun inpaint(handle: Long, input: FloatArray, mask: FloatArray, size: Int, output: FloatArray): Boolean
+    external fun upscale(handle: Long, input: FloatArray, width: Int, height: Int, output: FloatArray): Boolean
 }

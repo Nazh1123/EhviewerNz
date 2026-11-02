@@ -58,6 +58,10 @@
     <string name="subscription">訂閲</string>
     <string name="whats_hot">熱門</string>
     <string name="top_lists">排行榜</string>
+    <string name="top_list_click_to_view">點擊以查看</string>
+    <string name="settings_yesterday_top_list_new_badge">昨日排行榜未讀提醒</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">未查看昨日排行榜時，在側邊欄「排行榜」右側顯示 New!，每天 UTC 00:05 重設</string>
+    <string name="navigation_long_press_hint">長按按鈕以執行特殊操作</string>
     <string name="favourite">收藏</string>
     <string name="history">歷史</string>
     <string name="downloads">下載</string>
@@ -231,6 +235,8 @@
 
     <string name="search_normal">一般搜尋</string>
     <string name="search_advance">進階選項</string>
+    <string name="search_more_options">更多搜尋條件</string>
+    <string name="search_hide_options">收起搜尋條件</string>
     <string name="search_image">圖片搜尋</string>
     <string name="search_normal_search">一般搜尋</string>
     <string name="search_subscription_search">訂閲搜尋</string>
@@ -441,6 +447,9 @@
     <string name="download_remove_dialog_message">從下載列表移除 %s ？</string>
     <string name="download_remove_dialog_message_2">從下載列表移除 %d 項？</string>
     <string name="download_remove_dialog_check_text">刪除圖檔</string>
+    <string name="download_remove_record">僅刪除記錄</string>
+    <string name="download_redownload">重新下載</string>
+    <string name="download_remove_files">刪除記錄和本機檔案</string>
     <string name="download_delete_empty_labels">刪除空標籤</string>
     <string name="download_delete_empty_labels_message">刪除 %d 個沒有畫廊的下載標籤？</string>
     <string name="download_delete_empty_labels_none">沒有空下載標籤</string>
@@ -760,8 +769,6 @@
     <string name="settings_advanced_proxy_summary_1">%1$s %2$s:%3$d</string>
     <string name="settings_advanced_proxy_summary_2">%1$s</string>
     <string name="settings_advanced_app_language_title">App 界面語言</string>
-    <string name="settings_search_language">搜尋語言標籤</string>
-    <string name="settings_search_language_disabled">關閉</string>
     <string name="settings_advanced_built_in_hosts_title">內置 hosts.txt</string>
     <string name="settings_advanced_built_in_hosts_summary">應用提供的主機到IP的映射\n可被自定義 hosts.txt 覆蓋</string>
     <string name="settings_advanced_custom_hosts_title">自定義 hosts.txt</string>
@@ -969,6 +976,7 @@
     <string name="cleanup_toplists">整理 排行榜</string>
     <string name="rating_reviewing_toplists">等級&#038;審核 排行榜</string>
     <string name="top_list">排行榜</string>
+    <string name="top_list_period_title">%1$s 排行榜</string>
 
     <string name="all_time_top_list">有史以來</string>
     <string name="past_year_top_list">過去一年</string>
@@ -1138,8 +1146,8 @@
     <string name="settings_animated_webp_auto_transfer_button">自動翻頁按鈕</string>
     <string name="settings_animated_webp_auto_transfer_button_summary">叫出頁面滑動列時顯示自動翻頁的播放／暫停按鈕</string>
     <string name="settings_animated_webp_long_press_speed">長按倍速</string>
-    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 長按螢幕中下區域，以 %1$sx 倍速播放；設為 1.0 時長按改為叫出選單；長按後可透過水平移動更改倍率</string>
-    <string name="animated_webp_long_press_speed_hint">%1$sx，拖曳以變更</string>
+    <string name="settings_animated_webp_long_press_speed_summary">%1$sx - 長按螢幕中下區域，以 %1$sx 倍速播放；設為 1.0 時長按改為叫出選單；長按後可透過水平移動更改倍率；向上滑動可立即鎖定目前倍率</string>
+    <string name="animated_webp_long_press_speed_hint">%1$sx，左右調速，上滑鎖定</string>
     <string name="animated_webp_long_press_speed_value">%1$sx</string>
     <string name="settings_animated_webp_long_press_speed_invalid">請輸入 0.1–3.0 範圍內最多一位小數的數值</string>
 
@@ -1209,7 +1217,7 @@
     <string name="settings_eh_show_thumbnail_info_details">日期、評分、打碼類型、閱讀進度</string>
     <string name="settings_eh_show_thumbnail_info_highlight">色彩高亮</string>
     <string name="settings_gallery_long_press_quick_download">畫廊長按快速下載</string>
-    <string name="settings_gallery_long_press_quick_download_summary">長按畫廊項目的指定區域即可快速開始下載</string>
+    <string name="settings_gallery_long_press_quick_download_summary">開啟後，列表模式長按封面快速下載；縮圖模式啟用額外資訊列時，長按封面左下角或資訊列左半區打開放大預覽，點擊螢幕或返回關閉，長按封面右下角或資訊列右半區快速下載。關閉後恢復原本的長按行為</string>
     <string name="settings_eh_system_theme">系統主題</string>
     <string name="settings_fork_auto_subscription_updates">自動獲取訂閱更新</string>
     <string name="settings_fork_auto_subscription_updates_eh">自動更新 EH訂閱</string>
@@ -1219,7 +1227,7 @@
     <string name="settings_fork_auto_subscription_update_interval_invalid">請輸入有效的正整數分鐘數</string>
     <string name="settings_fork_subscription_update_minutes">分鐘</string>
     <string name="settings_fork_bookmark_subscription_summary">點擊此項目或在書籤欄設定中為書籤新增訂閱。後可在側邊欄中點選「書籤訂閱」以查看依據時間排序的符合書籤條件的所有畫廊</string>
-    <string name="settings_fork_features">Fork功能雜項</string>
+    <string name="settings_fork_features">Fork 雜項</string>
     <string name="settings_fork_category_gallery">畫廊與搜尋</string>
     <string name="settings_fork_category_reading">閱讀與儲存</string>
     <string name="settings_fork_category_animated_webp">動態 WebP</string>
@@ -1315,4 +1323,8 @@
     <string name="gallery_detail_back_to_top">回到最上方</string>
     <string name="settings_show_viewed_galleries">顯示已瀏覽畫廊</string>
     <string name="settings_show_viewed_galleries_summary">記錄畫廊搜索結果中的最新畫廊，用於後續執行相同條件的搜索時，標記已瀏覽過的畫廊。</string>
+    <string name="title_keyword_search_action">搜尋關鍵字</string>
+    <string name="settings_subscription_homepage_scan">掃描首頁以檢查訂閱更新</string>
+    <string name="settings_subscription_homepage_scan_summary">手動與自動檢查更新時，若訂閱書籤數 N &gt; 8、距上次更新的分鐘數 T &lt; 400，且 T × 0.3 &lt; N，則自動掃描首頁；其他情況與複雜搜尋使用書籤搜尋。切換方式時保留檢查進度，書籤訂閱的瀏覽方式不變。</string>
+    <string name="open_image_folder">開啟同資料夾圖片</string>
 </resources>

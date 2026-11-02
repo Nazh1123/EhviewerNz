@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_method">更新方法</string>
+    <string name="app_update_method_description">リリースページを開くか、ここで APK をダウンロードして完了後にインストーラーを開きます。</string>
+    <string name="app_update_open_release">リリースを開く</string>
+    <string name="app_update_direct_download">直接ダウンロード</string>
+    <string name="app_update_no_apk">このリリースにはダウンロード対象を一意に決定できる APK がありません。リリースページからダウンロードしてください。</string>
+    <string name="app_update_download_title">EhViewerNz の更新</string>
+    <string name="app_update_downloading">更新をダウンロード中…</string>
+    <string name="app_update_progress">更新をダウンロード中：%1$d%%</string>
+    <string name="app_update_waiting_network">ダウンロードを一時停止しました。ネットワークの復旧またはシステムの再試行を待っています…</string>
+    <string name="app_update_ready">ダウンロードが完了しました。インストールできます。</string>
+    <string name="app_update_install">インストール</string>
+    <string name="app_update_install_permission">システム設定でこのアプリから不明なアプリをインストールすることを許可し、戻ってインストールを続けてください。</string>
+    <string name="app_update_install_failed">インストーラーを開けませんでした。再試行するか、リリースページからダウンロードしてください。</string>
+    <string name="app_update_download_failed">ダウンロードに失敗しました。接続と空き容量を確認して再試行するか、リリースページを開いてください。</string>
+    <string name="app_update_retry">ダウンロードを再試行</string>
+</resources>

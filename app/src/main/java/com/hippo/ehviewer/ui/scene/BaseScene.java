@@ -185,6 +185,14 @@ public abstract class BaseScene extends SceneFragment {
         return null;
     }
 
+    public boolean isDrawerFullWidth() {
+        return false;
+    }
+
+    /** Called only when this scene's right drawer has completely opened. */
+    public void onDrawerOpened() {
+    }
+
     public final void destroyDrawerView() {
         if (drawerView != null) {
             drawerViewState = new SparseArray<>();

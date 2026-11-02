@@ -364,6 +364,7 @@ static bool decode_animation(WEBP* webp, const uint8_t* data, size_t length,
 
   WebPIterator iter;
   if (!WebPDemuxGetFrame(webp->demux, 1, &iter)) return false;
+  unsigned int replay_start = 0;
   do {
     const unsigned int index = (unsigned int) iter.frame_num - 1u;
     if (index >= webp->frame_count) continue;
@@ -382,6 +383,14 @@ static bool decode_animation(WEBP* webp, const uint8_t* data, size_t length,
     frame->blend_method = iter.blend_method;
     frame->has_alpha = iter.has_alpha != 0;
     frame->decoded_opaque = frame->has_alpha ? -1 : 1;
+    if (index == 0 || (iter.x_offset == 0 && iter.y_offset == 0
+        && (unsigned int) iter.width == source_width
+        && (unsigned int) iter.height == source_height
+        && (!frame->has_alpha || frame->blend_method == WEBP_MUX_NO_BLEND))) {
+      replay_start = index;
+    }
+    frame->replay_start = replay_start;
+    frame->start = webp->total_duration;
     if (webp->total_duration <= INT_MAX - frame->duration) {
       webp->total_duration += frame->duration;
     } else {
@@ -545,6 +554,7 @@ int WEBP_get_byte_count(WEBP* webp) {
   }
   size += webp->alpha_temp_buffer_size;
   size += webp->upload_buffer_size;
+  size += image_seek_cache_size(&webp->seek_cache);
   return size > INT_MAX ? INT_MAX : (int) size;
 }
 
@@ -593,52 +603,125 @@ bool WEBP_present_prepared_frame(WEBP* webp) {
   return looped;
 }
 
-int WEBP_seek_to(WEBP* webp, int position_ms) {
-  if (webp == NULL || !webp->animated || webp->demux == NULL) return 0;
+static unsigned int webp_frame_at_position(WEBP* webp, int position_ms) {
   if (position_ms < 0) position_ms = 0;
   if (position_ms >= webp->total_duration) position_ms = webp->total_duration - 1;
-  int frame_start = 0;
   unsigned int target = 0;
-  for (unsigned int i = 0; i < webp->frame_count; ++i) {
-    target = i;
-    if (position_ms < frame_start + webp->frames[i].duration) break;
-    frame_start += webp->frames[i].duration;
+  unsigned int end = webp->frame_count;
+  while (target + 1u < end) {
+    const unsigned int middle = target + (end - target) / 2u;
+    if (webp->frames[middle].start <= position_ms) target = middle;
+    else end = middle;
   }
+  return target;
+}
+
+int WEBP_seek_step(WEBP* webp, int position_ms) {
+  if (webp == NULL || !webp->animated || webp->demux == NULL) return IMAGE_SEEK_FAILED;
+  const unsigned int target = webp_frame_at_position(webp, position_ms);
+  webp->frame_prepared = false;
+  if (webp->current_frame < webp->frame_count) {
+    image_seek_cache_store(&webp->seek_cache, webp->current_frame,
+                           webp->current_frame_buffer, NULL, webp->frame_buffer_size);
+  }
+  if (webp->current_frame == target) return webp->frames[target].start;
+
+  const unsigned int base = webp->frames[target].replay_start;
+  const bool can_continue = webp->current_frame <= target && webp->current_frame >= base;
+  const unsigned int first = can_continue ? webp->current_frame + 1u : base;
+  const unsigned int restored = image_seek_cache_restore(&webp->seek_cache, first, target,
+      webp->next_frame_buffer, NULL, webp->frame_buffer_size);
+  if (restored != IMAGE_SEEK_CACHE_MISS) {
+    WEBP_lock_pixels(webp);
+    unsigned char* previous = webp->current_frame_buffer;
+    webp->current_frame_buffer = webp->next_frame_buffer;
+    webp->next_frame_buffer = previous;
+    webp->current_frame = restored;
+    add_full_dirty_rect(webp);
+    WEBP_unlock_pixels(webp);
+  }
+  if (webp->current_frame != target) {
+    const unsigned int next = webp->current_frame < target && webp->current_frame >= base
+        ? webp->current_frame + 1u : base;
+    // An independent full-canvas frame can be decoded directly. Otherwise
+    // compose exactly one dependency and let the caller reread its live target.
+    if (!decode_frame(webp, next, false, true)) return IMAGE_SEEK_FAILED;
+    image_seek_cache_store(&webp->seek_cache, webp->current_frame,
+                           webp->current_frame_buffer, NULL, webp->frame_buffer_size);
+  }
+  return webp->frames[webp->current_frame].start;
+}
+
+int WEBP_seek_to(WEBP* webp, int position_ms,
+                 ImageSeekCancelled cancelled, void* context) {
+  if (webp == NULL || !webp->animated || webp->demux == NULL) return IMAGE_SEEK_FAILED;
+  const unsigned int target = webp_frame_at_position(webp, position_ms);
+  const int frame_start = webp->frames[target].start;
+  if (cancelled != NULL && cancelled(context)) return IMAGE_SEEK_CANCELLED;
   if (target == webp->current_frame) return frame_start;
 
-  WEBP_lock_pixels(webp);
+  // Keep the published canvas immutable throughout replay. Borrow the back
+  // canvas and allocate just one temporary canvas; no pixel lock is needed
+  // until the completed result replaces the published canvas.
+  unsigned char* scratch = (unsigned char*) malloc(webp->frame_buffer_size);
+  if (scratch == NULL) return IMAGE_SEEK_FAILED;
+  WEBP work = {0};
+  work.width = webp->width;
+  work.height = webp->height;
+  work.frame_count = webp->frame_count;
+  work.frame_buffer_size = webp->frame_buffer_size;
+  work.frames = webp->frames;
+  work.demux = webp->demux;
+  work.current_frame = webp->current_frame;
+  work.current_frame_buffer = scratch;
+  work.next_frame_buffer = webp->next_frame_buffer;
+  work.alpha_temp_buffer = webp->alpha_temp_buffer;
+  work.alpha_temp_buffer_size = webp->alpha_temp_buffer_size;
   webp->frame_prepared = false;
   unsigned int first_frame;
   if (target < webp->current_frame) {
-    webp->current_frame = UINT_MAX;
-    memset(webp->current_frame_buffer, 0, webp->frame_buffer_size);
-    memset(webp->next_frame_buffer, 0, webp->frame_buffer_size);
+    work.current_frame = UINT_MAX;
     first_frame = 0;
   } else {
+    memcpy(scratch, webp->current_frame_buffer, webp->frame_buffer_size);
     first_frame = webp->current_frame + 1u;
   }
+  int result = frame_start;
   for (unsigned int i = first_frame; i <= target; ++i) {
-    if (!decode_frame(webp, i, true, true)) {
-      WEBP_unlock_pixels(webp);
-      return WEBP_get_current_position(webp);
+    if (cancelled != NULL && cancelled(context)) {
+      result = IMAGE_SEEK_CANCELLED;
+      break;
+    }
+    if (!decode_frame(&work, i, true, true)) {
+      result = IMAGE_SEEK_FAILED;
+      break;
     }
   }
-  // The GPU may still contain the image from before an arbitrary multi-frame
-  // seek. Synchronize it with one safe full upload.
-  add_full_dirty_rect(webp);
-  WEBP_unlock_pixels(webp);
-  return frame_start;
+  // Replay can grow the alpha staging buffer even when it is cancelled.
+  webp->alpha_temp_buffer = work.alpha_temp_buffer;
+  webp->alpha_temp_buffer_size = work.alpha_temp_buffer_size;
+  if (result >= 0 && cancelled != NULL && cancelled(context)) {
+    result = IMAGE_SEEK_CANCELLED;
+  }
+  if (result >= 0) {
+    WEBP_lock_pixels(webp);
+    unsigned char* previous = webp->current_frame_buffer;
+    webp->current_frame_buffer = work.current_frame_buffer;
+    webp->next_frame_buffer = previous;
+    webp->current_frame = target;
+    add_full_dirty_rect(webp);
+    WEBP_unlock_pixels(webp);
+    free(work.next_frame_buffer);
+  } else {
+    free(scratch);
+  }
+  return result;
 }
 
 int WEBP_get_current_position(WEBP* webp) {
-  int position = 0;
   if (webp == NULL || webp->frames == NULL
       || webp->current_frame >= webp->frame_count) return 0;
-  for (unsigned int i = 0; i < webp->current_frame; ++i) {
-    if (position > INT_MAX - webp->frames[i].duration) return INT_MAX;
-    position += webp->frames[i].duration;
-  }
-  return position;
+  return webp->frames[webp->current_frame].start;
 }
 
 int WEBP_get_total_duration(WEBP* webp) {
@@ -660,6 +743,7 @@ bool WEBP_is_opaque(WEBP* webp) { return webp != NULL && webp->is_opaque; }
 void WEBP_recycle(JNIEnv* env, WEBP* webp) {
   (void) env;
   if (webp == NULL) return;
+  image_seek_cache_clear(&webp->seek_cache);
   if (webp->demux != NULL) WebPDemuxDelete(webp->demux);
   free(webp->buffer);
   free(webp->current_frame_buffer);

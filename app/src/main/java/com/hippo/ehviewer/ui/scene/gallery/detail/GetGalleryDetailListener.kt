@@ -20,10 +20,12 @@ class GetGalleryDetailListener(
             return
         }
         // Put gallery detail to cache
+        result.fetchedAtElapsed = android.os.SystemClock.elapsedRealtime()
         EhApplication.getGalleryDetailCache(application).put(result.gid, result)
 
-        // Add history
-        EhDB.putHistoryInfo(result)
+        // Persist independently; a database lock must not delay displaying received details.
+        val history = com.hippo.ehviewer.dao.HistoryInfo(result)
+        EhApplication.getExecutorService(application).execute { EhDB.putHistoryInfo(history) }
 
         // Save tags
         val syncTask = GalleryDetailTagsSyncTask(result)

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_prefer_existing_results">แสดงผลลัพธ์ที่มีอยู่</string>
+    <string name="reader_prefer_existing_results_help">แสดงผลลัพธ์ที่บันทึกไว้แม้ปิดการประมวลผล แตะไอคอนลอยเพื่อสลับระหว่างภาพต้นฉบับกับผลลัพธ์ หน้าที่ไม่มีผลลัพธ์จะแสดงภาพต้นฉบับ โดยไม่เริ่มใช้งานโมเดล</string>
+    <string name="reader_show_original">แสดงภาพต้นฉบับ</string>
+    <string name="reader_show_translation_result">แสดงผลการแปล</string>
+    <string name="reader_show_enhanced_result">แสดงผลการเพิ่มความละเอียด</string>
+    <string name="result_import">นำเข้าผลลัพธ์จากโฟลเดอร์</string>
+    <string name="result_import_running">กำลังนำเข้าภาพแปลและภาพเพิ่มความละเอียดที่สมบูรณ์สำหรับแกลเลอรีนี้…</string>
+    <string name="result_import_report">นำเข้าภาพแปล: %1$d\nนำเข้าภาพเพิ่มความละเอียด: %2$d\nข้าม: %3$d\nไม่สำเร็จ: %4$d\n\nนำเข้าเฉพาะภาพที่สมบูรณ์และยืนยันหน้าต้นฉบับได้ โดยไม่คำนวณแฮชของภาพต้นฉบับ ผลลัพธ์ในแคชยังคงอยู่ภายใต้ขีดจำกัดแคชของคุณ</string>
+    <string name="result_import_failed">นำเข้าผลลัพธ์ไม่ได้ ภาพที่มีอยู่ยังคงเดิม</string>
+</resources>

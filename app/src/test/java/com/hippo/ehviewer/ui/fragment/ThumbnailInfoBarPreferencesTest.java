@@ -51,11 +51,14 @@ public class ThumbnailInfoBarPreferencesTest {
         activity.finish();
     }
 
-    @Test public void bothEntriesFollowInfoSubitemsAndRecordLimitEntriesUseSharedKey() throws Exception {
+    @Test public void searchOwnsThumbnailSettingsAndRecordLimitEntriesUseSharedKey() throws Exception {
         List<String> eh = keys(R.xml.eh_settings), fork = keys(R.xml.fork_features_settings);
+        List<String> search = keys(R.xml.search_settings);
+        assertEquals(search.indexOf(Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT) + 1,
+                search.indexOf(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE));
         for (List<String> list : new List[]{eh, fork}) {
-            assertEquals(list.indexOf(Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT) + 1,
-                    list.indexOf(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE));
+            assertFalse(list.contains(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR));
+            assertFalse(list.contains(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE));
         }
         assertEquals(eh.indexOf(Settings.KEY_HISTORY_INFO_SIZE) + 1,
                 eh.indexOf(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));

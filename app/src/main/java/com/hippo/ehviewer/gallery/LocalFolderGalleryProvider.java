@@ -172,6 +172,11 @@ public final class LocalFolderGalleryProvider extends GalleryProvider2 implement
                 : image.relativePath.substring(0, image.relativePath.length() - extension.length() - 1);
     }
 
+    @Override public String getResultPageName(int index) {
+        LocalFolderGalleryScanner.ImageEntry image = getImage(index);
+        return image != null ? image.relativePath : getTranslationFilename(index);
+    }
+
     @Override
     public boolean save(int index, @NonNull UniFile destination) {
         LocalFolderGalleryScanner.ImageEntry image = getImage(index);

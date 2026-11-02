@@ -2,7 +2,10 @@ package com.hippo.ehviewer.ui;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -15,6 +18,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
+import androidx.appcompat.content.res.AppCompatResources;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.hippo.ehviewer.EhApplication;
@@ -29,6 +33,7 @@ import com.hippo.ehviewer.client.data.PreviewSet;
 import com.hippo.ehviewer.gallery.EhGalleryProvider;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
 import com.hippo.ehviewer.gallery.ReaderPreviewLoader;
+import com.hippo.ehviewer.gallery.ReaderResultIndex;
 import com.hippo.ehviewer.widget.ReaderPreviewRecyclerView;
 import com.hippo.lib.image.Image;
 import com.hippo.widget.LoadImageView;
@@ -57,6 +62,10 @@ final class ReaderPagePreview implements AutoCloseable {
     private final ReaderPreviewLoader localLoader;
     private final IntConsumer onSelected;
     private final IntConsumer onBrowsed;
+    private ReaderResultIndex resultIndex;
+    private final Runnable resultsChanged = () -> {
+        if (this.visible && !this.closed) for (Card card : attached) bindResults(card);
+    };
     private final LruCache<String, Long> failures = new LruCache<>(128);
     private final Set<String> downloading = new HashSet<>();
     private int edge;
@@ -152,6 +161,18 @@ final class ReaderPagePreview implements AutoCloseable {
     }
 
     boolean isVisible() { return visible && !closed; }
+
+    void setResultIndex(ReaderResultIndex index) {
+        if (resultIndex != null) resultIndex.removeListener(resultsChanged);
+        resultIndex = index;
+        if (index != null) index.addListener(resultsChanged);
+        resultsChanged.run();
+    }
+
+    private void bindResults(Card card) {
+        card.label.setResultFlags(resultIndex == null ? 0 : resultIndex.flags(card.page));
+        if (resultIndex != null && card.page >= 0) resultIndex.request(card.page);
+    }
 
     void show(int page, int count, boolean rightToLeft) {
         if (closed || count <= 0) return;
@@ -254,6 +275,7 @@ final class ReaderPagePreview implements AutoCloseable {
         hide();
         closed = true;
         localLoader.close();
+        setResultIndex(null);
         row.removeOnScrollListener(scrollListener);
         row.removeOnLayoutChangeListener(layoutListener);
         if (row instanceof ReaderPreviewRecyclerView) ((ReaderPreviewRecyclerView) row).setViewportWidthListener(null);
@@ -286,6 +308,7 @@ final class ReaderPagePreview implements AutoCloseable {
     }
 
     private void bindCached(Card card) {
+        bindResults(card);
         Bitmap bitmap = localLoader.get(card.page);
         if (bitmap != null && card.image.preview == null && card.image.getDrawable() == null) bindLocal(card, bitmap);
         else if (bitmap != null && card.image.preview != null) bindLocal(card, bitmap);
@@ -456,6 +479,7 @@ final class ReaderPagePreview implements AutoCloseable {
             card.clearImage();
             card.page = page;
             card.label.setText(Integer.toString(page + 1));
+            bindResults(card);
             card.itemView.setContentDescription(context.getString(R.string.reader_page_preview_page, page + 1));
             card.resize();
             if (visible) bindCached(card);
@@ -478,7 +502,7 @@ final class ReaderPagePreview implements AutoCloseable {
     private final class Card extends RecyclerView.ViewHolder {
         final LinearLayout container;
         final PreviewImage image;
-        final TextView label;
+        final ResultLabel label;
         int page = -1;
         Card(Context ui) {
             super(new LinearLayout(ui));
@@ -489,7 +513,7 @@ final class ReaderPagePreview implements AutoCloseable {
             image = new PreviewImage(ui, this);
             image.setScaleType(ImageView.ScaleType.FIT_CENTER);
             container.addView(image, new LinearLayout.LayoutParams(-1, imageHeight));
-            label = new TextView(ui);
+            label = new ResultLabel(ui);
             label.setGravity(Gravity.CENTER); label.setTextColor(0xFFFFFFFF); label.setTextSize(13);
             container.addView(label, new LinearLayout.LayoutParams(-1, dp(24)));
             container.setLayoutParams(new RecyclerView.LayoutParams(itemWidth, imageHeight + dp(30)));
@@ -510,6 +534,47 @@ final class ReaderPagePreview implements AutoCloseable {
         void clearImage() {
             if (image.preview != null) downloading.remove(image.preview.getImageKey());
             image.unload(); image.preview = null; image.missed = false; image.network = false;
+        }
+    }
+
+    /** Draw beside the centered digits without extra views or an asymmetric compound-drawable layout. */
+    private final class ResultLabel extends TextView {
+        private final Drawable translation;
+        private final Drawable enhanced;
+        private final Rect digits = new Rect();
+        private int flags;
+        ResultLabel(Context context) {
+            super(context);
+            translation = icon(context, R.drawable.v_translate_x24);
+            enhanced = icon(context, R.drawable.v_super_resolution_x24);
+        }
+        private Drawable icon(Context context, int resource) {
+            Drawable drawable = AppCompatResources.getDrawable(context, resource).mutate();
+            drawable.setTint(0xFFFFFFFF);
+            drawable.setAlpha(120);
+            return drawable;
+        }
+        void setResultFlags(int value) {
+            if (flags != value) { flags = value; invalidate(); }
+        }
+        @Override protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            if (flags == 0) return;
+            getPaint().getTextBounds("0", 0, 1, digits);
+            int edge = Math.max(1, digits.height());
+            int top = Math.round(getBaseline() + (digits.top + digits.bottom - edge) / 2f);
+            float halfWidth = getPaint().measureText(getText(), 0, getText().length()) / 2f;
+            float center = (getWidth() + getPaddingLeft() - getPaddingRight()) / 2f;
+            if ((flags & ReaderResultIndex.TRANSLATION) != 0) {
+                int right = Math.round(center - halfWidth - dp(4));
+                translation.setBounds(right - edge, top, right, top + edge);
+                translation.draw(canvas);
+            }
+            if ((flags & ReaderResultIndex.SUPER_RESOLUTION) != 0) {
+                int left = Math.round(center + halfWidth + dp(4));
+                enhanced.setBounds(left, top, left + edge, top + edge);
+                enhanced.draw(canvas);
+            }
         }
     }
 

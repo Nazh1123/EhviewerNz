@@ -20,9 +20,10 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="@dimen/keyline_margin"
-    android:divider="@drawable/spacer_keyline"
-    android:showDividers="middle">
+    android:paddingLeft="@dimen/keyline_margin"
+    android:paddingRight="@dimen/keyline_margin"
+    android:paddingTop="@dimen/gallery_detail_comments_padding_vertical"
+    android:paddingBottom="@dimen/gallery_detail_comments_padding_vertical">
 
     <TextView
         android:id="@+id/comments_text"
@@ -30,5 +31,10 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
         android:textColor="?attr/textColorThemeAccent"/>
+
+    <include
+        android:id="@+id/comments_more"
+        layout="@layout/gallery_detail_more_indicator"
+        android:visibility="gone"/>
 
 </LinearLayout>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="torrent_seeds">シード %1$s</string>
+    <string name="torrent_peers">ダウンロード中 %1$s</string>
+    <string name="torrent_downloads">累計ダウンロード %1$s</string>
+    <string name="torrent_open">開く</string>
+    <string name="torrent_cannot_open">このトレントを開けません。ファイルが存在し、対応アプリがインストールされているか確認してください。</string>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_results_directory">Archive result folder</string>
+    <string name="archive_results_permission_message">Select the folder containing this archive and allow reading and writing. Translation and enhancement results will be saved beside it in “full archive filename.results” and can be reused when reopened. Cancelling does not affect reading or saving individual images.</string>
+    <string name="archive_results_choose_parent">Choose containing folder</string>
+    <string name="archive_results_wrong_parent">Folder access was not granted. Select the folder directly containing this archive and allow reading and writing.</string>
+</resources>

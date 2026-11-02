@@ -28,6 +28,9 @@ import java.util.Arrays;
  */
 public class GalleryDetail extends GalleryInfo {
 
+    /** Monotonic fetch time; unknown/restored legacy data must be revalidated. */
+    public long fetchedAtElapsed = -1L;
+
     public long apiUid = -1L;
     public String apiKey;
     public int torrentCount;
@@ -150,6 +153,7 @@ public class GalleryDetail extends GalleryInfo {
            n.token = params[length-1];
            n.gid = Long.parseLong(params[length-2]);
            n.newVersions = null;
+           n.fetchedAtElapsed = -1L;
            return n;
        }catch (Throwable e){
            return this;
