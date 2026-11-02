@@ -1783,7 +1783,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         int textPadding = offline ? getResources().getDimensionPixelSize(R.dimen.keyline_margin) : 0;
         mRatingText.setPadding(textPadding, 0, textPadding, 0);
         mComments.setVisibility(offline || Settings.getShowGalleryComment() ? View.VISIBLE : View.GONE);
-        mCommentsText.setVisibility(offline || Settings.getShowGalleryComment() ? View.VISIBLE : View.GONE);
+        if (offline) mCommentsText.setVisibility(View.VISIBLE);
         mFavoredTimes.setVisibility(offline ? View.GONE : View.VISIBLE);
         mDownload.setEnabled(true);
         mRead.setEnabled(true);
@@ -2026,22 +2026,37 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             return;
         }
 
-        mComments.removeViews(0, mComments.getChildCount() - 1);
+        // Keep the empty/offline message and the shared more indicator at the end.
+        mComments.removeViews(0, mComments.getChildCount() - 2);
 
         final int maxShowCount = 2;
-        if (comments == null || comments.length == 0) {
+        boolean hasComments = comments != null && comments.length > 0;
+        boolean hasMore = hasComments && comments.length > maxShowCount;
+        View more = mComments.findViewById(R.id.comments_more);
+        more.setVisibility(hasMore ? View.VISIBLE : View.GONE);
+        more.setContentDescription(context.getString(R.string.more_comment));
+        mCommentsText.setVisibility(hasComments ? View.GONE : View.VISIBLE);
+
+        Resources resources = context.getResources();
+        LinearLayout.LayoutParams moreParams = (LinearLayout.LayoutParams) more.getLayoutParams();
+        moreParams.topMargin = resources.getDimensionPixelSize(R.dimen.gallery_detail_comments_more_spacing);
+        int padding = resources.getDimensionPixelSize(R.dimen.gallery_detail_comments_padding_vertical);
+        mComments.setPadding(mComments.getPaddingLeft(), padding, mComments.getPaddingRight(),
+                hasMore ? 0 : padding);
+        if (!hasComments) {
             mCommentsText.setText(R.string.no_comments);
             return;
-        } else if (comments.length <= maxShowCount) {
-            mCommentsText.setText(R.string.no_more_comments);
-        } else {
-            mCommentsText.setText(R.string.more_comment);
         }
 
         int length = Math.min(maxShowCount, comments.length);
+        int commentSpacing = resources.getDimensionPixelSize(R.dimen.gallery_detail_comment_spacing);
         for (int i = 0; i < length; i++) {
             GalleryComment comment = comments[i];
             View v = inflater.inflate(R.layout.item_gallery_comment, mComments, false);
+            // Let the section own vertical spacing; keep the full comments page's item layout intact.
+            v.setPadding(v.getPaddingLeft(), 0, v.getPaddingRight(), 0);
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) v.getLayoutParams();
+            lp.topMargin = i == 0 ? 0 : commentSpacing;
             mComments.addView(v, i);
             TextView user = v.findViewById(R.id.user);
             user.setText(comment.user);
