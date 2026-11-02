@@ -26,6 +26,8 @@ import android.graphics.Canvas;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.InputFilter;
+import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.TextWatcher;
 import android.util.AttributeSet;
@@ -58,6 +60,7 @@ public class SearchEditText extends AppCompatEditText {
 
     private SearchEditTextListener mListener;
     private final Object editingTag = new Object();
+    private final Object inputSeparator = new Object();
     private boolean ready;
     private boolean changing;
     private boolean adjustingSelection;
@@ -127,10 +130,45 @@ public class SearchEditText extends AppCompatEditText {
             @Override public void afterTextChanged(Editable text) {
                 if (updatingRows) return;
                 changing = false;
+                int separator = text.getSpanStart(inputSeparator);
+                if (separator >= 0) {
+                    // Keep typing before an inserted suffix, rather than starting another term.
+                    if (getSelectionStart() == separator + 1 && getSelectionEnd() == separator + 1) {
+                        setSelection(separator);
+                    }
+                    text.removeSpan(inputSeparator);
+                }
                 refreshTagChips(insertedCount > 1 && !composing && text.getSpanStart(editingTag) < 0);
                 scheduleRefresh();
             }
         });
+        InputFilter[] filters = getFilters();
+        InputFilter[] chipFilters = java.util.Arrays.copyOf(filters, filters.length + 1);
+        chipFilters[filters.length] = this::separateInputFromChips;
+        setFilters(chipFilters);
+    }
+
+    /** A collapsed chip is a complete term, even if the caret is moved against its edge. */
+    private CharSequence separateInputFromChips(CharSequence source, int start, int end,
+            Spanned dest, int replaceStart, int replaceEnd) {
+        if (start == end) return null;
+        boolean before = false, after = false;
+        for (SearchTagChipSpan chip : dest.getSpans(0, dest.length(), SearchTagChipSpan.class)) {
+            before |= dest.getSpanEnd(chip) == replaceStart
+                    && !SearchQueryTokenizer.isSeparator(source.charAt(start));
+            after |= dest.getSpanStart(chip) == replaceEnd
+                    && !SearchQueryTokenizer.isSeparator(source.charAt(end - 1));
+        }
+        if (!before && !after) return null;
+        SpannableStringBuilder separated = new SpannableStringBuilder();
+        if (before) separated.append(' ');
+        separated.append(source, start, end);
+        if (after) {
+            separated.append(' ');
+            separated.setSpan(inputSeparator, separated.length() - 1, separated.length(),
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+        return separated;
     }
 
     /** Programmatic queries (history, presets, restored searches) are already committed. */
@@ -142,6 +180,20 @@ public class SearchEditText extends AppCompatEditText {
         if (getText() != null) getText().removeSpan(editingTag);
         setText(query);
         refreshTagChips(true);
+    }
+
+    /** Restored searches are trimmed; leave room to type after a committed final chip. */
+    public void prepareForEditing() {
+        Editable text = getText();
+        if (text == null || text.length() == 0
+                || getSelectionStart() != text.length() || getSelectionEnd() != text.length()) return;
+        for (SearchTagChipSpan chip : chips()) {
+            if (text.getSpanEnd(chip) == text.length()) {
+                text.append(' ');
+                setSelection(text.length());
+                return;
+            }
+        }
     }
 
     public void setTagChipsEnabled(boolean enabled) {
@@ -489,7 +541,10 @@ public class SearchEditText extends AppCompatEditText {
             replacement += " ";
         }
         text.replace(range.start(), range.end(), replacement);
-        setSelection(range.start() + replacement.length());
+        int caret = range.start() + replacement.length();
+        // Reuse existing separators, but put the next input after them rather than in the tag.
+        while (caret < text.length() && SearchQueryTokenizer.isSeparator(text.charAt(caret))) caret++;
+        setSelection(caret);
         refreshTagChips(true);
     }
 

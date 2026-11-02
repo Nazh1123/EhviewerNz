@@ -3075,8 +3075,7 @@ public class GalleryListScene extends BaseScene
     @Override
     public void onSearchPresetQueryChanged(String query) {
         if (mSearchBar != null) {
-            mSearchBar.setText(query);
-            mSearchBar.cursorToEnd();
+            mSearchBar.setTextForEditing(query);
         }
     }
 
