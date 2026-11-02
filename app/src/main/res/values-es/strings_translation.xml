@@ -211,4 +211,6 @@
     <string name="translation_model_external_help">Lee el GGUF original sin conservar una copia privada. No muevas, elimines ni modifiques el archivo. Vuelve a importar con copia para usar una copia privada; referenciar el mismo modelo elimina su copia privada existente. Eliminar la referencia conserva el archivo original.</string>
     <string name="translation_model_external_unsupported">Este archivo externo no se puede cargar directamente. Elige «Copiar al almacenamiento privado de la aplicación».</string>
     <string name="translation_model_external_changed">El modelo externo cambió o no está disponible. Selecciona el archivo GGUF de nuevo.</string>
+    <string name="translation_gallery">Traducir esta galería</string>
+    <string name="translation_gallery_submitted">Tarea de traducción de galería enviada</string>
 </resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_processing_service">Procesamiento de galerías</string>
+    <string name="gallery_processing_queued">Galerías en cola: %1$d</string>
+    <string name="gallery_processing_stop">Detener esta galería</string>
+</resources>

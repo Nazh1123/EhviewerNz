@@ -1178,4 +1178,16 @@
     <string name="sync_folder_label_removed">Synchronisierung abgebrochen: Downloadlabel wurde entfernt</string>
     <string name="settings_show_viewed_galleries">Angesehene Galerien anzeigen</string>
     <string name="settings_show_viewed_galleries_summary">Die neueste Galerie der Suchergebnisse speichern, um bei einer erneuten Suche mit denselben Bedingungen bereits angesehene Galerien zu markieren.</string>
+    <string name="top_list_click_to_view">Zum Anzeigen tippen</string>
+    <string name="settings_yesterday_top_list_new_badge">Erinnerung an die gestrige Rangliste</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">Zeigt New! neben den Ranglisten, bis die gestrige Rangliste angesehen wurde. Wird täglich um 00:05 UTC zurückgesetzt.</string>
+    <string name="navigation_long_press_hint">Tasten für Sonderaktionen gedrückt halten</string>
+    <string name="title_keyword_search_action">Suchbegriffe suchen</string>
+    <string name="download_remove_record">Nur Eintrag entfernen</string>
+    <string name="download_redownload">Erneut herunterladen</string>
+    <string name="download_remove_files">Eintrag und lokale Dateien entfernen</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">Startseite nach Abonnement-Updates durchsuchen</string>
+    <string name="settings_subscription_homepage_scan_summary">Durchsucht bei manuellen und automatischen Update-Prüfungen die Startseite, wenn die Anzahl abonnierter Lesezeichen N &gt; 8, die Minuten seit dem letzten Update T &lt; 400 und T × 0,3 &lt; N sind. Sonst und bei komplexen Suchanfragen wird die Lesezeichensuche verwendet. Beim Wechsel bleibt der Prüffortschritt erhalten. Das Durchsuchen der Lesezeichen-Abonnements bleibt unverändert.</string>
+    <string name="open_image_folder">Bilder in diesem Ordner öffnen</string>
 </resources>

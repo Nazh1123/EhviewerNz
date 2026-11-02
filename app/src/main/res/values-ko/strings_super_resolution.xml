@@ -57,4 +57,6 @@
     <string name="sr_queue_progress">초해상도: %1$d / %2$d페이지</string>
     <string name="sr_page_progress">%1$d페이지: %2$d%%</string>
     <string name="sr_gallery_done">갤러리 초해상도 완료: %1$d페이지, %2$d페이지 실패</string>
+    <string name="sr_gallery">이 갤러리 초해상도 처리</string>
+    <string name="sr_gallery_submitted">갤러리 초해상도 작업이 제출되었습니다</string>
 </resources>

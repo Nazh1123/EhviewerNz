@@ -211,4 +211,6 @@
     <string name="translation_model_external_help">อ่าน GGUF ต้นฉบับโดยไม่เก็บสำเนาส่วนตัว ห้ามย้าย ลบ หรือแก้ไขไฟล์ต้นฉบับ นำเข้าอีกครั้งแบบคัดลอกเพื่อใช้สำเนาส่วนตัว การอ้างอิงโมเดลเดิมจะลบสำเนาส่วนตัวที่มีอยู่ การลบการอ้างอิงจะยังเก็บไฟล์ต้นฉบับไว้</string>
     <string name="translation_model_external_unsupported">โหลดไฟล์ภายนอกนี้โดยตรงไม่ได้ เลือก “คัดลอกไปยังพื้นที่ส่วนตัวของแอป”</string>
     <string name="translation_model_external_changed">โมเดลภายนอกเปลี่ยนไปหรือไม่พร้อมใช้งาน เลือกไฟล์ GGUF อีกครั้ง</string>
+    <string name="translation_gallery">แปลทั้งแกลเลอรีนี้</string>
+    <string name="translation_gallery_submitted">ส่งงานแปลแกลเลอรีแล้ว</string>
 </resources>

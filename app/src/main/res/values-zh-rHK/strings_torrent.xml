@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="torrent_seeds">做種 %1$s</string>
+    <string name="torrent_peers">下載中 %1$s</string>
+    <string name="torrent_downloads">累計下載 %1$s</string>
+    <string name="torrent_open">開啟</string>
+    <string name="torrent_cannot_open">無法開啟種子，請檢查檔案是否存在，以及是否已安裝支援開啟種子的應用程式。</string>
+</resources>

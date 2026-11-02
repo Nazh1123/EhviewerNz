@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_results_directory">압축 파일 처리 결과 폴더</string>
+    <string name="archive_results_permission_message">이 압축 파일이 있는 폴더를 선택하고 읽기 및 쓰기를 허용하세요. 번역 및 초해상도 결과는 옆의 “압축 파일 전체 이름.results” 폴더에 저장되며 다시 열 때 사용할 수 있습니다. 취소해도 일반 읽기나 개별 이미지 저장에는 영향을 주지 않습니다.</string>
+    <string name="archive_results_choose_parent">압축 파일이 있는 폴더 선택</string>
+    <string name="archive_results_wrong_parent">폴더 접근 권한을 받지 못했습니다. 이 압축 파일을 직접 포함하는 폴더를 선택하고 읽기 및 쓰기를 허용하세요.</string>
+</resources>

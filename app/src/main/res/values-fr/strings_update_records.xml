@@ -79,4 +79,7 @@
     <string name="gallery_update_history_no_pages">Aucune page ajoutée par cette mise à jour n’est encore lisible localement. Elles ont peut-être été supprimées plus tard ou sont absentes localement. Les anciens enregistrements sans instantanés de jetons ne peuvent être lus que dans leur version locale d’origine.</string>
     <string name="gallery_update_history_incomplete">Informations des pages incomplètes</string>
     <string name="gallery_update_history_empty">Aucun enregistrement de mise à jour pour cette chaîne de versions. Les anciens ont peut-être été supprimés à cause de la limite du nombre d’enregistrements.</string>
+    <string name="gallery_updated">Mise à jour</string>
+    <string name="gallery_read_full">Lire toute la galerie</string>
+    <string name="gallery_update_record_invalid">Enregistrement de mise à jour invalide</string>
 </resources>

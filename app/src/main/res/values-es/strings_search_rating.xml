@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_rating_label">Puntuación</string>
+    <string name="search_rating_title">Puntuación mínima</string>
+    <string name="search_rating_hint">0.00–5.00; 0.00 desactiva el filtro</string>
+    <string name="search_rating_invalid">Introduce un número entre 0.00 y 5.00 con un máximo de dos decimales</string>
+</resources>

@@ -211,4 +211,6 @@
     <string name="translation_model_external_help">Liest die ursprüngliche GGUF-Datei ohne private Kopie. Datei nicht verschieben, löschen oder ändern. Durch erneuten Import mit Kopieren wird eine private Kopie verwendet. Eine Verknüpfung zum selben Modell entfernt die vorhandene private Kopie. Beim Entfernen der Verknüpfung bleibt die Originaldatei erhalten.</string>
     <string name="translation_model_external_unsupported">Diese externe Datei kann nicht direkt geladen werden. „In privaten App-Speicher kopieren“ auswählen.</string>
     <string name="translation_model_external_changed">Das externe Modell wurde geändert oder ist nicht verfügbar. GGUF-Datei erneut auswählen.</string>
+    <string name="translation_gallery">Diese Galerie übersetzen</string>
+    <string name="translation_gallery_submitted">Galerieübersetzung eingereiht</string>
 </resources>

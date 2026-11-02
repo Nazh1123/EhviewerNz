@@ -1241,4 +1241,16 @@
     <string name="sync_folder_label_removed">Sincronización cancelada: se eliminó la etiqueta de descarga</string>
     <string name="settings_show_viewed_galleries">Mostrar galerías vistas</string>
     <string name="settings_show_viewed_galleries_summary">Guarda la galería más reciente de los resultados para marcar las ya vistas al repetir la búsqueda con las mismas condiciones.</string>
+    <string name="top_list_click_to_view">Toca para ver</string>
+    <string name="settings_yesterday_top_list_new_badge">Recordatorio de la clasificación de ayer</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">Muestra New! junto a las clasificaciones hasta que veas la de ayer. Se restablece cada día a las 00:05 UTC.</string>
+    <string name="navigation_long_press_hint">Mantén pulsados los botones para acciones especiales</string>
+    <string name="title_keyword_search_action">Buscar palabras clave</string>
+    <string name="download_remove_record">Eliminar solo el registro</string>
+    <string name="download_redownload">Volver a descargar</string>
+    <string name="download_remove_files">Eliminar registro y archivos locales</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">Buscar actualizaciones de suscripciones en la página principal</string>
+    <string name="settings_subscription_homepage_scan_summary">Explora la página principal al comprobar actualizaciones manual o automáticamente si los marcadores suscritos N &gt; 8, los minutos desde la última actualización T &lt; 400 y T × 0,3 &lt; N. En otros casos y para búsquedas complejas, usa búsquedas de marcadores. Conserva el progreso al cambiar de método. La navegación por suscripciones de marcadores no cambia.</string>
+    <string name="open_image_folder">Abrir imágenes de esta carpeta</string>
 </resources>

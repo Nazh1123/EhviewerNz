@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_prefer_existing_results">Afficher les résultats existants</string>
+    <string name="reader_prefer_existing_results_help">Affiche les résultats enregistrés même si le traitement est désactivé. Appuyez sur une icône flottante pour basculer entre l’original et le résultat. Sans résultat, l’image originale est affichée ; aucun modèle n’est lancé.</string>
+    <string name="reader_show_original">Afficher l’image originale</string>
+    <string name="reader_show_translation_result">Afficher la traduction</string>
+    <string name="reader_show_enhanced_result">Afficher l’image agrandie</string>
+    <string name="result_import">Importer les résultats du dossier</string>
+    <string name="result_import_running">Importation des images complètes traduites et agrandies pour cette galerie…</string>
+    <string name="result_import_report">Traductions importées : %1$d\nAgrandissements importés : %2$d\nIgnorés : %3$d\nÉchecs : %4$d\n\nSeules les images complètes dont la page source est confirmée sont importées. Aucune empreinte des originaux n’est calculée. Les résultats en cache restent soumis à vos limites de cache.</string>
+    <string name="result_import_failed">Impossible d’importer les résultats. Les images existantes ont été conservées.</string>
+</resources>

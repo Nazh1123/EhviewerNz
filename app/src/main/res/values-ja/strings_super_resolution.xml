@@ -57,4 +57,6 @@
     <string name="sr_queue_progress">超解像：%1$d / %2$d ページ</string>
     <string name="sr_page_progress">%1$d ページ：%2$d%%</string>
     <string name="sr_gallery_done">ギャラリーの超解像が完了：%1$d ページ、失敗 %2$d ページ</string>
+    <string name="sr_gallery">このギャラリーを超解像処理</string>
+    <string name="sr_gallery_submitted">ギャラリーの超解像タスクを送信しました</string>
 </resources>

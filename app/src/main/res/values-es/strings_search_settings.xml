@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search">Búsqueda</string>
+    <string name="settings_enable_search_tag_chips">Burbujas de etiquetas de búsqueda</string>
+    <string name="settings_enable_search_tag_chips_summary">Muestra las etiquetas como burbujas editables y amplía la barra de búsqueda hasta 4 líneas. Desactívalo para usar una sola línea de texto.</string>
+    <string name="settings_enable_search_preset_tags">Activar etiquetas de búsqueda predefinidas</string>
+    <string name="settings_enable_precise_rating_filter">Activar filtro de puntuación preciso</string>
+    <string name="settings_persistent_min_rating">Filtro de puntuación permanente</string>
+    <string name="settings_persistent_min_rating_description">Establece la puntuación mínima predeterminada para cada búsqueda. Las galerías con menor puntuación se ocultan por defecto.</string>
+    <string name="settings_persistent_min_rating_value">Actual: %1$s (0.00 desactiva el filtro)</string>
+</resources>

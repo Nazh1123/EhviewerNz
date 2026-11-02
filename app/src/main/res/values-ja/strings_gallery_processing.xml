@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gallery_processing_service">ギャラリーの処理</string>
+    <string name="gallery_processing_queued">待機中のギャラリー：%1$d</string>
+    <string name="gallery_processing_stop">このギャラリーを停止</string>
+</resources>

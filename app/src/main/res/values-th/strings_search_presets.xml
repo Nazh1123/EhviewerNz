@@ -8,4 +8,18 @@
     <string name="search_preset_exclude">ยกเว้น</string>
     <string name="search_preset_normal">ปกติ</string>
     <string name="search_preset_include">รวม</string>
+    <string name="settings_search_preset_bubbles_summary">แสดงแท็กที่ตั้งไว้ล่วงหน้าเป็นฟองในตัวเลือกการค้นหาเพิ่มเติม แตะเพื่อเพิ่มหรือนำออก และแตะสัญลักษณ์ด้านซ้ายเพื่อสลับรวม ยกเว้น และ OR</string>
+    <string name="settings_search_preset_tags">คำสำคัญที่ตั้งไว้ล่วงหน้า</string>
+    <string name="settings_search_preset_reorder">ลากเพื่อเรียงลำดับ %1$s</string>
+    <string name="settings_search_preset_add">เพิ่มแท็กที่ตั้งไว้ล่วงหน้า</string>
+    <string name="settings_search_preset_edit">แก้ไขแท็กที่ตั้งไว้ล่วงหน้า</string>
+    <string name="settings_search_preset_remove">ลบค่าที่ตั้งไว้</string>
+    <string name="settings_search_preset_duplicate">มีแท็กนี้ในรายการที่ตั้งไว้ล่วงหน้าแล้ว</string>
+    <string name="search_preset_absent">ไม่อยู่ในคำค้นหา</string>
+    <string name="search_preset_add">เพิ่มแท็ก %1$s</string>
+    <string name="settings_search_presets_count">แท็กที่ตั้งไว้ล่วงหน้า: %1$d · เพิ่ม แก้ไข หรือลบ</string>
+    <string name="settings_search_presets_description">จัดการคำสำคัญที่ตั้งไว้ล่วงหน้าในตัวเลือกการค้นหาเพิ่มเติม ลากที่จับด้านซ้ายเพื่อเรียงลำดับ ใช้ปุ่มด้านขวาเพื่อแก้ไขหรือลบ การเปลี่ยนแปลงจะบันทึกทันที</string>
+    <string name="settings_search_presets_empty">ยังไม่มีแท็กที่ตั้งไว้ล่วงหน้า แตะปุ่มด้านล่างเพื่อเพิ่ม</string>
+    <string name="settings_search_preset_remove_confirm">ลบค่าที่ตั้งไว้ %1$s หรือไม่? คำค้นหาปัจจุบันจะไม่เปลี่ยนแปลง</string>
+    <string name="search_preset_input_hint">ป้อนคำสำคัญหรือนิพจน์แท็ก</string>
 </resources>

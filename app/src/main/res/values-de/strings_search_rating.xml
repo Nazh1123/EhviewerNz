@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_rating_label">Bewertung</string>
+    <string name="search_rating_title">Mindestbewertung</string>
+    <string name="search_rating_hint">0.00–5.00; 0.00 deaktiviert den Filter</string>
+    <string name="search_rating_invalid">Zahl von 0.00 bis 5.00 mit höchstens zwei Nachkommastellen eingeben</string>
+</resources>

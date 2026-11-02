@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_update_method">更新方式</string>
+    <string name="app_update_method_description">可前往 Release 頁面，或在應用程式內直接下載 APK，完成後開啟安裝介面。</string>
+    <string name="app_update_open_release">前往 Release</string>
+    <string name="app_update_direct_download">直接下載</string>
+    <string name="app_update_no_apk">此 Release 未提供唯一可下載的 APK，請前往 Release 頁面自行下載。</string>
+    <string name="app_update_download_title">EhViewerNz 更新</string>
+    <string name="app_update_downloading">正在下載更新…</string>
+    <string name="app_update_progress">正在下載更新：%1$d%%</string>
+    <string name="app_update_waiting_network">下載已暫停，等待網路恢復或系統重試…</string>
+    <string name="app_update_ready">下載完成，可以安裝。</string>
+    <string name="app_update_install">安裝</string>
+    <string name="app_update_install_permission">請在系統設定中允許此應用程式安裝未知應用程式，返回後繼續安裝。</string>
+    <string name="app_update_install_failed">無法開啟安裝介面，請重試或前往 Release 頁面下載。</string>
+    <string name="app_update_download_failed">下載失敗，請檢查網路及儲存空間後重試，或前往 Release 頁面下載。</string>
+    <string name="app_update_retry">重新下載</string>
+</resources>

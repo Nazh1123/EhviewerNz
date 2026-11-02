@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_download_mobile_browsing_priority">Surfen bei mobilen Daten priorisieren</string>
+    <string name="settings_download_mobile_browsing_priority_summary">Bei mobilen Daten werden Galerie- und Archivdownloads beim Laden von Galerieinformationen, Vorschaubildern oder der aktuellen Leseseite gedrosselt. Nach Abschluss der Ladevorgänge und einer kurzen Ruhephase wird die normale Geschwindigkeit wiederhergestellt. Gilt nicht für WLAN.</string>
+</resources>

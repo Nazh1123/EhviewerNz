@@ -1263,4 +1263,16 @@
     <string name="sync_folder_label_removed">다운로드 라벨이 삭제되어 동기화가 취소됨</string>
     <string name="settings_show_viewed_galleries">열람한 갤러리 표시</string>
     <string name="settings_show_viewed_galleries_summary">검색 결과의 최신 갤러리를 기록하여 같은 조건으로 다시 검색할 때 이미 열람한 갤러리를 표시합니다.</string>
+    <string name="top_list_click_to_view">탭하여 보기</string>
+    <string name="settings_yesterday_top_list_new_badge">어제 순위 알림</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">어제 순위를 확인할 때까지 순위 옆에 New!를 표시합니다. 매일 UTC 00:05에 초기화됩니다.</string>
+    <string name="navigation_long_press_hint">버튼을 길게 누르면 특수 동작을 실행합니다</string>
+    <string name="title_keyword_search_action">키워드 검색</string>
+    <string name="download_remove_record">기록만 삭제</string>
+    <string name="download_redownload">다시 다운로드</string>
+    <string name="download_remove_files">기록 및 로컬 파일 삭제</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">홈에서 구독 업데이트 검색</string>
+    <string name="settings_subscription_homepage_scan_summary">수동 및 자동 업데이트 확인 시 구독한 북마크 수 N &gt; 8, 마지막 업데이트 후 경과 시간(분) T &lt; 400, T × 0.3 &lt; N이면 홈을 검색합니다. 그 외의 경우와 복잡한 검색에는 북마크 검색을 사용합니다. 방식을 전환해도 확인 진행 상황은 유지됩니다. 북마크 구독 탐색 방식은 바뀌지 않습니다.</string>
+    <string name="open_image_folder">같은 폴더의 이미지 열기</string>
 </resources>

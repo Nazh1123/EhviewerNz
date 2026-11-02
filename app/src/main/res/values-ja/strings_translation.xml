@@ -211,4 +211,6 @@
     <string name="translation_model_external_help">元の GGUF を直接読み取り、アプリ内にコピーを保存しません。元のファイルを移動、削除、変更しないでください。コピーで再インポートするとアプリ内のコピーを使用します。同じモデルを参照すると既存のコピーを削除します。参照を削除しても元のファイルは残ります。</string>
     <string name="translation_model_external_unsupported">この外部ファイルは直接読み込めません。「アプリ専用フォルダーにコピー」を選択してください。</string>
     <string name="translation_model_external_changed">外部モデルが変更されたか利用できません。GGUF ファイルを選び直してください。</string>
+    <string name="translation_gallery">このギャラリーを翻訳</string>
+    <string name="translation_gallery_submitted">ギャラリーの翻訳タスクを送信しました</string>
 </resources>

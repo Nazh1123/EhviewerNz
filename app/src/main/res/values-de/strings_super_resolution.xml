@@ -57,4 +57,6 @@
     <string name="sr_queue_progress">SR: %1$d / %2$d Seiten</string>
     <string name="sr_page_progress">Seite %1$d: %2$d%%</string>
     <string name="sr_gallery_done">Galerieverbesserung abgeschlossen: %1$d Seiten, %2$d fehlgeschlagen</string>
+    <string name="sr_gallery">Diese Galerie vergrößern</string>
+    <string name="sr_gallery_submitted">Galerievergrößerung eingereiht</string>
 </resources>

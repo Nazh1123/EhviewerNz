@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_results_directory">Carpeta de resultados del archivo comprimido</string>
+    <string name="archive_results_permission_message">Selecciona la carpeta que contiene este archivo comprimido y permite la lectura y escritura. Las traducciones y ampliaciones se guardarán a su lado en «nombre completo del archivo.results» y podrán reutilizarse al abrirlo de nuevo. Cancelar no afecta a la lectura ni al guardado de imágenes individuales.</string>
+    <string name="archive_results_choose_parent">Elegir carpeta contenedora</string>
+    <string name="archive_results_wrong_parent">No se concedió acceso a la carpeta. Selecciona la carpeta que contiene directamente este archivo comprimido y permite la lectura y escritura.</string>
+</resources>

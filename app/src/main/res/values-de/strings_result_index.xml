@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_prefer_existing_results">Vorhandene Ergebnisse anzeigen</string>
+    <string name="reader_prefer_existing_results_help">Gespeicherte Ergebnisse auch bei deaktivierter Verarbeitung anzeigen. Tippe auf ein schwebendes Symbol, um zwischen Original und Ergebnis zu wechseln. Seiten ohne Ergebnis zeigen das Original; es werden keine Modelle gestartet.</string>
+    <string name="reader_show_original">Originalbild anzeigen</string>
+    <string name="reader_show_translation_result">Übersetzungsergebnis anzeigen</string>
+    <string name="reader_show_enhanced_result">Vergrößerungsergebnis anzeigen</string>
+    <string name="result_import">Ergebnisse aus Ordner importieren</string>
+    <string name="result_import_running">Vollständige Übersetzungs- und Vergrößerungsbilder für diese Galerie werden importiert…</string>
+    <string name="result_import_report">Importierte Übersetzungen: %1$d\nImportierte Vergrößerungen: %2$d\nÜbersprungen: %3$d\nFehlgeschlagen: %4$d\n\nNur vollständige Bilder mit bestätigter Zuordnung zur Originalseite werden importiert. Es werden keine Hashwerte der Originalbilder berechnet. Zwischengespeicherte Ergebnisse unterliegen weiterhin dem Cache-Limit.</string>
+    <string name="result_import_failed">Ergebnisse konnten nicht importiert werden. Vorhandene Bilder wurden beibehalten.</string>
+</resources>

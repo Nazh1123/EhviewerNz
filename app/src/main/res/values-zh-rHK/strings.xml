@@ -1323,4 +1323,8 @@
     <string name="gallery_detail_back_to_top">回到最上方</string>
     <string name="settings_show_viewed_galleries">顯示已瀏覽畫廊</string>
     <string name="settings_show_viewed_galleries_summary">記錄畫廊搜索結果中的最新畫廊，用於後續執行相同條件的搜索時，標記已瀏覽過的畫廊。</string>
+    <string name="title_keyword_search_action">搜尋關鍵字</string>
+    <string name="settings_subscription_homepage_scan">掃描首頁以檢查訂閱更新</string>
+    <string name="settings_subscription_homepage_scan_summary">手動與自動檢查更新時，若訂閱書籤數 N &gt; 8、距上次更新的分鐘數 T &lt; 400，且 T × 0.3 &lt; N，則自動掃描首頁；其他情況與複雜搜尋使用書籤搜尋。切換方式時保留檢查進度，書籤訂閱的瀏覽方式不變。</string>
+    <string name="open_image_folder">開啟同資料夾圖片</string>
 </resources>

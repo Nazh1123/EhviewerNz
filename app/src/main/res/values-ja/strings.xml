@@ -1187,4 +1187,16 @@
     <string name="sync_folder_label_removed">ダウンロードラベルが削除されたため、同期を中止しました</string>
     <string name="settings_show_viewed_galleries">閲覧済みギャラリーを表示</string>
     <string name="settings_show_viewed_galleries_summary">検索結果の最新ギャラリーを記録し、同じ条件で再検索したときに閲覧済みギャラリーを表示します。</string>
+    <string name="top_list_click_to_view">タップして表示</string>
+    <string name="settings_yesterday_top_list_new_badge">昨日のランキングの未読通知</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">昨日のランキングを見るまで、ランキングの横に New! を表示します。毎日 UTC 00:05 にリセットされます。</string>
+    <string name="navigation_long_press_hint">ボタンを長押しすると特殊な操作ができます</string>
+    <string name="title_keyword_search_action">キーワードを検索</string>
+    <string name="download_remove_record">記録のみ削除</string>
+    <string name="download_redownload">再ダウンロード</string>
+    <string name="download_remove_files">記録とローカルファイルを削除</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">ホームから購読の更新を確認</string>
+    <string name="settings_subscription_homepage_scan_summary">手動・自動の更新確認時、購読中のブックマーク数 N &gt; 8、前回更新からの経過分数 T &lt; 400、T × 0.3 &lt; N の場合にホームを走査します。それ以外や複雑な検索ではブックマーク検索を使います。方式を切り替えても確認の進捗は保持されます。ブックマーク購読の閲覧方法は変わりません。</string>
+    <string name="open_image_folder">同じフォルダーの画像を開く</string>
 </resources>

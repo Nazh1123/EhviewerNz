@@ -79,4 +79,7 @@
     <string name="gallery_update_history_no_pages">ไม่มีหน้าที่เพิ่มจากการอัปเดตนี้ที่ยังอ่านได้ภายใน อาจถูกลบในเวอร์ชันภายหลังหรือไม่มีอยู่ภายใน บันทึกเก่าที่ไม่มีข้อมูลโทเค็นหน้าสามารถอ่านได้เฉพาะในเวอร์ชันภายในเดิม</string>
     <string name="gallery_update_history_incomplete">ข้อมูลหน้าไม่ครบ</string>
     <string name="gallery_update_history_empty">ไม่มีบันทึกการอัปเดตสำหรับลำดับเวอร์ชันนี้ บันทึกเก่าอาจถูกลบเนื่องจากขีดจำกัดจำนวนบันทึก</string>
+    <string name="gallery_updated">อัปเดตแล้ว</string>
+    <string name="gallery_read_full">อ่านทั้งแกลเลอรี</string>
+    <string name="gallery_update_record_invalid">บันทึกการอัปเดตไม่ถูกต้อง</string>
 </resources>

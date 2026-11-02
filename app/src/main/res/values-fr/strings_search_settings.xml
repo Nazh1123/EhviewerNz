@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search">Recherche</string>
+    <string name="settings_enable_search_tag_chips">Bulles d’étiquettes de recherche</string>
+    <string name="settings_enable_search_tag_chips_summary">Affiche les étiquettes sous forme de bulles modifiables et étend la barre de recherche jusqu’à 4 lignes. Désactivez pour une seule ligne de texte.</string>
+    <string name="settings_enable_search_preset_tags">Activer les étiquettes de recherche prédéfinies</string>
+    <string name="settings_enable_precise_rating_filter">Activer le filtre de note précis</string>
+    <string name="settings_persistent_min_rating">Filtre de note permanent</string>
+    <string name="settings_persistent_min_rating_description">Définit la note minimale par défaut pour chaque recherche. Les galeries moins bien notées sont masquées par défaut.</string>
+    <string name="settings_persistent_min_rating_value">Actuel : %1$s (0.00 désactive le filtre)</string>
+</resources>

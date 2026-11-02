@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_search">검색</string>
+    <string name="settings_enable_search_tag_chips">키워드 태그 말풍선</string>
+    <string name="settings_enable_search_tag_chips_summary">키워드 태그를 편집 가능한 말풍선으로 표시하고 검색창을 최대 4줄로 확장합니다. 끄면 한 줄의 일반 텍스트를 사용합니다.</string>
+    <string name="settings_enable_search_preset_tags">검색 프리셋 태그 사용</string>
+    <string name="settings_enable_precise_rating_filter">정밀 평점 필터 사용</string>
+    <string name="settings_persistent_min_rating">상시 평점 필터</string>
+    <string name="settings_persistent_min_rating_description">모든 검색에 기본으로 적용할 최소 평점을 설정합니다. 그보다 평점이 낮은 갤러리는 기본적으로 숨깁니다.</string>
+    <string name="settings_persistent_min_rating_value">현재: %1$s (0.00은 필터 해제)</string>
+</resources>

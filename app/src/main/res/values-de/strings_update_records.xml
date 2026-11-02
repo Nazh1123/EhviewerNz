@@ -79,4 +79,7 @@
     <string name="gallery_update_history_no_pages">Keine neuen Seiten dieser Aktualisierung sind lokal noch lesbar. Sie wurden möglicherweise später gelöscht oder fehlen lokal. Ältere Datensätze ohne Seitentoken-Snapshots können nur in ihrer ursprünglichen lokalen Version gelesen werden.</string>
     <string name="gallery_update_history_incomplete">Unvollständige Seiteninformationen</string>
     <string name="gallery_update_history_empty">Keine Aktualisierungsdatensätze für diese Versionskette gespeichert. Ältere Datensätze wurden möglicherweise durch die Begrenzung der Datensatzanzahl entfernt.</string>
+    <string name="gallery_updated">Aktualisiert</string>
+    <string name="gallery_read_full">Gesamte Galerie lesen</string>
+    <string name="gallery_update_record_invalid">Ungültiger Update-Eintrag</string>
 </resources>

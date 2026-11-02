@@ -1242,4 +1242,16 @@
     <string name="sync_folder_label_removed">Synchronisation annulée : l’étiquette de téléchargement a été supprimée</string>
     <string name="settings_show_viewed_galleries">Afficher les galeries consultées</string>
     <string name="settings_show_viewed_galleries_summary">Enregistre la galerie la plus récente des résultats pour marquer celles déjà consultées lors d’une nouvelle recherche avec les mêmes critères.</string>
+    <string name="top_list_click_to_view">Appuyer pour afficher</string>
+    <string name="settings_yesterday_top_list_new_badge">Rappel du classement d’hier</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">Affiche New! à côté des classements jusqu’à la consultation de celui d’hier. Réinitialisation quotidienne à 00:05 UTC.</string>
+    <string name="navigation_long_press_hint">Appuyez longuement sur les boutons pour les actions spéciales</string>
+    <string name="title_keyword_search_action">Rechercher les mots-clés</string>
+    <string name="download_remove_record">Supprimer uniquement l’entrée</string>
+    <string name="download_redownload">Télécharger à nouveau</string>
+    <string name="download_remove_files">Supprimer l’entrée et les fichiers locaux</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">Parcourir l’accueil pour les mises à jour des abonnements</string>
+    <string name="settings_subscription_homepage_scan_summary">Parcourt l’accueil lors des vérifications manuelles et automatiques si le nombre de favoris suivis N &gt; 8, les minutes depuis la dernière mise à jour T &lt; 400 et T × 0,3 &lt; N. Sinon, et pour les recherches complexes, utilise les recherches de favoris. La progression est conservée lors du changement de méthode. La consultation des abonnements aux favoris reste inchangée.</string>
+    <string name="open_image_folder">Ouvrir les images de ce dossier</string>
 </resources>

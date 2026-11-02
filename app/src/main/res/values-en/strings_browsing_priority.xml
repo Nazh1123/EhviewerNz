@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_download_mobile_browsing_priority">Prioritize browsing on mobile data</string>
+    <string name="settings_download_mobile_browsing_priority_summary">On mobile data, slow gallery and archive downloads while loading gallery information, thumbnails or the current reading page. Restore normal download speed after browsing requests finish and remain idle briefly. Does not apply to Wi-Fi.</string>
+</resources>

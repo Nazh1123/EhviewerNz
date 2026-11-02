@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_results_directory">壓縮檔結果目錄</string>
+    <string name="archive_results_permission_message">請選擇此壓縮檔所在的資料夾，並允許讀寫。翻譯和超解析度結果將儲存在旁邊的「壓縮檔完整檔名.results」資料夾中，重新開啟時可繼續使用。取消不影響一般閱讀或儲存單張圖片。</string>
+    <string name="archive_results_choose_parent">選擇所在資料夾</string>
+    <string name="archive_results_wrong_parent">未取得目錄存取權限。請選擇直接包含此壓縮檔的資料夾，並允許讀寫。</string>
+</resources>

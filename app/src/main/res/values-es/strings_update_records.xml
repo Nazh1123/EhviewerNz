@@ -79,4 +79,7 @@
     <string name="gallery_update_history_no_pages">No quedan páginas añadidas de esta actualización que se puedan leer localmente. Es posible que se eliminaran en una versión posterior o falten localmente. Los registros antiguos sin instantáneas de tokens solo se pueden leer en su versión local original.</string>
     <string name="gallery_update_history_incomplete">Información de páginas incompleta</string>
     <string name="gallery_update_history_empty">No hay registros de actualización guardados para esta cadena de versiones. Los registros antiguos pueden haberse eliminado por el límite de registros.</string>
+    <string name="gallery_updated">Actualizada</string>
+    <string name="gallery_read_full">Leer galería completa</string>
+    <string name="gallery_update_record_invalid">Registro de actualización no válido</string>
 </resources>

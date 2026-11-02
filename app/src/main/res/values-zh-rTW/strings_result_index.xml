@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_prefer_existing_results">顯示已有結果</string>
+    <string name="reader_prefer_existing_results_help">翻譯或超解析度模式關閉時，仍顯示已有結果。點選浮動圖示可切換原圖與結果，無結果時顯示原圖，不啟動模型處理。</string>
+    <string name="reader_show_original">顯示原圖</string>
+    <string name="reader_show_translation_result">顯示翻譯結果</string>
+    <string name="reader_show_enhanced_result">顯示超解析度結果</string>
+    <string name="result_import">匯入目錄內結果</string>
+    <string name="result_import_running">正在為目前畫廊匯入完整翻譯與超解析度結果…</string>
+    <string name="result_import_report">匯入翻譯：%1$d 張\n匯入超解析度：%2$d 張\n略過：%3$d 項\n失敗：%4$d 項\n\n僅匯入能確認對應原圖的完整結果，不計算原圖雜湊。快取結果仍受快取限額約束。</string>
+    <string name="result_import_failed">匯入失敗，已有結果圖片已保留。</string>
+</resources>

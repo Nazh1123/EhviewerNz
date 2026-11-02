@@ -8,4 +8,18 @@
     <string name="search_preset_exclude">Excluir</string>
     <string name="search_preset_normal">Normal</string>
     <string name="search_preset_include">Incluir</string>
+    <string name="settings_search_preset_bubbles_summary">Muestra burbujas predefinidas en las opciones de búsqueda. Toca una para añadirla o quitarla; toca su símbolo izquierdo para alternar entre incluir, excluir y O.</string>
+    <string name="settings_search_preset_tags">Palabras clave predefinidas</string>
+    <string name="settings_search_preset_reorder">Arrastra para reordenar %1$s</string>
+    <string name="settings_search_preset_add">Añadir etiqueta predefinida</string>
+    <string name="settings_search_preset_edit">Editar etiqueta predefinida</string>
+    <string name="settings_search_preset_remove">Eliminar preajuste</string>
+    <string name="settings_search_preset_duplicate">Esta etiqueta ya está en la lista de preajustes.</string>
+    <string name="search_preset_absent">No está en la consulta de búsqueda</string>
+    <string name="search_preset_add">Añadir etiqueta %1$s</string>
+    <string name="settings_search_presets_count">Etiquetas predefinidas: %1$d · Añadir, editar o eliminar</string>
+    <string name="settings_search_presets_description">Gestiona las palabras clave predefinidas de las opciones de búsqueda. Arrastra el control izquierdo para reordenar; usa los botones derechos para editar o eliminar. Los cambios se guardan inmediatamente.</string>
+    <string name="settings_search_presets_empty">Aún no hay etiquetas predefinidas. Toca el botón inferior para añadir una.</string>
+    <string name="settings_search_preset_remove_confirm">¿Eliminar el preajuste %1$s? La consulta de búsqueda actual no cambia.</string>
+    <string name="search_preset_input_hint">Introduce una palabra clave o expresión de etiquetas</string>
 </resources>

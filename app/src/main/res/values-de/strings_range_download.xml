@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="range_download">Seitenbereich herunterladen</string>
+    <string name="range_downloaded">Seitenbereich heruntergeladen</string>
+    <string name="range_download_badge">Bereich</string>
+    <string name="range_download_full">Gesamte Galerie herunterladen</string>
+    <string name="range_read_downloaded">Nur heruntergeladenen Bereich lesen</string>
+    <string name="range_download_input_hint">Zum Beispiel: 1,2,6-10,25-</string>
+    <string name="range_download_preview">%1$s · %2$d Seiten. Bilder außerhalb dieses Bereichs werden aus dem Downloadordner dieser Galerie entfernt.</string>
+    <string name="range_download_invalid">Gültige Seitenzahlen von 1 bis %1$d eingeben.</string>
+    <string name="range_download_busy">Die Galerie wird gerade geändert oder aktualisiert. Danach erneut versuchen.</string>
+    <string name="range_download_missing_pages">Die Seitenzahl der Galerie wurde noch nicht geladen. Bitte gleich erneut versuchen.</string>
+    <string name="range_download_no_pages">Keine lesbaren heruntergeladenen Seiten in diesem Bereich.</string>
+    <string name="range_reader_progress">Heruntergeladen %1$d/%2$d · S. %3$d/%4$d</string>
+</resources>

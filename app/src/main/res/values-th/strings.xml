@@ -1251,4 +1251,16 @@
     <string name="sync_folder_label_removed">ยกเลิกการซิงค์: ป้ายกำกับดาวน์โหลดถูกลบ</string>
     <string name="settings_show_viewed_galleries">แสดงแกลเลอรีที่เคยดู</string>
     <string name="settings_show_viewed_galleries_summary">บันทึกแกลเลอรีล่าสุดในผลการค้นหาเพื่อทำเครื่องหมายแกลเลอรีที่เคยดู เมื่อค้นหาด้วยเงื่อนไขเดิมอีกครั้ง</string>
+    <string name="top_list_click_to_view">แตะเพื่อดู</string>
+    <string name="settings_yesterday_top_list_new_badge">แจ้งเตือนอันดับเมื่อวาน</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">แสดง New! ข้างรายการอันดับจนกว่าจะดูอันดับเมื่อวาน รีเซ็ตทุกวันเวลา 00:05 UTC</string>
+    <string name="navigation_long_press_hint">กดปุ่มค้างไว้เพื่อใช้การทำงานพิเศษ</string>
+    <string name="title_keyword_search_action">ค้นหาคำสำคัญ</string>
+    <string name="download_remove_record">ลบเฉพาะรายการ</string>
+    <string name="download_redownload">ดาวน์โหลดอีกครั้ง</string>
+    <string name="download_remove_files">ลบรายการและไฟล์ในเครื่อง</string>
+    <string name="top_list_period_title">%1$s</string>
+    <string name="settings_subscription_homepage_scan">สแกนหน้าหลักเพื่อค้นหาอัปเดตการติดตาม</string>
+    <string name="settings_subscription_homepage_scan_summary">สแกนหน้าหลักเมื่อเช็กอัปเดตด้วยตนเองหรืออัตโนมัติ หากจำนวนบุ๊กมาร์กที่ติดตาม N &gt; 8 เวลาหลังอัปเดตครั้งก่อนเป็นนาที T &lt; 400 และ T × 0.3 &lt; N มิฉะนั้น รวมถึงการค้นหาที่ซับซ้อน จะใช้การค้นหาบุ๊กมาร์ก ความคืบหน้าจะคงอยู่เมื่อสลับวิธี และไม่เปลี่ยนวิธีเรียกดูการติดตามบุ๊กมาร์ก</string>
+    <string name="open_image_folder">เปิดภาพในโฟลเดอร์เดียวกัน</string>
 </resources>

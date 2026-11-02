@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="range_download">ดาวน์โหลดช่วงหน้า</string>
+    <string name="range_downloaded">ดาวน์โหลดช่วงหน้าแล้ว</string>
+    <string name="range_download_badge">ช่วงหน้า</string>
+    <string name="range_download_full">ดาวน์โหลดทั้งแกลเลอรี</string>
+    <string name="range_read_downloaded">อ่านเฉพาะช่วงที่ดาวน์โหลด</string>
+    <string name="range_download_input_hint">ตัวอย่าง: 1,2,6-10,25-</string>
+    <string name="range_download_preview">%1$s · %2$d หน้า ภาพนอกช่วงนี้จะถูกลบออกจากโฟลเดอร์ดาวน์โหลดของแกลเลอรีนี้</string>
+    <string name="range_download_invalid">ป้อนหมายเลขหน้าที่ถูกต้องตั้งแต่ 1 ถึง %1$d</string>
+    <string name="range_download_busy">กำลังแก้ไขหรืออัปเดตแกลเลอรี โปรดลองใหม่เมื่อเสร็จสิ้น</string>
+    <string name="range_download_missing_pages">ยังไม่ได้โหลดจำนวนหน้าของแกลเลอรี โปรดลองใหม่สักครู่</string>
+    <string name="range_download_no_pages">ไม่มีหน้าที่ดาวน์โหลดและอ่านได้ในช่วงนี้</string>
+    <string name="range_reader_progress">ดาวน์โหลด %1$d/%2$d · หน้า %3$d/%4$d</string>
+</resources>

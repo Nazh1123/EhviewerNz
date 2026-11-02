@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="torrent_seeds">시드 %1$s</string>
+    <string name="torrent_peers">다운로드 중 %1$s</string>
+    <string name="torrent_downloads">누적 다운로드 %1$s</string>
+    <string name="torrent_open">열기</string>
+    <string name="torrent_cannot_open">이 토렌트를 열 수 없습니다. 파일이 존재하고 호환 앱이 설치되어 있는지 확인하세요.</string>
+</resources>

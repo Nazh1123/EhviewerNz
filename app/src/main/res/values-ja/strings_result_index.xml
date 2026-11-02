@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_prefer_existing_results">既存の処理結果を表示</string>
+    <string name="reader_prefer_existing_results_help">処理がオフでも保存済みの結果を表示します。フローティングアイコンをタップすると原画像と結果を切り替えられます。結果がないページは原画像を表示し、モデル処理は開始しません。</string>
+    <string name="reader_show_original">原画像を表示</string>
+    <string name="reader_show_translation_result">翻訳結果を表示</string>
+    <string name="reader_show_enhanced_result">超解像の結果を表示</string>
+    <string name="result_import">フォルダー内の結果をインポート</string>
+    <string name="result_import_running">このギャラリーの完成した翻訳・超解像画像をインポート中…</string>
+    <string name="result_import_report">翻訳のインポート：%1$d\n超解像のインポート：%2$d\nスキップ：%3$d\n失敗：%4$d\n\n元のページとの対応を確認できる完成画像のみをインポートします。原画像のハッシュは計算しません。キャッシュされた結果には引き続きキャッシュの上限が適用されます。</string>
+    <string name="result_import_failed">結果をインポートできませんでした。既存の画像は保持されています。</string>
+</resources>

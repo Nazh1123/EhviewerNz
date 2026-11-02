@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="torrent_seeds">Sources %1$s</string>
+    <string name="torrent_peers">En téléchargement %1$s</string>
+    <string name="torrent_downloads">Téléchargements %1$s</string>
+    <string name="torrent_open">Ouvrir</string>
+    <string name="torrent_cannot_open">Impossible d’ouvrir ce torrent. Vérifiez que le fichier existe et qu’une application compatible est installée.</string>
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="range_download">Télécharger une plage de pages</string>
+    <string name="range_downloaded">Plage téléchargée</string>
+    <string name="range_download_badge">Plage</string>
+    <string name="range_download_full">Télécharger toute la galerie</string>
+    <string name="range_read_downloaded">Lire uniquement la plage téléchargée</string>
+    <string name="range_download_input_hint">Par exemple : 1,2,6-10,25-</string>
+    <string name="range_download_preview">%1$s · %2$d pages. Les images hors de cette plage seront supprimées du dossier de téléchargement de cette galerie.</string>
+    <string name="range_download_invalid">Saisissez des numéros de page valides de 1 à %1$d.</string>
+    <string name="range_download_busy">La galerie est en cours de modification ou de mise à jour. Réessayez une fois l’opération terminée.</string>
+    <string name="range_download_missing_pages">Le nombre de pages de la galerie n’est pas encore chargé. Réessayez dans un instant.</string>
+    <string name="range_download_no_pages">Aucune page téléchargée lisible dans cette plage.</string>
+    <string name="range_reader_progress">Téléchargées %1$d/%2$d · p. %3$d/%4$d</string>
+</resources>

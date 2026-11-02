@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_tag_or">Correspondance avec au moins une (OU)</string>
+    <string name="search_tag_or_label">%1$s (OU)</string>
+    <string name="search_tag_change_mode">%1$s : passer à %2$s</string>
+    <string name="search_tag_edit">Modifier l’étiquette %1$s</string>
+    <string name="search_tag_delete">Supprimer l’étiquette %1$s</string>
+</resources>
