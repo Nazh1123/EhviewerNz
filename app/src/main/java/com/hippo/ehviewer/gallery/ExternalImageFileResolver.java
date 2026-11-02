@@ -21,9 +21,12 @@ import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.system.ErrnoException;
+import android.system.Os;
 import com.hippo.unifile.UniFile;
 
 import androidx.annotation.NonNull;
@@ -95,7 +98,26 @@ public final class ExternalImageFileResolver {
         }
 
         // A few file providers expose the absolute filesystem path as their URI path.
-        return existingFile(uri.getPath());
+        file = existingFile(uri.getPath());
+        return file != null ? file : resolveFileDescriptor(context, uri);
+    }
+
+    @Nullable
+    private static File resolveFileDescriptor(@NonNull Context context, @NonNull Uri uri) {
+        // FileProvider root names (e.g. Amaze's "storage_root") are aliases, not
+        // filesystem directories. Ask the provider for the file instead of guessing
+        // which URI segments to remove. This also handles completely opaque URIs.
+        try (ParcelFileDescriptor descriptor = context.getContentResolver()
+                .openFileDescriptor(uri, "r")) {
+            if (descriptor == null) return null;
+            String path = Os.readlink("/proc/self/fd/" + descriptor.getFd());
+            // Pipes, sockets, deleted files and provider-private files cannot be
+            // used for directory browsing. A URI grant alone does not grant access
+            // to the underlying path; require a successful direct open as before.
+            return path != null && new File(path).isAbsolute() ? existingFile(path) : null;
+        } catch (IOException | ErrnoException | RuntimeException ignored) {
+            return null;
+        }
     }
 
     public static boolean isSupportedImageName(@Nullable String name) {
