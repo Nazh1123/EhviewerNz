@@ -500,6 +500,23 @@ public class Settings {
         return getBoolean(KEY_POPULAR_UPDATES_ONLY, false);
     }
 
+    public static final String KEY_SHOW_YESTERDAY_TOP_LIST_NEW_BADGE =
+            "show_yesterday_top_list_new_badge";
+    private static final String KEY_YESTERDAY_TOP_LIST_READ_PERIOD =
+            "yesterday_top_list_read_period";
+
+    public static boolean getShowYesterdayTopListNewBadge() {
+        return getBoolean(KEY_SHOW_YESTERDAY_TOP_LIST_NEW_BADGE, true);
+    }
+
+    public static long getYesterdayTopListReadPeriod() {
+        return getLong(KEY_YESTERDAY_TOP_LIST_READ_PERIOD, Long.MIN_VALUE);
+    }
+
+    public static void putYesterdayTopListReadPeriod(long period) {
+        putLong(KEY_YESTERDAY_TOP_LIST_READ_PERIOD, period);
+    }
+
     public static final String KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE =
             "show_thumbnail_download_badge";
     private static final boolean DEFAULT_SHOW_THUMBNAIL_DOWNLOAD_BADGE = true;

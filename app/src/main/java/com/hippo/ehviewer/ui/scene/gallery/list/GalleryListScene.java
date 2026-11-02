@@ -94,6 +94,7 @@ import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
+import com.hippo.ehviewer.client.YesterdayTopListReadState;
 import com.hippo.ehviewer.client.SearchRating;
 import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
 import com.hippo.ehviewer.client.SeenGalleryHistory;
@@ -409,6 +410,8 @@ public class GalleryListScene extends BaseScene
     private final Set<Long> mSubscriptionPendingUnread = new HashSet<>();
     @Nullable
     private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
+    private long mYesterdayTopListRequestPeriod = YesterdayTopListReadState.NO_PERIOD;
+    private long mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
 
     @Override
     public int getNavCheckedItem() {
@@ -419,6 +422,9 @@ public class GalleryListScene extends BaseScene
         if (null == args || null == mUrlBuilder) {
             return;
         }
+
+        mYesterdayTopListRequestPeriod = YesterdayTopListReadState.NO_PERIOD;
+        mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
 
         String action = args.getString(KEY_ACTION);
         mPopularUpdatesOnlyOverride = ACTION_WHATS_HOT.equals(action)
@@ -1512,6 +1518,7 @@ public class GalleryListScene extends BaseScene
     @Override
     public void onResume() {
         super.onResume();
+        markYesterdayTopListReadIfVisible();
         if (mSearchLayout != null && mSearchBar != null) {
             mSearchLayout.syncPresetTags(mSearchBar.getText());
         }
@@ -3156,9 +3163,31 @@ public class GalleryListScene extends BaseScene
     }
 
 
+    private void prepareYesterdayTopListRequest(int page) {
+        mYesterdayTopListRequestPeriod = page == 0
+                && YesterdayTopListReadState.isYesterdayTopList(mUrlBuilder)
+                ? YesterdayTopListReadState.periodAt(System.currentTimeMillis())
+                : YesterdayTopListReadState.NO_PERIOD;
+        if (page == 0) mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
+    }
+
+    private void markYesterdayTopListReadIfVisible() {
+        MainActivity activity = getActivity2();
+        if (mLoadedYesterdayTopListPeriod != YesterdayTopListReadState.NO_PERIOD
+                && YesterdayTopListReadState.isYesterdayTopList(mUrlBuilder)
+                && isResumed() && getView() != null && activity != null
+                && activity.getTopScene() == this) {
+            activity.onYesterdayTopListRead(mLoadedYesterdayTopListPeriod);
+        }
+    }
+
     private void onGetGalleryListSuccess(GalleryListParser.Result result, int taskId) {
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
+            long loadedYesterdayPeriod = result.customErrorString == null
+                    && result.galleryInfoList != null && !result.galleryInfoList.isEmpty()
+                    && YesterdayTopListReadState.isYesterdayTopList(mUrlBuilder)
+                    ? mYesterdayTopListRequestPeriod : YesterdayTopListReadState.NO_PERIOD;
             boolean noPopularUpdates = false;
             if (isPopularMode() && mPopularHistory != null && result.customErrorString == null) {
                 mPopularRepeatedExpanded = false;
@@ -3222,6 +3251,10 @@ public class GalleryListScene extends BaseScene
             mHelper.setEmptyString(emptyString);
 //            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
             mHelper.onGetPageData(taskId, result, result.galleryInfoList);
+            if (loadedYesterdayPeriod != YesterdayTopListReadState.NO_PERIOD) {
+                mLoadedYesterdayTopListPeriod = loadedYesterdayPeriod;
+                markYesterdayTopListReadIfVisible();
+            }
             onDownloadedPageScanPageLoaded();
             if (isPopularMode()) {
                 mPopularRequestInFlight = false;
@@ -3767,6 +3800,7 @@ public class GalleryListScene extends BaseScene
             if (null == activity || null == mClient || null == mUrlBuilder) {
                 return;
             }
+            prepareYesterdayTopListRequest(page);
             mLastRequestedRatingMinimum = mUrlBuilder.getEffectiveMinRatingHundredths();
             mLastRequestedPreciseRating = Settings.getEnablePreciseRatingFilter();
 
@@ -3864,6 +3898,7 @@ public class GalleryListScene extends BaseScene
             if (null == activity || null == mClient || null == mUrlBuilder) {
                 return;
             }
+            prepareYesterdayTopListRequest(page);
             if (isPopularMode()) {
                 getPageData(taskId, pageAction, page);
                 return;

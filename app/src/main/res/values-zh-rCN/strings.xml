@@ -49,6 +49,10 @@
     <string name="search_corresponding_bookmarks">搜索对应书签</string>
     <string name="whats_hot">热门</string>
     <string name="top_lists">排行榜</string>
+    <string name="top_list_click_to_view">点击以查看</string>
+    <string name="settings_yesterday_top_list_new_badge">昨日排行榜未读提醒</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">未查看昨日排行榜时，在侧边栏“排行榜”右侧显示 New!，每天 UTC 00:05 重置</string>
+    <string name="navigation_long_press_hint">长按按钮以执行特殊操作</string>
     <string name="favourite">收藏</string>
     <string name="history">历史</string>
     <string name="downloads">下载</string>

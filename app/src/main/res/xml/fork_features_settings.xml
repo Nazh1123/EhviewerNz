@@ -3,6 +3,18 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <PreferenceCategory
+        android:title="@string/settings_fork_category_gallery">
+
+        <com.hippo.preference.SwitchPreference
+            android:defaultValue="true"
+            android:key="show_yesterday_top_list_new_badge"
+            android:summary="@string/settings_yesterday_top_list_new_badge_summary"
+            android:title="@string/settings_yesterday_top_list_new_badge"
+            app:allowDividerAbove="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
         android:title="@string/settings_fork_category_read">
 
         <com.hippo.preference.SwitchPreference

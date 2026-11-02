@@ -31,6 +31,10 @@
     <string name="subscription">訂閱</string>
     <string name="whats_hot">熱門</string>
     <string name="top_lists">排行榜</string>
+    <string name="top_list_click_to_view">點擊以查看</string>
+    <string name="settings_yesterday_top_list_new_badge">昨日排行榜未讀提醒</string>
+    <string name="settings_yesterday_top_list_new_badge_summary">未查看昨日排行榜時，在側邊欄「排行榜」右側顯示 New!，每天 UTC 00:05 重設</string>
+    <string name="navigation_long_press_hint">長按按鈕以執行特殊操作</string>
     <string name="favourite">收藏</string>
     <string name="history">歷史</string>
     <string name="downloads">下載</string>
