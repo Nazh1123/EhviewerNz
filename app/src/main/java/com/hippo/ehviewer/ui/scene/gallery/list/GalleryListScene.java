@@ -1296,10 +1296,6 @@ public class GalleryListScene extends BaseScene
 
     void showAddQuickSearchDialog(final List<QuickSearch> list,
                                   final ArrayAdapter<QuickSearch> adapter, final ListView listView, final TextView tip) {
-        boolean translation = Settings.getShowTagTranslations();
-//        if (translation){
-//            String translationString = getTagCN();
-//        }
         Context context = getEHContext();
         final ListUrlBuilder urlBuilder = mUrlBuilder;
         if (null == context || null == urlBuilder) {
@@ -1346,33 +1342,8 @@ public class GalleryListScene extends BaseScene
             builder.dismiss(() -> {
                 QuickSearch quickSearch = urlBuilder.toQuickSearch();
 
-                //汉化or不汉化
-                if (translation) {
-                    if (ehTags == null) {
-                        ehTags = EhTagDatabase.getInstance(context);
-                    }
-                //根据‘：’分割字符串为组名和标签名
-                //String[] tags = text.split(":");
-                //quickSearch.name = TagTranslationUtil.getTagCN(tags, ehTags);
-//                String[] parts = text.split("(?=(?:(?:[^\"]*\"){2})*[^\"]*$)\\s+");
-                    String[] parts = text.split("  ");
-                    StringBuilder newText = new StringBuilder();
-                    for (String part : parts) {
-                        String[] tags = part.split(":");
-                        for (int j = 0; j < tags.length; j++) {
-                            tags[j] = tags[j].replace("\"", "").replace("$", "");
-                        }
-                        String trans = TagTranslationUtil.getTagCN(tags, ehTags);
-                        if (newText.length() == 0) {
-                            newText.append(trans);
-                        } else {
-                            newText.append("  ").append(trans);
-                        }
-                    }
-                    quickSearch.name = newText.toString();
-                } else {
-                    quickSearch.name = text;
-                }
+                // Keep the user's label verbatim; tag translation belongs to rendering.
+                quickSearch.name = text;
                 EhDB.insertQuickSearch(quickSearch);
                 list.add(quickSearch);
                 adapter.notifyDataSetChanged();

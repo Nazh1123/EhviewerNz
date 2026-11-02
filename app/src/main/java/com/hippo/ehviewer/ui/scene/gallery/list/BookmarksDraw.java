@@ -2,9 +2,11 @@ package com.hippo.ehviewer.ui.scene.gallery.list;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.AbsListView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
@@ -61,33 +63,29 @@ public class BookmarksDraw {
 
         AssertUtils.assertNotNull(context);
 
-        List<QuickSearch> quickSearchList = EhDB.getAllQuickSearch();
-        //汉化标签
-        final boolean judge = Settings.getShowTagTranslations();
-        if (judge && !quickSearchList.isEmpty()) {
-            for (int i = 0; i < quickSearchList.size(); i++) {
-                String name = quickSearchList.get(i).getName();
-                //重设标签名称,并跳过已翻译的标签
-                if (name != null && 2 == name.split(":").length) {
-                    quickSearchList.get(i).setName(TagTranslationUtil.getTagCN(name.split(":"), ehTags));
-                    EhDB.updateQuickSearch(quickSearchList.get(i));
+        final List<QuickSearch> list = EhDB.getAllQuickSearch();
+        final ArrayAdapter<QuickSearch> adapter = new ArrayAdapter<>(context, R.layout.item_simple_list, list) {
+            @NonNull
+            @Override
+            public View getView(int position, View convertView, @NonNull ViewGroup parent) {
+                TextView view = (TextView) super.getView(position, convertView, parent);
+                QuickSearch search = getItem(position);
+                String name = search.getName();
+                // Translate only an unchanged keyword label. A custom name is user data;
+                // rendering the drawer must never rewrite it or persist a translation.
+                if (Settings.getShowTagTranslations() && ehTags != null && name != null
+                        && name.equals(search.getKeyword())) {
+                    String[] parts = name.split("  ");
+                    for (int i = 0; i < parts.length; i++) {
+                        parts[i] = TagTranslationUtil.getTagCN(
+                                parts[i].replace("\"", "").replace("$", ""), ehTags);
+                    }
+                    name = TextUtils.join("  ", parts);
                 }
+                view.setText(name);
+                return view;
             }
-        } else if (!judge && !quickSearchList.isEmpty()) {
-            for (int i = 0; i < quickSearchList.size(); i++) {
-                String name = quickSearchList.get(i).getName();
-                //重设标签名称,并跳过未翻译的标签
-                if (null != name && 1 == name.split(":").length) {
-                    quickSearchList.get(i).setName(quickSearchList.get(i).getKeyword());
-                    EhDB.updateQuickSearch(quickSearchList.get(i));
-                }
-            }
-        }
-
-
-        final List<QuickSearch> list = quickSearchList;
-
-        final ArrayAdapter<QuickSearch> adapter = new ArrayAdapter<>(context, R.layout.item_simple_list, list);
+        };
         listView.setAdapter(adapter);
         //快速搜索点击tag事件监听
         listView.setOnItemClickListener((parent, view1, position, id) -> {
