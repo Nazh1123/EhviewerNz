@@ -23,6 +23,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.net.Uri;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
@@ -1900,7 +1901,14 @@ public class Settings {
     }
 
     public static void putAppLanguage(String value) {
-        putString(KEY_APP_LANGUAGE, value);
+        Locale locale = "system".equals(value)
+                ? Resources.getSystem().getConfiguration().getLocales().get(0)
+                : Locale.forLanguageTag(value);
+        // Apply both before recreating activities so they see a consistent language choice.
+        sSettingsPre.edit()
+                .putString(KEY_APP_LANGUAGE, value)
+                .putBoolean(KEY_SHOW_TAG_TRANSLATIONS, "zh".equals(locale.getLanguage()))
+                .apply();
     }
 
     private static final String KEY_PROXY_TYPE = "proxy_type";
