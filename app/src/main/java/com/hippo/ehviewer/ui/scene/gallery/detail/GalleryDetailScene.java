@@ -2035,7 +2035,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         } else if (gd.previewPages == 1 ) {
             mPreviewText.setText(R.string.no_more_previews);
         } else {
-            mPreviewText.setText(R.string.more_previews);
+            mPreviewText.setText(resources.getString(R.string.gallery_detail_preview_count,
+                    resources.getString(R.string.more_previews), totalSize, gd.pages));
         }
 
         // 只创建限制数量的视图，大幅减少视图数量以提升滚动性能

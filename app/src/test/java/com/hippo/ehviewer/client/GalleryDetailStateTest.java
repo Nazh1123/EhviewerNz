@@ -42,6 +42,9 @@ public class GalleryDetailStateTest {
         assertTrue(GalleryDetailState.samePreviews(a, b)); assertTrue(GalleryDetailState.sameComments(a, b));
         assertFalse(GalleryDetailState.samePreviews(a, detail("https://example.org/a", 100)));
         assertFalse(GalleryDetailState.samePreviews(a, detail("https://example.org/b", 0)));
+        b.pages = a.pages + 1;
+        assertFalse(GalleryDetailState.samePreviews(a, b));
+        b.pages = a.pages;
         b.comments.comments[0].comment = "updated";
         assertFalse(GalleryDetailState.sameComments(a, b));
         b.token = "different";

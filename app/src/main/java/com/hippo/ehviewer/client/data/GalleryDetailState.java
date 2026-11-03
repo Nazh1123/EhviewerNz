@@ -26,7 +26,7 @@ public final class GalleryDetailState {
         return true;
     }
     public static boolean samePreviews(GalleryDetail a, GalleryDetail b) {
-        if (!sameGallery(a, b) || a.previewPages != b.previewPages) return false;
+        if (!sameGallery(a, b) || a.pages != b.pages || a.previewPages != b.previewPages) return false;
         PreviewSet left = a.previewSet, right = b.previewSet;
         if (left == null || right == null || left.getClass() != right.getClass() || left.size() != right.size()) return false;
         for (int i = 0; i < left.size(); i++) {
