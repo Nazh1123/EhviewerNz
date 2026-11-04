@@ -219,8 +219,11 @@ public class SearchEditText extends AppCompatEditText {
         try {
             setGravity((originalGravity & ~Gravity.VERTICAL_GRAVITY_MASK) | Gravity.TOP);
             firstRow.update(this);
-            // Rebuild only when the query or its display changes, never while scrolling.
-            setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
+            // TextView clears its Layout even when the same strategy is set again.
+            // Keep it available to the native handle / magnifier between cursor moves.
+            if (getBreakStrategy() != android.text.Layout.BREAK_STRATEGY_SIMPLE) {
+                setBreakStrategy(android.text.Layout.BREAK_STRATEGY_SIMPLE);
+            }
             requestLayout();
             invalidate();
         } finally {

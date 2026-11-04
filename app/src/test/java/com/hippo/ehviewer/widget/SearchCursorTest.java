@@ -10,6 +10,8 @@ import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.os.Looper;
 import android.view.ContextThemeWrapper;
+import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
 import androidx.preference.PreferenceManager;
@@ -26,6 +28,8 @@ import org.robolectric.Shadows;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
+import org.robolectric.util.ReflectionHelpers;
+import static org.robolectric.util.ReflectionHelpers.ClassParameter.from;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = {28, 36}, qualifiers = "zh-rCN-mdpi")
@@ -141,6 +145,90 @@ public class SearchCursorTest {
             }
         }
         image.recycle();
+    }
+
+    @Test public void movingLeftAcrossQuotesKeepsSearchInputEditable() {
+        SearchBar bar = attachedBar();
+        SearchEditText input = bar.findViewById(R.id.search_edit_text);
+        for (boolean chipsEnabled : new boolean[]{true, false}) {
+            Settings.putBoolean(Settings.KEY_ENABLE_SEARCH_TAG_CHIPS, chipsEnabled);
+            for (String query : new String[]{"wfaf\"", "a:\"alice$\"", "title:\"a b\"", "\"", "\"\"", "a:\"",
+                    "before a:\"alice name$\" title:\"some words\" tail",
+                    "a:\"alice$\" f:\"bravo$\" o:\"charlie$\" p:\"delta$\""}) {
+                bar.setText(query);
+                input.requestFocus();
+                input.setSelection(input.length());
+                measure(bar);
+                // Both direct caret placement (IME / selection handles) and arrow keys.
+                for (int caret = query.length(); caret >= 0; caret--) {
+                    input.setSelection(caret);
+                    measure(bar);
+                    assertEquals(caret, input.getSelectionEnd());
+                    assertEquals(query, input.getText().toString());
+                }
+                input.setSelection(input.length());
+                measure(bar);
+                for (int i = 0; i < query.length() && input.getSelectionEnd() > 0; i++) {
+                    try {
+                        input.onKeyDown(KeyEvent.KEYCODE_DPAD_LEFT,
+                                new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_LEFT));
+                    } catch (RuntimeException e) {
+                        throw new AssertionError("Moving left in " + query + " at "
+                                + input.getSelectionEnd() + ", chips=" + chipsEnabled, e);
+                    }
+                    measure(bar);
+                    assertEquals(query, input.getText().toString());
+                }
+                assertEquals(0, input.getSelectionEnd());
+            }
+        }
+    }
+
+    @Test public void draggingInsertionHandleLeftAcrossQuote() {
+        SearchBar bar = attachedBar();
+        SearchEditText input = bar.findViewById(R.id.search_edit_text);
+        for (int mode = 0; mode < 3; mode++) {
+            String query = mode == 0 ? "wfaf\"" : "a:\"alice$\"";
+            bar.setText(query);
+            if (mode == 2) assertTrue(input.performAccessibilityAction(0x02000001, null));
+            dragInsertionHandle(bar, input, query);
+        }
+    }
+
+    private void dragInsertionHandle(SearchBar bar, SearchEditText input, String query) {
+        input.requestFocus();
+        input.setSelection(input.length());
+        measure(bar);
+        Object editor = ReflectionHelpers.getField(input, "mEditor");
+        Object insertion = ReflectionHelpers.callInstanceMethod(editor, "getInsertionController");
+        ReflectionHelpers.callInstanceMethod(insertion, "show");
+        View handle = ReflectionHelpers.getField(insertion, "mHandle");
+        assertNotNull(handle);
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            ReflectionHelpers.callInstanceMethod(editor, "getMagnifierAnimator");
+            ReflectionHelpers.callInstanceMethod(handle, "checkForTransforms");
+        }
+        long time = android.os.SystemClock.uptimeMillis();
+        for (int offset = input.length() - 1; offset >= 0; offset--) {
+            int line = input.getLayout().getLineForOffset(offset);
+            float x = input.getLayout().getPrimaryHorizontal(offset);
+            float y = input.getPaddingTop() + input.getLayout().getLineBaseline(line);
+            ReflectionHelpers.callInstanceMethod(handle, "updatePosition",
+                    from(float.class, x), from(float.class, y), from(boolean.class, false));
+            Runnable refresh = ReflectionHelpers.getField(input, "refreshAfterSelection");
+            refresh.run();
+            MotionEvent event = MotionEvent.obtain(time, time + 20, MotionEvent.ACTION_MOVE, x, y, 0);
+            // Exercise native magnifier coordinate calculation without creating its
+            // Surface popup, which is unavailable in Robolectric's synthetic window.
+            ReflectionHelpers.callInstanceMethod(handle,
+                    "obtainMagnifierShowCoordinates",
+                    from(MotionEvent.class, event),
+                    from(android.graphics.PointF.class, new android.graphics.PointF()));
+            event.recycle();
+            measure(bar);
+        }
+        assertTrue(input.getSelectionEnd() < input.length());
+        assertEquals(query, input.getText().toString());
     }
 
     @Test public void visibleChipRowsKeepTheirFullBackgroundAndTwoPixelBottomPadding() throws Exception {
