@@ -146,7 +146,6 @@ class ReaderOriginalController(
 
     private fun comparisonLabel(page: Int) = when {
         !provider.isOriginalResultChosen(page) -> R.string.original_show_result
-        provider.hasDisplayableEnhancedPage(page) -> R.string.reader_show_enhanced_result
         else -> R.string.original_show_source
     }
 

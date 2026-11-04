@@ -72,7 +72,6 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
         val selected = provider.isShowingEnhanced(session.current)
         if (available && !session.enabled) panel.contentDescription = activity.getString(when {
             !selected -> R.string.reader_show_enhanced_result
-            provider.getOriginalResultFile(session.current) != null -> R.string.original_show_result
             else -> R.string.original_show_source
         })
         panel.findViewById<View>(R.id.super_resolution_progress_icon)?.apply {

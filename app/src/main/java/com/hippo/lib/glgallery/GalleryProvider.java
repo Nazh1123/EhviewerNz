@@ -112,10 +112,9 @@ public abstract class GalleryProvider {
         }
         if (previous != null) {
             previous.image().release();
-            if (image == null || previous.page() != page) notifyDataChanged(previous.page());
+            if (image == null || previous.page() != page) notifyOverlayChanged(previous.page());
         }
-        if (image != null) notifyDataChanged(page);
-        if (previous != null || image != null) notifyResultStateChanged();
+        if (image != null) notifyOverlayChanged(page);
     }
 
     ImageWrapper getOriginalResultImage(int page) {
@@ -140,14 +139,12 @@ public abstract class GalleryProvider {
 
     public void toggleOriginalResult(int page) {
         // The caller may also select a page with an indexed original that is not decoded yet.
-        boolean hasEnhanced = hasDisplayableEnhancedPage(page);
         if (isOriginalResultChosen(page)) {
-            if (!hasEnhanced) mHiddenOriginalResults.add(page);
-            mUnenhancedPages.remove(page);
+            mHiddenOriginalResults.add(page);
         } else {
             mHiddenOriginalResults.remove(page);
-            if (hasEnhanced) mUnenhancedPages.add(page);
         }
+        if (hasEnhancedPage(page)) mUnenhancedPages.add(page);
         notifyOverlayChanged(page);
     }
 
@@ -344,10 +341,10 @@ public abstract class GalleryProvider {
         if (!hasDisplayableEnhancedPage(index)) return;
         if (isShowingEnhanced(index)) {
             mUnenhancedPages.add(index);
-            mHiddenOriginalResults.remove(index);
         } else {
             mUnenhancedPages.remove(index);
         }
+        mHiddenOriginalResults.add(index);
         notifyOverlayChanged(index);
     }
 

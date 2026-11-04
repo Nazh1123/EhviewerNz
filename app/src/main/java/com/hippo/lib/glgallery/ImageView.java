@@ -69,6 +69,8 @@ class ImageView extends GLView implements ImageTexture.Callback {
 
     private boolean mScaleOffsetDirty = true;
     private boolean mPositionInRootDirty = true;
+    private record Viewport(float zoom, float centerX, float centerY) {}
+    private Viewport mPendingViewport;
 
     private final AlphaAnimation mAlphaAnimation;
 
@@ -160,6 +162,14 @@ class ImageView extends GLView implements ImageTexture.Callback {
     }
 
     @Override
+    protected void onLayout(boolean changeSize, int left, int top, int right, int bottom) {
+        if (mPendingViewport != null) {
+            restoreViewport(mPendingViewport);
+            mPendingViewport = null;
+        }
+    }
+
+    @Override
     protected void onPositionInRootChanged(int x, int y, int oldX, int oldY) {
         mPositionInRootDirty = true;
 
@@ -200,6 +210,12 @@ class ImageView extends GLView implements ImageTexture.Callback {
     }
 
     public void setImageTexture(ImageTexture imageTexture) {
+        setImageTexture(imageTexture, false);
+    }
+
+    void setImageTexture(ImageTexture imageTexture, boolean preserveViewport) {
+        Viewport viewport = preserveViewport && imageTexture != null ? captureViewport() : null;
+        mPendingViewport = null;
         // Remove callback
         if (mImageTexture != null) {
             mImageTexture.setCallback(null);
@@ -226,7 +242,7 @@ class ImageView extends GLView implements ImageTexture.Callback {
             // Start alpha animation, do not show animation for image has no valid rect
             getValidRect(mValidRect);
             if (!mValidRect.isEmpty()) {
-                startAnimation(mAlphaAnimation, true);
+                if (viewport == null) startAnimation(mAlphaAnimation, true);
                 mImageTexture.start();
             }
         } else {
@@ -236,10 +252,37 @@ class ImageView extends GLView implements ImageTexture.Callback {
 
         mScaleOffsetDirty = true;
         mPositionInRootDirty = true;
+        if (viewport != null) restoreViewport(viewport);
 
         if (oldTextureWidth != mTextureWidth || oldTextureHeight != mTextureHeight) {
+            mPendingViewport = viewport;
             requestLayout();
         }
+    }
+
+    private Viewport captureViewport() {
+        if (mImageTexture == null || mScaleOffsetDirty || mDst.isEmpty() || getWidth() <= 0 || getHeight() <= 0) {
+            return null;
+        }
+        float fit = Math.min((float) getWidth() / mTextureWidth, (float) getHeight() / mTextureHeight);
+        return new Viewport(mScale / fit,
+                (getWidth() / 2f - mDst.left) / mDst.width(),
+                (getHeight() / 2f - mDst.top) / mDst.height());
+    }
+
+    private void restoreViewport(Viewport viewport) {
+        if (getWidth() <= 0 || getHeight() <= 0) return;
+        float fit = Math.min((float) getWidth() / mTextureWidth, (float) getHeight() / mTextureHeight);
+        mScale = fit * viewport.zoom();
+        float width = mTextureWidth * mScale;
+        float height = mTextureHeight * mScale;
+        float left = getWidth() / 2f - width * viewport.centerX();
+        float top = getHeight() / 2f - height * viewport.centerY();
+        mDst.set(left, top, left + width, top + height);
+        adjustPosition();
+        mScaleOffsetDirty = false;
+        mPositionInRootDirty = true;
+        invalidate();
     }
 
     public ImageTexture getImageTexture() {
@@ -407,6 +450,7 @@ class ImageView extends GLView implements ImageTexture.Callback {
     }
 
     public void setScaleOffset(int scaleMode, int startPosition, float scaleValue) {
+        mPendingViewport = null;
         mScaleMode = scaleMode;
         mStartPosition = startPosition;
         mScaleValue = scaleValue;
@@ -512,6 +556,7 @@ class ImageView extends GLView implements ImageTexture.Callback {
     }
 
     public void scroll(int dx, int dy, int[] remain) {
+        mPendingViewport = null;
         // Only work after layout
         if (mScaleOffsetDirty) {
             setScaleOffset(mScaleMode, mStartPosition, mScaleValue);
@@ -574,6 +619,7 @@ class ImageView extends GLView implements ImageTexture.Callback {
     }
 
     public void scale(float focusX, float focusY, float scale) {
+        mPendingViewport = null;
         // Only work after layout
         if (mScaleOffsetDirty) {
             setScaleOffset(mScaleMode, mStartPosition, mScaleValue);

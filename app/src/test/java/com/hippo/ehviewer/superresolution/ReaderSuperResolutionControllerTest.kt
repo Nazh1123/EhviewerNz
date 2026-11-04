@@ -31,7 +31,7 @@ import org.robolectric.util.ReflectionHelpers
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class ReaderSuperResolutionControllerTest {
-    @Test fun originalPanelUsesFreeColumnThenMovesBelowTranslation() {
+    @Test fun originalPanelStacksBelowEnhancementAndCompactResultsShareTheRightEdge() {
         val lifecycle = Robolectric.buildActivity(AppCompatActivity::class.java)
         val activity = lifecycle.get()
         activity.setTheme(R.style.AppTheme_Gallery)
@@ -58,14 +58,31 @@ class ReaderSuperResolutionControllerTest {
                 layout.setEnhancementEnabled(true)
                 measure(host, width)
                 assertTrue(translation.right < enhancement.left)
-                assertEquals(translation.left, original.left)
-                assertTrue(original.y >= translation.y + translation.height)
+                assertEquals(enhancement.right, original.right)
+                assertTrue(original.y >= enhancement.y + enhancement.height)
 
                 layout.setOriginalState(enabled = false, result = true)
                 measure(host, width)
                 assertEquals(View.VISIBLE, original.visibility)
                 assertEquals(View.GONE, originalBars.visibility)
-                assertTrue(original.y >= translation.y + translation.height)
+                assertTrue(original.y >= enhancement.y + enhancement.height)
+                layout.setEnhancementEnabled(false)
+                layout.setEnhancementResultAvailable(true)
+                measure(host, width)
+                assertEquals(enhancement.y, original.y, .01f)
+                assertTrue(original.x + original.width < enhancement.x)
+                val compactOffset = original.translationX
+                layout.onQuickSettingsPositionChanged(true, 240f)
+                measure(host, width)
+                assertEquals(enhancement.y, original.y, .01f)
+                assertEquals(compactOffset, original.translationX, .01f)
+                layout.setOriginalState(enabled = true, result = true)
+                measure(host, width)
+                assertEquals(0f, original.translationX, .01f)
+                assertEquals(enhancement.right, original.right)
+                assertTrue(original.y >= enhancement.y + enhancement.height)
+                layout.onQuickSettingsPositionChanged(false, 0f)
+                layout.setEnhancementResultAvailable(false)
             }
         } finally {
             lifecycle.pause().stop().destroy()
@@ -360,7 +377,17 @@ class ReaderSuperResolutionControllerTest {
             assertTrue(provider.isShowingEnhancedFromOriginal(0))
             assertTrue(icon.isSelected)
             panel.performClick()
+            assertNull(provider.getDisplayedOriginalFile(0))
+            assertFalse(provider.isShowingEnhanced(0))
+            assertFalse(provider.isOriginalResultChosen(0))
+            assertFalse(icon.isSelected)
+            provider.toggleOriginalResult(0)
             assertEquals(original, provider.getDisplayedOriginalFile(0))
+            assertFalse(provider.isShowingEnhanced(0))
+            provider.toggleOriginalResult(0)
+            assertNull(provider.getDisplayedOriginalFile(0))
+            assertFalse(provider.isShowingEnhanced(0))
+            assertFalse(provider.isOriginalResultChosen(0))
             assertNotNull(provider.getTranslationOverlay(0))
         }
     }

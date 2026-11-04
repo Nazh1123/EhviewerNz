@@ -139,10 +139,21 @@ public class GalleryPageView extends GLFrameLayout {
 
     public void setImage(ImageTexture imageTexture) {
         mOriginalResultBase = null;
+        mResultImagePending = false;
         unbindImage();
         if (imageTexture != null) {
             mImage.setImageTexture(imageTexture);
         }
+    }
+
+    void setResultImage(ImageTexture imageTexture) {
+        ImageTexture previous = mImage.getImageTexture();
+        setOverlay(null);
+        setEnhanced(null);
+        setEnhancedTiles(null);
+        mImage.setImageTexture(imageTexture, true);
+        if (previous != null) previous.recycle();
+        mResultImagePending = false;
     }
 
     @Nullable
@@ -151,6 +162,7 @@ public class GalleryPageView extends GLFrameLayout {
     }
 
     ImageWrapper mOriginalResultBase;
+    boolean mResultImagePending;
 
     public void setOverlay(ImageTexture overlay) {
         ImageTexture previous = mImage.getOverlayTexture();

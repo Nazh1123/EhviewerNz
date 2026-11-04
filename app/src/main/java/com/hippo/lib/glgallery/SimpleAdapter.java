@@ -80,7 +80,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     @Override
     public void onPageWait(int index) {
         GalleryPageView page = findPageByIndex(index);
-        if (page != null && mProvider.getOriginalResultImage(index) == null) {
+        if (page != null && !page.mResultImagePending && mProvider.getOriginalResultImage(index) == null) {
             page.showInfo();
             page.setImage(null);
             if (mShowIndex) {
@@ -96,7 +96,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     @Override
     public void onPagePercent(int index, float percent) {
         GalleryPageView page = findPageByIndex(index);
-        if (page != null && mProvider.getOriginalResultImage(index) == null) {
+        if (page != null && !page.mResultImagePending && mProvider.getOriginalResultImage(index) == null) {
             page.showInfo();
             page.setImage(null);
             if (mShowIndex) {
@@ -134,7 +134,8 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
         page.showImage();
         // Apply gallery playback/visibility before setImage starts decoding.
         mGalleryView.notifyAnimatedPageVisibility(page, imageTexture);
-        page.setImage(imageTexture);
+        if (original || page.mResultImagePending) page.setResultImage(imageTexture);
+        else page.setImage(imageTexture);
         page.mOriginalResultBase = original ? image : null;
         bindOverlay(page, index);
         if (mShowIndex) {
@@ -167,7 +168,10 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     public void onDataChanged(int index) {
         GalleryPageView page = findPageByIndex(index);
         if (page != null && !showOriginalResult(page, index)) {
-            if (page.mOriginalResultBase != null) onPageWait(index);
+            if (page.mOriginalResultBase != null) {
+                page.mResultImagePending = true;
+                bindOverlay(page, index);
+            }
             mProvider.request(index);
         }
     }
@@ -184,8 +188,9 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
         } else if (current != null && page.mOriginalResultBase == null) {
             bindOverlay(page, index);
         } else {
-            // Drop the previous full-frame result while the ordinary source is requested.
-            onPageWait(index);
+            // Retain the current viewport until the requested source is ready.
+            page.mResultImagePending = current != null;
+            bindOverlay(page, index);
             mProvider.request(index);
         }
     }
