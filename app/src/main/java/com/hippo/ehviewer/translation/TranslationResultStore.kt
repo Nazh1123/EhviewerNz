@@ -29,6 +29,9 @@ internal class TranslationResultStore(
     private val cacheDirectory = requireNotNull(UniFile.fromFile(cacheDir))
     val persists = options.persistDownloaded && downloaded && galleryDir != null && (galleryId != null || resultIndex != null)
 
+    fun copyDownloadedOriginal(target: File): Boolean =
+        indexedSource?.let { resultIndex?.copyOriginal(it, target) } == true
+
     fun key(source: File): String = indexedSource?.let { "indexed-" + GalleryResultIndex.digest(it.name) }
         ?: ((galleryId?.let { "g${it}_" } ?: "") + cache.key(source, options))
     fun preparationKey(source: File): String = cache.preparationKey(source, options)

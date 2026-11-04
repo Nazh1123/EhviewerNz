@@ -14,7 +14,7 @@ import com.hippo.ehviewer.ui.SettingsActivity
 import com.hippo.ehviewer.widget.ReaderProgressLayout
 import com.hippo.lib.image.Image
 
-/** Detachable controls. Enhancement and translation always read source-provider originals. */
+/** Detachable controls for super-resolution processing and result comparison. */
 class ReaderSuperResolutionController @JvmOverloads constructor(
     private val activity: AppCompatActivity,
     private val provider: GalleryProvider2,
@@ -67,12 +67,18 @@ class ReaderSuperResolutionController @JvmOverloads constructor(
         queueBar.contentDescription = activity.getString(R.string.sr_queue_progress, session.completed, session.total)
     }
     private fun updateFloatingControl() {
-        val available = !closed && !session.enabled && provider.isPreferExistingResults && provider.hasEnhancedPage(session.current)
+        val available = !closed && provider.hasDisplayableEnhancedPage(session.current)
         progressLayout.setEnhancementResultAvailable(available)
-        val hidden = available && provider.getEnhancedTiles(session.current) == null && provider.getEnhancedPage(session.current) == null
-        if (available) panel.contentDescription = activity.getString(if (hidden)
-            R.string.reader_show_enhanced_result else R.string.reader_show_original)
-        panel.findViewById<View>(R.id.super_resolution_progress_icon)?.alpha = if (hidden) .5f else 1f
+        val selected = provider.isShowingEnhanced(session.current)
+        if (available && !session.enabled) panel.contentDescription = activity.getString(when {
+            !selected -> R.string.reader_show_enhanced_result
+            provider.getOriginalResultFile(session.current) != null -> R.string.original_show_result
+            else -> R.string.original_show_source
+        })
+        panel.findViewById<View>(R.id.super_resolution_progress_icon)?.apply {
+            alpha = if (available && !selected) .5f else 1f
+            isSelected = selected
+        }
     }
     private fun toggle() {
         if (closed) return

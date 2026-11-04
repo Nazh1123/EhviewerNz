@@ -168,7 +168,7 @@ internal class SuperResolutionStore(context: Context, private val identity: Stri
         val image = if (resultIndex != null && indexedSource != null) {
             val coroutine = kotlinx.coroutines.currentCoroutineContext()
             SuperResolutionExport.encode(page, workspace, options.quality) { extension, writer ->
-                resultIndex.write(indexedSource, GalleryResultIndex.Kind.SR, extension, page.scale) { output ->
+                resultIndex.write(indexedSource, GalleryResultIndex.Kind.SR, extension, page.scale, page.fromOriginal) { output ->
                     kotlinx.coroutines.runBlocking(coroutine) { writer(output) }
                 }
             }

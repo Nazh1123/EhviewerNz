@@ -541,12 +541,14 @@ final class ReaderPagePreview implements AutoCloseable {
     private final class ResultLabel extends TextView {
         private final Drawable translation;
         private final Drawable enhanced;
+        private final Drawable original;
         private final Rect digits = new Rect();
         private int flags;
         ResultLabel(Context context) {
             super(context);
             translation = icon(context, R.drawable.v_translate_x24);
             enhanced = icon(context, R.drawable.v_super_resolution_x24);
+            original = icon(context, R.drawable.v_original_download_x24);
         }
         private Drawable icon(Context context, int resource) {
             Drawable drawable = AppCompatResources.getDrawable(context, resource).mutate();
@@ -570,10 +572,23 @@ final class ReaderPagePreview implements AutoCloseable {
                 translation.setBounds(right - edge, top, right, top + edge);
                 translation.draw(canvas);
             }
-            if ((flags & ReaderResultIndex.SUPER_RESOLUTION) != 0) {
-                int left = Math.round(center + halfWidth + dp(4));
-                enhanced.setBounds(left, top, left + edge, top + edge);
+            boolean showEnhanced = (flags & ReaderResultIndex.SUPER_RESOLUTION) != 0;
+            boolean showOriginal = (flags & ReaderResultIndex.ORIGINAL) != 0;
+            int rightIcons = (showEnhanced ? 1 : 0) + (showOriginal ? 1 : 0);
+            if (rightIcons == 0) return;
+            int left = Math.round(center + halfWidth + dp(4));
+            int rightEdge = Math.min(edge, (getWidth() - getPaddingRight() - left -
+                    (rightIcons - 1) * dp(4)) / rightIcons);
+            if (rightEdge <= 0) return;
+            int rightTop = top + (edge - rightEdge) / 2;
+            if (showEnhanced) {
+                enhanced.setBounds(left, rightTop, left + rightEdge, rightTop + rightEdge);
                 enhanced.draw(canvas);
+                left += rightEdge + dp(4);
+            }
+            if (showOriginal) {
+                original.setBounds(left, rightTop, left + rightEdge, rightTop + rightEdge);
+                original.draw(canvas);
             }
         }
     }

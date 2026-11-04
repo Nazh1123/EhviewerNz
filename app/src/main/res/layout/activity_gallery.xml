@@ -425,5 +425,6 @@
         tools:ignore="RtlHardcoded" />
 
     <include layout="@layout/reader_super_resolution_progress" />
+    <include layout="@layout/reader_original_progress" />
 
 </FrameLayout>

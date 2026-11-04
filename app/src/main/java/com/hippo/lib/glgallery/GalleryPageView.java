@@ -23,6 +23,7 @@ import com.hippo.lib.glview.glrenderer.Texture;
 import com.hippo.lib.glview.image.GLImageMovableTextView;
 import com.hippo.lib.glview.image.ImageMovableTextTexture;
 import com.hippo.lib.glview.image.ImageTexture;
+import com.hippo.lib.glview.image.ImageWrapper;
 import com.hippo.lib.glview.view.Gravity;
 import com.hippo.lib.glview.widget.GLFrameLayout;
 import com.hippo.lib.glview.widget.GLLinearLayout;
@@ -137,6 +138,7 @@ public class GalleryPageView extends GLFrameLayout {
     }
 
     public void setImage(ImageTexture imageTexture) {
+        mOriginalResultBase = null;
         unbindImage();
         if (imageTexture != null) {
             mImage.setImageTexture(imageTexture);
@@ -147,6 +149,8 @@ public class GalleryPageView extends GLFrameLayout {
     public ImageTexture getImageTexture() {
         return mImage.getImageTexture();
     }
+
+    ImageWrapper mOriginalResultBase;
 
     public void setOverlay(ImageTexture overlay) {
         ImageTexture previous = mImage.getOverlayTexture();

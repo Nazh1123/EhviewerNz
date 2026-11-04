@@ -393,7 +393,10 @@ internal class GalleryTranslationSession(
                                         true
                                     }
                                 }) return@withContext
-                                if (!sourceLock.withLock { provider.save(page, requireNotNull(UniFile.fromFile(source))) }) {
+                                if (!sourceLock.withLock {
+                                        savedResults.copyDownloadedOriginal(source) ||
+                                            provider.save(page, requireNotNull(UniFile.fromFile(source)))
+                                    }) {
                                     withContext(Dispatchers.Main) {
                                         if (generation == epoch && !request.isObsolete) {
                                             val attempts = (sourceAttempts[page] ?: 0) + 1

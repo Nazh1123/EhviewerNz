@@ -44,6 +44,9 @@ public abstract class GalleryProvider {
     private volatile GLRoot mGLRoot;
 
     private final ImageCache mImageCache = new ImageCache();
+    private record OriginalResult(int page, ImageWrapper image, com.hippo.unifile.UniFile file) {}
+    private volatile OriginalResult mOriginalResult;
+    private final java.util.Set<Integer> mHiddenOriginalResults = ConcurrentHashMap.newKeySet();
     private final ImageCache mTranslatedCache = new ImageCache();
     private final ImageCache mEnhancedCache = new ImageCache(
             (int) com.hippo.ehviewer.translation.engine.SuperResolution.DEFAULT_OUTPUT_BYTES);
@@ -70,12 +73,14 @@ public abstract class GalleryProvider {
     @UiThread
     public void stop() {
         OSUtils.checkMainLoop();
+        setOriginalResult(-1, null, null);
         mImageCache.evictAll();
         mTranslatedCache.evictAll();
         mEnhancedCache.evictAll();
         mEnhancedTiles.values().forEach(com.hippo.ehviewer.superresolution.EnhancedTilePage::trim);
         mEnhancedTiles.clear();
         mUnenhancedPages.clear();
+        mHiddenOriginalResults.clear();
         mSuperResolutionAnimations.clear();
         mOriginalPages.clear();
     }
@@ -93,6 +98,58 @@ public abstract class GalleryProvider {
 
     /** Display/source page identity may differ from the position in a filtered reader. */
     public int getSourcePage(int index) { return index; }
+
+    /** The reader owns only the visible original result's decoded image. */
+    @UiThread
+    public void setOriginalResult(int page, Image image, com.hippo.unifile.UniFile file) {
+        OriginalResult previous = mOriginalResult;
+        if (image == null) {
+            mOriginalResult = null;
+        } else {
+            ImageWrapper wrapper = new ImageWrapper(image);
+            if (!wrapper.obtain()) return;
+            mOriginalResult = new OriginalResult(page, wrapper, file);
+        }
+        if (previous != null) {
+            previous.image().release();
+            if (image == null || previous.page() != page) notifyDataChanged(previous.page());
+        }
+        if (image != null) notifyDataChanged(page);
+        if (previous != null || image != null) notifyResultStateChanged();
+    }
+
+    ImageWrapper getOriginalResultImage(int page) {
+        OriginalResult result = mOriginalResult;
+        if (result == null || result.page() != page) return null;
+        if (isShowingEnhanced(page)) return isShowingEnhancedFromOriginal(page) ? result.image() : null;
+        return mHiddenOriginalResults.contains(page) ? null : result.image();
+    }
+
+    public com.hippo.unifile.UniFile getOriginalResultFile(int page) {
+        OriginalResult result = mOriginalResult;
+        return result != null && result.page() == page ? result.file() : null;
+    }
+
+    public com.hippo.unifile.UniFile getDisplayedOriginalFile(int page) {
+        return isOriginalResultChosen(page) ? getOriginalResultFile(page) : null;
+    }
+
+    public boolean isOriginalResultChosen(int page) {
+        return !isShowingEnhanced(page) && !mHiddenOriginalResults.contains(page);
+    }
+
+    public void toggleOriginalResult(int page) {
+        // The caller may also select a page with an indexed original that is not decoded yet.
+        boolean hasEnhanced = hasDisplayableEnhancedPage(page);
+        if (isOriginalResultChosen(page)) {
+            if (!hasEnhanced) mHiddenOriginalResults.add(page);
+            mUnenhancedPages.remove(page);
+        } else {
+            mHiddenOriginalResults.remove(page);
+            if (hasEnhanced) mUnenhancedPages.add(page);
+        }
+        notifyOverlayChanged(page);
+    }
 
     public final void request(int index) {
         ImageWrapper imageWrapper = mImageCache.getLive(index);
@@ -133,8 +190,8 @@ public abstract class GalleryProvider {
 
     public boolean hasEnhancedPage(int index) { return mEnhancedTiles.containsKey(index) || mEnhancedCache.getLive(index) != null; }
 
-    private boolean mPreferExistingResults;
-    private boolean mShowEnhancements;
+    private volatile boolean mPreferExistingResults;
+    private volatile boolean mShowEnhancements;
     private Runnable mExistingResultLoader;
     private final java.util.Set<Runnable> mResultStateListeners = new java.util.concurrent.CopyOnWriteArraySet<>();
     public void addResultStateListener(Runnable listener) { mResultStateListeners.add(listener); }
@@ -149,7 +206,11 @@ public abstract class GalleryProvider {
     private final java.util.Set<Integer> mExistingTranslatedPages = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public void setExistingResultLoader(Runnable loader) { mExistingResultLoader = loader; }
     private void reloadExistingResults() { if (mExistingResultLoader != null) mExistingResultLoader.run(); }
-    public void setShowEnhancements(boolean show) { mShowEnhancements = show; }
+    public void setShowEnhancements(boolean show) {
+        if (mShowEnhancements == show) return;
+        mShowEnhancements = show;
+        for (Integer page : mExistingEnhancedPages) notifyOverlayChanged(page);
+    }
     public void setPreferExistingResults(boolean prefer) {
         if (mPreferExistingResults == prefer) return;
         mPreferExistingResults = prefer;
@@ -191,27 +252,43 @@ public abstract class GalleryProvider {
     }
     public void setExistingEnhancedTiles(int index, com.hippo.ehviewer.superresolution.EnhancedTilePage page) {
         mExistingEnhancedPages.add(index);
-        setEnhancedTilesInternal(index, page, false);
+        setEnhancedTilesInternal(index, page);
     }
 
     public void setEnhancedTiles(int index, com.hippo.ehviewer.superresolution.EnhancedTilePage page) {
         mExistingEnhancedPages.remove(index);
-        setEnhancedTilesInternal(index, page, true);
+        setEnhancedTilesInternal(index, page);
     }
 
-    private void setEnhancedTilesInternal(int index, com.hippo.ehviewer.superresolution.EnhancedTilePage page, boolean resetComparison) {
+    private void setEnhancedTilesInternal(int index, com.hippo.ehviewer.superresolution.EnhancedTilePage page) {
         page.activate();
         if (mEnhancedTiles.get(index) == page) return;
         mEnhancedCache.remove(index);
         com.hippo.ehviewer.superresolution.EnhancedTilePage previous = mEnhancedTiles.put(index, page);
         if (previous != null) previous.trim();
-        if (resetComparison) mUnenhancedPages.remove(index);
         notifyOverlayChanged(index);
     }
 
     public com.hippo.ehviewer.superresolution.EnhancedTilePage getEnhancedTiles(int index) {
-        return mUnenhancedPages.contains(index) || (mExistingEnhancedPages.contains(index) && !mPreferExistingResults && !mShowEnhancements)
+        return mUnenhancedPages.contains(index) || !canShowEnhanced(index)
                 ? null : mEnhancedTiles.get(index);
+    }
+
+    private boolean canShowEnhanced(int index) {
+        return !mExistingEnhancedPages.contains(index) || mPreferExistingResults || mShowEnhancements;
+    }
+
+    public boolean hasDisplayableEnhancedPage(int index) {
+        return canShowEnhanced(index) && hasEnhancedPage(index);
+    }
+
+    public boolean isShowingEnhanced(int index) {
+        return getEnhancedTiles(index) != null || getEnhancedPage(index) != null;
+    }
+
+    public boolean isShowingEnhancedFromOriginal(int index) {
+        var tiles = getEnhancedTiles(index);
+        return tiles != null && tiles.getFromOriginal();
     }
 
     /** 0 = source pending, 1 = ready, -1 = animation, -2 = over memory budget. */
@@ -255,7 +332,6 @@ public abstract class GalleryProvider {
         mExistingEnhancedPages.remove(index);
         com.hippo.ehviewer.superresolution.EnhancedTilePage previous = mEnhancedTiles.remove(index);
         if (previous != null) previous.trim();
-        mUnenhancedPages.remove(index);
         mEnhancedCache.add(index, new ImageWrapper(image));
         notifyOverlayChanged(index);
     }
@@ -265,8 +341,13 @@ public abstract class GalleryProvider {
     }
 
     public void toggleEnhancedPage(int index) {
-        if (!hasEnhancedPage(index)) return;
-        if (!mUnenhancedPages.add(index)) mUnenhancedPages.remove(index);
+        if (!hasDisplayableEnhancedPage(index)) return;
+        if (isShowingEnhanced(index)) {
+            mUnenhancedPages.add(index);
+            mHiddenOriginalResults.remove(index);
+        } else {
+            mUnenhancedPages.remove(index);
+        }
         notifyOverlayChanged(index);
     }
 

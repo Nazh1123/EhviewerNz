@@ -36,6 +36,105 @@ class GalleryResultIndexTest {
         return try { ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray() }
         finally { bitmap.recycle() }
     }
+
+    @Test fun originalDownloadKeepsSourceBytesAndUsesTheSharedManifest() {
+        val source = GalleryResultIndex.Source("00000024")
+        val readingFile = File(gallery, "00000024.png").apply { writeBytes(png(8, 8)) }
+        val readingBytes = readingFile.readBytes()
+        val originalBytes = png(24, 32)
+        val writer = index(persist = true)
+        writer.write(source, tl, "png") { it.write(png()) }
+        writer.writeOriginal(source) { it.write(originalBytes) }
+
+        val downloaded = File(gallery, "_original/00000024_orn.png")
+        assertArrayEquals(originalBytes, downloaded.readBytes())
+        assertArrayEquals(readingBytes, readingFile.readBytes())
+        GalleryResultIndex.dropMemory()
+        val reader = index()
+        assertNotNull(reader.find(source, tl)?.file)
+        assertEquals(downloaded.name, reader.find(source, GalleryResultIndex.Kind.ORIGINAL)?.file?.name)
+
+        assertThrows(IllegalStateException::class.java) {
+            writer.writeOriginal(source) { it.write("<html>Download error</html>".toByteArray()) }
+        }
+        assertArrayEquals(originalBytes, downloaded.readBytes())
+        assertArrayEquals(readingBytes, readingFile.readBytes())
+    }
+
+    @Test fun downloadedOriginalIsCopiedForProcessingAndEnhancementRetainsItsProvenance() {
+        val original = png(16, 24)
+        val input = File(app.cacheDir, "processing-input")
+        val local = index(persist = true)
+        val cached = index()
+        assertFalse(local.copyOriginal(source, input))
+        local.writeOriginal(source) { it.write(original) }
+        assertTrue(cached.copyOriginal(source, input))
+        assertArrayEquals(original, input.readBytes())
+
+        cached.write(source, sr, "png", scale = 2, fromOriginal = true) { it.write(png(32, 48)) }
+        assertTrue(local.find(source, sr)?.persistent == true)
+        GalleryResultIndex.dropMemory()
+        assertTrue(index().find(source, sr)?.fromOriginal == true)
+        local.write(source, sr, "png", scale = 2) { it.write(png(32, 48)) }
+        assertFalse(index().find(source, sr)?.fromOriginal == true)
+    }
+
+    @Test fun manifestCountsDeduplicateCompletedPagesAcrossStorageAndIgnoreCheckpoints() {
+        val page = GalleryResultIndex.Source("00000001")
+        val other = GalleryResultIndex.Source("00000002")
+        val original = GalleryResultIndex.Kind.ORIGINAL
+        val local = index(persist = true)
+        val cached = index()
+        local.write(page, tl, "png") { it.write(png()) }
+        cached.write(page, tl, "png") { it.write(png()) }
+        cached.write(other, tl, "partial") { it.write(png()) }
+        local.write(page, sr, "png", 2) { it.write(png()) }
+        local.writeOriginal(page) { it.write(png()) }
+        cached.writeOriginal(other) { it.write(png()) }
+        assertEquals(GalleryProcessingProgress.Counts(1, 1, 2), local.snapshot(refresh = true).counts())
+
+        val hit = checkNotNull(local.find(page, original))
+        File(gallery, "_original/00000001_orn.png").writeText("invalid image")
+        local.discardUnreadable(page, original, hit)
+        assertEquals(GalleryProcessingProgress.Counts(1, 1, 1), local.snapshot(refresh = true).counts())
+        assertNotNull(local.find(page, tl))
+        assertTrue(File(gallery, "_original/00000001_orn.png").isFile)
+
+        local.writeOriginal(page) { it.write(png(48, 32)) }
+        local.discardUnreadable(page, original, hit)
+        assertEquals(GalleryProcessingProgress.Counts(1, 1, 2), local.snapshot(refresh = true).counts())
+    }
+
+    @Test fun cachedOriginalUsesTheSameNamedFileAndSurvivesClearingOtherKinds() {
+        val page = GalleryResultIndex.Source("00000003")
+        val original = GalleryResultIndex.Kind.ORIGINAL
+        val writer = index()
+        val image = writer.writeOriginal(page) { it.write(png()) }
+        assertEquals("_original", image.parentFile?.name)
+        assertEquals("00000003_orn.png", image.name)
+        GalleryResultIndex.clearCache(app, sr)
+        assertTrue(image.isFile)
+        assertNotNull(index().find(page, original)?.file)
+        GalleryResultIndex.clearCache(app, original)
+        assertNull(index().find(page, original))
+    }
+
+    @Test fun publishingJpegOriginalRecordsDownloadListProgress() = kotlinx.coroutines.runBlocking {
+        val gid = 81924L
+        val writer = GalleryResultIndex.open(app, "gallery:$gid", gid, UniFile.fromFile(gallery), true)
+        val bitmap = Bitmap.createBitmap(8, 12, Bitmap.Config.ARGB_8888)
+        try {
+            writer.writeOriginal(GalleryResultIndex.Source("00000003")) {
+                assertTrue(bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it))
+            }
+        } finally {
+            bitmap.recycle()
+        }
+        val saved = GalleryProcessingProgress.savedResults(app, gid).single()
+        assertEquals(GalleryProcessingProgress.Kind.ORIGINAL, saved.kind)
+        assertEquals(1, legacyCounts(app, gid).originals)
+        assertTrue(File(gallery, "_original/00000003_orn.jpg").isFile)
+    }
     @Test fun encodingDoesNotBlockReadingSameOrOtherGalleryAndDeleteWinsBeforePublication() {
         val index = GalleryResultIndex.open(app, "gallery:991", 991, UniFile.fromFile(gallery), true)
         val other = GalleryResultIndex.open(app, "other", null, null, false)

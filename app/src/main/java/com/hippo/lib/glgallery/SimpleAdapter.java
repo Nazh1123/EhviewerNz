@@ -42,6 +42,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
 
     @Override
     public void onBind(GalleryPageView view, int index) {
+        if (showOriginalResult(view, index)) return;
         mProvider.request(index);
         view.showInfo();
         view.setImage(null);
@@ -79,7 +80,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     @Override
     public void onPageWait(int index) {
         GalleryPageView page = findPageByIndex(index);
-        if (page != null) {
+        if (page != null && mProvider.getOriginalResultImage(index) == null) {
             page.showInfo();
             page.setImage(null);
             if (mShowIndex) {
@@ -95,7 +96,7 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     @Override
     public void onPagePercent(int index, float percent) {
         GalleryPageView page = findPageByIndex(index);
-        if (page != null) {
+        if (page != null && mProvider.getOriginalResultImage(index) == null) {
             page.showInfo();
             page.setImage(null);
             if (mShowIndex) {
@@ -111,23 +112,9 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     @Override
     public void onPageSucceed(int index, ImageWrapper image) {
         GalleryPageView page = findPageByIndex(index);
-        if (page != null) {
-            if (image.obtain()) {
-                ImageTexture imageTexture = new ImageTexture(image);
-                mUploader.addTexture(imageTexture);
-                page.showImage();
-                // Apply gallery playback/visibility before setImage starts decoding.
-                mGalleryView.notifyAnimatedPageVisibility(page, imageTexture);
-                page.setImage(imageTexture);
-                bindOverlay(page, index);
+        if (page != null && mProvider.getOriginalResultImage(index) == null) {
+            if (showImage(page, index, image, false)) {
                 mGalleryView.notifyPageImageReady(index);
-                if (mShowIndex) {
-                    page.setPage(mProvider.getSourcePage(index) + 1);
-                } else {
-                    page.hidePage();
-                }
-                page.setProgress(GalleryPageView.PROGRESS_GONE);
-                page.setError(null, null);
             } else {
                 // request() discards a recycled cache entry before loading the source.
                 mProvider.request(index);
@@ -135,10 +122,35 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
         }
     }
 
+    private boolean showOriginalResult(GalleryPageView page, int index) {
+        ImageWrapper original = mProvider.getOriginalResultImage(index);
+        return original != null && showImage(page, index, original, true);
+    }
+
+    private boolean showImage(GalleryPageView page, int index, ImageWrapper image, boolean original) {
+        if (!image.obtain()) return false;
+        ImageTexture imageTexture = new ImageTexture(image);
+        mUploader.addTexture(imageTexture);
+        page.showImage();
+        // Apply gallery playback/visibility before setImage starts decoding.
+        mGalleryView.notifyAnimatedPageVisibility(page, imageTexture);
+        page.setImage(imageTexture);
+        page.mOriginalResultBase = original ? image : null;
+        bindOverlay(page, index);
+        if (mShowIndex) {
+            page.setPage(mProvider.getSourcePage(index) + 1);
+        } else {
+            page.hidePage();
+        }
+        page.setProgress(GalleryPageView.PROGRESS_GONE);
+        page.setError(null, null);
+        return true;
+    }
+
     @Override
     public void onPageFailed(int index, String error) {
         GalleryPageView page = findPageByIndex(index);
-        if (page != null) {
+        if (page != null && mProvider.getOriginalResultImage(index) == null) {
             page.showInfo();
             page.setImage(null);
             if (mShowIndex) {
@@ -154,7 +166,8 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     @Override
     public void onDataChanged(int index) {
         GalleryPageView page = findPageByIndex(index);
-        if (page != null) {
+        if (page != null && !showOriginalResult(page, index)) {
+            if (page.mOriginalResultBase != null) onPageWait(index);
             mProvider.request(index);
         }
     }
@@ -162,9 +175,18 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     @Override
     public void onPageOverlayChanged(int index) {
         GalleryPageView page = findPageByIndex(index);
-        if (page != null) {
-            if (page.getImageTexture() != null) bindOverlay(page, index);
-            else mProvider.request(index);
+        if (page == null) return;
+        ImageWrapper original = mProvider.getOriginalResultImage(index);
+        ImageTexture current = page.getImageTexture();
+        if (original != null) {
+            if (page.mOriginalResultBase == original) bindOverlay(page, index);
+            else if (!showImage(page, index, original, true)) mProvider.request(index);
+        } else if (current != null && page.mOriginalResultBase == null) {
+            bindOverlay(page, index);
+        } else {
+            // Drop the previous full-frame result while the ordinary source is requested.
+            onPageWait(index);
+            mProvider.request(index);
         }
     }
 

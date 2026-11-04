@@ -301,15 +301,20 @@ internal class GallerySuperResolutionSession(
             val forceRequested = withContext(Dispatchers.Main) { page in forced }
             if (!forceRequested) index.find(entry, GalleryResultIndex.Kind.SR)?.takeIf { it.state == "complete" }?.let { hit ->
                 val tiles = EnhancedTilePage(File(context.cacheDir, "result-reader").apply { mkdirs() },
-                    hit.width / hit.scale, hit.height / hit.scale, hit.scale).apply { useFinalImage(checkNotNull(hit.file)) }
+                    hit.width / hit.scale, hit.height / hit.scale, hit.scale).apply {
+                    fromOriginal = hit.fromOriginal
+                    useFinalImage(checkNotNull(hit.file))
+                }
                 withContext(Dispatchers.Main) {
                     if (generation == epoch && enabled && browsing && current == page) reader?.displayTiles(page, tiles)
                 }
                 return tiles to SuperResolutionPageMetrics(reusedTiles = tiles.count)
             }
             if (forceRequested) index.invalidate(entry, GalleryResultIndex.Kind.SR)
-            var saved = false
+            val fromOriginal = index.copyOriginal(entry, source)
+            var saved = fromOriginal
             for (attempt in 0 until 30) {
+                if (saved) break
                 currentCoroutineContext().ensureActive()
                 if (provider.save(page, checkNotNull(UniFile.fromFile(source)))) { saved = true; break }
                 if (attempt == 0) withContext(Dispatchers.Main) { provider.prepareTranslationSource(page) }
@@ -372,6 +377,7 @@ internal class GallerySuperResolutionSession(
                                 8L * 1024 * 1024) { done, total -> checkPriority(); callback(done, total) }
                         }, progress = ::report,
                         ready = { tiles ->
+                            tiles.fromOriginal = fromOriginal
                             withContext(Dispatchers.Main) {
                                 ensureActive()
                                 if (generation == epoch && enabled && browsing && current == page && reader != null) {
@@ -380,6 +386,7 @@ internal class GallerySuperResolutionSession(
                                 } else false
                             }
                         }, grouped = true).also { (tiles, _) ->
+                            tiles.fromOriginal = fromOriginal
                             recordResult(store.compact(key, tiles, directory, sourceName))
                             GalleryResultIndex.prune(context, GalleryResultIndex.Kind.SR, selected.cacheMiB * 1024L * 1024)
                         }

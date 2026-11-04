@@ -108,7 +108,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     private final DownloadAdapterCallback mCallback;
     private long mActionHeaderId = RecyclerView.NO_ID;
     private LabelHeaderHolder mActiveActionHolder;
-    private final GalleryProcessingProgress.Listener mProcessingProgressListener = this::onProcessingProgressChanged;
+    private final com.hippo.ehviewer.gallery.DownloadResultProgress mResultProgress;
     private boolean mObservingProcessingProgress;
 
     private View movedItem = null;
@@ -180,6 +180,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             }
         }
         mInflater = mInflater1;
+        mResultProgress = new com.hippo.ehviewer.gallery.DownloadResultProgress(
+                mInflater.getContext(), this::onProcessingProgressChanged);
         AssertUtils.assertNotNull(mInflater);
 
         View calculator = mInflater.inflate(R.layout.item_gallery_list_thumb_height, null);
@@ -204,7 +206,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     public void startObservingProcessingProgress() {
         if (mObservingProcessingProgress) return;
         mObservingProcessingProgress = true;
-        GalleryProcessingProgress.addListener(mProcessingProgressListener);
+        mResultProgress.start();
         RecyclerView recycler = mCallback.getRecyclerView();
         if (recycler == null) return;
         for (int i = 0; i < recycler.getChildCount(); i++) {
@@ -218,15 +220,18 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
     public void stopObservingProcessingProgress() {
         mObservingProcessingProgress = false;
-        GalleryProcessingProgress.removeListener(mProcessingProgressListener);
+        mResultProgress.stop();
     }
 
     private void bindReadProgress(DownloadHolder holder, long gid) {
         SpiderInfo spiderInfo = mCallback.getSpiderInfoMap().get(gid);
-        GalleryProcessingProgress.Counts counts = GalleryProcessingProgress.get(mInflater.getContext(), gid);
+        GalleryProcessingProgress.Counts counts = holder.boundInfo == null
+                ? new GalleryProcessingProgress.Counts(0, 0, 0) : mResultProgress.get(holder.boundInfo);
+        int pages = spiderInfo == null ? holder.boundPageCount : spiderInfo.pages;
         holder.readProgress.setText(spiderInfo == null ? null : (spiderInfo.startPage + 1) + "/" + spiderInfo.pages);
-        holder.processingProgress.setText(spiderInfo == null ? null : counts.primary(spiderInfo.pages));
-        holder.srProgress.setText(spiderInfo == null ? null : counts.secondary(spiderInfo.pages));
+        holder.processingSeparator.setText(holder.readProgress.length() == 0 ? "" : counts.separator(pages));
+        holder.processingProgress.setText(counts.primary(pages));
+        holder.srProgress.setText(counts.secondary(pages));
         bindProcessingVisibility(holder, holder.readProgress.getVisibility() == View.VISIBLE);
     }
 
@@ -309,6 +314,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         }
         DownloadHolder holder = (DownloadHolder) rawHolder;
         holder.boundGid = Long.MIN_VALUE;
+        holder.boundInfo = null;
         holder.boundArchiveUri = null;
         holder.thumb.unload();
         holder.thumb.setTag(R.id.thumb, null);
@@ -324,6 +330,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             }
             DownloadInfo info = list.get(pos);
             holder.boundGid = info.gid;
+            holder.boundInfo = info;
+            holder.boundPageCount = Math.max(info.pages, info.total);
             boolean isImportedFolder =
                     LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri);
             boolean isImportedArchive = info.archiveUri != null
@@ -708,6 +716,7 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
         } else if (rawHolder instanceof DownloadHolder) {
             DownloadHolder holder = (DownloadHolder) rawHolder;
             holder.boundGid = Long.MIN_VALUE;
+            holder.boundInfo = null;
             holder.boundArchiveUri = null;
             holder.thumb.unload();
             holder.thumb.setTag(R.id.thumb, null);
@@ -1110,6 +1119,8 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
             implements View.OnClickListener, View.OnLongClickListener {
 
         long boundGid = -1L;
+        DownloadInfo boundInfo;
+        int boundPageCount;
         String boundArchiveUri;
         public final LoadImageView thumb;
         public final TextView title;

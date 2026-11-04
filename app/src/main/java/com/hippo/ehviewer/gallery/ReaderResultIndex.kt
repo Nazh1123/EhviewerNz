@@ -10,9 +10,10 @@ import kotlinx.coroutines.*
 class ReaderResultIndex(context: Context, private val provider: GalleryProvider2,
                         private val info: GalleryInfo?) : AutoCloseable {
     internal data class Page(val source: GalleryResultIndex.Source?, val translation: GalleryResultIndex.Hit?,
-                             val enhanced: GalleryResultIndex.Hit?) {
+                             val enhanced: GalleryResultIndex.Hit?, val original: GalleryResultIndex.Hit? = null) {
         val flags: Int get() = (if (translation?.state == "complete") TRANSLATION else 0) or
-            (if (enhanced?.state == "complete" && enhanced.scale in listOf(2, 4, 8)) SUPER_RESOLUTION else 0)
+            (if (enhanced?.state == "complete" && enhanced.scale in listOf(2, 4, 8)) SUPER_RESOLUTION else 0) or
+            (if (original?.state == "complete") ORIGINAL else 0)
     }
     private data class State(val index: GalleryResultIndex, val snapshot: GalleryResultIndex.Snapshot)
     private val app = context.applicationContext
@@ -31,7 +32,7 @@ class ReaderResultIndex(context: Context, private val provider: GalleryProvider2
         if (event.identity == GalleryResultIndex.identity(provider, info)) {
             changedSources.add(event.source)
             pages.entries.removeAll { it.value.source?.name.let { name -> name == null || name == event.source } }
-            invalidate(false)
+            invalidate(event.kind == GalleryResultIndex.Kind.ORIGINAL)
         }
     }
 
@@ -107,6 +108,17 @@ class ReaderResultIndex(context: Context, private val provider: GalleryProvider2
     }.also { task = it }
 
     internal suspend fun index(): GalleryResultIndex = state().await().index
+    internal suspend fun discardUnreadable(page: Page, kind: GalleryResultIndex.Kind, hit: GalleryResultIndex.Hit) {
+        val source = page.source ?: return
+        try {
+            val index = index()
+            withContext(Dispatchers.IO) { index.discardUnreadable(source, kind, hit) }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (error: Exception) {
+            android.util.Log.w("ReaderResultIndex", "Cannot remove unreadable result", error)
+        }
+    }
     internal suspend fun hasResults(): Boolean = state().await().snapshot.pages.isNotEmpty()
     internal suspend fun page(position: Int): Page {
         while (true) {
@@ -120,7 +132,8 @@ class ReaderResultIndex(context: Context, private val provider: GalleryProvider2
                         val source = GalleryResultIndex.source(provider, position, info?.gid)
                         fun find(kind: GalleryResultIndex.Kind) = if (state.snapshot.contains(source, kind))
                             state.index.find(source, kind) else null
-                        Page(source, find(GalleryResultIndex.Kind.TL), find(GalleryResultIndex.Kind.SR))
+                        Page(source, find(GalleryResultIndex.Kind.TL), find(GalleryResultIndex.Kind.SR),
+                            find(GalleryResultIndex.Kind.ORIGINAL))
                     }
                 }
                 pages[position] = result
@@ -143,5 +156,6 @@ class ReaderResultIndex(context: Context, private val provider: GalleryProvider2
     companion object {
         const val TRANSLATION = 1
         const val SUPER_RESOLUTION = 2
+        const val ORIGINAL = 4
     }
 }

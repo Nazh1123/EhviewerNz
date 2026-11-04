@@ -14,6 +14,8 @@ import java.util.concurrent.atomic.AtomicIntegerArray
 class EnhancedTilePage internal constructor(val directory: File, val sourceWidth: Int, val sourceHeight: Int,
                                            val scale: Int = 2) {
     init { require(scale in listOf(2, 4, 8)) }
+    @Volatile var fromOriginal: Boolean = false
+        internal set
     val width = sourceWidth * scale
     val height = sourceHeight * scale
     // Keep output tiles around 504px at every scale, with source-aligned gutters.
@@ -35,6 +37,12 @@ class EnhancedTilePage internal constructor(val directory: File, val sourceWidth
         decoder?.recycle(); decoder = null
         finalImage = image
     }
+    @Synchronized internal fun openFinalImage() {
+        checkNotNull(finalDecoder(checkNotNull(finalImage))) { "Enhanced result cannot be decoded" }
+    }
+
+    private fun finalDecoder(image: UniFile): BitmapRegionDecoder? =
+        decoder ?: image.openInputStream().use { BitmapRegionDecoder.newInstance(it, false) }?.also { decoder = it }
 
     /** Switch the backing source before deleting checkpoints, excluding concurrent region reads. */
     @Synchronized internal fun removeTileImages() {
@@ -105,9 +113,7 @@ class EnhancedTilePage internal constructor(val directory: File, val sourceWidth
             val final = finalImage
             if (final == null) BitmapFactory.decodeFile(file(index).path, options)
             else {
-                val source = decoder ?: final.openInputStream().use {
-                    BitmapRegionDecoder.newInstance(it, false)
-                }?.also { decoder = it } ?: return null
+                val source = finalDecoder(final) ?: return null
                 source.decodeRegion(region(index), options)
             }
         } ?: return null

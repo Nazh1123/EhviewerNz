@@ -5,34 +5,36 @@ import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import com.hippo.lib.yorozuya.FileUtils
 import com.hippo.unifile.UniFile
-import java.util.concurrent.CopyOnWriteArraySet
 import kotlinx.coroutines.*
 
-/** Event-maintained index of complete result images, keyed by source page rather than inference runs. */
+/** Result count formatting and the legacy URI catalog used to import unindexed results. */
 object GalleryProcessingProgress {
-    enum class Kind { TRANSLATION, SUPER_RESOLUTION }
+    enum class Kind { TRANSLATION, SUPER_RESOLUTION, ORIGINAL }
     fun interface Listener { fun onChanged(galleryId: Long) }
-    data class Counts(val translated: Int, val enhanced: Int) {
+    data class Counts(val translated: Int, val enhanced: Int, val originals: Int = 0) {
+        fun compact(pages: Int) = pages > 0 && translated > 0 && enhanced > 0 && originals > 0
+        fun separator(pages: Int) = if (compact(pages)) " - " else "  -  "
         fun primary(pages: Int): String? = when {
+            compact(pages) -> "TL ${translated.coerceAtMost(pages)}/$pages - OR ${originals.coerceAtMost(pages)}"
+            originals.coerceAtMost(pages) > 0 -> "OR ${originals.coerceAtMost(pages)}/$pages"
             translated.coerceAtMost(pages) > 0 -> "TL ${translated.coerceAtMost(pages)}/$pages"
             enhanced.coerceAtMost(pages) > 0 -> "SR ${enhanced.coerceAtMost(pages)}/$pages"
             else -> null
         }
-        fun secondary(pages: Int): String? = if (translated > 0 && enhanced > 0 && pages > 0)
-            "SR ${enhanced.coerceAtMost(pages)}/$pages" else null
+        fun secondary(pages: Int): String? = when {
+            pages <= 0 -> null
+            enhanced > 0 && (translated > 0 || originals > 0) -> "SR ${enhanced.coerceAtMost(pages)}/$pages"
+            translated > 0 && originals > 0 -> "TL ${translated.coerceAtMost(pages)}/$pages"
+            else -> null
+        }
         fun format(readPage: Int, pages: Int): String =
-            "${readPage.coerceIn(1, pages.coerceAtLeast(1))}/$pages" + (primary(pages)?.let { "  -  $it" } ?: "")
+            "${readPage.coerceIn(1, pages.coerceAtLeast(1))}/$pages" + (primary(pages)?.let { separator(pages) + it } ?: "")
     }
 
-    private const val PREFERENCES = "gallery_processing_progress_v1"
     // Each task runs to completion without suspension: deletion and publication events stay ordered.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
-    private val listeners = CopyOnWriteArraySet<Listener>()
-    private val main = Handler(Looper.getMainLooper())
     private var helper: SQLiteOpenHelper? = null
 
     // Keep the per-page URI index out of SharedPreferences: a page update must not rewrite every gallery.
@@ -51,17 +53,6 @@ object GalleryProcessingProgress {
         }.also { helper = it }
         return existing.writableDatabase
     }
-
-    private fun preferences(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-
-    /** Only two cached integers are read while binding a download row. */
-    @JvmStatic fun get(context: Context, galleryId: Long): Counts = preferences(context).let {
-        Counts(it.getInt("$galleryId.t", 0), it.getInt("$galleryId.s", 0))
-    }
-
-    @JvmStatic fun addListener(listener: Listener) { listeners.add(listener) }
-    @JvmStatic fun removeListener(listener: Listener) { listeners.remove(listener) }
 
     internal data class SavedResult(val kind: Kind, val source: String, val uri: Uri)
 
@@ -92,7 +83,6 @@ object GalleryProcessingProgress {
                 ?.use { it.moveToFirst() } == true
             if (!referenced && !file.delete()) failed++
         }
-        if (galleryId != null && db != null) saveSnapshot(context, galleryId, db)
         failed
     }.await()
 
@@ -120,7 +110,6 @@ object GalleryProcessingProgress {
                 if (previous == uri) return@launch
                 if (uri == null) db.delete("results", "gallery_id=? AND source_key=?", arrayOf(galleryId.toString(), key))
                 else put(db, galleryId, key, uri)
-                saveSnapshot(app, galleryId, db)
             }.onFailure { android.util.Log.w("ProcessingProgress", "Cannot index result", it) }
         }
     }
@@ -170,9 +159,8 @@ object GalleryProcessingProgress {
             runCatching {
                 val db = database(app)
                 db.beginTransaction()
-                val affected = try { action(db).also { db.setTransactionSuccessful() } }
+                try { action(db); db.setTransactionSuccessful() }
                 finally { db.endTransaction() }
-                for (gid in affected) saveSnapshot(app, gid, db)
             }.onFailure { android.util.Log.w("ProcessingProgress", "Cannot remove indexed results", it) }
         }
     }
@@ -190,7 +178,6 @@ object GalleryProcessingProgress {
         val app = context.applicationContext
         scope.launch {
             database(app).delete("results", "gallery_id=?", arrayOf(galleryId.toString()))
-            preferences(app).edit().remove("$galleryId.t").remove("$galleryId.s").apply()
         }
     }
 
@@ -198,19 +185,6 @@ object GalleryProcessingProgress {
         db.insertWithOnConflict("results", null, ContentValues().apply {
             put("gallery_id", galleryId); put("source_key", key); put("uri", uri)
         }, SQLiteDatabase.CONFLICT_REPLACE).also { check(it != -1L) { "Cannot index result" } }
-    }
-
-    private fun saveSnapshot(context: Context, galleryId: Long, db: SQLiteDatabase) {
-        val counts = db.rawQuery("SELECT SUM(source_key LIKE 'TRANSLATION/%'), " +
-            "SUM(source_key LIKE 'SUPER_RESOLUTION/%') FROM results WHERE gallery_id=?",
-            arrayOf(galleryId.toString())).use { cursor ->
-            cursor.moveToFirst(); Counts(cursor.getInt(0), cursor.getInt(1))
-        }
-        val changed = get(context, galleryId) != counts
-        if (!changed) return
-        preferences(context).edit().putInt("$galleryId.t", counts.translated)
-            .putInt("$galleryId.s", counts.enhanced).apply()
-        main.post { listeners.forEach { it.onChanged(galleryId) } }
     }
 
 }
