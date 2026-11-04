@@ -1232,6 +1232,24 @@ public class EhEngine {
         return result;
     }
 
+    public static long getArchiveQuota(@Nullable EhClient.Task task, OkHttpClient okHttpClient)
+            throws Exception {
+        // Kept separate from archive choices so cached levels cost no extra HTTP request.
+        Call donationCall = okHttpClient.newBuilder()
+                .callTimeout(8, java.util.concurrent.TimeUnit.SECONDS).build().newCall(new EhRequestBuilder(
+                EhUrl.HOST_E + "bitcoin.php", EhUrl.HOME_E).build());
+        if (task != null) task.setCall(donationCall);
+        try (Response response = donationCall.execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new java.io.IOException("Archive quota HTTP " + response.code());
+            }
+            String body = response.body().string();
+            Long quota = com.hippo.ehviewer.client.parser.ArchiveQuotaParser.parseDonationQuota(body);
+            if (quota == null) throw new ParseException("Unknown donation level", body);
+            return quota;
+        }
+    }
+
     public static Void downloadArchive(@Nullable EhClient.Task task, OkHttpClient okHttpClient,
                                        long gid, String token, String or, String res) throws Throwable {
         if (or == null) {
