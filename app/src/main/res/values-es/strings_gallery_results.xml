@@ -11,4 +11,14 @@
     <string name="gallery_results_inspect_failed">No se pudieron examinar algunos resultados. Comprueba el acceso al almacenamiento o inténtalo más tarde.</string>
     <string name="gallery_results_deleted">Se eliminaron los resultados del tipo seleccionado</string>
     <string name="gallery_results_delete_failed">No se pudieron eliminar algunos resultados. Comprueba el acceso al almacenamiento o reinténtalo.</string>
+    <string name="gallery_results_selected">%1$d galerías seleccionadas</string>
+    <string name="gallery_results_type">Tipo</string>
+    <string name="gallery_results_count">Cantidad</string>
+    <string name="gallery_results_size">Tamaño</string>
+    <string name="gallery_results_initial_label">Imágenes iniciales</string>
+    <string name="gallery_results_translation_label">Traducciones</string>
+    <string name="gallery_results_sr_label">Superresolución</string>
+    <string name="gallery_results_downloaded_label">Originales descargados</string>
+    <string name="gallery_results_storage_note">Los recuentos de traducción y SR solo incluyen resultados completos registrados; el espacio incluye cachés y resultados incompletos. Los archivos comprimidos se contabilizan por su tamaño total. Se conservan las imágenes iniciales y los resultados de los demás tipos.</string>
+    <string name="gallery_results_delete_confirm">¿Eliminar los resultados de este tipo de las %1$d galerías seleccionadas?\n\nEsta acción no se puede deshacer. Se conservarán las imágenes iniciales y los resultados de otros tipos.</string>
 </resources>

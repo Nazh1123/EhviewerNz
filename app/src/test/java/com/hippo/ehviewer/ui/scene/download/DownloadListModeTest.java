@@ -252,15 +252,16 @@ public class DownloadListModeTest {
 
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
         assertNotNull(dialog);
-        TextView message = dialog.findViewById(android.R.id.message);
+        TextView message = dialog.findViewById(R.id.gallery_results_summary);
         assertEquals(scene.getContext().getString(R.string.gallery_results_calculating),
                 message.getText().toString());
         assertEquals(scene.getContext().getString(R.string.translation_delete_results),
-                dialog.getButton(DialogInterface.BUTTON_POSITIVE).getText().toString());
+                dialog.findViewById(R.id.delete_translation_results).getContentDescription().toString());
         assertEquals(scene.getContext().getString(R.string.gallery_results_delete_sr),
-                dialog.getButton(DialogInterface.BUTTON_NEGATIVE).getText().toString());
-        assertFalse(dialog.getButton(DialogInterface.BUTTON_POSITIVE).isEnabled());
-        assertFalse(dialog.getButton(DialogInterface.BUTTON_NEGATIVE).isEnabled());
+                dialog.findViewById(R.id.delete_super_resolution_results).getContentDescription().toString());
+        assertFalse(dialog.findViewById(R.id.delete_translation_results).isEnabled());
+        assertFalse(dialog.findViewById(R.id.delete_super_resolution_results).isEnabled());
+        assertFalse(dialog.findViewById(R.id.delete_original_results).isEnabled());
         dialog.getButton(DialogInterface.BUTTON_NEUTRAL).performClick();
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertTrue(scene.getDownloadManager().containDownloadInfo(1));

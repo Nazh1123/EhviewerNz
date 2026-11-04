@@ -11,4 +11,14 @@
     <string name="gallery_results_inspect_failed">無法統計部分結果，請檢查儲存空間存取權限或稍後重試。</string>
     <string name="gallery_results_deleted">所選類型的結果已刪除</string>
     <string name="gallery_results_delete_failed">部分結果未能刪除，請檢查儲存空間存取權限或重試。</string>
+    <string name="gallery_results_selected">所選 %1$d 個畫廊</string>
+    <string name="gallery_results_type">類型</string>
+    <string name="gallery_results_count">數量</string>
+    <string name="gallery_results_size">體積</string>
+    <string name="gallery_results_initial_label">初始圖片</string>
+    <string name="gallery_results_translation_label">翻譯結果</string>
+    <string name="gallery_results_sr_label">超分結果</string>
+    <string name="gallery_results_downloaded_label">下載原圖</string>
+    <string name="gallery_results_storage_note">翻譯和超解析度數量僅含已記錄的完整結果，占用包含快取和未完成結果；壓縮檔按檔案大小統計。刪除所選類型的全部結果，保留初始圖片和其他類型的結果。</string>
+    <string name="gallery_results_delete_confirm">確定刪除所選 %1$d 個畫廊的此類結果？\n\n刪除後無法復原，初始圖片和其他類型的結果將保留。</string>
 </resources>

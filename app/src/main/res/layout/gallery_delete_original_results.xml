@@ -1,30 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingStart="24dp"
-        android:paddingTop="16dp"
-        android:paddingEnd="16dp">
+        android:paddingTop="12dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/gallery_results_selection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="8dp"
+            android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
+
+        <TableLayout
+            android:id="@+id/gallery_results_table"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:shrinkColumns="0"
+            android:stretchColumns="0">
+
+            <TableRow
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+
+                <TextView
+                    style="@style/GalleryResultsCell.Label.Header"
+                    android:text="@string/gallery_results_type" />
+
+                <TextView
+                    style="@style/GalleryResultsCell.Value.Header"
+                    android:text="@string/gallery_results_count" />
+
+                <TextView
+                    style="@style/GalleryResultsCell.Value.Header"
+                    android:text="@string/gallery_results_size" />
+
+                <Space
+                    android:layout_width="48dp"
+                    android:layout_height="1dp" />
+            </TableRow>
+
+            <View style="@style/GalleryResultsDivider" />
+
+            <TableRow
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+
+                <TextView
+                    style="@style/GalleryResultsCell.Label"
+                    android:text="@string/gallery_results_initial_label" />
+
+                <TextView
+                    android:id="@+id/gallery_results_initial_count"
+                    style="@style/GalleryResultsCell.Value" />
+
+                <TextView
+                    android:id="@+id/gallery_results_initial_size"
+                    style="@style/GalleryResultsCell.Value" />
+
+                <Space
+                    android:layout_width="48dp"
+                    android:layout_height="1dp" />
+            </TableRow>
+
+            <View style="@style/GalleryResultsDivider" />
+
+            <TableRow
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+
+                <TextView
+                    style="@style/GalleryResultsCell.Label"
+                    android:text="@string/gallery_results_translation_label" />
+
+                <TextView
+                    android:id="@+id/gallery_results_translation_count"
+                    style="@style/GalleryResultsCell.Value" />
+
+                <TextView
+                    android:id="@+id/gallery_results_translation_size"
+                    style="@style/GalleryResultsCell.Value" />
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/delete_translation_results"
+                    style="@style/GalleryResultsDeleteButton"
+                    android:contentDescription="@string/translation_delete_results"
+                    app:tint="@color/gallery_results_delete_tint" />
+            </TableRow>
+
+            <View style="@style/GalleryResultsDivider" />
+
+            <TableRow
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+
+                <TextView
+                    style="@style/GalleryResultsCell.Label"
+                    android:text="@string/gallery_results_sr_label" />
+
+                <TextView
+                    android:id="@+id/gallery_results_sr_count"
+                    style="@style/GalleryResultsCell.Value" />
+
+                <TextView
+                    android:id="@+id/gallery_results_sr_size"
+                    style="@style/GalleryResultsCell.Value" />
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/delete_super_resolution_results"
+                    style="@style/GalleryResultsDeleteButton"
+                    android:contentDescription="@string/gallery_results_delete_sr"
+                    app:tint="@color/gallery_results_delete_tint" />
+            </TableRow>
+
+            <View style="@style/GalleryResultsDivider" />
+
+            <TableRow
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+
+                <TextView
+                    style="@style/GalleryResultsCell.Label"
+                    android:text="@string/gallery_results_downloaded_label" />
+
+                <TextView
+                    android:id="@+id/gallery_results_original_count"
+                    style="@style/GalleryResultsCell.Value" />
+
+                <TextView
+                    android:id="@+id/gallery_results_original_size"
+                    style="@style/GalleryResultsCell.Value" />
+
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/delete_original_results"
+                    style="@style/GalleryResultsDeleteButton"
+                    android:contentDescription="@string/gallery_results_delete_original"
+                    app:tint="@color/gallery_results_delete_tint" />
+            </TableRow>
+
+            <View style="@style/GalleryResultsDivider" />
+        </TableLayout>
 
         <TextView
             android:id="@+id/gallery_results_summary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:accessibilityLiveRegion="polite"
+            android:paddingTop="12dp"
             android:paddingEnd="8dp"
             android:text="@string/gallery_results_calculating"
-            android:textAppearance="?android:attr/textAppearanceMedium" />
+            android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
 
-        <Button
-            android:id="@+id/delete_original_results"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="wrap_content"
+        <TextView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:text="@string/gallery_results_delete_original"
-            android:textColor="?attr/colorAccent" />
+            android:paddingTop="12dp"
+            android:paddingEnd="8dp"
+            android:text="@string/gallery_results_storage_note"
+            android:textAppearance="@style/TextAppearance.AppCompat.Caption" />
     </LinearLayout>
 </ScrollView>

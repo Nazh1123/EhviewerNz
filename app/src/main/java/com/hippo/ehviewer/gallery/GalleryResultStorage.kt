@@ -4,7 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.text.format.Formatter
 import android.view.LayoutInflater
-import android.widget.Button
+import android.view.View
+import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -23,6 +24,7 @@ import com.hippo.ehviewer.translation.TranslationRuntime
 import com.hippo.ehviewer.translation.TranslationStorage
 import com.hippo.ehviewer.translation.TranslationTasks
 import com.hippo.unifile.UniFile
+import java.text.NumberFormat
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
 
@@ -47,49 +49,71 @@ object GalleryResultStorage {
         }
         val action = LayoutInflater.from(context).inflate(R.layout.gallery_delete_original_results, null)
         val summaryView = action.findViewById<TextView>(R.id.gallery_results_summary)
-        val deleteOriginal = action.findViewById<Button>(R.id.delete_original_results)
-        deleteOriginal.isEnabled = false
+        action.findViewById<TextView>(R.id.gallery_results_selection).text =
+            context.getString(R.string.gallery_results_selected, selected.size)
         val dialog = AlertDialog.Builder(context)
             .setTitle(R.string.gallery_results_delete_title)
             .setView(action)
-            .setPositiveButton(R.string.translation_delete_results) { _, _ -> delete(Kind.TRANSLATION) }
-            .setNegativeButton(R.string.gallery_results_delete_sr) { _, _ -> delete(Kind.SUPER_RESOLUTION) }
             .setNeutralButton(android.R.string.cancel, null)
             .create()
-        deleteOriginal.setOnClickListener {
-            dialog.dismiss()
-            delete(Kind.ORIGINAL)
+        var confirmation: AlertDialog? = null
+        fun bindDeleteButton(id: Int, kind: Kind): ImageButton = action.findViewById<ImageButton>(id).apply {
+            isEnabled = false
+            setOnClickListener {
+                if (confirmation?.isShowing == true) return@setOnClickListener
+                confirmation = AlertDialog.Builder(context)
+                    .setTitle(contentDescription)
+                    .setMessage(context.getString(R.string.gallery_results_delete_confirm, selected.size))
+                    .setPositiveButton(R.string.delete) { _, _ ->
+                        if (dialog.isShowing) {
+                            dialog.dismiss()
+                            delete(kind)
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .create().also { prompt ->
+                        prompt.setOnDismissListener { if (confirmation === prompt) confirmation = null }
+                        prompt.show()
+                    }
+            }
         }
+        val deleteTranslation = bindDeleteButton(R.id.delete_translation_results, Kind.TRANSLATION)
+        val deleteSuperResolution = bindDeleteButton(R.id.delete_super_resolution_results, Kind.SUPER_RESOLUTION)
+        val deleteOriginal = bindDeleteButton(R.id.delete_original_results, Kind.ORIGINAL)
         dialog.show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled = false
+        val numberFormat = NumberFormat.getIntegerInstance(context.resources.configuration.locales[0])
+        fun bindUsage(countId: Int, sizeId: Int, usage: Usage?, button: ImageButton? = null) {
+            if (usage != null) {
+                action.findViewById<TextView>(countId).text = numberFormat.format(usage.count)
+                action.findViewById<TextView>(sizeId).text = Formatter.formatFileSize(context, usage.bytes)
+            }
+            button?.isEnabled = usage != null && (usage.count > 0 || usage.bytes > 0)
+        }
         val loading = scope.launch {
             try {
                 val summary = inspect(app, selected)
                 ensureActive()
                 if (!dialog.isShowing) return@launch
-                val initialImages = summary.originals?.let {
-                    context.getString(R.string.gallery_results_originals, it.count, Formatter.formatFileSize(context, it.bytes))
-                } ?: context.getString(R.string.gallery_results_originals_unavailable)
-                val downloaded = summary.downloadedOriginals
-                val originalLine = context.getString(R.string.gallery_results_downloaded_originals,
-                    downloaded.count, Formatter.formatFileSize(context, downloaded.bytes))
-                summaryView.text = context.getString(R.string.gallery_results_delete_summary, selected.size,
-                    summary.translation.count, Formatter.formatFileSize(context, summary.translation.bytes),
-                    summary.superResolution.count, Formatter.formatFileSize(context, summary.superResolution.bytes),
-                    initialImages, originalLine)
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled =
-                    summary.translation.count > 0 || summary.translation.bytes > 0
-                dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled =
-                    summary.superResolution.count > 0 || summary.superResolution.bytes > 0
-                deleteOriginal.isEnabled = downloaded.count > 0 || downloaded.bytes > 0
+                bindUsage(R.id.gallery_results_initial_count, R.id.gallery_results_initial_size, summary.originals)
+                bindUsage(R.id.gallery_results_translation_count, R.id.gallery_results_translation_size,
+                    summary.translation, deleteTranslation)
+                bindUsage(R.id.gallery_results_sr_count, R.id.gallery_results_sr_size,
+                    summary.superResolution, deleteSuperResolution)
+                bindUsage(R.id.gallery_results_original_count, R.id.gallery_results_original_size,
+                    summary.downloadedOriginals, deleteOriginal)
+                if (summary.originals == null) summaryView.setText(R.string.gallery_results_originals_unavailable)
+                else summaryView.visibility = View.GONE
             } catch (cancel: CancellationException) { throw cancel
             } catch (_: Exception) { summaryView.setText(R.string.gallery_results_inspect_failed) }
         }
         val lifecycle = (context as? LifecycleOwner)?.lifecycle
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_DESTROY) dialog.dismiss() }
         lifecycle?.addObserver(observer)
-        dialog.setOnDismissListener { loading.cancel(); lifecycle?.removeObserver(observer) }
+        dialog.setOnDismissListener {
+            confirmation?.dismiss()
+            loading.cancel()
+            lifecycle?.removeObserver(observer)
+        }
     }
 
     internal suspend fun inspect(context: Context, galleries: List<DownloadInfo>): Summary = withContext(Dispatchers.IO) {

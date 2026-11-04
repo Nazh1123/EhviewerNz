@@ -11,4 +11,14 @@
     <string name="gallery_results_inspect_failed">ไม่สามารถตรวจสอบผลลัพธ์บางส่วน โปรดตรวจสอบสิทธิ์เข้าถึงพื้นที่จัดเก็บหรือลองอีกครั้งภายหลัง</string>
     <string name="gallery_results_deleted">ลบผลลัพธ์ประเภทที่เลือกแล้ว</string>
     <string name="gallery_results_delete_failed">ไม่สามารถลบผลลัพธ์บางส่วน โปรดตรวจสอบสิทธิ์เข้าถึงพื้นที่จัดเก็บหรือลองอีกครั้ง</string>
+    <string name="gallery_results_selected">เลือก %1$d แกลเลอรี</string>
+    <string name="gallery_results_type">ประเภท</string>
+    <string name="gallery_results_count">จำนวน</string>
+    <string name="gallery_results_size">ขนาด</string>
+    <string name="gallery_results_initial_label">ภาพเริ่มต้น</string>
+    <string name="gallery_results_translation_label">ผลการแปล</string>
+    <string name="gallery_results_sr_label">ผลเพิ่มความละเอียด</string>
+    <string name="gallery_results_downloaded_label">ต้นฉบับที่ดาวน์โหลด</string>
+    <string name="gallery_results_storage_note">จำนวนผลการแปลและ SR นับเฉพาะผลลัพธ์ที่สมบูรณ์ที่บันทึกไว้ ส่วนพื้นที่จัดเก็บรวมแคชและผลลัพธ์ที่ยังไม่เสร็จ ไฟล์บีบอัดนับตามขนาดไฟล์ทั้งหมด ระบบจะเก็บภาพเริ่มต้นและผลลัพธ์ประเภทอื่นไว้</string>
+    <string name="gallery_results_delete_confirm">ลบผลลัพธ์ประเภทนี้จาก %1$d แกลเลอรีที่เลือกหรือไม่?\n\nการดำเนินการนี้ไม่สามารถเลิกทำได้ ภาพเริ่มต้นและผลลัพธ์ประเภทอื่นจะถูกเก็บไว้</string>
 </resources>

@@ -2,6 +2,9 @@ package com.hippo.ehviewer.gallery
 
 import android.app.Application
 import android.os.Looper
+import android.text.format.Formatter
+import android.widget.ImageButton
+import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.view.ContextThemeWrapper
 import com.hippo.ehviewer.R
@@ -99,15 +102,112 @@ class GalleryResultStorageTest {
         GalleryResultStorage.showDeleteDialog(themed, listOf(info(13)), Runnable { confirmed = true })
         val dialog = ShadowDialog.getLatestDialog() as AlertDialog
         try {
-            await { dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled && dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled }
-            assertEquals(themed.getString(R.string.translation_delete_results), dialog.getButton(AlertDialog.BUTTON_POSITIVE).text)
-            assertEquals(themed.getString(R.string.gallery_results_delete_sr), dialog.getButton(AlertDialog.BUTTON_NEGATIVE).text)
-            val original = requireNotNull(dialog.findViewById<android.widget.Button>(R.id.delete_original_results))
+            val translation = requireNotNull(dialog.findViewById<ImageButton>(R.id.delete_translation_results))
+            val enhancement = requireNotNull(dialog.findViewById<ImageButton>(R.id.delete_super_resolution_results))
+            val original = requireNotNull(dialog.findViewById<ImageButton>(R.id.delete_original_results))
+            assertFalse(translation.isEnabled)
+            assertFalse(enhancement.isEnabled)
+            assertFalse(original.isEnabled)
+            await { translation.isEnabled && enhancement.isEnabled }
+            assertEquals(themed.getString(R.string.translation_delete_results), translation.contentDescription)
+            assertEquals(themed.getString(R.string.gallery_results_delete_sr), enhancement.contentDescription)
             assertTrue(original.isShown)
-            assertEquals(themed.getString(R.string.gallery_results_delete_original), original.text)
+            assertFalse(original.isEnabled)
+            assertEquals(themed.getString(R.string.gallery_results_delete_original), original.contentDescription)
+            assertEquals("0", dialog.findViewById<TextView>(R.id.gallery_results_translation_count)!!.text.toString())
+            assertEquals(Formatter.formatFileSize(themed, tl.length()),
+                dialog.findViewById<TextView>(R.id.gallery_results_translation_size)!!.text.toString())
+            assertEquals(themed.getString(R.string.gallery_results_originals_unavailable),
+                dialog.findViewById<TextView>(R.id.gallery_results_summary)!!.text.toString())
+            assertEquals(android.view.View.GONE, dialog.getButton(AlertDialog.BUTTON_POSITIVE).visibility)
+            assertEquals(android.view.View.GONE, dialog.getButton(AlertDialog.BUTTON_NEGATIVE).visibility)
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick()
             shadowOf(Looper.getMainLooper()).idle()
             assertFalse(confirmed); assertTrue(tl.exists()); assertTrue(sr.exists())
+        } finally { dialog.dismiss() }
+    }
+
+    @Test fun rowDeleteButtonsRequireConfirmationAndDeleteOnlyTheirOwnResultType() {
+        for ((index, buttonId) in listOf(R.id.delete_translation_results,
+            R.id.delete_super_resolution_results, R.id.delete_original_results).withIndex()) {
+            val gallery = temp.newFolder()
+            val source = write(gallery, "00000001.jpg")
+            val results = listOf(write(gallery, "_translated/00000001_tl.png"),
+                write(gallery, "_super_resolution/00000001_sr.png"),
+                write(gallery, "_original/00000001_orn.jpg"))
+            val uri = Uri.fromFile(gallery)
+            val handler = UriHandler { _, candidate -> if (candidate == uri) UniFile.fromFile(gallery) else null }
+            UniFile.addUriHandler(handler)
+            val selected = DownloadInfo(400L + index).apply {
+                archiveUri = LocalFolderGallerySource.create(uri, "").encode()
+            }
+            var callbacks = 0
+            GalleryResultStorage.showDeleteDialog(ContextThemeWrapper(context, R.style.AppTheme),
+                listOf(selected), Runnable { callbacks++ })
+            val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+            try {
+                val button = requireNotNull(dialog.findViewById<ImageButton>(buttonId))
+                await { button.isEnabled }
+                assertEquals("1", dialog.findViewById<TextView>(R.id.gallery_results_initial_count)!!.text.toString())
+                button.performClick()
+                val cancelled = ShadowDialog.getLatestDialog() as AlertDialog
+                assertNotSame(dialog, cancelled)
+                assertTrue(dialog.isShowing)
+                assertEquals(0, callbacks)
+                assertTrue(results.all { it.exists() })
+                assertEquals(button.contentDescription,
+                    cancelled.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)!!.text)
+                assertEquals(dialog.context.getString(R.string.gallery_results_delete_confirm, 1),
+                    cancelled.findViewById<TextView>(android.R.id.message)!!.text)
+                cancelled.getButton(AlertDialog.BUTTON_NEGATIVE).performClick()
+                shadowOf(Looper.getMainLooper()).idle()
+                assertTrue(dialog.isShowing)
+                assertEquals(0, callbacks)
+                assertTrue(results.all { it.exists() })
+
+                button.performClick()
+                val dismissed = ShadowDialog.getLatestDialog() as AlertDialog
+                dismissed.cancel()
+                shadowOf(Looper.getMainLooper()).idle()
+                assertTrue(dialog.isShowing)
+                assertEquals(0, callbacks)
+                assertTrue(results.all { it.exists() })
+
+                button.performClick()
+                val confirmed = ShadowDialog.getLatestDialog() as AlertDialog
+                button.performClick()
+                assertSame(confirmed, ShadowDialog.getLatestDialog())
+                confirmed.getButton(AlertDialog.BUTTON_POSITIVE).performClick()
+                shadowOf(Looper.getMainLooper()).idle()
+                assertFalse(dialog.isShowing)
+                assertEquals(1, callbacks)
+                await { !results[index].exists() }
+                assertTrue(source.exists())
+                assertTrue(results.filterIndexed { i, _ -> i != index }.all { it.exists() })
+            } finally {
+                dialog.dismiss()
+                UniFile.removeUriHandler(handler)
+            }
+        }
+    }
+
+    @Test fun dismissingTableClosesPendingConfirmationWithoutDeleting() {
+        val translated = write(context.cacheDir, "translated-pages/g415_one_tl.png")
+        var callbacks = 0
+        GalleryResultStorage.showDeleteDialog(ContextThemeWrapper(context, R.style.AppTheme),
+            listOf(info(415)), Runnable { callbacks++ })
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        try {
+            val button = requireNotNull(dialog.findViewById<ImageButton>(R.id.delete_translation_results))
+            await { button.isEnabled }
+            button.performClick()
+            val confirmation = ShadowDialog.getLatestDialog() as AlertDialog
+            assertTrue(confirmation.isShowing)
+            dialog.dismiss()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertFalse(confirmation.isShowing)
+            assertEquals(0, callbacks)
+            assertTrue(translated.exists())
         } finally { dialog.dismiss() }
     }
 

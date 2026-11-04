@@ -11,4 +11,14 @@
     <string name="gallery_results_inspect_failed">Certains résultats n’ont pas pu être examinés. Vérifiez l’accès au stockage ou réessayez plus tard.</string>
     <string name="gallery_results_deleted">Résultats du type sélectionné supprimés</string>
     <string name="gallery_results_delete_failed">Certains résultats n’ont pas pu être supprimés. Vérifiez l’accès au stockage ou réessayez.</string>
+    <string name="gallery_results_selected">%1$d galeries sélectionnées</string>
+    <string name="gallery_results_type">Type</string>
+    <string name="gallery_results_count">Nombre</string>
+    <string name="gallery_results_size">Taille</string>
+    <string name="gallery_results_initial_label">Images initiales</string>
+    <string name="gallery_results_translation_label">Traductions</string>
+    <string name="gallery_results_sr_label">Super-résolution</string>
+    <string name="gallery_results_downloaded_label">Originaux téléchargés</string>
+    <string name="gallery_results_storage_note">Le nombre de traductions et de résultats SR ne comprend que les résultats complets enregistrés ; l’espace occupé inclut les caches et les résultats incomplets. Les archives sont comptées selon la taille du fichier archive. Les images initiales et les résultats des autres types sont conservés.</string>
+    <string name="gallery_results_delete_confirm">Supprimer les résultats de ce type dans les %1$d galeries sélectionnées ?\n\nCette action est irréversible. Les images initiales et les résultats des autres types seront conservés.</string>
 </resources>

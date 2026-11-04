@@ -11,4 +11,14 @@
     <string name="gallery_results_inspect_failed">Some results could not be inspected. Check storage access or try again later.</string>
     <string name="gallery_results_deleted">Results of the selected type deleted</string>
     <string name="gallery_results_delete_failed">Some results could not be deleted. Check storage access or retry.</string>
+    <string name="gallery_results_selected">%1$d selected galleries</string>
+    <string name="gallery_results_type">Type</string>
+    <string name="gallery_results_count">Count</string>
+    <string name="gallery_results_size">Size</string>
+    <string name="gallery_results_initial_label">Initial images</string>
+    <string name="gallery_results_translation_label">Translations</string>
+    <string name="gallery_results_sr_label">Super resolution</string>
+    <string name="gallery_results_downloaded_label">Downloaded originals</string>
+    <string name="gallery_results_storage_note">Translation and SR counts include recorded complete results; storage includes caches and unfinished results. Archives use their container size. Initial images and results of other types are kept.</string>
+    <string name="gallery_results_delete_confirm">Delete results of this type from %1$d selected galleries?\n\nThis cannot be undone. Initial images and results of other types will be kept.</string>
 </resources>

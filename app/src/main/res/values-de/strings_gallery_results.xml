@@ -11,4 +11,14 @@
     <string name="gallery_results_inspect_failed">Einige Ergebnisse konnten nicht geprüft werden. Speicherzugriff prüfen oder später erneut versuchen.</string>
     <string name="gallery_results_deleted">Ergebnisse des gewählten Typs gelöscht</string>
     <string name="gallery_results_delete_failed">Einige Ergebnisse konnten nicht gelöscht werden. Speicherzugriff prüfen oder erneut versuchen.</string>
+    <string name="gallery_results_selected">%1$d ausgewählte Galerien</string>
+    <string name="gallery_results_type">Typ</string>
+    <string name="gallery_results_count">Anzahl</string>
+    <string name="gallery_results_size">Größe</string>
+    <string name="gallery_results_initial_label">Ausgangsbilder</string>
+    <string name="gallery_results_translation_label">Übersetzungen</string>
+    <string name="gallery_results_sr_label">Superauflösung</string>
+    <string name="gallery_results_downloaded_label">Geladene Originale</string>
+    <string name="gallery_results_storage_note">Die Anzahl der Übersetzungs- und SR-Ergebnisse umfasst nur erfasste vollständige Ergebnisse; der Speicherbedarf enthält auch Caches und unvollständige Ergebnisse. Bei Archiven zählt die Größe der Archivdatei. Ausgangsbilder und Ergebnisse anderer Typen bleiben erhalten.</string>
+    <string name="gallery_results_delete_confirm">Ergebnisse dieses Typs aus %1$d ausgewählten Galerien löschen?\n\nDies kann nicht rückgängig gemacht werden. Ausgangsbilder und Ergebnisse anderer Typen bleiben erhalten.</string>
 </resources>

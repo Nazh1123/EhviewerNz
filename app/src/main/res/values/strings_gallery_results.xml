@@ -11,4 +11,14 @@
     <string name="gallery_results_inspect_failed">无法统计部分结果，请检查存储权限或稍后重试。</string>
     <string name="gallery_results_deleted">所选类型的结果已删除</string>
     <string name="gallery_results_delete_failed">部分结果未能删除，请检查存储权限或重试。</string>
+    <string name="gallery_results_selected">所选 %1$d 个画廊</string>
+    <string name="gallery_results_type">类型</string>
+    <string name="gallery_results_count">数量</string>
+    <string name="gallery_results_size">体积</string>
+    <string name="gallery_results_initial_label">初始图片</string>
+    <string name="gallery_results_translation_label">翻译结果</string>
+    <string name="gallery_results_sr_label">超分结果</string>
+    <string name="gallery_results_downloaded_label">下载原图</string>
+    <string name="gallery_results_storage_note">翻译和超分数量仅含已记录的完整结果，占用包含缓存和未完成结果；压缩包按包体积统计。删除所选类型的全部结果，保留初始图片和其他类型的结果。</string>
+    <string name="gallery_results_delete_confirm">确认删除所选 %1$d 个画廊的此类结果？\n\n删除后无法恢复，初始图片和其他类型的结果将保留。</string>
 </resources>

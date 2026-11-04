@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="GalleryResultsCell">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppCompat.Body1</item>
+    </style>
+
+    <style name="GalleryResultsCell.Label">
+        <item name="android:paddingEnd">8dp</item>
+    </style>
+
+    <style name="GalleryResultsCell.Label.Header">
+        <item name="android:minHeight">36dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppCompat.Caption</item>
+    </style>
+
+    <style name="GalleryResultsCell.Value">
+        <item name="android:gravity">end|center_vertical</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">4dp</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:text">—</item>
+    </style>
+
+    <style name="GalleryResultsCell.Value.Header">
+        <item name="android:minHeight">36dp</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppCompat.Caption</item>
+    </style>
+
+    <style name="GalleryResultsDeleteButton" parent="Widget.AppCompat.ImageButton">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:background">?attr/selectableItemBackgroundBorderless</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:src">@drawable/v_delete_x24</item>
+        <item name="android:enabled">false</item>
+    </style>
+
+    <style name="GalleryResultsDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:background">?android:attr/listDivider</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+</resources>
