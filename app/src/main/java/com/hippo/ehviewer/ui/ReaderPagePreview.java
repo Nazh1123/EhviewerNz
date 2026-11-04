@@ -225,7 +225,10 @@ final class ReaderPagePreview implements AutoCloseable {
         int nextViewportWidth = Math.max(1, width - row.getPaddingLeft() - row.getPaddingRight());
         boolean viewportChanged = viewportWidth != nextViewportWidth;
         viewportWidth = nextViewportWidth;
-        int nextWidth = Math.max(1, viewportWidth / 4);
+        // Keep portrait-sized cards in landscape; the wider viewport naturally reveals
+        // more pages, including partial cards at its edges, without changing concurrency.
+        int portraitWidth = Math.min(width, row.getResources().getDisplayMetrics().heightPixels);
+        int nextWidth = Math.max(1, (portraitWidth - row.getPaddingLeft() - row.getPaddingRight()) / 4);
         int nextHeight = Math.min(dp(180), Math.max(dp(96),
                 Math.round(Math.max(1, nextWidth - dp(4)) * 130f / 91f)));
         if (itemWidth == nextWidth && imageHeight == nextHeight && !viewportChanged) return false;

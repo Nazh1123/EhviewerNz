@@ -51,7 +51,7 @@ import org.robolectric.util.ReflectionHelpers;
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = 28, application = Application.class,
+@Config(sdk = 28, application = Application.class, qualifiers = "w1000dp-h2000dp-mdpi",
         shadows = {ReaderPageSeekTest.PreviewAppShadow.class, ReaderPageSeekTest.PreviewClientShadow.class})
 @ConscryptMode(ConscryptMode.Mode.OFF)
 public class ReaderPageSeekTest {
@@ -323,6 +323,51 @@ public class ReaderPageSeekTest {
             assertEquals("301", ((TextView) ((LinearLayout) target).getChildAt(1)).getText().toString());
             assertTrue(chosen.isEmpty());
             target.performClick(); assertEquals(java.util.Collections.singletonList(300), chosen);
+        }
+    }
+
+    @Test @Config(qualifiers = "w400dp-h851dp-mdpi")
+    public void landscapeKeepsPortraitCardSizesAndLoadsItsEntireFractionalViewport() {
+        for (boolean reverse : new boolean[] {false, true}) {
+            RuntimeEnvironment.setQualifiers("w400dp-h851dp-mdpi");
+            RecyclerView row = strip(); row.setPadding(8, 0, 8, 0);
+            try (ReaderPagePreview preview = new ReaderPagePreview(context, row, local(new AtomicInteger()))) {
+                preview.show(50, 1000, reverse); layoutAtWidth(row, 400);
+                View portraitCard = page(row, 50);
+                int portraitWidth = portraitCard.getWidth();
+                int portraitHeight = portraitCard.getHeight();
+                int portraitImageHeight = image(portraitCard).getHeight();
+                ReaderPreviewLoader loader = ReflectionHelpers.getField(preview, "localLoader");
+                int generation = ReflectionHelpers.getField(loader, "generation");
+
+                RuntimeEnvironment.setQualifiers("w851dp-h400dp-mdpi");
+                layoutAtWidth(row, 851);
+                View landscapeCard = page(row, 50);
+                assertEquals(portraitWidth, landscapeCard.getWidth());
+                assertEquals(portraitHeight, landscapeCard.getHeight());
+                assertEquals(portraitImageHeight, image(landscapeCard).getHeight());
+                assertEquals("Rotation discarded same-sized cached or in-flight previews", generation,
+                        (int) ReflectionHelpers.getField(loader, "generation"));
+                java.util.Set<Integer> visible = new java.util.HashSet<>();
+                boolean partialCard = false;
+                for (int i = 0; i < row.getChildCount(); i++) {
+                    View child = row.getChildAt(i);
+                    int visibleWidth = Math.min(child.getRight(), row.getWidth() - row.getPaddingRight())
+                            - Math.max(child.getLeft(), row.getPaddingLeft());
+                    if (visibleWidth <= 0) continue;
+                    visible.add(row.getChildAdapterPosition(child));
+                    if (visibleWidth < child.getWidth()) partialCard = true;
+                }
+                assertTrue("Landscape did not reveal additional pages", visible.size() > 8);
+                assertTrue("Landscape forced whole cards to fill its width", partialCard);
+                assertEquals("Partial edge pages were omitted from loading", visible, requestedPages(preview));
+                assertEquals(50, ((int[]) ReflectionHelpers.getField(loader, "pages"))[0]);
+
+                RuntimeEnvironment.setQualifiers("w400dp-h851dp-mdpi");
+                layoutAtWidth(row, 400);
+                assertEquals(portraitWidth, page(row, 50).getWidth());
+                assertEquals(portraitHeight, page(row, 50).getHeight());
+            }
         }
     }
 
