@@ -30,6 +30,9 @@ public class PopularGalleryActions extends FrameLayout {
     private FloatingActionButton mAnchor;
     private FloatingActionButton mMenuUpdates;
     private int mActiveIndex = -1;
+    private int mReservedSlots;
+
+    public void setReservedSlots(int slots) { mReservedSlots = slots; positionButtons(); }
     private ValueAnimator mPositionAnimator;
     private ValueAnimator mNoticeAnimator;
     private float mNoticeRadiusFactor;
@@ -179,7 +182,9 @@ public class PopularGalleryActions extends FrameLayout {
         for (int i = 0; i < getChildCount(); i++) {
             View button = getChildAt(i);
             button.setX(centerX - button.getWidth() / 2f);
-            button.setY(centerY - step * mSlots[i] - button.getHeight() / 2f);
+            button.setY(centerY - step * (mSlots[i] + mReservedSlots) - button.getHeight() / 2f);
+            if (mReservedSlots > 0) GalleryListModeActions.place(button, centerX, centerY,
+                    step, mSlots[i] + mReservedSlots);
         }
     }
 

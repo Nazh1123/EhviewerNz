@@ -253,7 +253,7 @@ public class EhEngine {
 
         List<GalleryInfo> required = new ArrayList<>();
         for (GalleryInfo gi : list) {
-            if (preciseRating || gi.rated || (filter &&
+            if (((preciseRating || gi.rated) && !gi.hasApiRating()) || (filter &&
                     ((sEhFilter.needTags() && gi.simpleTags == null)
                     || (sEhFilter.needUploader() && TextUtils.isEmpty(gi.uploader))))) {
                 required.add(gi);
@@ -372,6 +372,7 @@ public class EhEngine {
             extra.prevHref = result.prevHref;
             extra.rawHeadGid = Math.max(result.rawHeadGid, extra.rawHeadGid);
             extra.rawSeenState = result.rawSeenState.merge(extra.rawSeenState);
+            extra.sourcePages += result.sourcePages;
             result.rawPublicationTimes.forEach(extra.rawPublicationTimes::putIfAbsent);
             if (result.rawGalleries != null && extra.rawGalleries != null) {
                 List<GalleryInfo> raw = new ArrayList<>(result.rawGalleries);
@@ -412,38 +413,7 @@ public class EhEngine {
         }
         final String requestUrl = url;
         String subscriptionScope = subscriptionSearch ? SubscriptionSearchContext.key() : null;
-        String referer = EhUrl.getReferer();
-        Log.d(TAG, url);
-        Request request = new EhRequestBuilder(url, referer).build();
-        Call call = subscriptionSearch ? new SubscriptionPageCall(okHttpClient, request)
-                : okHttpClient.newCall(request);
-
-        // Put call
-        if (null != task) {
-            task.setCall(call);
-        }
-
-        String body = null;
-        Headers headers = null;
-        GalleryListParser.Result result;
-        int code = -1;
-        try {
-            Response response = call.execute();
-            code = response.code();
-            headers = response.headers();
-            assert response.body() != null;
-            body = response.body().string();
-            if (subscriptionSearch && !response.isSuccessful()) {
-                throw new IOException("Subscription search returned HTTP " + code);
-            }
-            result = subscriptionSearch
-                    ? GalleryListParser.parseMergedUploaderSearch(body, mode)
-                    : GalleryListParser.parse(body, mode);
-        } catch (Throwable e) {
-            ExceptionUtils.throwIfFatal(e);
-            throwException(call, code, headers, body, e);
-            throw e;
-        }
+        GalleryListParser.Result result = getGalleryListHtml(task, okHttpClient, url, mode, subscriptionSearch);
 
         if (homepageMatcher != null) {
             // Preserve the unfiltered website order for the anchor and the 15-gallery margin.
@@ -486,10 +456,63 @@ public class EhEngine {
             result.galleryInfoList.removeIf(gallery -> !newSubscriptionGids.contains(gallery.gid));
         }
 
+
+        return result;
+    }
+
+    /** HTML/cursors are available before any required gdata enrichment starts. */
+    public static GalleryListParser.Result getGalleryListHtml(@Nullable EhClient.Task task,
+            OkHttpClient okHttpClient, String url, int mode, boolean subscriptionSearch) throws Throwable {
+        if (subscriptionSearch || SearchRating.isClientOnlyMode(mode)) url = SearchRating.withoutServerFilter(url);
+        if (subscriptionSearch) okHttpClient = SubscriptionPageCall.boundedClient(okHttpClient);
+        String referer = EhUrl.getReferer();
+        Log.d(TAG, url);
+        Request request = new EhRequestBuilder(url, referer).build();
+        Call call = subscriptionSearch && (task == null || !task.usesGalleryBudget())
+                ? new SubscriptionPageCall(okHttpClient, request)
+                : okHttpClient.newCall(request);
+
+        // Put call
+        if (null != task) {
+            task.setCall(call);
+        }
+
+        String body = null;
+        Headers headers = null;
+        GalleryListParser.Result result;
+        int code = -1;
+        try {
+            Response response = call.execute();
+            code = response.code();
+            headers = response.headers();
+            assert response.body() != null;
+            body = response.body().string();
+            if (subscriptionSearch && !response.isSuccessful()) {
+                throw new IOException("Subscription search returned HTTP " + code);
+            }
+            result = subscriptionSearch
+                    ? GalleryListParser.parseMergedUploaderSearch(body, mode)
+                    : GalleryListParser.parse(body, mode);
+        } catch (Throwable e) {
+            ExceptionUtils.throwIfFatal(e);
+            throwException(call, code, headers, body, e);
+            throw e;
+        }
+
         if (code == 200 && url.equals("https://exhentai.org/") && body.isEmpty()) {
             result.customErrorString = GetText.getString(R.string.error_igneous_wrong);
         }
+        return result;
+    }
 
+    public static GalleryListParser.Result prepareGalleryListResult(@Nullable EhClient.Task task,
+            OkHttpClient client, String url, int mode, boolean subscriptionSearch, boolean requireUploader,
+            int minRatingHundredths, GalleryListParser.Result result) throws Throwable {
+        if (result.customErrorString == null) {
+            prepareGalleryList(task, client, url, mode, result,
+                    subscriptionSearch ? SubscriptionSearchContext.key() : null,
+                    requireUploader, minRatingHundredths, false);
+        }
         return result;
     }
 

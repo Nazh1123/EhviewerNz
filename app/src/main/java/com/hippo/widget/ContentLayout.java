@@ -252,6 +252,9 @@ public class ContentLayout extends FrameLayout {
         public int mPages;
 
         private int mNextPage;
+        private int mLoadedSourcePages;
+        private boolean mLoadedFromStart;
+        private String mOldestLoadedPosted;
 
         public String resultCount;
         public String firstHref;
@@ -419,6 +422,8 @@ public class ContentLayout extends FrameLayout {
             }
         }
 
+        protected boolean shouldRevealNextPage() { return true; }
+
         /** Called immediately before a scroll-triggered next-page request starts. */
         protected void onNextPageRequestFromScroll() {
         }
@@ -490,6 +495,11 @@ public class ContentLayout extends FrameLayout {
         public int getPages() {
             return mPages;
         }
+
+        public int getLoadedSourcePages() { return mLoadedSourcePages; }
+        public boolean isLoadedFromStart() { return mLoadedFromStart; }
+        public String getOldestLoadedPosted() { return mOldestLoadedPosted; }
+        public boolean isRefreshing() { return mRefreshLayout.isRefreshing(); }
 
         /**
          * Returns whether a real page exists after the currently loaded range. Unlike the
@@ -576,6 +586,20 @@ public class ContentLayout extends FrameLayout {
         }
 
         public void onGetPageData(int taskId, GalleryListParser.Result result, List<E> data) {
+            if (!isCurrentTask(taskId)) return;
+            if (result.customErrorString == null) {
+                if (mCurrentTaskType == TYPE_REFRESH || mCurrentTaskType == TYPE_SOMEWHERE) {
+                    mLoadedSourcePages = result.sourcePages;
+                    mLoadedFromStart = mCurrentTaskType == TYPE_REFRESH;
+                    mOldestLoadedPosted = result.rawTailPosted;
+                } else {
+                    if (mCurrentTaskType != TYPE_REFRESH_PAGE) mLoadedSourcePages += result.sourcePages;
+                    if (result.rawTailPosted != null && (mOldestLoadedPosted == null
+                            || result.rawTailPosted.compareTo(mOldestLoadedPosted) < 0)) {
+                        mOldestLoadedPosted = result.rawTailPosted;
+                    }
+                }
+            }
             if (mCurrentTaskType != TYPE_NEXT_PAGE_KEEP_POS && mCurrentTaskType != TYPE_NEXT_PAGE) {
                 firstHref = result.firstHref;
                 prevHref = result.prevHref;
@@ -742,7 +766,7 @@ public class ContentLayout extends FrameLayout {
                     mRefreshLayout.setFooterRefreshing(false);
                     showContent();
 
-                    if (mCurrentTaskType == TYPE_NEXT_PAGE && mRecyclerView.isAttachedToWindow()) {
+                    if (shouldRevealNextPage() && mCurrentTaskType == TYPE_NEXT_PAGE && mRecyclerView.isAttachedToWindow()) {
                         // RecyclerView scroll
                         mRecyclerView.stopScroll();
                         RecyclerView.LayoutManager manager = mRecyclerView.getLayoutManager();
@@ -763,7 +787,7 @@ public class ContentLayout extends FrameLayout {
                 mRefreshLayout.setFooterRefreshing(false);
                 showContent();
 
-                if (mRecyclerView.isAttachedToWindow()) {
+                if (shouldRevealNextPage() && mRecyclerView.isAttachedToWindow()) {
                     if (mCurrentTaskType == TYPE_NEXT_PAGE_KEEP_POS) {
                         scrollToRevealNewContent();
                     } else {
@@ -1118,6 +1142,9 @@ public class ContentLayout extends FrameLayout {
             bundle.putInt(KEY_START_PAGE, mStartPage);
             bundle.putInt(KEY_END_PAGE, mEndPage);
             bundle.putInt(KEY_PAGES, mPages);
+            bundle.putInt("loaded_source_pages", mLoadedSourcePages);
+            bundle.putBoolean("loaded_from_start", mLoadedFromStart);
+            bundle.putString("oldest_loaded_posted", mOldestLoadedPosted);
             bundle.putString(KEY_RESULT_COUNT, resultCount);
             bundle.putString(KEY_FIRST_HREF, firstHref);
             bundle.putString(KEY_PREV_HREF, prevHref);
@@ -1148,6 +1175,9 @@ public class ContentLayout extends FrameLayout {
                 mStartPage = bundle.getInt(KEY_START_PAGE);
                 mEndPage = bundle.getInt(KEY_END_PAGE);
                 mPages = bundle.getInt(KEY_PAGES);
+                mLoadedSourcePages = bundle.getInt("loaded_source_pages", mPageDivider.size());
+                mLoadedFromStart = bundle.getBoolean("loaded_from_start", mStartPage == 0);
+                mOldestLoadedPosted = bundle.getString("oldest_loaded_posted");
                 resultCount = bundle.getString(KEY_RESULT_COUNT);
                 firstHref = bundle.getString(KEY_FIRST_HREF);
                 prevHref = bundle.getString(KEY_PREV_HREF);

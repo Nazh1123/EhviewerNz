@@ -1,0 +1,23 @@
+<resources>
+    <string name="gallery_rating_sort">Sort by rating</string>
+    <string name="gallery_rating_sort_active">Rating sort on · settings</string>
+    <string name="gallery_downloaded_only_active">Downloaded only on · turn off</string>
+    <string name="gallery_rating_sort_loaded">Sort loaded galleries</string>
+    <string name="gallery_rating_sort_pages">Load up to N pages in total</string>
+    <string name="gallery_rating_sort_batches">Load up to N result batches in total</string>
+    <string name="gallery_rating_sort_page_hint">Target total (1–200)</string>
+    <string name="gallery_rating_sort_months">Load back N months</string>
+    <string name="gallery_rating_sort_month_hint">Months (1–240)</string>
+    <string name="gallery_rating_sort_month_note">Loads consecutive pages to the target date; keeps the boundary page.</string>
+    <string name="gallery_rating_sort_month_unavailable">Date range unavailable for this list or after a jump.</string>
+    <string name="gallery_rating_sort_status">Loaded: %1$d pages · %2$d galleries\nVisible: %3$d</string>
+    <string name="gallery_rating_sort_batch_status">Loaded: %1$d batches · %2$d galleries\nVisible: %3$d</string>
+    <string name="gallery_rating_sort_sources">Source pages: %1$d</string>
+    <string name="gallery_rating_sort_execute">Sort</string>
+    <string name="gallery_rating_sort_restore">Restore original order</string>
+    <string name="gallery_rating_sort_loading">Loading galleries…</string>
+    <string name="gallery_rating_sort_ratings">Reading ratings…</string>
+    <string name="gallery_rating_sort_stop">Stop and sort loaded</string>
+    <string name="gallery_rating_sort_incomplete">Loaded results sorted; some loading or ratings are incomplete.</string>
+    <string name="gallery_rating_sort_jump_reset">Original order restored for jump.</string>
+</resources>

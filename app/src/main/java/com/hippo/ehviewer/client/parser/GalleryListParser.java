@@ -73,6 +73,8 @@ public class GalleryListParser {
     };
 
     public static class Result {
+        public int sourcePages = 1;
+        public boolean partialFailure;
         public int pages;
         public int nextPage;
         public String resultCount;

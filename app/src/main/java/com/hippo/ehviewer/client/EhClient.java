@@ -77,6 +77,8 @@ public class EhClient {
     public static final int METHOD_PREPARE_SUBSCRIPTION_LIST = 32;
     public static final int METHOD_GET_SUBSCRIPTION_HOMEPAGE = 33;
     public static final int METHOD_GET_DISPLAY_METADATA = 34;
+    public static final int METHOD_GET_GALLERY_LIST_HTML = 35;
+    public static final int METHOD_PREPARE_GALLERY_LIST = 36;
 
     private final ThreadPoolExecutor mRequestThreadPool;
     private final OkHttpClient mOkHttpClient;
@@ -96,6 +98,7 @@ public class EhClient {
         if (!request.isCancelled()) {
             Task task = new Task(request.getMethod(), request.getCallback(), request.getEhConfig(),
                     request.isBackground());
+            task.mBulk = request.isBulk();
             task.executeOnExecutor(mRequestThreadPool, request.getArgs());
             request.task = task;
         } else {
@@ -110,6 +113,10 @@ public class EhClient {
         private Callback mCallback;
         private EhConfig mEhConfig;
         private final boolean mBackground;
+        private boolean mBulk;
+
+        public boolean isBulk() { return mBulk; }
+        public boolean usesGalleryBudget() { return mBulk || GalleryRequestBudget.appliesTo(mMethod); }
 
         private final AtomicReference<Call> mCall = new AtomicReference<>();
         private final AtomicBoolean mStop = new AtomicBoolean();
@@ -171,7 +178,12 @@ public class EhClient {
         protected Object doInBackground(Object... params) {
             OkHttpClient mOkHttpClient = mBackground ? mBackgroundOkHttpClient : EhClient.this.mOkHttpClient;
             OkHttpClient mImageOkHttpClient = mBackground ? mBackgroundImageOkHttpClient : EhClient.this.mImageOkHttpClient;
+            boolean acquired = false;
             try {
+                if (usesGalleryBudget()) {
+                    GalleryRequestBudget.SHARED.acquire(mStop::get);
+                    acquired = true;
+                }
                 Log.i(TAG, "doInBackground: "+mMethod);
                 switch (mMethod) {
                     case METHOD_SIGN_IN:
@@ -179,6 +191,14 @@ public class EhClient {
                     case METHOD_GET_DISPLAY_METADATA:
                         return EhEngine.fillDisplayMetadata(this, mOkHttpClient,
                                 (List<GalleryInfo>) params[0], (String) params[1]);
+                    case METHOD_GET_GALLERY_LIST_HTML:
+                        return EhEngine.getGalleryListHtml(this, mOkHttpClient,
+                                (String) params[0], (int) params[1], Boolean.TRUE.equals(params[2]));
+                    case METHOD_PREPARE_GALLERY_LIST:
+                        return EhEngine.prepareGalleryListResult(this, mOkHttpClient,
+                                (String) params[0], (int) params[1], Boolean.TRUE.equals(params[2]),
+                                Boolean.TRUE.equals(params[3]), (int) params[4],
+                                (com.hippo.ehviewer.client.parser.GalleryListParser.Result) params[5]);
                     case METHOD_GET_GALLERY_LIST:
                         return EhEngine.getGalleryList(this, mOkHttpClient,
                                 (String) params[0], (int) params[1],
@@ -263,6 +283,8 @@ public class EhClient {
             } catch (Throwable e) {
                 ExceptionUtils.throwIfFatal(e);
                 return e;
+            } finally {
+                if (acquired) GalleryRequestBudget.SHARED.release();
             }
         }
 

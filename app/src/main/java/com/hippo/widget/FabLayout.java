@@ -47,6 +47,12 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
     private boolean mExpanded = true;
     private boolean mAutoCancel = true;
     private boolean mHidePrimaryFab = false;
+    private boolean mWrapSecondaryFabs;
+
+    public void setWrapSecondaryFabs(boolean wrap) {
+        mWrapSecondaryFabs = wrap;
+        requestLayout();
+    }
     private float mMainFabCenterY = -1f;
 
     private OnExpandListener mOnExpandListener;
@@ -151,6 +157,10 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
         int centerX = 0;
         int bottom = getMeasuredHeight() - getPaddingBottom();
         int count = getChildCount();
+        int secondaryBottom = bottom - mFabSize - mIntervalPrimary;
+        int rows = mWrapSecondaryFabs ? Math.max(1, (secondaryBottom - getPaddingTop())
+                / (mFabMiniSize + mIntervalSecondary)) : Integer.MAX_VALUE;
+        int secondaryIndex = 0;
         int i = count;
         while(--i >= 0) {
             View child = getChildAt(i);
@@ -169,8 +179,11 @@ public class FabLayout extends ViewGroup implements View.OnClickListener {
                 centerX = layoutRight - (childWidth / 2);
                 mMainFabCenterY = layoutBottom - (childHeight / 2f);
             } else {
+                int column = secondaryIndex / rows;
+                int row = secondaryIndex++ % rows;
+                bottom = secondaryBottom - row * (mFabMiniSize + mIntervalSecondary);
                 layoutBottom = bottom + ((childHeight - mFabMiniSize) / 2);
-                layoutRight = centerX + (childWidth / 2);
+                layoutRight = centerX + (childWidth / 2) - column * (mFabMiniSize + mIntervalSecondary);
                 bottom -= mFabMiniSize + mIntervalSecondary;
             }
             child.layout(layoutRight - childWidth, layoutBottom - childHeight, layoutRight, layoutBottom);

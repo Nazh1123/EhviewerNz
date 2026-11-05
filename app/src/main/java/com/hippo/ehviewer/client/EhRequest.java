@@ -25,6 +25,8 @@ public class EhRequest {
     private EhClient.Callback mCallback;
     private EhConfig mEhConfig;
     private boolean mBackground;
+    private boolean mBulk;
+    private Runnable mCancelAction;
 
     EhClient.Task task;
 
@@ -62,6 +64,14 @@ public class EhRequest {
 
     public boolean isBackground() { return mBackground; }
 
+    public EhRequest setBulk(boolean bulk) { mBulk = bulk; return this; }
+    public boolean isBulk() { return mBulk; }
+
+    public void setCancelAction(Runnable action) {
+        mCancelAction = action;
+        if (mCancel && action != null) action.run();
+    }
+
     public Object[] getArgs() {
         return mArgs;
     }
@@ -77,6 +87,9 @@ public class EhRequest {
     public void cancel() {
         if (!mCancel) {
             mCancel = true;
+            Runnable action = mCancelAction;
+            mCancelAction = null;
+            if (action != null) action.run();
             if (task != null) {
                 task.stop();
                 task = null;

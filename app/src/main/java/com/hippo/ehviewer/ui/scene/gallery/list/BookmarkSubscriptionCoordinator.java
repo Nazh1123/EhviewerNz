@@ -65,6 +65,8 @@ final class BookmarkSubscriptionCoordinator {
                                          boolean noSubscriptions, boolean partialFailure);
 
         void onBookmarkSubscriptionFailure(int taskId, Exception error);
+
+        default void onBookmarkSubscriptionProgress() { }
     }
 
     private static final class Source {
@@ -161,6 +163,10 @@ final class BookmarkSubscriptionCoordinator {
     private final Set<Long> mBookmarkGids = new HashSet<>();
     private boolean mRefresh;
     private boolean mLoading;
+    private boolean mBulk;
+    private int mSourcePagesRead;
+
+    int getSourcePagesRead() { return mSourcePagesRead; }
     private boolean mHasCachedInitialSource;
     @Nullable private Exception mFirstFailure;
     private String mSubscriptionFingerprint = "";
@@ -415,10 +421,46 @@ final class BookmarkSubscriptionCoordinator {
         mLoading = true;
         mFirstFailure = null;
         for (Source source : mSources) source.ratingBatchEmpty = false;
+        if (mBulk) {
+            // One bounded lookahead per source; buffers are merged only when their order is safe.
+            int available = MAX_CONCURRENT_REQUESTS - mActiveRequests - mRequestQueue.size();
+            for (Source source : mSources) {
+                if (available > 0 && !source.exhausted && !source.queued && !source.loading
+                        && source.buffer.size() - source.bufferIndex <= mBatchSize) {
+                    enqueue(source, false);
+                    available--;
+                }
+            }
+            pumpRequests();
+        }
         continueProducing();
     }
 
+    void setBulk(boolean bulk) { mBulk = bulk; }
+
+    /** Keep cursors, completed source buffers and partially emitted rows when stopping a scan. */
+    void pauseLoading() {
+        if (mRefresh || (!mLoading && mActiveRequests == 0 && mRequestQueue.isEmpty())) return;
+        mGeneration++;
+        mRequestQueue.clear();
+        mActiveRequests = 0;
+        for (Source source : mSources) {
+            if (source.request != null) {
+                EhRequest request = source.request;
+                source.request = null;
+                request.cancel();
+                // Retry this exact URL rather than advancing its numeric page index twice.
+                source.retries = Math.max(1, source.retries);
+            }
+            source.loading = false;
+            source.queued = false;
+        }
+        mLoading = false;
+        if (!mPendingBatch.isEmpty()) finishBatch();
+    }
+
     void cancel() {
+        mSourcePagesRead = 0;
         mGeneration++;
         if (mResolution != null && mResolution.request != null) mResolution.request.cancel();
         mResolution = null;
@@ -504,7 +546,7 @@ final class BookmarkSubscriptionCoordinator {
 
     private void pumpRequests() {
         pumpResolution();
-        while (mActiveRequests < MAX_CONCURRENT_REQUESTS && !mRequestQueue.isEmpty()) {
+        while ((!mBulk || mLoading) && mActiveRequests < MAX_CONCURRENT_REQUESTS && !mRequestQueue.isEmpty()) {
             PendingRequest pending = mRequestQueue.removeFirst();
             Source source = pending.source();
             source.queued = false;
@@ -540,10 +582,11 @@ final class BookmarkSubscriptionCoordinator {
             source.retryUrl = url;
             int generation = mGeneration;
             EhRequest request = new EhRequest()
+                    .setBulk(mBulk)
                     .setMethod(EhClient.METHOD_GET_GALLERY_LIST)
                     .setArgs(url, source.builder.getMode(), true,
                             source.plan != null && source.plan.isMergedUploaderSearch(),
-                            sourceRatingMinimum(source), true)
+                            sourceRatingMinimum(source), !mBulk)
                     .setCallback(new EhClient.Callback<GalleryListParser.Result>() {
                         @Override
                         public void onSuccess(GalleryListParser.Result result) {
@@ -622,12 +665,19 @@ final class BookmarkSubscriptionCoordinator {
         source.responseReady = result.customErrorString == null;
         mSessionNewGids.addAll(source.session.displayNewGids());
 
+        mSourcePagesRead += result.sourcePages;
+        mListener.onBookmarkSubscriptionProgress();
+
         afterRequestFinished();
     }
 
     private void setSourceGalleryInfos(Source source, List<GalleryInfo> galleryInfoList) {
+        List<GalleryInfo> retained = mBulk && source.bufferIndex < source.buffer.size()
+                ? new ArrayList<>(source.buffer.subList(source.bufferIndex, source.buffer.size()))
+                : Collections.emptyList();
         source.buffer.clear();
         source.bufferIndex = 0;
+        source.buffer.addAll(retained);
         source.buffer.addAll(galleryInfoList);
         if (source.plan == null) mLatestEhState = mLatestEhState.observe(galleryInfoList);
         else mLatestBookmarkState = mLatestBookmarkState.observe(galleryInfoList);

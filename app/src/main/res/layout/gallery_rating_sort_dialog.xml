@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="24dp">
+        <TextView android:id="@+id/rating_sort_status"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:paddingBottom="12dp"/>
+        <RadioGroup android:id="@+id/rating_sort_range"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:checkedButton="@id/rating_sort_loaded">
+            <RadioButton android:id="@+id/rating_sort_loaded"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/gallery_rating_sort_loaded"/>
+            <RadioButton android:id="@+id/rating_sort_pages"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/gallery_rating_sort_pages"/>
+            <EditText android:id="@+id/rating_sort_page_count"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginStart="32dp" android:inputType="number"
+                android:maxLength="3" android:singleLine="true"
+                android:hint="@string/gallery_rating_sort_page_hint"/>
+            <RadioButton android:id="@+id/rating_sort_months"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/gallery_rating_sort_months"/>
+            <EditText android:id="@+id/rating_sort_month_count"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginStart="32dp" android:inputType="number"
+                android:maxLength="3" android:singleLine="true"
+                android:hint="@string/gallery_rating_sort_month_hint"/>
+        </RadioGroup>
+        <TextView android:id="@+id/rating_sort_range_note"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:paddingTop="8dp" android:textAppearance="?android:attr/textAppearanceSmall"/>
+    </LinearLayout>
+</ScrollView>

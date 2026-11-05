@@ -1074,6 +1074,111 @@ public class PopularGalleryRenderingTest {
         @Override public boolean awaitTermination(long timeout, java.util.concurrent.TimeUnit unit) { return true; }
     }
 
+    @Test @Config(sdk = 34) public void ratingSortKeepsSourceOrderAndMapsClicksAndPagePositions() {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        refresh(1, 2, 3);
+        helper.getDataAt(0).rating = 4;
+        helper.getDataAt(1).rating = 2;
+        helper.getDataAt(2).rating = 5;
+        enableRatingSort();
+        assertEquals(List.of(3L, 1L, 2L), visibleIds());
+        assertEquals(List.of(1L, 2L, 3L), GalleryRatingSortTest.ids(helper.getData()));
+        assertEquals(1, helper.getAdapterPosition(0));
+        assertEquals(2, helper.getDataPosition(0));
+        scene.captureClick = true;
+        scene.onItemClick((EasyRecyclerView) recycler, null, 0, 0);
+        assertEquals(3, scene.lastClickedGallery.gid);
+        scene.onItemLongClick((EasyRecyclerView) recycler, null, 1, 0);
+        assertEquals(1, scene.lastLongPressedGallery.gid);
+        assertRendered(3);
+        adapter.setType(GalleryAdapterNew.TYPE_GRID);
+        layout();
+        assertEquals(3, adapter.getItemCount());
+        assertNotNull(recycler.findViewHolderForAdapterPosition(0).itemView.findViewById(R.id.thumb_new));
+        ReflectionHelpers.callInstanceMethod(scene, "restoreRatingOrder");
+        assertEquals(List.of(1L, 2L, 3L), visibleIds());
+    }
+
+    @Test public void ratingSortCombinesWithDownloadedFilterAndRestoresReadDivider() {
+        subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 3);
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(3, 2, 1);
+        helper.getDataAt(0).rating = 1;
+        helper.getDataAt(1).rating = 5;
+        helper.getDataAt(2).rating = 4;
+        enableRatingSort();
+        assertEquals(List.of(2L, 1L, 3L), visibleIds());
+        downloadedGids.addAll(List.of(3L, 1L));
+        ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
+                ClassParameter.from(boolean.class, true), ClassParameter.from(boolean.class, false));
+        assertEquals(List.of(1L, 3L), visibleIds());
+        ReflectionHelpers.callInstanceMethod(scene, "restoreRatingOrder");
+        assertEquals(Arrays.asList(3L, null, 1L), visibleIds());
+        assertTrue(ReflectionHelpers.getField(scene, "mDownloadedOnlyMode"));
+    }
+
+    @Test public void jumpingExitsRatingSortAndRetainsOriginalPaginationData() {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        refresh(1, 2, 3);
+        enableRatingSort();
+        helper.goTo(0);
+        assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+        assertEquals(List.of(1L, 2L, 3L), visibleIds());
+        assertEquals(R.string.gallery_rating_sort_jump_reset, scene.lastTip);
+        assertEquals(1, helper.getLoadedSourcePages());
+    }
+
+    @Test public void sortedPaginationRequiresUserGestureAndRetainsDownloadModeOnExit() {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        refresh(1, 2);
+        helper.mPages = -1;
+        helper.nextHref = "https://example.com/?next=1";
+        enableRatingSort();
+        assertFalse(helper.shouldRequestNextPageOnScroll(10));
+        ReflectionHelpers.setField(scene, "mRatingBrowseGestureArmed", true);
+        assertTrue(helper.shouldRequestNextPageOnScroll(10));
+        helper.onNextPageRequestFromScroll();
+        assertFalse(helper.shouldRequestNextPageOnScroll(10));
+        ReflectionHelpers.setField(scene, "mRatingLoading", true);
+        ReflectionHelpers.setField(scene, "mRatingBrowseGestureArmed", true);
+        assertFalse(helper.shouldRequestNextPageOnScroll(10));
+        ReflectionHelpers.setField(scene, "mRatingLoading", false);
+        ReflectionHelpers.setField(scene, "mDownloadedOnlyMode", true);
+        ReflectionHelpers.callInstanceMethod(scene, "restoreRatingOrder");
+        assertTrue(ReflectionHelpers.getField(scene, "mDownloadedOnlyMode"));
+    }
+
+    @Test public void explicitSortReturningToTopRestoresTheHiddenMoreButton() {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        refresh(1, 2, 3);
+        View controls = LayoutInflater.from(scene.getContext()).inflate(R.layout.scene_gallery_list, null);
+        FabLayout menu = controls.findViewById(R.id.fab_layout);
+        menu.setExpanded(false, false);
+        ReflectionHelpers.setField(scene, "mFabLayout", menu);
+        ReflectionHelpers.setField(scene, "mShowActionFab", false);
+        menu.getPrimaryFab().setVisibility(View.INVISIBLE);
+        menu.getPrimaryFab().setScaleX(0);
+        menu.getPrimaryFab().setScaleY(0);
+        ReflectionHelpers.setField(scene, "mRatingSortScrollToTop", true);
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        ReflectionHelpers.setField(scene, "executorService", jobs);
+        GalleryRatingSortController controller = ReflectionHelpers.callInstanceMethod(scene, "getRatingSortController");
+        controller.stopAndSort();
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
+        assertTrue(ReflectionHelpers.getField(scene, "mShowActionFab"));
+        assertEquals(View.VISIBLE, menu.getPrimaryFab().getVisibility());
+        assertEquals(1f, menu.getPrimaryFab().getScaleX(), 0f);
+    }
+
+    private void enableRatingSort() {
+        List<GalleryInfo> order = ReflectionHelpers.getField(scene, "mRatingOrder");
+        order.clear();
+        order.addAll(GalleryRatingSort.sort(GalleryRatingSort.snapshot(helper.getData())));
+        ReflectionHelpers.setField(scene, "mRatingSortMode", true);
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceDataSetChanged");
+    }
+
     private void refresh(long... gids) {
         helper.refresh();
         GalleryListParser.Result result = new GalleryListParser.Result();
@@ -1133,10 +1238,17 @@ public class PopularGalleryRenderingTest {
         int lastTip;
         int originalLongPresses;
         GalleryInfo lastLongPressedGallery;
+        GalleryInfo lastClickedGallery;
+        boolean captureClick;
         TestScene(Context context) { this.context = context; }
         @Override public Context getContext() { return context; }
         @Override public Context getEHContext() { return context; }
         @Override public void showTip(int id, int length) { lastTip = id; }
+        @Override public boolean onItemClick(View view, GalleryInfo gallery) {
+            if (!captureClick) return super.onItemClick(view, gallery);
+            lastClickedGallery = gallery;
+            return true;
+        }
         @Override public boolean onItemLongClick(GalleryInfo gallery, View view) {
             originalLongPresses++;
             lastLongPressedGallery = gallery;
