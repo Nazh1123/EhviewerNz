@@ -109,12 +109,32 @@ public class OfflineGalleryDetailTest {
         GalleryTagGroup[] groups = OfflineGalleryDetail.tags(saved,
                 new String[]{"artist:alice", "female:glasses", "miscellaneous", null, "male:"});
         assertEquals(5, groups.length);
-        assertEquals("artist", groups[0].groupName);
-        assertEquals(2, groups[0].size());
-        assertEquals("bob", groups[0].getTagAt(1));
+        assertEquals("artist", groups[1].groupName);
+        assertEquals(2, groups[1].size());
+        assertEquals("bob", groups[1].getTagAt(1));
         OfflineGalleryDetail result = OfflineGalleryDetail.read(source(), saved, null);
         assertEquals("chinese", result.info.language);
         assertNull(result.directory);
+    }
+
+    @Test public void restoredTagsPlaceParodyBeforeOtherWithoutSortingTagsWithinGroups() {
+        GalleryTags saved = new GalleryTags(123);
+        saved.language = "chinese";
+        saved.parody = "touhou project,original";
+        saved.artist = "zeta,alpha";
+        saved.other = "full color";
+
+        GalleryTagGroup[] groups = OfflineGalleryDetail.tags(saved, null);
+
+        assertEquals(4, groups.length);
+        assertEquals("language", groups[0].groupName);
+        assertEquals("parody", groups[1].groupName);
+        assertEquals("artist", groups[2].groupName);
+        assertEquals("other", groups[3].groupName);
+        assertEquals("touhou project", groups[1].getTagAt(0));
+        assertEquals("original", groups[1].getTagAt(1));
+        assertEquals("zeta", groups[2].getTagAt(0));
+        assertEquals("alpha", groups[2].getTagAt(1));
     }
 
     @Test public void identifierAloneDoesNotQualifyAsAnOfflineDetail() {

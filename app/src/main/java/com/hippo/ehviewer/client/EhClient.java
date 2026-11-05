@@ -23,6 +23,7 @@ import android.util.Log;
 
 import com.hippo.ehviewer.Analytics;
 import com.hippo.ehviewer.EhApplication;
+import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.userTag.TagPushParam;
 import com.hippo.ehviewer.client.data.userTag.UserTag;
@@ -79,6 +80,7 @@ public class EhClient {
     public static final int METHOD_GET_DISPLAY_METADATA = 34;
     public static final int METHOD_GET_GALLERY_LIST_HTML = 35;
     public static final int METHOD_PREPARE_GALLERY_LIST = 36;
+    public static final int METHOD_GET_ARCHIVE_QUOTA = 37;
 
     private final ThreadPoolExecutor mRequestThreadPool;
     private final OkHttpClient mOkHttpClient;
@@ -260,6 +262,10 @@ public class EhClient {
                         return EhEngine.getArchiveList(this, mOkHttpClient, (String) params[0], (Long) params[1], (String) params[2]);
                     case METHOD_ARCHIVER:
                         return EhEngine.getArchiver(this, mOkHttpClient, (String) params[0], (Long) params[1], (String) params[2]);
+                    case METHOD_GET_ARCHIVE_QUOTA:
+                        return com.hippo.ehviewer.download.ArchiveQuota.loadQuota(
+                                Settings.getApplicationContext(), (String) params[0],
+                                (Boolean) params[1], this, mOkHttpClient);
                     case METHOD_DOWNLOAD_ARCHIVE:
                         return EhEngine.downloadArchive(this, mOkHttpClient, (Long) params[0], (String) params[1], (String) params[2], (String) params[3]);
                     case METHOD_DOWNLOAD_ARCHIVER:

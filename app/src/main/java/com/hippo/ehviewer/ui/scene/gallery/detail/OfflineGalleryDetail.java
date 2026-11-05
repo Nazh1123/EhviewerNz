@@ -114,11 +114,12 @@ public final class OfflineGalleryDetail {
     static GalleryTagGroup[] tags(@Nullable GalleryTags saved, @Nullable String[] simpleTags) {
         LinkedHashMap<String, List<String>> groups = new LinkedHashMap<>();
         if (saved != null) {
-            String[] names = {"rows", "artist", "cosplayer", "character", "female", "group",
-                    "language", "male", "misc", "mixed", "other", "parody", "reclass", "location"};
-            String[] values = {saved.rows, saved.artist, saved.cosplayer, saved.character,
-                    saved.female, saved.group, saved.language, saved.male, saved.misc, saved.mixed,
-                    saved.other, saved.parody, saved.reclass, saved.location};
+            // Restore namespace rows in display order; keep the saved order within each row.
+            String[] names = {"language", "parody", "character", "group", "artist", "cosplayer",
+                    "male", "female", "mixed", "location", "reclass", "other", "misc", "rows"};
+            String[] values = {saved.language, saved.parody, saved.character, saved.group,
+                    saved.artist, saved.cosplayer, saved.male, saved.female, saved.mixed,
+                    saved.location, saved.reclass, saved.other, saved.misc, saved.rows};
             for (int i = 0; i < names.length; i++) {
                 if (!isEmpty(values[i])) for (String tag : values[i].split(",")) addTag(groups, names[i], tag);
             }
