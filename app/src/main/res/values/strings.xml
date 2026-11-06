@@ -363,6 +363,7 @@
     <string name="star_5">5 stars</string>
 
     <!-- Gallery detail -->
+    <string name="gallery_detail_size_placeholder" translatable="false">MiB</string>
     <string name="error_cannot_find_gallery">Couldn\'t find the gallery</string>
     <string name="download">Download</string>
     <string name="read">Read</string>

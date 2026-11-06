@@ -344,11 +344,11 @@ public class OfflineGalleryDetailSceneTest {
         bindPendingHeader();
         assertEquals("", text(R.id.rating_text));
         assertEquals("", text(R.id.pages));
-        assertEquals("", text(R.id.size));
+        assertEquals("MiB", text(R.id.size));
         assertEquals("Japanese", text(R.id.language));
         assertEquals(context.getString(R.string.not_favorited), text(R.id.heart_outline));
         assertEquals(context.getString(R.string.favored_times, 0).replace("0", " "), text(R.id.favoredTimes));
-        assertEquals(context.getString(R.string.torrent_count, 0).replace("0", "  "), text(R.id.torrent));
+        assertEquals(context.getString(R.string.torrent_count, 0).replace("0", " "), visibleText(R.id.torrent));
         assertEquals(View.GONE, content.findViewById(R.id.tags).getVisibility());
         assertEquals(View.GONE, content.findViewById(R.id.update_action_card).getVisibility());
         assertFalse(content.findViewById(R.id.download).isEnabled());
@@ -382,7 +382,8 @@ public class OfflineGalleryDetailSceneTest {
         }
     }
 
-    @Test public void pendingCountsPreserveFinalLocalizedFormatAndRequestedBlankWidths() {
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void pendingCountsPreserveFinalLocalizedFormatAndHideUnknownCounts() {
         for (java.util.Locale locale : new java.util.Locale[]{java.util.Locale.ENGLISH,
                 java.util.Locale.SIMPLIFIED_CHINESE, java.util.Locale.JAPANESE,
                 java.util.Locale.GERMAN, java.util.Locale.forLanguageTag("ar")}) {
@@ -397,8 +398,12 @@ public class OfflineGalleryDetailSceneTest {
             ReflectionHelpers.setField(scene, "mGalleryInfo", summary);
             bindPendingHeader();
             String favorites = text(R.id.favoredTimes);
-            String torrents = text(R.id.torrent);
-            String rating = text(R.id.rating_text);
+            String torrents = visibleText(R.id.torrent);
+            String rating = visibleText(R.id.rating_text);
+            assertHiddenCount(content.findViewById(R.id.torrent));
+            assertHiddenCount(content.findViewById(R.id.rating_text));
+            assertEquals(torrents, content.findViewById(R.id.torrent).getContentDescription());
+            assertEquals(rating, content.findViewById(R.id.rating_text).getContentDescription());
             GalleryDetail detail = online();
             detail.rating = 4.5f;
             detail.ratingCount = 123;
@@ -409,10 +414,130 @@ public class OfflineGalleryDetailSceneTest {
             assertEquals(locale.toLanguageTag(),
                     text(R.id.favoredTimes).replace(String.format(locale, "%d", 987), " "), favorites);
             assertEquals(locale.toLanguageTag(),
-                    text(R.id.torrent).replace(String.format(locale, "%d", 64), "  "), torrents);
+                    text(R.id.torrent).replace(String.format(locale, "%d", 64), " "), torrents);
             assertEquals(locale.toLanguageTag(),
-                    text(R.id.rating_text).replace(String.format(locale, "%d", 123), "   "), rating);
+                    text(R.id.rating_text).replace(String.format(locale, "%d", 123), " "), rating);
+            assertSameParenthesisWidths(content.findViewById(R.id.torrent), torrents, text(R.id.torrent));
+            assertSameParenthesisWidths(content.findViewById(R.id.rating_text), rating, text(R.id.rating_text));
+            assertNull(content.findViewById(R.id.torrent).getContentDescription());
+            assertNull(content.findViewById(R.id.rating_text).getContentDescription());
         }
+    }
+
+    private static void assertSameParenthesisWidths(TextView view, String pending, String loaded) {
+        float[] pendingWidths = new float[pending.length()];
+        float[] loadedWidths = new float[loaded.length()];
+        view.getPaint().getTextWidths(pending, pendingWidths);
+        view.getPaint().getTextWidths(loaded, loadedWidths);
+        for (char bracket : new char[]{'(', ')'}) {
+            assertTrue(pending.indexOf(bracket) >= 0);
+            assertTrue(loaded.indexOf(bracket) >= 0);
+            assertEquals("Bracket " + bracket + ": " + pending + " -> " + loaded,
+                    pendingWidths[pending.indexOf(bracket)], loadedWidths[loaded.indexOf(bracket)], 0.01f);
+        }
+    }
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void singleDigitTorrentCountsKeepButtonWidthAndFollowingActionPosition() {
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        TextView torrent = content.findViewById(R.id.torrent);
+        // Exercise a proportional-number font instead of relying on equal-width default digits.
+        torrent.setFontFeatureSettings("'pnum' 1, 'tnum' 0");
+        assertNotEquals(torrent.getPaint().measureText("1"), torrent.getPaint().measureText("2"), 0.01f);
+        View actions = content.findViewById(R.id.actions);
+        bindPendingHeader();
+        measureActions(actions);
+        int pendingWidth = torrent.getWidth();
+        Integer followingPosition = null;
+        for (int count = 0; count < 10; count++) {
+            GalleryDetail detail = online();
+            detail.torrentCount = count;
+            scene.onGetGalleryDetailSuccess(detail);
+            measureActions(actions);
+            assertEquals("Torrent count=" + count, pendingWidth, torrent.getWidth());
+            View following = content.findViewById(R.id.archiver);
+            int position = following.getLeft();
+            for (View parent = (View) following.getParent(); parent != actions; parent = (View) parent.getParent()) {
+                position += parent.getLeft() - parent.getScrollX();
+            }
+            if (followingPosition == null) followingPosition = position;
+            assertEquals("Following action, count=" + count, followingPosition.intValue(), position);
+        }
+    }
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void multipleDigitTorrentCountsReleaseReservedWidthAndDisplayNormally() {
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        TextView torrent = content.findViewById(R.id.torrent);
+        View actions = content.findViewById(R.id.actions);
+        bindPendingHeader();
+        assertTrue(torrent.getMinWidth() > 0);
+        for (int count : new int[]{10, 12, 100, Integer.MAX_VALUE}) {
+            GalleryDetail detail = online();
+            detail.torrentCount = count;
+            scene.onGetGalleryDetailSuccess(detail);
+            measureActions(actions);
+            assertEquals(0, torrent.getMinWidth());
+            assertEquals(context.getString(R.string.torrent_count, count), torrent.getText().toString());
+            assertNull(torrent.getContentDescription());
+        }
+        GalleryDetail detail = online();
+        detail.torrentCount = 1;
+        scene.onGetGalleryDetailSuccess(detail);
+        assertTrue(torrent.getMinWidth() > 0);
+    }
+
+    private void measureActions(View actions) {
+        int width = Math.round(1000 * context.getResources().getDisplayMetrics().density);
+        actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        actions.layout(0, 0, width, actions.getMeasuredHeight());
+    }
+
+    private static void assertHiddenCount(TextView view) {
+        android.text.Spanned text = (android.text.Spanned) view.getText();
+        android.text.style.ForegroundColorSpan[] hidden = text.getSpans(0, text.length(),
+                android.text.style.ForegroundColorSpan.class);
+        assertEquals(1, hidden.length);
+        assertEquals(android.graphics.Color.TRANSPARENT, hidden[0].getForegroundColor());
+        int start = text.getSpanStart(hidden[0]);
+        int end = text.getSpanEnd(hidden[0]);
+        assertTrue(text.subSequence(start, end).toString().matches("\\p{Nd}+"));
+    }
+
+    @Test public void ratingResponseBeforeHtmlReplacesTheHiddenCountAndItsAccessibleDescription() {
+        GalleryInfo info = source();
+        info.rating = 4.5f;
+        ReflectionHelpers.setField(scene, "mGalleryInfo", info);
+        bindPendingHeader();
+        TextView rating = content.findViewById(R.id.rating_text);
+        assertNotNull(rating.getContentDescription());
+        com.hippo.ehviewer.client.parser.RateGalleryParser.Result result =
+                new com.hippo.ehviewer.client.parser.RateGalleryParser.Result();
+        result.rating = 4.5f;
+        result.ratingCount = 123;
+        ReflectionHelpers.callInstanceMethod(scene, "onRateGallerySuccess",
+                ReflectionHelpers.ClassParameter.from(com.hippo.ehviewer.client.parser.RateGalleryParser.Result.class, result));
+        assertNull(rating.getContentDescription());
+        assertEquals(context.getString(R.string.rating_text,
+                ReflectionHelpers.<String>callStaticMethod(GalleryDetailScene.class, "getRatingText",
+                        ReflectionHelpers.ClassParameter.from(float.class, result.rating),
+                        ReflectionHelpers.ClassParameter.from(android.content.res.Resources.class, context.getResources())),
+                result.rating, result.ratingCount), rating.getText().toString());
+    }
+
+    private String visibleText(int id) {
+        CharSequence text = ((TextView) content.findViewById(id)).getText();
+        StringBuilder visible = new StringBuilder(text);
+        if (text instanceof android.text.Spanned spanned) {
+            for (android.text.style.ForegroundColorSpan span : spanned.getSpans(0, text.length(),
+                    android.text.style.ForegroundColorSpan.class)) {
+                if (span.getForegroundColor() == android.graphics.Color.TRANSPARENT) {
+                    for (int i = spanned.getSpanStart(span); i < spanned.getSpanEnd(span); i++) visible.setCharAt(i, ' ');
+                }
+            }
+        }
+        return visible.toString();
     }
 
     private DownloadInfo addKnownDownload(long gid, Long firstGid, int state) {
@@ -1013,12 +1138,12 @@ public class OfflineGalleryDetailSceneTest {
         info.simpleTags = new String[]{"artist:a", "language:chinese"};
         bindPendingHeader();
         ViewGroup tags = content.findViewById(R.id.tags);
-        View artist = tags.getChildAt(1);
+        View artist = tags.getChildAt(2);
         GalleryDetail detail = online();
-        detail.tags = new GalleryTagGroup[]{group("artist", "a"), group("language", "chinese")};
+        detail.tags = new GalleryTagGroup[]{group("language", "chinese"), group("artist", "a")};
         ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
         scene.onGetGalleryDetailSuccess(detail);
-        assertSame(artist, tags.getChildAt(1));
+        assertSame(artist, tags.getChildAt(2));
     }
 
     private List<String> tagKeys(View view) {
@@ -1030,15 +1155,42 @@ public class OfflineGalleryDetailSceneTest {
         return result;
     }
 
+    @Test public void pendingNamespaceRowsKeepTheirPositionsWhenCurrentHtmlArrives() throws Exception {
+        GalleryTagGroup[] onlineTags = OfflineGalleryDetailTest.currentOnlineTags();
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.simpleTags = new String[onlineTags.length];
+        for (int i = 0; i < onlineTags.length; i++) {
+            GalleryTagGroup group = onlineTags[i];
+            info.simpleTags[onlineTags.length - 1 - i] = group.groupName + ":" + group.getTagAt(0);
+        }
+        bindPendingHeader();
+        ViewGroup tags = content.findViewById(R.id.tags);
+        List<View> rows = new ArrayList<>();
+        assertEquals(onlineTags.length + 1, tags.getChildCount());
+        for (int i = 0; i < onlineTags.length; i++) {
+            View row = tags.getChildAt(i + 1);
+            assertEquals(onlineTags[i].groupName, row.getTag());
+            rows.add(row);
+        }
+        List<String> pendingTags = tagKeys(tags);
+        GalleryDetail detail = online();
+        detail.tags = onlineTags;
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        scene.onGetGalleryDetailSuccess(detail);
+        assertEquals(pendingTags, tagKeys(tags));
+        for (int i = 0; i < rows.size(); i++) assertSame(rows.get(i), tags.getChildAt(i + 1));
+    }
+
     @Test public void knownTagsShowAboveSpinnerThenHtmlReplacesThem() {
         GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
-        info.simpleTags = new String[]{"artist:known", "language:chinese"};
-        info.tgList = new ArrayList<>(List.of("artist:known", ":full color"));
+        info.simpleTags = new String[]{"female:glasses", "artist:known", "language:chinese"};
+        info.tgList = new ArrayList<>(List.of("artist:known", ":full color", "cosplayer:known"));
         bindPendingHeader();
         View tags = content.findViewById(R.id.tags);
         assertSame(content, tags.getParent());
         assertEquals(View.VISIBLE, tags.getVisibility());
-        assertEquals(List.of("artist:known", "language:chinese", "misc:full color"), tagKeys(tags));
+        assertEquals(List.of("language:chinese", "artist:known", "cosplayer:known",
+                "female:glasses", "misc:full color"), tagKeys(tags));
         assertEquals(View.VISIBLE, sceneView.findViewById(R.id.progress).getVisibility());
         assertEquals("Chinese", text(R.id.language));
         GalleryDetail detail = online();
@@ -1056,7 +1208,7 @@ public class OfflineGalleryDetailSceneTest {
         info.tgList = new ArrayList<>(List.of("artist:list artist", "language:korean"));
         bindPendingHeader();
         assertEquals("Korean", text(R.id.language));
-        assertEquals(List.of("artist:list artist", "language:korean"), tagKeys(content.findViewById(R.id.tags)));
+        assertEquals(List.of("language:korean", "artist:list artist"), tagKeys(content.findViewById(R.id.tags)));
     }
 
     @Test public void titleSearchActionsWorkWithoutHtmlOrNetwork() {
@@ -1319,9 +1471,12 @@ public class OfflineGalleryDetailSceneTest {
         View rating = content.findViewById(R.id.rating);
         View stars = (View) rating.getParent();
         TextView ratingText = content.findViewById(R.id.rating_text);
-        String pending = ReflectionHelpers.callInstanceMethod(scene, "getPendingRatingText",
-                ReflectionHelpers.ClassParameter.from(float.class, 4.5f));
-        List<String> labels = new ArrayList<>();
+        GalleryInfo summary = source();
+        summary.rating = 4.5f;
+        ReflectionHelpers.setField(scene, "mGalleryInfo", summary);
+        bindPendingHeader();
+        CharSequence pending = ratingText.getText();
+        List<CharSequence> labels = new ArrayList<>();
         labels.add("");
         labels.add(pending);
         for (int count : new int[]{1, 123, Integer.MAX_VALUE}) {
@@ -1335,7 +1490,7 @@ public class OfflineGalleryDetailSceneTest {
             int width = Math.round(widthDp * density);
             Integer initialLeft = null;
             Integer initialTop = null;
-            for (String label : labels) {
+            for (CharSequence label : labels) {
                 ratingText.setText(label);
                 actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                         View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
@@ -1355,7 +1510,7 @@ public class OfflineGalleryDetailSceneTest {
     }
 
     @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
-    public void pendingAndLoadedRatingTextStayCenteredInRemainingSpace() {
+    public void pendingAndLoadedRatingTextKeepTheirStartPosition() {
         ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
         TextView ratingText = content.findViewById(R.id.rating_text);
         View actions = content.findViewById(R.id.actions);
@@ -1370,24 +1525,26 @@ public class OfflineGalleryDetailSceneTest {
             actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
             actions.layout(0, 0, width, actions.getMeasuredHeight());
-            float pendingTextCenter = ratingText.getLeft() + ratingText.getTotalPaddingLeft()
-                    + (ratingText.getLayout().getLineLeft(0) + ratingText.getLayout().getLineRight(0)) / 2;
-            assertEquals("Pending rating text center at " + widthDp + "dp",
-                    (ratingText.getLeft() + ratingText.getRight()) / 2f, pendingTextCenter, 1f);
+            float pendingTextStart = ratingText.getLeft() + ratingText.getTotalPaddingLeft()
+                    + ratingText.getLayout().getLineLeft(0);
+            assertEquals("Pending rating text start at " + widthDp + "dp",
+                    ratingText.getLeft() + ratingText.getTotalPaddingLeft(), pendingTextStart, 1f);
             int pendingBaseline = ratingText.getTop() + ratingText.getBaseline();
 
-            GalleryDetail detail = online();
-            detail.rating = summary.rating;
-            detail.ratingCount = 123;
-            scene.onGetGalleryDetailSuccess(detail);
-            actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
-            actions.layout(0, 0, width, actions.getMeasuredHeight());
-            assertEquals("Loaded rating text center at " + widthDp + "dp", pendingTextCenter,
-                    ratingText.getLeft() + ratingText.getTotalPaddingLeft()
-                            + (ratingText.getLayout().getLineLeft(0) + ratingText.getLayout().getLineRight(0)) / 2, 1f);
-            assertEquals("Rating text baseline at " + widthDp + "dp", pendingBaseline,
-                    ratingText.getTop() + ratingText.getBaseline());
+            for (int count : new int[]{1, 123, Integer.MAX_VALUE}) {
+                GalleryDetail detail = online();
+                detail.rating = summary.rating;
+                detail.ratingCount = count;
+                scene.onGetGalleryDetailSuccess(detail);
+                actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                actions.layout(0, 0, width, actions.getMeasuredHeight());
+                assertEquals("Loaded rating text start at " + widthDp + "dp, count=" + count, pendingTextStart,
+                        ratingText.getLeft() + ratingText.getTotalPaddingLeft()
+                                + ratingText.getLayout().getLineLeft(0), 1f);
+                assertEquals("Rating text baseline at " + widthDp + "dp, count=" + count, pendingBaseline,
+                        ratingText.getTop() + ratingText.getBaseline());
+            }
         }
     }
 
@@ -1420,8 +1577,7 @@ public class OfflineGalleryDetailSceneTest {
                     assertTrue(message, ratingText.getRight() <= ratingGroup.getWidth() - ratingGroup.getPaddingRight());
                     assertTrue(message, ratingText.getLayout().getLineLeft(0) >= 0);
                     assertTrue(message, ratingText.getLayout().getLineRight(0) <= ratingText.getWidth());
-                    assertEquals(message, ratingText.getWidth() / 2f,
-                            (ratingText.getLayout().getLineLeft(0) + ratingText.getLayout().getLineRight(0)) / 2, 1f);
+                    assertEquals(message, 0f, ratingText.getLayout().getLineLeft(0), 1f);
                 }
             }
         }

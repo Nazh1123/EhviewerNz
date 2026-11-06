@@ -112,14 +112,15 @@ public final class OfflineGalleryDetail {
     }
 
     static GalleryTagGroup[] tags(@Nullable GalleryTags saved, @Nullable String[] simpleTags) {
+        // Match current gallery HTML row order (the online parser preserves that order).
+        // Legacy misc/rows namespaces follow the current site namespaces.
+        String[] names = {"reclass", "language", "parody", "character", "group", "artist",
+                "cosplayer", "female", "male", "mixed", "location", "other", "misc", "rows"};
         LinkedHashMap<String, List<String>> groups = new LinkedHashMap<>();
         if (saved != null) {
-            // Restore namespace rows in display order; keep the saved order within each row.
-            String[] names = {"language", "parody", "character", "group", "artist", "cosplayer",
-                    "male", "female", "mixed", "location", "reclass", "other", "misc", "rows"};
-            String[] values = {saved.language, saved.parody, saved.character, saved.group,
-                    saved.artist, saved.cosplayer, saved.male, saved.female, saved.mixed,
-                    saved.location, saved.reclass, saved.other, saved.misc, saved.rows};
+            String[] values = {saved.reclass, saved.language, saved.parody, saved.character,
+                    saved.group, saved.artist, saved.cosplayer, saved.female, saved.male,
+                    saved.mixed, saved.location, saved.other, saved.misc, saved.rows};
             for (int i = 0; i < names.length; i++) {
                 if (!isEmpty(values[i])) for (String tag : values[i].split(",")) addTag(groups, names[i], tag);
             }
@@ -130,8 +131,15 @@ public final class OfflineGalleryDetail {
             addTag(groups, colon > 0 ? tag.substring(0, colon) : "misc",
                     colon >= 0 ? tag.substring(colon + 1) : tag);
         }
+        // Order namespaces after merging both sources, preserving tag order within each row.
+        LinkedHashMap<String, List<String>> orderedGroups = new LinkedHashMap<>();
+        for (String name : names) {
+            if (groups.containsKey(name)) orderedGroups.put(name, groups.get(name));
+        }
+        // Unknown namespaces follow known rows in their original order.
+        orderedGroups.putAll(groups);
         ArrayList<GalleryTagGroup> result = new ArrayList<>();
-        for (Map.Entry<String, List<String>> entry : groups.entrySet()) {
+        for (Map.Entry<String, List<String>> entry : orderedGroups.entrySet()) {
             GalleryTagGroup group = new GalleryTagGroup();
             group.groupName = entry.getKey();
             for (String tag : entry.getValue()) group.addTag(tag);

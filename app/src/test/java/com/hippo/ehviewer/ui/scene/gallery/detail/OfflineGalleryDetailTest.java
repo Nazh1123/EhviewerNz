@@ -10,6 +10,7 @@ import android.util.SparseArray;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.GalleryPreview;
 import com.hippo.ehviewer.client.data.GalleryTagGroup;
+import com.hippo.ehviewer.client.parser.GalleryDetailParser;
 import com.hippo.ehviewer.dao.GalleryTags;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.unifile.UniFile;
@@ -27,8 +28,11 @@ import org.robolectric.util.ReflectionHelpers;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import org.jsoup.Jsoup;
 
 import static org.junit.Assert.*;
 
@@ -135,6 +139,80 @@ public class OfflineGalleryDetailTest {
         assertEquals("original", groups[1].getTagAt(1));
         assertEquals("zeta", groups[2].getTagAt(0));
         assertEquals("alpha", groups[2].getTagAt(1));
+    }
+
+    @Test public void simpleTagsUseDisplayOrderRegardlessOfInputOrder() {
+        GalleryTagGroup[] groups = OfflineGalleryDetail.tags(null, new String[]{
+                "female:glasses", "other:full color", "cosplayer:zeta", "rows:row",
+                "misc:sample", "reclass:sample", "location:beach", "mixed:sample",
+                "male:glasses", "artist:alice", "group:circle", "character:sample",
+                "parody:original", "language:chinese", "cosplayer:alpha"});
+
+        assertNamespaces(groups, "reclass", "language", "parody", "character", "group", "artist",
+                "cosplayer", "female", "male", "mixed", "location", "other",
+                "misc", "rows");
+        assertEquals("zeta", groups[6].getTagAt(0));
+        assertEquals("alpha", groups[6].getTagAt(1));
+    }
+
+    static GalleryTagGroup[] currentOnlineTags() throws Exception {
+        try (InputStream input = OfflineGalleryDetailTest.class.getResourceAsStream(
+                "/com/hippo/ehviewer/client/parser/GalleryTagNamespaceOrder.html")) {
+            assertNotNull(input);
+            return GalleryDetailParser.parseTagGroups(Jsoup.parse(
+                    new String(input.readAllBytes(), StandardCharsets.UTF_8)));
+        }
+    }
+
+    @Test public void savedAndSimpleTagsMatchCurrentOnlineNamespaceOrder() throws Exception {
+        GalleryTagGroup[] online = currentOnlineTags();
+        assertNamespaces(online, "language", "artist", "female", "male", "mixed", "other");
+        GalleryTags saved = new GalleryTags(123);
+        saved.language = "english";
+        saved.artist = "example artist";
+        saved.female = "glasses";
+        saved.male = "glasses";
+        saved.mixed = "sample";
+        saved.other = "full color";
+        String[] expected = new String[online.length];
+        String[] reversed = new String[online.length];
+        for (int i = 0; i < online.length; i++) {
+            expected[i] = online[i].groupName;
+            reversed[online.length - 1 - i] = online[i].groupName + ":" + online[i].getTagAt(0);
+        }
+        assertNamespaces(OfflineGalleryDetail.tags(saved, null), expected);
+        assertNamespaces(OfflineGalleryDetail.tags(null, reversed), expected);
+        assertNamespaces(OfflineGalleryDetail.tags(saved, reversed), expected);
+        saved.reclass = "non-h";
+        GalleryTagGroup[] withReclass = OfflineGalleryDetail.tags(saved, null);
+        assertEquals("reclass", withReclass[0].groupName);
+        assertEquals("non-h", withReclass[0].getTagAt(0));
+        assertEquals("language", withReclass[1].groupName);
+    }
+
+    @Test public void mergedTagsOrderNamespacesAfterCombiningBothSources() {
+        GalleryTags saved = new GalleryTags(123);
+        saved.female = "glasses";
+        saved.other = "full color";
+
+        GalleryTagGroup[] groups = OfflineGalleryDetail.tags(saved, new String[]{
+                "unknown-b:one", "female:glasses", "cosplayer:zeta", "artist:alice",
+                "language:chinese", "cosplayer:alpha", "female:stockings", "unknown-a:two"});
+
+        assertNamespaces(groups, "language", "artist", "cosplayer", "female", "other",
+                "unknown-b", "unknown-a");
+        assertEquals(2, groups[2].size());
+        assertEquals("zeta", groups[2].getTagAt(0));
+        assertEquals("alpha", groups[2].getTagAt(1));
+        assertEquals(2, groups[3].size());
+        assertEquals("glasses", groups[3].getTagAt(0));
+        assertEquals("stockings", groups[3].getTagAt(1));
+    }
+
+    private static void assertNamespaces(GalleryTagGroup[] groups, String... expected) {
+        String[] actual = new String[groups.length];
+        for (int i = 0; i < groups.length; i++) actual[i] = groups[i].groupName;
+        assertArrayEquals(expected, actual);
     }
 
     @Test public void identifierAloneDoesNotQualifyAsAnOfflineDetail() {

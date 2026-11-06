@@ -26,6 +26,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.Resources;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -35,7 +36,10 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.DocumentsContract;
+import android.text.SpannableString;
+import android.text.Spanned;
 import android.text.TextUtils;
+import android.text.style.ForegroundColorSpan;
 import android.util.Pair;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -1371,14 +1375,19 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             mRead.setEnabled(canOpenGallery);
             mLanguage.setText(getPendingLanguage(gi));
             bindReadProgress(gi);
-            mSize.setText("");
+            mSize.setText(R.string.gallery_detail_size_placeholder);
             mPosted.setText(GalleryTimeFormatter.format(gi.posted));
             mFavoredTimes.setText(blankLastCount(resources.getString(R.string.favored_times, 0), " "));
             boolean hasRating = Float.isFinite(gi.rating) && gi.rating >= 0 && gi.rating <= 5;
             mRating.setRating(hasRating ? gi.rating : 0);
             // The list/API provides the rating value, but not necessarily its vote count.
-            mRatingText.setText(hasRating ? getPendingRatingText(gi.rating) : "");
-            mTorrent.setText(blankLastCount(resources.getString(R.string.torrent_count, 0), "  "));
+            if (hasRating) bindPendingCountText(mRatingText, getAllRatingText(gi.rating, 0));
+            else {
+                mRatingText.setText("");
+                mRatingText.setContentDescription(null);
+            }
+            updateTorrentMinWidth(resources, 0);
+            bindPendingCountText(mTorrent, resources.getString(R.string.torrent_count, 0));
             updateFavoriteDrawable();
             setDetailActionsEnabled(true);
             bindPendingVersionActions(gi);
@@ -1403,9 +1412,31 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         return TextUtils.isEmpty(code) ? "Japanese" : Locale.forLanguageTag(code).getDisplayLanguage(Locale.ENGLISH);
     }
 
-    private String getPendingRatingText(float rating) {
-        // Keep the same label/value/count layout while the vote count is unknown.
-        return blankLastCount(getAllRatingText(rating, 0), "   ");
+    private void updateTorrentMinWidth(Resources resources, int count) {
+        int minWidth = 0;
+        if (count >= 0 && count < 10) {
+            float widest = 0;
+            for (int digit = 0; digit < 10; digit++) {
+                widest = Math.max(widest, mTorrent.getPaint().measureText(resources.getString(R.string.torrent_count, digit)));
+            }
+            minWidth = (int) Math.ceil(widest) + mTorrent.getCompoundPaddingLeft() + mTorrent.getCompoundPaddingRight();
+        }
+        mTorrent.setMinWidth(minWidth);
+    }
+
+    private static void bindPendingCountText(TextView view, String formatted) {
+        java.util.regex.Matcher count = java.util.regex.Pattern.compile("\\p{Nd}+(?=[^\\p{Nd}]*$)").matcher(formatted);
+        if (!count.find()) {
+            view.setText(formatted);
+            view.setContentDescription(null);
+            return;
+        }
+        // Retain numeric context for fonts that shape punctuation differently around blank text.
+        SpannableString pending = new SpannableString(formatted);
+        pending.setSpan(new ForegroundColorSpan(Color.TRANSPARENT), count.start(), count.end(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        view.setText(pending);
+        // Screen readers must not announce the placeholder as a real count.
+        view.setContentDescription(blankLastCount(formatted, " "));
     }
 
     private static String blankLastCount(String formatted, String spaces) {
@@ -1558,6 +1589,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         if (resources != null) {
             mFavoredTimes.setText(resources.getString(R.string.favored_times, gd.favoriteCount));
+            updateTorrentMinWidth(resources, gd.torrentCount);
             mTorrent.setText(resources.getString(R.string.torrent_count, gd.torrentCount));
         }
 
@@ -1695,6 +1727,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     }
 
     private void setOfflineVisibility(boolean offline) {
+        mRatingText.setContentDescription(null);
+        mTorrent.setContentDescription(null);
         setDetailActionsEnabled(true);
         GalleryInfo rangeInfo = getGalleryInfo();
         if (mRangeDownload != null) mRangeDownload.setVisibility(getGid() > 0
@@ -1709,9 +1743,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         ((View) mRating.getParent()).setVisibility(mRating.getVisibility());
         mRatingText.setVisibility(offline || Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
         mRatingText.setSingleLine(!offline);
-        // Center within the available width, including after setSingleLine enables scrolling.
+        // Keep the normal rating text anchored after setSingleLine enables scrolling.
         mRatingText.setHorizontallyScrolling(false);
-        mRatingText.setGravity(Gravity.CENTER);
+        mRatingText.setGravity(offline ? Gravity.CENTER : Gravity.START | Gravity.CENTER_VERTICAL);
         int textPadding = offline ? getResources().getDimensionPixelSize(R.dimen.keyline_margin) : 0;
         mRatingText.setPadding(textPadding, 0, textPadding, 0);
         mComments.setVisibility(offline || Settings.getShowGalleryComment() ? View.VISIBLE : View.GONE);
@@ -3871,6 +3905,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         // Update UI
         if (mRatingText != null && mRating != null) {
+            mRatingText.setContentDescription(null);
             mRatingText.setText(getAllRatingText(result.rating, result.ratingCount));
             mRating.setRating(result.rating);
         }
