@@ -235,6 +235,47 @@ public class GalleryRatingSortControllerTest {
         assertEquals(List.of(2L, 1L), GalleryRatingSortTest.ids(host.order));
     }
 
+    @Test public void expandingPastCachedPagesOnlyLoadsTheMissingTail() {
+        host.pages = 20;
+        controller.start(25, null);
+        for (int i = 21; i <= 25; i++) page("https://example.com/?next=" + i);
+        assertEquals(5, host.nextRequests);
+        assertFalse(controller.isActive());
+        controller.start(10, null);
+        shadowOf(Looper.getMainLooper()).idle();
+        controller.start(25, null);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(5, host.nextRequests);
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test public void boundedRangeFetchesOnlyMissingScoresAndReusesThemAfterSwitchingBack() {
+        host.rows.clear();
+        addRows(1, 2);
+        host.pages = 20;
+        host.rangeSize = 1;
+        controller.start(10, null);
+        assertEquals(1, requests.size());
+        assertEquals(1, ((List<?>) requests.get(0).getArgs()[0]).size());
+        completeMetadata(requests.get(0));
+        assertEquals(List.of(1L), GalleryRatingSortTest.ids(host.order));
+        host.rangeSize = 2;
+        controller.start(20, null);
+        assertEquals(2, requests.size());
+        assertEquals(1, ((List<?>) requests.get(1).getArgs()[0]).size());
+        completeMetadata(requests.get(1));
+        assertEquals(List.of(2L, 1L), GalleryRatingSortTest.ids(host.order));
+        host.rangeSize = 1;
+        controller.start(10, null);
+        shadowOf(Looper.getMainLooper()).idle();
+        host.rangeSize = 2;
+        controller.start(20, null);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(2, requests.size());
+        assertEquals(0, host.nextRequests);
+        assertEquals(List.of(2L, 1L), GalleryRatingSortTest.ids(host.order));
+    }
+
     private void addRows(int first, int last) {
         for (int i = first; i <= last; i++) {
             GalleryInfo gallery = gallery(i, 2);
@@ -246,6 +287,7 @@ public class GalleryRatingSortControllerTest {
     private static class FakeHost implements GalleryRatingSortController.Host {
         final List<GalleryInfo> rows = new ArrayList<>();
         int pages = 1;
+        int rangeSize = Integer.MAX_VALUE;
         int nextRequests;
         int cancelRequests;
         String oldest = "2026-11-01 00:00";
@@ -254,6 +296,7 @@ public class GalleryRatingSortControllerTest {
         List<GalleryInfo> order;
         Runnable onStopped;
         @Override public List<GalleryInfo> galleries() { return rows; }
+        @Override public List<GalleryInfo> galleriesInRange(int pages, String cutoff) { return rows.subList(0, Math.min(rows.size(), rangeSize)); }
         @Override public int loadedPages() { return pages; }
         @Override public String oldestPosted() { return oldest; }
         @Override public boolean hasNextPage() { return true; }

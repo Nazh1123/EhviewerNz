@@ -25,11 +25,11 @@ public class GalleryRatingSortTest {
         assertEquals(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L), ids(source));
     }
 
-    @Test public void filteredProjectionUsesLiveObjectsAndRetainsNewRows() {
+    @Test public void filteredProjectionUsesLiveObjectsAndExcludesRowsOutsideSortedRange() {
         GalleryInfo live = gallery(1, 4);
         List<GalleryInfo> result = GalleryRatingSort.project(List.of(live, gallery(3, 2), gallery(4, 1)),
                 List.of(gallery(2, 5), gallery(3, 2), gallery(1, 4)));
-        assertEquals(List.of(3L, 1L, 4L), ids(result));
+        assertEquals(List.of(3L, 1L), ids(result));
         assertSame(live, result.get(1));
     }
 

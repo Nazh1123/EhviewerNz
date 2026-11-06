@@ -46,7 +46,6 @@ final class GalleryRatingSort {
             GalleryInfo visible = remaining.remove(gallery.gid);
             if (visible != null) result.add(visible);
         }
-        for (GalleryInfo gallery : source) if (remaining.remove(gallery.gid) != null) result.add(gallery);
         return result;
     }
 

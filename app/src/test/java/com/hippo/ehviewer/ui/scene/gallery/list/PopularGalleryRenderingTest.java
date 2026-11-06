@@ -70,7 +70,7 @@ import static org.robolectric.Shadows.shadowOf;
 @Config(application = Application.class, sdk = 28, shadows = {
         PopularGalleryRenderingTest.AppShadow.class, PopularGalleryRenderingTest.DownloadShadow.class,
         PopularGalleryRenderingTest.ImageShadow.class, PopularGalleryRenderingTest.DbShadow.class,
-        PopularGalleryRenderingTest.ContextShadow.class})
+        PopularGalleryRenderingTest.ContextShadow.class, PopularGalleryRenderingTest.ClientShadow.class})
 public class PopularGalleryRenderingTest {
     private static final List<QuickSearch> bookmarks = new ArrayList<>();
     private static FavouriteStatusRouter router;
@@ -1171,6 +1171,129 @@ public class PopularGalleryRenderingTest {
         assertEquals(1f, menu.getPrimaryFab().getScaleX(), 0f);
     }
 
+    @Test public void ratingRangeShrinksTwentyPagesAndReusesThemWhenExpanded() {
+        cacheRatingPages(20);
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        ReflectionHelpers.setField(scene, "executorService", jobs);
+        GalleryRatingSortController controller = ReflectionHelpers.callInstanceMethod(scene, "getRatingSortController");
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        sortRange(controller, jobs, 20, null);
+        assertEquals(20, adapter.getItemCount());
+        assertEquals(20L, adapter.getDataAt(0).gid);
+        sortRange(controller, jobs, 10, null);
+        assertEquals(List.of(10L, 9L, 8L, 7L, 6L, 5L, 4L, 3L, 2L, 1L), visibleIds());
+        assertEquals(20, helper.size());
+        assertEquals(20, helper.getLoadedSourcePages());
+        sortRange(controller, jobs, 20, null);
+        assertEquals(20, adapter.getItemCount());
+        assertEquals(20L, adapter.getDataAt(0).gid);
+        assertEquals(task, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+        ReflectionHelpers.callInstanceMethod(scene, "restoreRatingOrder");
+        assertEquals(1L, adapter.getDataAt(0).gid);
+        assertEquals(20, adapter.getItemCount());
+    }
+
+    @Test public void ratingMonthRangeUsesCachedRawPageBoundariesAndKeepsTheWholeBoundaryPage() {
+        cacheRatingPages(4);
+        // A gallery's publication date may differ from its list order (for example an update).
+        helper.getDataAtEx(0).posted = "1970-01-01 00:00";
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        ReflectionHelpers.setField(scene, "executorService", jobs);
+        GalleryRatingSortController controller = ReflectionHelpers.callInstanceMethod(scene, "getRatingSortController");
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        sortRange(controller, jobs, 0, "2026-09-06 00:00");
+        assertEquals(List.of(4L, 3L, 2L, 1L), visibleIds());
+        sortRange(controller, jobs, 0, "2026-10-06 00:00");
+        assertEquals(List.of(3L, 2L, 1L), visibleIds());
+        controller.restart();
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(List.of(3L, 2L, 1L), visibleIds());
+        sortRange(controller, jobs, 0, "2026-09-06 00:00");
+        assertEquals(List.of(4L, 3L, 2L, 1L), visibleIds());
+        assertEquals(task, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+    }
+
+    @Test public void ratingRangeCountsEmptyFilteredPagesAndPreservesDownloadIntersection() {
+        cacheRatingPages(3);
+        // Removing a row leaves its original source page represented by an empty divider.
+        helper.removeAt(1);
+        assertEquals(List.of(1L), GalleryRatingSortTest.ids(helper.getLoadedRangeData(2, null)));
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        ReflectionHelpers.setField(scene, "executorService", jobs);
+        GalleryRatingSortController controller = ReflectionHelpers.callInstanceMethod(scene, "getRatingSortController");
+        sortRange(controller, jobs, 1, null);
+        downloadedGids.addAll(List.of(1L, 3L));
+        ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
+                ClassParameter.from(boolean.class, true), ClassParameter.from(boolean.class, false));
+        assertEquals(List.of(1L), visibleIds());
+        sortRange(controller, jobs, 3, null);
+        assertEquals(List.of(3L, 1L), visibleIds());
+    }
+
+    @Test public void ratingRangeSurvivesSceneStateRestoration() {
+        cacheRatingPages(3);
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        ReflectionHelpers.setField(scene, "executorService", jobs);
+        GalleryRatingSortController controller = ReflectionHelpers.callInstanceMethod(scene, "getRatingSortController");
+        sortRange(controller, jobs, 1, null);
+        Bundle saved = new Bundle();
+        scene.onSaveInstanceState(saved);
+        ReflectionHelpers.setField(scene, "mRatingSortController", null);
+        ReflectionHelpers.callInstanceMethod(scene, "onRestore", ClassParameter.from(Bundle.class, saved));
+        controller = ReflectionHelpers.callInstanceMethod(scene, "getRatingSortController");
+        controller.stopAndSort();
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(List.of(1L), visibleIds());
+        assertEquals(3, helper.size());
+    }
+
+    @Test public void ratingPageRangeRemainsAvailableWhenAllPagesAreAlreadyLoaded() {
+        cacheRatingPages(3);
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        ReflectionHelpers.setField(scene, "executorService", jobs);
+        ReflectionHelpers.setField(scene, "mClient", new EhClient(scene.getContext()));
+        GalleryRatingSortController controller = ReflectionHelpers.callInstanceMethod(scene, "getRatingSortController");
+        sortRange(controller, jobs, 1, null);
+        assertFalse(helper.hasNextPage());
+        ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
+        androidx.appcompat.app.AlertDialog dialog = (androidx.appcompat.app.AlertDialog)
+                org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        assertTrue(dialog.findViewById(R.id.rating_sort_pages).isEnabled());
+        assertEquals("1", ((TextView) dialog.findViewById(R.id.rating_sort_page_count)).getText().toString());
+        assertEquals(R.id.rating_sort_pages, ((android.widget.RadioGroup)
+                dialog.findViewById(R.id.rating_sort_range)).getCheckedRadioButtonId());
+        dialog.dismiss();
+    }
+
+    private void cacheRatingPages(int count) {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        for (int page = 1; page <= count; page++) {
+            helper.doGetData(page == 1 ? ContentLayout.ContentHelper.TYPE_REFRESH
+                            : ContentLayout.ContentHelper.TYPE_NEXT_PAGE_KEEP_POS, page - 1,
+                    ContentLayout.ContentHelper.REFRESH_TYPE_FOOTER);
+            GalleryListParser.Result result = new GalleryListParser.Result();
+            result.pages = count;
+            result.galleryInfoList = galleries(page);
+            result.galleryInfoList.get(0).apiRating = result.galleryInfoList.get(0).rating = page / 5f;
+            result.rawTailPosted = switch (page) {
+                case 1 -> "2026-11-05 00:00";
+                case 2 -> "2026-10-20 00:00";
+                case 3 -> "2026-10-01 00:00";
+                default -> "2026-09-01 00:00";
+            };
+            helper.onGetPageData(ReflectionHelpers.getField(helper, "mCurrentTaskId"), result, result.galleryInfoList);
+        }
+    }
+
+    private void sortRange(GalleryRatingSortController controller, ManualProgressExecutor jobs, int pages, String cutoff) {
+        controller.start(pages, cutoff);
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(controller.isActive());
+    }
+
     private void enableRatingSort() {
         List<GalleryInfo> order = ReflectionHelpers.getField(scene, "mRatingOrder");
         order.clear();
@@ -1253,6 +1376,14 @@ public class PopularGalleryRenderingTest {
             originalLongPresses++;
             lastLongPressedGallery = gallery;
             return true;
+        }
+    }
+
+    @Implements(EhClient.class)
+    public static class ClientShadow {
+        @Implementation protected void __constructor__(Context context) {}
+        @Implementation protected void execute(com.hippo.ehviewer.client.EhRequest request) {
+            throw new AssertionError("Cached range changes must not request the network");
         }
     }
 

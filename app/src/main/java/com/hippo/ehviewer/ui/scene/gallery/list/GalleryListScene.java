@@ -280,6 +280,9 @@ public class GalleryListScene extends BaseScene
     private FloatingActionButton mRatingSortFab;
     private GalleryListModeActions mModeActions;
     private boolean mRatingSortMode;
+    private int mRestoredRatingPages;
+    private String mRestoredRatingCutoff;
+    private int mRatingSortMonths = 1;
     private boolean mRatingLoading;
     private boolean mRatingBrowseGestureArmed;
     private boolean mRatingSortScrollToTop;
@@ -587,6 +590,9 @@ public class GalleryListScene extends BaseScene
         mMultiSelectMode = savedInstanceState.getBoolean(KEY_MULTI_SELECT_MODE);
         mDownloadedOnlyMode = savedInstanceState.getBoolean(KEY_DOWNLOADED_ONLY_MODE);
         mRatingSortMode = savedInstanceState.getBoolean(KEY_RATING_SORT_MODE);
+        mRestoredRatingPages = savedInstanceState.getInt("rating_sort_pages");
+        mRestoredRatingCutoff = savedInstanceState.getString("rating_sort_cutoff");
+        mRatingSortMonths = savedInstanceState.getInt("rating_sort_months", 1);
         mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
         mPopularUpdatesOnlyOverride = savedInstanceState.containsKey(KEY_POPULAR_UPDATES_ONLY)
                 ? savedInstanceState.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
@@ -632,6 +638,11 @@ public class GalleryListScene extends BaseScene
         outState.putBoolean(KEY_MULTI_SELECT_MODE, mMultiSelectMode);
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
         outState.putBoolean(KEY_RATING_SORT_MODE, mRatingSortMode);
+        outState.putInt("rating_sort_months", mRatingSortMonths);
+        outState.putInt("rating_sort_pages", mRatingSortController == null
+                ? mRestoredRatingPages : mRatingSortController.targetPages());
+        outState.putString("rating_sort_cutoff", mRatingSortController == null
+                ? mRestoredRatingCutoff : mRatingSortController.cutoff());
         outState.putInt(KEY_POPULAR_VIEW_MODE, mPopularViewMode);
         if (mPopularUpdatesOnlyOverride != null) {
             outState.putBoolean(KEY_POPULAR_UPDATES_ONLY, mPopularUpdatesOnlyOverride);
@@ -2094,6 +2105,17 @@ public class GalleryListScene extends BaseScene
                 @Override public List<GalleryInfo> galleries() {
                     return mAdapter == null ? Collections.emptyList() : mAdapter.getSourceData();
                 }
+                @Override public List<GalleryInfo> galleriesInRange(int pages, String cutoff) {
+                    if (mAdapter == null || mHelper == null) return Collections.emptyList();
+                    if (pages <= 0 && cutoff == null) return mAdapter.getSourceData();
+                    Set<Long> included = new HashSet<>();
+                    for (GalleryInfo gallery : mHelper.getLoadedRangeData(pages, cutoff)) included.add(gallery.gid);
+                    List<GalleryInfo> result = new ArrayList<>();
+                    for (GalleryInfo gallery : mAdapter.getSourceData()) {
+                        if (included.contains(gallery.gid)) result.add(gallery);
+                    }
+                    return result;
+                }
                 @Override public int loadedPages() { return mHelper == null ? 0 : mHelper.getLoadedSourcePages(); }
                 @Override public String oldestPosted() { return mHelper == null ? null : mHelper.getOldestLoadedPosted(); }
                 @Override public boolean hasNextPage() { return mHelper != null && mHelper.hasNextPage(); }
@@ -2160,6 +2182,7 @@ public class GalleryListScene extends BaseScene
                     if (incomplete) showTip(R.string.gallery_rating_sort_incomplete, LENGTH_LONG);
                 }
             }, request -> mClient.execute(request), executorService);
+            mRatingSortController.setRange(mRestoredRatingPages, mRestoredRatingCutoff);
         }
         return mRatingSortController;
     }
@@ -2175,6 +2198,9 @@ public class GalleryListScene extends BaseScene
         stopRatingLoading();
         mRatingSortMode = false;
         mRatingOrder.clear();
+        mRestoredRatingPages = 0;
+        mRestoredRatingCutoff = null;
+        if (mRatingSortController != null) mRatingSortController.setRange(0, null);
         if (mBookmarkSubscriptionCoordinator != null) mBookmarkSubscriptionCoordinator.setBulk(false);
         if (wasSorted && mAdapter != null) mAdapter.onSourceDataSetChanged();
         updateModeActions();
@@ -2208,15 +2234,17 @@ public class GalleryListScene extends BaseScene
         RadioGroup range = content.findViewById(R.id.rating_sort_range);
         EditText pages = content.findViewById(R.id.rating_sort_page_count);
         EditText months = content.findViewById(R.id.rating_sort_month_count);
-        boolean canLoad = mHelper.hasNextPage() && !isPopularMode()
+        boolean canLoad = mHelper.getLoadedSourcePages() > 0 && !isPopularMode()
                 && mUrlBuilder.getMode() != ListUrlBuilder.MODE_IMAGE_SEARCH;
         boolean canUseMonths = supportsRatingMonthRange();
         content.findViewById(R.id.rating_sort_pages).setEnabled(canLoad);
         content.findViewById(R.id.rating_sort_months).setEnabled(canLoad && canUseMonths);
         if (isBookmarkSubscriptionMode()) ((TextView) content.findViewById(R.id.rating_sort_page_unit))
                 .setText(R.string.gallery_rating_sort_batches);
-        pages.setText(String.valueOf(Math.min(GalleryRatingSort.MAX_PAGES, mHelper.getLoadedSourcePages() + 5)));
-        months.setText("1");
+        GalleryRatingSortController controller = getRatingSortController();
+        pages.setText(String.valueOf(controller.targetPages() > 0 ? controller.targetPages()
+                : Math.min(GalleryRatingSort.MAX_PAGES, mHelper.getLoadedSourcePages() + 5)));
+        months.setText(String.valueOf(mRatingSortMonths));
         pages.setEnabled(false);
         months.setEnabled(false);
         TextView note = content.findViewById(R.id.rating_sort_range_note);
@@ -2226,6 +2254,10 @@ public class GalleryListScene extends BaseScene
             pages.setEnabled(id == R.id.rating_sort_pages);
             months.setEnabled(id == R.id.rating_sort_months);
         });
+        if (mRatingSortMode) {
+            if (controller.cutoff() != null && canLoad && canUseMonths) range.check(R.id.rating_sort_months);
+            else if (controller.targetPages() > 0 && canLoad) range.check(R.id.rating_sort_pages);
+        }
         // RadioGroup only observes direct children; forward radio clicks from the inline rows.
         View.OnClickListener selectRange = view -> range.check(view.getId());
         content.findViewById(R.id.rating_sort_pages).setOnClickListener(selectRange);
@@ -2249,7 +2281,10 @@ public class GalleryListScene extends BaseScene
                 int maximum = selection == R.id.rating_sort_pages ? GalleryRatingSort.MAX_PAGES : 240;
                 if (value < 1 || value > maximum) { input.setError(getString(R.string.error_out_of_range)); return; }
                 if (selection == R.id.rating_sort_pages) target = value;
-                else date = GalleryRatingSort.cutoff(ZonedDateTime.now(), value);
+                else {
+                    mRatingSortMonths = value;
+                    date = GalleryRatingSort.cutoff(ZonedDateTime.now(), value);
+                }
             }
             stopDownloadedPageScan(false);
             mRatingSortScrollToTop = true;
@@ -2400,7 +2435,7 @@ public class GalleryListScene extends BaseScene
         mPopularRepeatedExpanded = false;
         mPopularViewMode = mPopularViewMode == mode ? PopularGalleryHistory.CURRENT : mode;
         updatePopularProjection();
-        if (mRatingSortMode) getRatingSortController().start(0, null);
+        if (mRatingSortMode) getRatingSortController().restart();
         if (mRecyclerView != null) {
             mRecyclerView.stopScroll();
             mRecyclerView.scrollToPosition(0);
@@ -3523,9 +3558,9 @@ public class GalleryListScene extends BaseScene
             }
             if (mRatingSortController != null && mRatingSortController.isActive()) {
                 if (mRatingSortController.isWaitingForPage()) mRatingSortController.pageLoaded(result);
-                else mRatingSortController.start(0, null);
+                else mRatingSortController.restart();
             } else if (mRatingSortMode && !mRatingLoading && result.customErrorString == null) {
-                getRatingSortController().start(0, null);
+                getRatingSortController().restart();
             }
         }
     }
@@ -4037,6 +4072,15 @@ public class GalleryListScene extends BaseScene
 
         @Override
         protected boolean onInterceptFooterRefresh() {
+            if (mRatingSortMode && !mRatingLoading) {
+                GalleryRatingSortController controller = getRatingSortController();
+                boolean cached = getLoadedRangeData(controller.targetPages(), controller.cutoff()).size() < size();
+                controller.setRange(0, null);
+                if (cached) {
+                    controller.restart();
+                    return true;
+                }
+            }
             if (!isPopularMode() || !mPopularResponseReady
                     || mPopularViewMode != PopularGalleryHistory.UPDATES) return false;
             if (!mPopularRequestInFlight && !mMultiSelectMode && !mPopularRepeatedExpanded
@@ -4044,7 +4088,7 @@ public class GalleryListScene extends BaseScene
                     && mAdapter != null) {
                 mPopularRepeatedExpanded = true;
                 if (mAdapter.appendPopularRepeatedGalleries()) scrollToRevealNewContent();
-                if (mRatingSortMode && !mRatingLoading) getRatingSortController().start(0, null);
+                if (mRatingSortMode && !mRatingLoading) getRatingSortController().restart();
                 updatePopularActions();
             }
             return true;

@@ -255,6 +255,9 @@ public class ContentLayout extends FrameLayout {
         private int mLoadedSourcePages;
         private boolean mLoadedFromStart;
         private String mOldestLoadedPosted;
+        // Aligned with mPageDivider, including pages with no visible galleries.
+        private final ArrayList<String> mLoadedPageTails = new ArrayList<>();
+        private IntList mLoadedPageCounts = new IntList();
 
         public String resultCount;
         public String firstHref;
@@ -499,6 +502,24 @@ public class ContentLayout extends FrameLayout {
         public int getLoadedSourcePages() { return mLoadedSourcePages; }
         public boolean isLoadedFromStart() { return mLoadedFromStart; }
         public String getOldestLoadedPosted() { return mOldestLoadedPosted; }
+        /** A source-order prefix; cached rows outside the range remain available for reuse. */
+        public List<E> getLoadedRangeData(int pages, String cutoff) {
+            if (pages <= 0 && cutoff == null) return mData;
+            int count = 0;
+            int end = 0;
+            for (int i = 0; i < mPageDivider.size(); i++) {
+                int span = i < mLoadedPageCounts.size() ? mLoadedPageCounts.get(i) : 1;
+                // A combined response can start with empty, filtered source pages.
+                if (pages > 0 && count + span > pages) break;
+                count += span;
+                end = Math.min(mData.size(), mPageDivider.get(i));
+                String tail = i < mLoadedPageTails.size() ? mLoadedPageTails.get(i) : null;
+                if (pages > 0 && count >= pages || cutoff != null && tail != null
+                        && tail.compareTo(cutoff) <= 0) break;
+            }
+            return mData.subList(0, end);
+        }
+
         public boolean isRefreshing() { return mRefreshLayout.isRefreshing(); }
 
         /**
@@ -588,6 +609,27 @@ public class ContentLayout extends FrameLayout {
         public void onGetPageData(int taskId, GalleryListParser.Result result, List<E> data) {
             if (!isCurrentTask(taskId)) return;
             if (result.customErrorString == null) {
+                if (mCurrentTaskType == TYPE_REFRESH || mCurrentTaskType == TYPE_SOMEWHERE) {
+                    mLoadedPageTails.clear();
+                    mLoadedPageCounts.clear();
+                }
+                while (mLoadedPageTails.size() < mPageDivider.size()
+                        && mCurrentTaskType != TYPE_REFRESH && mCurrentTaskType != TYPE_SOMEWHERE) {
+                    mLoadedPageTails.add(null);
+                    mLoadedPageCounts.add(1);
+                }
+                if (mCurrentTaskType == TYPE_REFRESH_PAGE) {
+                    int index = mCurrentTaskPage - mStartPage;
+                    if (index >= 0 && index < mLoadedPageTails.size()) {
+                        mLoadedPageTails.set(index, result.rawTailPosted);
+                    }
+                } else {
+                    boolean prepend = mCurrentTaskType == TYPE_PRE_PAGE
+                            || mCurrentTaskType == TYPE_PRE_PAGE_KEEP_POS;
+                    int index = prepend ? 0 : mLoadedPageTails.size();
+                    mLoadedPageTails.add(index, result.rawTailPosted);
+                    mLoadedPageCounts.add(index, result.sourcePages);
+                }
                 if (mCurrentTaskType == TYPE_REFRESH || mCurrentTaskType == TYPE_SOMEWHERE) {
                     mLoadedSourcePages = result.sourcePages;
                     mLoadedFromStart = mCurrentTaskType == TYPE_REFRESH;
@@ -1145,6 +1187,8 @@ public class ContentLayout extends FrameLayout {
             bundle.putInt("loaded_source_pages", mLoadedSourcePages);
             bundle.putBoolean("loaded_from_start", mLoadedFromStart);
             bundle.putString("oldest_loaded_posted", mOldestLoadedPosted);
+            bundle.putStringArrayList("loaded_page_tails", new ArrayList<>(mLoadedPageTails));
+            bundle.putParcelable("loaded_page_counts", mLoadedPageCounts);
             bundle.putString(KEY_RESULT_COUNT, resultCount);
             bundle.putString(KEY_FIRST_HREF, firstHref);
             bundle.putString(KEY_PREV_HREF, prevHref);
@@ -1178,6 +1222,11 @@ public class ContentLayout extends FrameLayout {
                 mLoadedSourcePages = bundle.getInt("loaded_source_pages", mPageDivider.size());
                 mLoadedFromStart = bundle.getBoolean("loaded_from_start", mStartPage == 0);
                 mOldestLoadedPosted = bundle.getString("oldest_loaded_posted");
+                mLoadedPageTails.clear();
+                ArrayList<String> tails = bundle.getStringArrayList("loaded_page_tails");
+                if (tails != null) mLoadedPageTails.addAll(tails);
+                IntList counts = bundle.getParcelable("loaded_page_counts");
+                mLoadedPageCounts = counts != null ? counts : new IntList();
                 resultCount = bundle.getString(KEY_RESULT_COUNT);
                 firstHref = bundle.getString(KEY_FIRST_HREF);
                 prevHref = bundle.getString(KEY_PREV_HREF);

@@ -26,6 +26,7 @@ final class GalleryRatingSortController {
 
     interface Host {
         List<GalleryInfo> galleries();
+        List<GalleryInfo> galleriesInRange(int pages, String cutoff);
         int loadedPages();
         String oldestPosted();
         boolean hasNextPage();
@@ -59,6 +60,10 @@ final class GalleryRatingSortController {
         this.execute = execute;
         this.sorter = sorter;
     }
+
+    int targetPages() { return targetPages; }
+    String cutoff() { return cutoff; }
+    void setRange(int pages, String date) { targetPages = pages; cutoff = date; }
 
     boolean isActive() { return active; }
     boolean isWaitingForPage() { return pagePending; }
@@ -156,8 +161,13 @@ final class GalleryRatingSortController {
         return true;
     }
 
+    private List<GalleryInfo> rangeGalleries() { return host.galleriesInRange(targetPages, cutoff); }
+
+    // Re-sort after a display change without discarding the selected range.
+    void restart() { start(targetPages, cutoff); }
+
     private void enqueueMissing() {
-        for (GalleryInfo gallery : host.galleries()) {
+        for (GalleryInfo gallery : rangeGalleries()) {
             if (reuseRating(gallery) || !enqueued.add(key(gallery))) continue;
             if (gallery.gid > 0 && gallery.token != null && !gallery.token.isEmpty()) pending.add(gallery);
         }
@@ -227,7 +237,7 @@ final class GalleryRatingSortController {
         if (sorting) return;
         sorting = true;
         int epoch = generation;
-        List<GalleryRatingSort.Entry> snapshot = GalleryRatingSort.snapshot(host.galleries());
+        List<GalleryRatingSort.Entry> snapshot = GalleryRatingSort.snapshot(rangeGalleries());
         sorter.execute(() -> {
             List<GalleryInfo> order = GalleryRatingSort.sort(snapshot);
             main.post(() -> {
@@ -236,7 +246,7 @@ final class GalleryRatingSortController {
                 host.loadingChanged(false);
                 // Pausing subscription lookahead can commit a completed partial batch. A
                 // score may also change while the worker sorts; never publish a stale order.
-                if (!matchesSnapshot(snapshot, host.galleries())) {
+                if (!matchesSnapshot(snapshot, rangeGalleries())) {
                     active = true;
                     sorting = false;
                     host.loadingChanged(true);

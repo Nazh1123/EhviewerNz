@@ -3,14 +3,14 @@
     <string name="gallery_rating_sort_active">Rating sort on · settings</string>
     <string name="gallery_downloaded_only_active">Downloaded only on · turn off</string>
     <string name="gallery_rating_sort_loaded">Sort loaded galleries</string>
-    <string name="gallery_rating_sort_pages">Load up to</string>
+    <string name="gallery_rating_sort_pages">Sort first</string>
     <string name="gallery_rating_sort_page_unit">pages</string>
     <string name="gallery_rating_sort_batches">batches</string>
     <string name="gallery_rating_sort_page_hint">1–200</string>
     <string name="gallery_rating_sort_months">Load back</string>
     <string name="gallery_rating_sort_month_unit">months</string>
     <string name="gallery_rating_sort_month_hint">1–240</string>
-    <string name="gallery_rating_sort_month_note">Loads consecutive pages to the target date; keeps the boundary page.</string>
+    <string name="gallery_rating_sort_month_note">Reuses loaded results and shows only the selected range; loads more if needed. Month ranges keep the boundary page.</string>
     <string name="gallery_rating_sort_month_unavailable">Date range unavailable for this list or after a jump.</string>
     <string name="gallery_rating_sort_status">Loaded: %1$d pages · %2$d galleries\nVisible: %3$d</string>
     <string name="gallery_rating_sort_batch_status">Loaded: %1$d batches · %2$d galleries\nVisible: %3$d</string>
