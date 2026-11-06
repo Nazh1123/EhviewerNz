@@ -12,22 +12,37 @@
             <RadioButton android:id="@+id/rating_sort_loaded"
                 android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="@string/gallery_rating_sort_loaded"/>
-            <RadioButton android:id="@+id/rating_sort_pages"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="@string/gallery_rating_sort_pages"/>
-            <EditText android:id="@+id/rating_sort_page_count"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginStart="32dp" android:inputType="number"
-                android:maxLength="3" android:singleLine="true"
-                android:hint="@string/gallery_rating_sort_page_hint"/>
-            <RadioButton android:id="@+id/rating_sort_months"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="@string/gallery_rating_sort_months"/>
-            <EditText android:id="@+id/rating_sort_month_count"
-                android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:layout_marginStart="32dp" android:inputType="number"
-                android:maxLength="3" android:singleLine="true"
-                android:hint="@string/gallery_rating_sort_month_hint"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <RadioButton android:id="@+id/rating_sort_pages"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:singleLine="true" android:labelFor="@id/rating_sort_page_count"
+                    android:text="@string/gallery_rating_sort_pages"/>
+                <EditText android:id="@+id/rating_sort_page_count"
+                    android:layout_width="64dp" android:layout_height="wrap_content"
+                    android:minHeight="48dp" android:gravity="center"
+                    android:paddingStart="4dp" android:paddingEnd="4dp" android:inputType="number"
+                    android:maxLength="3" android:singleLine="true"
+                    android:hint="@string/gallery_rating_sort_page_hint"/>
+                <TextView android:id="@+id/rating_sort_page_unit"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="@string/gallery_rating_sort_page_unit"/>
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical">
+                <RadioButton android:id="@+id/rating_sort_months"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:singleLine="true" android:labelFor="@id/rating_sort_month_count"
+                    android:text="@string/gallery_rating_sort_months"/>
+                <EditText android:id="@+id/rating_sort_month_count"
+                    android:layout_width="64dp" android:layout_height="wrap_content"
+                    android:minHeight="48dp" android:gravity="center"
+                    android:paddingStart="4dp" android:paddingEnd="4dp" android:inputType="number"
+                    android:maxLength="3" android:singleLine="true"
+                    android:hint="@string/gallery_rating_sort_month_hint"/>
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="@string/gallery_rating_sort_month_unit"/>
+            </LinearLayout>
         </RadioGroup>
         <TextView android:id="@+id/rating_sort_range_note"
             android:layout_width="match_parent" android:layout_height="wrap_content"

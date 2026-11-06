@@ -2213,7 +2213,7 @@ public class GalleryListScene extends BaseScene
         boolean canUseMonths = supportsRatingMonthRange();
         content.findViewById(R.id.rating_sort_pages).setEnabled(canLoad);
         content.findViewById(R.id.rating_sort_months).setEnabled(canLoad && canUseMonths);
-        if (isBookmarkSubscriptionMode()) ((TextView) content.findViewById(R.id.rating_sort_pages))
+        if (isBookmarkSubscriptionMode()) ((TextView) content.findViewById(R.id.rating_sort_page_unit))
                 .setText(R.string.gallery_rating_sort_batches);
         pages.setText(String.valueOf(Math.min(GalleryRatingSort.MAX_PAGES, mHelper.getLoadedSourcePages() + 5)));
         months.setText("1");
@@ -2226,6 +2226,10 @@ public class GalleryListScene extends BaseScene
             pages.setEnabled(id == R.id.rating_sort_pages);
             months.setEnabled(id == R.id.rating_sort_months);
         });
+        // RadioGroup only observes direct children; forward radio clicks from the inline rows.
+        View.OnClickListener selectRange = view -> range.check(view.getId());
+        content.findViewById(R.id.rating_sort_pages).setOnClickListener(selectRange);
+        content.findViewById(R.id.rating_sort_months).setOnClickListener(selectRange);
         AlertDialog.Builder builder = new AlertDialog.Builder(context).setTitle(R.string.gallery_rating_sort)
                 .setView(content).setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(R.string.gallery_rating_sort_execute, null);
