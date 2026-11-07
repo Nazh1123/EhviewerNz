@@ -1531,7 +1531,7 @@ public class OfflineGalleryDetailSceneTest {
                     ratingText.getLeft() + ratingText.getTotalPaddingLeft(), pendingTextStart, 1f);
             int pendingBaseline = ratingText.getTop() + ratingText.getBaseline();
 
-            for (int count : new int[]{1, 123, Integer.MAX_VALUE}) {
+            for (int count : new int[]{1, 123, 9999}) {
                 GalleryDetail detail = online();
                 detail.rating = summary.rating;
                 detail.ratingCount = count;
@@ -1546,6 +1546,54 @@ public class OfflineGalleryDetailSceneTest {
                         ratingText.getTop() + ratingText.getBaseline());
             }
         }
+    }
+
+    @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    public void longKnownRatingReservesFourDigitsAndOnlyOverflowingRealCountsCompressFurther() {
+        android.content.res.Configuration configuration =
+                new android.content.res.Configuration(context.getResources().getConfiguration());
+        configuration.setLocale(java.util.Locale.SIMPLIFIED_CHINESE);
+        scene.themeContext = new ContextThemeWrapper(context.createConfigurationContext(configuration), R.style.AppTheme);
+        ReflectionHelpers.setField(scene, "mUpdateActionGroup", null);
+        GalleryInfo summary = source();
+        summary.rating = 4.97f;
+        ReflectionHelpers.setField(scene, "mGalleryInfo", summary);
+        TextView text = content.findViewById(R.id.rating_text);
+        View actions = content.findViewById(R.id.actions);
+        View stars = (View) content.findViewById(R.id.rating).getParent();
+        View row = content.findViewById(R.id.rating_group);
+        int width = Math.round(400 * context.getResources().getDisplayMetrics().density);
+        bindPendingHeader();
+        actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        actions.layout(0, 0, width, actions.getMeasuredHeight());
+        assertTrue(visibleText(R.id.rating_text).startsWith("根本把持不住 (4.97,"));
+        int pendingStart = text.getLeft();
+        int pendingStarStart = stars.getLeft();
+        int pendingSpacing = stars.getLeft() + (text.getLeft() - stars.getRight()) + row.getPaddingEnd();
+        assertTrue(pendingSpacing < Math.round(78 * context.getResources().getDisplayMetrics().density));
+        for (int count : new int[]{1, 1234, 9999}) {
+            GalleryDetail detail = online();
+            detail.rating = summary.rating;
+            detail.ratingCount = count;
+            scene.onGetGalleryDetailSuccess(detail);
+            actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            actions.layout(0, 0, width, actions.getMeasuredHeight());
+            assertEquals(pendingStart, text.getLeft());
+            assertEquals(pendingStarStart, stars.getLeft());
+            assertEquals(0, text.getLayout().getEllipsisCount(0));
+        }
+        GalleryDetail detail = online();
+        detail.rating = summary.rating;
+        detail.ratingCount = 88888;
+        scene.onGetGalleryDetailSuccess(detail);
+        actions.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        actions.layout(0, 0, width, actions.getMeasuredHeight());
+        int loadedSpacing = stars.getLeft() + (text.getLeft() - stars.getRight()) + row.getPaddingEnd();
+        assertTrue(loadedSpacing < pendingSpacing);
+        assertEquals(0, text.getLayout().getEllipsisCount(0));
     }
 
     @Test @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)

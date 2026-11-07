@@ -1381,8 +1381,11 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             boolean hasRating = Float.isFinite(gi.rating) && gi.rating >= 0 && gi.rating <= 5;
             mRating.setRating(hasRating ? gi.rating : 0);
             // The list/API provides the rating value, but not necessarily its vote count.
-            if (hasRating) bindPendingCountText(mRatingText, getAllRatingText(gi.rating, 0));
-            else {
+            if (hasRating) {
+                reservePendingRatingWidth(gi.rating);
+                bindPendingCountText(mRatingText, getAllRatingText(gi.rating, 0));
+            } else {
+                reserveRatingTextWidth(0);
                 mRatingText.setText("");
                 mRatingText.setContentDescription(null);
             }
@@ -1410,6 +1413,26 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             }
         }
         return TextUtils.isEmpty(code) ? "Japanese" : Locale.forLanguageTag(code).getDisplayLanguage(Locale.ENGLISH);
+    }
+
+    private void reservePendingRatingWidth(float rating) {
+        String zero = getAllRatingText(rating, 0);
+        java.util.regex.Matcher count = java.util.regex.Pattern.compile("\\p{Nd}+(?=[^\\p{Nd}]*$)").matcher(zero);
+        float width = mRatingText.getPaint().measureText(zero);
+        if (count.find()) {
+            String digit = count.group();
+            String fourZeros = zero.substring(0, count.start()) + digit + digit + digit + digit + zero.substring(count.end());
+            width = mRatingText.getPaint().measureText(fourZeros);
+        }
+        // Measure full localized strings, including punctuation and the widest four-digit form.
+        for (int digit = 1; digit <= 9; digit++) {
+            width = Math.max(width, mRatingText.getPaint().measureText(getAllRatingText(rating, digit * 1111)));
+        }
+        reserveRatingTextWidth(width + 2 * mRatingText.getResources().getDisplayMetrics().density);
+    }
+
+    private void reserveRatingTextWidth(float width) {
+        if (mRatingGroup instanceof GalleryRatingLayout layout) layout.reserveTextWidth(getGid(), width);
     }
 
     private void updateTorrentMinWidth(Resources resources, int count) {
@@ -1584,7 +1607,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mSize.setText(gd.size);
         mPosted.setText(GalleryTimeFormatter.format(gd.posted));
 
-        mRatingText.setText(getAllRatingText(gd.rating, gd.ratingCount));
+        String ratingText = getAllRatingText(gd.rating, gd.ratingCount);
+        reserveRatingTextWidth(mRatingText.getPaint().measureText(ratingText));
+        mRatingText.setText(ratingText);
         mRating.setRating(gd.rating);
 
         if (resources != null) {
@@ -3906,7 +3931,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         // Update UI
         if (mRatingText != null && mRating != null) {
             mRatingText.setContentDescription(null);
-            mRatingText.setText(getAllRatingText(result.rating, result.ratingCount));
+            String ratingText = getAllRatingText(result.rating, result.ratingCount);
+            reserveRatingTextWidth(mRatingText.getPaint().measureText(ratingText));
+            mRatingText.setText(ratingText);
             mRating.setRating(result.rating);
         }
     }

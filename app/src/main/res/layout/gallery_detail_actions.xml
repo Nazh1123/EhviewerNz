@@ -140,8 +140,8 @@
         </LinearLayout>
     </HorizontalScrollView>
 
-    <!-- Keep the stars anchored while the rating label and vote count change. -->
-    <LinearLayout
+    <!-- Reserve room for four-digit rating counts before the first draw. -->
+    <com.hippo.ehviewer.ui.scene.gallery.detail.GalleryRatingLayout
         android:id="@+id/rating_group"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -188,6 +188,6 @@
             android:ellipsize="end"
             android:textColor="?android:attr/textColorPrimary"/>
 
-    </LinearLayout>
+    </com.hippo.ehviewer.ui.scene.gallery.detail.GalleryRatingLayout>
 
 </LinearLayout>
