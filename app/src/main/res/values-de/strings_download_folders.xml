@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_label_folder">Ordner</string>
+    <string name="download_folder_delete_children">Labels in Ordnern löschen</string>
+    <string name="download_labels_sort_name">Nach Namen sortieren</string>
+    <string name="download_labels_sort_confirm">Ausgewählte Einträge nach Namen sortieren? Die oberste Ebene und jeder Ordner werden getrennt sortiert.</string>
+    <string name="download_label_new">Hinzufügen</string>
+    <string name="download_labels_delete_message">Die %1$d ausgewählten Einträge löschen? Downloads aus gelöschten Labels werden ins Standardlabel verschoben.</string>
+    <string name="download_fast_scroll">Schnell scrollen</string>
+</resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_label_folder">Dossier</string>
+    <string name="download_folder_delete_children">Supprimer les libellés dans les dossiers</string>
+    <string name="download_labels_sort_name">Trier par nom</string>
+    <string name="download_labels_sort_confirm">Trier les éléments sélectionnés par nom ? Le niveau principal et chaque dossier sont triés séparément.</string>
+    <string name="download_label_new">Ajouter</string>
+    <string name="download_labels_delete_message">Supprimer les %1$d éléments sélectionnés ? Les téléchargements des libellés supprimés seront déplacés vers le libellé par défaut.</string>
+    <string name="download_fast_scroll">Défilement rapide</string>
+</resources>

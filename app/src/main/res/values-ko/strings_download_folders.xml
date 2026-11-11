@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_label_folder">폴더</string>
+    <string name="download_folder_delete_children">폴더 안의 라벨 삭제</string>
+    <string name="download_labels_sort_name">이름순 정렬</string>
+    <string name="download_labels_sort_confirm">선택한 항목을 이름순으로 정렬할까요? 최상위와 각 폴더 안의 항목은 따로 정렬됩니다.</string>
+    <string name="download_label_new">추가</string>
+    <string name="download_labels_delete_message">선택한 항목 %1$d개를 삭제할까요? 삭제된 라벨의 다운로드는 기본 라벨로 이동합니다.</string>
+    <string name="download_fast_scroll">빠른 스크롤</string>
+</resources>

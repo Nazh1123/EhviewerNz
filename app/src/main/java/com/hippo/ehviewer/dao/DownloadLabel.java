@@ -13,6 +13,8 @@ public class DownloadLabel {
     private Long id;
     private String label;
     private long time;
+    private boolean folder;
+    private Long parentId;
 
     @Generated
     public DownloadLabel() {
@@ -28,6 +30,17 @@ public class DownloadLabel {
         this.label = label;
         this.time = time;
     }
+
+    public DownloadLabel(Long id, String label, long time, boolean folder, Long parentId) {
+        this(id, label, time);
+        this.folder = folder;
+        this.parentId = parentId;
+    }
+
+    public boolean getFolder() { return folder; }
+    public void setFolder(boolean folder) { this.folder = folder; }
+    public Long getParentId() { return parentId; }
+    public void setParentId(Long parentId) { this.parentId = parentId; }
 
     public Long getId() {
         return id;

@@ -114,6 +114,28 @@ public class EhDBCompatibilityTest {
     }
 
     @Test
+    public void migratesFlatLabelsAndPersistsFolderOwnership() throws Exception {
+        try (SQLiteDatabase db = upstream(8)) {
+            db.setVersion(1_000_012);
+            db.execSQL("INSERT INTO DOWNLOAD_LABELS (_id, LABEL, TIME) VALUES (11, 'existing', 1)");
+            EhDB.prepareImportDatabase(db);
+            DaoSession session = new DaoMaster(db).newSession();
+            var existing = session.getDownloadLabelDao().load(11L);
+            assertFalse(existing.getFolder());
+            assertNull(existing.getParentId());
+            var folder = new com.hippo.ehviewer.dao.DownloadLabel(12L, "folder", 0, true, null);
+            session.getDownloadLabelDao().insert(folder);
+            existing.setParentId(12L);
+            session.getDownloadLabelDao().update(existing);
+            session.clear();
+            assertTrue(session.getDownloadLabelDao().load(12L).getFolder());
+            assertEquals(Long.valueOf(12), session.getDownloadLabelDao().load(11L).getParentId());
+            EhDB.prepareImportDatabase(db);
+            assertEquals(2, session.getDownloadLabelDao().count());
+        }
+    }
+
+    @Test
     public void importsUpstream7And8() throws Exception {
         for (int version : new int[] {7, 8}) {
             try (SQLiteDatabase db = upstream(version)) {
@@ -438,6 +460,34 @@ public class EhDBCompatibilityTest {
             assertTrue(integrity.moveToFirst());
             assertEquals("ok", integrity.getString(0));
         }
+    }
+
+    @Test
+    public void normalBackupKeepsFoldersAndCompatibleBackupFlattensWithoutChangingLiveData() throws Exception {
+        Context context = RuntimeEnvironment.getApplication();
+        try (SQLiteDatabase source = upstream(8)) {
+            EhDB.prepareImportDatabase(source);
+            DaoSession live = new DaoMaster(source).newSession();
+            live.getDownloadLabelDao().insert(new com.hippo.ehviewer.dao.DownloadLabel(11L, "folder", 0, true, null));
+            live.getDownloadLabelDao().insert(new com.hippo.ehviewer.dao.DownloadLabel(12L, "child", 1, false, 11L));
+            source.execSQL("UPDATE DOWNLOADS SET LABEL='child'");
+            ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", live);
+            for (boolean compatible : new boolean[] {false, true}) {
+                File backup = new File(context.getCacheDir(), "folders-" + compatible + ".db");
+                assertTrue(compatible ? EhDB.exportDBCompatible(context, backup) : EhDB.exportDB(context, backup));
+                try (SQLiteDatabase exported = SQLiteDatabase.openDatabase(backup.getPath(), null, 0)) {
+                    if (compatible) assertUpstream8Schema(exported);
+                    EhDB.prepareImportDatabase(exported);
+                    DaoSession restored = new DaoMaster(exported).newSession();
+                    assertEquals(compatible ? 1 : 2, restored.getDownloadLabelDao().count());
+                    assertEquals(compatible ? null : Long.valueOf(11), restored.getDownloadLabelDao().load(12L).getParentId());
+                    assertEquals("child", restored.getDownloadsDao().load(42L).label);
+                }
+                live.clear();
+                assertTrue(live.getDownloadLabelDao().load(11L).getFolder());
+                assertEquals(Long.valueOf(11), live.getDownloadLabelDao().load(12L).getParentId());
+            }
+        } finally { ReflectionHelpers.setStaticField(EhDB.class, "sDaoSession", null); }
     }
 
     @Test

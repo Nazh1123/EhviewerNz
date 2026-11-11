@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_label_folder">文件夹</string>
+    <string name="download_folder_delete_children">删除文件夹内标签</string>
+    <string name="download_labels_sort_name">按名称排序</string>
+    <string name="download_labels_sort_confirm">按名称排序所选项？一级目录和各文件夹内的所选项会分别排序。</string>
+    <string name="download_label_new">新增</string>
+    <string name="download_labels_delete_message">删除选中的 %1$d 项？被删除标签内的下载项将移至默认标签。</string>
+    <string name="download_fast_scroll">快速滚动</string>
+</resources>

@@ -41,6 +41,8 @@ public class DownloadChoiceListener implements MyEasyRecyclerView.CustomChoiceLi
         void setDrawerLockMode(int lockMode, int edgeGravity);
 
         MyEasyRecyclerView.OnItemLongClickListener getItemLongClickListener();
+        default void onGallerySelectionChanged(int position, boolean checked) {}
+        default void onGallerySelectionEnded() {}
     }
 
     @NonNull
@@ -71,6 +73,7 @@ public class DownloadChoiceListener implements MyEasyRecyclerView.CustomChoiceLi
 
     @Override
     public void onOutOfCustomChoice(EasyRecyclerView view) {
+        mHost.onGallerySelectionEnded();
         MyEasyRecyclerView recyclerView = mHost.getRecyclerView();
         if (recyclerView != null) {
             recyclerView.setOnItemLongClickListener(mHost.getItemLongClickListener());
@@ -89,6 +92,7 @@ public class DownloadChoiceListener implements MyEasyRecyclerView.CustomChoiceLi
 
     @Override
     public void onItemCheckedStateChanged(EasyRecyclerView view, int position, long id, boolean checked) {
+        mHost.onGallerySelectionChanged(position, checked);
         if (view.getCheckedItemCount() == 0) {
             view.outOfCustomChoiceMode();
         }

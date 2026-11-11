@@ -282,9 +282,12 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
     public void onBindViewHolder(RecyclerView.ViewHolder rawHolder, int position) {
         if (rawHolder instanceof LabelHeaderHolder) {
             LabelHeaderHolder holder = (LabelHeaderHolder) rawHolder;
-            holder.label.setText(mCallback.getLabelHeaderTitle(position));
-            holder.count.setText(Integer.toString(
-                    mCallback.getLabelHeaderGalleryCount(position)));
+            com.hippo.ehviewer.ui.scene.download.DownloadLabelPresentation.bind(
+                    holder.label, mCallback.getLabelHeaderTitle(position), mScene.getHeaderLabel(position));
+            holder.count.setText(mScene.getLabelHeaderCountText(position));
+            holder.searchOrSync.setVisibility(mScene.isFolderHeader(position) ? View.GONE : View.VISIBLE);
+            holder.itemView.findViewById(R.id.action_enter).setVisibility(
+                    mScene.isFolderHeader(position) ? View.GONE : View.VISIBLE);
             boolean collapsed = mCallback.isLabelHeaderCollapsed(position);
             holder.headerContent.setContentDescription(holder.label.getText() + ", "
                     + holder.count.getText() + ", " + mScene.getString(collapsed

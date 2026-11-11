@@ -8,6 +8,13 @@ import android.view.MotionEvent
 import com.hippo.easyrecyclerview.EasyRecyclerView
 
 class MyEasyRecyclerView : EasyRecyclerView {
+    var touchCancelListener: Runnable? = null
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_CANCEL) touchCancelListener?.run()
+        return super.dispatchTouchEvent(event)
+    }
+
     constructor(context: Context) : super(context)
 
     constructor(context: Context, attrs: AttributeSet?) : super(context, attrs)

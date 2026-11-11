@@ -67,6 +67,34 @@ class EditTextDialogBuilder @SuppressLint("InflateParams") constructor(
         mTextInputLayout.error = error
     }
 
+    /** Reuses the input/error/keyboard handling with a mutually exclusive type selector. */
+    fun setSingleChoiceOptions(options: Array<String>, onSelected: java.util.function.IntConsumer) {
+        val container = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
+        val group = android.widget.RadioGroup(context).apply {
+            orientation = android.widget.RadioGroup.HORIZONTAL
+            val inset = (16 * context.resources.displayMetrics.density).toInt()
+            setPadding(inset, 0, inset, 0)
+        }
+        options.forEachIndexed { index, title ->
+            group.addView(android.widget.RadioButton(context).apply {
+                id = View.generateViewId()
+                text = title
+                tag = index
+            })
+        }
+        group.check(group.getChildAt(0).id)
+        group.setOnCheckedChangeListener { _, id ->
+            onSelected.accept(group.findViewById<View>(id).tag as Int)
+        }
+        container.addView(group)
+        container.addView(mTextInputLayout)
+        setView(container)
+    }
+
+    fun setHint(hint: String) { mTextInputLayout.hint = hint }
+
     override fun create(): AlertDialog {
         mDialog = super.create()
         mDialog!!.window?.setSoftInputMode(

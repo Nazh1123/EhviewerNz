@@ -25,6 +25,8 @@ public class DownloadLabelDao extends AbstractDao<DownloadLabel, Long> {
         public final static Property Id = new Property(0, Long.class, "id", true, "_id");
         public final static Property Label = new Property(1, String.class, "label", false, "LABEL");
         public final static Property Time = new Property(2, long.class, "time", false, "TIME");
+        public final static Property Folder = new Property(3, boolean.class, "folder", false, "FOLDER");
+        public final static Property ParentId = new Property(4, Long.class, "parentId", false, "PARENT_ID");
     };
 
 
@@ -42,7 +44,9 @@ public class DownloadLabelDao extends AbstractDao<DownloadLabel, Long> {
         db.execSQL("CREATE TABLE " + constraint + "\"DOWNLOAD_LABELS\" (" + //
                 "\"_id\" INTEGER PRIMARY KEY ," + // 0: id
                 "\"LABEL\" TEXT," + // 1: label
-                "\"TIME\" INTEGER NOT NULL );"); // 2: time
+                "\"TIME\" INTEGER NOT NULL ," +
+                "\"FOLDER\" INTEGER NOT NULL DEFAULT 0 ," +
+                "\"PARENT_ID\" INTEGER );");
     }
 
     /** Drops the underlying database table. */
@@ -65,6 +69,8 @@ public class DownloadLabelDao extends AbstractDao<DownloadLabel, Long> {
             stmt.bindString(2, label);
         }
         stmt.bindLong(3, entity.getTime());
+        stmt.bindLong(4, entity.getFolder() ? 1 : 0);
+        if (entity.getParentId() != null) stmt.bindLong(5, entity.getParentId());
     }
 
     @Override
@@ -81,6 +87,8 @@ public class DownloadLabelDao extends AbstractDao<DownloadLabel, Long> {
             stmt.bindString(2, label);
         }
         stmt.bindLong(3, entity.getTime());
+        stmt.bindLong(4, entity.getFolder() ? 1 : 0);
+        if (entity.getParentId() != null) stmt.bindLong(5, entity.getParentId());
     }
 
     @Override
@@ -93,7 +101,9 @@ public class DownloadLabelDao extends AbstractDao<DownloadLabel, Long> {
         DownloadLabel entity = new DownloadLabel( //
             cursor.isNull(offset + 0) ? null : cursor.getLong(offset + 0), // id
             cursor.isNull(offset + 1) ? null : cursor.getString(offset + 1), // label
-            cursor.getLong(offset + 2) // time
+            cursor.getLong(offset + 2), // time
+            cursor.getShort(offset + 3) != 0,
+            cursor.isNull(offset + 4) ? null : cursor.getLong(offset + 4)
         );
         return entity;
     }
@@ -103,6 +113,8 @@ public class DownloadLabelDao extends AbstractDao<DownloadLabel, Long> {
         entity.setId(cursor.isNull(offset + 0) ? null : cursor.getLong(offset + 0));
         entity.setLabel(cursor.isNull(offset + 1) ? null : cursor.getString(offset + 1));
         entity.setTime(cursor.getLong(offset + 2));
+        entity.setFolder(cursor.getShort(offset + 3) != 0);
+        entity.setParentId(cursor.isNull(offset + 4) ? null : cursor.getLong(offset + 4));
      }
     
     @Override

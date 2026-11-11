@@ -43,7 +43,7 @@ public class DownloadLabelDraw {
     }
 
     public View createView(){
-        view = inflater.inflate(R.layout.bookmarks_draw, container, false);
+        view = inflater.inflate(R.layout.drawer_download_labels, container, false);
         assert context != null;
         AssertUtils.assertNotNull(context);
 
@@ -62,7 +62,7 @@ public class DownloadLabelDraw {
                         return true;
                     }
 
-                    List<DownloadLabel> list = dm.getLabelList();
+                    List<DownloadLabel> list = dm.getDownloadLabels();
                     final String[] items = new String[list.size() + 2];
                     items[0] = scene.getString(R.string.let_me_select);
                     items[1] = scene.getString(R.string.default_download_label_name);
@@ -90,103 +90,52 @@ public class DownloadLabelDraw {
             return false;
         });
 
-        final DownloadManager downloadManager = EhApplication.getDownloadManager(context);
-
-
-        List<DownloadLabel> list = downloadManager.getLabelList();
-        final List<String> labels = new ArrayList<>(list.size() + 1);
-        // Add default label name
-        labels.add(scene.getString(R.string.default_download_label_name));
-        for (DownloadLabel raw : list) {
-            labels.add(raw.getLabel());
-        }
-
-        // TODO handle download label items update
-        final List<DownloadLabelItem> downloadLabelList = new ArrayList<>();
-
-        for (int i = 0; i < labels.size(); i++) {
-            String label = labels.get(i);
-            if (i == 0) {
-                downloadLabelList.add(new DownloadLabelItem(label, downloadManager.getDefaultDownloadInfoList().size()));
-                continue;
-            }
-            downloadLabelList.add(new DownloadLabelItem(label, downloadManager.getLabelCount(label)));
-        }
-
-        listView = (ListView) view.findViewById(R.id.list_view);
-        DownloadLabelAdapter adapter = new DownloadLabelAdapter(Objects.requireNonNull(scene.getEHContext()), R.layout.item_download_label_list, downloadLabelList);
-        listView.setAdapter(adapter);
-
-        listView.setOnItemClickListener((parent, view1, position, id) -> {
-            if (scene.searching) {
-                Toast.makeText(context, R.string.download_searching, Toast.LENGTH_LONG).show();
-                return;
-            }
-            String label;
-            if (position == 0) {
-                label = null;
-            } else {
-                label = labels.get(position);
-            }
-            if (scene.isContinuousLabelBrowse()) {
-                scene.expandAndScrollToDownloadLabel(label);
-                scene.closeDrawer(Gravity.RIGHT);
-                return;
-            }
-            if (!ObjectUtils.equal(label, scene.mLabel)) {
-                scene.mLabel = label;
-                scene.updateForLabel();
-                if (scene.searchKey != null && !scene.searchKey.isEmpty()) {
-                    scene.startSearching();
-                } else {
-                    scene.updateView();
-                }
-                scene.closeDrawer(Gravity.RIGHT);
-            }
-
-        });
+        listView = view.findViewById(R.id.list_view);
+        com.hippo.ehviewer.widget.DownloadFastScroller scroller = view.findViewById(R.id.label_fast_scroller);
+        scroller.attachToListView(listView);
+        updateDownloadLabels();
         return view;
     }
 
-    public void updateDownloadLabels(){
-        if (listView == null) {
-            return;
-        }
-        final DownloadManager downloadManager = EhApplication.getDownloadManager(context);
-        List<DownloadLabel> list = downloadManager.getLabelList();
-        final List<String> labels = new ArrayList<>(list.size() + 1);
-        // Add default label name
-        labels.add(scene.getString(R.string.default_download_label_name));
-        for (DownloadLabel raw : list) {
-            labels.add(raw.getLabel());
-        }
-
-        // TODO handle download label items update
-        final List<DownloadLabelItem> downloadLabelList = new ArrayList<>();
-
-        for (int i = 0; i < labels.size(); i++) {
-            String label = labels.get(i);
-            if (i == 0) {
-                downloadLabelList.add(new DownloadLabelItem(label, downloadManager.getDefaultDownloadInfoList().size()));
-                continue;
+    public void updateDownloadLabels() {
+        if (listView == null) return;
+        DownloadManager manager = EhApplication.getDownloadManager(context);
+        List<DownloadLabelItem> rows = new ArrayList<>();
+        rows.add(new DownloadLabelItem(scene.getString(R.string.default_download_label_name),
+                manager.getDefaultDownloadInfoList().size()));
+        for (DownloadLabel label : manager.getLabelList()) {
+            if (label.getParentId() != null) {
+                DownloadLabel folder = null;
+                for (DownloadLabel candidate : manager.getLabelList()) {
+                    if (Objects.equals(candidate.getId(), label.getParentId())) folder = candidate;
+                }
+                if (folder != null && !Settings.isDownloadLabelExpanded(folder.getId(), folder.getLabel())) continue;
             }
-            downloadLabelList.add(new DownloadLabelItem(label, downloadManager.getLabelCount(label)));
+            DownloadLabelItem row = new DownloadLabelItem(label.getLabel(), manager.getLabelCount(label.getLabel()));
+            row.item = label;
+            row.folderCount = label.getFolder() ? manager.getFolderCount(label) : null;
+            rows.add(row);
         }
-
-        DownloadLabelAdapter adapter = new DownloadLabelAdapter(Objects.requireNonNull(scene.getEHContext()), R.layout.item_download_label_list, downloadLabelList);
-        listView.setAdapter(adapter);
-
-        listView.setOnItemClickListener((parent, view1, position, id) -> {
+        listView.setAdapter(new DownloadLabelAdapter(context, R.layout.item_download_label_list, rows));
+        listView.setOnItemClickListener((parent, clickedView, position, id) -> {
             if (scene.searching) {
                 Toast.makeText(context, R.string.download_searching, Toast.LENGTH_LONG).show();
                 return;
             }
-            String label;
-            if (position == 0) {
-                label = null;
-            } else {
-                label = labels.get(position);
+            DownloadLabelItem row = rows.get(position);
+            if (row.item != null && row.item.getFolder()) {
+                DownloadLabel folder = row.item;
+                Settings.setDownloadLabelExpanded(folder.getId(), folder.getLabel(),
+                        !Settings.isDownloadLabelExpanded(folder.getId(), folder.getLabel()));
+                int first = listView.getFirstVisiblePosition();
+                View firstView = listView.getChildAt(0);
+                int top = firstView == null ? 0 : firstView.getTop();
+                updateDownloadLabels();
+                listView.setSelectionFromTop(first, top);
+                if (scene.isContinuousLabelBrowse()) { scene.updateForLabel(); scene.updateView(); }
+                return;
             }
+            String label = row.item == null ? null : row.item.getLabel();
             if (scene.isContinuousLabelBrowse()) {
                 scene.expandAndScrollToDownloadLabel(label);
                 scene.closeDrawer(Gravity.RIGHT);
@@ -195,14 +144,10 @@ public class DownloadLabelDraw {
             if (!ObjectUtils.equal(label, scene.mLabel)) {
                 scene.mLabel = label;
                 scene.updateForLabel();
-                if (scene.searchKey != null && !scene.searchKey.isEmpty()) {
-                    scene.startSearching();
-                } else {
-                    scene.updateView();
-                }
-                scene.closeDrawer(Gravity.RIGHT);
+                if (scene.searchKey != null && !scene.searchKey.isEmpty()) scene.startSearching();
+                else scene.updateView();
             }
-
+            scene.closeDrawer(Gravity.RIGHT);
         });
     }
 }

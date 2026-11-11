@@ -76,6 +76,7 @@ public class DownloadBatchActions {
         int positionInList(int position);
 
         boolean isContinuousLabelBrowse();
+        void selectAllInLastCheckedLabel();
         boolean isLabelHeaderPosition(int position);
         void quickOrganizeDownloads(Context context, List<DownloadInfo> infos);
 
@@ -114,16 +115,8 @@ public class DownloadBatchActions {
         }
 
         if (0 == position) {
-            recyclerView.checkAll();
-            if (mHost.isContinuousLabelBrowse()) {
-                SparseBooleanArray checked = recyclerView.getCheckedItemPositions();
-                for (int i = checked.size() - 1; i >= 0; i--) {
-                    int adapterPosition = checked.keyAt(i);
-                    if (checked.valueAt(i) && mHost.isLabelHeaderPosition(adapterPosition)) {
-                        recyclerView.toggleItemChecked(adapterPosition);
-                    }
-                }
-            }
+            if (mHost.isContinuousLabelBrowse()) mHost.selectAllInLastCheckedLabel();
+            else recyclerView.checkAll();
         } else {
             List<DownloadInfo> list = mHost.getList();
             if (list == null) {
@@ -198,7 +191,7 @@ public class DownloadBatchActions {
                     if (downloadInfoList.isEmpty()) {
                         break;
                     }
-                    List<DownloadLabel> labelRawList = EhApplication.getDownloadManager(context).getLabelList();
+                    List<DownloadLabel> labelRawList = EhApplication.getDownloadManager(context).getDownloadLabels();
                     List<String> labelList = new ArrayList<>(labelRawList.size() + 1);
                     labelList.add(mHost.getString(R.string.default_download_label_name));
                     for (int i = 0, n = labelRawList.size(); i < n; i++) {

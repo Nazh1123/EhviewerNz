@@ -216,6 +216,129 @@ public class DownloadListModeTest {
     }
 
     @Test
+    public void selectAllUsesMostRecentlyCheckedGalleryAcrossExpandedLabels() {
+        makeSmallSections();
+        switchMode(true);
+        scene.onLabelHeaderClick(findHeader("first"));
+        scene.onLabelHeaderClick(findHeader("second"));
+        recycler.setChoiceMode(MyEasyRecyclerView.CHOICE_MODE_MULTIPLE_CUSTOM);
+        recycler.intoCustomChoiceMode();
+        recycler.toggleItemChecked(scene.getAdapterPositionForGallery(121));
+        recycler.toggleItemChecked(scene.getAdapterPositionForGallery(1));
+        batchActions().onClickSecondaryFab(null, null, 0);
+        assertEquals(21, recycler.getCheckedItemCount());
+        assertTrue(recycler.getCheckedItemPositions().get(scene.getAdapterPositionForGallery(20)));
+        assertFalse(recycler.getCheckedItemPositions().get(scene.getAdapterPositionForGallery(122)));
+        recycler.toggleItemChecked(scene.getAdapterPositionForGallery(122));
+        batchActions().onClickSecondaryFab(null, null, 0);
+        assertEquals(40, recycler.getCheckedItemCount());
+    }
+
+    private DownloadLabel putLabelsInFolder() {
+        DownloadManager manager = scene.getDownloadManager();
+        manager.addLabelFolder("folder");
+        DownloadLabel folder = manager.findDownloadLabel("folder");
+        for (DownloadLabel label : manager.getDownloadLabels()) label.setParentId(folder.getId());
+        manager.reorderLabels(new ArrayList<>(manager.getLabelList()));
+        return folder;
+    }
+
+    @Test
+    public void folderCollapseHidesChildrenAndKeepsTheirGalleriesForReopening() {
+        makeSmallSections();
+        DownloadLabel folder = putLabelsInFolder();
+        switchMode(true);
+        assertEquals("2(40)", scene.getDownloadManager().getFolderCount(folder));
+        assertEquals(40, scene.getList().size());
+        assertEquals(2, scene.getDisplayItemCount()); // Default label and folder.
+        int header = findHeader("folder");
+        assertTrue(scene.isFolderHeader(header));
+        assertEquals("2(40)", scene.getLabelHeaderCountText(header));
+        scene.onLabelHeaderClick(header);
+        assertEquals(4, scene.getDisplayItemCount());
+        scene.onLabelHeaderClick(findHeader("first"));
+        assertEquals(24, scene.getDisplayItemCount());
+        scene.onLabelHeaderClick(findHeader("folder"));
+        assertEquals(2, scene.getDisplayItemCount());
+        assertEquals(40, scene.getList().size());
+        scene.onLabelHeaderClick(findHeader("folder"));
+        assertEquals(24, scene.getDisplayItemCount());
+    }
+
+    @Test
+    public void openingHiddenLabelExpandsItsFolderAndTheLabel() {
+        makeSmallSections();
+        putLabelsInFolder();
+        switchMode(true);
+        assertTrue(scene.expandAndScrollToDownloadLabel("second"));
+        assertFalse(scene.isLabelHeaderCollapsed(findHeader("folder")));
+        assertFalse(scene.isLabelHeaderCollapsed(findHeader("second")));
+        assertTrue(scene.getAdapterPositionForGallery(121) >= 0);
+    }
+
+    @Test
+    public void deletingFolderOnlyPromotesChildrenAndPreservesGalleriesAcrossReload() {
+        DownloadLabel folder = putLabelsInFolder();
+        DownloadManager manager = scene.getDownloadManager();
+        manager.deleteLabel(folder.getLabel());
+        assertEquals(2, manager.getDownloadLabels().size());
+        assertNull(manager.findDownloadLabel("first").getParentId());
+        assertTrue(manager.getDefaultDownloadInfoList().isEmpty());
+        assertEquals(120, manager.getLabelDownloadInfoList("first").size());
+        DownloadManager reloaded = new DownloadManager(scene.getContext());
+        assertNull(reloaded.findDownloadLabel("first").getParentId());
+        assertEquals(120, reloaded.getLabelDownloadInfoList("first").size());
+    }
+
+    @Test
+    public void deletingFolderAndChildrenMovesGalleriesToDefault() {
+        putLabelsInFolder();
+        DownloadManager manager = scene.getDownloadManager();
+        manager.deleteLabels(List.of("folder", "first", "second"));
+        assertTrue(manager.getLabelList().isEmpty());
+        assertEquals(240, manager.getDefaultDownloadInfoList().size());
+        assertNull(manager.getDownloadInfo(121).label);
+    }
+
+    @Test
+    public void backupImportRemapsFolderIdsWithoutChangingBackupObjects() {
+        DownloadManager manager = scene.getDownloadManager();
+        DownloadLabel folder = new DownloadLabel(987L, "import folder", 0, true, null);
+        DownloadLabel child = new DownloadLabel(988L, "import child", 1, false, 987L);
+        manager.addDownloadLabel(List.of(child, folder));
+        assertEquals(Long.valueOf(987), folder.getId());
+        assertEquals(Long.valueOf(987), child.getParentId());
+        DownloadLabel importedFolder = manager.findDownloadLabel("import folder");
+        assertNotEquals(Long.valueOf(987), importedFolder.getId());
+        assertEquals(importedFolder.getId(), manager.findDownloadLabel("import child").getParentId());
+        DownloadManager reloaded = new DownloadManager(scene.getContext());
+        assertEquals(importedFolder.getId(), reloaded.findDownloadLabel("import child").getParentId());
+        assertEquals(3, manager.getDownloadLabels().size());
+    }
+
+    @Test
+    public void backupImportPreservesRootOrderAndHandlesFolderLabelNameConflicts() {
+        DownloadManager manager = scene.getDownloadManager();
+        List<DownloadLabel> backup = List.of(
+                new DownloadLabel(900L, "root before", 0, false, null),
+                new DownloadLabel(901L, "first", 1, true, null), // Existing download label.
+                new DownloadLabel(902L, "new child", 2, false, 901L),
+                new DownloadLabel(903L, "root after", 3, false, null));
+        manager.addDownloadLabel(backup);
+        assertEquals(List.of("first", "second", "root before", "first (2)", "new child", "root after"),
+                manager.getLabelList().stream().map(DownloadLabel::getLabel).toList());
+        assertTrue(manager.findDownloadLabel("first (2)").getFolder());
+        assertFalse(manager.findDownloadLabel("first").getFolder());
+        assertEquals(manager.findDownloadLabel("first (2)").getId(), manager.findDownloadLabel("new child").getParentId());
+        var conflictingLabel = List.of(new DownloadLabel(904L, "first (2)", 4, false, null));
+        assertEquals("first (2) (2)", manager.addDownloadLabel(conflictingLabel).get("first (2)"));
+        assertFalse(manager.findDownloadLabel("first (2) (2)").getFolder());
+        manager.addDownloadLabel(backup);
+        manager.addDownloadLabel(conflictingLabel);
+        assertEquals(7, manager.getLabelList().size());
+    }
+
+    @Test
     public void batchDeleteMapsGroupedPositionsAndIgnoresCheckedHeaders() {
         makeSmallSections();
         switchMode(true);
@@ -297,6 +420,7 @@ public class DownloadListModeTest {
             @Override public DownloadManager getDownloadManager() { return scene.getDownloadManager(); }
             @Override public int positionInList(int position) { return scene.positionInList(position); }
             @Override public boolean isContinuousLabelBrowse() { return scene.isContinuousLabelBrowse(); }
+            @Override public void selectAllInLastCheckedLabel() { scene.selectAllInLastCheckedLabel(); }
             @Override public boolean isLabelHeaderPosition(int position) { return scene.isLabelHeaderPosition(position); }
             @Override public void quickOrganizeDownloads(Context ctx, List<DownloadInfo> infos) {
                 throw new AssertionError("Unexpected quick organize");
@@ -547,6 +671,47 @@ public class DownloadListModeTest {
         ReflectionHelpers.callInstanceMethod(scene, "applyDownloadListMode",
                 ReflectionHelpers.ClassParameter.from(boolean.class, continuous));
         layout();
+    }
+
+    private void organize(java.util.Map<String, List<DownloadInfo>> assignments) {
+        ReflectionHelpers.callInstanceMethod(scene, "applyQuickOrganization",
+                ReflectionHelpers.ClassParameter.from(Context.class, scene.getContext()),
+                ReflectionHelpers.ClassParameter.from(java.util.Map.class, assignments),
+                ReflectionHelpers.ClassParameter.from(int.class, 0));
+    }
+
+    @Test public void quickOrganizationGroupsOnlyNewLabelsInTimestampedFolder() {
+        DownloadManager manager = scene.getDownloadManager();
+        var assignments = new java.util.LinkedHashMap<String, List<DownloadInfo>>();
+        assignments.put("A: new artist", List.of(manager.getDownloadInfo(1)));
+        assignments.put("G: new group", List.of(manager.getDownloadInfo(2)));
+        assignments.put("first", List.of(manager.getDownloadInfo(121)));
+        organize(assignments);
+        DownloadLabel folder = manager.getLabelList().stream().filter(DownloadLabel::getFolder).findFirst().orElseThrow();
+        assertTrue(folder.getLabel().matches("Sort_\\d{8}_\\d{6}(?:_\\d+)?"));
+        assertEquals(folder.getId(), manager.findDownloadLabel("A: new artist").getParentId());
+        assertEquals(folder.getId(), manager.findDownloadLabel("G: new group").getParentId());
+        assertNull(manager.findDownloadLabel("first").getParentId());
+        assertEquals("2(2)", manager.getFolderCount(folder));
+        assertTrue(Settings.isDownloadLabelExpanded(folder.getId(), folder.getLabel()));
+        DownloadManager reloaded = new DownloadManager(scene.getContext());
+        assertEquals(folder.getId(), reloaded.findDownloadLabel("A: new artist").getParentId());
+    }
+
+    @Test public void quickOrganizationWithOnlyExistingLabelsDoesNotCreateEmptyFolder() {
+        DownloadManager manager = scene.getDownloadManager();
+        organize(java.util.Map.of("second", List.of(manager.getDownloadInfo(1))));
+        assertTrue(manager.getLabelList().stream().noneMatch(DownloadLabel::getFolder));
+        assertEquals("second", manager.getDownloadInfo(1).label);
+    }
+
+    @Test public void quickOrganizationDoesNotUseAFolderAsAGalleryDestination() {
+        DownloadManager manager = scene.getDownloadManager();
+        manager.addLabelFolder("A: collision");
+        organize(java.util.Map.of("A: collision", List.of(manager.getDownloadInfo(1))));
+        assertEquals("A: collision (2)", manager.getDownloadInfo(1).label);
+        assertFalse(manager.findDownloadLabel("A: collision (2)").getFolder());
+        assertNotNull(manager.findDownloadLabel("A: collision (2)").getParentId());
     }
 
     private void selectLabel(String label) {

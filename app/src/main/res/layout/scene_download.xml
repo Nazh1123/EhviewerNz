@@ -71,7 +71,7 @@
                     app:unselected_color="?attr/drawableColorSecondary" />
             </LinearLayout>
 
-            <com.hippo.easyrecyclerview.FastScroller
+            <com.hippo.ehviewer.widget.DownloadFastScroller
                 android:id="@+id/fast_scroller"
                 android:layout_width="30dp"
                 android:layout_height="match_parent"
