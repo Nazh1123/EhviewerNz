@@ -67,6 +67,9 @@ final class BookmarkSubscriptionCoordinator {
         void onBookmarkSubscriptionFailure(int taskId, Exception error);
 
         default void onBookmarkSubscriptionProgress() { }
+
+        default void onBookmarkSubscriptionSourceLoaded(String contextKey, String displayKey,
+                SubscriptionUpdateManager.RecentCheckSource source) { }
     }
 
     private static final class Source {
@@ -168,8 +171,13 @@ final class BookmarkSubscriptionCoordinator {
 
     int getSourcePagesRead() { return mSourcePagesRead; }
     private boolean mHasCachedInitialSource;
+    private long mReusedResultCompletedRealtime = -1L;
+
+    long getReusedResultCompletedRealtime() { return mReusedResultCompletedRealtime; }
     @Nullable private Exception mFirstFailure;
     private String mSubscriptionFingerprint = "";
+    private String mCacheContext = "";
+    private String mDisplayCacheContext = "";
 
     BookmarkSubscriptionCoordinator(EhClient client, Listener listener) {
         mClient = client;
@@ -372,6 +380,8 @@ final class BookmarkSubscriptionCoordinator {
         mBatchSize = 0;
         mSubscriptionFingerprint = getFingerprint(
                 quickSearches, includeEhSubscription);
+        mCacheContext = SubscriptionSearchContext.key();
+        mDisplayCacheContext = SubscriptionSearchContext.cacheKey();
 
         if (includeEhSubscription) {
             mSources.add(new Source(mSources.size()));
@@ -393,6 +403,11 @@ final class BookmarkSubscriptionCoordinator {
         for (Source source : mSources) {
             SubscriptionUpdateManager.RecentCheckSource cachedSource =
                     findCachedSource(recentResult, source);
+            if (cachedSource != null) {
+                mReusedResultCompletedRealtime = mReusedResultCompletedRealtime < 0L
+                        ? cachedSource.completedRealtime
+                        : Math.min(mReusedResultCompletedRealtime, cachedSource.completedRealtime);
+            }
             if (cachedSource != null && !cachedSource.requiresDisplayPreparation) {
                 mHasCachedInitialSource = true;
                 applyCachedSource(source, cachedSource);
@@ -468,6 +483,7 @@ final class BookmarkSubscriptionCoordinator {
         mLoading = false;
         mRefresh = false;
         mHasCachedInitialSource = false;
+        mReusedResultCompletedRealtime = -1L;
         mRequestQueue.clear();
         mActiveRequests = 0;
         mInitialRequestsRemaining = 0;
@@ -498,7 +514,7 @@ final class BookmarkSubscriptionCoordinator {
         }
         for (SubscriptionUpdateManager.RecentCheckSource cachedSource
                 : recentResult.sources) {
-            if (!cachedSource.isFresh() || (!cachedSource.requiresDisplayPreparation
+            if (!recentResult.canReuseSource(cachedSource) || (!cachedSource.requiresDisplayPreparation
                     && cachedSource.ratingMinimumHundredths != sourceRatingMinimum(source))) continue;
             if (source.plan == null
                     ? cachedSource.isEhSubscription()
@@ -626,7 +642,8 @@ final class BookmarkSubscriptionCoordinator {
                     new IllegalStateException(result.customErrorString));
             return;
         }
-        if (source.cachedCheck != null) {
+        boolean reused = source.cachedCheck != null;
+        if (reused) {
             SubscriptionUpdateManager.RecentCheckSource cached = source.cachedCheck;
             source.pageIndex = cached.pageIndex;
             result.rawResultCount = cached.initialResultCount;
@@ -664,6 +681,11 @@ final class BookmarkSubscriptionCoordinator {
         source.session.observe(result, !source.exhausted);
         source.responseReady = result.customErrorString == null;
         mSessionNewGids.addAll(source.session.displayNewGids());
+        if (initial && !reused) {
+            mListener.onBookmarkSubscriptionSourceLoaded(mCacheContext, mDisplayCacheContext,
+                    SubscriptionUpdateManager.RecentCheckSource.fromDisplay(
+                            source.builder, source.plan, result, sourceRatingMinimum(source)));
+        }
 
         mSourcePagesRead += result.sourcePages;
         mListener.onBookmarkSubscriptionProgress();

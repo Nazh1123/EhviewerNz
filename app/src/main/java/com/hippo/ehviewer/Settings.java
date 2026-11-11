@@ -614,7 +614,13 @@ public class Settings {
     public static final String KEY_AUTO_SUBSCRIPTION_UPDATE_INTERVAL =
             "auto_subscription_update_interval";
     public static final String KEY_SUBSCRIPTION_HOMEPAGE_SCAN = "subscription_homepage_scan";
+    public static final String KEY_UPDATE_BOOKMARK_SUBSCRIPTIONS_ON_OPEN =
+            "update_bookmark_subscriptions_on_open";
     public static final int DEFAULT_AUTO_SUBSCRIPTION_UPDATE_INTERVAL = 60;
+
+    public static boolean getUpdateBookmarkSubscriptionsOnOpen() {
+        return getBoolean(KEY_UPDATE_BOOKMARK_SUBSCRIPTIONS_ON_OPEN, false);
+    }
 
     public static boolean getSubscriptionHomepageScan() {
         // Disabled even for installations that previously enabled homepage scanning.

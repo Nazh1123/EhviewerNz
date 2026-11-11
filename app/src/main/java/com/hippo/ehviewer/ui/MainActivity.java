@@ -654,7 +654,7 @@ public final class MainActivity extends StageActivity
                 break;
             case R.id.nav_bookmark_subscription:
             case R.id.nav_global_subscription:
-                startScene(new Announcer(QuickSearchScene.class));
+                openBookmarkSubscription(itemId, true);
                 break;
             case R.id.nav_update_subscription:
                 showSubscriptionUpdateSettings();
@@ -675,9 +675,31 @@ public final class MainActivity extends StageActivity
         AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(this, () -> {
             renderSubscriptionUpdateState();
             scheduleSubscriptionUpdateCheck();
+        }, () -> {
+            startScene(new Announcer(QuickSearchScene.class));
+            if (mDrawerLayout != null) {
+                mDrawerLayout.closeDrawers();
+            }
         });
         mSubscriptionUpdateSettingsDialog = dialog;
         dialog.setOnDismissListener(ignored -> mSubscriptionUpdateSettingsDialog = null);
+    }
+
+    private void openBookmarkSubscription(@IdRes int itemId, boolean longClick) {
+        Bundle args = new Bundle();
+        args.putString(GalleryListScene.KEY_ACTION, itemId == R.id.nav_global_subscription
+                ? GalleryListScene.ACTION_GLOBAL_SUBSCRIPTION
+                : GalleryListScene.ACTION_BOOKMARK_SUBSCRIPTION);
+        int reusePolicy;
+        if (Settings.getUpdateBookmarkSubscriptionsOnOpen()) {
+            reusePolicy = longClick ? GalleryListScene.SUBSCRIPTION_REUSE_AVAILABLE
+                    : GalleryListScene.SUBSCRIPTION_REUSE_RECENT;
+        } else {
+            reusePolicy = longClick ? GalleryListScene.SUBSCRIPTION_FORCE_REFRESH
+                    : GalleryListScene.SUBSCRIPTION_REUSE_AVAILABLE;
+        }
+        args.putInt(GalleryListScene.KEY_SUBSCRIPTION_REUSE_POLICY, reusePolicy);
+        startSceneFirstly(new Announcer(GalleryListScene.class).setArgs(args));
     }
 
     private boolean isHistoryNavigationGrouped() {
@@ -1555,18 +1577,8 @@ public final class MainActivity extends StageActivity
                         .setArgs(nav_subscription));
                 break;
             case R.id.nav_bookmark_subscription:
-                Bundle navBookmarkSubscription = new Bundle();
-                navBookmarkSubscription.putString(GalleryListScene.KEY_ACTION,
-                        GalleryListScene.ACTION_BOOKMARK_SUBSCRIPTION);
-                startSceneFirstly(new Announcer(GalleryListScene.class)
-                        .setArgs(navBookmarkSubscription));
-                break;
             case R.id.nav_global_subscription:
-                Bundle navGlobalSubscription = new Bundle();
-                navGlobalSubscription.putString(GalleryListScene.KEY_ACTION,
-                        GalleryListScene.ACTION_GLOBAL_SUBSCRIPTION);
-                startSceneFirstly(new Announcer(GalleryListScene.class)
-                        .setArgs(navGlobalSubscription));
+                openBookmarkSubscription(item.getItemId(), false);
                 break;
             case R.id.nav_update_subscription:
                 if (!Settings.getAutoSubscriptionUpdatesEh()

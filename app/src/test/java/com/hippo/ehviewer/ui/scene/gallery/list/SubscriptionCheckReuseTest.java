@@ -185,6 +185,137 @@ public class SubscriptionCheckReuseTest {
         assertEquals(4, requests.size());
     }
 
+    @Test public void sidebarRefreshArgumentBypassesReusableResultsForBothSubscriptionModes() {
+        enableBookmark();
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        for (int mode : new int[]{ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
+                ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION}) {
+            for (boolean force : new boolean[]{false, true}) {
+                GalleryListScene scene = new GalleryListScene();
+                ReflectionHelpers.setField(scene, "mUrlBuilder", new ListUrlBuilder());
+                ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+                android.os.Bundle args = new android.os.Bundle();
+                args.putString(GalleryListScene.KEY_ACTION,
+                        mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
+                                ? GalleryListScene.ACTION_GLOBAL_SUBSCRIPTION
+                                : GalleryListScene.ACTION_BOOKMARK_SUBSCRIPTION);
+                args.putInt(GalleryListScene.KEY_SUBSCRIPTION_REUSE_POLICY, force
+                        ? GalleryListScene.SUBSCRIPTION_FORCE_REFRESH
+                        : GalleryListScene.SUBSCRIPTION_REUSE_AVAILABLE);
+                ReflectionHelpers.callInstanceMethod(scene, "handleArgs",
+                        ReflectionHelpers.ClassParameter.from(android.os.Bundle.class, args));
+                ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+                SubscriptionUpdateManager.RecentCheckResult cached =
+                        ReflectionHelpers.getField(scene, "mRecentCheckResult");
+                int before = requests.size();
+                var coordinator = refresh(mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION, cached);
+                if (force) {
+                    assertNull(cached);
+                    assertTrue(requests.size() > before);
+                    assertEquals(-1L, coordinator.getReusedResultCompletedRealtime());
+                } else {
+                    assertNotNull(cached);
+                    assertEquals(before, requests.size());
+                    assertEquals(cached.completedRealtime, coordinator.getReusedResultCompletedRealtime());
+                }
+                coordinator.cancel();
+            }
+        }
+    }
+
+    @Test public void reuseIndicatorRequiresAMatchingSourceAndResetsForFreshRequests() {
+        enableBookmark();
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        var cached = manager.getRecentCheckResult(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        bookmarks.get(0).keyword = "changed";
+        var coordinator = refresh(false, cached);
+        assertEquals(-1L, coordinator.getReusedResultCompletedRealtime());
+        coordinator.cancel();
+        bookmarks.get(0).keyword = "test";
+        coordinator = refresh(false, cached);
+        assertEquals(cached.completedRealtime, coordinator.getReusedResultCompletedRealtime());
+        coordinator.refresh(2, bookmarks, false, null);
+        assertEquals(-1L, coordinator.getReusedResultCompletedRealtime());
+        coordinator.cancel();
+    }
+
+    @Test public void recentOnlyEntryReusesAtSixtySecondsButOlderResultsRemainAvailableToOtherEntries() {
+        enableBookmark();
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        ShadowSystemClock.advanceBy(Duration.ofSeconds(60));
+        for (int mode : new int[]{ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
+                ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION}) {
+            assertNotNull(resultForEntry(mode, GalleryListScene.SUBSCRIPTION_REUSE_RECENT));
+        }
+        ShadowSystemClock.advanceBy(Duration.ofMillis(1));
+        for (int mode : new int[]{ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
+                ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION}) {
+            assertNull(resultForEntry(mode, GalleryListScene.SUBSCRIPTION_REUSE_RECENT));
+            assertNotNull(resultForEntry(mode, GalleryListScene.SUBSCRIPTION_REUSE_AVAILABLE));
+            assertNull(resultForEntry(mode, GalleryListScene.SUBSCRIPTION_FORCE_REFRESH));
+        }
+    }
+
+    @Test public void successfulInteractiveRefreshReplacesTheResultsReusedOnTheNextVisit() {
+        enableBookmark();
+        GalleryListScene scene = new GalleryListScene();
+        ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+        var coordinator = new BookmarkSubscriptionCoordinator(client, scene);
+        coordinator.refresh(1, bookmarks, true, null);
+        assertEquals(2, requests.size());
+        succeed(0, page(200, null));
+        long ehCompletedAt = manager.getReusableCheckResult(
+                ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION).sources.get(0).completedRealtime;
+        ShadowSystemClock.advanceBy(Duration.ofMinutes(2));
+        succeed(1, page(199, null));
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        assertNotNull(cached);
+        assertEquals(2, cached.sources.size());
+        var reused = refresh(true, cached);
+        assertEquals(ehCompletedAt, reused.getReusedResultCompletedRealtime());
+        reused.cancel();
+        reused = refresh(false, cached);
+        assertEquals(cached.sources.get(1).completedRealtime, reused.getReusedResultCompletedRealtime());
+        reused.cancel();
+        assertEquals(2, requests.size());
+
+        coordinator.refresh(2, bookmarks, true, null);
+        assertEquals(4, requests.size());
+        succeed(2, page(300, null));
+        var updated = page(299, null);
+        succeed(3, updated);
+        updated.galleryInfoList.get(0).gid = 999; // Cache owns a separate copy of displayed objects.
+        cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        assertEquals(2, cached.sources.size());
+        assertEquals(300, cached.sources.get(0).galleryInfoList.get(0).gid);
+        assertEquals(299, cached.sources.get(1).galleryInfoList.get(0).gid);
+        refresh(true, cached).cancel();
+        assertEquals(4, requests.size());
+        coordinator.cancel();
+    }
+
+    private SubscriptionUpdateManager.RecentCheckResult resultForEntry(int mode, int policy) {
+        GalleryListScene scene = new GalleryListScene();
+        ReflectionHelpers.setField(scene, "mUrlBuilder", new ListUrlBuilder());
+        ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+        android.os.Bundle args = new android.os.Bundle();
+        args.putString(GalleryListScene.KEY_ACTION,
+                mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
+                        ? GalleryListScene.ACTION_GLOBAL_SUBSCRIPTION
+                        : GalleryListScene.ACTION_BOOKMARK_SUBSCRIPTION);
+        args.putInt(GalleryListScene.KEY_SUBSCRIPTION_REUSE_POLICY, policy);
+        ReflectionHelpers.callInstanceMethod(scene, "handleArgs",
+                ReflectionHelpers.ClassParameter.from(android.os.Bundle.class, args));
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        return ReflectionHelpers.getField(scene, "mRecentCheckResult");
+    }
+
     @Test public void openingDuringEitherCheckRetainsSuccessfulSourcesAndRetriesMissingOnes() {
         enableBookmark();
         for (boolean manual : new boolean[]{false, true}) {
@@ -234,6 +365,30 @@ public class SubscriptionCheckReuseTest {
         assertNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
         refresh(true, cached);
         assertEquals(2, requests.size());
+    }
+
+    @Test public void explicitReuseRetainsOlderCompatibleResultsAndTheirOriginalTime() {
+        enableBookmark();
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        long checkedAt = manager.getRecentCheckResult(
+                ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION).completedRealtime;
+        ShadowSystemClock.advanceBy(Duration.ofMinutes(90));
+        assertNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        for (int mode : new int[]{ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
+                ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION}) {
+            var cached = manager.getReusableCheckResult(mode);
+            assertNotNull(cached);
+            assertEquals(checkedAt, cached.completedRealtime);
+            int before = requests.size();
+            var coordinator = refresh(mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION, cached);
+            assertEquals(before, requests.size());
+            assertEquals(checkedAt, coordinator.getReusedResultCompletedRealtime());
+            coordinator.cancel();
+        }
+        contextKey = "account-b";
+        assertNull(manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
     }
 
     @Test public void bookmarkChecksUseOnlyExactClientRatingAndKeepItWhenReusingResults() {

@@ -36,6 +36,7 @@ public class BookmarkSubscriptionConcurrencyTest {
         SearchUpdateStore.initialize(app);
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 app.getSharedPreferences("concurrency-test", Context.MODE_PRIVATE));
+        ReflectionHelpers.setStaticField(Settings.class, "sEhConfig", new EhConfig());
         coordinator = new BookmarkSubscriptionCoordinator(Shadow.newInstanceOf(EhClient.class),
                 new BookmarkSubscriptionCoordinator.Listener() {
                     @Override public void onBookmarkSubscriptionBatch(int task, List<GalleryInfo> data,

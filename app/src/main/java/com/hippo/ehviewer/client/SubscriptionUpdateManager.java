@@ -111,7 +111,7 @@ public final class SubscriptionUpdateManager {
     }
 
     /**
-     * A successful source response retained from the most recent update check. The source can
+     * A successful source response retained from an update check or interactive refresh. It can
      * represent either the EH subscription or a planned group of bookmark searches.
      */
     public static final class RecentCheckSource {
@@ -128,12 +128,14 @@ public final class SubscriptionUpdateManager {
         public final long boundaryGid;
         public final boolean hasBoundary;
         public final boolean exhausted;
+        public final long completedRealtime;
         private final long startedRealtime;
 
         private final ListUrlBuilder mBuilder = new ListUrlBuilder();
         @Nullable private final String mBookmarkSourceKey;
 
         RecentCheckSource(@NonNull Source source) {
+            completedRealtime = SystemClock.elapsedRealtime();
             observed = source.observed;
             rawGalleries = SubscriptionGallerySnapshot.copy(source.rawGalleries);
             rawPublicationTimes = Collections.unmodifiableMap(new HashMap<>(source.rawPublicationTimes));
@@ -164,26 +166,70 @@ public final class SubscriptionUpdateManager {
         public boolean isFresh() {
             return isCheckResultFresh(startedRealtime, SystemClock.elapsedRealtime());
         }
+
+        public static RecentCheckSource fromDisplay(ListUrlBuilder builder,
+                @Nullable BookmarkSubscriptionPlanner.Source plan,
+                GalleryListParser.Result page, int ratingMinimumHundredths) {
+            Source source = plan == null ? new Source() : new Source(plan);
+            source.builder.set(builder);
+            source.ratingMinimumHundredths = ratingMinimumHundredths;
+            source.startedRealtime = SystemClock.elapsedRealtime();
+            source.galleryInfoList.addAll(page.galleryInfoList);
+            source.rawGalleries.addAll(page.rawGalleries != null
+                    ? page.rawGalleries : page.galleryInfoList);
+            source.rawPublicationTimes.putAll(page.rawPublicationTimes);
+            source.observed = page.rawSeenState;
+            source.initialResultCount = page.rawResultCount;
+            source.pageIndex = builder.getPageIndex();
+            source.nextHref = page.nextHref;
+            source.boundaryPosted = page.rawTailPosted;
+            source.boundaryGid = page.rawTailGid;
+            source.hasBoundary = page.rawResultCount > 0;
+            source.exhausted = TextUtils.isEmpty(page.nextHref)
+                    && !(page.pages > 0 && source.pageIndex + 1 < page.pages);
+            return new RecentCheckSource(source);
+        }
+
+        private boolean sameSource(RecentCheckSource other) {
+            return isEhSubscription() ? other.isEhSubscription()
+                    : mBookmarkSourceKey != null && mBookmarkSourceKey.equals(other.mBookmarkSourceKey);
+        }
     }
 
-    /** A short-lived snapshot reusable by bookmark and global subscription entry points. */
+    /** A compatible snapshot shared by bookmark and global subscription entry points. */
     public static final class RecentCheckResult {
         @NonNull public final List<RecentCheckSource> sources;
+        public final long completedRealtime;
         private final String contextKey;
         private final String displayKey;
+        private final boolean allowExpired;
 
         RecentCheckResult(@NonNull List<RecentCheckSource> sources, String contextKey) {
             this.sources = Collections.unmodifiableList(new ArrayList<>(sources));
+            this.completedRealtime = SystemClock.elapsedRealtime();
             this.contextKey = contextKey;
             this.displayKey = SubscriptionSearchContext.cacheKey();
+            this.allowExpired = false;
+        }
+
+        private RecentCheckResult(RecentCheckResult result) {
+            sources = result.sources;
+            completedRealtime = result.completedRealtime;
+            contextKey = result.contextKey;
+            displayKey = result.displayKey;
+            allowExpired = true;
         }
 
         public boolean matchesContext() { return contextKey.equals(SubscriptionSearchContext.key())
                 && displayKey.equals(SubscriptionSearchContext.cacheKey()); }
 
+        public boolean canReuseSource(RecentCheckSource source) {
+            return allowExpired || source.isFresh();
+        }
+
         boolean hasSourceForMode(int mode) {
             for (RecentCheckSource source : sources) {
-                if (source.isFresh() && (mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
+                if (canReuseSource(source) && (mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
                         || (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
                         && !source.isEhSubscription()))) {
                     return true;
@@ -340,15 +386,41 @@ public final class SubscriptionUpdateManager {
             return null;
         }
         long now = SystemClock.elapsedRealtime();
-        if (!result.matchesContext() || !isCheckResultFresh(mRecentCheckCompletedRealtime, now)) {
+        if (!result.matchesContext()) {
             mRecentCheckResult = null;
             mRecentCheckCompletedRealtime = 0L;
             return null;
         }
+        if (!isCheckResultFresh(mRecentCheckCompletedRealtime, now)) return null;
         if (!result.hasSourceForMode(mode)) {
             return null;
         }
         return result;
+    }
+
+    /** Explicit reuse keeps the last compatible result until another check replaces it. */
+    @Nullable
+    public RecentCheckResult getReusableCheckResult(int mode) {
+        syncRatingPolicy();
+        if (mRecentCheckResult == null || !mRecentCheckResult.matchesContext()) return null;
+        RecentCheckResult result = new RecentCheckResult(mRecentCheckResult);
+        return result.hasSourceForMode(mode) ? result : null;
+    }
+
+    /** A successful interactive refresh becomes the result reused on the next visit. */
+    public void rememberDisplayedSource(String contextKey, String displayKey, RecentCheckSource source) {
+        syncRatingPolicy();
+        if (!contextKey.equals(SubscriptionSearchContext.key())
+                || !displayKey.equals(SubscriptionSearchContext.cacheKey())) return;
+        ArrayList<RecentCheckSource> sources = new ArrayList<>();
+        if (mRecentCheckResult != null && mRecentCheckResult.matchesContext()) {
+            for (RecentCheckSource previous : mRecentCheckResult.sources) {
+                if (!source.sameSource(previous)) sources.add(previous);
+            }
+        }
+        sources.add(source);
+        mRecentCheckResult = new RecentCheckResult(sources, contextKey);
+        mRecentCheckCompletedRealtime = mRecentCheckResult.completedRealtime;
     }
 
     public void resetCheckTimer() {

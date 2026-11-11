@@ -56,6 +56,18 @@ public class SubscriptionSidebarPreferencesTest {
         }
     }
 
+    @Test public void updateOnOpenDefaultsOffAndPersistsIndependentlyOfAutomaticUpdates() {
+        TwoStatePreference update = preference(Settings.KEY_UPDATE_BOOKMARK_SUBSCRIPTIONS_ON_OPEN);
+        assertNotNull(update);
+        assertFalse(update.isChecked());
+        assertFalse(Settings.getUpdateBookmarkSubscriptionsOnOpen());
+        assertNull(update.getDependency());
+        assertTrue(update.getOrder() < fragment.findPreference("test_bookmark_subscription").getOrder());
+        update.setChecked(true);
+        assertTrue(Settings.getUpdateBookmarkSubscriptionsOnOpen());
+        assertFalse(Settings.getAutoSubscriptionUpdates());
+    }
+
     @Test public void turningAllButtonsOffAndOneOnKeepsOthersOff() {
         change(Settings.KEY_SHOW_EH_SUBSCRIPTION, false);
         change(Settings.KEY_SHOW_GLOBAL_SUBSCRIPTION, false);

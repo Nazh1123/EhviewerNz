@@ -10,7 +10,6 @@ import androidx.appcompat.app.AlertDialog;
 import com.google.android.material.navigation.NavigationView;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
-import com.hippo.ehviewer.ui.scene.gallery.list.QuickSearchScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.SubscriptionsScene;
 import com.hippo.ehviewer.ui.scene.history.HistoryScene;
@@ -43,6 +42,9 @@ public class NavigationLongPressTest {
     public void setUp() {
         Settings.initialize(RuntimeEnvironment.getApplication());
         Settings.putBoolean(Settings.KEY_POPULAR_UPDATES_ONLY, false);
+        android.preference.PreferenceManager.getDefaultSharedPreferences(
+                RuntimeEnvironment.getApplication()).edit()
+                .remove(Settings.KEY_UPDATE_BOOKMARK_SUBSCRIPTIONS_ON_OPEN).commit();
         // Avoid launching network-backed scenes; only attach the navigation and dialog UI.
         activity = Robolectric.buildActivity(MainActivity.class).get();
         activity.setTheme(R.style.AppTheme_Main);
@@ -70,11 +72,33 @@ public class NavigationLongPressTest {
 
     @Test
     @Config(shadows = ShadowStageActivity.class, instrumentedPackages = "com.hippo.scene")
-    public void bookmarkSubscriptionLongPressOpensTheExistingBookmarkSettingsScene() {
-        ShadowStageActivity.destination = null;
-        row.setId(R.id.nav_bookmark_subscription);
-        assertTrue(row.performLongClick());
-        assertEquals(QuickSearchScene.class, ShadowStageActivity.destination);
+    public void subscriptionButtonsDefaultToTapReuseAndHoldUpdateAndSettingReversesBoth() {
+        assertFalse(Settings.getUpdateBookmarkSubscriptionsOnOpen());
+        int[] ids = {R.id.nav_bookmark_subscription, R.id.nav_global_subscription};
+        String[] actions = {GalleryListScene.ACTION_BOOKMARK_SUBSCRIPTION,
+                GalleryListScene.ACTION_GLOBAL_SUBSCRIPTION};
+        for (boolean updateOnOpen : new boolean[]{false, true}) {
+            Settings.putBoolean(Settings.KEY_UPDATE_BOOKMARK_SUBSCRIPTIONS_ON_OPEN, updateOnOpen);
+            for (int i = 0; i < ids.length; i++) {
+                row.setId(ids[i]);
+                assertTrue(row.performLongClick());
+                assertEquals(GalleryListScene.class, ShadowStageActivity.destination);
+                assertEquals(actions[i], ShadowStageActivity.args.getString(GalleryListScene.KEY_ACTION));
+                assertEquals(updateOnOpen ? GalleryListScene.SUBSCRIPTION_REUSE_AVAILABLE
+                        : GalleryListScene.SUBSCRIPTION_FORCE_REFRESH,
+                        ShadowStageActivity.args.getInt(GalleryListScene.KEY_SUBSCRIPTION_REUSE_POLICY));
+
+                // Re-selecting the current destination must obey the same setting.
+                var item = navigation.getMenu().findItem(ids[i]);
+                item.setChecked(true);
+                assertTrue(activity.onNavigationItemSelected(item));
+                assertEquals(GalleryListScene.class, ShadowStageActivity.destination);
+                assertEquals(actions[i], ShadowStageActivity.args.getString(GalleryListScene.KEY_ACTION));
+                assertEquals(updateOnOpen ? GalleryListScene.SUBSCRIPTION_REUSE_RECENT
+                        : GalleryListScene.SUBSCRIPTION_REUSE_AVAILABLE,
+                        ShadowStageActivity.args.getInt(GalleryListScene.KEY_SUBSCRIPTION_REUSE_POLICY));
+            }
+        }
     }
 
     @Test

@@ -3,9 +3,11 @@ package com.hippo.ehviewer.ui.fragment;
 import android.content.Context;
 import android.text.InputFilter;
 import android.text.InputType;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
@@ -13,7 +15,6 @@ import androidx.appcompat.widget.SwitchCompat;
 import androidx.preference.EditTextPreference;
 import androidx.preference.PreferenceFragmentCompat;
 
-import com.google.android.material.textfield.TextInputLayout;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 
@@ -51,8 +52,10 @@ public final class SubscriptionUpdatePreferences {
         });
     }
 
-    public static AlertDialog showDialog(Context context, Runnable onSaved) {
-        View view = LayoutInflater.from(context).inflate(
+    public static AlertDialog showDialog(Context context, Runnable onSaved,
+            Runnable onManageBookmarks) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        View view = LayoutInflater.from(builder.getContext()).inflate(
                 R.layout.dialog_subscription_update_settings, null);
         // Homepage scanning is disabled along with its settings controls.
         // SwitchCompat homepage = view.findViewById(R.id.subscription_homepage_scan);
@@ -60,9 +63,13 @@ public final class SubscriptionUpdatePreferences {
         SwitchCompat automatic = view.findViewById(R.id.auto_subscription_updates);
         SwitchCompat eh = view.findViewById(R.id.auto_subscription_updates_eh);
         SwitchCompat bookmark = view.findViewById(R.id.auto_subscription_updates_bookmark);
-        TextInputLayout intervalLayout = view.findViewById(
-                R.id.auto_subscription_update_interval_layout);
+        TextView intervalLabel = view.findViewById(R.id.auto_subscription_update_interval_label);
         EditText interval = view.findViewById(R.id.auto_subscription_update_interval);
+        // Use the dialog's switch text appearance, including its disabled-state colors.
+        for (TextView text : new TextView[]{intervalLabel, interval}) {
+            text.setTextColor(bookmark.getTextColors());
+            text.setTextSize(TypedValue.COMPLEX_UNIT_PX, bookmark.getTextSize());
+        }
         automatic.setChecked(Settings.getAutoSubscriptionUpdates());
         eh.setChecked(Settings.getAutoSubscriptionUpdatesEh());
         bookmark.setChecked(Settings.getAutoSubscriptionUpdatesBookmark());
@@ -70,15 +77,19 @@ public final class SubscriptionUpdatePreferences {
         automatic.setOnCheckedChangeListener((button, enabled) -> {
             eh.setEnabled(enabled);
             bookmark.setEnabled(enabled);
-            intervalLayout.setEnabled(enabled);
+            intervalLabel.setEnabled(enabled);
+            interval.setEnabled(enabled);
         });
         eh.setEnabled(automatic.isChecked());
         bookmark.setEnabled(automatic.isChecked());
-        intervalLayout.setEnabled(automatic.isChecked());
+        intervalLabel.setEnabled(automatic.isChecked());
+        interval.setEnabled(automatic.isChecked());
 
-        AlertDialog dialog = new AlertDialog.Builder(context)
+        AlertDialog dialog = builder
                 .setTitle(R.string.update_subscriptions)
                 .setView(view)
+                .setNeutralButton(R.string.manage_subscription_bookmarks,
+                        (ignored, which) -> onManageBookmarks.run())
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(android.R.string.ok, null)
                 .create();
@@ -87,7 +98,7 @@ public final class SubscriptionUpdatePreferences {
             String normalized = Settings.normalizeAutoSubscriptionUpdateInterval(
                     interval.getText().toString());
             if (normalized == null && automatic.isChecked()) {
-                intervalLayout.setError(context.getString(
+                interval.setError(context.getString(
                         R.string.settings_fork_auto_subscription_update_interval_invalid));
                 interval.requestFocus();
                 return;

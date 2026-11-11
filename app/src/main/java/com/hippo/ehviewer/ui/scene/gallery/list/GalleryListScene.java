@@ -200,6 +200,10 @@ public class GalleryListScene extends BaseScene
     public final static String ACTION_SUBSCRIPTION = "action_subscription";
     public final static String ACTION_BOOKMARK_SUBSCRIPTION = "action_bookmark_subscription";
     public final static String ACTION_GLOBAL_SUBSCRIPTION = "action_global_subscription";
+    public final static String KEY_SUBSCRIPTION_REUSE_POLICY = "subscription_reuse_policy";
+    public static final int SUBSCRIPTION_REUSE_AVAILABLE = 0;
+    public static final int SUBSCRIPTION_REUSE_RECENT = 1;
+    public static final int SUBSCRIPTION_FORCE_REFRESH = 2;
     public final static String ACTION_WHATS_HOT = "action_whats_hot";
     public final static String ACTION_TOP_LIST = "action_top_list";
     public final static String ACTION_LIST_URL_BUILDER = "action_list_url_builder";
@@ -432,6 +436,8 @@ public class GalleryListScene extends BaseScene
     private final Set<Long> mSubscriptionPendingUnread = new HashSet<>();
     @Nullable
     private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
+    private int mSubscriptionReusePolicy = SUBSCRIPTION_REUSE_AVAILABLE;
+    @Nullable private String mSubscriptionReusedTitle;
     private long mYesterdayTopListRequestPeriod = YesterdayTopListReadState.NO_PERIOD;
     private long mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
 
@@ -449,6 +455,9 @@ public class GalleryListScene extends BaseScene
         mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
 
         String action = args.getString(KEY_ACTION);
+        mSubscriptionReusePolicy = args.getInt(KEY_SUBSCRIPTION_REUSE_POLICY,
+                SUBSCRIPTION_REUSE_AVAILABLE);
+        mSubscriptionReusedTitle = null;
         mPopularUpdatesOnlyOverride = ACTION_WHATS_HOT.equals(action)
                 && args.containsKey(KEY_POPULAR_UPDATES_ONLY)
                 ? args.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
@@ -586,6 +595,8 @@ public class GalleryListScene extends BaseScene
     private void onRestore(Bundle savedInstanceState) {
         mHasFirstRefresh = savedInstanceState.getBoolean(KEY_HAS_FIRST_REFRESH);
         mUrlBuilder = savedInstanceState.getParcelable(KEY_LIST_URL_BUILDER);
+        mSubscriptionReusePolicy = savedInstanceState.getInt(KEY_SUBSCRIPTION_REUSE_POLICY,
+                SUBSCRIPTION_REUSE_AVAILABLE);
         mState = savedInstanceState.getInt(KEY_STATE);
         mMultiSelectMode = savedInstanceState.getBoolean(KEY_MULTI_SELECT_MODE);
         mDownloadedOnlyMode = savedInstanceState.getBoolean(KEY_DOWNLOADED_ONLY_MODE);
@@ -634,6 +645,7 @@ public class GalleryListScene extends BaseScene
                 !isBookmarkSubscriptionMode() && hasFirstRefresh
                         && !(isPopularMode() && mPopularRequestInFlight));
         outState.putParcelable(KEY_LIST_URL_BUILDER, mUrlBuilder);
+        outState.putInt(KEY_SUBSCRIPTION_REUSE_POLICY, mSubscriptionReusePolicy);
         outState.putInt(KEY_STATE, mState);
         outState.putBoolean(KEY_MULTI_SELECT_MODE, mMultiSelectMode);
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
@@ -862,6 +874,7 @@ public class GalleryListScene extends BaseScene
         if (null != mSearchBar) {
             mSearchBar.setTitle(title);
         }
+        updateSubscriptionResultTitle();
 
         // Update nav checked item
         int checkedItemId;
@@ -3635,11 +3648,21 @@ public class GalleryListScene extends BaseScene
             }
             mSubscriptionUpdateManager.onSubscriptionOpened(mode);
         }
-        if (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
-                || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
-            mRecentCheckResult =
-                    mSubscriptionUpdateManager.getRecentCheckResult(mode);
+        if (mSubscriptionReusePolicy != SUBSCRIPTION_FORCE_REFRESH
+                && (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
+                || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)) {
+            mRecentCheckResult = mSubscriptionReusePolicy == SUBSCRIPTION_REUSE_RECENT
+                    ? mSubscriptionUpdateManager.getRecentCheckResult(mode)
+                    : mSubscriptionUpdateManager.getReusableCheckResult(mode);
         }
+    }
+
+    private void updateSubscriptionResultTitle() {
+        if (mSearchBar == null) return;
+        if (!isBookmarkSubscriptionMode()) return;
+        mSearchBar.setTitle(mSubscriptionReusedTitle != null ? mSubscriptionReusedTitle
+                : getString(isGlobalSubscriptionMode()
+                        ? R.string.global_subscription : R.string.bookmark_subscription));
     }
 
     /** Keep the displayed update markers intact until a refresh actually succeeds. */
@@ -3697,6 +3720,14 @@ public class GalleryListScene extends BaseScene
                     : R.string.bookmark_subscription_partial_failure, LENGTH_SHORT);
         }
         if (mBookmarkSubscriptionCoordinator != null) {
+            if (refresh) {
+                long reusedAt = mBookmarkSubscriptionCoordinator.getReusedResultCompletedRealtime();
+                mSubscriptionReusedTitle = reusedAt < 0L ? null : SubscriptionResultAge.title(
+                        getResources(), getString(isGlobalSubscriptionMode()
+                                ? R.string.global_subscription : R.string.bookmark_subscription),
+                        android.os.SystemClock.elapsedRealtime() - reusedAt);
+                updateSubscriptionResultTitle();
+            }
             beginSubscriptionResponse(taskId);
             for (GalleryInfo gallery : data) {
                 if (mBookmarkSubscriptionCoordinator.isNewGallery(gallery)) {
@@ -3725,6 +3756,13 @@ public class GalleryListScene extends BaseScene
 
     @Override public void onBookmarkSubscriptionProgress() {
         if (mRatingProgressDialog != null) mRatingProgressDialog.setMessage(ratingSortStatus());
+    }
+
+    @Override public void onBookmarkSubscriptionSourceLoaded(String contextKey, String displayKey,
+            SubscriptionUpdateManager.RecentCheckSource source) {
+        if (mSubscriptionUpdateManager != null) {
+            mSubscriptionUpdateManager.rememberDisplayedSource(contextKey, displayKey, source);
+        }
     }
 
     private abstract class UrlSuggestion extends SearchBar.Suggestion {
@@ -4123,6 +4161,8 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public void refresh() {
+            mSubscriptionReusedTitle = null;
+            updateSubscriptionResultTitle();
             stopRatingLoading();
             if (mRatingSortController != null) mRatingSortController.clearRatings();
             stopDownloadedPageScan(false);

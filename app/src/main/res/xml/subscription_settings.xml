@@ -73,6 +73,13 @@
         android:title="@string/settings_fork_auto_subscription_update_interval"
         app:allowDividerAbove="false" />
 
+    <com.hippo.preference.SwitchPreference
+        android:defaultValue="false"
+        android:key="update_bookmark_subscriptions_on_open"
+        android:title="@string/settings_update_bookmark_subscriptions_on_open"
+        android:summary="@string/settings_update_bookmark_subscriptions_on_open_summary"
+        app:allowDividerAbove="true" />
+
     <Preference
         android:key="test_bookmark_subscription"
         android:title="@string/settings_test_bookmark_subscription"
