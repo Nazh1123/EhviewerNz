@@ -376,9 +376,9 @@ public class PopularGalleryActionsTest {
             }
         });
         updates.performClick();
-        assertEquals(8, clicked[0]);
-        previous.performClick();
         assertEquals(9, clicked[0]);
+        previous.performClick();
+        assertEquals(10, clicked[0]);
     }
 
     @Test public void independentActiveModesRemainVisibleAndReservePopularSlots() {
@@ -492,7 +492,7 @@ public class PopularGalleryActionsTest {
             }
         });
         root.findViewById(R.id.rating_sort_fab).performClick();
-        assertEquals(10, clicked[0]);
+        assertEquals(11, clicked[0]);
     }
 
     private void bind(String field, int id) {

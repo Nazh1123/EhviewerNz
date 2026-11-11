@@ -1328,10 +1328,72 @@ public class PopularGalleryRenderingTest {
         return jobs;
     }
 
+    @Test public void rangeFabAppearsAboveDownloadAndFillsSelectedEndpoints() {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        refresh(1, 2, 3, 4, 5);
+        FabLayout menu = prepareRangeMenu();
+        FloatingActionButton range = menu.findViewById(R.id.multi_select_range_fab);
+        assertEquals(View.GONE, range.getVisibility());
+        menu.findViewById(R.id.multi_select_fab).performClick();
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
+        assertEquals(View.VISIBLE, range.getVisibility());
+        menu.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY));
+        menu.layout(0, 0, 600, 1000);
+        assertTrue(range.getBottom() <= menu.findViewById(R.id.multi_select_download_fab).getTop());
+        scene.onItemClick(null, adapter.getDataAt(1));
+        scene.onItemClick(null, adapter.getDataAt(3));
+        range.performClick();
+        assertEquals(Set.of(2L, 3L, 4L), ReflectionHelpers.getField(scene, "mSelectedGids"));
+        menu.findViewById(R.id.multi_select_fab).performClick();
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
+        assertEquals(View.GONE, range.getVisibility());
+    }
+
+    @Test public void rangeUsesFilteredDisplayOrderAndAcceptsReverseEndpoints() {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        refresh(1, 2, 3, 4, 5, 6);
+        downloadedGids.addAll(List.of(1L, 3L, 5L, 6L));
+        ReflectionHelpers.callInstanceMethod(scene, "setDownloadedOnlyMode",
+                ClassParameter.from(boolean.class, true), ClassParameter.from(boolean.class, false));
+        FabLayout menu = prepareRangeMenu();
+        menu.findViewById(R.id.multi_select_fab).performClick();
+        menu.findViewById(R.id.multi_select_range_fab).performClick();
+        scene.onItemClick(null, adapter.getDataAt(3));
+        scene.onItemClick(null, adapter.getDataAt(1));
+        assertEquals(Set.of(3L, 5L, 6L), ReflectionHelpers.getField(scene, "mSelectedGids"));
+    }
+
+    private FabLayout prepareRangeMenu() {
+        View controls = LayoutInflater.from(scene.getContext()).inflate(R.layout.scene_gallery_list, null);
+        Robolectric.buildActivity(Activity.class).setup().get().setContentView(controls);
+        FabLayout menu = controls.findViewById(R.id.fab_layout);
+        menu.setExpanded(false, false);
+        menu.setOnClickFabListener(scene);
+        ReflectionHelpers.setField(scene, "mFabLayout", menu);
+        ReflectionHelpers.setField(scene, "mMultiSelectFab", controls.findViewById(R.id.multi_select_fab));
+        menu.setExpanded(true, false);
+        return menu;
+    }
+
+    @Test public void rangeSelectionSkipsTheGallerySectionDivider() {
+        refresh(2, 3, 4);
+        toggle(PopularGalleryHistory.UPDATES);
+        ReflectionHelpers.setField(scene, "mPopularRepeatedExpanded", true);
+        ReflectionHelpers.callInstanceMethod(scene, "updatePopularProjection");
+        assertEquals(Arrays.asList(3L, 4L, null, 2L), visibleIds());
+        FabLayout menu = prepareRangeMenu();
+        menu.findViewById(R.id.multi_select_fab).performClick();
+        scene.onItemClick(null, adapter.getDataAt(0));
+        scene.onItemClick(null, adapter.getDataAt(3));
+        menu.findViewById(R.id.multi_select_range_fab).performClick();
+        assertEquals(Set.of(2L, 3L, 4L), ReflectionHelpers.getField(scene, "mSelectedGids"));
+    }
+
     private void clickRatingFab() {
         View controls = LayoutInflater.from(scene.getContext()).inflate(R.layout.scene_gallery_list, null);
         scene.onClickSecondaryFab(controls.findViewById(R.id.fab_layout),
-                controls.findViewById(R.id.rating_sort_fab), 10);
+                controls.findViewById(R.id.rating_sort_fab), 11);
     }
 
     private void finishPopularRatingSort(ManualProgressExecutor jobs) {

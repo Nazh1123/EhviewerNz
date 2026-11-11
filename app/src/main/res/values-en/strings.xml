@@ -1312,6 +1312,7 @@
     <string name="navigation_long_press_hint">Long press buttons for special actions</string>
     <string name="title_keyword_search_action">Search keywords</string>
     <string name="top_list_period_title">%1$s</string>
+    <string name="select_gallery_range_same_label">Select a gallery in the same label</string>
     <string name="settings_update_bookmark_subscriptions_on_open">Update subscriptions on open</string>
     <string name="manage_subscription_bookmarks">Manage subscriptions</string>
     <string name="subscription_global_short">Global Subs</string>

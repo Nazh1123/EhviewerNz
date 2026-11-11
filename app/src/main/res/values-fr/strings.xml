@@ -1254,6 +1254,7 @@
     <string name="settings_subscription_homepage_scan">Parcourir l’accueil pour les mises à jour des abonnements</string>
     <string name="settings_subscription_homepage_scan_summary">Parcourt l’accueil lors des vérifications manuelles et automatiques si le nombre de favoris suivis N &gt; 8, les minutes depuis la dernière mise à jour T &lt; 400 et T × 0,3 &lt; N. Sinon, et pour les recherches complexes, utilise les recherches de favoris. La progression est conservée lors du changement de méthode. La consultation des abonnements aux favoris reste inchangée.</string>
     <string name="open_image_folder">Ouvrir les images de ce dossier</string>
+    <string name="select_gallery_range_same_label">Sélectionnez la fin de la plage dans le même libellé</string>
     <string name="settings_update_bookmark_subscriptions_on_open">Actualiser à l’ouverture</string>
     <string name="manage_subscription_bookmarks">Gérer les abonnements</string>
     <string name="subscription_global_short">Abonnements</string>

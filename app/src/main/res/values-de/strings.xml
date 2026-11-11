@@ -1190,6 +1190,7 @@
     <string name="settings_subscription_homepage_scan">Startseite nach Abonnement-Updates durchsuchen</string>
     <string name="settings_subscription_homepage_scan_summary">Durchsucht bei manuellen und automatischen Update-Prüfungen die Startseite, wenn die Anzahl abonnierter Lesezeichen N &gt; 8, die Minuten seit dem letzten Update T &lt; 400 und T × 0,3 &lt; N sind. Sonst und bei komplexen Suchanfragen wird die Lesezeichensuche verwendet. Beim Wechsel bleibt der Prüffortschritt erhalten. Das Durchsuchen der Lesezeichen-Abonnements bleibt unverändert.</string>
     <string name="open_image_folder">Bilder in diesem Ordner öffnen</string>
+    <string name="select_gallery_range_same_label">Wählen Sie den Endpunkt im selben Label</string>
     <string name="settings_update_bookmark_subscriptions_on_open">Abos beim Öffnen aktualisieren</string>
     <string name="manage_subscription_bookmarks">Abos verwalten</string>
     <string name="subscription_global_short">Alle Abos</string>

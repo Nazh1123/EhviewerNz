@@ -11,6 +11,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.os.Looper;
 import android.util.SparseBooleanArray;
 import android.view.ContextThemeWrapper;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -243,6 +244,104 @@ public class DownloadListModeTest {
         return folder;
     }
 
+    @Test public void rangeSelectionOnlyFillsTheMostRecentlySelectedLabel() {
+        prepareRangeSelection();
+        recycler.toggleItemChecked(scene.getAdapterPositionForGallery(122));
+        recycler.toggleItemChecked(scene.getAdapterPositionForGallery(2));
+        recycler.toggleItemChecked(scene.getAdapterPositionForGallery(6));
+        scene.onClickSecondaryFab(null, null, 1);
+        assertEquals(6, recycler.getCheckedItemCount()); // 2..6 and the existing 122.
+        assertTrue(isGalleryChecked(4));
+        assertTrue(isGalleryChecked(122));
+        assertFalse(isGalleryChecked(1));
+        assertFalse(isGalleryChecked(121));
+    }
+
+    @Test public void pendingRangeRejectsAnotherLabelAndAcceptsAReverseEndpoint() {
+        prepareRangeSelection();
+        recycler.toggleItemChecked(scene.getAdapterPositionForGallery(8));
+        scene.onClickSecondaryFab(null, null, 1);
+        clickRangeGallery(125);
+        assertEquals(1, recycler.getCheckedItemCount());
+        assertFalse(isGalleryChecked(125));
+        clickRangeGallery(3);
+        assertEquals(6, recycler.getCheckedItemCount());
+        assertTrue(isGalleryChecked(5));
+        assertTrue(recycler.isInCustomChoice());
+    }
+
+    @Test public void emptyRangeUsesFirstClickedLabelAndSkipsHeaders() {
+        prepareRangeSelection();
+        scene.onClickSecondaryFab(null, null, 1);
+        clickRangeGallery(123);
+        clickRangeGallery(8);
+        assertEquals(1, recycler.getCheckedItemCount());
+        clickRangeGallery(127);
+        assertEquals(5, recycler.getCheckedItemCount());
+        assertTrue(isGalleryChecked(125));
+        SparseBooleanArray checked = recycler.getCheckedItemPositions();
+        for (int i = 0; i < checked.size(); i++) {
+            if (checked.valueAt(i)) assertFalse(scene.isLabelHeaderPosition(checked.keyAt(i)));
+        }
+    }
+
+    @Test public void leavingChoiceModeCancelsThePendingRange() {
+        prepareRangeSelection();
+        recycler.toggleItemChecked(scene.getAdapterPositionForGallery(3));
+        scene.onClickSecondaryFab(null, null, 1);
+        recycler.outOfCustomChoiceMode();
+        recycler.intoCustomChoiceMode();
+        recycler.toggleItemChecked(scene.getAdapterPositionForGallery(8));
+        scene.onClickSecondaryFab(null, null, 1);
+        clickRangeGallery(10);
+        assertEquals(3, recycler.getCheckedItemCount());
+        assertFalse(isGalleryChecked(3));
+    }
+
+    @Test public void ordinaryLabelRangeDoesNotSelectOutsideItsEndpoints() {
+        recycler.setChoiceMode(MyEasyRecyclerView.CHOICE_MODE_MULTIPLE_CUSTOM);
+        recycler.intoCustomChoiceMode();
+        recycler.toggleItemChecked(1);
+        recycler.toggleItemChecked(5);
+        scene.onClickSecondaryFab(null, null, 1);
+        assertEquals(5, recycler.getCheckedItemCount());
+        assertTrue(recycler.getCheckedItemPositions().get(3));
+        assertFalse(recycler.getCheckedItemPositions().get(0));
+        assertFalse(recycler.getCheckedItemPositions().get(6));
+    }
+
+    @Test public void rangeFabSitsBelowSelectAll() {
+        View root = LayoutInflater.from(scene.getContext()).inflate(R.layout.scene_download, null);
+        FabLayout menu = root.findViewById(R.id.fab_layout);
+        menu.setWrapSecondaryFabs(true);
+        menu.setExpanded(true, false);
+        menu.measure(View.MeasureSpec.makeMeasureSpec(600, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.EXACTLY));
+        menu.layout(0, 0, 600, 1600);
+        View range = root.findViewById(R.id.select_download_range_fab);
+        assertSame(range, menu.getSecondaryFabAt(1));
+        assertTrue(menu.getSecondaryFabAt(0).getBottom() <= range.getTop());
+        assertEquals(scene.getContext().getString(R.string.select_label_range), range.getContentDescription());
+    }
+
+    private void prepareRangeSelection() {
+        makeSmallSections();
+        switchMode(true);
+        scene.onLabelHeaderClick(findHeader("first"));
+        scene.onLabelHeaderClick(findHeader("second"));
+        recycler.setChoiceMode(MyEasyRecyclerView.CHOICE_MODE_MULTIPLE_CUSTOM);
+        recycler.intoCustomChoiceMode();
+    }
+
+    private boolean isGalleryChecked(long gid) {
+        return recycler.getCheckedItemPositions().get(scene.getAdapterPositionForGallery(gid));
+    }
+
+    private void clickRangeGallery(long gid) {
+        ReflectionHelpers.callInstanceMethod(scene, "selectGalleryRange",
+                ReflectionHelpers.ClassParameter.from(int.class, scene.getAdapterPositionForGallery(gid)));
+    }
+
     @Test
     public void folderCollapseHidesChildrenAndKeepsTheirGalleriesForReopening() {
         makeSmallSections();
@@ -348,7 +447,7 @@ public class DownloadListModeTest {
         recycler.checkAll(); // Include headers to exercise defensive position mapping.
         Settings.putRemoveImageFiles(false);
 
-        batchActions().onClickSecondaryFab(null, null, 3);
+        batchActions().onClickSecondaryFab(null, null, 4);
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
         assertNotNull(dialog);
         dialog.findViewById(R.id.download_remove_record).performClick();
@@ -371,7 +470,7 @@ public class DownloadListModeTest {
         recycler.intoCustomChoiceMode();
         recycler.checkAll();
 
-        batchActions().onClickSecondaryFab(null, null, 4);
+        batchActions().onClickSecondaryFab(null, null, 5);
 
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
         assertNotNull(dialog);
@@ -400,7 +499,7 @@ public class DownloadListModeTest {
         recycler.intoCustomChoiceMode();
         recycler.checkAll();
 
-        batchActions().onClickSecondaryFab(null, null, 8);
+        batchActions().onClickSecondaryFab(null, null, 9);
 
         AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
         assertNotNull(dialog);

@@ -123,6 +123,7 @@ import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
 import com.hippo.ehviewer.ui.CommonOperations;
+import com.hippo.ehviewer.ui.GalleryRangeSelection;
 import com.hippo.ehviewer.ui.DownloadRemovalDialog;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
@@ -226,17 +227,18 @@ public class GalleryListScene extends BaseScene
     // Keep advanced criteria active while hiding the options panel to show suggestions.
     final static int STATE_SEARCH_SHOW_LIST = 3;
 
-    private static final int FAB_MULTI_SELECT_DOWNLOAD = 0;
-    private static final int FAB_MULTI_SELECT_DELETE = 1;
-    private static final int FAB_MULTI_SELECT = 2;
-    private static final int FAB_TAG_FILTER = 3;
-    private static final int FAB_GO_TO = 4;
-    private static final int FAB_REFRESH = 5;
-    private static final int FAB_RANDOM = 6;
-    private static final int FAB_DOWNLOADED_ONLY = 7;
-    private static final int FAB_POPULAR_UPDATES = 8;
-    private static final int FAB_POPULAR_PREVIOUS = 9;
-    private static final int FAB_RATING_SORT = 10;
+    private static final int FAB_MULTI_SELECT_RANGE = 0;
+    private static final int FAB_MULTI_SELECT_DOWNLOAD = 1;
+    private static final int FAB_MULTI_SELECT_DELETE = 2;
+    private static final int FAB_MULTI_SELECT = 3;
+    private static final int FAB_TAG_FILTER = 4;
+    private static final int FAB_GO_TO = 5;
+    private static final int FAB_REFRESH = 6;
+    private static final int FAB_RANDOM = 7;
+    private static final int FAB_DOWNLOADED_ONLY = 8;
+    private static final int FAB_POPULAR_UPDATES = 9;
+    private static final int FAB_POPULAR_PREVIOUS = 10;
+    private static final int FAB_RATING_SORT = 11;
 
     private static final int DOWNLOADED_SCAN_PAGE_LIMIT = 5;
     private static final int DOWNLOADED_SUBSCRIPTION_SCAN_PAGE_LIMIT = 2;
@@ -410,6 +412,7 @@ public class GalleryListScene extends BaseScene
     private final Runnable mHideQuickDownloadNoticeRunnable =
             this::hideQuickDownloadNotice;
     private boolean mMultiSelectMode;
+    private final GalleryRangeSelection mRangeSelection = new GalleryRangeSelection();
     private final Set<Long> mSelectedGids = new HashSet<>();
     private boolean mDownloadedOnlyMode;
     private boolean mDownloadedPageScanActive;
@@ -2627,6 +2630,11 @@ public class GalleryListScene extends BaseScene
     }
 
     private void toggleGallerySelection(@NonNull GalleryInfo galleryInfo) {
+        if (mRangeSelection.isPending()) {
+            mRangeSelection.onGalleryClick(galleryInfo.gid, getDisplayedGalleryGids(), mSelectedGids);
+            refreshRangeSelection();
+            return;
+        }
         if (!mSelectedGids.remove(galleryInfo.gid)) {
             mSelectedGids.add(galleryInfo.gid);
         }
@@ -2636,6 +2644,7 @@ public class GalleryListScene extends BaseScene
     @SuppressLint("NotifyDataSetChanged")
     private void exitMultiSelectMode() {
         mMultiSelectMode = false;
+        mRangeSelection.clear();
         mSelectedGids.clear();
         if (mAdapter != null) {
             mAdapter.notifyDataSetChanged();
@@ -2654,6 +2663,7 @@ public class GalleryListScene extends BaseScene
                 ? R.drawable.v_return_curve_dark_x24 : R.drawable.v_check_all_dark_x24);
 
         if (mMultiSelectMode) {
+            fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_RANGE, true);
             fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DOWNLOAD, true);
             fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DELETE, true);
             fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT, true);
@@ -2682,6 +2692,7 @@ public class GalleryListScene extends BaseScene
     }
 
     private void showNormalFabs(@NonNull FabLayout fabLayout) {
+        fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_RANGE, false);
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DOWNLOAD, false);
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DELETE, false);
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT, true);
@@ -2692,6 +2703,26 @@ public class GalleryListScene extends BaseScene
         fabLayout.setSecondaryFabVisibilityAt(FAB_DOWNLOADED_ONLY, true);
         fabLayout.setSecondaryFabVisibilityAt(FAB_RATING_SORT, true);
         updatePopularActions();
+    }
+
+    private List<Long> getDisplayedGalleryGids() {
+        List<Long> gids = new ArrayList<>();
+        if (mAdapter != null) {
+            for (int i = 0; i < mAdapter.getItemCount(); i++) {
+                GalleryInfo gallery = mAdapter.getDataAt(i);
+                gids.add(gallery != null ? gallery.gid : null);
+            }
+        }
+        return gids;
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private void refreshRangeSelection() {
+        if (mAdapter != null) mAdapter.notifyDataSetChanged();
+        Context context = getEHContext();
+        if (mRangeSelection.isPending() && context != null) {
+            Toast.makeText(context, mRangeSelection.getHint(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void notifyGallerySelectionChanged(long gid) {
@@ -2870,6 +2901,12 @@ public class GalleryListScene extends BaseScene
         }
 
         switch (position) {
+            case FAB_MULTI_SELECT_RANGE:
+                if (mMultiSelectMode) {
+                    mRangeSelection.start(getDisplayedGalleryGids(), mSelectedGids);
+                    refreshRangeSelection();
+                }
+                return;
             case FAB_MULTI_SELECT_DOWNLOAD: {
                 MainActivity activity = getActivity2();
                 if (mMultiSelectMode && activity != null) {

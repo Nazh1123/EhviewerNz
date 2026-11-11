@@ -1275,6 +1275,7 @@
     <string name="settings_subscription_homepage_scan">홈에서 구독 업데이트 검색</string>
     <string name="settings_subscription_homepage_scan_summary">수동 및 자동 업데이트 확인 시 구독한 북마크 수 N &gt; 8, 마지막 업데이트 후 경과 시간(분) T &lt; 400, T × 0.3 &lt; N이면 홈을 검색합니다. 그 외의 경우와 복잡한 검색에는 북마크 검색을 사용합니다. 방식을 전환해도 확인 진행 상황은 유지됩니다. 북마크 구독 탐색 방식은 바뀌지 않습니다.</string>
     <string name="open_image_folder">같은 폴더의 이미지 열기</string>
+    <string name="select_gallery_range_same_label">같은 라벨에서 범위의 끝을 선택하세요</string>
     <string name="settings_update_bookmark_subscriptions_on_open">구독을 열 때 갱신</string>
     <string name="manage_subscription_bookmarks">구독 관리</string>
     <string name="subscription_global_short">전체 구독</string>

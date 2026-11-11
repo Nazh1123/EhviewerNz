@@ -50,6 +50,16 @@
         android:paddingBottom="@dimen/corner_fab_margin">
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/multi_select_range_fab"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:contentDescription="@string/select_label_range"
+            app:srcCompat="@drawable/v_select_range_dark_x24"
+            app:backgroundTint="?attr/widgetColorThemeAccent"
+            style="@style/Widget.Design.FloatingActionButton.Mini"/>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/multi_select_download_fab"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

@@ -100,6 +100,7 @@ import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.sync.DownloadListInfosExecutor;
 import com.hippo.ehviewer.sync.DownloadSpiderInfoExecutor;
 import com.hippo.ehviewer.ui.GalleryActivity;
+import com.hippo.ehviewer.ui.GalleryRangeSelection;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadAdapter;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadArchiveImporter;
@@ -171,9 +172,10 @@ public class DownloadsScene extends ToolbarScene
     public static final int LOCAL_GALLERY_INFO_CHANGE = 909;
 
     private static final long ANIMATE_TIME = 300L;
-    private static final int FAB_DELETE_TRANSLATIONS = 4;
-    private static final int FAB_DRAG = 7;
-    private static final int FAB_QUICK_ORGANIZE = 8;
+    private static final int FAB_SELECT_RANGE = 1;
+    private static final int FAB_DELETE_TRANSLATIONS = 5;
+    private static final int FAB_DRAG = 8;
+    private static final int FAB_QUICK_ORGANIZE = 9;
 
     @Nullable
     private AddDeleteDrawable mActionFabDrawable;
@@ -192,6 +194,7 @@ public class DownloadsScene extends ToolbarScene
     private boolean mContinuousLabelBrowse;
     private final java.util.LinkedHashSet<Long> mCheckedGalleryOrder = new java.util.LinkedHashSet<>();
     private boolean mSelectingLabelBatch;
+    private final GalleryRangeSelection mRangeSelection = new GalleryRangeSelection();
     private boolean mForceSingleLabelBrowse;
     private static final java.util.concurrent.atomic.AtomicBoolean sFolderScanRunning =
             new java.util.concurrent.atomic.AtomicBoolean();
@@ -789,6 +792,7 @@ public class DownloadsScene extends ToolbarScene
         mRecyclerView.post(this::queryVisibleSpiderInfo);
 
         mFabLayout.setExpanded(false, true);
+        mFabLayout.setWrapSecondaryFabs(true);
         mFabLayout.setHidePrimaryFab(false);
         mFabLayout.setAutoCancel(false);
         mFabLayout.setOnClickFabListener(this);
@@ -1059,6 +1063,10 @@ public class DownloadsScene extends ToolbarScene
         }
 
         if (recyclerView.isInCustomChoice()) {
+            if (mRangeSelection.isPending()) {
+                selectGalleryRange(position);
+                return true;
+            }
             recyclerView.toggleItemChecked(position);
             return true;
         } else {
@@ -1309,6 +1317,11 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onClickSecondaryFab(FabLayout view, FloatingActionButton fab, int position) {
+        if (position == FAB_SELECT_RANGE) {
+            selectGalleryRange(RecyclerView.NO_POSITION);
+            return;
+        }
+        if (position == 0) mRangeSelection.clear();
         mBatchActions.onClickSecondaryFab(view, fab, position);
     }
 
@@ -1822,7 +1835,89 @@ public class DownloadsScene extends ToolbarScene
         if (checked) mCheckedGalleryOrder.add(gid);
     }
 
-    @Override public void onGallerySelectionEnded() { mCheckedGalleryOrder.clear(); }
+    @Override public void onGallerySelectionEnded() {
+        mCheckedGalleryOrder.clear();
+        mRangeSelection.clear();
+    }
+
+    private void selectGalleryRange(int clickedPosition) {
+        if (mRecyclerView == null || !mRecyclerView.isInCustomChoice()
+                || mRecyclerView.getAdapter() == null || mList == null) return;
+        List<Long> gids = new ArrayList<>();
+        java.util.Set<Long> selected = new java.util.HashSet<>();
+        android.util.SparseBooleanArray checked = mRecyclerView.getCheckedItemPositions();
+        for (int i = 0; i < mRecyclerView.getAdapter().getItemCount(); i++) {
+            int index = positionInList(i);
+            Long gid = index >= 0 && index < mList.size() ? mList.get(index).gid : null;
+            gids.add(gid);
+            if (gid != null && checked.get(i)) selected.add(gid);
+        }
+        Long scopeGid = mRangeSelection.getAnchorGid();
+        if (clickedPosition == RecyclerView.NO_POSITION) {
+            // Match Select all: use the label of the most recently checked gallery.
+            scopeGid = null;
+            for (Long gid : mCheckedGalleryOrder) {
+                if (selected.contains(gid)) scopeGid = gid;
+            }
+            if (scopeGid == null) {
+                for (Long gid : gids) {
+                    if (gid != null && selected.contains(gid)) scopeGid = gid;
+                }
+            }
+        }
+        if (scopeGid == null && clickedPosition >= 0 && clickedPosition < gids.size()) {
+            scopeGid = gids.get(clickedPosition);
+        }
+        if (scopeGid != null) {
+            DownloadInfo anchor = null;
+            for (DownloadInfo info : mList) {
+                if (info.gid == scopeGid) { anchor = info; break; }
+            }
+            if (anchor != null) {
+                for (int i = 0; i < gids.size(); i++) {
+                    int index = positionInList(i);
+                    if (gids.get(i) != null
+                            && !java.util.Objects.equals(mList.get(index).label, anchor.label)) {
+                        gids.set(i, null);
+                    }
+                }
+            }
+        }
+        if (clickedPosition >= 0 && clickedPosition < gids.size()
+                && gids.get(clickedPosition) == null) {
+            Context context = getEHContext();
+            if (context != null) Toast.makeText(context,
+                    R.string.select_gallery_range_same_label, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (clickedPosition == RecyclerView.NO_POSITION) {
+            mRangeSelection.start(gids, selected);
+        } else if (clickedPosition >= 0 && clickedPosition < gids.size()
+                && gids.get(clickedPosition) != null) {
+            mRangeSelection.onGalleryClick(gids.get(clickedPosition), gids, selected);
+        }
+        mSelectingLabelBatch = true;
+        try {
+            for (int i = 0; i < gids.size(); i++) {
+                if (gids.get(i) != null && selected.contains(gids.get(i)) && !checked.get(i)) {
+                    mRecyclerView.toggleItemChecked(i);
+                }
+            }
+        } finally {
+            mSelectingLabelBatch = false;
+        }
+        // Preserve the explicit endpoint as the anchor used by the label-scoped Select all.
+        if (clickedPosition >= 0 && clickedPosition < gids.size()
+                && gids.get(clickedPosition) != null) {
+            long gid = gids.get(clickedPosition);
+            mCheckedGalleryOrder.remove(gid);
+            mCheckedGalleryOrder.add(gid);
+        }
+        Context context = getEHContext();
+        if (mRangeSelection.isPending() && context != null) {
+            Toast.makeText(context, mRangeSelection.getHint(), Toast.LENGTH_SHORT).show();
+        }
+    }
 
     @Override
     public void selectAllInLastCheckedLabel() {
