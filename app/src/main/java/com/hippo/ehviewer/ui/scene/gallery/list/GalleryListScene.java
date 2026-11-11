@@ -930,7 +930,7 @@ public class GalleryListScene extends BaseScene
         mModeActions = mainLayout.findViewById(R.id.gallery_mode_actions);
         View ratingActive = mainLayout.findViewById(R.id.rating_sort_active);
         View downloadedActive = mainLayout.findViewById(R.id.downloaded_only_active);
-        ratingActive.setOnClickListener(v -> showRatingSortDialog());
+        ratingActive.setOnClickListener(v -> onRatingSortClick());
         downloadedActive.setOnClickListener(v -> setDownloadedOnlyMode(false, false));
         TooltipCompat.setTooltipText(ratingActive, getString(R.string.gallery_rating_sort_active));
         TooltipCompat.setTooltipText(downloadedActive, getString(R.string.gallery_downloaded_only_active));
@@ -2063,12 +2063,20 @@ public class GalleryListScene extends BaseScene
     private void updateModeActions() {
         if (mAdapter != null) mAdapter.setBulkMetadata(mRatingLoading || mRatingSortMode);
         if (mFabLayout == null) return;
+        int activeSortLabel = isPopularMode() ? R.string.gallery_rating_sort_restore
+                : R.string.gallery_rating_sort_active;
         if (mRatingSortFab != null) {
             mRatingSortFab.setImageResource(mRatingSortMode ? R.drawable.v_star_x16 : R.drawable.v_star_outline_x16);
             CharSequence label = mRatingSortFab.getContext().getText(mRatingSortMode
-                    ? R.string.gallery_rating_sort_active : R.string.gallery_rating_sort);
+                    ? activeSortLabel : R.string.gallery_rating_sort);
             mRatingSortFab.setContentDescription(label);
             TooltipCompat.setTooltipText(mRatingSortFab, label);
+        }
+        if (mModeActions != null) {
+            View ratingActive = mModeActions.findViewById(R.id.rating_sort_active);
+            CharSequence label = ratingActive.getContext().getText(activeSortLabel);
+            ratingActive.setContentDescription(label);
+            TooltipCompat.setTooltipText(ratingActive, label);
         }
         int reserved = (mRatingSortMode ? 1 : 0) + (mDownloadedOnlyMode ? 1 : 0);
         if (mPopularActions != null) mPopularActions.setReservedSlots(reserved);
@@ -2222,6 +2230,25 @@ public class GalleryListScene extends BaseScene
             getRatingSortController().stopAndSort();
         });
         mRatingProgressDialog.show();
+    }
+
+    private void onRatingSortClick() {
+        if (!isPopularMode()) {
+            showRatingSortDialog();
+            return;
+        }
+        if (mHelper == null || mAdapter == null || mClient == null || mMultiSelectMode
+                || !mPopularResponseReady || mPopularRequestInFlight || mRatingLoading
+                || mHelper.isRefreshing()) return;
+        if (mRatingSortMode) {
+            restoreRatingOrder();
+            return;
+        }
+        // Popular is one bounded snapshot. Sort its current projection (including updates-only)
+        // without asking for a page/date range or showing a progress dialog.
+        stopDownloadedPageScan(false);
+        mRatingSortScrollToTop = true;
+        getRatingSortController().start(0, null);
     }
 
     private void showRatingSortDialog() {
@@ -2876,7 +2903,7 @@ public class GalleryListScene extends BaseScene
                 break;
             case FAB_RATING_SORT:
                 view.setExpanded(false);
-                showRatingSortDialog();
+                onRatingSortClick();
                 return;
             case FAB_POPULAR_UPDATES:
                 togglePopularView(PopularGalleryHistory.UPDATES);

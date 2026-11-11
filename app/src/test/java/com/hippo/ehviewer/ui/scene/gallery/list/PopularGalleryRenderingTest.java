@@ -1249,6 +1249,98 @@ public class PopularGalleryRenderingTest {
         assertEquals(3, helper.size());
     }
 
+    @Test public void popularRatingFabSortsImmediatelyAndRestoresWithoutDialogs() {
+        setDefaultUpdates(false);
+        refresh(2, 3, 4);
+        ManualProgressExecutor jobs = preparePopularRatingSort();
+        android.app.Dialog previousDialog = org.robolectric.shadows.ShadowDialog.getLatestDialog();
+        clickRatingFab();
+        assertTrue(ReflectionHelpers.getField(scene, "mRatingLoading"));
+        assertEquals(1, jobs.jobs.size());
+        clickRatingFab(); // A second tap while sorting must not start another operation.
+        assertEquals(1, jobs.jobs.size());
+        finishPopularRatingSort(jobs);
+        assertEquals(List.of(2L, 4L, 3L), visibleIds());
+        assertEquals(List.of(2L, 3L, 4L), ids(helper.getData()));
+        assertSame(previousDialog, org.robolectric.shadows.ShadowDialog.getLatestDialog());
+        assertNull(ReflectionHelpers.getField(scene, "mRatingProgressDialog"));
+
+        clickRatingFab();
+        assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+        assertEquals(List.of(2L, 3L, 4L), visibleIds());
+        assertSame(previousDialog, org.robolectric.shadows.ShadowDialog.getLatestDialog());
+    }
+
+    @Test public void directPopularSortRespectsUpdatesModeSwitchesAndRepeatedExpansion() {
+        setDefaultUpdates(true);
+        refresh(2, 3, 4);
+        ManualProgressExecutor jobs = preparePopularRatingSort();
+        clickRatingFab();
+        finishPopularRatingSort(jobs);
+        assertEquals(List.of(4L, 3L), visibleIds());
+        assertEquals(PopularGalleryHistory.UPDATES,
+                (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+        assertFalse(ReflectionHelpers.getField(scene, "mPopularRepeatedExpanded"));
+
+        toggle(PopularGalleryHistory.UPDATES);
+        finishPopularRatingSort(jobs);
+        assertEquals(List.of(2L, 4L, 3L), visibleIds());
+        toggle(PopularGalleryHistory.PREVIOUS);
+        finishPopularRatingSort(jobs);
+        assertEquals(List.of(2L, 1L), visibleIds());
+        toggle(PopularGalleryHistory.UPDATES);
+        finishPopularRatingSort(jobs);
+        assertEquals(List.of(4L, 3L), visibleIds());
+        footer();
+        finishPopularRatingSort(jobs);
+        assertEquals(List.of(2L, 4L, 3L), visibleIds());
+
+        clickRatingFab();
+        assertEquals(Arrays.asList(3L, 4L, null, 2L), visibleIds());
+        assertEquals(PopularGalleryHistory.UPDATES,
+                (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
+        assertTrue(Settings.getPopularUpdatesOnly());
+    }
+
+    @Test public void popularSortIgnoresClicksBeforeTheSnapshotIsReadyOrDuringRefresh() {
+        ManualProgressExecutor jobs = preparePopularRatingSort();
+        ReflectionHelpers.setField(scene, "mPopularResponseReady", false);
+        clickRatingFab();
+        assertTrue(jobs.jobs.isEmpty());
+        ReflectionHelpers.setField(scene, "mPopularResponseReady", true);
+        ReflectionHelpers.setField(scene, "mPopularRequestInFlight", true);
+        clickRatingFab();
+        assertTrue(jobs.jobs.isEmpty());
+        assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+        assertNull(ReflectionHelpers.getField(scene, "mRatingProgressDialog"));
+    }
+
+    private ManualProgressExecutor preparePopularRatingSort() {
+        PopularGalleryHistory history = ReflectionHelpers.getField(scene, "mPopularHistory");
+        for (int mode : new int[]{PopularGalleryHistory.CURRENT, PopularGalleryHistory.PREVIOUS}) {
+            for (GalleryInfo gallery : history.galleries(mode)) {
+                gallery.apiRating = gallery.rating = gallery.gid == 2 ? 5f : gallery.gid == 4 ? 4f : 2f;
+            }
+        }
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        ReflectionHelpers.setField(scene, "executorService", jobs);
+        ReflectionHelpers.setField(scene, "mClient", new EhClient(scene.getContext()));
+        return jobs;
+    }
+
+    private void clickRatingFab() {
+        View controls = LayoutInflater.from(scene.getContext()).inflate(R.layout.scene_gallery_list, null);
+        scene.onClickSecondaryFab(controls.findViewById(R.id.fab_layout),
+                controls.findViewById(R.id.rating_sort_fab), 10);
+    }
+
+    private void finishPopularRatingSort(ManualProgressExecutor jobs) {
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(ReflectionHelpers.getField(scene, "mRatingLoading"));
+        assertTrue(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+    }
+
     @Test public void ratingPageRangeRemainsAvailableWhenAllPagesAreAlreadyLoaded() {
         cacheRatingPages(3);
         ManualProgressExecutor jobs = new ManualProgressExecutor();
@@ -1257,7 +1349,7 @@ public class PopularGalleryRenderingTest {
         GalleryRatingSortController controller = ReflectionHelpers.callInstanceMethod(scene, "getRatingSortController");
         sortRange(controller, jobs, 1, null);
         assertFalse(helper.hasNextPage());
-        ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
+        ReflectionHelpers.callInstanceMethod(scene, "onRatingSortClick");
         androidx.appcompat.app.AlertDialog dialog = (androidx.appcompat.app.AlertDialog)
                 org.robolectric.shadows.ShadowDialog.getLatestDialog();
         assertTrue(dialog.findViewById(R.id.rating_sort_pages).isEnabled());
