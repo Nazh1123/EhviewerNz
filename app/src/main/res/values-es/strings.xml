@@ -1253,4 +1253,12 @@
     <string name="settings_subscription_homepage_scan">Buscar actualizaciones de suscripciones en la página principal</string>
     <string name="settings_subscription_homepage_scan_summary">Explora la página principal al comprobar actualizaciones manual o automáticamente si los marcadores suscritos N &gt; 8, los minutos desde la última actualización T &lt; 400 y T × 0,3 &lt; N. En otros casos y para búsquedas complejas, usa búsquedas de marcadores. Conserva el progreso al cambiar de método. La navegación por suscripciones de marcadores no cambia.</string>
     <string name="open_image_folder">Abrir imágenes de esta carpeta</string>
+    <string name="settings_update_bookmark_subscriptions_on_open">Actualizar al abrir</string>
+    <string name="manage_subscription_bookmarks">Gestionar suscripciones</string>
+    <string name="subscription_global_short">Suscripciones</string>
+    <string name="subscription_bookmarks_short">Marcadores</string>
+    <string name="subscription_result_age_seconds">%1$s - hace %2$d s</string>
+    <string name="subscription_result_age_minutes">%1$s - hace %2$d min</string>
+    <string name="subscription_result_age_hours">%1$s - hace %2$s h</string>
+    <string name="settings_update_bookmark_subscriptions_on_open_summary">Desactivado: tocar reutiliza, mantener actualiza. Activado: tocar actualiza (reutiliza durante 60 s), mantener reutiliza.</string>
 </resources>

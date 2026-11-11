@@ -1190,4 +1190,12 @@
     <string name="settings_subscription_homepage_scan">Startseite nach Abonnement-Updates durchsuchen</string>
     <string name="settings_subscription_homepage_scan_summary">Durchsucht bei manuellen und automatischen Update-Prüfungen die Startseite, wenn die Anzahl abonnierter Lesezeichen N &gt; 8, die Minuten seit dem letzten Update T &lt; 400 und T × 0,3 &lt; N sind. Sonst und bei komplexen Suchanfragen wird die Lesezeichensuche verwendet. Beim Wechsel bleibt der Prüffortschritt erhalten. Das Durchsuchen der Lesezeichen-Abonnements bleibt unverändert.</string>
     <string name="open_image_folder">Bilder in diesem Ordner öffnen</string>
+    <string name="settings_update_bookmark_subscriptions_on_open">Abos beim Öffnen aktualisieren</string>
+    <string name="manage_subscription_bookmarks">Abos verwalten</string>
+    <string name="subscription_global_short">Alle Abos</string>
+    <string name="subscription_bookmarks_short">Lesezeichen</string>
+    <string name="subscription_result_age_seconds">%1$s - vor %2$d s</string>
+    <string name="subscription_result_age_minutes">%1$s - vor %2$d min</string>
+    <string name="subscription_result_age_hours">%1$s - vor %2$s h</string>
+    <string name="settings_update_bookmark_subscriptions_on_open_summary">Aus: Tippen nutzt Ergebnisse, Halten aktualisiert. An: Tippen aktualisiert (60 s Wiederverwendung), Halten nutzt Ergebnisse.</string>
 </resources>

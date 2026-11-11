@@ -790,9 +790,9 @@
     <string name="settings_fork_auto_subscription_updates_summary">按设定间隔获取订阅内容的更新画廊数量</string>
     <string name="settings_fork_auto_subscription_update_interval">自动更新间隔</string>
     <string name="subscription_update_interval_minutes">自动更新间隔 (分钟)</string>
-    <string name="manage_subscription_bookmarks">管理订阅书签</string>
-    <string name="settings_update_bookmark_subscriptions_on_open">查看全局／书签订阅时更新</string>
-    <string name="settings_update_bookmark_subscriptions_on_open_summary">关闭：点击优先复用已有结果，长按更新后显示。开启：点击仅复用 60 秒内的结果，否则更新；长按优先复用已有结果。</string>
+    <string name="manage_subscription_bookmarks">管理订阅</string>
+    <string name="settings_update_bookmark_subscriptions_on_open">查看订阅时更新</string>
+    <string name="settings_update_bookmark_subscriptions_on_open_summary">关闭：点击复用，长按更新。开启：点击更新（60 秒内可复用），长按复用。</string>
     <string name="subscription_result_age_seconds">%1$s - %2$d 秒前</string>
     <string name="subscription_result_age_minutes">%1$s - %2$d 分前</string>
     <string name="subscription_result_age_hours">%1$s - %2$s 时前</string>
@@ -1278,4 +1278,6 @@
     <string name="animated_webp_play_pause">播放或暂停动图</string>
     <string name="settings_subscription_homepage_scan">主页扫描更新订阅</string>
     <string name="settings_subscription_homepage_scan_summary">手动及自动“更新订阅”时，订阅数 N 大于 8、距上次更新 T 小于 400 分钟且 T × 0.3 小于 N 时，自动使用主页扫描；其他情况及复杂搜索使用原方式。切换时沿用检查进度，不改变“书签订阅”的浏览方式。</string>
+    <string name="subscription_global_short">全局订阅</string>
+    <string name="subscription_bookmarks_short">书签订阅</string>
 </resources>

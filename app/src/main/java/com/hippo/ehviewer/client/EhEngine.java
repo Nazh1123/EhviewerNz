@@ -368,6 +368,7 @@ public class EhEngine {
                 && next != null && !next.isEmpty() && !next.equals(url)) {
             GalleryListParser.Result extra = getGalleryListPage(task, okHttpClient, next, mode,
                     subscriptionSearch, requireUploader, minRatingHundredths, null);
+            extra.firstPageForCache = result;
             extra.firstHref = result.firstHref;
             extra.prevHref = result.prevHref;
             extra.rawHeadGid = Math.max(result.rawHeadGid, extra.rawHeadGid);

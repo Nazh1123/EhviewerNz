@@ -438,6 +438,7 @@ public class GalleryListScene extends BaseScene
     private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
     private int mSubscriptionReusePolicy = SUBSCRIPTION_REUSE_AVAILABLE;
     @Nullable private String mSubscriptionReusedTitle;
+    private int mBorrowedEhTaskId = -1;
     private long mYesterdayTopListRequestPeriod = YesterdayTopListReadState.NO_PERIOD;
     private long mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
 
@@ -458,6 +459,7 @@ public class GalleryListScene extends BaseScene
         mSubscriptionReusePolicy = args.getInt(KEY_SUBSCRIPTION_REUSE_POLICY,
                 SUBSCRIPTION_REUSE_AVAILABLE);
         mSubscriptionReusedTitle = null;
+        mBorrowedEhTaskId = -1;
         mPopularUpdatesOnlyOverride = ACTION_WHATS_HOT.equals(action)
                 && args.containsKey(KEY_POPULAR_UPDATES_ONLY)
                 ? args.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
@@ -3561,6 +3563,14 @@ public class GalleryListScene extends BaseScene
                 mEhSearchSession.observe(result, hasMoreResults);
                 mSubscriptionNewGids.addAll(mEhSearchSession.displayNewGids());
                 mEhSearchSession.commit(true);
+                if (mSubscriptionUpdateManager != null && mHelper.isCurrentTaskRefresh(taskId)
+                        && taskId != mBorrowedEhTaskId) {
+                    mSubscriptionUpdateManager.rememberDisplayedSource(
+                            com.hippo.ehviewer.client.SubscriptionSearchContext.key(),
+                            com.hippo.ehviewer.client.SubscriptionSearchContext.cacheKey(),
+                            SubscriptionUpdateManager.RecentCheckSource.fromDisplay(
+                                    mUrlBuilder, null, result, mUrlBuilder.getEffectiveMinRatingHundredths()));
+                }
                 try (SearchUpdateStore store = SearchUpdateStore.open()) {
                     store.acknowledgeLegacy(com.hippo.ehviewer.client.SubscriptionSearchContext.key(), "eh");
                 }
@@ -3665,7 +3675,7 @@ public class GalleryListScene extends BaseScene
         if (!isBookmarkSubscriptionMode()) return;
         mSearchBar.setTitle(mSubscriptionReusedTitle != null ? mSubscriptionReusedTitle
                 : getString(isGlobalSubscriptionMode()
-                        ? R.string.global_subscription : R.string.bookmark_subscription));
+                        ? R.string.subscription_global_short : R.string.subscription_bookmarks_short));
     }
 
     /** Keep the displayed update markers intact until a refresh actually succeeds. */
@@ -3724,11 +3734,11 @@ public class GalleryListScene extends BaseScene
         }
         if (mBookmarkSubscriptionCoordinator != null) {
             if (refresh) {
-                long reusedAt = mBookmarkSubscriptionCoordinator.getReusedResultCompletedRealtime();
+                long reusedAt = mBookmarkSubscriptionCoordinator.getReusedResultCompletedTimeMillis();
                 mSubscriptionReusedTitle = reusedAt < 0L ? null : SubscriptionResultAge.title(
                         getResources(), getString(isGlobalSubscriptionMode()
-                                ? R.string.global_subscription : R.string.bookmark_subscription),
-                        android.os.SystemClock.elapsedRealtime() - reusedAt);
+                                ? R.string.subscription_global_short : R.string.subscription_bookmarks_short),
+                        System.currentTimeMillis() - reusedAt);
                 updateSubscriptionResultTitle();
             }
             beginSubscriptionResponse(taskId);
@@ -3761,10 +3771,10 @@ public class GalleryListScene extends BaseScene
         if (mRatingProgressDialog != null) mRatingProgressDialog.setMessage(ratingSortStatus());
     }
 
-    @Override public void onBookmarkSubscriptionSourceLoaded(String contextKey, String displayKey,
-            SubscriptionUpdateManager.RecentCheckSource source) {
+    @Override public void onBookmarkSubscriptionSourcesLoaded(String contextKey, String displayKey,
+            List<SubscriptionUpdateManager.RecentCheckSource> sources) {
         if (mSubscriptionUpdateManager != null) {
-            mSubscriptionUpdateManager.rememberDisplayedSource(contextKey, displayKey, source);
+            mSubscriptionUpdateManager.rememberDisplayedSources(contextKey, displayKey, sources);
         }
     }
 
@@ -4214,6 +4224,32 @@ public class GalleryListScene extends BaseScene
             mLastRequestedRatingMinimum = mUrlBuilder.getEffectiveMinRatingHundredths();
             mLastRequestedPreciseRating = Settings.getEnablePreciseRatingFilter();
 
+            if (isSubscriptionMode() && mSubscriptionUpdateManager != null) {
+                int mode = mUrlBuilder.getMode();
+                if (mSubscriptionUpdateManager.awaitCurrentCheck(result -> {
+                    if (mHelper != this || !isCurrentTask(taskId) || mUrlBuilder == null
+                            || mUrlBuilder.getMode() != mode || getActivity2() == null) return;
+                    if (result == null) {
+                        onGetGalleryListFailure(new IllegalStateException(
+                                getString(R.string.subscription_updates_failed)), taskId);
+                    } else if (isBookmarkSubscriptionMode()) {
+                        mRecentCheckResult = result;
+                        loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode(), true);
+                    } else {
+                        for (var source : result.sources) {
+                            if (source.isEhSubscription() && !source.requiresDisplayPreparation
+                                    && source.ratingMinimumHundredths == mUrlBuilder.getEffectiveMinRatingHundredths()) {
+                                mBorrowedEhTaskId = taskId;
+                                onGetGalleryListSuccess(source.asPageResult(), taskId);
+                                return;
+                            }
+                        }
+                        onGetGalleryListFailure(new IllegalStateException(
+                                getString(R.string.subscription_updates_failed)), taskId);
+                    }
+                })) return;
+            }
+
             if (isPopularMode()) {
                 mPopularRequestInFlight = true;
                 updatePopularActions();
@@ -4235,7 +4271,7 @@ public class GalleryListScene extends BaseScene
             }
 
             if (isBookmarkSubscriptionMode()) {
-                loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode());
+                loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode(), false);
                 return;
             } else if (mBookmarkSubscriptionCoordinator != null
                     && mBookmarkSubscriptionCoordinator.isLoading()) {
@@ -4265,7 +4301,7 @@ public class GalleryListScene extends BaseScene
         }
 
         private void loadBookmarkSubscriptions(int taskId, @NonNull MainActivity activity,
-                                               boolean includeEhSubscription) {
+                                               boolean includeEhSubscription, boolean completedCheckOnly) {
             SubscriptionUpdateManager.RecentCheckResult recentCheckResult =
                     mRecentCheckResult;
             mRecentCheckResult = null;
@@ -4291,7 +4327,7 @@ public class GalleryListScene extends BaseScene
                             getBookmarkSubscriptionCoordinator();
                     if (coordinator != null) {
                         coordinator.refresh(taskId, subscriptions, includeEhSubscription,
-                                recentCheckResult, mUrlBuilder.getEffectiveMinRatingHundredths());
+                                recentCheckResult, mUrlBuilder.getEffectiveMinRatingHundredths(), completedCheckOnly);
                     }
                 });
             });

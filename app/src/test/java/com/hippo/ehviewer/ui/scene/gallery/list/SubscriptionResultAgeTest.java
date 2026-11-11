@@ -14,6 +14,14 @@ import static org.junit.Assert.assertEquals;
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = 28, qualifiers = "zh-rCN", manifest = Config.NONE)
 public class SubscriptionResultAgeTest {
+    @Test @Config(qualifiers = "en")
+    public void englishSubscriptionTitlesUseShortNamesAndTimeUnits() {
+        Resources resources = RuntimeEnvironment.getApplication().getResources();
+        assertEquals("Global Subs - 12m ago", SubscriptionResultAge.title(resources,
+                resources.getString(com.hippo.ehviewer.R.string.subscription_global_short), 720_000L));
+        assertEquals("Bookmarks - 1.5h ago", SubscriptionResultAge.title(resources,
+                resources.getString(com.hippo.ehviewer.R.string.subscription_bookmarks_short), 5_400_000L));
+    }
     @Test public void elapsedTimeUsesInclusiveUnitBoundariesAndAtMostOneDecimalForHours() {
         Resources resources = RuntimeEnvironment.getApplication().getResources();
         String title = "全局订阅";

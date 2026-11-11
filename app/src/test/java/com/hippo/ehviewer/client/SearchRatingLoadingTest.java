@@ -245,6 +245,14 @@ public class SearchRatingLoadingTest {
         }
         assertFalse(result.galleryInfoList.isEmpty());
         assertEquals(4.51f, result.galleryInfoList.get(0).rating, 0f);
+        assertNotNull(result.firstPageForCache);
+        assertTrue(result.firstPageForCache.galleryInfoList.isEmpty());
+        ListUrlBuilder builder = new ListUrlBuilder();
+        builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
+        var saved = SubscriptionUpdateManager.RecentCheckSource.fromDisplay(builder, null, result, 451);
+        assertTrue(saved.galleryInfoList.isEmpty());
+        assertEquals(result.firstPageForCache.nextHref, saved.nextHref);
+        assertEquals(result.firstPageForCache.rawTailGid, saved.boundaryGid);
     }
 
     private static SubscriptionHomepageMatcher homepageMatcher(String uploader) {

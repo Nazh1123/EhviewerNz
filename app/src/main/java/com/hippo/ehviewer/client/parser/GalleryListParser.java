@@ -101,6 +101,8 @@ public class GalleryListParser {
         // Display-ready full pages let update-check results open without another metadata request.
         public List<GalleryInfo> subscriptionDisplayGalleries;
         public List<GalleryInfo> ratingMetadata;
+        // Rating filtering may fetch an extra page; persistence still keeps the actual first page.
+        public Result firstPageForCache;
     }
 
     private static int parsePages(Document d, String body) throws ParseException {

@@ -1199,4 +1199,12 @@
     <string name="settings_subscription_homepage_scan">ホームから購読の更新を確認</string>
     <string name="settings_subscription_homepage_scan_summary">手動・自動の更新確認時、購読中のブックマーク数 N &gt; 8、前回更新からの経過分数 T &lt; 400、T × 0.3 &lt; N の場合にホームを走査します。それ以外や複雑な検索ではブックマーク検索を使います。方式を切り替えても確認の進捗は保持されます。ブックマーク購読の閲覧方法は変わりません。</string>
     <string name="open_image_folder">同じフォルダーの画像を開く</string>
+    <string name="settings_update_bookmark_subscriptions_on_open">購読を開くときに更新</string>
+    <string name="manage_subscription_bookmarks">購読を管理</string>
+    <string name="subscription_global_short">全購読</string>
+    <string name="subscription_bookmarks_short">ブックマーク</string>
+    <string name="subscription_result_age_seconds">%1$s - %2$d秒前</string>
+    <string name="subscription_result_age_minutes">%1$s - %2$d分前</string>
+    <string name="subscription_result_age_hours">%1$s - %2$s時間前</string>
+    <string name="settings_update_bookmark_subscriptions_on_open_summary">オフ：タップで再利用、長押しで更新。オン：タップで更新（60秒以内は再利用）、長押しで再利用。</string>
 </resources>

@@ -774,20 +774,20 @@
     <string name="settings_read_start_position_bottom_left">Bottom left</string>
     <string name="settings_read_start_position_bottom_right">Bottom right</string>
     <string name="settings_read_auto_transfer_time">Auto Transfer(ms)</string>
-    <string name="settings_fork_auto_subscription_updates">Automatically fetch subscription updates</string>
+    <string name="settings_fork_auto_subscription_updates">Auto-update subscriptions</string>
     <string name="settings_fork_auto_subscription_updates_summary">Fetch the number of updated galleries in subscriptions at the configured interval</string>
     <string name="settings_fork_auto_subscription_update_interval">Automatic update interval</string>
-    <string name="subscription_update_interval_minutes">Automatic update interval (minutes)</string>
-    <string name="manage_subscription_bookmarks">Manage subscription bookmarks</string>
-    <string name="settings_update_bookmark_subscriptions_on_open">Update when opening global or bookmark subscriptions</string>
-    <string name="settings_update_bookmark_subscriptions_on_open_summary">Off: tap to reuse available results, hold to update. On: tap to reuse results from the last 60 seconds or update; hold to reuse available results.</string>
-    <string name="subscription_result_age_seconds">%1$s - %2$d seconds ago</string>
-    <string name="subscription_result_age_minutes">%1$s - %2$d minutes ago</string>
-    <string name="subscription_result_age_hours">%1$s - %2$s hours ago</string>
+    <string name="subscription_update_interval_minutes">Update interval (min)</string>
+    <string name="manage_subscription_bookmarks">Manage subscriptions</string>
+    <string name="settings_update_bookmark_subscriptions_on_open">Update subscriptions on open</string>
+    <string name="settings_update_bookmark_subscriptions_on_open_summary">Off: tap to reuse, hold to update. On: tap to update (60s reuse), hold to reuse.</string>
+    <string name="subscription_result_age_seconds">%1$s - %2$ds ago</string>
+    <string name="subscription_result_age_minutes">%1$s - %2$dm ago</string>
+    <string name="subscription_result_age_hours">%1$s - %2$sh ago</string>
     <string name="settings_fork_auto_subscription_update_interval_summary">%1$d minutes</string>
     <string name="settings_fork_auto_subscription_update_interval_invalid">Enter a valid positive whole number of minutes</string>
     <string name="settings_fork_subscription_update_minutes">minutes</string>
-    <string name="settings_fork_auto_subscription_updates_eh">Automatically update EH subscriptions</string>
+    <string name="settings_fork_auto_subscription_updates_eh">Auto-update EH subs</string>
     <string name="settings_read_direct_save">Long-press save</string>
     <string name="settings_read_long_press_save_turn_page">Turn page after saving</string>
     <string name="settings_read_quick_page_turn">Quick page turning</string>
@@ -1341,7 +1341,7 @@
     <string name="settings_bookmark_subscription_management">Manage bookmark subscriptions</string>
     <string name="settings_subscription_sidebar_buttons">Sidebar button visibility</string>
     <string name="settings_subscription_sidebar_eh">EH subscription</string>
-    <string name="settings_fork_auto_subscription_updates_bookmark">Automatically update bookmark subscriptions</string>
+    <string name="settings_fork_auto_subscription_updates_bookmark">Auto-update bookmarks</string>
     <string name="settings_test_bookmark_subscription">Test bookmark subscriptions</string>
     <string name="settings_test_bookmark_subscription_summary">Run one round of actual bookmark subscription requests\nSubscribed bookmarks: %1$s, Website requests: %2$s, Round duration: %3$ss</string>
     <string name="settings_test_bookmark_subscription_running">Testing bookmark subscriptions…</string>
@@ -1351,4 +1351,6 @@
     <string name="settings_show_viewed_galleries_summary">Record the newest gallery in search results to mark previously browsed galleries when searching with the same conditions again.</string>
     <string name="settings_subscription_homepage_scan">Scan homepage for subscription updates</string>
     <string name="settings_subscription_homepage_scan_summary">Automatically scans the homepage during manual and automatic update checks when subscribed bookmarks N &gt; 8, minutes since the last update T &lt; 400, and T × 0.3 &lt; N. Otherwise, and for complex searches, uses bookmark searches. Check progress is preserved when switching. Bookmark subscription browsing is unchanged.</string>
+    <string name="subscription_global_short">Global Subs</string>
+    <string name="subscription_bookmarks_short">Bookmarks</string>
 </resources>
