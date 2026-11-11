@@ -403,9 +403,67 @@ public class PopularGalleryActionsTest {
         assertCenterAbove(sort, menu.getPrimaryFab(), 0);
         assertCenterAbove(downloaded, menu.getPrimaryFab(), 1);
         menu.setExpanded(true, false);
+        settle();
         assertEquals(View.INVISIBLE, root.findViewById(R.id.gallery_mode_actions).getVisibility());
         menu.setExpanded(false, false);
+        settle();
         assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_mode_actions).getVisibility());
+    }
+
+    @Test public void activeRatingSortUsesPopularModeMovementAndMenuVisibilityAnimations() {
+        bind("mModeActions", R.id.gallery_mode_actions);
+        bind("mRatingSortFab", R.id.rating_sort_fab);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        ReflectionHelpers.setField(scene, "mRatingSortMode", true);
+        layout(600, 1200);
+        update();
+        settle();
+        View sort = root.findViewById(R.id.rating_sort_active);
+        assertEquals(View.VISIBLE, sort.getVisibility());
+        assertCenterAbove(sort, menu.getPrimaryFab(), 1);
+
+        ReflectionHelpers.callInstanceMethod(scene, "hideActionFab");
+        // The active button waits for the main FAB to leave, then slides into its position.
+        assertCenterAbove(sort, menu.getPrimaryFab(), 1);
+        ValueAnimator movement = ReflectionHelpers.getField(root.findViewById(R.id.gallery_mode_actions),
+                "mPositionAnimator");
+        assertNotNull(movement);
+        assertEquals(300L, movement.getDuration());
+        assertEquals(300L, movement.getStartDelay());
+        movement.setCurrentPlayTime(150L);
+        float step = root.getResources().getDimension(R.dimen.fab_size)
+                + root.getResources().getDimension(R.dimen.fab_layout_secondary_margin);
+        float distance = menu.getPrimaryFab().getY() + menu.getPrimaryFab().getHeight() / 2f
+                - sort.getY() - sort.getHeight() / 2f;
+        assertTrue("Rating button must slide between the two FAB positions", distance > 0f && distance < step);
+        movement.end();
+        settle();
+        assertCenterAbove(sort, menu.getPrimaryFab(), 0);
+
+        ReflectionHelpers.callInstanceMethod(scene, "showActionFab");
+        assertEquals(300L, menu.getPrimaryFab().animate().getStartDelay());
+        settle();
+        assertCenterAbove(sort, menu.getPrimaryFab(), 1);
+
+        menu.setExpanded(true, false);
+        assertEquals(300L, sort.animate().getDuration());
+        assertEquals(View.VISIBLE, sort.getVisibility());
+        settle();
+        assertEquals(View.INVISIBLE, sort.getVisibility());
+        menu.setExpanded(false, false);
+        settle();
+        assertEquals(View.VISIBLE, sort.getVisibility());
+        assertEquals(1f, sort.getScaleY(), 0f);
+        assertEquals(0f, sort.getRotation(), 0f);
+        assertCenterAbove(sort, menu.getPrimaryFab(), 1);
+        for (int i = 0; i < 3; i++) {
+            menu.setExpanded(true);
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(80));
+            menu.setExpanded(false);
+        }
+        settle();
+        assertEquals(View.VISIBLE, sort.getVisibility());
+        assertEquals(1f, sort.getScaleY(), 0f);
     }
 
     @Test public void expandedGalleryMenuWrapsOnShortScreensAndKeepsEveryActionClickable() {

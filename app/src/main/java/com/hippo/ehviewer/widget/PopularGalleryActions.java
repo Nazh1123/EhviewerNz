@@ -70,6 +70,37 @@ public class PopularGalleryActions extends FrameLayout {
         mActiveIndex = activeIndex;
         float[] targets = {2f, 1f};
         if (activeIndex >= 0) targets[activeIndex] = primaryShown ? 1f : 0f;
+        moveToSlots(targets, animate, visible, modeChanged, activeIndex >= 0 && !primaryShown);
+        for (int i = 0; i < 2; i++) {
+            setButtonShown(i, visible && (activeIndex < 0 || activeIndex == i), animate,
+                    (modeChanged && activeIndex < 0) || (replacingModeButton && i == activeIndex)
+                            ? ANIMATE_TIME : 0L);
+        }
+        positionButtons();
+        updateVisibility();
+    }
+
+    /** Independent active modes use the same movement and visibility transitions as popular modes. */
+    protected void updateIndependentModes(FloatingActionButton anchor, boolean visible,
+            boolean firstActive, boolean secondActive, boolean primaryShown) {
+        mAnchor = anchor;
+        boolean modeChanged = mActiveIndex != (firstActive ? 0 : secondActive ? 1 : -1);
+        mActiveIndex = firstActive ? 0 : secondActive ? 1 : -1;
+        float firstSlot = primaryShown ? 1f : 0f;
+        float[] targets = {firstSlot, firstSlot + (firstActive ? 1f : 0f)};
+        // Newly shown modes enter their reserved slot without crossing neighboring actions.
+        if (visible && firstActive && !mShown[0]) mTargetSlots[0] = mSlots[0] = targets[0];
+        if (visible && secondActive && !mShown[1]) mTargetSlots[1] = mSlots[1] = targets[1];
+        moveToSlots(targets,
+                isLaidOut(), visible, modeChanged, !primaryShown);
+        setButtonShown(0, visible && firstActive, isLaidOut(), 0L);
+        setButtonShown(1, visible && secondActive, isLaidOut(), 0L);
+        positionButtons();
+        updateVisibility();
+    }
+
+    private void moveToSlots(float[] targets, boolean animate, boolean visible,
+            boolean modeChanged, boolean movingDown) {
         if (mTargetSlots[0] != targets[0] || mTargetSlots[1] != targets[1]) {
             cancelPositionAnimation();
             System.arraycopy(targets, 0, mTargetSlots, 0, 2);
@@ -78,9 +109,8 @@ public class PopularGalleryActions extends FrameLayout {
                 mPositionAnimator = ValueAnimator.ofFloat(0f, 1f);
                 mPositionAnimator.setDuration(ANIMATE_TIME);
                 // Let a departing button disappear before occupying its slot.
-                boolean movingDown = activeIndex >= 0 && !primaryShown;
-                mPositionAnimator.setStartDelay((modeChanged && activeIndex >= 0)
-                        || (movingDown && anchor.getVisibility() == VISIBLE && anchor.getScaleY() > 0f)
+                mPositionAnimator.setStartDelay((modeChanged && mActiveIndex >= 0)
+                        || (movingDown && mAnchor.getVisibility() == VISIBLE && mAnchor.getScaleY() > 0f)
                         ? ANIMATE_TIME : 0L);
                 mPositionAnimator.setInterpolator(movingDown
                         ? AnimationUtils.SLOW_FAST_INTERPOLATOR : AnimationUtils.FAST_SLOW_INTERPOLATOR);
@@ -94,14 +124,9 @@ public class PopularGalleryActions extends FrameLayout {
                 System.arraycopy(targets, 0, mSlots, 0, 2);
             }
         }
-        for (int i = 0; i < 2; i++) {
-            setButtonShown(i, visible && (activeIndex < 0 || activeIndex == i), animate,
-                    (modeChanged && activeIndex < 0) || (replacingModeButton && i == activeIndex)
-                            ? ANIMATE_TIME : 0L);
-        }
-        positionButtons();
-        updateVisibility();
     }
+
+    protected boolean wrapsSlots() { return false; }
 
     /** Move the retained mode button up before the primary FAB reappears underneath it. */
     public long primaryShowDelay() {
@@ -183,7 +208,7 @@ public class PopularGalleryActions extends FrameLayout {
             View button = getChildAt(i);
             button.setX(centerX - button.getWidth() / 2f);
             button.setY(centerY - step * (mSlots[i] + mReservedSlots) - button.getHeight() / 2f);
-            if (mReservedSlots > 0) GalleryListModeActions.place(button, centerX, centerY,
+            if (mReservedSlots > 0 || wrapsSlots()) GalleryListModeActions.place(button, centerX, centerY,
                     step, mSlots[i] + mReservedSlots);
         }
     }

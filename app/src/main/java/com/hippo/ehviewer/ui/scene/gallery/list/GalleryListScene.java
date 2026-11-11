@@ -1332,6 +1332,7 @@ public class GalleryListScene extends BaseScene
         mMultiSelectFab = null;
         mDownloadedOnlyFab = null;
         mRatingSortFab = null;
+        if (mModeActions != null) mModeActions.destroy();
         mModeActions = null;
         if (mPopularActions != null) mPopularActions.destroy();
         mPopularActions = null;
@@ -3072,6 +3073,7 @@ public class GalleryListScene extends BaseScene
             setSearchFabsVisible(false, true, 0L);
             View fab = mFabLayout.getPrimaryFab();
             delay = Math.max(delay, mPopularActions != null ? mPopularActions.primaryShowDelay() : 0L);
+            if (mModeActions != null) delay = Math.max(delay, mModeActions.primaryShowDelay());
             fab.animate().setListener(null);
             fab.animate().cancel();
             fab.setVisibility(View.VISIBLE);
@@ -3087,6 +3089,7 @@ public class GalleryListScene extends BaseScene
             fab.animate().setListener(null);
             fab.animate().cancel();
             if (mPopularActions != null) mPopularActions.snapAbovePrimary();
+            if (mModeActions != null) mModeActions.snapAbovePrimary();
             fab.setScaleX(1.0f);
             fab.setScaleY(1.0f);
             setSearchFabsVisible(false, false, 0L);
