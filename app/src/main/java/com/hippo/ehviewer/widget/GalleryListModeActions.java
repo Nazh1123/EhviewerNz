@@ -8,12 +8,13 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 /** Independent active modes share the popular buttons' animations and primary-FAB handoff. */
 public final class GalleryListModeActions extends PopularGalleryActions {
     public GalleryListModeActions(Context context, AttributeSet attrs) {
-        super(context, attrs);
+        super(context, attrs, 3);
     }
 
     public void update(FloatingActionButton primary, boolean visible, boolean sort, boolean downloaded,
-                       boolean showPrimary) {
-        updateIndependentModes(primary, visible, sort, downloaded, showPrimary);
+                       boolean refresh, boolean showPrimary) {
+        updateIndependentModes(primary, visible,
+                new boolean[]{sort, downloaded, refresh && showPrimary}, showPrimary);
     }
 
     @Override protected boolean wrapsSlots() { return true; }

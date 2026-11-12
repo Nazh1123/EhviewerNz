@@ -441,6 +441,7 @@ public class GalleryListScene extends BaseScene
     private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
     private int mSubscriptionReusePolicy = SUBSCRIPTION_REUSE_AVAILABLE;
     @Nullable private String mSubscriptionReusedTitle;
+    private boolean mSubscriptionStaleResult;
     private int mBorrowedEhTaskId = -1;
     private long mYesterdayTopListRequestPeriod = YesterdayTopListReadState.NO_PERIOD;
     private long mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
@@ -462,6 +463,7 @@ public class GalleryListScene extends BaseScene
         mSubscriptionReusePolicy = args.getInt(KEY_SUBSCRIPTION_REUSE_POLICY,
                 SUBSCRIPTION_REUSE_AVAILABLE);
         mSubscriptionReusedTitle = null;
+        mSubscriptionStaleResult = false;
         mBorrowedEhTaskId = -1;
         mPopularUpdatesOnlyOverride = ACTION_WHATS_HOT.equals(action)
                 && args.containsKey(KEY_POPULAR_UPDATES_ONLY)
@@ -948,8 +950,13 @@ public class GalleryListScene extends BaseScene
         mModeActions = mainLayout.findViewById(R.id.gallery_mode_actions);
         View ratingActive = mainLayout.findViewById(R.id.rating_sort_active);
         View downloadedActive = mainLayout.findViewById(R.id.downloaded_only_active);
+        View subscriptionRefresh = mainLayout.findViewById(R.id.subscription_refresh_active);
         ratingActive.setOnClickListener(v -> onRatingSortClick());
         downloadedActive.setOnClickListener(v -> setDownloadedOnlyMode(false, false));
+        subscriptionRefresh.setOnClickListener(v -> {
+            if (mHelper != null) mHelper.refresh();
+        });
+        TooltipCompat.setTooltipText(subscriptionRefresh, getString(R.string.refresh));
         TooltipCompat.setTooltipText(ratingActive, getString(R.string.gallery_rating_sort_active));
         TooltipCompat.setTooltipText(downloadedActive, getString(R.string.gallery_downloaded_only_active));
         mPopularActions = mainLayout.findViewById(R.id.popular_actions);
@@ -2101,7 +2108,8 @@ public class GalleryListScene extends BaseScene
         if (mPopularActions != null) mPopularActions.setReservedSlots(reserved);
         if (mModeActions != null) mModeActions.update(mFabLayout.getPrimaryFab(),
                 mState == STATE_NORMAL && !mMultiSelectMode && !mFabLayout.isExpanded(),
-                mRatingSortMode, mDownloadedOnlyMode, mShowActionFab);
+                mRatingSortMode, mDownloadedOnlyMode,
+                isBookmarkSubscriptionMode() && mSubscriptionStaleResult, mShowActionFab);
     }
 
     private String ratingSortStatus() {
@@ -3772,11 +3780,14 @@ public class GalleryListScene extends BaseScene
         if (mBookmarkSubscriptionCoordinator != null) {
             if (refresh) {
                 long reusedAt = mBookmarkSubscriptionCoordinator.getReusedResultCompletedTimeMillis();
+                long now = System.currentTimeMillis();
+                mSubscriptionStaleResult = SubscriptionResultAge.shouldOfferRefresh(reusedAt, now);
                 mSubscriptionReusedTitle = reusedAt < 0L ? null : SubscriptionResultAge.title(
                         getResources(), getString(isGlobalSubscriptionMode()
                                 ? R.string.subscription_global_short : R.string.subscription_bookmarks_short),
-                        System.currentTimeMillis() - reusedAt);
+                        now - reusedAt);
                 updateSubscriptionResultTitle();
+                updateModeActions();
             }
             beginSubscriptionResponse(taskId);
             for (GalleryInfo gallery : data) {
@@ -4212,7 +4223,9 @@ public class GalleryListScene extends BaseScene
         @Override
         public void refresh() {
             mSubscriptionReusedTitle = null;
+            mSubscriptionStaleResult = false;
             updateSubscriptionResultTitle();
+            updateModeActions();
             stopRatingLoading();
             if (mRatingSortController != null) mRatingSortController.clearRatings();
             stopDownloadedPageScan(false);

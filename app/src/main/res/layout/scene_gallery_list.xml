@@ -216,6 +216,15 @@
             app:backgroundTint="?attr/widgetColorThemePrimary"
             app:tint="@color/primary_drawable_dark"
             style="@style/Widget.PopularAction"/>
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/subscription_refresh_active"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/refresh"
+            app:srcCompat="@drawable/v_refresh_dark_x24"
+            app:backgroundTint="?attr/widgetColorThemePrimary"
+            app:tint="@color/primary_drawable_dark"
+            style="@style/Widget.PopularAction"/>
     </com.hippo.ehviewer.widget.GalleryListModeActions>
 
     <LinearLayout

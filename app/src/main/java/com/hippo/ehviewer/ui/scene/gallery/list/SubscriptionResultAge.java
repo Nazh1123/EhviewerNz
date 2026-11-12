@@ -10,6 +10,10 @@ import java.math.RoundingMode;
 final class SubscriptionResultAge {
     private SubscriptionResultAge() { }
 
+    static boolean shouldOfferRefresh(long reusedAtMillis, long nowMillis) {
+        return reusedAtMillis >= 0L && nowMillis - reusedAtMillis > 3 * 60_000L;
+    }
+
     static String title(Resources resources, String title, long ageMillis) {
         long age = Math.max(0L, ageMillis);
         if (age <= 60_000L) {

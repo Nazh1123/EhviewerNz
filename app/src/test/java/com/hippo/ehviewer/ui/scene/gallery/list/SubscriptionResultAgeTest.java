@@ -10,10 +10,22 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = 28, qualifiers = "zh-rCN", manifest = Config.NONE)
 public class SubscriptionResultAgeTest {
+    @Test public void refreshShortcutRequiresAnActuallyReusedResultOlderThanThreeMinutes() {
+        long now = 1_000_000L;
+        assertFalse(SubscriptionResultAge.shouldOfferRefresh(-1L, now));
+        assertFalse(SubscriptionResultAge.shouldOfferRefresh(now, now));
+        assertFalse(SubscriptionResultAge.shouldOfferRefresh(now + 1L, now));
+        assertFalse(SubscriptionResultAge.shouldOfferRefresh(now - 179_999L, now));
+        assertFalse(SubscriptionResultAge.shouldOfferRefresh(now - 180_000L, now));
+        assertTrue(SubscriptionResultAge.shouldOfferRefresh(now - 180_001L, now));
+    }
+
     @Test @Config(qualifiers = "en")
     public void englishSubscriptionTitlesUseShortNamesAndTimeUnits() {
         Resources resources = RuntimeEnvironment.getApplication().getResources();

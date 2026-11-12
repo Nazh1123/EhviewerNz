@@ -381,6 +381,62 @@ public class PopularGalleryActionsTest {
         assertEquals(10, clicked[0]);
     }
 
+    @Test public void staleSubscriptionRefreshFollowsPrimaryFabAndReservesItsOwnSlot() {
+        bind("mModeActions", R.id.gallery_mode_actions);
+        View refresh = root.findViewById(R.id.subscription_refresh_active);
+        for (int mode : new int[]{ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
+                ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION}) {
+            builder.setMode(mode);
+            ReflectionHelpers.setField(scene, "mSubscriptionStaleResult", true);
+            layout(600, 1200);
+            update();
+            settle();
+            assertEquals(View.VISIBLE, refresh.getVisibility());
+            assertCenterAbove(refresh, menu.getPrimaryFab(), 1);
+
+            ReflectionHelpers.callInstanceMethod(scene, "hideActionFab");
+            assertEquals(menu.getPrimaryFab().animate().getDuration(), refresh.animate().getDuration());
+            assertSame(menu.getPrimaryFab().animate().getInterpolator(), refresh.animate().getInterpolator());
+            settle();
+            assertEquals(View.INVISIBLE, refresh.getVisibility());
+            ReflectionHelpers.callInstanceMethod(scene, "showActionFab");
+            settle();
+            assertEquals(View.VISIBLE, refresh.getVisibility());
+            assertCenterAbove(refresh, menu.getPrimaryFab(), 1);
+
+            menu.setExpanded(true, false);
+            settle();
+            assertEquals(View.INVISIBLE, refresh.getVisibility());
+            menu.setExpanded(false, false);
+            settle();
+            assertEquals(View.VISIBLE, refresh.getVisibility());
+
+            ReflectionHelpers.setField(scene, "mRatingSortMode", true);
+            ReflectionHelpers.setField(scene, "mDownloadedOnlyMode", true);
+            update();
+            settle();
+            assertCenterAbove(root.findViewById(R.id.rating_sort_active), menu.getPrimaryFab(), 1);
+            assertCenterAbove(root.findViewById(R.id.downloaded_only_active), menu.getPrimaryFab(), 2);
+            assertCenterAbove(refresh, menu.getPrimaryFab(), 3);
+            ReflectionHelpers.setField(scene, "mMultiSelectMode", true);
+            update();
+            settle();
+            assertEquals(View.INVISIBLE, refresh.getVisibility());
+            ReflectionHelpers.setField(scene, "mMultiSelectMode", false);
+            ReflectionHelpers.setField(scene, "mRatingSortMode", false);
+            ReflectionHelpers.setField(scene, "mDownloadedOnlyMode", false);
+        }
+        ReflectionHelpers.setField(scene, "mSubscriptionStaleResult", false);
+        update();
+        settle();
+        assertEquals(View.INVISIBLE, refresh.getVisibility());
+        ReflectionHelpers.setField(scene, "mSubscriptionStaleResult", true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        update();
+        settle();
+        assertEquals(View.INVISIBLE, refresh.getVisibility());
+    }
+
     @Test public void independentActiveModesRemainVisibleAndReservePopularSlots() {
         bind("mModeActions", R.id.gallery_mode_actions);
         bind("mRatingSortFab", R.id.rating_sort_fab);
