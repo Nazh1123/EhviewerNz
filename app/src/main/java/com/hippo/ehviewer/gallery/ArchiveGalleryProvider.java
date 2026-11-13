@@ -30,8 +30,12 @@ import com.hippo.lib.image.Image;
 import com.hippo.unifile.UniFile;
 import com.hippo.lib.yorozuya.thread.PriorityThread;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PushbackInputStream;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -237,7 +241,7 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
         checkActive(); out.write(bytes, offset, count);
       }
       private void checkActive() throws IOException {
-        if (stopped || Thread.currentThread().isInterrupted()) throw new java.io.InterruptedIOException();
+        ArchiveGalleryProvider.this.checkActive();
       }
     };
   }
@@ -370,14 +374,7 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
         }
 
         try (InputStream input = stream) {
-          Image image = Image.decode(BitmapDrawable.createFromStream(input, null), false);
-          // Finish the entry even if the bitmap decoder stops before the archive stream's EOF.
-          byte[] remaining = new byte[4096];
-          try { while (input.read(remaining) != -1) { } }
-          catch (IOException failure) {
-            if (image != null) image.recycle();
-            throw failure;
-          }
+          Image image = decodeImage(input, index);
           if (stopped) {
             if (image != null) image.recycle();
             continue;
@@ -393,6 +390,64 @@ public class ArchiveGalleryProvider extends GalleryProvider2 {
           decodingIndex.lazySet(GalleryPageView.INVALID_INDEX);
         }
       }
+    }
+  }
+
+  private void checkActive() throws IOException {
+    if (stopped || Thread.currentThread().isInterrupted()) throw new java.io.InterruptedIOException();
+  }
+
+  /** Only animation sources need a complete, seekable file for the shared decoder. */
+  Image decodeImage(InputStream input, int index) throws IOException {
+    checkActive();
+    byte[] header = new byte[21];
+    PushbackInputStream source = new PushbackInputStream(input, header.length);
+    int count = 0;
+    while (count < header.length) {
+      int read = source.read(header, count, header.length - count);
+      if (read == -1) break;
+      count += read;
+      checkActive();
+    }
+    source.unread(header, 0, count);
+    if (!isAnimationSource(header, count)) {
+      Image image = Image.decode(BitmapDrawable.createFromStream(source, null), false);
+      try {
+        // A bitmap decoder may stop before EOF. Drain the entry so extraction can continue.
+        byte[] remaining = new byte[4096];
+        while (source.read(remaining) != -1) checkActive();
+        checkActive();
+        return image;
+      } catch (IOException | RuntimeException failure) {
+        if (image != null) image.recycle();
+        throw failure;
+      }
+    }
+    return decodeAnimation(source, index);
+  }
+
+  private static boolean isAnimationSource(byte[] header, int count) {
+    return (count >= 6 && header[0] == 'G' && header[1] == 'I' && header[2] == 'F'
+        && header[3] == '8' && (header[4] == '7' || header[4] == '9') && header[5] == 'a')
+        || (count >= 21 && header[0] == 'R' && header[1] == 'I' && header[2] == 'F'
+        && header[3] == 'F' && header[8] == 'W' && header[9] == 'E' && header[10] == 'B'
+        && header[11] == 'P' && header[12] == 'V' && header[13] == 'P'
+        && header[14] == '8' && header[15] == 'X' && (header[20] & 2) != 0);
+  }
+
+  private Image decodeAnimation(InputStream input, int index) throws IOException {
+    File temporary = File.createTempFile("archive-reader-", ".image", context.getCacheDir());
+    try {
+      try (java.io.OutputStream output = cancellable(new FileOutputStream(temporary))) {
+        com.hippo.lib.yorozuya.IOUtils.copy(input, output);
+      }
+      checkActive();
+      try (FileInputStream source = new FileInputStream(temporary)) {
+        return Image.decode(source, false, getAnimatedWebpDecodeMode(index));
+      }
+    } finally {
+      // Both decoders own their image data after decoding; no extracted page is retained on disk.
+      temporary.delete();
     }
   }
 
