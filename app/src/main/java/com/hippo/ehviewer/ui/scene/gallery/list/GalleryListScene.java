@@ -139,6 +139,7 @@ import com.hippo.ehviewer.widget.JumpDateSelector;
 import com.hippo.ehviewer.widget.SearchBar;
 import com.hippo.ehviewer.widget.SearchLayout;
 import com.hippo.ehviewer.widget.RatingFilterControl;
+import com.hippo.ehviewer.ui.dialog.DialogActionLayout;
 import com.hippo.lib.yorozuya.AnimationUtils;
 import com.hippo.lib.yorozuya.AssertUtils;
 import com.hippo.lib.yorozuya.MathUtils;
@@ -2333,6 +2334,7 @@ public class GalleryListScene extends BaseScene
                 (dialog, which) -> restoreRatingOrder());
         AlertDialog dialog = builder.create();
         dialog.show();
+        DialogActionLayout.placeNeutralAboveActions(dialog);
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(view -> {
             int selection = range.getCheckedRadioButtonId();
             int target = 0;

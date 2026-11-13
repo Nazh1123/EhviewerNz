@@ -1201,7 +1201,7 @@
     <string name="open_image_folder">同じフォルダーの画像を開く</string>
     <string name="select_gallery_range_same_label">同じラベル内で範囲の終了点を選択してください</string>
     <string name="settings_update_bookmark_subscriptions_on_open">購読を開くときに更新</string>
-    <string name="manage_subscription_bookmarks">購読を管理</string>
+    <string name="manage_subscription_bookmarks">購読ブックマークを管理</string>
     <string name="subscription_global_short">全購読</string>
     <string name="subscription_bookmarks_short">ブックマーク</string>
     <string name="subscription_result_age_seconds">%1$s - %2$d秒前</string>

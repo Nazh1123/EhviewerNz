@@ -1256,7 +1256,7 @@
     <string name="open_image_folder">Ouvrir les images de ce dossier</string>
     <string name="select_gallery_range_same_label">Sélectionnez la fin de la plage dans le même libellé</string>
     <string name="settings_update_bookmark_subscriptions_on_open">Actualiser à l’ouverture</string>
-    <string name="manage_subscription_bookmarks">Gérer les abonnements</string>
+    <string name="manage_subscription_bookmarks">Gérer les favoris d’abonnement</string>
     <string name="subscription_global_short">Abonnements</string>
     <string name="subscription_bookmarks_short">Favoris</string>
     <string name="subscription_result_age_seconds">%1$s - il y a %2$d s</string>

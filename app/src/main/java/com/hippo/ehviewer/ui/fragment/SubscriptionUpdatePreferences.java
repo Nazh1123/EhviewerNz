@@ -17,6 +17,7 @@ import androidx.preference.PreferenceFragmentCompat;
 
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.ui.dialog.DialogActionLayout;
 
 public final class SubscriptionUpdatePreferences {
     private SubscriptionUpdatePreferences() {}
@@ -94,17 +95,7 @@ public final class SubscriptionUpdatePreferences {
                 .setPositiveButton(android.R.string.ok, null)
                 .create();
         dialog.show();
-        // Leave more room for translated labels while retaining a 48dp touch target.
-        int horizontalPadding = Math.round(4 * context.getResources().getDisplayMetrics().density);
-        int minimumWidth = Math.round(48 * context.getResources().getDisplayMetrics().density);
-        for (int action : new int[]{AlertDialog.BUTTON_NEUTRAL, AlertDialog.BUTTON_NEGATIVE,
-                AlertDialog.BUTTON_POSITIVE}) {
-            TextView button = dialog.getButton(action);
-            button.setMinWidth(minimumWidth);
-            button.setMinimumWidth(minimumWidth);
-            button.setPaddingRelative(horizontalPadding, button.getPaddingTop(),
-                    horizontalPadding, button.getPaddingBottom());
-        }
+        DialogActionLayout.placeNeutralAboveActions(dialog);
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
             String normalized = Settings.normalizeAutoSubscriptionUpdateInterval(
                     interval.getText().toString());

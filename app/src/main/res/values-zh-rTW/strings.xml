@@ -1279,7 +1279,7 @@
     <string name="open_image_folder">開啟同資料夾圖片</string>
     <string name="select_gallery_range_same_label">請在同一標籤內選擇區間終點</string>
     <string name="settings_update_bookmark_subscriptions_on_open">查看訂閱時更新</string>
-    <string name="manage_subscription_bookmarks">管理訂閱</string>
+    <string name="manage_subscription_bookmarks">管理訂閱書籤</string>
     <string name="subscription_global_short">全域訂閱</string>
     <string name="subscription_bookmarks_short">書籤訂閱</string>
     <string name="subscription_result_age_seconds">%1$s - %2$d 秒前</string>

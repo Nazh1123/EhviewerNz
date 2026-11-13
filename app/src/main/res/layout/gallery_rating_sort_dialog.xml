@@ -44,6 +44,6 @@
                     android:text="@string/gallery_rating_sort_month_unit"/>
             </LinearLayout>
         </RadioGroup>
-        <include layout="@layout/widget_rating_filter" />
+        <include layout="@layout/widget_rating_filter_dialog" />
     </LinearLayout>
 </ScrollView>

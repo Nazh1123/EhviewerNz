@@ -1265,7 +1265,7 @@
     <string name="open_image_folder">เปิดภาพในโฟลเดอร์เดียวกัน</string>
     <string name="select_gallery_range_same_label">เลือกจุดสิ้นสุดของช่วงในป้ายกำกับเดียวกัน</string>
     <string name="settings_update_bookmark_subscriptions_on_open">อัปเดตเมื่อเปิดการติดตาม</string>
-    <string name="manage_subscription_bookmarks">จัดการการติดตาม</string>
+    <string name="manage_subscription_bookmarks">จัดการบุ๊กมาร์กการติดตาม</string>
     <string name="subscription_global_short">การติดตาม</string>
     <string name="subscription_bookmarks_short">บุ๊กมาร์ก</string>
     <string name="subscription_result_age_seconds">%1$s - %2$d วิ.ก่อน</string>

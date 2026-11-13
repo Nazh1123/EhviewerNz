@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/search_rating_row"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="4dp"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:minHeight="48dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/search_rating_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:labelFor="@id/search_rating_value"
+            android:text="@string/search_rating_title" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/search_rating_value"
+            style="?attr/radioButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:padding="4dp"
+            android:background="?attr/selectableItemBackground"
+            android:contentDescription="@string/search_rating_title"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp">
+
+        <androidx.appcompat.widget.AppCompatRatingBar
+            android:id="@+id/search_rating_stars"
+            style="?android:attr/ratingBarStyleIndicator"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:theme="@style/RatingBarTheme"
+            android:contentDescription="@string/search_rating_title"
+            android:isIndicator="false"
+            android:numStars="5"
+            android:stepSize="0.5" />
+    </FrameLayout>
+</LinearLayout>

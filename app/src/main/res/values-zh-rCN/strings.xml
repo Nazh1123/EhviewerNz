@@ -790,7 +790,7 @@
     <string name="settings_fork_auto_subscription_updates_summary">按设定间隔获取订阅内容的更新画廊数量</string>
     <string name="settings_fork_auto_subscription_update_interval">自动更新间隔</string>
     <string name="subscription_update_interval_minutes">自动更新间隔 (分钟)</string>
-    <string name="manage_subscription_bookmarks">管理订阅</string>
+    <string name="manage_subscription_bookmarks">管理订阅书签</string>
     <string name="settings_update_bookmark_subscriptions_on_open">查看订阅时更新</string>
     <string name="settings_update_bookmark_subscriptions_on_open_summary">关闭：点击复用，长按更新。开启：点击更新（60 秒内可复用），长按复用。</string>
     <string name="subscription_result_age_seconds">%1$s - %2$d 秒前</string>

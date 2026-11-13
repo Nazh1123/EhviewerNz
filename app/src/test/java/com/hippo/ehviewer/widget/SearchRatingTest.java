@@ -120,10 +120,47 @@ public class SearchRatingTest {
                 View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.AT_MOST));
         content.layout(0, 0, content.getMeasuredWidth(), content.getMeasuredHeight());
         View row = content.findViewById(R.id.search_rating_row);
-        View label = ((android.view.ViewGroup) row).getChildAt(3);
+        TextView label = content.findViewById(R.id.search_rating_label);
         assertTrue(stars.getWidth() > 0);
-        assertTrue(stars.getRight() <= value.getLeft());
-        assertTrue(label.getRight() <= row.getWidth());
+        assertEquals(context.getString(R.string.search_rating_title), label.getText().toString());
+        assertTrue(value.getRight() <= ((View) value.getParent()).getWidth());
+        assertEquals(row.getWidth() / 2f, stars.getLeft() + stars.getWidth() / 2f, 1f);
+    }
+
+    @Test public void dialogRatingLabelAndValueStayCenteredWithFixedSpacingAcrossLanguages() {
+        for (String language : new String[]{"en", "de", "es", "fr", "ja", "ko", "th", "zh-CN", "zh-TW", "zh-HK"}) {
+            for (float fontScale : new float[]{1f, 1.3f}) {
+                android.content.res.Configuration config = new android.content.res.Configuration(context.getResources().getConfiguration());
+                config.setLocale(java.util.Locale.forLanguageTag(language));
+                config.fontScale = fontScale;
+                Context localized = new ContextThemeWrapper(context.createConfigurationContext(config), R.style.AppTheme_Main);
+                View content = android.view.LayoutInflater.from(localized).inflate(R.layout.gallery_rating_sort_dialog, null);
+                new RatingFilterControl(content, 275, ignored -> {});
+                content.measure(View.MeasureSpec.makeMeasureSpec(280, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.AT_MOST));
+                content.layout(0, 0, content.getMeasuredWidth(), content.getMeasuredHeight());
+                android.view.ViewGroup root = (android.view.ViewGroup) content;
+                android.graphics.Rect label = bounds(root, content.findViewById(R.id.search_rating_label));
+                android.graphics.Rect value = bounds(root, content.findViewById(R.id.search_rating_value));
+                android.graphics.Rect stars = bounds(root, content.findViewById(R.id.search_rating_stars));
+                android.graphics.Rect row = bounds(root, content.findViewById(R.id.search_rating_row));
+                TextView title = content.findViewById(R.id.search_rating_label);
+                assertEquals(language, Math.round(16 * localized.getResources().getDisplayMetrics().density),
+                        value.left - label.right);
+                assertEquals(language, row.exactCenterX(), (label.left + value.right) / 2f, 1f);
+                assertEquals(language, row.exactCenterX(), stars.exactCenterX(), 1f);
+                assertTrue(language, stars.top >= Math.max(label.bottom, value.bottom));
+                assertTrue(language, title.getLayout().getHeight() <= title.getHeight());
+                if (fontScale == 1f) assertEquals(language, 1, title.getLineCount());
+            }
+        }
+    }
+
+    private android.graphics.Rect bounds(android.view.ViewGroup root, View view) {
+        android.graphics.Rect rect = new android.graphics.Rect();
+        view.getDrawingRect(rect);
+        root.offsetDescendantRectToMyCoords(view, rect);
+        return rect;
     }
 
     @Test public void preservesThresholdAcrossParcelBookmarksAndAllSearchModes() {
