@@ -138,6 +138,7 @@ import com.hippo.ehviewer.widget.GalleryInfoContentHelper;
 import com.hippo.ehviewer.widget.JumpDateSelector;
 import com.hippo.ehviewer.widget.SearchBar;
 import com.hippo.ehviewer.widget.SearchLayout;
+import com.hippo.ehviewer.widget.RatingFilterControl;
 import com.hippo.lib.yorozuya.AnimationUtils;
 import com.hippo.lib.yorozuya.AssertUtils;
 import com.hippo.lib.yorozuya.MathUtils;
@@ -289,6 +290,7 @@ public class GalleryListScene extends BaseScene
     private int mRestoredRatingPages;
     private String mRestoredRatingCutoff;
     private int mRatingSortMonths = 1;
+    private int mRatingSortMinimum;
     private boolean mRatingLoading;
     private boolean mRatingBrowseGestureArmed;
     private boolean mRatingSortScrollToTop;
@@ -611,6 +613,7 @@ public class GalleryListScene extends BaseScene
         mRestoredRatingPages = savedInstanceState.getInt("rating_sort_pages");
         mRestoredRatingCutoff = savedInstanceState.getString("rating_sort_cutoff");
         mRatingSortMonths = savedInstanceState.getInt("rating_sort_months", 1);
+        mRatingSortMinimum = savedInstanceState.getInt("rating_sort_minimum");
         mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
         mPopularUpdatesOnlyOverride = savedInstanceState.containsKey(KEY_POPULAR_UPDATES_ONLY)
                 ? savedInstanceState.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
@@ -658,6 +661,7 @@ public class GalleryListScene extends BaseScene
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
         outState.putBoolean(KEY_RATING_SORT_MODE, mRatingSortMode);
         outState.putInt("rating_sort_months", mRatingSortMonths);
+        outState.putInt("rating_sort_minimum", mRatingSortMinimum);
         outState.putInt("rating_sort_pages", mRatingSortController == null
                 ? mRestoredRatingPages : mRatingSortController.targetPages());
         outState.putString("rating_sort_cutoff", mRatingSortController == null
@@ -2230,11 +2234,14 @@ public class GalleryListScene extends BaseScene
 
     private void restoreRatingOrder() {
         boolean wasSorted = mRatingSortMode;
-        stopRatingLoading();
+        // Cancelling may publish a buffered subscription batch synchronously. Disable
+        // the projection first so that its callback cannot start another sort.
         mRatingSortMode = false;
+        mRatingSortMinimum = 0;
         mRatingOrder.clear();
         mRestoredRatingPages = 0;
         mRestoredRatingCutoff = null;
+        stopRatingLoading();
         if (mRatingSortController != null) mRatingSortController.setRange(0, null);
         if (mBookmarkSubscriptionCoordinator != null) mBookmarkSubscriptionCoordinator.setBulk(false);
         if (wasSorted && mAdapter != null) mAdapter.onSourceDataSetChanged();
@@ -2301,9 +2308,12 @@ public class GalleryListScene extends BaseScene
         months.setText(String.valueOf(mRatingSortMonths));
         pages.setEnabled(false);
         months.setEnabled(false);
-        TextView note = content.findViewById(R.id.rating_sort_range_note);
-        note.setText(canUseMonths ? R.string.gallery_rating_sort_month_note
-                : R.string.gallery_rating_sort_month_unavailable);
+        // Include the native site filter when precise rating filtering is disabled.
+        int searchMinimum = Math.max(mUrlBuilder.getEffectiveMinRatingHundredths(),
+                mUrlBuilder.getSubscriptionMinRatingHundredths());
+        RatingFilterControl ratingFilter = new RatingFilterControl(content,
+                mRatingSortMode ? mRatingSortMinimum : Math.max(275, searchMinimum),
+                ignored -> {});
         range.setOnCheckedChangeListener((group, id) -> {
             pages.setEnabled(id == R.id.rating_sort_pages);
             months.setEnabled(id == R.id.rating_sort_months);
@@ -2340,6 +2350,7 @@ public class GalleryListScene extends BaseScene
                     date = GalleryRatingSort.cutoff(ZonedDateTime.now(), value);
                 }
             }
+            mRatingSortMinimum = ratingFilter.getMinimumRating();
             stopDownloadedPageScan(false);
             mRatingSortScrollToTop = true;
             AppHelper.hideSoftInput(dialog);
@@ -3965,7 +3976,8 @@ public class GalleryListScene extends BaseScene
 
         private void rebuildSectionDivider() {
             mRatingData = mRatingSortMode ? GalleryRatingSort.project(
-                    mDownloadedOnlyMode ? mDownloadedData : getSourceData(), mRatingOrder) : Collections.emptyList();
+                    mDownloadedOnlyMode ? mDownloadedData : getSourceData(), mRatingOrder,
+                    mRatingSortMinimum) : Collections.emptyList();
             mSectionDividerPosition = -1;
             if (mRatingSortMode) return;
             Set<Long> newGids = new HashSet<>();

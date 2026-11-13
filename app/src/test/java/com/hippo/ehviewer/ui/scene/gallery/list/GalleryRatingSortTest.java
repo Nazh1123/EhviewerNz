@@ -33,6 +33,18 @@ public class GalleryRatingSortTest {
         assertSame(live, result.get(1));
     }
 
+    @Test public void preciseMinimumFiltersSortedRangeAndCanBeClearedWithoutLosingRows() {
+        List<GalleryInfo> source = new ArrayList<>(List.of(gallery(1, 4.50f), gallery(2, 4.51f),
+                gallery(3, 4.99f), gallery(4, Float.NaN), gallery(5, 5.00f)));
+        // Gallery 5 is outside the selected sorting range.
+        List<GalleryInfo> order = GalleryRatingSort.sort(GalleryRatingSort.snapshot(source.subList(0, 4)));
+        assertEquals(List.of(3L, 2L), ids(GalleryRatingSort.project(source, order, 451)));
+        assertEquals(List.of(3L), ids(GalleryRatingSort.project(source, order, 499)));
+        assertTrue(GalleryRatingSort.project(source, order, 500).isEmpty());
+        assertEquals(List.of(3L, 2L, 1L, 4L), ids(GalleryRatingSort.project(source, order, 0)));
+        assertEquals(5, source.size());
+    }
+
     @Test public void calendarMonthsRespectLeapDayAndConvertToUtc() {
         assertEquals("2024-02-29 17:30", GalleryRatingSort.cutoff(
                 ZonedDateTime.parse("2024-03-31T12:30:00-04:00[America/New_York]"), 1));

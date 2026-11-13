@@ -1,6 +1,7 @@
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
 import com.hippo.ehviewer.client.data.GalleryInfo;
+import com.hippo.ehviewer.client.SearchRating;
 import java.time.ZonedDateTime;
 import java.time.ZoneOffset;
 import java.time.LocalDateTime;
@@ -39,12 +40,16 @@ final class GalleryRatingSort {
 
     /** Filter an already sorted order using the current projection, retaining its live objects. */
     static List<GalleryInfo> project(List<GalleryInfo> source, List<GalleryInfo> order) {
+        return project(source, order, 0);
+    }
+
+    static List<GalleryInfo> project(List<GalleryInfo> source, List<GalleryInfo> order, int minimumRating) {
         Map<Long, GalleryInfo> remaining = new HashMap<>();
         for (GalleryInfo gallery : source) remaining.put(gallery.gid, gallery);
         List<GalleryInfo> result = new ArrayList<>(source.size());
         for (GalleryInfo gallery : order) {
             GalleryInfo visible = remaining.remove(gallery.gid);
-            if (visible != null) result.add(visible);
+            if (visible != null && SearchRating.matches(visible.rating, minimumRating)) result.add(visible);
         }
         return result;
     }

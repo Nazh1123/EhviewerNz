@@ -44,8 +44,6 @@
                     android:text="@string/gallery_rating_sort_month_unit"/>
             </LinearLayout>
         </RadioGroup>
-        <TextView android:id="@+id/rating_sort_range_note"
-            android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:paddingTop="8dp" android:textAppearance="?android:attr/textAppearanceSmall"/>
+        <include layout="@layout/widget_rating_filter" />
     </LinearLayout>
 </ScrollView>

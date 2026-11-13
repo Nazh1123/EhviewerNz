@@ -86,6 +86,46 @@ public class SearchRatingTest {
         assertEquals("3.50", value.getText().toString());
     }
 
+    @Test public void sortDialogUsesSameStarsAndExactInputAndFitsNarrowDialogs() {
+        View content = android.view.LayoutInflater.from(context)
+                .inflate(R.layout.gallery_rating_sort_dialog, null);
+        RatingFilterControl filter = new RatingFilterControl(content, 275, ignored -> {});
+        RatingBar stars = content.findViewById(R.id.search_rating_stars);
+        TextView value = content.findViewById(R.id.search_rating_value);
+        assertEquals("2.75", value.getText().toString());
+        assertEquals(2.75f, stars.getRating(), 0.011f);
+        assertEquals(5, stars.getNumStars());
+        stars.getOnRatingBarChangeListener().onRatingChanged(stars, 3.26f, true);
+        assertEquals(350, filter.getMinimumRating());
+        assertEquals("3.50", value.getText().toString());
+        value.performClick();
+        org.robolectric.shadows.ShadowLooper.idleMainLooper();
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        EditText input = findInput(dialog.getWindow().getDecorView());
+        input.setText("4.99");
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertFalse(dialog.isShowing());
+        assertEquals(499, filter.getMinimumRating());
+        assertEquals("4.99", value.getText().toString());
+        assertEquals(4.99f, stars.getRating(), 0.011f);
+        value.performClick();
+        org.robolectric.shadows.ShadowLooper.idleMainLooper();
+        dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        findInput(dialog.getWindow().getDecorView()).setText("1.00");
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+        assertEquals(499, filter.getMinimumRating());
+        filter.setMinimumRating(0);
+        assertEquals("0.00", value.getText().toString());
+        content.measure(View.MeasureSpec.makeMeasureSpec(280, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.AT_MOST));
+        content.layout(0, 0, content.getMeasuredWidth(), content.getMeasuredHeight());
+        View row = content.findViewById(R.id.search_rating_row);
+        View label = ((android.view.ViewGroup) row).getChildAt(3);
+        assertTrue(stars.getWidth() > 0);
+        assertTrue(stars.getRight() <= value.getLeft());
+        assertTrue(label.getRight() <= row.getWidth());
+    }
+
     @Test public void preservesThresholdAcrossParcelBookmarksAndAllSearchModes() {
         ListUrlBuilder builder = new ListUrlBuilder();
         builder.setKeyword("artist:test");

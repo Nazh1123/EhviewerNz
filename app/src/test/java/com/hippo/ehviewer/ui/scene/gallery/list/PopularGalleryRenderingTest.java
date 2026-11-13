@@ -1099,6 +1099,260 @@ public class PopularGalleryRenderingTest {
         assertEquals(List.of(1L, 2L, 3L), visibleIds());
     }
 
+    @Test public void ratingDialogFilterStaysLocalAndRestoreReturnsEveryLoadedGallery() {
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        builder.setMinRatingHundredths(350);
+        Settings.putPersistentMinRatingHundredths(300);
+        String originalSearch = builder.build();
+        ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
+        androidx.appcompat.app.AlertDialog dialog = latestRatingDialog();
+        assertEquals("3.50", ((TextView) dialog.findViewById(R.id.search_rating_value)).getText().toString());
+        ((android.widget.RatingBar) dialog.findViewById(R.id.search_rating_stars))
+                .getOnRatingBarChangeListener().onRatingChanged(
+                        dialog.findViewById(R.id.search_rating_stars), 5f, true);
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick();
+        finishPopularRatingSort(jobs);
+        assertEquals(List.of(3L), visibleIds());
+        assertEquals(originalSearch, builder.build());
+        assertEquals(350, builder.getMinRatingHundredths());
+        assertEquals(300, Settings.getConfiguredPersistentMinRatingHundredths());
+        assertEquals(List.of(1L, 2L, 3L), GalleryRatingSortTest.ids(helper.getData()));
+        ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
+        latestRatingDialog().getButton(android.content.DialogInterface.BUTTON_NEUTRAL).performClick();
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+        assertEquals(List.of(1L, 2L, 3L), visibleIds());
+        assertEquals(originalSearch, builder.build());
+        assertEquals(300, Settings.getConfiguredPersistentMinRatingHundredths());
+    }
+
+    @Test @Config(sdk = 36)
+    public void emptyRatingLayoutDuringPendingScrollDoesNotKeepDetachedSpanViews() {
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        refresh(java.util.stream.LongStream.rangeClosed(1, 50).toArray());
+        for (GalleryInfo gallery : helper.getData()) gallery.apiRating = gallery.rating = 4.5f;
+        adapter.setType(GalleryAdapterNew.TYPE_GRID);
+        assertRatingRowsRendered(50);
+        StaggeredGridLayoutManager manager = (StaggeredGridLayoutManager) recycler.getLayoutManager();
+        manager.scrollToPosition(0);
+        ReflectionHelpers.setField(scene, "mRatingSortMinimum", 500);
+        enableRatingSort();
+        assertEquals(0, adapter.getItemCount());
+        // Exercise the empty pending-scroll layout directly, independently of frame scheduling.
+        RecyclerView.State empty = new RecyclerView.State();
+        RecyclerView.Recycler cached = ReflectionHelpers.getField(recycler, "mRecycler");
+        manager.onLayoutChildren(cached, empty);
+        manager.onLayoutCompleted(empty);
+        assertEquals(0, recycler.getChildCount());
+        Object[] spans = ReflectionHelpers.getField(manager, "mSpans");
+        for (Object span : spans) {
+            List<View> spanViews = ReflectionHelpers.getField(span, "mViews");
+            assertTrue("Empty layout must release detached span views", spanViews.isEmpty());
+        }
+        applyRatingFilter(jobs, 3.5f);
+        assertRatingRowsRendered(50);
+    }
+
+    @Test @Config(sdk = 36)
+    public void emptyRatingProjectionCanShowResultsAgainAfterLoweringTheMinimum() {
+        for (int type : new int[]{GalleryAdapterNew.TYPE_LIST, GalleryAdapterNew.TYPE_GRID}) {
+            ManualProgressExecutor jobs = prepareEmptyRatingFilter(type);
+            applyRatingFilter(jobs, 3.5f);
+            assertEquals(GalleryRatingSortTest.ids(helper.getData()), visibleIds());
+            assertRatingRowsRendered(50);
+            ReflectionHelpers.callInstanceMethod(scene, "restoreRatingOrder");
+        }
+    }
+
+    @Test @Config(sdk = 36)
+    public void emptyRatingProjectionCanRestoreTheOriginalList() {
+        for (int type : new int[]{GalleryAdapterNew.TYPE_LIST, GalleryAdapterNew.TYPE_GRID}) {
+            prepareEmptyRatingFilter(type);
+            ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
+            latestRatingDialog().getButton(android.content.DialogInterface.BUTTON_NEUTRAL).performClick();
+            shadowOf(Looper.getMainLooper()).idle();
+            assertEquals(GalleryRatingSortTest.ids(helper.getData()), visibleIds());
+            assertRatingRowsRendered(50);
+        }
+    }
+
+    @Test @Config(sdk = 36)
+    public void emptyRatingProjectionDoesNotLeaveANewSearchVisuallyEmpty() {
+        for (int type : new int[]{GalleryAdapterNew.TYPE_LIST, GalleryAdapterNew.TYPE_GRID}) {
+            ManualProgressExecutor jobs = prepareEmptyRatingFilter(type);
+            ListUrlBuilder next = new ListUrlBuilder();
+            next.setKeyword("another search");
+            Bundle args = new Bundle();
+            args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_LIST_URL_BUILDER);
+            args.putParcelable(GalleryListScene.KEY_LIST_URL_BUILDER, next);
+            scene.onNewArguments(args);
+            jobs.runAll();
+            refresh(4, 5);
+            assertEquals(List.of(4L, 5L), visibleIds());
+            assertRatingRowsRendered(2);
+        }
+    }
+
+    private ManualProgressExecutor prepareEmptyRatingFilter(int type) {
+        ReflectionHelpers.callInstanceMethod(scene, "restoreRatingOrder");
+        ReflectionHelpers.setField(scene, "mRatingSortController", null);
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        refresh(java.util.stream.LongStream.rangeClosed(1, 50).toArray());
+        for (GalleryInfo gallery : helper.getData()) gallery.apiRating = gallery.rating = 4.5f;
+        adapter.setType(type);
+        assertRatingRowsRendered(50);
+        applyRatingFilter(jobs, 5f);
+        layout();
+        assertEquals(0, adapter.getItemCount());
+        assertEquals(0, recycler.getChildCount());
+        assertEquals(50, helper.size());
+        Object[] spans = ReflectionHelpers.getField(recycler.getLayoutManager(), "mSpans");
+        for (Object span : spans) {
+            List<View> spanViews = ReflectionHelpers.getField(span, "mViews");
+            assertTrue("Empty layout must release detached span views", spanViews.isEmpty());
+        }
+        return jobs;
+    }
+
+    private void assertRatingRowsRendered(int count) {
+        layout();
+        assertEquals(count, adapter.getItemCount());
+        assertEquals(0, helper.getShownViewIndex());
+        assertTrue(recycler.isShown());
+        assertEquals(1f, content.findViewById(R.id.content_view).getAlpha(), 0f);
+        assertTrue("Recycler must attach visible gallery rows", recycler.getChildCount() > 0);
+        GalleryAdapterNew.GalleryHolder holder = (GalleryAdapterNew.GalleryHolder)
+                recycler.getChildViewHolder(recycler.getChildAt(0));
+        assertTrue(holder.boundGid > 0);
+        assertTrue(holder.itemView.getHeight() > 0);
+    }
+
+    @Test public void fullRefreshPreservesRatingFilterForTheSameSearch() {
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        applyLocalRatingFilter(jobs);
+        helper.refresh();
+        assertTrue(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+        assertEquals(500, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+        finishRatingFilterRefresh(jobs);
+    }
+
+    @Test public void pullToRefreshPreservesRatingFilterForTheSameSearch() {
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        applyLocalRatingFilter(jobs);
+        RefreshLayout.OnRefreshListener listener = ReflectionHelpers.getField(helper, "mOnRefreshListener");
+        listener.onHeaderRefresh();
+        assertTrue(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+        assertEquals(500, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+        finishRatingFilterRefresh(jobs);
+    }
+
+    private void finishRatingFilterRefresh(ManualProgressExecutor jobs) {
+        GalleryListParser.Result result = new GalleryListParser.Result();
+        result.pages = 1;
+        result.galleryInfoList = galleries(4, 5);
+        for (GalleryInfo gallery : result.galleryInfoList) {
+            gallery.apiRating = gallery.rating = gallery.gid == 4 ? 5f : 4f;
+        }
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListSuccess",
+                ClassParameter.from(GalleryListParser.Result.class, result), ClassParameter.from(int.class, task));
+        finishPopularRatingSort(jobs);
+        assertEquals(500, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+        assertEquals(List.of(4L), visibleIds());
+        assertEquals(List.of(4L, 5L), GalleryRatingSortTest.ids(helper.getData()));
+        assertEquals(0, builder.getMinRatingHundredths());
+        assertEquals(0, Settings.getConfiguredPersistentMinRatingHundredths());
+    }
+
+    @Test public void newSearchDoesNotInheritRatingDialogFilterOrQueuedSortCallbacks() {
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        applyLocalRatingFilter(jobs);
+        GalleryRatingSortController controller = ReflectionHelpers.callInstanceMethod(scene, "getRatingSortController");
+        controller.restart(); // Leave an old sort pending when another search is opened.
+        ListUrlBuilder next = new ListUrlBuilder();
+        next.setKeyword("another search");
+        Bundle args = new Bundle();
+        args.putString(GalleryListScene.KEY_ACTION, GalleryListScene.ACTION_LIST_URL_BUILDER);
+        args.putParcelable(GalleryListScene.KEY_LIST_URL_BUILDER, next);
+        scene.onNewArguments(args);
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+        assertEquals(0, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+        assertEquals("another search", builder.getKeyword());
+        assertEquals(0, builder.getMinRatingHundredths());
+        assertEquals(0, Settings.getConfiguredPersistentMinRatingHundredths());
+        refresh(4, 5);
+        assertEquals(List.of(4L, 5L), visibleIds());
+    }
+
+    @Test public void restoringRatingFilterCannotBeReenabledByFlushedSubscriptionBatch() {
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        applyLocalRatingFilter(jobs);
+        helper.doGetData(ContentLayout.ContentHelper.TYPE_NEXT_PAGE_KEEP_POS, 1,
+                ContentLayout.ContentHelper.REFRESH_TYPE_FOOTER);
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        BookmarkSubscriptionCoordinator coordinator = new BookmarkSubscriptionCoordinator(
+                new EhClient(scene.getContext()), new BookmarkSubscriptionCoordinator.Listener() {
+            @Override public void onBookmarkSubscriptionBatch(int taskId, List<GalleryInfo> data,
+                    boolean hasMore, boolean refresh, boolean noSubscriptions, boolean partialFailure) {
+                GalleryListParser.Result result = new GalleryListParser.Result();
+                result.pages = 2;
+                result.galleryInfoList = data;
+                ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListSuccess",
+                        ClassParameter.from(GalleryListParser.Result.class, result),
+                        ClassParameter.from(int.class, taskId));
+            }
+            @Override public void onBookmarkSubscriptionFailure(int taskId, Exception error) {
+                throw new AssertionError(error);
+            }
+        });
+        List<GalleryInfo> pending = ReflectionHelpers.getField(coordinator, "mPendingBatch");
+        GalleryInfo extra = galleries(4).get(0);
+        extra.apiRating = extra.rating = 1;
+        pending.add(extra);
+        ReflectionHelpers.setField(coordinator, "mTaskId", task);
+        ReflectionHelpers.setField(coordinator, "mLoading", true);
+        ReflectionHelpers.setField(scene, "mBookmarkSubscriptionCoordinator", coordinator);
+        ReflectionHelpers.callInstanceMethod(scene, "restoreRatingOrder");
+        jobs.runAll();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+        assertEquals(List.of(1L, 2L, 3L, 4L), visibleIds());
+        assertEquals(0, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+    }
+
+    private ManualProgressExecutor prepareLocalRatingFilter() {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        refresh(1, 2, 3);
+        for (GalleryInfo gallery : helper.getData()) {
+            gallery.apiRating = gallery.rating = gallery.gid == 3 ? 5f : gallery.gid == 2 ? 4f : 3.5f;
+        }
+        ManualProgressExecutor jobs = new ManualProgressExecutor();
+        ReflectionHelpers.setField(scene, "executorService", jobs);
+        ReflectionHelpers.setField(scene, "mClient", new EhClient(scene.getContext()));
+        return jobs;
+    }
+
+    private void applyLocalRatingFilter(ManualProgressExecutor jobs) {
+        applyRatingFilter(jobs, 5f);
+        assertEquals(List.of(3L), visibleIds());
+    }
+
+    private void applyRatingFilter(ManualProgressExecutor jobs, float rating) {
+        ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
+        androidx.appcompat.app.AlertDialog dialog = latestRatingDialog();
+        android.widget.RatingBar stars = dialog.findViewById(R.id.search_rating_stars);
+        stars.getOnRatingBarChangeListener().onRatingChanged(stars, rating, true);
+        dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick();
+        finishPopularRatingSort(jobs);
+    }
+
+    private androidx.appcompat.app.AlertDialog latestRatingDialog() {
+        return (androidx.appcompat.app.AlertDialog) org.robolectric.shadows.ShadowDialog.getLatestDialog();
+    }
+
     @Test public void ratingSortCombinesWithDownloadedFilterAndRestoresReadDivider() {
         subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 3);
         ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
