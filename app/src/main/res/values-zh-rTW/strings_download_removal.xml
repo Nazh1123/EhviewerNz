@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_remove_gallery_title">標題:</string>
+    <string name="download_remove_time">下載時間:</string>
+    <string name="download_remove_time_unknown">未知</string>
+</resources>
