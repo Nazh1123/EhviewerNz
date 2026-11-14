@@ -291,7 +291,13 @@ public class GalleryListScene extends BaseScene
     private int mRestoredRatingPages;
     private String mRestoredRatingCutoff;
     private int mRatingSortMonths = 1;
-    private int mRatingSortMinimum;
+    private final RatingSearchCoverage mRatingSearchCoverage = new RatingSearchCoverage();
+    private boolean mRetainsRatingCandidates;
+    private boolean mRatingConditionOnly;
+    private boolean mRatingHistoryRebindPending;
+    private boolean mRestartRatingSortAfterRefresh;
+    private int mPendingRatingPages;
+    private String mPendingRatingCutoff;
     private boolean mRatingLoading;
     private boolean mRatingBrowseGestureArmed;
     private boolean mRatingSortScrollToTop;
@@ -614,7 +620,11 @@ public class GalleryListScene extends BaseScene
         mRestoredRatingPages = savedInstanceState.getInt("rating_sort_pages");
         mRestoredRatingCutoff = savedInstanceState.getString("rating_sort_cutoff");
         mRatingSortMonths = savedInstanceState.getInt("rating_sort_months", 1);
-        mRatingSortMinimum = savedInstanceState.getInt("rating_sort_minimum");
+        mRatingSearchCoverage.restore(savedInstanceState.getInt("rating_search_coverage", -1));
+        mRetainsRatingCandidates = savedInstanceState.getBoolean("rating_search_candidates");
+        mRestartRatingSortAfterRefresh = savedInstanceState.getBoolean("rating_restart_pending");
+        mPendingRatingPages = savedInstanceState.getInt("rating_pending_pages");
+        mPendingRatingCutoff = savedInstanceState.getString("rating_pending_cutoff");
         mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
         mPopularUpdatesOnlyOverride = savedInstanceState.containsKey(KEY_POPULAR_UPDATES_ONLY)
                 ? savedInstanceState.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
@@ -662,7 +672,11 @@ public class GalleryListScene extends BaseScene
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
         outState.putBoolean(KEY_RATING_SORT_MODE, mRatingSortMode);
         outState.putInt("rating_sort_months", mRatingSortMonths);
-        outState.putInt("rating_sort_minimum", mRatingSortMinimum);
+        outState.putInt("rating_search_coverage", mRatingSearchCoverage.minimum());
+        outState.putBoolean("rating_search_candidates", mRetainsRatingCandidates);
+        outState.putBoolean("rating_restart_pending", mRestartRatingSortAfterRefresh);
+        outState.putInt("rating_pending_pages", mPendingRatingPages);
+        outState.putString("rating_pending_cutoff", mPendingRatingCutoff);
         outState.putInt("rating_sort_pages", mRatingSortController == null
                 ? mRestoredRatingPages : mRatingSortController.targetPages());
         outState.putString("rating_sort_cutoff", mRatingSortController == null
@@ -2121,7 +2135,7 @@ public class GalleryListScene extends BaseScene
         String status = getString(isBookmarkSubscriptionMode() ? R.string.gallery_rating_sort_batch_status
                         : R.string.gallery_rating_sort_status,
                 mHelper == null ? 0 : mHelper.getLoadedSourcePages(),
-                mAdapter == null ? 0 : mAdapter.getSourceData().size(),
+                mAdapter == null ? 0 : mAdapter.getRatingSourceData().size(),
                 mAdapter == null ? 0 : mAdapter.getGalleryCount());
         if (isBookmarkSubscriptionMode() && mBookmarkSubscriptionCoordinator != null) {
             status += "\n" + getString(R.string.gallery_rating_sort_sources,
@@ -2143,15 +2157,18 @@ public class GalleryListScene extends BaseScene
         if (mRatingSortController == null) {
             mRatingSortController = new GalleryRatingSortController(new GalleryRatingSortController.Host() {
                 @Override public List<GalleryInfo> galleries() {
-                    return mAdapter == null ? Collections.emptyList() : mAdapter.getSourceData();
+                    return mAdapter == null ? Collections.emptyList() : mAdapter.getRatingSourceData();
+                }
+                @Override public boolean filterAllLoadedRatings() {
+                    return mRetainsRatingCandidates && currentRatingMinimum() > 0;
                 }
                 @Override public List<GalleryInfo> galleriesInRange(int pages, String cutoff) {
                     if (mAdapter == null || mHelper == null) return Collections.emptyList();
-                    if (pages <= 0 && cutoff == null) return mAdapter.getSourceData();
+                    if (pages <= 0 && cutoff == null) return mAdapter.getRatingSourceData();
                     Set<Long> included = new HashSet<>();
                     for (GalleryInfo gallery : mHelper.getLoadedRangeData(pages, cutoff)) included.add(gallery.gid);
                     List<GalleryInfo> result = new ArrayList<>();
-                    for (GalleryInfo gallery : mAdapter.getSourceData()) {
+                    for (GalleryInfo gallery : mAdapter.getRatingSourceData()) {
                         if (included.contains(gallery.gid)) result.add(gallery);
                     }
                     return result;
@@ -2194,6 +2211,16 @@ public class GalleryListScene extends BaseScene
                 }
                 @Override public void sorted(List<GalleryInfo> order, boolean incomplete) {
                     if (mAdapter == null || mRecyclerView == null) return;
+                    commitRetainedRatingHistory();
+                    if (mRatingConditionOnly) {
+                        mRatingConditionOnly = false;
+                        mAdapter.onSourceDataSetChanged();
+                        if (mRatingProgressDialog != null) mRatingProgressDialog.dismiss();
+                        mRatingProgressDialog = null;
+                        updateModeActions();
+                        if (incomplete) showTip(R.string.gallery_rating_sort_incomplete, LENGTH_LONG);
+                        return;
+                    }
                     int first = com.hippo.easyrecyclerview.LayoutManagerUtils
                             .getFirstVisibleItemPosition(mRecyclerView.getLayoutManager());
                     GalleryInfo anchor = mAdapter.getDataAt(first);
@@ -2235,10 +2262,12 @@ public class GalleryListScene extends BaseScene
 
     private void restoreRatingOrder() {
         boolean wasSorted = mRatingSortMode;
+        mRestartRatingSortAfterRefresh = false;
         // Cancelling may publish a buffered subscription batch synchronously. Disable
         // the projection first so that its callback cannot start another sort.
         mRatingSortMode = false;
-        mRatingSortMinimum = 0;
+        mRatingConditionOnly = false;
+        mRatingHistoryRebindPending = false;
         mRatingOrder.clear();
         mRestoredRatingPages = 0;
         mRestoredRatingCutoff = null;
@@ -2313,8 +2342,13 @@ public class GalleryListScene extends BaseScene
         int searchMinimum = Math.max(mUrlBuilder.getEffectiveMinRatingHundredths(),
                 mUrlBuilder.getSubscriptionMinRatingHundredths());
         RatingFilterControl ratingFilter = new RatingFilterControl(content,
-                mRatingSortMode ? mRatingSortMinimum : Math.max(275, searchMinimum),
+                Math.max(275, searchMinimum),
                 ignored -> {});
+        ((TextView) content.findViewById(R.id.search_rating_current)).setText(
+                getString(R.string.search_rating_current, SearchRating.format(searchMinimum)));
+        content.findViewById(R.id.search_rating_current).setVisibility(View.VISIBLE);
+        content.findViewById(R.id.search_rating_row).setVisibility(
+                Settings.getEnablePreciseRatingFilter() ? View.VISIBLE : View.GONE);
         range.setOnCheckedChangeListener((group, id) -> {
             pages.setEnabled(id == R.id.rating_sort_pages);
             months.setEnabled(id == R.id.rating_sort_months);
@@ -2352,14 +2386,93 @@ public class GalleryListScene extends BaseScene
                     date = GalleryRatingSort.cutoff(ZonedDateTime.now(), value);
                 }
             }
-            mRatingSortMinimum = ratingFilter.getMinimumRating();
             stopDownloadedPageScan(false);
             mRatingSortScrollToTop = true;
             AppHelper.hideSoftInput(dialog);
             dialog.dismiss();
-            showRatingProgress();
-            getRatingSortController().start(target, date);
+            ListUrlBuilder next = new ListUrlBuilder();
+            next.set(mUrlBuilder);
+            if (Settings.getEnablePreciseRatingFilter())
+                next.setMinRatingHundredths(ratingFilter.getMinimumRating());
+            applyRatingSearch(next, true, target, date);
         });
+    }
+
+    private int currentRatingMinimum() {
+        return mUrlBuilder == null ? 0 : Math.max(mUrlBuilder.getEffectiveMinRatingHundredths(),
+                mUrlBuilder.getSubscriptionMinRatingHundredths());
+    }
+
+    /** Both entry points commit the same search value, retaining candidates whenever complete. */
+    private void applyRatingSearch(ListUrlBuilder next, boolean sort, int pages, String cutoff) {
+        int minimum = Math.max(next.getEffectiveMinRatingHundredths(), next.getSubscriptionMinRatingHundredths());
+        boolean changed = currentRatingMinimum() != minimum;
+        boolean reuse = !changed || (mRetainsRatingCandidates && mRatingSearchCoverage.contains(minimum));
+        int loadedPages = mHelper.getLoadedSourcePages();
+        stopRatingLoading();
+        if (mListRequest != null) mListRequest.cancel();
+        mListRequest = null;
+        mHelper.cancelPageTask();
+        mUrlBuilder.set(next);
+        mLastRequestedRatingMinimum = mUrlBuilder.getEffectiveMinRatingHundredths();
+        mLastRequestedPreciseRating = Settings.getEnablePreciseRatingFilter();
+        onUpdateUrlBuilder();
+        mRatingConditionOnly = false;
+        if (!reuse) {
+            mRatingSortMode = false;
+            mRatingOrder.clear();
+            mRestartRatingSortAfterRefresh = sort;
+            // Rebuild the same amount of already-loaded work when sorting "loaded results".
+            mPendingRatingPages = pages > 0 || cutoff != null ? pages : loadedPages;
+            mPendingRatingCutoff = cutoff;
+            mHelper.refresh();
+            return;
+        }
+        mHelper.firstHref = next.applyRatingToContinuation(mHelper.firstHref);
+        mHelper.prevHref = next.applyRatingToContinuation(mHelper.prevHref);
+        mHelper.nextHref = next.applyRatingToContinuation(mHelper.nextHref);
+        mHelper.lastHref = next.applyRatingToContinuation(mHelper.lastHref);
+        if (changed && SeenGalleryHistory.supports(mUrlBuilder)) {
+            mSeenSearch = SeenGalleryHistory.open(mUrlBuilder);
+            mRatingHistoryRebindPending = mSeenSearch != null;
+            mSeenProjection.reset();
+            mSeenNewGids.clear();
+            if (mSeenSearch != null) for (GalleryInfo gallery : mHelper.getData()) {
+                if (mSeenSearch.baseline().isNew(gallery)) mSeenNewGids.add(gallery.gid);
+            }
+        }
+        if (mAdapter != null) mAdapter.onSourceDataSetChanged();
+        if (sort) {
+            showRatingProgress();
+            getRatingSortController().start(pages, cutoff);
+        } else if (minimum > 0 && mAdapter != null && mAdapter.getRatingSourceData().stream()
+                .anyMatch(gallery -> !gallery.hasApiRating() || gallery.firstGid == null)) {
+            // Enrich candidates without replacing the website order or repeating the HTML search.
+            mRatingConditionOnly = true;
+            showRatingProgress();
+            getRatingSortController().start(0, null);
+        } else {
+            commitRetainedRatingHistory();
+            if (mAdapter != null) mAdapter.onSourceDataSetChanged();
+        }
+    }
+
+    /** Seed the new logical search with its cached prefix before committing later pages to it. */
+    private void commitRetainedRatingHistory() {
+        if (!mRatingHistoryRebindPending || mSeenSearch == null || mHelper == null) return;
+        mRatingHistoryRebindPending = false;
+        GalleryListParser.Result cached = new GalleryListParser.Result();
+        cached.rawGalleries = new ArrayList<>(mHelper.getData());
+        cached.galleryInfoList = new ArrayList<>();
+        for (GalleryInfo gallery : cached.rawGalleries) {
+            cached.rawPublicationTimes.put(gallery.gid, gallery.posted);
+            if (SearchRating.matches(gallery.rating, currentRatingMinimum())) cached.galleryInfoList.add(gallery);
+        }
+        cached.rawSeenState = GallerySeenState.empty().observe(cached.rawGalleries);
+        cached.rawTailPosted = mHelper.getOldestLoadedPosted();
+        SeenGalleryHistory.record(mSeenSearch, cached, mHelper.hasNextPage());
+        mSeenNewGids.clear();
+        mSeenNewGids.addAll(mSeenSearch.newGids());
     }
 
     private void executeListRequest(EhRequest request) {
@@ -3374,6 +3487,9 @@ public class GalleryListScene extends BaseScene
             query = query.replace("\r", "").replace("\n", "");
         }
 
+        ListUrlBuilder previous = new ListUrlBuilder();
+        previous.set(mUrlBuilder);
+
         if (mState == STATE_SEARCH || mState == STATE_SEARCH_SHOW_LIST) {
             try {
                 mSearchLayout.formatListUrlBuilder(mUrlBuilder, query);
@@ -3391,6 +3507,19 @@ public class GalleryListScene extends BaseScene
             mUrlBuilder.setMode(newMode);
             mUrlBuilder.setKeyword(query);
         }
+        if (!mHelper.isRefreshing() && mHelper.getLoadedSourcePages() > 0
+                && previous.sameSearchExceptRating(mUrlBuilder)
+                && Math.max(previous.getEffectiveMinRatingHundredths(), previous.getSubscriptionMinRatingHundredths())
+                != currentRatingMinimum()) {
+            ListUrlBuilder next = new ListUrlBuilder();
+            next.set(mUrlBuilder);
+            mUrlBuilder.set(previous);
+            GalleryRatingSortController controller = getRatingSortController();
+            applyRatingSearch(next, mRatingSortMode, controller.targetPages(), controller.cutoff());
+            setState(STATE_NORMAL);
+            return;
+        }
+        mRestartRatingSortAfterRefresh = false;
         resetDownloadedOnlyModeForNewSearch();
         onUpdateUrlBuilder();
         mHelper.refresh();
@@ -3652,7 +3781,14 @@ public class GalleryListScene extends BaseScene
 
             mHelper.setEmptyString(emptyString);
 //            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
-            mHelper.onGetPageData(taskId, result, result.galleryInfoList);
+            if (result.customErrorString == null && SearchRating.retainsSearchCandidates(mUrlBuilder.getMode())) {
+                boolean replace = mHelper.isCurrentTaskRefresh(taskId) || mHelper.getLoadedSourcePages() == 0;
+                if (replace) mRetainsRatingCandidates = result.ratingCandidates != null;
+                mRatingSearchCoverage.record(result.ratingCandidates == null ? -1 : result.ratingCandidateFloor, replace);
+            }
+            List<GalleryInfo> candidates = mRetainsRatingCandidates && result.ratingCandidates != null
+                    ? result.ratingCandidates : result.galleryInfoList;
+            mHelper.onGetPageData(taskId, result, candidates);
             if (loadedYesterdayPeriod != YesterdayTopListReadState.NO_PERIOD) {
                 mLoadedYesterdayTopListPeriod = loadedYesterdayPeriod;
                 markYesterdayTopListReadIfVisible();
@@ -3667,7 +3803,11 @@ public class GalleryListScene extends BaseScene
                     showPopularNoUpdatesNotice();
                 }
             }
-            if (mRatingSortController != null && mRatingSortController.isActive()) {
+            if (mRestartRatingSortAfterRefresh && result.customErrorString == null) {
+                mRestartRatingSortAfterRefresh = false;
+                showRatingProgress();
+                getRatingSortController().start(mPendingRatingPages, mPendingRatingCutoff);
+            } else if (mRatingSortController != null && mRatingSortController.isActive()) {
                 if (mRatingSortController.isWaitingForPage()) mRatingSortController.pageLoaded(result);
                 else mRatingSortController.restart();
             } else if (mRatingSortMode && !mRatingLoading && result.customErrorString == null) {
@@ -3680,6 +3820,7 @@ public class GalleryListScene extends BaseScene
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
             mListRequest = null;
+            mRestartRatingSortAfterRefresh = false;
             stopDownloadedPageScan(false);
             mHelper.onGetException(taskId, e);
             if (mRatingSortController != null) mRatingSortController.pageFailed();
@@ -3926,6 +4067,7 @@ public class GalleryListScene extends BaseScene
         private final List<GalleryInfo> mDownloadedData = new ArrayList<>();
         private final List<GalleryInfo> mPopularData = new ArrayList<>();
         private final List<GalleryInfo> mViewedData = new ArrayList<>();
+        private final List<GalleryInfo> mSearchRatingData = new ArrayList<>();
         private List<GalleryInfo> mRatingData = Collections.emptyList();
         private int mPopularNewCount;
         private int mSectionDividerPosition = -1;
@@ -3936,12 +4078,33 @@ public class GalleryListScene extends BaseScene
         }
 
         private List<GalleryInfo> getSourceData() {
+            if (hasSearchRatingProjection()) return mSearchRatingData;
+            return getRatingSourceData();
+        }
+
+        private List<GalleryInfo> getRatingSourceData() {
             if (hasPopularProjection()) return mPopularData;
             return hasViewedProjection() ? mViewedData : mHelper.getData();
         }
 
+        private boolean hasSearchRatingProjection() {
+            return mRetainsRatingCandidates && mUrlBuilder != null
+                    && SearchRating.retainsSearchCandidates(mUrlBuilder.getMode());
+        }
+
+        private void rebuildSearchRatingData() {
+            mSearchRatingData.clear();
+            if (!hasSearchRatingProjection()) return;
+            int minimum = currentRatingMinimum();
+            for (GalleryInfo gallery : getRatingSourceData()) {
+                if (minimum <= 0 || gallery.hasApiRating() && gallery.firstGid != null && gallery.firstGid >= 0
+                        && SearchRating.matches(gallery.apiRating, minimum)) mSearchRatingData.add(gallery);
+            }
+        }
+
         private boolean hasDisplayProjection() {
-            return mRatingSortMode || mDownloadedOnlyMode || hasPopularProjection() || hasViewedProjection();
+            return mRatingSortMode || mDownloadedOnlyMode || hasPopularProjection() || hasViewedProjection()
+                    || hasSearchRatingProjection();
         }
 
         private boolean hasViewedProjection() {
@@ -3979,7 +4142,7 @@ public class GalleryListScene extends BaseScene
         private void rebuildSectionDivider() {
             mRatingData = mRatingSortMode ? GalleryRatingSort.project(
                     mDownloadedOnlyMode ? mDownloadedData : getSourceData(), mRatingOrder,
-                    mRatingSortMinimum) : Collections.emptyList();
+                    currentRatingMinimum()) : Collections.emptyList();
             mSectionDividerPosition = -1;
             if (mRatingSortMode) return;
             Set<Long> newGids = new HashSet<>();
@@ -4021,6 +4184,7 @@ public class GalleryListScene extends BaseScene
                 return mDownloadedData != null ? mDownloadedData.size() : 0;
             }
             if (hasPopularProjection()) return mPopularData != null ? mPopularData.size() : 0;
+            if (hasSearchRatingProjection()) return mSearchRatingData.size();
             if (hasViewedProjection()) return mViewedData.size();
             return null != mHelper ? mHelper.size() : 0;
         }
@@ -4047,6 +4211,9 @@ public class GalleryListScene extends BaseScene
             }
             if (hasPopularProjection()) {
                 return position >= 0 && position < mPopularData.size() ? mPopularData.get(position) : null;
+            }
+            if (hasSearchRatingProjection()) {
+                return position >= 0 && position < mSearchRatingData.size() ? mSearchRatingData.get(position) : null;
             }
             if (hasViewedProjection()) {
                 return position >= 0 && position < mViewedData.size() ? mViewedData.get(position) : null;
@@ -4090,6 +4257,7 @@ public class GalleryListScene extends BaseScene
         void onDownloadedOnlyModeChanged() {
             rebuildPopularData();
             rebuildViewedData();
+            rebuildSearchRatingData();
             rebuildDownloadedData();
             rebuildSectionDivider();
             notifyDataSetChanged();
@@ -4098,6 +4266,7 @@ public class GalleryListScene extends BaseScene
         void onSourceDataSetChanged() {
             rebuildPopularData();
             rebuildViewedData();
+            rebuildSearchRatingData();
             if (mDownloadedOnlyMode) {
                 rebuildDownloadedData();
             }
@@ -4106,7 +4275,7 @@ public class GalleryListScene extends BaseScene
         }
 
         void onSourceItemRangeInserted(int positionStart, int itemCount) {
-            if (mRatingSortMode || hasPopularProjection() || hasViewedProjection()) {
+            if (mRatingSortMode || hasPopularProjection() || hasViewedProjection() || hasSearchRatingProjection()) {
                 onSourceDataSetChanged();
                 return;
             }
@@ -4119,7 +4288,7 @@ public class GalleryListScene extends BaseScene
         }
 
         void onSourceItemRangeRemoved(int positionStart, int itemCount) {
-            if (mRatingSortMode || hasPopularProjection() || hasViewedProjection()) {
+            if (mRatingSortMode || hasPopularProjection() || hasViewedProjection() || hasSearchRatingProjection()) {
                 onSourceDataSetChanged();
                 return;
             }
@@ -4236,6 +4405,7 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public void refresh() {
+            mRatingSearchCoverage.clear();
             mSubscriptionReusedTitle = null;
             mSubscriptionStaleResult = false;
             updateSubscriptionResultTitle();
@@ -4247,6 +4417,7 @@ public class GalleryListScene extends BaseScene
         }
 
         @Override public void goTo(int page) {
+            mRatingSearchCoverage.clear();
             boolean wasSorted = mRatingSortMode;
             restoreRatingOrder();
             if (wasSorted) showTip(R.string.gallery_rating_sort_jump_reset, LENGTH_SHORT);

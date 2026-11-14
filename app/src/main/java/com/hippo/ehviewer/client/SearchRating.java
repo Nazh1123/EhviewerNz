@@ -37,6 +37,37 @@ public final class SearchRating {
                 || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION;
     }
 
+    public static boolean retainsSearchCandidates(int mode) {
+        return mode == ListUrlBuilder.MODE_NORMAL || mode == ListUrlBuilder.MODE_SUBSCRIPTION
+                || mode == ListUrlBuilder.MODE_TAG || mode == ListUrlBuilder.MODE_UPLOADER
+                || mode == ListUrlBuilder.MODE_FILTER;
+    }
+
+    /** The lowest score the server could have returned for this actual request. */
+    public static int serverFloor(String url) {
+        HttpUrl parsed = HttpUrl.parse(url);
+        if (parsed == null) return -1;
+        // Current website continuation links keep f_srdd but omit the legacy f_sr toggle.
+        String minimum = parsed.queryParameter("f_srdd");
+        if (minimum == null || minimum.isEmpty() || "0".equals(minimum)) return 0;
+        try {
+            int option = Integer.parseInt(minimum);
+            return option >= 2 && option <= 5 ? option * 100 - 25 : -1;
+        } catch (NumberFormatException error) { return -1; }
+    }
+
+    /** Keep the website's continuation cursor and every unrelated search condition. */
+    public static String withServerMinimum(String url, int option) {
+        if (url == null || url.isEmpty()) return url;
+        HttpUrl parsed = HttpUrl.parse(url);
+        if (parsed == null) return url;
+        HttpUrl.Builder builder = parsed.newBuilder().removeAllQueryParameters("f_sr")
+                .removeAllQueryParameters("f_srdd");
+        if (option >= 2) builder.setQueryParameter("advsearch", "1")
+                .addQueryParameter("f_sr", "on").addQueryParameter("f_srdd", String.valueOf(option));
+        return builder.build().toString();
+    }
+
     public static String withoutServerFilter(String url) {
         HttpUrl parsed = HttpUrl.parse(url);
         if (parsed == null || parsed.queryParameter("f_sr") == null

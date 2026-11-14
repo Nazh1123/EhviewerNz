@@ -27,6 +27,7 @@ final class GalleryRatingSortController {
     interface Host {
         List<GalleryInfo> galleries();
         List<GalleryInfo> galleriesInRange(int pages, String cutoff);
+        default boolean filterAllLoadedRatings() { return false; }
         int loadedPages();
         String oldestPosted();
         boolean hasNextPage();
@@ -167,7 +168,9 @@ final class GalleryRatingSortController {
     void restart() { start(targetPages, cutoff); }
 
     private void enqueueMissing() {
-        for (GalleryInfo gallery : rangeGalleries()) {
+        // A shared search threshold also applies after leaving the selected sorting range.
+        List<GalleryInfo> candidates = host.filterAllLoadedRatings() ? host.galleries() : rangeGalleries();
+        for (GalleryInfo gallery : candidates) {
             if (reuseRating(gallery) || !enqueued.add(key(gallery))) continue;
             if (gallery.gid > 0 && gallery.token != null && !gallery.token.isEmpty()) pending.add(gallery);
         }

@@ -94,6 +94,9 @@ public class GalleryListParser {
         public List<GalleryInfo> galleryInfoList = new ArrayList<>();
         // A separate list, sharing immutable identity/metadata objects before filtering removes rows.
         public List<GalleryInfo> rawGalleries;
+        // Candidates after non-rating filters, before applying the exact search threshold.
+        public List<GalleryInfo> ratingCandidates;
+        public int ratingCandidateFloor = -1;
         // API enrichment mutates GalleryInfo.posted; pagination coverage uses the HTML timestamp.
         public final Map<Long, String> rawPublicationTimes = new HashMap<>();
         // Background checks filter only new candidates; retain the full page for later browsing.

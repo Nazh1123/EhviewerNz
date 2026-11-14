@@ -1,12 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/search_rating_row"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginTop="4dp"
     android:orientation="vertical">
 
-    <LinearLayout
+    <com.google.android.flexbox.FlexboxLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:flexWrap="wrap"
+        app:justifyContent="center"
+        app:alignItems="center">
+      <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
@@ -36,7 +43,15 @@
             android:contentDescription="@string/search_rating_title"
             android:clickable="true"
             android:focusable="true" />
-    </LinearLayout>
+      </LinearLayout>
+      <TextView
+          android:id="@+id/search_rating_current"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:layout_marginStart="8dp"
+          android:visibility="gone"
+          app:layout_flexShrink="0" />
+    </com.google.android.flexbox.FlexboxLayout>
 
     <FrameLayout
         android:layout_width="match_parent"

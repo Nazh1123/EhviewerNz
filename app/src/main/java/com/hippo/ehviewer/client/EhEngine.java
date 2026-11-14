@@ -374,6 +374,13 @@ public class EhEngine {
             extra.rawHeadGid = Math.max(result.rawHeadGid, extra.rawHeadGid);
             extra.rawSeenState = result.rawSeenState.merge(extra.rawSeenState);
             extra.sourcePages += result.sourcePages;
+            if (result.ratingCandidates != null && extra.ratingCandidates != null) {
+                List<GalleryInfo> candidates = new ArrayList<>(result.ratingCandidates);
+                candidates.addAll(extra.ratingCandidates);
+                extra.ratingCandidates = candidates;
+                extra.ratingCandidateFloor = result.ratingCandidateFloor < 0 || extra.ratingCandidateFloor < 0
+                        ? -1 : Math.max(result.ratingCandidateFloor, extra.ratingCandidateFloor);
+            }
             result.rawPublicationTimes.forEach(extra.rawPublicationTimes::putIfAbsent);
             if (result.rawGalleries != null && extra.rawGalleries != null) {
                 List<GalleryInfo> raw = new ArrayList<>(result.rawGalleries);
@@ -560,6 +567,12 @@ public class EhEngine {
         }
         fillGalleryList(task, okHttpClient, result.galleryInfoList, requestUrl, true, subscriptionScope,
                 minRatingHundredths > 0, checkOnly, true);
+        if (subscriptionScope == null && SearchRating.retainsSearchCandidates(mode)) {
+            result.ratingCandidates = new ArrayList<>(result.galleryInfoList);
+            if (minRatingHundredths > 0) result.ratingCandidates.removeIf(
+                    gallery -> gallery.firstGid == null || gallery.firstGid < 0);
+            result.ratingCandidateFloor = SearchRating.serverFloor(requestUrl);
+        }
         // Popular history must retain the entire snapshot; its UI projection applies the threshold.
         if (minRatingHundredths > 0 && mode != ListUrlBuilder.MODE_WHATS_HOT) {
             boolean hadGalleries = !result.galleryInfoList.isEmpty();

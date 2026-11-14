@@ -154,6 +154,18 @@ public class SearchRatingLoadingTest {
         assertEquals(20, complete.pages);
     }
 
+    @Test public void rejectedExactRatingsRemainAvailableWithoutAnotherHtmlOrApiRequest() throws Throwable {
+        GalleryListParser.Result result = EhEngine.getGalleryList(null, client(false), FIRST,
+                ListUrlBuilder.MODE_NORMAL, false, false, 451, false);
+        assertTrue(result.galleryInfoList.isEmpty());
+        assertFalse(result.ratingCandidates.isEmpty());
+        assertTrue(result.ratingCandidates.stream().allMatch(gallery -> gallery.hasApiRating()
+                && gallery.apiRating == 4.50f));
+        assertEquals(375, result.ratingCandidateFloor);
+        assertEquals(1, listRequests.get());
+        assertTrue(result.ratingCandidates.stream().anyMatch(gallery -> SearchRating.matches(gallery.apiRating, 450)));
+    }
+
     @Test public void usesApiDecimalsAndAdvancesPastExactlyOneEmptyBatch() throws Throwable {
         GalleryListParser.Result result = EhEngine.getGalleryList(null, client(true), FIRST,
                 ListUrlBuilder.MODE_NORMAL, false, false, 451, true);

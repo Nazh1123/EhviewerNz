@@ -276,6 +276,20 @@ public class GalleryRatingSortControllerTest {
         assertEquals(List.of(2L, 1L), GalleryRatingSortTest.ids(host.order));
     }
 
+    @Test public void sharedSearchResolvesCachedRowsOutsideSortRangeWithoutExpandingTheSort() {
+        host.rows.clear();
+        addRows(1, 3);
+        host.rangeSize = 1;
+        host.filterAll = true;
+        controller.start(0, null);
+        assertEquals(1, requests.size());
+        assertEquals(3, ((List<?>) requests.get(0).getArgs()[0]).size());
+        completeMetadata(requests.get(0));
+        assertEquals(List.of(1L), GalleryRatingSortTest.ids(host.order));
+        assertTrue(host.rows.stream().allMatch(gallery -> gallery.hasApiRating()));
+        assertEquals(0, host.nextRequests);
+    }
+
     private void addRows(int first, int last) {
         for (int i = first; i <= last; i++) {
             GalleryInfo gallery = gallery(i, 2);
@@ -293,9 +307,11 @@ public class GalleryRatingSortControllerTest {
         String oldest = "2026-11-01 00:00";
         boolean loading;
         boolean incomplete;
+        boolean filterAll;
         List<GalleryInfo> order;
         Runnable onStopped;
         @Override public List<GalleryInfo> galleries() { return rows; }
+        @Override public boolean filterAllLoadedRatings() { return filterAll; }
         @Override public List<GalleryInfo> galleriesInRange(int pages, String cutoff) { return rows.subList(0, Math.min(rows.size(), rangeSize)); }
         @Override public int loadedPages() { return pages; }
         @Override public String oldestPosted() { return oldest; }

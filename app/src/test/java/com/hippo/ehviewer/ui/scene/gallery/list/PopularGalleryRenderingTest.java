@@ -1099,7 +1099,106 @@ public class PopularGalleryRenderingTest {
         assertEquals(List.of(1L, 2L, 3L), visibleIds());
     }
 
-    @Test public void ratingDialogFilterStaysLocalAndRestoreReturnsEveryLoadedGallery() {
+    @Test public void ratingDialogDefaultKeepsFloorAndShowsCurrentSearchWithoutCommittingOnCancel() {
+        prepareLocalRatingFilter();
+        ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
+        androidx.appcompat.app.AlertDialog dialog = latestRatingDialog();
+        assertEquals("2.75", ((TextView) dialog.findViewById(R.id.search_rating_value)).getText().toString());
+        assertEquals(scene.getContext().getString(R.string.search_rating_current, "0.00"),
+                ((TextView) dialog.findViewById(R.id.search_rating_current)).getText().toString());
+        dialog.getButton(android.content.DialogInterface.BUTTON_NEGATIVE).performClick();
+        assertEquals(0, builder.getEffectiveMinRatingHundredths());
+    }
+
+    @Test public void bothEntryPointsShareRatingAndRestoreHiddenCandidatesWithoutHtmlRequests() {
+        builder.setCategory(com.hippo.ehviewer.client.EhConfig.ALL_CATEGORY);
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        com.hippo.ehviewer.widget.SearchLayout options = new com.hippo.ehviewer.widget.SearchLayout(scene.getContext(), null);
+        ReflectionHelpers.setField(scene, "mSearchLayout", options);
+        applyRatingFilter(jobs, 4f);
+        ListUrlBuilder submitted = new ListUrlBuilder();
+        try { options.formatListUrlBuilder(submitted, ""); } catch (Exception error) { throw new AssertionError(error); }
+        assertEquals(400, submitted.getEffectiveMinRatingHundredths());
+        assertEquals(List.of(3L, 2L), visibleIds());
+        options.setMinimumRating(350);
+        ReflectionHelpers.setField(scene, "mState", GalleryListScene.STATE_SEARCH);
+        scene.onApplySearch("");
+        finishPopularRatingSort(jobs);
+        assertEquals(350, builder.getEffectiveMinRatingHundredths());
+        assertEquals(List.of(3L, 2L, 1L), visibleIds());
+        assertEquals(3, helper.size());
+        assertFalse(ReflectionHelpers.getField(scene, "mRestartRatingSortAfterRefresh"));
+    }
+
+    @Test public void stricterSearchUpdatesContinuationAndLoweringBeforeMorePagesStaysLocal() {
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        helper.nextHref = "https://e-hentai.org/?f_search=test&next=123";
+        applyRatingFilter(jobs, 4f);
+        assertEquals("123", android.net.Uri.parse(helper.nextHref).getQueryParameter("next"));
+        assertEquals("4", android.net.Uri.parse(helper.nextHref).getQueryParameter("f_srdd"));
+        applyRatingFilter(jobs, 3.5f);
+        assertEquals("3", android.net.Uri.parse(helper.nextHref).getQueryParameter("f_srdd"));
+        assertEquals(List.of(3L, 2L, 1L), visibleIds());
+        assertFalse(helper.isRefreshing());
+    }
+
+    @Test public void narrowerCommittedPageRequiresRestartWhenLoweringAcrossItsCoverage() {
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        applyRatingFilter(jobs, 4f);
+        helper.doGetData(ContentLayout.ContentHelper.TYPE_NEXT_PAGE_KEEP_POS, 1,
+                ContentLayout.ContentHelper.REFRESH_TYPE_FOOTER);
+        GalleryListParser.Result page = new GalleryListParser.Result();
+        page.pages = -1; page.nextPage = -1;
+        page.nextHref = "https://e-hentai.org/?next=100&f_sr=on&f_srdd=4";
+        page.galleryInfoList = new ArrayList<>();
+        page.ratingCandidates = new ArrayList<>(); // Empty pages still certify a restricted search range.
+        page.ratingCandidateFloor = 375;
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListSuccess",
+                ClassParameter.from(GalleryListParser.Result.class, page), ClassParameter.from(int.class, task));
+        finishPopularRatingSort(jobs);
+        applyRatingSearchValue(350, true);
+        assertEquals(350, builder.getEffectiveMinRatingHundredths());
+        assertEquals(1, helper.getShownViewIndex());
+        assertTrue(ReflectionHelpers.getField(scene, "mRestartRatingSortAfterRefresh"));
+        assertEquals(2, (int) ReflectionHelpers.<Integer>getField(scene, "mPendingRatingPages"));
+        assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
+        GalleryListParser.Result restarted = new GalleryListParser.Result();
+        restarted.pages = 1;
+        restarted.galleryInfoList = galleries(1, 3);
+        for (GalleryInfo gallery : restarted.galleryInfoList) {
+            gallery.firstGid = gallery.gid;
+            gallery.apiRating = gallery.rating = gallery.gid == 1 ? 3.5f : 5f;
+        }
+        restarted.ratingCandidates = new ArrayList<>(restarted.galleryInfoList);
+        restarted.ratingCandidateFloor = 275;
+        int freshTask = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListSuccess",
+                ClassParameter.from(GalleryListParser.Result.class, restarted), ClassParameter.from(int.class, freshTask));
+        finishPopularRatingSort(jobs);
+        assertEquals(List.of(3L, 1L), visibleIds());
+        assertFalse(ReflectionHelpers.getField(scene, "mRestartRatingSortAfterRefresh"));
+    }
+
+    @Test public void coverageAndSharedConditionSurviveSavedSceneState() {
+        ManualProgressExecutor jobs = prepareLocalRatingFilter();
+        applyRatingFilter(jobs, 4f);
+        Bundle saved = new Bundle(); scene.onSaveInstanceState(saved);
+        ReflectionHelpers.callInstanceMethod(scene, "onRestore", ClassParameter.from(Bundle.class, saved));
+        applyRatingSearchValue(350, true);
+        finishPopularRatingSort(jobs);
+        assertEquals(List.of(3L, 2L, 1L), visibleIds());
+        assertEquals(350, builder.getEffectiveMinRatingHundredths());
+    }
+
+    private void applyRatingSearchValue(int value, boolean sorted) {
+        ListUrlBuilder next = new ListUrlBuilder(); next.set(builder); next.setMinRatingHundredths(value);
+        ReflectionHelpers.callInstanceMethod(scene, "applyRatingSearch",
+                ClassParameter.from(ListUrlBuilder.class, next), ClassParameter.from(boolean.class, sorted),
+                ClassParameter.from(int.class, 0), ClassParameter.from(String.class, null));
+    }
+
+    @Test public void ratingDialogCommitsSharedSearchAndRestoreKeepsTheMinimum() {
         ManualProgressExecutor jobs = prepareLocalRatingFilter();
         builder.setMinRatingHundredths(350);
         Settings.putPersistentMinRatingHundredths(300);
@@ -1113,8 +1212,8 @@ public class PopularGalleryRenderingTest {
         dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).performClick();
         finishPopularRatingSort(jobs);
         assertEquals(List.of(3L), visibleIds());
-        assertEquals(originalSearch, builder.build());
-        assertEquals(350, builder.getMinRatingHundredths());
+        assertNotEquals(originalSearch, builder.build());
+        assertEquals(500, builder.getMinRatingHundredths());
         assertEquals(300, Settings.getConfiguredPersistentMinRatingHundredths());
         assertEquals(List.of(1L, 2L, 3L), GalleryRatingSortTest.ids(helper.getData()));
         ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
@@ -1122,8 +1221,8 @@ public class PopularGalleryRenderingTest {
         jobs.runAll();
         shadowOf(Looper.getMainLooper()).idle();
         assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
-        assertEquals(List.of(1L, 2L, 3L), visibleIds());
-        assertEquals(originalSearch, builder.build());
+        assertEquals(List.of(3L), visibleIds());
+        assertNotEquals(originalSearch, builder.build());
         assertEquals(300, Settings.getConfiguredPersistentMinRatingHundredths());
     }
 
@@ -1136,7 +1235,7 @@ public class PopularGalleryRenderingTest {
         assertRatingRowsRendered(50);
         StaggeredGridLayoutManager manager = (StaggeredGridLayoutManager) recycler.getLayoutManager();
         manager.scrollToPosition(0);
-        ReflectionHelpers.setField(scene, "mRatingSortMinimum", 500);
+        builder.setMinRatingHundredths(500);
         enableRatingSort();
         assertEquals(0, adapter.getItemCount());
         // Exercise the empty pending-scroll layout directly, independently of frame scheduling.
@@ -1166,12 +1265,15 @@ public class PopularGalleryRenderingTest {
     }
 
     @Test @Config(sdk = 36)
-    public void emptyRatingProjectionCanRestoreTheOriginalList() {
+    public void restoringOrderPreservesEmptySharedFilterAndClearingItRestoresRows() {
         for (int type : new int[]{GalleryAdapterNew.TYPE_LIST, GalleryAdapterNew.TYPE_GRID}) {
-            prepareEmptyRatingFilter(type);
+            ManualProgressExecutor jobs = prepareEmptyRatingFilter(type);
             ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
             latestRatingDialog().getButton(android.content.DialogInterface.BUTTON_NEUTRAL).performClick();
             shadowOf(Looper.getMainLooper()).idle();
+            assertTrue(visibleIds().isEmpty());
+            assertEquals(500, builder.getMinRatingHundredths());
+            applyRatingFilter(jobs, 0f);
             assertEquals(GalleryRatingSortTest.ids(helper.getData()), visibleIds());
             assertRatingRowsRendered(50);
         }
@@ -1233,7 +1335,7 @@ public class PopularGalleryRenderingTest {
         applyLocalRatingFilter(jobs);
         helper.refresh();
         assertTrue(ReflectionHelpers.getField(scene, "mRatingSortMode"));
-        assertEquals(500, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+        assertEquals(500, builder.getMinRatingHundredths());
         finishRatingFilterRefresh(jobs);
     }
 
@@ -1243,7 +1345,7 @@ public class PopularGalleryRenderingTest {
         RefreshLayout.OnRefreshListener listener = ReflectionHelpers.getField(helper, "mOnRefreshListener");
         listener.onHeaderRefresh();
         assertTrue(ReflectionHelpers.getField(scene, "mRatingSortMode"));
-        assertEquals(500, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+        assertEquals(500, builder.getMinRatingHundredths());
         finishRatingFilterRefresh(jobs);
     }
 
@@ -1253,15 +1355,18 @@ public class PopularGalleryRenderingTest {
         result.galleryInfoList = galleries(4, 5);
         for (GalleryInfo gallery : result.galleryInfoList) {
             gallery.apiRating = gallery.rating = gallery.gid == 4 ? 5f : 4f;
+            gallery.firstGid = gallery.gid;
         }
+        result.ratingCandidates = new ArrayList<>(result.galleryInfoList);
+        result.ratingCandidateFloor = 475;
         int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
         ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListSuccess",
                 ClassParameter.from(GalleryListParser.Result.class, result), ClassParameter.from(int.class, task));
         finishPopularRatingSort(jobs);
-        assertEquals(500, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+        assertEquals(500, builder.getMinRatingHundredths());
         assertEquals(List.of(4L), visibleIds());
         assertEquals(List.of(4L, 5L), GalleryRatingSortTest.ids(helper.getData()));
-        assertEquals(0, builder.getMinRatingHundredths());
+        assertEquals(500, builder.getMinRatingHundredths());
         assertEquals(0, Settings.getConfiguredPersistentMinRatingHundredths());
     }
 
@@ -1279,7 +1384,7 @@ public class PopularGalleryRenderingTest {
         jobs.runAll();
         shadowOf(Looper.getMainLooper()).idle();
         assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
-        assertEquals(0, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+        assertEquals(0, builder.getMinRatingHundredths());
         assertEquals("another search", builder.getKeyword());
         assertEquals(0, builder.getMinRatingHundredths());
         assertEquals(0, Settings.getConfiguredPersistentMinRatingHundredths());
@@ -1319,20 +1424,30 @@ public class PopularGalleryRenderingTest {
         jobs.runAll();
         shadowOf(Looper.getMainLooper()).idle();
         assertFalse(ReflectionHelpers.getField(scene, "mRatingSortMode"));
-        assertEquals(List.of(1L, 2L, 3L, 4L), visibleIds());
-        assertEquals(0, (int) ReflectionHelpers.<Integer>getField(scene, "mRatingSortMinimum"));
+        assertEquals(List.of(3L), visibleIds());
+        assertEquals(500, builder.getMinRatingHundredths());
     }
 
     private ManualProgressExecutor prepareLocalRatingFilter() {
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setMinRatingHundredths(0);
         refresh(1, 2, 3);
         for (GalleryInfo gallery : helper.getData()) {
             gallery.apiRating = gallery.rating = gallery.gid == 3 ? 5f : gallery.gid == 2 ? 4f : 3.5f;
         }
+        retainRatingCandidates();
         ManualProgressExecutor jobs = new ManualProgressExecutor();
         ReflectionHelpers.setField(scene, "executorService", jobs);
         ReflectionHelpers.setField(scene, "mClient", new EhClient(scene.getContext()));
         return jobs;
+    }
+
+    private void retainRatingCandidates() {
+        for (GalleryInfo gallery : helper.getData()) gallery.firstGid = gallery.gid;
+        ReflectionHelpers.setField(scene, "mRetainsRatingCandidates", true);
+        RatingSearchCoverage coverage = ReflectionHelpers.getField(scene, "mRatingSearchCoverage");
+        coverage.restore(0);
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceDataSetChanged");
     }
 
     private void applyLocalRatingFilter(ManualProgressExecutor jobs) {
@@ -1714,6 +1829,11 @@ public class PopularGalleryRenderingTest {
         helper.refresh();
         GalleryListParser.Result result = new GalleryListParser.Result();
         result.galleryInfoList = galleries(gids);
+        if (ReflectionHelpers.<Boolean>getField(scene, "mRetainsRatingCandidates")) {
+            result.ratingCandidates = new ArrayList<>(result.galleryInfoList);
+            result.ratingCandidateFloor = 0;
+            for (GalleryInfo gallery : result.ratingCandidates) gallery.firstGid = gallery.gid;
+        }
         result.pages = 1;
         int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
         ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListSuccess",

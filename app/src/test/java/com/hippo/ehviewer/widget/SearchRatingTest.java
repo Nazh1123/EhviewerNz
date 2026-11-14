@@ -230,6 +230,56 @@ public class SearchRatingTest {
         assertTrue(sources.stream().anyMatch(source -> source.createBuilder().getMinRatingHundredths() == 499));
     }
 
+    @Test public void continuationUsesNewRatingButRetainsWebsiteCursorAndOtherConditions() {
+        String url = "https://e-hentai.org/?f_search=test&next=123&f_spf=20&f_sr=on&f_srdd=3";
+        ListUrlBuilder builder = new ListUrlBuilder();
+        builder.setMinRatingHundredths(380);
+        android.net.Uri strict = android.net.Uri.parse(builder.applyRatingToContinuation(url));
+        assertEquals("123", strict.getQueryParameter("next"));
+        assertEquals("test", strict.getQueryParameter("f_search"));
+        assertEquals("20", strict.getQueryParameter("f_spf"));
+        assertEquals(java.util.List.of("4"), strict.getQueryParameters("f_srdd"));
+        assertEquals(375, SearchRating.serverFloor(strict.toString()));
+        assertEquals(375, SearchRating.serverFloor("https://exhentai.org/?next=123&f_srdd=4"));
+        assertEquals(0, SearchRating.serverFloor("https://exhentai.org/?next=123&f_srdd=0"));
+        builder.setMinRatingHundredths(0);
+        String loose = builder.applyRatingToContinuation(strict.toString());
+        assertNull(android.net.Uri.parse(loose).getQueryParameter("f_srdd"));
+        assertEquals(0, SearchRating.serverFloor(loose));
+        assertEquals("123", android.net.Uri.parse(loose).getQueryParameter("next"));
+    }
+
+    @Test public void ratingOnlyComparisonIgnoresPageButRecognizesOtherSearchChanges() {
+        ListUrlBuilder first = new ListUrlBuilder();
+        first.setKeyword("test"); first.setPageIndex(10); first.setMinRatingHundredths(350);
+        ListUrlBuilder second = new ListUrlBuilder(); second.set(first);
+        second.setPageIndex(0); second.setMinRatingHundredths(380);
+        assertTrue(first.sameSearchExceptRating(second));
+        second.setKeyword("changed");
+        assertFalse(first.sameSearchExceptRating(second));
+    }
+
+    @Test public void currentRatingLabelWrapsWithoutClippingAtNarrowWidths() {
+        for (String language : new String[]{"en", "de", "fr", "zh-CN"}) {
+            android.content.res.Configuration config = new android.content.res.Configuration(context.getResources().getConfiguration());
+            config.setLocale(java.util.Locale.forLanguageTag(language)); config.fontScale = 1.3f;
+            Context localized = new ContextThemeWrapper(context.createConfigurationContext(config), R.style.AppTheme_Main);
+            View content = android.view.LayoutInflater.from(localized).inflate(R.layout.gallery_rating_sort_dialog, null);
+            new RatingFilterControl(content, 275, ignored -> {});
+            TextView current = content.findViewById(R.id.search_rating_current);
+            current.setText(localized.getString(R.string.search_rating_current, "0.00")); current.setVisibility(View.VISIBLE);
+            content.measure(View.MeasureSpec.makeMeasureSpec(280, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.AT_MOST));
+            content.layout(0, 0, content.getMeasuredWidth(), content.getMeasuredHeight());
+            android.view.ViewGroup root = (android.view.ViewGroup) content;
+            android.graphics.Rect row = bounds(root, content.findViewById(R.id.search_rating_row));
+            android.graphics.Rect label = bounds(root, current);
+            assertTrue(language, label.left >= row.left && label.right <= row.right);
+            assertTrue(language, label.bottom <= bounds(root, content.findViewById(R.id.search_rating_stars)).top);
+            assertEquals(language, 1, current.getLineCount());
+        }
+    }
+
     @Test public void selectsStrongestSafeSiteOptionAtEveryHundredth() {
         for (int threshold = 0; threshold <= 500; threshold++) {
             int expected = -1;
