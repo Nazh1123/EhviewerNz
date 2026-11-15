@@ -46,7 +46,7 @@ public class DialogActionLayoutTest {
         activity.setTheme(R.style.AppTheme);
     }
 
-    @Test public void ratingAndSubscriptionActionsUseTwoRowsAcrossLanguagesAndFontSizes() throws Exception {
+    @Test public void ratingAndSubscriptionActionsShareOneRowWithNeutralAtStartAcrossLanguagesAndFontSizes() throws Exception {
         for (String language : new String[]{"en", "de", "es", "fr", "ja", "ko", "th", "zh-CN", "zh-TW", "zh-HK"}) {
             for (float scale : new float[]{1f, 1.3f}) {
                 Configuration config = new Configuration(activity.getResources().getConfiguration());
@@ -62,11 +62,11 @@ public class DialogActionLayoutTest {
                         new RatingFilterControl(content, 275, ignored -> {});
                         dialog = new AlertDialog.Builder(context)
                                 .setTitle(R.string.gallery_rating_sort).setView(content)
-                                .setNeutralButton(R.string.gallery_rating_sort_restore, null)
+                                .setNeutralButton(R.string.dialog_action_restore, null)
                                 .setNegativeButton(android.R.string.cancel, null)
                                 .setPositiveButton(R.string.gallery_rating_sort_execute, null).create();
                         dialog.show();
-                        DialogActionLayout.placeNeutralAboveActions(dialog);
+                        DialogActionLayout.placeNeutralAtStart(dialog);
                     }
                     ViewGroup decor = layout(dialog, context);
                     Button neutral = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
@@ -74,16 +74,23 @@ public class DialogActionLayoutTest {
                     Button confirm = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
                     Rect n = bounds(decor, neutral), c = bounds(decor, cancel), p = bounds(decor, confirm);
                     String description = language + " scale=" + scale + " subscription=" + subscription;
-                    assertTrue(description, n.bottom <= Math.min(c.top, p.top));
-                    assertEquals(description, c.top, p.top);
+                    assertEquals(description, n.exactCenterY(), c.exactCenterY(), 1f);
+                    assertTrue(description, n.right <= c.left);
+                    assertEquals(description, c.exactCenterY(), p.exactCenterY(), 1f);
                     assertTrue(description, c.right <= p.left);
-                    assertEquals(description, n.right, p.right);
-                    assertEquals(description, android.view.Gravity.RIGHT,
-                            android.view.Gravity.getAbsoluteGravity(neutral.getGravity(), neutral.getLayoutDirection())
-                                    & android.view.Gravity.HORIZONTAL_GRAVITY_MASK);
-                    assertTrue(description, n.left >= 0 && p.right <= decor.getWidth());
+                    ViewGroup panel = (ViewGroup) neutral.getParent();
+                    assertEquals(description, panel.getPaddingLeft(), neutral.getLeft());
+                    assertEquals(context.getString(subscription ? R.string.dialog_action_manage
+                            : R.string.dialog_action_restore), neutral.getText().toString());
+                    Rect panelBounds = bounds(decor, panel);
+                    assertTrue(description + " buttons=" + n + "," + c + "," + p + " panel=" + panelBounds,
+                            n.left >= panelBounds.left && p.right <= panelBounds.right - panel.getPaddingRight());
                     assertTrue(description, p.bottom <= decor.getHeight());
                     for (Button button : new Button[]{neutral, cancel, confirm}) {
+                        assertEquals(description, 1, button.getLineCount());
+                        assertTrue(description + " clipped button: " + button.getText(),
+                                button.getLayout().getLineWidth(0) <= button.getWidth()
+                                        - button.getCompoundPaddingLeft() - button.getCompoundPaddingRight() + 1);
                         assertTrue(description, button.getLayout().getHeight() <= button.getHeight()
                                 - button.getCompoundPaddingTop() - button.getCompoundPaddingBottom());
                         for (int line = 0; line < button.getLineCount(); line++) {
@@ -103,13 +110,13 @@ public class DialogActionLayoutTest {
         AtomicInteger restored = new AtomicInteger();
         AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setMessage("Dialog content")
-                .setNeutralButton(R.string.gallery_rating_sort_restore, (d, which) -> restored.incrementAndGet())
+                .setNeutralButton(R.string.dialog_action_restore, (d, which) -> restored.incrementAndGet())
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(android.R.string.ok, null).create();
         dialog.show();
         android.text.method.TransformationMethod transformation = dialog.getButton(AlertDialog.BUTTON_NEUTRAL)
                 .getTransformationMethod();
-        DialogActionLayout.placeNeutralAboveActions(dialog);
+        DialogActionLayout.placeNeutralAtStart(dialog);
         assertSame(transformation, dialog.getButton(AlertDialog.BUTTON_NEUTRAL).getTransformationMethod());
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
         ShadowLooper.idleMainLooper();

@@ -89,13 +89,13 @@ public final class SubscriptionUpdatePreferences {
         AlertDialog dialog = builder
                 .setTitle(R.string.update_subscriptions)
                 .setView(view)
-                .setNeutralButton(R.string.manage_subscription_bookmarks,
+                .setNeutralButton(R.string.dialog_action_manage,
                         (ignored, which) -> onManageBookmarks.run())
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(android.R.string.ok, null)
                 .create();
         dialog.show();
-        DialogActionLayout.placeNeutralAboveActions(dialog);
+        DialogActionLayout.placeNeutralAtStart(dialog);
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
             String normalized = Settings.normalizeAutoSubscriptionUpdateInterval(
                     interval.getText().toString());

@@ -2364,11 +2364,11 @@ public class GalleryListScene extends BaseScene
         AlertDialog.Builder builder = new AlertDialog.Builder(context).setTitle(R.string.gallery_rating_sort)
                 .setView(content).setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(R.string.gallery_rating_sort_execute, null);
-        if (mRatingSortMode) builder.setNeutralButton(R.string.gallery_rating_sort_restore,
+        if (mRatingSortMode) builder.setNeutralButton(R.string.dialog_action_restore,
                 (dialog, which) -> restoreRatingOrder());
         AlertDialog dialog = builder.create();
         dialog.show();
-        DialogActionLayout.placeNeutralAboveActions(dialog);
+        DialogActionLayout.placeNeutralAtStart(dialog);
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(view -> {
             int selection = range.getCheckedRadioButtonId();
             int target = 0;
