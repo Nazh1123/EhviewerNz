@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_label_folder">Folder</string>
+    <string name="download_folder_delete_children">Delete labels inside folders</string>
+    <string name="download_labels_sort_name">Sort by name</string>
+    <string name="download_labels_sort_confirm">Sort the selected items by name? Items at the top level and inside each folder are sorted independently.</string>
+    <string name="download_label_new">Add</string>
+    <string name="download_labels_delete_message">Delete the %1$d selected items? Downloads in deleted labels will move to the default label.</string>
+    <string name="download_fast_scroll">Quick scroll</string>
+</resources>

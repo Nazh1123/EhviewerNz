@@ -80,6 +80,7 @@ public final class SubscriptionMetadataCache {
     private static void applyMetadata(GalleryInfo from, GalleryInfo to) {
         if (from.firstGid != null && from.firstGid < 0) {
             to.firstGid = from.firstGid;
+            to.apiRating = Float.NaN;
             return;
         }
         copyMetadata(from, to);
@@ -88,6 +89,7 @@ public final class SubscriptionMetadataCache {
         to.title = from.title; to.titleJpn = from.titleJpn; to.uploader = from.uploader;
         to.thumb = from.thumb; to.category = from.category; to.posted = from.posted;
         to.rating = from.rating; to.pages = from.pages; to.firstGid = from.firstGid;
+        to.apiRating = from.apiRating;
         to.simpleTags = from.simpleTags != null ? from.simpleTags.clone() : null;
         to.simpleLanguage = from.simpleLanguage;
         // Preserve local favorites, rated state, display state and download state.

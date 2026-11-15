@@ -31,6 +31,64 @@ import org.robolectric.util.ReflectionHelpers
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class ReaderSuperResolutionControllerTest {
+    @Test fun originalPanelStacksBelowEnhancementAndCompactResultsShareTheRightEdge() {
+        val lifecycle = Robolectric.buildActivity(AppCompatActivity::class.java)
+        val activity = lifecycle.get()
+        activity.setTheme(R.style.AppTheme_Gallery)
+        lifecycle.setup()
+        try {
+            val host = FrameLayout(activity)
+            activity.setContentView(host)
+            activity.layoutInflater.inflate(R.layout.reader_translation_progress, host)
+            activity.layoutInflater.inflate(R.layout.reader_super_resolution_progress, host)
+            activity.layoutInflater.inflate(R.layout.reader_original_progress, host)
+            val layout = ReaderProgressLayout(activity)
+            val translation = host.findViewById<View>(R.id.translation_progress_panel)
+            val enhancement = host.findViewById<View>(R.id.super_resolution_progress_panel)
+            val original = host.findViewById<View>(R.id.original_progress_panel)
+            val originalBars = host.findViewById<View>(R.id.original_progress_bars)
+            for (width in listOf(320, 1000)) {
+                layout.setOriginalState(enabled = true, result = false)
+                layout.setTranslationEnabled(true)
+                layout.setEnhancementEnabled(false)
+                measure(host, width)
+                assertTrue(translation.right < original.left)
+                assertEquals(View.VISIBLE, originalBars.visibility)
+
+                layout.setEnhancementEnabled(true)
+                measure(host, width)
+                assertTrue(translation.right < enhancement.left)
+                assertEquals(enhancement.right, original.right)
+                assertTrue(original.y >= enhancement.y + enhancement.height)
+
+                layout.setOriginalState(enabled = false, result = true)
+                measure(host, width)
+                assertEquals(View.VISIBLE, original.visibility)
+                assertEquals(View.GONE, originalBars.visibility)
+                assertTrue(original.y >= enhancement.y + enhancement.height)
+                layout.setEnhancementEnabled(false)
+                layout.setEnhancementResultAvailable(true)
+                measure(host, width)
+                assertEquals(enhancement.y, original.y, .01f)
+                assertTrue(original.x + original.width < enhancement.x)
+                val compactOffset = original.translationX
+                layout.onQuickSettingsPositionChanged(true, 240f)
+                measure(host, width)
+                assertEquals(enhancement.y, original.y, .01f)
+                assertEquals(compactOffset, original.translationX, .01f)
+                layout.setOriginalState(enabled = true, result = true)
+                measure(host, width)
+                assertEquals(0f, original.translationX, .01f)
+                assertEquals(enhancement.right, original.right)
+                assertTrue(original.y >= enhancement.y + enhancement.height)
+                layout.onQuickSettingsPositionChanged(false, 0f)
+                layout.setEnhancementResultAvailable(false)
+            }
+        } finally {
+            lifecycle.pause().stop().destroy()
+        }
+    }
+
     @Test fun allModeAndExistingResultCombinationsUseIndependentProgressOrIconControls() {
         withReader { activity, provider, translation, enhancement, host ->
             val left = host.findViewById<View>(R.id.translation_progress_panel)
@@ -59,7 +117,7 @@ class ReaderSuperResolutionControllerTest {
                 }
                 if (srVisible) {
                     assertEquals(label, if (srMode) View.VISIBLE else View.GONE, host.findViewById<View>(R.id.super_resolution_progress_bars).visibility)
-                    assertEquals(label, if (!srMode || both) View.VISIBLE else View.GONE, host.findViewById<View>(R.id.super_resolution_progress_icon).visibility)
+                    assertEquals(label, if (srResult || both) View.VISIBLE else View.GONE, host.findViewById<View>(R.id.super_resolution_progress_icon).visibility)
                 }
                 for (width in listOf(1000, 500)) {
                     measure(host, width)
@@ -283,6 +341,54 @@ class ReaderSuperResolutionControllerTest {
             panel.performClick()
             provider.setEnhancedPage(0, image(32))
             assertNotNull(provider.getEnhancedPage(0))
+        }
+    }
+
+    @Test fun downloadedOriginalAndEnhancementSwitchIndependentlyOfTranslation() {
+        withReader { activity, provider, _, enhancement, host ->
+            enhancement.onPageChanged(0)
+            val original = com.hippo.unifile.UniFile.fromFile(java.io.File(activity.cacheDir, "reader_orn.png"))
+            fun image() = requireNotNull(Image.create(Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888)))
+            provider.setOriginalResult(0, image(), original)
+            provider.setShowTranslations(true)
+            provider.setTranslationOverlay(0, image())
+            assertEquals(original, provider.getDisplayedOriginalFile(0))
+            val panel = host.findViewById<View>(R.id.super_resolution_progress_panel)
+            val icon = panel.findViewById<View>(R.id.super_resolution_progress_icon)
+            val tiles = EnhancedTilePage(java.io.File(activity.cacheDir, "comparison-tiles"), 8, 8, 2)
+            provider.setExistingEnhancedTiles(0, tiles)
+            assertEquals(original, provider.getDisplayedOriginalFile(0))
+            provider.setPreferExistingResults(true)
+            assertNull(provider.getDisplayedOriginalFile(0))
+            assertTrue(provider.isShowingEnhanced(0))
+            assertFalse(provider.isShowingEnhancedFromOriginal(0))
+
+            val originalTiles = EnhancedTilePage(java.io.File(activity.cacheDir, "comparison-original-tiles"), 8, 8, 2)
+                .apply { fromOriginal = true }
+            provider.setExistingEnhancedTiles(0, originalTiles)
+            assertTrue(provider.isShowingEnhancedFromOriginal(0))
+            assertNull(provider.getDisplayedOriginalFile(0))
+            provider.toggleOriginalResult(0)
+            assertEquals(original, provider.getDisplayedOriginalFile(0))
+            assertFalse(provider.isShowingEnhancedFromOriginal(0))
+            assertFalse(icon.isSelected)
+            assertNotNull(provider.getTranslationOverlay(0))
+            panel.performClick()
+            assertTrue(provider.isShowingEnhancedFromOriginal(0))
+            assertTrue(icon.isSelected)
+            panel.performClick()
+            assertNull(provider.getDisplayedOriginalFile(0))
+            assertFalse(provider.isShowingEnhanced(0))
+            assertFalse(provider.isOriginalResultChosen(0))
+            assertFalse(icon.isSelected)
+            provider.toggleOriginalResult(0)
+            assertEquals(original, provider.getDisplayedOriginalFile(0))
+            assertFalse(provider.isShowingEnhanced(0))
+            provider.toggleOriginalResult(0)
+            assertNull(provider.getDisplayedOriginalFile(0))
+            assertFalse(provider.isShowingEnhanced(0))
+            assertFalse(provider.isOriginalResultChosen(0))
+            assertNotNull(provider.getTranslationOverlay(0))
         }
     }
 

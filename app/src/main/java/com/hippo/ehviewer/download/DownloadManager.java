@@ -118,12 +118,15 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         // Get all labels
         List<DownloadLabel> labels = EhDB.getAllDownloadLabelList();
         mLabelList = labels;
+        List<DownloadLabel> normalizedLabels = DownloadLabelTree.normalize(labels);
+        labels.clear();
+        labels.addAll(normalizedLabels);
 
         // Create list for each label
         HashMap<String, LinkedList<DownloadInfo>> map = new HashMap<>();
         mMap = map;
         for (DownloadLabel label : labels) {
-            map.put(label.getLabel(), new LinkedList<>());
+            if (!label.getFolder()) map.put(label.getLabel(), new LinkedList<>());
         }
 
         // Create default for non tag
@@ -952,14 +955,46 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         });
     }
 
-    public void addDownloadLabel(List<DownloadLabel> downloadLabelList) {
-        for (DownloadLabel label : downloadLabelList) {
-            String labelString = label.getLabel();
-            if (!containLabel(labelString)) {
-                mMap.put(labelString, new LinkedList<>());
-                mLabelList.add(EhDB.addDownloadLabel(label));
+    /** Imports in saved order, remapping both parent IDs and any folder/label name conflicts. */
+    public Map<String, String> addDownloadLabel(List<DownloadLabel> downloadLabelList) {
+        Map<Long, Long> importedFolders = new HashMap<>();
+        Map<DownloadLabel, DownloadLabel> importedItems = new HashMap<>();
+        Map<String, String> renamedLabels = new HashMap<>();
+        Set<DownloadLabel> created = new HashSet<>();
+        Set<String> reservedNames = new HashSet<>();
+        for (DownloadLabel source : downloadLabelList) reservedNames.add(source.getLabel());
+        // Resolve folders first, but append all new entries in the backup's original order below.
+        for (boolean folders : new boolean[]{true, false}) {
+            for (DownloadLabel source : downloadLabelList) {
+                if (source.getFolder() != folders) continue;
+                String name = source.getLabel();
+                DownloadLabel destination = findDownloadLabel(name);
+                int suffix = 2;
+                while (destination != null && destination.getFolder() != folders) {
+                    do { name = source.getLabel() + " (" + suffix++ + ")"; }
+                    while (reservedNames.contains(name));
+                    destination = findDownloadLabel(name);
+                }
+                if (destination == null) {
+                    destination = EhDB.addDownloadLabel(new DownloadLabel(null, name,
+                            source.getTime(), folders, folders ? null : importedFolders.get(source.getParentId())));
+                    mLabelList.add(destination);
+                    if (!folders) mMap.put(name, new LinkedList<>());
+                    created.add(destination);
+                }
+                importedItems.put(source, destination);
+                if (folders) importedFolders.put(source.getId(), destination.getId());
+                else if (!name.equals(source.getLabel())) renamedLabels.put(source.getLabel(), name);
             }
         }
+        List<DownloadLabel> ordered = new ArrayList<>(mLabelList);
+        ordered.removeAll(created);
+        for (DownloadLabel source : downloadLabelList) {
+            DownloadLabel destination = importedItems.get(source);
+            if (created.remove(destination)) ordered.add(destination);
+        }
+        reorderLabels(ordered);
+        return renamedLabels;
     }
 
     public void addDownload(GalleryInfo galleryInfo, @Nullable String label, int state) {
@@ -1345,7 +1380,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
      * @param label Not allow new label
      */
     public void changeLabel(List<DownloadInfo> list, String label) {
-        if (null != label && !containLabel(label)) {
+        if (null != label && (!containLabel(label)
+                || findDownloadLabel(label).getFolder())) {
             Log.e(TAG, "Not exits label: " + label);
             return;
         }
@@ -1394,6 +1430,34 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
     }
 
+    /** Gallery destinations exclude folders; management and navigation use getLabelList(). */
+    public List<DownloadLabel> getDownloadLabels() {
+        List<DownloadLabel> result = new ArrayList<>();
+        for (DownloadLabel item : mLabelList) if (!item.getFolder()) result.add(item);
+        return result;
+    }
+
+    public void addLabelFolder(String name) {
+        if (name == null || containLabel(name)) return;
+        DownloadLabel folder = EhDB.addDownloadLabel(
+                new DownloadLabel(null, name, System.currentTimeMillis(), true, null));
+        mLabelList.add(folder);
+        for (DownloadInfoListener listener : mDownloadInfoListeners) listener.onUpdateLabels();
+    }
+
+    public String getFolderCount(DownloadLabel folder) {
+        int labels = 0;
+        long galleries = 0;
+        for (DownloadLabel child : mLabelList) {
+            if (java.util.Objects.equals(folder.getId(), child.getParentId())) {
+                labels++;
+                List<DownloadInfo> downloads = mMap.get(child.getLabel());
+                galleries += downloads == null ? 0 : downloads.size();
+            }
+        }
+        return labels + "(" + galleries + ")";
+    }
+
     public void addLabelInSyncThread(String label) {
         if (label == null || containLabel(label)) {
             return;
@@ -1401,16 +1465,6 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
         mLabelList.add(EhDB.addDownloadLabel(label));
         mMap.put(label, new LinkedList<>());
-    }
-
-    public void moveLabel(int fromPosition, int toPosition) {
-        final DownloadLabel item = mLabelList.remove(fromPosition);
-        mLabelList.add(toPosition, item);
-        EhDB.moveDownloadLabel(fromPosition, toPosition);
-
-        for (DownloadInfoListener l : mDownloadInfoListeners) {
-            l.onUpdateLabels();
-        }
     }
 
     public void reorderLabels(@NonNull List<DownloadLabel> orderedLabels) {
@@ -1423,7 +1477,7 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             throw new IllegalArgumentException("The reordered labels must match the current labels");
         }
         mLabelList.clear();
-        mLabelList.addAll(newOrder);
+        mLabelList.addAll(DownloadLabelTree.normalize(newOrder));
         EhDB.reorderDownloadLabels(mLabelList);
 
         for (DownloadInfoListener l : mDownloadInfoListeners) {
@@ -1485,6 +1539,9 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
         }
         int position = findLocalFolderImportLabelPosition(mLabelList);
         mLabelList.add(position, target);
+        List<DownloadLabel> normalized = DownloadLabelTree.normalize(mLabelList);
+        mLabelList.clear();
+        mLabelList.addAll(normalized);
         if (!mMap.containsKey(label)) {
             mMap.put(label, new LinkedList<>());
         }
@@ -1582,7 +1639,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 destinationExists = true;
             }
         }
-        if (sourceLabel == null || !destinationExists) {
+        if (sourceLabel == null || sourceLabel.getFolder() || !destinationExists
+                || findDownloadLabel(to).getFolder()) {
             return false;
         }
 
@@ -1652,6 +1710,18 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             }
         }
 
+        Set<Long> removedFolderIds = new HashSet<>();
+        for (DownloadLabel item : mLabelList) {
+            if (item.getFolder() && targetLabels.contains(item.getLabel())) {
+                removedFolderIds.add(item.getId());
+            }
+        }
+        for (DownloadLabel item : mLabelList) {
+            if (removedFolderIds.contains(item.getParentId())) {
+                item.setParentId(null);
+                EhDB.updateDownloadLabel(item);
+            }
+        }
         List<DownloadLabel> removedLabels = new ArrayList<>();
         for (Iterator<DownloadLabel> iterator = mLabelList.iterator(); iterator.hasNext(); ) {
             DownloadLabel raw = iterator.next();
@@ -1664,6 +1734,8 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
             return;
         }
         EhDB.removeDownloadLabels(removedLabels);
+        if (targetLabels.contains(Settings.getDefaultDownloadLabel())) Settings.putDefaultDownloadLabel(null);
+        if (targetLabels.contains(Settings.getRecentDownloadLabel())) Settings.putRecentDownloadLabel(null);
         for (DownloadLabel removedLabel : removedLabels) {
             Settings.setDownloadLabelExpanded(removedLabel.getId(), removedLabel.getLabel(), false);
         }

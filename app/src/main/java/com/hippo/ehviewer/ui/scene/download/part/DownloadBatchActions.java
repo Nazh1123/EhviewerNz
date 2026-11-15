@@ -76,6 +76,7 @@ public class DownloadBatchActions {
         int positionInList(int position);
 
         boolean isContinuousLabelBrowse();
+        void selectAllInLastCheckedLabel();
         boolean isLabelHeaderPosition(int position);
         void quickOrganizeDownloads(Context context, List<DownloadInfo> infos);
 
@@ -95,11 +96,14 @@ public class DownloadBatchActions {
 
     @NonNull
     private final Host mHost;
-    private static final int FAB_DELETE_TRANSLATIONS = 4;
-    private static final int FAB_MOVE = 5;
-    private static final int FAB_RANDOM = 6;
-    private static final int FAB_DRAG = 7;
-    private static final int FAB_QUICK_ORGANIZE = 8;
+    private static final int FAB_START = 2;
+    private static final int FAB_STOP = 3;
+    private static final int FAB_DELETE = 4;
+    private static final int FAB_DELETE_TRANSLATIONS = 5;
+    private static final int FAB_MOVE = 6;
+    private static final int FAB_RANDOM = 7;
+    private static final int FAB_DRAG = 8;
+    private static final int FAB_QUICK_ORGANIZE = 9;
 
     public DownloadBatchActions(@NonNull Host host) {
         mHost = host;
@@ -114,16 +118,8 @@ public class DownloadBatchActions {
         }
 
         if (0 == position) {
-            recyclerView.checkAll();
-            if (mHost.isContinuousLabelBrowse()) {
-                SparseBooleanArray checked = recyclerView.getCheckedItemPositions();
-                for (int i = checked.size() - 1; i >= 0; i--) {
-                    int adapterPosition = checked.keyAt(i);
-                    if (checked.valueAt(i) && mHost.isLabelHeaderPosition(adapterPosition)) {
-                        recyclerView.toggleItemChecked(adapterPosition);
-                    }
-                }
-            }
+            if (mHost.isContinuousLabelBrowse()) mHost.selectAllInLastCheckedLabel();
+            else recyclerView.checkAll();
         } else {
             List<DownloadInfo> list = mHost.getList();
             if (list == null) {
@@ -132,8 +128,8 @@ public class DownloadBatchActions {
 
             LongList gidList = null;
             List<DownloadInfo> downloadInfoList = null;
-            boolean collectGid = position == 1 || position == 2; // Start, Stop
-            boolean collectDownloadInfo = position == 3 || position == FAB_MOVE
+            boolean collectGid = position == FAB_START || position == FAB_STOP;
+            boolean collectDownloadInfo = position == FAB_DELETE || position == FAB_MOVE
                     || position == FAB_QUICK_ORGANIZE || position == FAB_DELETE_TRANSLATIONS;
             if (collectGid) {
                 gidList = new LongList();
@@ -160,7 +156,7 @@ public class DownloadBatchActions {
             }
 
             switch (position) {
-                case 1: { // Start
+                case FAB_START: {
                     if (gidList.isEmpty()) {
                         break;
                     }
@@ -172,7 +168,7 @@ public class DownloadBatchActions {
                     recyclerView.outOfCustomChoiceMode();
                     break;
                 }
-                case 2: { // Stop
+                case FAB_STOP: {
                     if (gidList.isEmpty()) {
                         break;
                     }
@@ -183,7 +179,7 @@ public class DownloadBatchActions {
                     recyclerView.outOfCustomChoiceMode();
                     break;
                 }
-                case 3: { // Delete
+                case FAB_DELETE: {
                     if (downloadInfoList.isEmpty()) {
                         break;
                     }
@@ -198,7 +194,7 @@ public class DownloadBatchActions {
                     if (downloadInfoList.isEmpty()) {
                         break;
                     }
-                    List<DownloadLabel> labelRawList = EhApplication.getDownloadManager(context).getLabelList();
+                    List<DownloadLabel> labelRawList = EhApplication.getDownloadManager(context).getDownloadLabels();
                     List<String> labelList = new ArrayList<>(labelRawList.size() + 1);
                     labelList.add(mHost.getString(R.string.default_download_label_name));
                     for (int i = 0, n = labelRawList.size(); i < n; i++) {

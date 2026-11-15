@@ -4,4 +4,5 @@
     <string name="search_rating_title">Note minimale</string>
     <string name="search_rating_hint">0.00–5.00 ; 0.00 désactive le filtre</string>
     <string name="search_rating_invalid">Saisissez un nombre entre 0.00 et 5.00 avec au plus deux décimales</string>
+    <string name="search_rating_current">(Actuelle %1$s)</string>
 </resources>

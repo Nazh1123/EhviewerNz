@@ -1,0 +1,22 @@
+<resources>
+    <string name="original_title">Original image download</string>
+    <string name="original_show_source">Show reading image</string>
+    <string name="original_show_result">Show downloaded original</string>
+    <string name="original_enqueue">Add this page to the download queue</string>
+    <string name="original_redownload">Download original again</string>
+    <string name="original_cancel_queue">Cancel original downloads</string>
+    <string name="original_overwrite_confirm">An original image is already saved for this page. Download and replace it?</string>
+    <string name="original_overwrite">Download and replace</string>
+    <string name="original_resolving">Finding the original for page %1$d</string>
+    <string name="original_transfer_progress">Page %1$d, downloaded %2$s of %3$s</string>
+    <string name="original_transfer_unknown">Page %1$d, downloaded %2$s</string>
+    <string name="original_queue_progress">Original download queue, processed %1$d of %2$d</string>
+    <string name="original_saved">Original image for page %1$d saved</string>
+    <string name="original_failed">Could not download the original for page %1$d: %2$s</string>
+    <string name="original_page_unavailable">Could not find the gallery page</string>
+    <string name="original_unavailable">The server did not provide an original image</string>
+    <string name="original_login_required">Sign in to download the original image</string>
+    <string name="original_gp_required">The server requires more GP to download this original image</string>
+    <string name="original_incomplete">The image download was incomplete</string>
+    <string name="original_display_failed">Could not display the downloaded original image</string>
+</resources>

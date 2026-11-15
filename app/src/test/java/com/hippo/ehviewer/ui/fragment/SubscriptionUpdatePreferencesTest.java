@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Application;
 import android.os.Bundle;
 import android.widget.EditText;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SwitchCompat;
@@ -12,7 +13,6 @@ import androidx.preference.EditTextPreference;
 import androidx.preference.PreferenceFragmentCompat;
 import androidx.preference.TwoStatePreference;
 
-import com.google.android.material.textfield.TextInputLayout;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 
@@ -34,6 +34,7 @@ import static org.junit.Assert.*;
 public class SubscriptionUpdatePreferencesTest {
     private Activity activity;
     private AtomicInteger saves;
+    private AtomicInteger managements;
 
     @Before
     public void setUp() {
@@ -46,15 +47,22 @@ public class SubscriptionUpdatePreferencesTest {
         activity = Robolectric.buildActivity(Activity.class).setup().get();
         activity.setTheme(R.style.AppTheme);
         saves = new AtomicInteger();
+        managements = new AtomicInteger();
     }
 
     @Test
     public void parentSwitchControlsAllThreeChildrenAndCancelDoesNotPersistEdits() {
-        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
+        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity,
+                saves::incrementAndGet, managements::incrementAndGet);
         SwitchCompat automatic = dialog.findViewById(R.id.auto_subscription_updates);
         SwitchCompat eh = dialog.findViewById(R.id.auto_subscription_updates_eh);
         SwitchCompat bookmark = dialog.findViewById(R.id.auto_subscription_updates_bookmark);
         EditText interval = dialog.findViewById(R.id.auto_subscription_update_interval);
+        TextView intervalLabel = dialog.findViewById(R.id.auto_subscription_update_interval_label);
+        assertEquals(bookmark.getTextSize(), intervalLabel.getTextSize(), 0.01f);
+        assertEquals(bookmark.getTextSize(), interval.getTextSize(), 0.01f);
+        assertEquals(bookmark.getCurrentTextColor(), intervalLabel.getCurrentTextColor());
+        assertEquals(bookmark.getCurrentTextColor(), interval.getCurrentTextColor());
         assertFalse(eh.isEnabled());
         assertFalse(bookmark.isEnabled());
         assertFalse(interval.isEnabled());
@@ -63,6 +71,8 @@ public class SubscriptionUpdatePreferencesTest {
         assertTrue(eh.isEnabled());
         assertTrue(bookmark.isEnabled());
         assertTrue(interval.isEnabled());
+        assertEquals(bookmark.getCurrentTextColor(), intervalLabel.getCurrentTextColor());
+        assertEquals(bookmark.getCurrentTextColor(), interval.getCurrentTextColor());
         eh.setChecked(false);
         interval.setText("15");
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
@@ -75,15 +85,15 @@ public class SubscriptionUpdatePreferencesTest {
 
     @Test
     public void invalidIntervalKeepsDialogOpenAndValidSaveUpdatesAllSharedSettings() {
-        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
+        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity,
+                saves::incrementAndGet, managements::incrementAndGet);
         ((SwitchCompat) dialog.findViewById(R.id.auto_subscription_updates)).setChecked(true);
         ((SwitchCompat) dialog.findViewById(R.id.auto_subscription_updates_eh)).setChecked(false);
         EditText interval = dialog.findViewById(R.id.auto_subscription_update_interval);
         interval.setText("0");
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
         assertTrue(dialog.isShowing());
-        TextInputLayout intervalLayout = dialog.findViewById(R.id.auto_subscription_update_interval_layout);
-        assertNotNull(intervalLayout.getError());
+        assertNotNull(interval.getError());
         assertFalse(Settings.getAutoSubscriptionUpdates());
         assertEquals(0, saves.get());
         interval.setText("0015");
@@ -111,7 +121,8 @@ public class SubscriptionUpdatePreferencesTest {
         interval.callChangeListener("0030");
         assertEquals("30", interval.getText());
         assertEquals(30, Settings.getAutoSubscriptionUpdateIntervalMinutes());
-        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
+        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity,
+                saves::incrementAndGet, managements::incrementAndGet);
         assertEquals("30", ((EditText) dialog.findViewById(R.id.auto_subscription_update_interval))
                 .getText().toString());
         dialog.dismiss();
@@ -130,7 +141,8 @@ public class SubscriptionUpdatePreferencesTest {
         host.getSupportFragmentManager().beginTransaction()
                 .replace(android.R.id.content, fragment).commitNow();
         assertNull(fragment.findPreference(Settings.KEY_SUBSCRIPTION_HOMEPAGE_SCAN));
-        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity, saves::incrementAndGet);
+        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity,
+                saves::incrementAndGet, managements::incrementAndGet);
         String resourcePackage = activity.getResources().getResourcePackageName(R.id.auto_subscription_updates);
         assertEquals(0, activity.getResources().getIdentifier("subscription_homepage_scan", "id", resourcePackage));
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
@@ -138,6 +150,23 @@ public class SubscriptionUpdatePreferencesTest {
         assertFalse(Settings.getAutoSubscriptionUpdates());
         assertEquals(1, saves.get());
         host.finish();
+    }
+
+    @Test
+    public void managementOpensWithoutSavingPendingChangesEvenWhenIntervalIsInvalid() {
+        AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(activity,
+                saves::incrementAndGet, managements::incrementAndGet);
+        ((SwitchCompat) dialog.findViewById(R.id.auto_subscription_updates)).setChecked(true);
+        ((SwitchCompat) dialog.findViewById(R.id.auto_subscription_updates_eh)).setChecked(false);
+        ((EditText) dialog.findViewById(R.id.auto_subscription_update_interval)).setText("0");
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+        ShadowLooper.idleMainLooper();
+        assertFalse(dialog.isShowing());
+        assertEquals(1, managements.get());
+        assertEquals(0, saves.get());
+        assertFalse(Settings.getAutoSubscriptionUpdates());
+        assertTrue(Settings.getAutoSubscriptionUpdatesEh());
+        assertEquals(60, Settings.getAutoSubscriptionUpdateIntervalMinutes());
     }
 
     public static class Harness extends PreferenceFragmentCompat {

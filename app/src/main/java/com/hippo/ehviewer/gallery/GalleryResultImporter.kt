@@ -59,11 +59,17 @@ internal object GalleryResultImporter {
                     prefix + name.substringBeforeLast('.').removeSuffix(kind.suffix), true)
             }
         }
-        for (kind in GalleryResultIndex.Kind.entries) directory?.findFile(kind.directory)?.let { scan(it, kind) }
+        for (kind in listOf(GalleryResultIndex.Kind.TL, GalleryResultIndex.Kind.SR)) {
+            directory?.findFile(kind.directory)?.let { scan(it, kind) }
+        }
         val localUris = local.map { it.file.uri.toString() }.toSet()
         val candidates = records.mapNotNull { record ->
             try {
-                val kind = if (record.kind == GalleryProcessingProgress.Kind.TRANSLATION) GalleryResultIndex.Kind.TL else GalleryResultIndex.Kind.SR
+                val kind = when (record.kind) {
+                    GalleryProcessingProgress.Kind.TRANSLATION -> GalleryResultIndex.Kind.TL
+                    GalleryProcessingProgress.Kind.SUPER_RESOLUTION -> GalleryResultIndex.Kind.SR
+                    GalleryProcessingProgress.Kind.ORIGINAL -> return@mapNotNull null
+                }
                 val file = resolve(context, record.uri)
                 // Full-page renders and partial/checkpoint formats are deliberately excluded.
                 if (file == null || file.name?.let { if (kind == GalleryResultIndex.Kind.SR)

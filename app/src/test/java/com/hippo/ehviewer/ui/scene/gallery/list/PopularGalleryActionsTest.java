@@ -376,9 +376,179 @@ public class PopularGalleryActionsTest {
             }
         });
         updates.performClick();
-        assertEquals(8, clicked[0]);
-        previous.performClick();
         assertEquals(9, clicked[0]);
+        previous.performClick();
+        assertEquals(10, clicked[0]);
+    }
+
+    @Test public void staleSubscriptionRefreshFollowsPrimaryFabAndReservesItsOwnSlot() {
+        bind("mModeActions", R.id.gallery_mode_actions);
+        View refresh = root.findViewById(R.id.subscription_refresh_active);
+        for (int mode : new int[]{ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
+                ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION}) {
+            builder.setMode(mode);
+            ReflectionHelpers.setField(scene, "mSubscriptionStaleResult", true);
+            layout(600, 1200);
+            update();
+            settle();
+            assertEquals(View.VISIBLE, refresh.getVisibility());
+            assertCenterAbove(refresh, menu.getPrimaryFab(), 1);
+
+            ReflectionHelpers.callInstanceMethod(scene, "hideActionFab");
+            assertEquals(menu.getPrimaryFab().animate().getDuration(), refresh.animate().getDuration());
+            assertSame(menu.getPrimaryFab().animate().getInterpolator(), refresh.animate().getInterpolator());
+            settle();
+            assertEquals(View.INVISIBLE, refresh.getVisibility());
+            ReflectionHelpers.callInstanceMethod(scene, "showActionFab");
+            settle();
+            assertEquals(View.VISIBLE, refresh.getVisibility());
+            assertCenterAbove(refresh, menu.getPrimaryFab(), 1);
+
+            menu.setExpanded(true, false);
+            settle();
+            assertEquals(View.INVISIBLE, refresh.getVisibility());
+            menu.setExpanded(false, false);
+            settle();
+            assertEquals(View.VISIBLE, refresh.getVisibility());
+
+            ReflectionHelpers.setField(scene, "mRatingSortMode", true);
+            ReflectionHelpers.setField(scene, "mDownloadedOnlyMode", true);
+            update();
+            settle();
+            assertCenterAbove(root.findViewById(R.id.rating_sort_active), menu.getPrimaryFab(), 1);
+            assertCenterAbove(root.findViewById(R.id.downloaded_only_active), menu.getPrimaryFab(), 2);
+            assertCenterAbove(refresh, menu.getPrimaryFab(), 3);
+            ReflectionHelpers.setField(scene, "mMultiSelectMode", true);
+            update();
+            settle();
+            assertEquals(View.INVISIBLE, refresh.getVisibility());
+            ReflectionHelpers.setField(scene, "mMultiSelectMode", false);
+            ReflectionHelpers.setField(scene, "mRatingSortMode", false);
+            ReflectionHelpers.setField(scene, "mDownloadedOnlyMode", false);
+        }
+        ReflectionHelpers.setField(scene, "mSubscriptionStaleResult", false);
+        update();
+        settle();
+        assertEquals(View.INVISIBLE, refresh.getVisibility());
+        ReflectionHelpers.setField(scene, "mSubscriptionStaleResult", true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        update();
+        settle();
+        assertEquals(View.INVISIBLE, refresh.getVisibility());
+    }
+
+    @Test public void independentActiveModesRemainVisibleAndReservePopularSlots() {
+        bind("mModeActions", R.id.gallery_mode_actions);
+        bind("mRatingSortFab", R.id.rating_sort_fab);
+        ReflectionHelpers.setField(scene, "mRatingSortMode", true);
+        ReflectionHelpers.setField(scene, "mDownloadedOnlyMode", true);
+        layout(600, 1200);
+        update();
+        settle();
+        View sort = root.findViewById(R.id.rating_sort_active);
+        View downloaded = root.findViewById(R.id.downloaded_only_active);
+        assertEquals(View.VISIBLE, sort.getVisibility());
+        assertEquals(View.VISIBLE, downloaded.getVisibility());
+        assertCenterAbove(sort, menu.getPrimaryFab(), 1);
+        assertCenterAbove(downloaded, menu.getPrimaryFab(), 2);
+        assertCenterAbove(root.findViewById(R.id.popular_previous), menu.getPrimaryFab(), 3);
+        assertCenterAbove(root.findViewById(R.id.popular_updates), menu.getPrimaryFab(), 4);
+        ReflectionHelpers.setField(scene, "mShowActionFab", false);
+        update();
+        settle();
+        assertCenterAbove(sort, menu.getPrimaryFab(), 0);
+        assertCenterAbove(downloaded, menu.getPrimaryFab(), 1);
+        menu.setExpanded(true, false);
+        settle();
+        assertEquals(View.INVISIBLE, root.findViewById(R.id.gallery_mode_actions).getVisibility());
+        menu.setExpanded(false, false);
+        settle();
+        assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_mode_actions).getVisibility());
+    }
+
+    @Test public void activeRatingSortUsesPopularModeMovementAndMenuVisibilityAnimations() {
+        bind("mModeActions", R.id.gallery_mode_actions);
+        bind("mRatingSortFab", R.id.rating_sort_fab);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        ReflectionHelpers.setField(scene, "mRatingSortMode", true);
+        layout(600, 1200);
+        update();
+        settle();
+        View sort = root.findViewById(R.id.rating_sort_active);
+        assertEquals(View.VISIBLE, sort.getVisibility());
+        assertCenterAbove(sort, menu.getPrimaryFab(), 1);
+
+        ReflectionHelpers.callInstanceMethod(scene, "hideActionFab");
+        // The active button waits for the main FAB to leave, then slides into its position.
+        assertCenterAbove(sort, menu.getPrimaryFab(), 1);
+        ValueAnimator movement = ReflectionHelpers.getField(root.findViewById(R.id.gallery_mode_actions),
+                "mPositionAnimator");
+        assertNotNull(movement);
+        assertEquals(300L, movement.getDuration());
+        assertEquals(300L, movement.getStartDelay());
+        movement.setCurrentPlayTime(150L);
+        float step = root.getResources().getDimension(R.dimen.fab_size)
+                + root.getResources().getDimension(R.dimen.fab_layout_secondary_margin);
+        float distance = menu.getPrimaryFab().getY() + menu.getPrimaryFab().getHeight() / 2f
+                - sort.getY() - sort.getHeight() / 2f;
+        assertTrue("Rating button must slide between the two FAB positions", distance > 0f && distance < step);
+        movement.end();
+        settle();
+        assertCenterAbove(sort, menu.getPrimaryFab(), 0);
+
+        ReflectionHelpers.callInstanceMethod(scene, "showActionFab");
+        assertEquals(300L, menu.getPrimaryFab().animate().getStartDelay());
+        settle();
+        assertCenterAbove(sort, menu.getPrimaryFab(), 1);
+
+        menu.setExpanded(true, false);
+        assertEquals(300L, sort.animate().getDuration());
+        assertEquals(View.VISIBLE, sort.getVisibility());
+        settle();
+        assertEquals(View.INVISIBLE, sort.getVisibility());
+        menu.setExpanded(false, false);
+        settle();
+        assertEquals(View.VISIBLE, sort.getVisibility());
+        assertEquals(1f, sort.getScaleY(), 0f);
+        assertEquals(0f, sort.getRotation(), 0f);
+        assertCenterAbove(sort, menu.getPrimaryFab(), 1);
+        for (int i = 0; i < 3; i++) {
+            menu.setExpanded(true);
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(80));
+            menu.setExpanded(false);
+        }
+        settle();
+        assertEquals(View.VISIBLE, sort.getVisibility());
+        assertEquals(1f, sort.getScaleY(), 0f);
+    }
+
+    @Test public void expandedGalleryMenuWrapsOnShortScreensAndKeepsEveryActionClickable() {
+        ReflectionHelpers.callInstanceMethod(scene, "showNormalFabs", ClassParameter.from(FabLayout.class, menu));
+        menu.setWrapSecondaryFabs(true);
+        menu.setExpanded(true, false);
+        float density = root.getResources().getDisplayMetrics().density;
+        layout((int) (640 * density), (int) (320 * density));
+        boolean anotherColumn = false;
+        for (int i = 0; i < menu.getSecondaryFabCount(); i++) {
+            View button = menu.getSecondaryFabAt(i);
+            if (button.getVisibility() != View.VISIBLE) continue;
+            assertTrue("Action must fit above bottom edge", button.getBottom() <= menu.getHeight());
+            assertTrue("Action must fit below top edge", button.getTop() >= 0);
+            assertTrue(button.getLeft() >= 0);
+            anotherColumn |= button.getLeft() + button.getWidth() / 2f
+                    < menu.getPrimaryFab().getLeft() + menu.getPrimaryFab().getWidth() / 2f
+                    - root.getResources().getDimension(R.dimen.fab_min_size);
+        }
+        assertTrue(anotherColumn);
+        int[] clicked = {-1};
+        menu.setOnClickFabListener(new FabLayout.OnClickFabListener() {
+            @Override public void onClickPrimaryFab(FabLayout view, FloatingActionButton fab) {}
+            @Override public void onClickSecondaryFab(FabLayout view, FloatingActionButton fab, int position) {
+                clicked[0] = position;
+            }
+        });
+        root.findViewById(R.id.rating_sort_fab).performClick();
+        assertEquals(11, clicked[0]);
     }
 
     private void bind(String field, int id) {

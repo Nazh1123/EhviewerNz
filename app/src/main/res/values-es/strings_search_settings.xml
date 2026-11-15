@@ -8,4 +8,7 @@
     <string name="settings_persistent_min_rating">Filtro de puntuación permanente</string>
     <string name="settings_persistent_min_rating_description">Establece la puntuación mínima predeterminada para cada búsqueda. Las galerías con menor puntuación se ocultan por defecto.</string>
     <string name="settings_persistent_min_rating_value">Actual: %1$s (0.00 desactiva el filtro)</string>
+    <string name="settings_search_category_keyword">Palabras clave</string>
+    <string name="settings_search_category_gallery_search">Búsqueda de galerías</string>
+    <string name="settings_search_category_thumbnail">Miniaturas</string>
 </resources>

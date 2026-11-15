@@ -74,4 +74,24 @@ public class GalleryDisplayMetadataLoaderTest {
         assertEquals(99, first.pages); assertEquals(3, first.favoriteSlot);
         loader.clear();
     }
+
+    @Test @SuppressWarnings("unchecked")
+    public void optionalGdataSharesBulkBudgetAndPublishesReusableScoreProvenance() {
+        List<EhRequest> sent = new ArrayList<>();
+        GalleryDisplayMetadataLoader loader = new GalleryDisplayMetadataLoader(sent::add, () -> "scope");
+        loader.setBulk(true);
+        GalleryInfo gallery = gallery(1);
+        gallery.rating = 4.5f;
+        gallery.posted = "2026-11-01 00:00";
+        loader.request(gallery, () -> {});
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(40));
+        assertTrue(sent.get(0).isBulk());
+        ((List<GalleryInfo>) sent.get(0).getArgs()[0]).get(0).apiRating = 4.73f;
+        succeed(sent.get(0));
+        assertTrue(gallery.hasApiRating());
+        assertEquals(4.73f, gallery.apiRating, 0);
+        assertEquals(4.5f, gallery.rating, 0);
+        assertEquals("2026-11-01 00:00", gallery.posted);
+        loader.clear();
+    }
 }

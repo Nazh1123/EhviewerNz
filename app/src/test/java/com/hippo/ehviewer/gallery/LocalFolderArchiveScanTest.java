@@ -109,7 +109,7 @@ public class LocalFolderArchiveScanTest {
         File root = Files.createTempDirectory(context.getCacheDir().toPath(), "archive-folder").toFile();
         Files.createFile(new File(root, "10.zip").toPath());
         Files.createFile(new File(root, "2.cbz").toPath());
-        for (String name : Arrays.asList("_translation", "_translated", "_super_resolution", "a.results")) {
+        for (String name : Arrays.asList("_translation", "_translated", "_super_resolution", "_original", "a.results")) {
             File result = new File(root, name);
             assertTrue(result.mkdir());
             Files.createFile(new File(result, "ignored.jpg").toPath());

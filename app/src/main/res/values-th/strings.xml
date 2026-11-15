@@ -1150,6 +1150,7 @@
     <string name="my_tags">แท็กของฉัน</string>
     <string name="preset">ค่าเริ่มต้น</string>
     <string name="settings_about_issue_help">มีปัญหาช่วย</string>
+    <string name="settings_about_feature_guide">คำอธิบายฟังก์ชัน</string>
     <string name="settings_about_latest_release">เวอร์ชันล่าสุด</string>
     <string name="settings_read_auto_transfer_time">การเปลี่ยนหน้าอัตโนมัติ (มิลลิวินาที)</string>
     <string name="settings_read_reverse_volume_page">ทิศทางการหมุนหน้าปุ่มปรับระดับเสียงย้อนกลับ</string>
@@ -1263,4 +1264,13 @@
     <string name="settings_subscription_homepage_scan">สแกนหน้าหลักเพื่อค้นหาอัปเดตการติดตาม</string>
     <string name="settings_subscription_homepage_scan_summary">สแกนหน้าหลักเมื่อเช็กอัปเดตด้วยตนเองหรืออัตโนมัติ หากจำนวนบุ๊กมาร์กที่ติดตาม N &gt; 8 เวลาหลังอัปเดตครั้งก่อนเป็นนาที T &lt; 400 และ T × 0.3 &lt; N มิฉะนั้น รวมถึงการค้นหาที่ซับซ้อน จะใช้การค้นหาบุ๊กมาร์ก ความคืบหน้าจะคงอยู่เมื่อสลับวิธี และไม่เปลี่ยนวิธีเรียกดูการติดตามบุ๊กมาร์ก</string>
     <string name="open_image_folder">เปิดภาพในโฟลเดอร์เดียวกัน</string>
+    <string name="select_gallery_range_same_label">เลือกจุดสิ้นสุดของช่วงในป้ายกำกับเดียวกัน</string>
+    <string name="settings_update_bookmark_subscriptions_on_open">อัปเดตเมื่อเปิดการติดตาม</string>
+    <string name="manage_subscription_bookmarks">จัดการบุ๊กมาร์กการติดตาม</string>
+    <string name="subscription_global_short">การติดตาม</string>
+    <string name="subscription_bookmarks_short">บุ๊กมาร์ก</string>
+    <string name="subscription_result_age_seconds">%1$s - %2$d วิ.ก่อน</string>
+    <string name="subscription_result_age_minutes">%1$s - %2$d นาทีก่อน</string>
+    <string name="subscription_result_age_hours">%1$s - %2$s ชม.ก่อน</string>
+    <string name="settings_update_bookmark_subscriptions_on_open_summary">ปิด: แตะใช้ผลเดิม กดค้างเพื่ออัปเดต เปิด: แตะอัปเดต (ใช้ผลเดิมภายใน 60 วินาที) กดค้างใช้ผลเดิม</string>
 </resources>

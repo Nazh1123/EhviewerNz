@@ -8,4 +8,7 @@
     <string name="settings_persistent_min_rating">Dauerhafter Bewertungsfilter</string>
     <string name="settings_persistent_min_rating_description">Standard-Mindestbewertung für jede Suche festlegen. Galerien mit niedrigerer Bewertung werden standardmäßig ausgeblendet.</string>
     <string name="settings_persistent_min_rating_value">Aktuell: %1$s (0.00 deaktiviert den Filter)</string>
+    <string name="settings_search_category_keyword">Suchbegriffe</string>
+    <string name="settings_search_category_gallery_search">Galeriesuche</string>
+    <string name="settings_search_category_thumbnail">Vorschaubilder</string>
 </resources>

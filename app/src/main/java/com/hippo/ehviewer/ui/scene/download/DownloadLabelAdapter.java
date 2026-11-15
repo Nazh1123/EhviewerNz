@@ -41,7 +41,11 @@ public class DownloadLabelAdapter extends ArrayAdapter<DownloadLabelItem> {
             viewHolder = (ViewHolder) view.getTag();
         }
 
-        viewHolder.textView1.setText(item.label);
+        DownloadLabelPresentation.bind(viewHolder.textView1, item.label, item.item);
+        view.setContentDescription(item.label + ", " + item.count() + (item.item != null && item.item.getFolder()
+                ? ", " + getContext().getString(com.hippo.ehviewer.Settings.isDownloadLabelExpanded(
+                        item.item.getId(), item.item.getLabel()) ? R.string.download_label_action_collapse
+                        : R.string.download_label_action_expand) : ""));
         viewHolder.textView2.setText(item.count());
 
         return view;

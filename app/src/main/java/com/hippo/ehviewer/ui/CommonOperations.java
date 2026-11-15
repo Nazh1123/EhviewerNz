@@ -224,7 +224,7 @@ public final class CommonOperations {
             justStart = label == null || dm.containLabel(label);
         }
         // If there is no other label, just use null label
-        if (!justStart && 0 == dm.getLabelList().size()) {
+        if (!justStart && 0 == dm.getDownloadLabels().size()) {
             justStart = true;
             label = null;
         }
@@ -234,7 +234,7 @@ public final class CommonOperations {
             onSelected.accept(label);
         } else {
             // Let use chose label
-            List<DownloadLabel> list = dm.getLabelList();
+            List<DownloadLabel> list = dm.getDownloadLabels();
             final String[] items = new String[list.size() + 1];
             items[0] = context.getString(R.string.default_download_label_name);
             for (int i = 0, n = list.size(); i < n; i++) {

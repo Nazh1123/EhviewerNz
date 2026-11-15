@@ -91,4 +91,15 @@
             android:layout_height="wrap_content"/>
     </FrameLayout>
 
+    <TextView
+        android:id="@+id/dialog_archiver_quota_usage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:minHeight="48dp"
+        android:gravity="center"
+        android:textColorLink="?attr/colorAccent"
+        android:textAppearance="@style/TextAppearance.AppCompat.Caption"
+        android:visibility="gone" />
+
 </LinearLayout>

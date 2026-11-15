@@ -63,6 +63,10 @@
             android:summary="@string/settings_about_fork_author_summary"
             android:title="@string/settings_about_author" />
 
+        <Preference
+            android:key="fork_feature_guide"
+            android:title="@string/settings_about_feature_guide" />
+
         <com.hippo.preference.UrlPreference
             android:key="fork_latest_release"
             android:title="@string/settings_about_latest_release"

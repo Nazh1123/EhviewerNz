@@ -20,9 +20,9 @@ import com.hippo.lib.yorozuya.AnimationUtils;
 /** Popular actions share the main FAB's actual position, including snackbar/inset movement. */
 public class PopularGalleryActions extends FrameLayout {
     private static final long ANIMATE_TIME = 300L;
-    private final boolean[] mShown = new boolean[2];
-    private final float[] mSlots = {2f, 1f};
-    private final float[] mTargetSlots = {2f, 1f};
+    private final boolean[] mShown;
+    private final float[] mSlots;
+    private final float[] mTargetSlots;
     private final int[] mParentLocation = new int[2];
     private final int[] mLocation = new int[2];
     private final Rect mContentBounds = new Rect();
@@ -30,6 +30,9 @@ public class PopularGalleryActions extends FrameLayout {
     private FloatingActionButton mAnchor;
     private FloatingActionButton mMenuUpdates;
     private int mActiveIndex = -1;
+    private int mReservedSlots;
+
+    public void setReservedSlots(int slots) { mReservedSlots = slots; positionButtons(); }
     private ValueAnimator mPositionAnimator;
     private ValueAnimator mNoticeAnimator;
     private float mNoticeRadiusFactor;
@@ -40,7 +43,15 @@ public class PopularGalleryActions extends FrameLayout {
     };
 
     public PopularGalleryActions(Context context, AttributeSet attrs) {
+        this(context, attrs, 2);
+    }
+
+    protected PopularGalleryActions(Context context, AttributeSet attrs, int buttonCount) {
         super(context, attrs);
+        mShown = new boolean[buttonCount];
+        mSlots = new float[buttonCount];
+        for (int i = 0; i < buttonCount; i++) mSlots[i] = buttonCount - i;
+        mTargetSlots = mSlots.clone();
         setClipChildren(false);
         setClipToPadding(false);
         setWillNotDraw(false);
@@ -67,30 +78,7 @@ public class PopularGalleryActions extends FrameLayout {
         mActiveIndex = activeIndex;
         float[] targets = {2f, 1f};
         if (activeIndex >= 0) targets[activeIndex] = primaryShown ? 1f : 0f;
-        if (mTargetSlots[0] != targets[0] || mTargetSlots[1] != targets[1]) {
-            cancelPositionAnimation();
-            System.arraycopy(targets, 0, mTargetSlots, 0, 2);
-            if (animate && visible) {
-                float[] starts = mSlots.clone();
-                mPositionAnimator = ValueAnimator.ofFloat(0f, 1f);
-                mPositionAnimator.setDuration(ANIMATE_TIME);
-                // Let a departing button disappear before occupying its slot.
-                boolean movingDown = activeIndex >= 0 && !primaryShown;
-                mPositionAnimator.setStartDelay((modeChanged && activeIndex >= 0)
-                        || (movingDown && anchor.getVisibility() == VISIBLE && anchor.getScaleY() > 0f)
-                        ? ANIMATE_TIME : 0L);
-                mPositionAnimator.setInterpolator(movingDown
-                        ? AnimationUtils.SLOW_FAST_INTERPOLATOR : AnimationUtils.FAST_SLOW_INTERPOLATOR);
-                mPositionAnimator.addUpdateListener(animation -> {
-                    float fraction = (float) animation.getAnimatedValue();
-                    for (int i = 0; i < 2; i++) mSlots[i] = starts[i] + (targets[i] - starts[i]) * fraction;
-                    positionButtons();
-                });
-                mPositionAnimator.start();
-            } else {
-                System.arraycopy(targets, 0, mSlots, 0, 2);
-            }
-        }
+        moveToSlots(targets, animate, visible, modeChanged, activeIndex >= 0 && !primaryShown);
         for (int i = 0; i < 2; i++) {
             setButtonShown(i, visible && (activeIndex < 0 || activeIndex == i), animate,
                     (modeChanged && activeIndex < 0) || (replacingModeButton && i == activeIndex)
@@ -100,9 +88,65 @@ public class PopularGalleryActions extends FrameLayout {
         updateVisibility();
     }
 
+    /** Independent active modes use the same movement and visibility transitions as popular modes. */
+    protected void updateIndependentModes(FloatingActionButton anchor, boolean visible,
+            boolean[] active, boolean primaryShown) {
+        mAnchor = anchor;
+        int activeIndex = -1;
+        float slot = primaryShown ? 1f : 0f;
+        float[] targets = new float[active.length];
+        for (int i = 0; i < active.length; i++) {
+            targets[i] = slot;
+            if (active[i]) {
+                if (activeIndex < 0) activeIndex = i;
+                slot++;
+                // New actions enter their reserved slot without crossing their neighbors.
+                if (visible && !mShown[i]) mTargetSlots[i] = mSlots[i] = targets[i];
+            }
+        }
+        boolean modeChanged = mActiveIndex != activeIndex;
+        mActiveIndex = activeIndex;
+        moveToSlots(targets,
+                isLaidOut(), visible, modeChanged, !primaryShown);
+        for (int i = 0; i < active.length; i++) {
+            setButtonShown(i, visible && active[i], isLaidOut(), 0L);
+        }
+        positionButtons();
+        updateVisibility();
+    }
+
+    private void moveToSlots(float[] targets, boolean animate, boolean visible,
+            boolean modeChanged, boolean movingDown) {
+        if (!java.util.Arrays.equals(mTargetSlots, targets)) {
+            cancelPositionAnimation();
+            System.arraycopy(targets, 0, mTargetSlots, 0, targets.length);
+            if (animate && visible) {
+                float[] starts = mSlots.clone();
+                mPositionAnimator = ValueAnimator.ofFloat(0f, 1f);
+                mPositionAnimator.setDuration(ANIMATE_TIME);
+                // Let a departing button disappear before occupying its slot.
+                mPositionAnimator.setStartDelay((modeChanged && mActiveIndex >= 0)
+                        || (movingDown && mAnchor.getVisibility() == VISIBLE && mAnchor.getScaleY() > 0f)
+                        ? ANIMATE_TIME : 0L);
+                mPositionAnimator.setInterpolator(movingDown
+                        ? AnimationUtils.SLOW_FAST_INTERPOLATOR : AnimationUtils.FAST_SLOW_INTERPOLATOR);
+                mPositionAnimator.addUpdateListener(animation -> {
+                    float fraction = (float) animation.getAnimatedValue();
+                    for (int i = 0; i < targets.length; i++) mSlots[i] = starts[i] + (targets[i] - starts[i]) * fraction;
+                    positionButtons();
+                });
+                mPositionAnimator.start();
+            } else {
+                System.arraycopy(targets, 0, mSlots, 0, targets.length);
+            }
+        }
+    }
+
+    protected boolean wrapsSlots() { return false; }
+
     /** Move the retained mode button up before the primary FAB reappears underneath it. */
     public long primaryShowDelay() {
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < mShown.length; i++) {
             View button = getChildAt(i);
             if (mSlots[i] < 1f && button.getVisibility() == VISIBLE && button.getScaleY() > 0f) {
                 return ANIMATE_TIME;
@@ -113,8 +157,12 @@ public class PopularGalleryActions extends FrameLayout {
 
     public void snapAbovePrimary() {
         cancelPositionAnimation();
-        for (int i = 0; i < 2; i++) {
-            mTargetSlots[i] = mSlots[i] = mActiveIndex == i ? 1f : 2f - i;
+        float shift = 0f;
+        for (int i = 0; i < mShown.length; i++) {
+            if (mShown[i]) shift = Math.max(shift, 1f - mTargetSlots[i]);
+        }
+        for (int i = 0; i < mShown.length; i++) {
+            mSlots[i] = mTargetSlots[i] += shift;
         }
         positionButtons();
     }
@@ -179,7 +227,9 @@ public class PopularGalleryActions extends FrameLayout {
         for (int i = 0; i < getChildCount(); i++) {
             View button = getChildAt(i);
             button.setX(centerX - button.getWidth() / 2f);
-            button.setY(centerY - step * mSlots[i] - button.getHeight() / 2f);
+            button.setY(centerY - step * (mSlots[i] + mReservedSlots) - button.getHeight() / 2f);
+            if (mReservedSlots > 0 || wrapsSlots()) GalleryListModeActions.place(button, centerX, centerY,
+                    step, mSlots[i] + mReservedSlots);
         }
     }
 

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_label_folder">フォルダー</string>
+    <string name="download_folder_delete_children">フォルダー内のラベルも削除</string>
+    <string name="download_labels_sort_name">名前で並べ替え</string>
+    <string name="download_labels_sort_confirm">選択した項目を名前で並べ替えますか？最上位と各フォルダー内で個別に並べ替えます。</string>
+    <string name="download_label_new">追加</string>
+    <string name="download_labels_delete_message">選択した%1$d項目を削除しますか？削除したラベル内のダウンロードは既定のラベルに移動します。</string>
+    <string name="download_fast_scroll">高速スクロール</string>
+</resources>

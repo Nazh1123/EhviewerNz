@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_label_folder">資料夾</string>
+    <string name="download_folder_delete_children">刪除資料夾內標籤</string>
+    <string name="download_labels_sort_name">按名稱排序</string>
+    <string name="download_labels_sort_confirm">按名稱排序所選項目？第一層和各資料夾內的所選項目會分別排序。</string>
+    <string name="download_label_new">新增</string>
+    <string name="download_labels_delete_message">刪除所選的 %1$d 個項目？被刪除標籤內的下載項目將移至預設標籤。</string>
+    <string name="download_fast_scroll">快速捲動</string>
+</resources>

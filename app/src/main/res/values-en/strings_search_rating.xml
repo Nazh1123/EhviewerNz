@@ -4,4 +4,5 @@
     <string name="search_rating_title">Minimum rating</string>
     <string name="search_rating_hint">0.00–5.00; 0.00 disables the filter</string>
     <string name="search_rating_invalid">Enter a number from 0.00 to 5.00 with up to two decimal places</string>
+    <string name="search_rating_current">(Current %1$s)</string>
 </resources>

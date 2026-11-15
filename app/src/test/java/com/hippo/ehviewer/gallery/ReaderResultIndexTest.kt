@@ -16,6 +16,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
@@ -41,18 +42,21 @@ class ReaderResultIndexTest {
             }
         } finally { bitmap.recycle() }
     }
-    @Test fun distantPreviewStatusIsIndependentOfPreferenceAndDoesNotDecodeResults() {
-        write(80, tl); write(80, sr)
+    @Test
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun distantPreviewStatusIsIndependentOfPreferenceAndDoesNotDecodeResults() {
+        write(80, tl); write(80, sr); write(80, GalleryResultIndex.Kind.ORIGINAL)
         shadowOf(Looper.getMainLooper()).idle()
         val reader = ReaderExistingResults(app, provider, null)
         reader.decodeTranslation = { error("Status must not decode translated images") }
         try {
             reader.onPageChanged(0)
             reader.resultIndex.request(80)
-            await { reader.resultIndex.flags(80) == 3 }
+            val all = ReaderResultIndex.TRANSLATION or ReaderResultIndex.SUPER_RESOLUTION or ReaderResultIndex.ORIGINAL
+            await { reader.resultIndex.flags(80) == all }
             assertFalse(provider.hasTranslatedPage(80)); assertFalse(provider.hasEnhancedPage(80))
             val reads = provider.metadataReads
-            repeat(30) { reader.resultIndex.request(80); assertEquals(3, reader.resultIndex.flags(80)) }
+            repeat(30) { reader.resultIndex.request(80); assertEquals(all, reader.resultIndex.flags(80)) }
             assertEquals(reads, provider.metadataReads)
             PreferenceManager.getDefaultSharedPreferences(app).edit().putBoolean(GalleryResultIndex.PREFER_EXISTING, true).commit()
             reader.decodeTranslation = { null }

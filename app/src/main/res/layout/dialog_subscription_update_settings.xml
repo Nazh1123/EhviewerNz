@@ -43,24 +43,35 @@
                 android:text="@string/settings_fork_auto_subscription_updates_bookmark"
                 app:switchPadding="16dp" />
 
-            <com.google.android.material.textfield.TextInputLayout
+            <LinearLayout
                 android:id="@+id/auto_subscription_update_interval_layout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/settings_fork_auto_subscription_update_interval"
-                app:suffixText="@string/settings_fork_subscription_update_minutes">
+                android:orientation="horizontal">
 
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/auto_subscription_update_interval"
-                    android:layout_width="match_parent"
+                <TextView
+                    android:id="@+id/auto_subscription_update_interval_label"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_weight="2"
+                    android:labelFor="@id/auto_subscription_update_interval"
+                    android:text="@string/subscription_update_interval_minutes" />
+
+                <EditText
+                    android:id="@+id/auto_subscription_update_interval"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:layout_weight="1"
+                    android:gravity="center"
                     android:imeOptions="actionDone"
                     android:inputType="number"
                     android:maxLength="10"
                     android:selectAllOnFocus="true"
                     android:singleLine="true" />
 
-            </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
 
         </LinearLayout>
 

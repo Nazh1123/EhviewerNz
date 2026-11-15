@@ -3,6 +3,10 @@ package com.hippo.ehviewer.gallery
 import android.content.Context
 import android.net.Uri
 import android.text.format.Formatter
+import android.view.LayoutInflater
+import android.view.View
+import android.widget.ImageButton
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.Lifecycle
@@ -10,7 +14,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.dao.DownloadInfo
-import com.hippo.ehviewer.spider.SpiderDen
 import com.hippo.ehviewer.gallery.GalleryProcessingProgress.Kind
 import com.hippo.ehviewer.superresolution.SuperResolutionExport
 import com.hippo.ehviewer.superresolution.SuperResolutionModels
@@ -21,6 +24,7 @@ import com.hippo.ehviewer.translation.TranslationRuntime
 import com.hippo.ehviewer.translation.TranslationStorage
 import com.hippo.ehviewer.translation.TranslationTasks
 import com.hippo.unifile.UniFile
+import java.text.NumberFormat
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
 
@@ -28,7 +32,8 @@ import kotlinx.coroutines.sync.withLock
 object GalleryResultStorage {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     internal data class Usage(val count: Long, val bytes: Long)
-    internal data class Summary(val translation: Usage, val superResolution: Usage, val originals: Usage?)
+    internal data class Summary(val translation: Usage, val superResolution: Usage, val originals: Usage?,
+                                val downloadedOriginals: Usage)
 
     @JvmStatic fun showDeleteDialog(context: Context, galleries: List<DownloadInfo>, onDelete: Runnable) {
         val selected = galleries.distinctBy { it.gid }
@@ -42,68 +47,103 @@ object GalleryResultStorage {
                     else R.string.gallery_results_delete_failed, Toast.LENGTH_LONG).show()
             }
         }
+        val action = LayoutInflater.from(context).inflate(R.layout.gallery_delete_original_results, null)
+        val summaryView = action.findViewById<TextView>(R.id.gallery_results_summary)
+        action.findViewById<TextView>(R.id.gallery_results_selection).text =
+            context.getString(R.string.gallery_results_selected, selected.size)
         val dialog = AlertDialog.Builder(context)
             .setTitle(R.string.gallery_results_delete_title)
-            .setMessage(R.string.gallery_results_calculating)
-            .setPositiveButton(R.string.translation_delete_results) { _, _ -> delete(Kind.TRANSLATION) }
-            .setNegativeButton(R.string.gallery_results_delete_sr) { _, _ -> delete(Kind.SUPER_RESOLUTION) }
+            .setView(action)
             .setNeutralButton(android.R.string.cancel, null)
             .create()
+        var confirmation: AlertDialog? = null
+        fun bindDeleteButton(id: Int, kind: Kind): ImageButton = action.findViewById<ImageButton>(id).apply {
+            isEnabled = false
+            setOnClickListener {
+                if (confirmation?.isShowing == true) return@setOnClickListener
+                confirmation = AlertDialog.Builder(context)
+                    .setTitle(contentDescription)
+                    .setMessage(context.getString(R.string.gallery_results_delete_confirm, selected.size))
+                    .setPositiveButton(R.string.delete) { _, _ ->
+                        if (dialog.isShowing) {
+                            dialog.dismiss()
+                            delete(kind)
+                        }
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .create().also { prompt ->
+                        prompt.setOnDismissListener { if (confirmation === prompt) confirmation = null }
+                        prompt.show()
+                    }
+            }
+        }
+        val deleteTranslation = bindDeleteButton(R.id.delete_translation_results, Kind.TRANSLATION)
+        val deleteSuperResolution = bindDeleteButton(R.id.delete_super_resolution_results, Kind.SUPER_RESOLUTION)
+        val deleteOriginal = bindDeleteButton(R.id.delete_original_results, Kind.ORIGINAL)
         dialog.show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled = false
+        val numberFormat = NumberFormat.getIntegerInstance(context.resources.configuration.locales[0])
+        fun bindUsage(countId: Int, sizeId: Int, usage: Usage?, button: ImageButton? = null) {
+            if (usage != null) {
+                action.findViewById<TextView>(countId).text = numberFormat.format(usage.count)
+                action.findViewById<TextView>(sizeId).text = Formatter.formatFileSize(context, usage.bytes)
+            }
+            button?.isEnabled = usage != null && (usage.count > 0 || usage.bytes > 0)
+        }
         val loading = scope.launch {
             try {
                 val summary = inspect(app, selected)
                 ensureActive()
                 if (!dialog.isShowing) return@launch
-                val originals = summary.originals?.let {
-                    context.getString(R.string.gallery_results_originals, it.count, Formatter.formatFileSize(context, it.bytes))
-                } ?: context.getString(R.string.gallery_results_originals_unavailable)
-                dialog.setMessage(context.getString(R.string.gallery_results_delete_summary, selected.size,
-                    summary.translation.count, Formatter.formatFileSize(context, summary.translation.bytes),
-                    summary.superResolution.count, Formatter.formatFileSize(context, summary.superResolution.bytes), originals))
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled =
-                    summary.translation.count > 0 || summary.translation.bytes > 0
-                dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled =
-                    summary.superResolution.count > 0 || summary.superResolution.bytes > 0
+                bindUsage(R.id.gallery_results_initial_count, R.id.gallery_results_initial_size, summary.originals)
+                bindUsage(R.id.gallery_results_translation_count, R.id.gallery_results_translation_size,
+                    summary.translation, deleteTranslation)
+                bindUsage(R.id.gallery_results_sr_count, R.id.gallery_results_sr_size,
+                    summary.superResolution, deleteSuperResolution)
+                bindUsage(R.id.gallery_results_original_count, R.id.gallery_results_original_size,
+                    summary.downloadedOriginals, deleteOriginal)
+                if (summary.originals == null) summaryView.setText(R.string.gallery_results_originals_unavailable)
+                else summaryView.visibility = View.GONE
             } catch (cancel: CancellationException) { throw cancel
-            } catch (_: Exception) { dialog.setMessage(context.getString(R.string.gallery_results_inspect_failed)) }
+            } catch (_: Exception) { summaryView.setText(R.string.gallery_results_inspect_failed) }
         }
         val lifecycle = (context as? LifecycleOwner)?.lifecycle
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_DESTROY) dialog.dismiss() }
         lifecycle?.addObserver(observer)
-        dialog.setOnDismissListener { loading.cancel(); lifecycle?.removeObserver(observer) }
+        dialog.setOnDismissListener {
+            confirmation?.dismiss()
+            loading.cancel()
+            lifecycle?.removeObserver(observer)
+        }
     }
 
     internal suspend fun inspect(context: Context, galleries: List<DownloadInfo>): Summary = withContext(Dispatchers.IO) {
         val ids = galleries.map { it.gid }.toSet()
         val directories = directories(context, galleries)
+        val counts = galleries.distinctBy { it.gid }.map { DownloadResultProgress.read(context, it) }
         val translation = TranslationRuntime.lock.withLock {
             val bytes = collect(context, ids, directories, Kind.TRANSLATION, sourceIdentities(galleries)).sumOf { it.length() }
-            Usage(ids.sumOf { GalleryProcessingProgress.get(context, it).translated.toLong() }, bytes)
+            Usage(counts.sumOf { it.translated.toLong() }, bytes)
         }
         val sr = SuperResolutionModels.lock.withLock {
             val bytes = collect(context, ids, directories, Kind.SUPER_RESOLUTION, sourceIdentities(galleries)).sumOf { it.length() }
-            Usage(ids.sumOf { GalleryProcessingProgress.get(context, it).enhanced.toLong() }, bytes)
+            Usage(counts.sumOf { it.enhanced.toLong() }, bytes)
         }
         val originals = try { inspectOriginals(context, galleries, directories) }
             catch (cancel: CancellationException) { throw cancel }
             catch (_: Exception) { null }
-        Summary(translation, sr, originals)
+        val downloadedOriginals = Usage(counts.sumOf { it.originals.toLong() },
+            collect(context, ids, directories, Kind.ORIGINAL).sumOf { it.length() })
+        Summary(translation, sr, originals, downloadedOriginals)
     }
 
     /** Image metadata only: no decoding, hashing, extraction, or processing-progress backfill. */
     private suspend fun inspectOriginals(context: Context, galleries: List<DownloadInfo>, directories: List<UniFile>): Usage {
-        val roots = directories.toMutableList()
         val archives = linkedMapOf<String, DownloadInfo>()
         for (info in galleries) {
             val source = info.archiveUri ?: continue
-            if (source.startsWith("local-album:")) {
-                roots += checkNotNull(SpiderDen.getExistingGalleryDownloadDir(info)?.takeIf { it.isDirectory })
-            } else if (!LocalFolderGallerySource.isLocalFolderGallery(source)) archives.putIfAbsent(source, info)
+            if (!TranslationStorage.hasGalleryDirectory(info)) archives.putIfAbsent(source, info)
         }
-        var usage = collectOriginals(roots)
+        var usage = collectOriginals(directories)
         for ((uri, info) in archives) {
             currentCoroutineContext().ensureActive()
             val archive = checkNotNull(UniFile.fromUri(context, Uri.parse(uri))) { "Archive unavailable" }
@@ -134,7 +174,8 @@ object GalleryResultStorage {
                 val name = file.name ?: continue
                 if (file.isDirectory) {
                     if (!name.equals(TranslationResultStore.DIRECTORY_NAME, true) &&
-                        !name.equals(SuperResolutionExport.DIRECTORY_NAME, true)) pending.add(file)
+                        !name.equals(SuperResolutionExport.DIRECTORY_NAME, true) &&
+                        !name.equals(GalleryResultIndex.Kind.ORIGINAL.directory, true)) pending.add(file)
                 } else if (file.isFile && GalleryProvider2.SUPPORT_IMAGE_EXTENSIONS.any { name.endsWith(it, true) }) {
                     files[file.uri.toString()] = file
                 }
@@ -145,6 +186,24 @@ object GalleryResultStorage {
 
     internal suspend fun delete(context: Context, galleries: List<DownloadInfo>, kind: Kind): Boolean {
         val ids = galleries.map { it.gid }.toSet()
+        if (kind == Kind.ORIGINAL) {
+            withContext(Dispatchers.Main.immediate) { ReaderOriginalController.cancelDownloads(ids) }
+            return withContext(Dispatchers.IO) {
+                var success = true
+                for (gallery in galleries.distinctBy { it.gid }) {
+                    val directory = TranslationStorage.galleryDir(context, gallery)
+                    if (directory == null && TranslationStorage.hasGalleryDirectory(gallery)) success = false
+                    try {
+                        GalleryResultIndex.deleteKind(context, gallery.gid, directory, GalleryResultIndex.Kind.ORIGINAL)
+                    } catch (error: Exception) {
+                        if (error is CancellationException) throw error
+                        success = false
+                    }
+                }
+                GalleryProcessingProgress.removeMissing(context, ids, kind).join()
+                success
+            }
+        }
         val sourceIdentities = sourceIdentities(galleries)
         // Stop only the selected stage and await its writers before removing files.
         withContext(Dispatchers.Main.immediate) {
@@ -195,6 +254,17 @@ object GalleryResultStorage {
     internal suspend fun collect(context: Context, ids: Set<Long>, galleries: List<UniFile>, kind: Kind,
                                  sourceIdentities: Set<String> = emptySet()): List<UniFile> {
         val files = linkedMapOf<String, UniFile>()
+        if (kind == Kind.ORIGINAL) {
+            // Local OR files use a dedicated subfolder. Private files are scoped by gallery ID.
+            for (gid in ids) for (entry in GalleryResultIndex.files(context, gid, null, GalleryResultIndex.Kind.ORIGINAL)) {
+                files[entry.uri.toString()] = entry
+            }
+            for (directory in galleries) for (entry in GalleryResultIndex.files(context, null, directory,
+                GalleryResultIndex.Kind.ORIGINAL, "")) {
+                files[entry.uri.toString()] = entry
+            }
+            return files.values.toList()
+        }
         for (gid in ids) for (entry in GalleryResultIndex.files(context, gid, null,
             if (kind == Kind.TRANSLATION) GalleryResultIndex.Kind.TL else GalleryResultIndex.Kind.SR)) files[entry.uri.toString()] = entry
         for (identity in sourceIdentities) for (entry in GalleryResultIndex.files(context, null, null,

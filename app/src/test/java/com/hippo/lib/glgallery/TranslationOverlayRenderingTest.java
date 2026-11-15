@@ -20,6 +20,40 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = 28, manifest = Config.NONE)
 public class TranslationOverlayRenderingTest {
+    @Test public void replacingResultBasePreservesZoomAndPanAcrossResolutionChanges() {
+        List<String> draws = new ArrayList<>();
+        GalleryPageView page = new GalleryPageView(null, 0, 0, 0, 0, 0);
+        ImageView view = page.getImageView();
+        view.layout(0, 0, 800, 1000);
+        page.setImage(texture(400, 600, "ordinary", draws));
+        view.setScaleOffset(ImageView.SCALE_FIT, ImageView.START_POSITION_CENTER, 1f);
+        view.scale(310, 420, 2f);
+        view.scroll(37, 61, new int[2]);
+        RectF expected = new RectF(ReflectionHelpers.<RectF>getField(view, "mDst"));
+        float scale = view.getScale();
+        try {
+            page.setResultImage(texture(800, 1200, "downloaded original", draws));
+            view.layout(0, 0, 800, 1000);
+            assertViewport(expected, view);
+            assertEquals(scale / 2, view.getScale(), .001f);
+            page.setResultImage(texture(400, 600, "ordinary enhancement base", draws));
+            view.layout(0, 0, 800, 1000);
+            assertViewport(expected, view);
+            assertEquals(scale, view.getScale(), .001f);
+        } finally {
+            page.setImage(null);
+        }
+    }
+
+    private void assertViewport(RectF expected, ImageView view) {
+        RectF actual = ReflectionHelpers.getField(view, "mDst");
+        assertEquals(expected.left, actual.left, .001f);
+        assertEquals(expected.top, actual.top, .001f);
+        assertEquals(expected.right, actual.right, .001f);
+        assertEquals(expected.bottom, actual.bottom, .001f);
+        assertFalse(ReflectionHelpers.<Boolean>getField(view, "mScaleOffsetDirty"));
+    }
+
     @Test public void superResolutionAndTranslationUseOriginalGeometryAndIndependentComparison() {
         List<String> draws = new ArrayList<>();
         RecordingTexture original = texture(400, 600, "original", draws);

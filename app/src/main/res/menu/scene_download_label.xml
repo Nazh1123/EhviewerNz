@@ -34,7 +34,7 @@
     <item
         android:id="@+id/action_add"
         android:icon="@drawable/v_plus_dark_x24"
-        android:title="@string/add"
+        android:title="@string/download_label_new"
         app:showAsAction="always"/>
 
     <item
@@ -47,7 +47,7 @@
     <item
         android:id="@+id/action_classify_selected_labels"
         android:icon="@drawable/v_sort_selected_dark_x24"
-        android:title="@string/classify_selected_labels"
+        android:title="@string/download_labels_sort_name"
         android:visible="false"
         app:showAsAction="always" />
 

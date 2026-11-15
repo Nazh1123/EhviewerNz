@@ -2,6 +2,8 @@ package com.hippo.ehviewer.ui.scene.download;
 
 public class DownloadLabelItem {
     String label;
+    com.hippo.ehviewer.dao.DownloadLabel item;
+    String folderCount;
     private long count;
 
     DownloadLabelItem(){
@@ -14,7 +16,7 @@ public class DownloadLabelItem {
     }
 
     public String count(){
-        return count+"";
+        return folderCount != null ? folderCount : Long.toString(count);
     }
 
 }

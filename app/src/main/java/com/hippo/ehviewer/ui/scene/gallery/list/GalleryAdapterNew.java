@@ -101,6 +101,14 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
 
     private final ReadingProgressCache mReadingProgress;
     private final GalleryDisplayMetadataLoader mDisplayMetadata;
+    private boolean mMetadataPaused;
+
+    void setMetadataRequestsPaused(boolean paused) {
+        mMetadataPaused = paused;
+        if (paused) mDisplayMetadata.clear();
+    }
+
+    void setBulkMetadata(boolean bulk) { mDisplayMetadata.setBulk(bulk); }
     private static final Object METADATA_PAYLOAD = new Object();
     private final ExecutorService executor;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -323,7 +331,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             return;
         }
         holder.boundGid = gi.gid;
-        if (GalleryDisplayMetadataLoader.needsMetadata(gi)) {
+        if (!mMetadataPaused && GalleryDisplayMetadataLoader.needsMetadata(gi)) {
             holder.metadataRequest = mDisplayMetadata.request(gi, () -> {
                 int current = holder.getBindingAdapterPosition();
                 if (current != RecyclerView.NO_POSITION && getDataAt(current) == gi)

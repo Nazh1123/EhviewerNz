@@ -239,6 +239,21 @@ public class ListUrlBuilder implements Cloneable, Parcelable {
         return build(false);
     }
 
+    public String applyRatingToContinuation(String url) {
+        return SearchRating.withServerMinimum(url, getServerMinRating());
+    }
+
+    public boolean sameSearchExceptRating(ListUrlBuilder other) {
+        if (other == null || mMode != other.mMode) return false;
+        ListUrlBuilder first = new ListUrlBuilder();
+        first.set(this);
+        first.setPageIndex(0);
+        ListUrlBuilder second = new ListUrlBuilder();
+        second.set(other);
+        second.setPageIndex(0);
+        return Objects.equals(first.buildWithoutRatingFilter(), second.buildWithoutRatingFilter());
+    }
+
     public int getPageFrom() {
         return mPageFrom;
     }

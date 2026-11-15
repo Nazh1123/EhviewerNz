@@ -25,7 +25,6 @@ import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -75,7 +74,6 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResult;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -225,6 +223,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private GalleryInfo mGalleryInfo;
     private int mPage;
     private String mCacheFileName;
+    private java.util.function.Consumer<Boolean> mImageSaveToCallback;
     private boolean mExternalImage;
     private boolean mPendingExternalImageStart;
     @Nullable
@@ -242,6 +241,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     @Nullable
     private GalleryProvider2 mGalleryProvider;
     private ReaderTranslationController mTranslationController;
+    @Nullable private com.hippo.ehviewer.gallery.ReaderOriginalController mOriginalController;
     private com.hippo.ehviewer.gallery.ReaderExistingResults mExistingResults;
     private com.hippo.ehviewer.superresolution.ReaderSuperResolutionController mSuperResolutionController;
     @Nullable
@@ -715,6 +715,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mGalleryInfo = savedInstanceState.getParcelable(KEY_GALLERY_INFO);
         mPage = savedInstanceState.getInt(KEY_PAGE, -1);
         mCurrentIndex = savedInstanceState.getInt(KEY_CURRENT_INDEX);
+        mCacheFileName = savedInstanceState.getString("save_to_cache_file");
         mUpdateRecordTime = savedInstanceState.getLong(KEY_UPDATE_RECORD_TIME, 0L);
         mUpdateRecordGid = savedInstanceState.getLong(KEY_UPDATE_RECORD_GID, 0L);
         mPendingUpdateStart = false;
@@ -738,6 +739,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         }
         outState.putInt(KEY_PAGE, mPage);
         outState.putInt(KEY_CURRENT_INDEX, mCurrentIndex);
+        outState.putString("save_to_cache_file", mCacheFileName);
         outState.putLong(KEY_UPDATE_RECORD_TIME, mUpdateRecordTime);
         outState.putLong(KEY_UPDATE_RECORD_GID, mUpdateRecordGid);
         if (mRangeReaderMode && mGalleryProvider != null) outState.putInt(KEY_RANGE_SOURCE_PAGE,
@@ -844,6 +846,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         mSuperResolutionController = new com.hippo.ehviewer.superresolution.ReaderSuperResolutionController(
                 this, mGalleryProvider, findViewById(R.id.quick_super_resolution), mGalleryInfo, progressLayout);
         mExistingResults = new com.hippo.ehviewer.gallery.ReaderExistingResults(this, mGalleryProvider, mGalleryInfo);
+        if (ACTION_EH.equals(mAction) && mGalleryInfo != null && mGalleryInfo.gid > 0
+                && !TextUtils.isEmpty(mGalleryInfo.token) && !isImportedGallery()) {
+            mOriginalController = new com.hippo.ehviewer.gallery.ReaderOriginalController(
+                    this, mGalleryProvider, mGalleryInfo, mExistingResults.getResultIndex(), progressLayout);
+        }
         if (mGalleryProvider instanceof ArchiveGalleryProvider archive &&
                 androidx.preference.PreferenceManager.getDefaultSharedPreferences(this).getBoolean(
                         com.hippo.ehviewer.gallery.GalleryResultIndex.PREFER_EXISTING, false)) {
@@ -1017,6 +1024,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mTranslationController != null) mTranslationController.onPageChanged(startPage);
         if (mSuperResolutionController != null) mSuperResolutionController.onPageChanged(startPage);
         if (mExistingResults != null) mExistingResults.onPageChanged(startPage);
+        if (mOriginalController != null) mOriginalController.onPageChanged(startPage);
         if (mGalleryView != null) {
             mLayoutMode = mGalleryView.getLayoutMode();
         }
@@ -1104,6 +1112,12 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
 
     @Override
     protected void onDestroy() {
+        if (isFinishing() && mCacheFileName != null) {
+            new File(getCacheDir(), mCacheFileName).delete();
+            mCacheFileName = null;
+        }
+        mImageSaveToCallback = null;
+        if (mOriginalController != null) { mOriginalController.close(); mOriginalController = null; }
         if (mExistingResults != null) { mExistingResults.close(); mExistingResults = null; }
         if (mSuperResolutionController != null) {
             mSuperResolutionController.close(isFinishing());
@@ -1242,6 +1256,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (mTranslationController != null) mTranslationController.resume();
         if (mSuperResolutionController != null) mSuperResolutionController.resume();
         if (mExistingResults != null) mExistingResults.resume();
+        if (mOriginalController != null) mOriginalController.reloadDisplay();
         if (mOrientationEventListener != null && mOrientationEventListener.canDetectOrientation()) {
             mOrientationEventListener.enable();
         }
@@ -2506,13 +2521,17 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         if (provider == null || mImageFileOperationPending || mImageFileExecutor.isShutdown()) return;
         // boolean shouldTurn = turnPageAfterSave && (explicitTurn || Settings.getLongPressSaveTurnPage());
         boolean shouldTurn = turnPageAfterSave && explicitTurn;
+        UniFile original = provider.getDisplayedOriginalFile(page);
         mImageFileOperationPending = true;
         mImageFileExecutor.execute(() -> {
             GalleryProvider2.SaveResult saved = null;
             try {
                 // Resolving the directory can itself access SAF/storage.
                 UniFile directory = Settings.getManualImageSaveLocation();
-                if (directory != null) saved = saveImageInDirectory(provider, page, directory);
+                if (directory != null) {
+                    saved = original != null ? saveOriginalCopy(original, directory, provider.getImageFilename(page))
+                            : saveImageInDirectory(provider, page, directory);
+                }
             } catch (Throwable e) {
                 ExceptionUtils.throwIfFatal(e);
                 Log.w(TAG, "Unable to save gallery image", e);
@@ -2737,13 +2756,47 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void prepareImageExport(int page, UniFile directory, java.util.function.Consumer<UniFile> ready) {
+        prepareImageExport(page, directory, false, ready);
+    }
+
+    @Nullable
+    private static GalleryProvider2.SaveResult saveOriginalCopy(UniFile original, UniFile directory, String filename)
+            throws java.io.IOException {
+        String name = original.getName();
+        if (name == null || name.lastIndexOf('.') < 0) return null;
+        GalleryProvider2.SaveResult result = null;
+        try (java.io.InputStream input = original.openInputStream()) {
+            result = GalleryProvider2.prepareSaveDestination(directory, filename + "_orn" + name.substring(name.lastIndexOf('.')));
+            if (result == null) return null;
+            if (original.getUri().equals(result.file.getUri())) return result.skipped();
+            try (java.io.OutputStream output = result.file.openOutputStream(false)) {
+                IOUtils.copy(input, output);
+            }
+            return result;
+        } catch (java.io.IOException | RuntimeException error) {
+            if (result != null) result.deleteIfCreated();
+            throw error;
+        }
+    }
+
+    private void prepareImageExport(int page, UniFile directory, boolean useDisplayedOriginal,
+                                    java.util.function.Consumer<UniFile> ready) {
         GalleryProvider2 provider = mGalleryProvider;
         if (provider == null || directory == null || mImageFileOperationPending || mImageFileExecutor.isShutdown()) return;
+        UniFile original = useDisplayedOriginal ? provider.getDisplayedOriginalFile(page) : null;
         mImageFileOperationPending = true;
         mImageFileExecutor.execute(() -> {
             UniFile saved = null;
-            try { saved = provider.save(page, directory, provider.getImageFilename(page)); }
-            catch (RuntimeException failure) { Log.w(TAG, "Unable to export gallery image", failure); }
+            try {
+                String filename = provider.getImageFilename(page);
+                if (original == null) saved = provider.save(page, directory, filename);
+                else {
+                    GalleryProvider2.SaveResult result = saveOriginalCopy(original, directory, filename);
+                    if (result != null) saved = result.file;
+                }
+            } catch (java.io.IOException | RuntimeException failure) {
+                Log.w(TAG, "Unable to export gallery image", failure);
+            }
             UniFile result = saved;
             SimpleHandler.getInstance().post(() -> {
                 mImageFileOperationPending = false;
@@ -2755,31 +2808,41 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     }
 
     private void saveImageTo(int page) {
-        if (null == mGalleryProvider) {
+        if (mGalleryProvider == null || mCacheFileName != null) {
             return;
         }
         File dir = getCacheDir();
-        prepareImageExport(page, UniFile.fromFile(dir), file -> {
+        prepareImageExport(page, UniFile.fromFile(dir), true, file -> {
             String filename = file.getName();
             if (filename == null) {
                 showSaveErrorNotice(getText(R.string.error_cant_save_image));
                 return;
             }
-            mCacheFileName = filename;
-            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("image/*");
-            intent.putExtra(Intent.EXTRA_TITLE, filename);
-            try {
-                startActivityForResult(intent, WRITE_REQUEST_CODE);
-    //            registerForActivityResult(intent, WRITE_REQUEST_CODE);
-    //            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::saveImageDats)
-    //                    .launch(intent);
-            } catch (Throwable e) {
-                ExceptionUtils.throwIfFatal(e);
-                Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
-            }
+            File staged = new File(dir, filename);
+            if (!launchImageSaveTo(staged, filename, null)) staged.delete();
         });
+    }
+
+    /** On success the picker owns the cache file until it returns, including on rotation. */
+    public boolean launchImageSaveTo(File staged, String filename, @Nullable java.util.function.Consumer<Boolean> callback) {
+        if (isFinishing() || isDestroyed() || mCacheFileName != null) return false;
+        mCacheFileName = staged.getName();
+        mImageSaveToCallback = callback;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        String extension = com.hippo.lib.yorozuya.FileUtils.getExtensionFromFilename(filename);
+        String mime = extension == null ? null : android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+        intent.setType(mime != null && mime.startsWith("image/") ? mime : "image/*");
+        intent.putExtra(Intent.EXTRA_TITLE, filename);
+        try {
+            startActivityForResult(intent, WRITE_REQUEST_CODE);
+            return true;
+        } catch (RuntimeException error) {
+            mCacheFileName = null;
+            mImageSaveToCallback = null;
+            Toast.makeText(this, R.string.error_cant_find_activity, Toast.LENGTH_SHORT).show();
+            return false;
+        }
     }
 
     @Override
@@ -2805,73 +2868,51 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
             return;
         }
-        if (requestCode == WRITE_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            if (resultData != null) {
-                Uri uri = resultData.getData();
-                String filepath = getCacheDir() + "/" + mCacheFileName;
-                File cacheFile = new File(filepath);
-
-                InputStream is = null;
-                OutputStream os = null;
-                ContentResolver resolver = getContentResolver();
-
-                try {
-                    is = new FileInputStream(cacheFile);
-                    os = resolver.openOutputStream(uri);
-                    IOUtils.copy(is, os);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } finally {
-                    IOUtils.closeQuietly(is);
-                    IOUtils.closeQuietly(os);
-                }
-
-                cacheFile.delete();
-
-                showSaveNotice(getString(R.string.image_saved, uri.getPath()));
-                // Sync media store
-                sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, uri));
-            }
-        }
-    }
-
-    private void saveImageDats(ActivityResult result) {
-        if (result == null) {
+        if (requestCode != WRITE_REQUEST_CODE || mCacheFileName == null) return;
+        File staged = new File(getCacheDir(), mCacheFileName);
+        java.util.function.Consumer<Boolean> callback = mImageSaveToCallback;
+        mCacheFileName = null;
+        mImageSaveToCallback = null;
+        Uri uri = resultCode == Activity.RESULT_OK && resultData != null ? resultData.getData() : null;
+        if (uri == null) {
+            staged.delete();
+            if (callback != null) callback.accept(false);
             return;
         }
-        if (result.getResultCode() != Activity.RESULT_OK) {
-            return;
-        }
-        Intent resultData = result.getData();
-        if (resultData != null) {
-            Uri uri = resultData.getData();
-            String filepath = getCacheDir() + "/" + mCacheFileName;
-            File cacheFile = new File(filepath);
-
-            InputStream is = null;
-            OutputStream os = null;
-            ContentResolver resolver = getContentResolver();
-
-            try {
-                is = new FileInputStream(cacheFile);
-                os = resolver.openOutputStream(uri);
-                IOUtils.copy(is, os);
-            } catch (IOException e) {
-                e.printStackTrace();
+        Context app = getApplicationContext();
+        EhApplication.getExecutorService(app).execute(() -> {
+            boolean written = false;
+            try (InputStream input = new FileInputStream(staged);
+                 OutputStream output = app.getContentResolver().openOutputStream(uri, "wt")) {
+                if (output == null) throw new IOException("No output stream for selected document");
+                IOUtils.copy(input, output);
+                output.flush();
+                written = true;
+            } catch (IOException | RuntimeException error) {
+                written = false;
+                Log.w(TAG, "Unable to write selected document", error);
             } finally {
-                IOUtils.closeQuietly(is);
-                IOUtils.closeQuietly(os);
+                staged.delete();
             }
-
-            boolean deleted = cacheFile.delete();
-            if (!deleted) {
-                cacheFile.deleteOnExit();
+            boolean success = written;
+            if (success) app.sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, uri));
+            else {
+                try {
+                    if (android.provider.DocumentsContract.isDocumentUri(app, uri)) {
+                        android.provider.DocumentsContract.deleteDocument(app.getContentResolver(), uri);
+                    }
+                } catch (IOException | RuntimeException error) {
+                    Log.w(TAG, "Unable to remove incomplete document", error);
+                }
             }
-
-            showSaveNotice(getString(R.string.image_saved, uri.getPath()));
-            // Sync media store
-            sendBroadcast(new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, uri));
-        }
+            SimpleHandler.getInstance().post(() -> {
+                if (!isFinishing() && !isDestroyed()) {
+                    if (success) showSaveNotice(getString(R.string.image_saved, uri.getPath()));
+                    else showSaveErrorNotice(getText(R.string.error_cant_save_image));
+                }
+                if (callback != null) callback.accept(success);
+            });
+        });
     }
 
 
@@ -2897,6 +2938,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             @Override public boolean hasStableIds() { return true; }
         };
         mPageDialogItems = adapter;
+        if (mOriginalController != null) adapter.add(getString(R.string.original_title));
         addReaderModeActions();
         pageDialogListener(builder, adapter, page);
         builder.setOnDismissListener(dialog -> {
@@ -2912,7 +2954,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             }
             if (which >= 6 && !(mGalleryProvider instanceof ArchiveGalleryProvider)) {
                 String action = items.getItem(which).toString();
-                if (action.equals(getString(R.string.range_read_downloaded))
+                if (mOriginalController != null && action.equals(getString(R.string.original_title))) {
+                    mOriginalController.showMenu(page);
+                } else if (action.equals(getString(R.string.range_read_downloaded))
                         || (mRangeReaderMode && action.equals(getString(R.string.gallery_read_full)))) {
                     switchRangeReaderMode(page);
                 } else if (canSwitchReaderMode()) switchReaderMode(page);
@@ -4201,12 +4245,14 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     }
                     updateSlider();
                     updateProgress();
+                    if (mOriginalController != null) mOriginalController.onPageChanged(mCurrentIndex);
                     break;
                 case KEY_CURRENT_INDEX:
                     GalleryActivity.this.mCurrentIndex = mValue;
                     if (mTranslationController != null) mTranslationController.onPageChanged(mValue);
                     if (mSuperResolutionController != null) mSuperResolutionController.onPageChanged(mValue);
                     if (mExistingResults != null) mExistingResults.onPageChanged(mValue);
+                    if (mOriginalController != null) mOriginalController.onPageChanged(mValue);
                     updateLocalGalleryHistoryPage(mValue);
                     updateSlider();
                     updateProgress();

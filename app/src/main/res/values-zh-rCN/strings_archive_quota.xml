@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_quota_usage">%1$s / %2$s GB · %3$s 小时后刷新免费下载额度</string>
+    <string name="archive_quota_initial">%1$s / %2$s GB · 免费下载额度可用</string>
+    <string name="archive_quota_reset">重置</string>
+    <string name="archive_quota_refresh">刷新</string>
+    <string name="archive_quota_refreshing">刷新中…</string>
+    <string name="archive_quota_refresh_failed">刷新捐赠等级失败，已保留原有记录</string>
+</resources>

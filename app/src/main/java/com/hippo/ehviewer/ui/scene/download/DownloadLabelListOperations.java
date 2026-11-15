@@ -14,51 +14,14 @@ import androidx.annotation.NonNull;
 
 import com.hippo.ehviewer.dao.DownloadLabel;
 
-import java.text.Collator;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 
 final class DownloadLabelListOperations {
 
     private DownloadLabelListOperations() {
-    }
-
-    @NonNull
-    static List<DownloadLabel> sortSelectedAtFirstPosition(
-            @NonNull List<DownloadLabel> labels, @NonNull Set<Long> selectedIds) {
-        List<DownloadLabel> unselected = new ArrayList<>();
-        List<DownloadLabel> selected = new ArrayList<>();
-        int firstSelectedPosition = -1;
-        for (DownloadLabel label : labels) {
-            if (selectedIds.contains(label.getId())) {
-                if (firstSelectedPosition < 0) {
-                    firstSelectedPosition = unselected.size();
-                }
-                selected.add(label);
-            } else {
-                unselected.add(label);
-            }
-        }
-
-        Collator collator = Collator.getInstance(Locale.CHINA);
-        collator.setStrength(Collator.PRIMARY);
-        Collections.sort(selected, (left, right) -> {
-            String leftLabel = left.getLabel() != null ? left.getLabel() : "";
-            String rightLabel = right.getLabel() != null ? right.getLabel() : "";
-            int result = collator.compare(leftLabel, rightLabel);
-            return result != 0 ? result : leftLabel.compareTo(rightLabel);
-        });
-        if (firstSelectedPosition >= 0) {
-            unselected.addAll(firstSelectedPosition, selected);
-        }
-        return unselected;
     }
 
     @NonNull
@@ -117,52 +80,6 @@ final class DownloadLabelListOperations {
                 result.add(id);
             }
         }
-        return result;
-    }
-
-    @NonNull
-    static List<DownloadLabel> placeSelectedGroupAtAnchor(
-            @NonNull List<DownloadLabel> currentOrder,
-            @NonNull List<Long> selectedIdsInOriginalOrder,
-            long anchorId) {
-        int anchorPosition = findPosition(currentOrder, anchorId);
-        if (anchorPosition < 0) {
-            return new ArrayList<>(currentOrder);
-        }
-
-        Map<Long, DownloadLabel> labelsById = new HashMap<>();
-        for (DownloadLabel label : currentOrder) {
-            if (label.getId() != null) {
-                labelsById.put(label.getId(), label);
-            }
-        }
-
-        List<DownloadLabel> selectedGroup = new ArrayList<>();
-        int anchorIndex = -1;
-        for (Long id : selectedIdsInOriginalOrder) {
-            DownloadLabel label = labelsById.get(id);
-            if (label != null) {
-                if (id == anchorId) {
-                    anchorIndex = selectedGroup.size();
-                }
-                selectedGroup.add(label);
-            }
-        }
-        if (anchorIndex < 0 || selectedGroup.isEmpty()) {
-            return new ArrayList<>(currentOrder);
-        }
-
-        Set<DownloadLabel> selectedLabels = new HashSet<>(selectedGroup);
-        List<DownloadLabel> result = new ArrayList<>(currentOrder.size());
-        for (DownloadLabel label : currentOrder) {
-            if (!selectedLabels.contains(label)) {
-                result.add(label);
-            }
-        }
-
-        int insertionPosition = Math.max(0,
-                Math.min(anchorPosition - anchorIndex, result.size()));
-        result.addAll(insertionPosition, selectedGroup);
         return result;
     }
 

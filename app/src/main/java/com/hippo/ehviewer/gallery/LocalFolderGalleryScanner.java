@@ -291,7 +291,8 @@ public final class LocalFolderGalleryScanner {
     private static boolean isResultDirectory(String name) {
         String lowerName = name.toLowerCase(Locale.ROOT);
         return "_translation".equals(lowerName) || "_translated".equals(lowerName)
-                || "_super_resolution".equals(lowerName) || lowerName.endsWith(".results");
+                || "_super_resolution".equals(lowerName)
+                || GalleryResultIndex.Kind.ORIGINAL.getDirectory().equals(lowerName) || lowerName.endsWith(".results");
     }
 
     private static boolean isSupportedArchive(String name) {

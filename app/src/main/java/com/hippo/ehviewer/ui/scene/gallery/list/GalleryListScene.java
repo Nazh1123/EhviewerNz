@@ -48,6 +48,8 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
+import android.widget.RadioGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -88,11 +90,13 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.widget.HoldThumbnailPreview;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.widget.PopularGalleryActions;
+import com.hippo.ehviewer.widget.GalleryListModeActions;
 import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.callBack.SubscriptionCallback;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
+import com.hippo.ehviewer.client.GalleryListRequestPipeline;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.YesterdayTopListReadState;
 import com.hippo.ehviewer.client.SearchRating;
@@ -119,6 +123,7 @@ import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.DownloadService;
 import com.hippo.ehviewer.event.SomethingNeedRefresh;
 import com.hippo.ehviewer.ui.CommonOperations;
+import com.hippo.ehviewer.ui.GalleryRangeSelection;
 import com.hippo.ehviewer.ui.DownloadRemovalDialog;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
@@ -133,6 +138,8 @@ import com.hippo.ehviewer.widget.GalleryInfoContentHelper;
 import com.hippo.ehviewer.widget.JumpDateSelector;
 import com.hippo.ehviewer.widget.SearchBar;
 import com.hippo.ehviewer.widget.SearchLayout;
+import com.hippo.ehviewer.widget.RatingFilterControl;
+import com.hippo.ehviewer.ui.dialog.DialogActionLayout;
 import com.hippo.lib.yorozuya.AnimationUtils;
 import com.hippo.lib.yorozuya.AssertUtils;
 import com.hippo.lib.yorozuya.MathUtils;
@@ -157,6 +164,7 @@ import org.greenrobot.eventbus.Subscribe;
 import org.greenrobot.eventbus.ThreadMode;
 
 import java.io.File;
+import java.time.ZonedDateTime;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
@@ -195,6 +203,10 @@ public class GalleryListScene extends BaseScene
     public final static String ACTION_SUBSCRIPTION = "action_subscription";
     public final static String ACTION_BOOKMARK_SUBSCRIPTION = "action_bookmark_subscription";
     public final static String ACTION_GLOBAL_SUBSCRIPTION = "action_global_subscription";
+    public final static String KEY_SUBSCRIPTION_REUSE_POLICY = "subscription_reuse_policy";
+    public static final int SUBSCRIPTION_REUSE_AVAILABLE = 0;
+    public static final int SUBSCRIPTION_REUSE_RECENT = 1;
+    public static final int SUBSCRIPTION_FORCE_REFRESH = 2;
     public final static String ACTION_WHATS_HOT = "action_whats_hot";
     public final static String ACTION_TOP_LIST = "action_top_list";
     public final static String ACTION_LIST_URL_BUILDER = "action_list_url_builder";
@@ -205,6 +217,7 @@ public class GalleryListScene extends BaseScene
     private static final String KEY_MULTI_SELECT_MODE = "multi_select_mode";
     private static final String KEY_SELECTED_GIDS = "selected_gids";
     private static final String KEY_DOWNLOADED_ONLY_MODE = "downloaded_only_mode";
+    private static final String KEY_RATING_SORT_MODE = "rating_sort_mode";
     private static final String KEY_POPULAR_VIEW_MODE = "popular_view_mode";
     public static final String KEY_POPULAR_UPDATES_ONLY = "popular_updates_only";
     private static final String KEY_POPULAR_REPEATED_EXPANDED = "popular_repeated_expanded";
@@ -216,16 +229,18 @@ public class GalleryListScene extends BaseScene
     // Keep advanced criteria active while hiding the options panel to show suggestions.
     final static int STATE_SEARCH_SHOW_LIST = 3;
 
-    private static final int FAB_MULTI_SELECT_DOWNLOAD = 0;
-    private static final int FAB_MULTI_SELECT_DELETE = 1;
-    private static final int FAB_MULTI_SELECT = 2;
-    private static final int FAB_TAG_FILTER = 3;
-    private static final int FAB_GO_TO = 4;
-    private static final int FAB_REFRESH = 5;
-    private static final int FAB_RANDOM = 6;
-    private static final int FAB_DOWNLOADED_ONLY = 7;
-    private static final int FAB_POPULAR_UPDATES = 8;
-    private static final int FAB_POPULAR_PREVIOUS = 9;
+    private static final int FAB_MULTI_SELECT_RANGE = 0;
+    private static final int FAB_MULTI_SELECT_DOWNLOAD = 1;
+    private static final int FAB_MULTI_SELECT_DELETE = 2;
+    private static final int FAB_MULTI_SELECT = 3;
+    private static final int FAB_TAG_FILTER = 4;
+    private static final int FAB_GO_TO = 5;
+    private static final int FAB_REFRESH = 6;
+    private static final int FAB_RANDOM = 7;
+    private static final int FAB_DOWNLOADED_ONLY = 8;
+    private static final int FAB_POPULAR_UPDATES = 9;
+    private static final int FAB_POPULAR_PREVIOUS = 10;
+    private static final int FAB_RATING_SORT = 11;
 
     private static final int DOWNLOADED_SCAN_PAGE_LIMIT = 5;
     private static final int DOWNLOADED_SUBSCRIPTION_SCAN_PAGE_LIMIT = 2;
@@ -270,6 +285,27 @@ public class GalleryListScene extends BaseScene
     private FloatingActionButton mMultiSelectFab;
     @Nullable
     private FloatingActionButton mDownloadedOnlyFab;
+    private FloatingActionButton mRatingSortFab;
+    private GalleryListModeActions mModeActions;
+    private boolean mRatingSortMode;
+    private int mRestoredRatingPages;
+    private String mRestoredRatingCutoff;
+    private int mRatingSortMonths = 1;
+    private final RatingSearchCoverage mRatingSearchCoverage = new RatingSearchCoverage();
+    private boolean mRetainsRatingCandidates;
+    private boolean mRatingConditionOnly;
+    private boolean mRatingHistoryRebindPending;
+    private boolean mRestartRatingSortAfterRefresh;
+    private int mPendingRatingPages;
+    private String mPendingRatingCutoff;
+    private boolean mRatingLoading;
+    private boolean mRatingBrowseGestureArmed;
+    private boolean mRatingSortScrollToTop;
+    private final List<GalleryInfo> mRatingOrder = new ArrayList<>();
+    private GalleryRatingSortController mRatingSortController;
+    private AlertDialog mRatingProgressDialog;
+    private EhRequest mListRequest;
+    private GalleryListRequestPipeline mRatingPagePipeline;
     private PopularGalleryActions mPopularActions;
     private FloatingActionButton mPopularUpdates;
     private FloatingActionButton mPopularPrevious;
@@ -338,6 +374,7 @@ public class GalleryListScene extends BaseScene
         public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
             if (newState == RecyclerView.SCROLL_STATE_IDLE) {
                 mDownloadedBrowseGestureArmed = false;
+                mRatingBrowseGestureArmed = false;
             }
         }
 
@@ -384,6 +421,7 @@ public class GalleryListScene extends BaseScene
     private final Runnable mHideQuickDownloadNoticeRunnable =
             this::hideQuickDownloadNotice;
     private boolean mMultiSelectMode;
+    private final GalleryRangeSelection mRangeSelection = new GalleryRangeSelection();
     private final Set<Long> mSelectedGids = new HashSet<>();
     private boolean mDownloadedOnlyMode;
     private boolean mDownloadedPageScanActive;
@@ -410,6 +448,10 @@ public class GalleryListScene extends BaseScene
     private final Set<Long> mSubscriptionPendingUnread = new HashSet<>();
     @Nullable
     private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
+    private int mSubscriptionReusePolicy = SUBSCRIPTION_REUSE_AVAILABLE;
+    @Nullable private String mSubscriptionReusedTitle;
+    private boolean mSubscriptionStaleResult;
+    private int mBorrowedEhTaskId = -1;
     private long mYesterdayTopListRequestPeriod = YesterdayTopListReadState.NO_PERIOD;
     private long mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
 
@@ -427,6 +469,11 @@ public class GalleryListScene extends BaseScene
         mLoadedYesterdayTopListPeriod = YesterdayTopListReadState.NO_PERIOD;
 
         String action = args.getString(KEY_ACTION);
+        mSubscriptionReusePolicy = args.getInt(KEY_SUBSCRIPTION_REUSE_POLICY,
+                SUBSCRIPTION_REUSE_AVAILABLE);
+        mSubscriptionReusedTitle = null;
+        mSubscriptionStaleResult = false;
+        mBorrowedEhTaskId = -1;
         mPopularUpdatesOnlyOverride = ACTION_WHATS_HOT.equals(action)
                 && args.containsKey(KEY_POPULAR_UPDATES_ONLY)
                 ? args.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
@@ -564,9 +611,20 @@ public class GalleryListScene extends BaseScene
     private void onRestore(Bundle savedInstanceState) {
         mHasFirstRefresh = savedInstanceState.getBoolean(KEY_HAS_FIRST_REFRESH);
         mUrlBuilder = savedInstanceState.getParcelable(KEY_LIST_URL_BUILDER);
+        mSubscriptionReusePolicy = savedInstanceState.getInt(KEY_SUBSCRIPTION_REUSE_POLICY,
+                SUBSCRIPTION_REUSE_AVAILABLE);
         mState = savedInstanceState.getInt(KEY_STATE);
         mMultiSelectMode = savedInstanceState.getBoolean(KEY_MULTI_SELECT_MODE);
         mDownloadedOnlyMode = savedInstanceState.getBoolean(KEY_DOWNLOADED_ONLY_MODE);
+        mRatingSortMode = savedInstanceState.getBoolean(KEY_RATING_SORT_MODE);
+        mRestoredRatingPages = savedInstanceState.getInt("rating_sort_pages");
+        mRestoredRatingCutoff = savedInstanceState.getString("rating_sort_cutoff");
+        mRatingSortMonths = savedInstanceState.getInt("rating_sort_months", 1);
+        mRatingSearchCoverage.restore(savedInstanceState.getInt("rating_search_coverage", -1));
+        mRetainsRatingCandidates = savedInstanceState.getBoolean("rating_search_candidates");
+        mRestartRatingSortAfterRefresh = savedInstanceState.getBoolean("rating_restart_pending");
+        mPendingRatingPages = savedInstanceState.getInt("rating_pending_pages");
+        mPendingRatingCutoff = savedInstanceState.getString("rating_pending_cutoff");
         mPopularViewMode = savedInstanceState.getInt(KEY_POPULAR_VIEW_MODE, PopularGalleryHistory.CURRENT);
         mPopularUpdatesOnlyOverride = savedInstanceState.containsKey(KEY_POPULAR_UPDATES_ONLY)
                 ? savedInstanceState.getBoolean(KEY_POPULAR_UPDATES_ONLY) : null;
@@ -608,9 +666,21 @@ public class GalleryListScene extends BaseScene
                 !isBookmarkSubscriptionMode() && hasFirstRefresh
                         && !(isPopularMode() && mPopularRequestInFlight));
         outState.putParcelable(KEY_LIST_URL_BUILDER, mUrlBuilder);
+        outState.putInt(KEY_SUBSCRIPTION_REUSE_POLICY, mSubscriptionReusePolicy);
         outState.putInt(KEY_STATE, mState);
         outState.putBoolean(KEY_MULTI_SELECT_MODE, mMultiSelectMode);
         outState.putBoolean(KEY_DOWNLOADED_ONLY_MODE, mDownloadedOnlyMode);
+        outState.putBoolean(KEY_RATING_SORT_MODE, mRatingSortMode);
+        outState.putInt("rating_sort_months", mRatingSortMonths);
+        outState.putInt("rating_search_coverage", mRatingSearchCoverage.minimum());
+        outState.putBoolean("rating_search_candidates", mRetainsRatingCandidates);
+        outState.putBoolean("rating_restart_pending", mRestartRatingSortAfterRefresh);
+        outState.putInt("rating_pending_pages", mPendingRatingPages);
+        outState.putString("rating_pending_cutoff", mPendingRatingCutoff);
+        outState.putInt("rating_sort_pages", mRatingSortController == null
+                ? mRestoredRatingPages : mRatingSortController.targetPages());
+        outState.putString("rating_sort_cutoff", mRatingSortController == null
+                ? mRestoredRatingCutoff : mRatingSortController.cutoff());
         outState.putInt(KEY_POPULAR_VIEW_MODE, mPopularViewMode);
         if (mPopularUpdatesOnlyOverride != null) {
             outState.putBoolean(KEY_POPULAR_UPDATES_ONLY, mPopularUpdatesOnlyOverride);
@@ -830,6 +900,7 @@ public class GalleryListScene extends BaseScene
         if (null != mSearchBar) {
             mSearchBar.setTitle(title);
         }
+        updateSubscriptionResultTitle();
 
         // Update nav checked item
         int checkedItemId;
@@ -894,6 +965,19 @@ public class GalleryListScene extends BaseScene
         mMultiSelectFab = (FloatingActionButton) ViewUtils.$$(mFabLayout, R.id.multi_select_fab);
         mDownloadedOnlyFab = (FloatingActionButton) ViewUtils.$$(mFabLayout,
                 R.id.downloaded_only_fab);
+        mRatingSortFab = mainLayout.findViewById(R.id.rating_sort_fab);
+        mModeActions = mainLayout.findViewById(R.id.gallery_mode_actions);
+        View ratingActive = mainLayout.findViewById(R.id.rating_sort_active);
+        View downloadedActive = mainLayout.findViewById(R.id.downloaded_only_active);
+        View subscriptionRefresh = mainLayout.findViewById(R.id.subscription_refresh_active);
+        ratingActive.setOnClickListener(v -> onRatingSortClick());
+        downloadedActive.setOnClickListener(v -> setDownloadedOnlyMode(false, false));
+        subscriptionRefresh.setOnClickListener(v -> {
+            if (mHelper != null) mHelper.refresh();
+        });
+        TooltipCompat.setTooltipText(subscriptionRefresh, getString(R.string.refresh));
+        TooltipCompat.setTooltipText(ratingActive, getString(R.string.gallery_rating_sort_active));
+        TooltipCompat.setTooltipText(downloadedActive, getString(R.string.gallery_downloaded_only_active));
         mPopularActions = mainLayout.findViewById(R.id.popular_actions);
         mPopularUpdates = mainLayout.findViewById(R.id.popular_updates);
         mPopularPrevious = mainLayout.findViewById(R.id.popular_previous);
@@ -938,6 +1022,8 @@ public class GalleryListScene extends BaseScene
             public boolean onInterceptTouchEvent(@NonNull RecyclerView recyclerView,
                                                  @NonNull MotionEvent event) {
                 handleDownloadedOnlyBrowseTouch(event);
+                if (event.getActionMasked() == MotionEvent.ACTION_DOWN) mRatingBrowseGestureArmed = true;
+                if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) mRatingBrowseGestureArmed = false;
                 return false;
             }
         });
@@ -961,6 +1047,7 @@ public class GalleryListScene extends BaseScene
                 mSearchLayout.getPaddingRight(), mSearchLayout.getPaddingBottom() + paddingBottomFab);
 
         mFabLayout.setAutoCancel(true);
+        mFabLayout.setWrapSecondaryFabs(true);
         mFabLayout.setExpanded(false);
         mFabLayout.setHidePrimaryFab(false);
         mFabLayout.setOnClickFabListener(this);
@@ -993,10 +1080,17 @@ public class GalleryListScene extends BaseScene
             loadPopularHistory(Settings.getGallerySite(), () -> {
                 mPopularResponseReady = mPopularHistory.hasCurrent();
                 if (!mPopularRequestInFlight) updatePopularProjection();
+                if (mRatingSortMode && !mRatingLoading) getRatingSortController().stopAndSort();
             });
         }
 
         guideQuickSearch();
+
+        mainLayout.post(() -> {
+            if (mRatingSortMode && mHelper != null && !mHelper.isRefreshing() && mHelper.size() > 0) {
+                getRatingSortController().stopAndSort();
+            }
+        });
 
         return view;
     }
@@ -1214,6 +1308,9 @@ public class GalleryListScene extends BaseScene
     @Override
     public void onDestroyView() {
         mThumbnailPreview.dispose();
+        stopRatingLoading();
+        if (mListRequest != null) mListRequest.cancel();
+        mListRequest = null;
         super.onDestroyView();
         cancelPopularNoUpdatesNotice();
         if (isPopularMode() && mPopularRequestInFlight) {
@@ -1265,6 +1362,9 @@ public class GalleryListScene extends BaseScene
         mFloatingActionButton = null;
         mMultiSelectFab = null;
         mDownloadedOnlyFab = null;
+        mRatingSortFab = null;
+        if (mModeActions != null) mModeActions.destroy();
+        mModeActions = null;
         if (mPopularActions != null) mPopularActions.destroy();
         mPopularActions = null;
         mPopularUpdates = null;
@@ -2005,7 +2105,391 @@ public class GalleryListScene extends BaseScene
         if (isPopularMode() && mPopularResponseReady) updatePopularProjection();
     }
 
+    private void updateModeActions() {
+        if (mAdapter != null) mAdapter.setBulkMetadata(mRatingLoading || mRatingSortMode);
+        if (mFabLayout == null) return;
+        int activeSortLabel = isPopularMode() ? R.string.gallery_rating_sort_restore
+                : R.string.gallery_rating_sort_active;
+        if (mRatingSortFab != null) {
+            mRatingSortFab.setImageResource(mRatingSortMode ? R.drawable.v_star_x16 : R.drawable.v_star_outline_x16);
+            CharSequence label = mRatingSortFab.getContext().getText(mRatingSortMode
+                    ? activeSortLabel : R.string.gallery_rating_sort);
+            mRatingSortFab.setContentDescription(label);
+            TooltipCompat.setTooltipText(mRatingSortFab, label);
+        }
+        if (mModeActions != null) {
+            View ratingActive = mModeActions.findViewById(R.id.rating_sort_active);
+            CharSequence label = ratingActive.getContext().getText(activeSortLabel);
+            ratingActive.setContentDescription(label);
+            TooltipCompat.setTooltipText(ratingActive, label);
+        }
+        int reserved = (mRatingSortMode ? 1 : 0) + (mDownloadedOnlyMode ? 1 : 0);
+        if (mPopularActions != null) mPopularActions.setReservedSlots(reserved);
+        if (mModeActions != null) mModeActions.update(mFabLayout.getPrimaryFab(),
+                mState == STATE_NORMAL && !mMultiSelectMode && !mFabLayout.isExpanded(),
+                mRatingSortMode, mDownloadedOnlyMode,
+                isBookmarkSubscriptionMode() && mSubscriptionStaleResult, mShowActionFab);
+    }
+
+    private String ratingSortStatus() {
+        String status = getString(isBookmarkSubscriptionMode() ? R.string.gallery_rating_sort_batch_status
+                        : R.string.gallery_rating_sort_status,
+                mHelper == null ? 0 : mHelper.getLoadedSourcePages(),
+                mAdapter == null ? 0 : mAdapter.getRatingSourceData().size(),
+                mAdapter == null ? 0 : mAdapter.getGalleryCount());
+        if (isBookmarkSubscriptionMode() && mBookmarkSubscriptionCoordinator != null) {
+            status += "\n" + getString(R.string.gallery_rating_sort_sources,
+                    mBookmarkSubscriptionCoordinator.getSourcePagesRead());
+        }
+        return status;
+    }
+
+    private boolean supportsRatingMonthRange() {
+        if (mUrlBuilder == null || mHelper == null || !mHelper.isLoadedFromStart()
+                || !GalleryRatingSort.validTime(mHelper.getOldestLoadedPosted())) return false;
+        int mode = mUrlBuilder.getMode();
+        return mode == ListUrlBuilder.MODE_NORMAL || mode == ListUrlBuilder.MODE_TAG
+                || mode == ListUrlBuilder.MODE_UPLOADER || mode == ListUrlBuilder.MODE_FILTER
+                || mode == ListUrlBuilder.MODE_SUBSCRIPTION;
+    }
+
+    private GalleryRatingSortController getRatingSortController() {
+        if (mRatingSortController == null) {
+            mRatingSortController = new GalleryRatingSortController(new GalleryRatingSortController.Host() {
+                @Override public List<GalleryInfo> galleries() {
+                    return mAdapter == null ? Collections.emptyList() : mAdapter.getRatingSourceData();
+                }
+                @Override public boolean filterAllLoadedRatings() {
+                    return mRetainsRatingCandidates && currentRatingMinimum() > 0;
+                }
+                @Override public List<GalleryInfo> galleriesInRange(int pages, String cutoff) {
+                    if (mAdapter == null || mHelper == null) return Collections.emptyList();
+                    if (pages <= 0 && cutoff == null) return mAdapter.getRatingSourceData();
+                    Set<Long> included = new HashSet<>();
+                    for (GalleryInfo gallery : mHelper.getLoadedRangeData(pages, cutoff)) included.add(gallery.gid);
+                    List<GalleryInfo> result = new ArrayList<>();
+                    for (GalleryInfo gallery : mAdapter.getRatingSourceData()) {
+                        if (included.contains(gallery.gid)) result.add(gallery);
+                    }
+                    return result;
+                }
+                @Override public int loadedPages() { return mHelper == null ? 0 : mHelper.getLoadedSourcePages(); }
+                @Override public String oldestPosted() { return mHelper == null ? null : mHelper.getOldestLoadedPosted(); }
+                @Override public boolean hasNextPage() { return mHelper != null && mHelper.hasNextPage(); }
+                @Override public boolean requestNextPage() { return mHelper != null && mHelper.requestNextPage(); }
+                @Override public void cancelPageRequest() {
+                    if (mRatingPagePipeline != null) mRatingPagePipeline.cancel();
+                    if (mListRequest != null) mListRequest.cancel();
+                    mListRequest = null;
+                    if (mBookmarkSubscriptionCoordinator != null) mBookmarkSubscriptionCoordinator.pauseLoading();
+                    if (mHelper != null) mHelper.cancelPageTask();
+                }
+                @Override public void loadingChanged(boolean loading) {
+                    // Flush a partial subscription batch while the transition still suppresses
+                    // automatic re-sorting of source callbacks.
+                    if (!loading && mBookmarkSubscriptionCoordinator != null) {
+                        mBookmarkSubscriptionCoordinator.pauseLoading();
+                    }
+                    mRatingLoading = loading;
+                    if (!loading && mRatingPagePipeline != null) {
+                        mRatingPagePipeline.cancel();
+                        mRatingPagePipeline = null;
+                    }
+                    if (mAdapter != null) mAdapter.setMetadataRequestsPaused(loading);
+                    if (mHelper != null) mHelper.setEnable(!loading);
+                    if (mBookmarkSubscriptionCoordinator != null) {
+                        mBookmarkSubscriptionCoordinator.setBulk(loading || mRatingSortMode);
+                    }
+                    updatePopularActions();
+                }
+                @Override public void progressChanged() {
+                    if (mRatingProgressDialog != null) {
+                        mRatingProgressDialog.setTitle(mRatingSortController.isReadingRatings()
+                                ? R.string.gallery_rating_sort_ratings : R.string.gallery_rating_sort_loading);
+                        mRatingProgressDialog.setMessage(ratingSortStatus());
+                    }
+                }
+                @Override public void sorted(List<GalleryInfo> order, boolean incomplete) {
+                    if (mAdapter == null || mRecyclerView == null) return;
+                    commitRetainedRatingHistory();
+                    if (mRatingConditionOnly) {
+                        mRatingConditionOnly = false;
+                        mAdapter.onSourceDataSetChanged();
+                        if (mRatingProgressDialog != null) mRatingProgressDialog.dismiss();
+                        mRatingProgressDialog = null;
+                        updateModeActions();
+                        if (incomplete) showTip(R.string.gallery_rating_sort_incomplete, LENGTH_LONG);
+                        return;
+                    }
+                    int first = com.hippo.easyrecyclerview.LayoutManagerUtils
+                            .getFirstVisibleItemPosition(mRecyclerView.getLayoutManager());
+                    GalleryInfo anchor = mAdapter.getDataAt(first);
+                    View anchorView = mRecyclerView.getLayoutManager().findViewByPosition(first);
+                    int offset = anchorView == null ? 0 : anchorView.getTop() - mRecyclerView.getPaddingTop();
+                    mRatingSortMode = true;
+                    mRatingBrowseGestureArmed = false;
+                    mRatingOrder.clear();
+                    mRatingOrder.addAll(order);
+                    mAdapter.onSourceDataSetChanged();
+                    if (mRatingSortScrollToTop) {
+                        mRecyclerView.scrollToPosition(0);
+                        if (mSearchBarMover != null) mSearchBarMover.showSearchBar();
+                        showActionFab();
+                    }
+                    else if (anchor != null) {
+                        int position = mAdapter.findVisiblePosition(anchor.gid);
+                        if (position >= 0) com.hippo.easyrecyclerview.LayoutManagerUtils.scrollToPositionWithOffset(
+                                mRecyclerView.getLayoutManager(), position, offset);
+                    }
+                    mRatingSortScrollToTop = false;
+                    if (mRatingProgressDialog != null) mRatingProgressDialog.dismiss();
+                    mRatingProgressDialog = null;
+                    updateModeActions();
+                    if (mBookmarkSubscriptionCoordinator != null) mBookmarkSubscriptionCoordinator.setBulk(true);
+                    if (incomplete) showTip(R.string.gallery_rating_sort_incomplete, LENGTH_LONG);
+                }
+            }, request -> mClient.execute(request), executorService);
+            mRatingSortController.setRange(mRestoredRatingPages, mRestoredRatingCutoff);
+        }
+        return mRatingSortController;
+    }
+
+    private void stopRatingLoading() {
+        if (mRatingSortController != null) mRatingSortController.cancel();
+        if (mRatingProgressDialog != null) mRatingProgressDialog.dismiss();
+        mRatingProgressDialog = null;
+    }
+
+    private void restoreRatingOrder() {
+        boolean wasSorted = mRatingSortMode;
+        mRestartRatingSortAfterRefresh = false;
+        // Cancelling may publish a buffered subscription batch synchronously. Disable
+        // the projection first so that its callback cannot start another sort.
+        mRatingSortMode = false;
+        mRatingConditionOnly = false;
+        mRatingHistoryRebindPending = false;
+        mRatingOrder.clear();
+        mRestoredRatingPages = 0;
+        mRestoredRatingCutoff = null;
+        stopRatingLoading();
+        if (mRatingSortController != null) mRatingSortController.setRange(0, null);
+        if (mBookmarkSubscriptionCoordinator != null) mBookmarkSubscriptionCoordinator.setBulk(false);
+        if (wasSorted && mAdapter != null) mAdapter.onSourceDataSetChanged();
+        updateModeActions();
+    }
+
+    private void showRatingProgress() {
+        if (mRatingProgressDialog != null && mRatingProgressDialog.isShowing()) return;
+        Context context = getEHContext();
+        if (context == null) return;
+        mRatingProgressDialog = new AlertDialog.Builder(context)
+                .setTitle(R.string.gallery_rating_sort_loading).setMessage(ratingSortStatus())
+                .setNegativeButton(R.string.gallery_rating_sort_stop, (dialog, which) -> {
+                    mRatingProgressDialog = null;
+                    getRatingSortController().stopAndSort();
+                }).create();
+        mRatingProgressDialog.setCanceledOnTouchOutside(false);
+        mRatingProgressDialog.setOnCancelListener(dialog -> {
+            mRatingProgressDialog = null;
+            getRatingSortController().stopAndSort();
+        });
+        mRatingProgressDialog.show();
+    }
+
+    private void onRatingSortClick() {
+        if (!isPopularMode()) {
+            showRatingSortDialog();
+            return;
+        }
+        if (mHelper == null || mAdapter == null || mClient == null || mMultiSelectMode
+                || !mPopularResponseReady || mPopularRequestInFlight || mRatingLoading
+                || mHelper.isRefreshing()) return;
+        if (mRatingSortMode) {
+            restoreRatingOrder();
+            return;
+        }
+        // Popular is one bounded snapshot. Sort its current projection (including updates-only)
+        // without asking for a page/date range or showing a progress dialog.
+        stopDownloadedPageScan(false);
+        mRatingSortScrollToTop = true;
+        getRatingSortController().start(0, null);
+    }
+
+    private void showRatingSortDialog() {
+        Context context = getEHContext();
+        if (context == null || mHelper == null || mAdapter == null || mClient == null) return;
+        if (mRatingLoading) { showRatingProgress(); return; }
+        if (mHelper.isRefreshing()) return;
+        View content = LayoutInflater.from(context).inflate(R.layout.gallery_rating_sort_dialog, null);
+        ((TextView) content.findViewById(R.id.rating_sort_status)).setText(ratingSortStatus());
+        RadioGroup range = content.findViewById(R.id.rating_sort_range);
+        EditText pages = content.findViewById(R.id.rating_sort_page_count);
+        EditText months = content.findViewById(R.id.rating_sort_month_count);
+        boolean canLoad = mHelper.getLoadedSourcePages() > 0 && !isPopularMode()
+                && mUrlBuilder.getMode() != ListUrlBuilder.MODE_IMAGE_SEARCH;
+        boolean canUseMonths = supportsRatingMonthRange();
+        content.findViewById(R.id.rating_sort_pages).setEnabled(canLoad);
+        content.findViewById(R.id.rating_sort_months).setEnabled(canLoad && canUseMonths);
+        if (isBookmarkSubscriptionMode()) ((TextView) content.findViewById(R.id.rating_sort_page_unit))
+                .setText(R.string.gallery_rating_sort_batches);
+        GalleryRatingSortController controller = getRatingSortController();
+        pages.setText(String.valueOf(controller.targetPages() > 0 ? controller.targetPages()
+                : Math.min(GalleryRatingSort.MAX_PAGES, mHelper.getLoadedSourcePages() + 5)));
+        months.setText(String.valueOf(mRatingSortMonths));
+        pages.setEnabled(false);
+        months.setEnabled(false);
+        // Include the native site filter when precise rating filtering is disabled.
+        int searchMinimum = Math.max(mUrlBuilder.getEffectiveMinRatingHundredths(),
+                mUrlBuilder.getSubscriptionMinRatingHundredths());
+        RatingFilterControl ratingFilter = new RatingFilterControl(content,
+                Math.max(275, searchMinimum),
+                ignored -> {});
+        ((TextView) content.findViewById(R.id.search_rating_current)).setText(
+                getString(R.string.search_rating_current, SearchRating.format(searchMinimum)));
+        content.findViewById(R.id.search_rating_current).setVisibility(View.VISIBLE);
+        content.findViewById(R.id.search_rating_row).setVisibility(
+                Settings.getEnablePreciseRatingFilter() ? View.VISIBLE : View.GONE);
+        range.setOnCheckedChangeListener((group, id) -> {
+            pages.setEnabled(id == R.id.rating_sort_pages);
+            months.setEnabled(id == R.id.rating_sort_months);
+        });
+        if (mRatingSortMode) {
+            if (controller.cutoff() != null && canLoad && canUseMonths) range.check(R.id.rating_sort_months);
+            else if (controller.targetPages() > 0 && canLoad) range.check(R.id.rating_sort_pages);
+        }
+        // RadioGroup only observes direct children; forward radio clicks from the inline rows.
+        View.OnClickListener selectRange = view -> range.check(view.getId());
+        content.findViewById(R.id.rating_sort_pages).setOnClickListener(selectRange);
+        content.findViewById(R.id.rating_sort_months).setOnClickListener(selectRange);
+        AlertDialog.Builder builder = new AlertDialog.Builder(context).setTitle(R.string.gallery_rating_sort)
+                .setView(content).setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.gallery_rating_sort_execute, null);
+        if (mRatingSortMode) builder.setNeutralButton(R.string.dialog_action_restore,
+                (dialog, which) -> restoreRatingOrder());
+        AlertDialog dialog = builder.create();
+        dialog.show();
+        DialogActionLayout.placeNeutralAtStart(dialog);
+        dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(view -> {
+            int selection = range.getCheckedRadioButtonId();
+            int target = 0;
+            String date = null;
+            if (selection != R.id.rating_sort_loaded) {
+                EditText input = selection == R.id.rating_sort_pages ? pages : months;
+                int value;
+                try { value = Integer.parseInt(input.getText().toString().trim()); }
+                catch (NumberFormatException error) { input.setError(getString(R.string.error_invalid_number)); return; }
+                int maximum = selection == R.id.rating_sort_pages ? GalleryRatingSort.MAX_PAGES : 240;
+                if (value < 1 || value > maximum) { input.setError(getString(R.string.error_out_of_range)); return; }
+                if (selection == R.id.rating_sort_pages) target = value;
+                else {
+                    mRatingSortMonths = value;
+                    date = GalleryRatingSort.cutoff(ZonedDateTime.now(), value);
+                }
+            }
+            stopDownloadedPageScan(false);
+            mRatingSortScrollToTop = true;
+            AppHelper.hideSoftInput(dialog);
+            dialog.dismiss();
+            ListUrlBuilder next = new ListUrlBuilder();
+            next.set(mUrlBuilder);
+            if (Settings.getEnablePreciseRatingFilter())
+                next.setMinRatingHundredths(ratingFilter.getMinimumRating());
+            applyRatingSearch(next, true, target, date);
+        });
+    }
+
+    private int currentRatingMinimum() {
+        return mUrlBuilder == null ? 0 : Math.max(mUrlBuilder.getEffectiveMinRatingHundredths(),
+                mUrlBuilder.getSubscriptionMinRatingHundredths());
+    }
+
+    /** Both entry points commit the same search value, retaining candidates whenever complete. */
+    private void applyRatingSearch(ListUrlBuilder next, boolean sort, int pages, String cutoff) {
+        int minimum = Math.max(next.getEffectiveMinRatingHundredths(), next.getSubscriptionMinRatingHundredths());
+        boolean changed = currentRatingMinimum() != minimum;
+        boolean reuse = !changed || (mRetainsRatingCandidates && mRatingSearchCoverage.contains(minimum));
+        int loadedPages = mHelper.getLoadedSourcePages();
+        stopRatingLoading();
+        if (mListRequest != null) mListRequest.cancel();
+        mListRequest = null;
+        mHelper.cancelPageTask();
+        mUrlBuilder.set(next);
+        mLastRequestedRatingMinimum = mUrlBuilder.getEffectiveMinRatingHundredths();
+        mLastRequestedPreciseRating = Settings.getEnablePreciseRatingFilter();
+        onUpdateUrlBuilder();
+        mRatingConditionOnly = false;
+        if (!reuse) {
+            mRatingSortMode = false;
+            mRatingOrder.clear();
+            mRestartRatingSortAfterRefresh = sort;
+            // Rebuild the same amount of already-loaded work when sorting "loaded results".
+            mPendingRatingPages = pages > 0 || cutoff != null ? pages : loadedPages;
+            mPendingRatingCutoff = cutoff;
+            mHelper.refresh();
+            return;
+        }
+        mHelper.firstHref = next.applyRatingToContinuation(mHelper.firstHref);
+        mHelper.prevHref = next.applyRatingToContinuation(mHelper.prevHref);
+        mHelper.nextHref = next.applyRatingToContinuation(mHelper.nextHref);
+        mHelper.lastHref = next.applyRatingToContinuation(mHelper.lastHref);
+        if (changed && SeenGalleryHistory.supports(mUrlBuilder)) {
+            mSeenSearch = SeenGalleryHistory.open(mUrlBuilder);
+            mRatingHistoryRebindPending = mSeenSearch != null;
+            mSeenProjection.reset();
+            mSeenNewGids.clear();
+            if (mSeenSearch != null) for (GalleryInfo gallery : mHelper.getData()) {
+                if (mSeenSearch.baseline().isNew(gallery)) mSeenNewGids.add(gallery.gid);
+            }
+        }
+        if (mAdapter != null) mAdapter.onSourceDataSetChanged();
+        if (sort) {
+            showRatingProgress();
+            getRatingSortController().start(pages, cutoff);
+        } else if (minimum > 0 && mAdapter != null && mAdapter.getRatingSourceData().stream()
+                .anyMatch(gallery -> !gallery.hasApiRating() || gallery.firstGid == null)) {
+            // Enrich candidates without replacing the website order or repeating the HTML search.
+            mRatingConditionOnly = true;
+            showRatingProgress();
+            getRatingSortController().start(0, null);
+        } else {
+            commitRetainedRatingHistory();
+            if (mAdapter != null) mAdapter.onSourceDataSetChanged();
+        }
+    }
+
+    /** Seed the new logical search with its cached prefix before committing later pages to it. */
+    private void commitRetainedRatingHistory() {
+        if (!mRatingHistoryRebindPending || mSeenSearch == null || mHelper == null) return;
+        mRatingHistoryRebindPending = false;
+        GalleryListParser.Result cached = new GalleryListParser.Result();
+        cached.rawGalleries = new ArrayList<>(mHelper.getData());
+        cached.galleryInfoList = new ArrayList<>();
+        for (GalleryInfo gallery : cached.rawGalleries) {
+            cached.rawPublicationTimes.put(gallery.gid, gallery.posted);
+            if (SearchRating.matches(gallery.rating, currentRatingMinimum())) cached.galleryInfoList.add(gallery);
+        }
+        cached.rawSeenState = GallerySeenState.empty().observe(cached.rawGalleries);
+        cached.rawTailPosted = mHelper.getOldestLoadedPosted();
+        SeenGalleryHistory.record(mSeenSearch, cached, mHelper.hasNextPage());
+        mSeenNewGids.clear();
+        mSeenNewGids.addAll(mSeenSearch.newGids());
+    }
+
+    private void executeListRequest(EhRequest request) {
+        if (mListRequest != null) mListRequest.cancel();
+        mListRequest = request.setBulk(mRatingLoading || mRatingSortMode);
+        if (mRatingLoading && request.getMethod() == EhClient.METHOD_GET_GALLERY_LIST
+                && !isPopularMode() && !isBookmarkSubscriptionMode()) {
+            if (mRatingPagePipeline == null) mRatingPagePipeline = new GalleryListRequestPipeline(
+                    next -> mClient.execute(next), raw -> mRatingSortController != null
+                            && mRatingSortController.shouldPrefetch(raw));
+            mRatingPagePipeline.execute(request);
+        } else mClient.execute(request);
+    }
+
     void resetDownloadedOnlyModeForNewSearch() {
+        restoreRatingOrder();
+        if (mRatingSortController != null) mRatingSortController.clearRatings();
         setDownloadedOnlyMode(false, false);
     }
 
@@ -2023,12 +2507,14 @@ public class GalleryListScene extends BaseScene
     }
 
     private void updatePopularActions() {
+        updateModeActions();
         if (!isPopularMode() || mPopularRequestInFlight) cancelPopularNoUpdatesNotice();
         if (mPopularActions == null || mFabLayout == null) return;
         boolean popular = isPopularMode();
         mFabLayout.setSecondaryFabVisibilityAt(FAB_POPULAR_UPDATES, popular);
         mFabLayout.setSecondaryFabVisibilityAt(FAB_POPULAR_PREVIOUS, popular);
-        boolean enabled = popular && mPopularResponseReady && !mPopularRequestInFlight && !mMultiSelectMode;
+        boolean enabled = popular && mPopularResponseReady && !mPopularRequestInFlight
+                && !mMultiSelectMode && !mRatingLoading;
         int updatesText = mPopularViewMode == PopularGalleryHistory.UPDATES
                 ? R.string.popular_show_all : R.string.popular_updates_only;
         int previousText = mPopularViewMode == PopularGalleryHistory.PREVIOUS
@@ -2129,6 +2615,7 @@ public class GalleryListScene extends BaseScene
         mPopularRepeatedExpanded = false;
         mPopularViewMode = mPopularViewMode == mode ? PopularGalleryHistory.CURRENT : mode;
         updatePopularProjection();
+        if (mRatingSortMode) getRatingSortController().restart();
         if (mRecyclerView != null) {
             mRecyclerView.stopScroll();
             mRecyclerView.scrollToPosition(0);
@@ -2163,7 +2650,7 @@ public class GalleryListScene extends BaseScene
     }
 
     private void prepareDownloadedPageScan() {
-        if (!mDownloadedOnlyMode || mDownloadedPageScanActive || mAdapter == null) {
+        if (mRatingLoading || mRatingSortMode || !mDownloadedOnlyMode || mDownloadedPageScanActive || mAdapter == null) {
             return;
         }
         mDownloadedPageScanActive = true;
@@ -2175,11 +2662,17 @@ public class GalleryListScene extends BaseScene
     }
 
     private void startDownloadedPageScan() {
-        if (!mDownloadedOnlyMode || mDownloadedPageScanActive || mHelper == null) {
+        if (mRatingLoading || !mDownloadedOnlyMode || mDownloadedPageScanActive || mHelper == null) {
             return;
         }
         if (!mHelper.hasNextPage()) {
             showTip(R.string.gallery_list_no_more_data, LENGTH_SHORT);
+            return;
+        }
+        if (mRatingSortMode) {
+            mDownloadedBrowseGestureArmed = false;
+            mRatingBrowseGestureArmed = false;
+            mHelper.requestNextPage();
             return;
         }
         prepareDownloadedPageScan();
@@ -2271,6 +2764,11 @@ public class GalleryListScene extends BaseScene
     }
 
     private void toggleGallerySelection(@NonNull GalleryInfo galleryInfo) {
+        if (mRangeSelection.isPending()) {
+            mRangeSelection.onGalleryClick(galleryInfo.gid, getDisplayedGalleryGids(), mSelectedGids);
+            refreshRangeSelection();
+            return;
+        }
         if (!mSelectedGids.remove(galleryInfo.gid)) {
             mSelectedGids.add(galleryInfo.gid);
         }
@@ -2280,6 +2778,7 @@ public class GalleryListScene extends BaseScene
     @SuppressLint("NotifyDataSetChanged")
     private void exitMultiSelectMode() {
         mMultiSelectMode = false;
+        mRangeSelection.clear();
         mSelectedGids.clear();
         if (mAdapter != null) {
             mAdapter.notifyDataSetChanged();
@@ -2298,6 +2797,7 @@ public class GalleryListScene extends BaseScene
                 ? R.drawable.v_return_curve_dark_x24 : R.drawable.v_check_all_dark_x24);
 
         if (mMultiSelectMode) {
+            fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_RANGE, true);
             fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DOWNLOAD, true);
             fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DELETE, true);
             fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT, true);
@@ -2306,6 +2806,7 @@ public class GalleryListScene extends BaseScene
             fabLayout.setSecondaryFabVisibilityAt(FAB_REFRESH, false);
             fabLayout.setSecondaryFabVisibilityAt(FAB_RANDOM, false);
             fabLayout.setSecondaryFabVisibilityAt(FAB_DOWNLOADED_ONLY, false);
+            fabLayout.setSecondaryFabVisibilityAt(FAB_RATING_SORT, false);
             fabLayout.setAutoCancel(false);
             updatePopularActions();
             fabLayout.setExpanded(true, animation);
@@ -2325,6 +2826,7 @@ public class GalleryListScene extends BaseScene
     }
 
     private void showNormalFabs(@NonNull FabLayout fabLayout) {
+        fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_RANGE, false);
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DOWNLOAD, false);
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT_DELETE, false);
         fabLayout.setSecondaryFabVisibilityAt(FAB_MULTI_SELECT, true);
@@ -2333,7 +2835,28 @@ public class GalleryListScene extends BaseScene
         fabLayout.setSecondaryFabVisibilityAt(FAB_REFRESH, true);
         fabLayout.setSecondaryFabVisibilityAt(FAB_RANDOM, true);
         fabLayout.setSecondaryFabVisibilityAt(FAB_DOWNLOADED_ONLY, true);
+        fabLayout.setSecondaryFabVisibilityAt(FAB_RATING_SORT, true);
         updatePopularActions();
+    }
+
+    private List<Long> getDisplayedGalleryGids() {
+        List<Long> gids = new ArrayList<>();
+        if (mAdapter != null) {
+            for (int i = 0; i < mAdapter.getItemCount(); i++) {
+                GalleryInfo gallery = mAdapter.getDataAt(i);
+                gids.add(gallery != null ? gallery.gid : null);
+            }
+        }
+        return gids;
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    private void refreshRangeSelection() {
+        if (mAdapter != null) mAdapter.notifyDataSetChanged();
+        Context context = getEHContext();
+        if (mRangeSelection.isPending() && context != null) {
+            Toast.makeText(context, mRangeSelection.getHint(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void notifyGallerySelectionChanged(long gid) {
@@ -2512,6 +3035,12 @@ public class GalleryListScene extends BaseScene
         }
 
         switch (position) {
+            case FAB_MULTI_SELECT_RANGE:
+                if (mMultiSelectMode) {
+                    mRangeSelection.start(getDisplayedGalleryGids(), mSelectedGids);
+                    refreshRangeSelection();
+                }
+                return;
             case FAB_MULTI_SELECT_DOWNLOAD: {
                 MainActivity activity = getActivity2();
                 if (mMultiSelectMode && activity != null) {
@@ -2559,6 +3088,10 @@ public class GalleryListScene extends BaseScene
             case FAB_DOWNLOADED_ONLY:
                 setDownloadedOnlyMode(!mDownloadedOnlyMode, true);
                 break;
+            case FAB_RATING_SORT:
+                view.setExpanded(false);
+                onRatingSortClick();
+                return;
             case FAB_POPULAR_UPDATES:
                 togglePopularView(PopularGalleryHistory.UPDATES);
                 break;
@@ -2640,6 +3173,7 @@ public class GalleryListScene extends BaseScene
     private void showActionFab() {
         if (null != mFabLayout && STATE_NORMAL == mState && !mShowActionFab) {
             long delay = mPopularActions != null ? mPopularActions.primaryShowDelay() : 0L;
+            if (mModeActions != null) delay = Math.max(delay, mModeActions.primaryShowDelay());
             mShowActionFab = true;
             View fab = mFabLayout.getPrimaryFab();
             fab.animate().setListener(null);
@@ -2712,6 +3246,7 @@ public class GalleryListScene extends BaseScene
             setSearchFabsVisible(false, true, 0L);
             View fab = mFabLayout.getPrimaryFab();
             delay = Math.max(delay, mPopularActions != null ? mPopularActions.primaryShowDelay() : 0L);
+            if (mModeActions != null) delay = Math.max(delay, mModeActions.primaryShowDelay());
             fab.animate().setListener(null);
             fab.animate().cancel();
             fab.setVisibility(View.VISIBLE);
@@ -2727,6 +3262,7 @@ public class GalleryListScene extends BaseScene
             fab.animate().setListener(null);
             fab.animate().cancel();
             if (mPopularActions != null) mPopularActions.snapAbovePrimary();
+            if (mModeActions != null) mModeActions.snapAbovePrimary();
             fab.setScaleX(1.0f);
             fab.setScaleY(1.0f);
             setSearchFabsVisible(false, false, 0L);
@@ -2951,6 +3487,9 @@ public class GalleryListScene extends BaseScene
             query = query.replace("\r", "").replace("\n", "");
         }
 
+        ListUrlBuilder previous = new ListUrlBuilder();
+        previous.set(mUrlBuilder);
+
         if (mState == STATE_SEARCH || mState == STATE_SEARCH_SHOW_LIST) {
             try {
                 mSearchLayout.formatListUrlBuilder(mUrlBuilder, query);
@@ -2968,6 +3507,19 @@ public class GalleryListScene extends BaseScene
             mUrlBuilder.setMode(newMode);
             mUrlBuilder.setKeyword(query);
         }
+        if (!mHelper.isRefreshing() && mHelper.getLoadedSourcePages() > 0
+                && previous.sameSearchExceptRating(mUrlBuilder)
+                && Math.max(previous.getEffectiveMinRatingHundredths(), previous.getSubscriptionMinRatingHundredths())
+                != currentRatingMinimum()) {
+            ListUrlBuilder next = new ListUrlBuilder();
+            next.set(mUrlBuilder);
+            mUrlBuilder.set(previous);
+            GalleryRatingSortController controller = getRatingSortController();
+            applyRatingSearch(next, mRatingSortMode, controller.targetPages(), controller.cutoff());
+            setState(STATE_NORMAL);
+            return;
+        }
+        mRestartRatingSortAfterRefresh = false;
         resetDownloadedOnlyModeForNewSearch();
         onUpdateUrlBuilder();
         mHelper.refresh();
@@ -3154,6 +3706,7 @@ public class GalleryListScene extends BaseScene
     private void onGetGalleryListSuccess(GalleryListParser.Result result, int taskId) {
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
+            mListRequest = null;
             long loadedYesterdayPeriod = result.customErrorString == null
                     && result.galleryInfoList != null && !result.galleryInfoList.isEmpty()
                     && YesterdayTopListReadState.isYesterdayTopList(mUrlBuilder)
@@ -3197,6 +3750,14 @@ public class GalleryListScene extends BaseScene
                 mEhSearchSession.observe(result, hasMoreResults);
                 mSubscriptionNewGids.addAll(mEhSearchSession.displayNewGids());
                 mEhSearchSession.commit(true);
+                if (mSubscriptionUpdateManager != null && mHelper.isCurrentTaskRefresh(taskId)
+                        && taskId != mBorrowedEhTaskId) {
+                    mSubscriptionUpdateManager.rememberDisplayedSource(
+                            com.hippo.ehviewer.client.SubscriptionSearchContext.key(),
+                            com.hippo.ehviewer.client.SubscriptionSearchContext.cacheKey(),
+                            SubscriptionUpdateManager.RecentCheckSource.fromDisplay(
+                                    mUrlBuilder, null, result, mUrlBuilder.getEffectiveMinRatingHundredths()));
+                }
                 try (SearchUpdateStore store = SearchUpdateStore.open()) {
                     store.acknowledgeLegacy(com.hippo.ehviewer.client.SubscriptionSearchContext.key(), "eh");
                 }
@@ -3220,7 +3781,14 @@ public class GalleryListScene extends BaseScene
 
             mHelper.setEmptyString(emptyString);
 //            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
-            mHelper.onGetPageData(taskId, result, result.galleryInfoList);
+            if (result.customErrorString == null && SearchRating.retainsSearchCandidates(mUrlBuilder.getMode())) {
+                boolean replace = mHelper.isCurrentTaskRefresh(taskId) || mHelper.getLoadedSourcePages() == 0;
+                if (replace) mRetainsRatingCandidates = result.ratingCandidates != null;
+                mRatingSearchCoverage.record(result.ratingCandidates == null ? -1 : result.ratingCandidateFloor, replace);
+            }
+            List<GalleryInfo> candidates = mRetainsRatingCandidates && result.ratingCandidates != null
+                    ? result.ratingCandidates : result.galleryInfoList;
+            mHelper.onGetPageData(taskId, result, candidates);
             if (loadedYesterdayPeriod != YesterdayTopListReadState.NO_PERIOD) {
                 mLoadedYesterdayTopListPeriod = loadedYesterdayPeriod;
                 markYesterdayTopListReadIfVisible();
@@ -3235,14 +3803,27 @@ public class GalleryListScene extends BaseScene
                     showPopularNoUpdatesNotice();
                 }
             }
+            if (mRestartRatingSortAfterRefresh && result.customErrorString == null) {
+                mRestartRatingSortAfterRefresh = false;
+                showRatingProgress();
+                getRatingSortController().start(mPendingRatingPages, mPendingRatingCutoff);
+            } else if (mRatingSortController != null && mRatingSortController.isActive()) {
+                if (mRatingSortController.isWaitingForPage()) mRatingSortController.pageLoaded(result);
+                else mRatingSortController.restart();
+            } else if (mRatingSortMode && !mRatingLoading && result.customErrorString == null) {
+                getRatingSortController().restart();
+            }
         }
     }
 
     private void onGetGalleryListFailure(Exception e, int taskId) {
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
+            mListRequest = null;
+            mRestartRatingSortAfterRefresh = false;
             stopDownloadedPageScan(false);
             mHelper.onGetException(taskId, e);
+            if (mRatingSortController != null) mRatingSortController.pageFailed();
             mPopularRequestInFlight = false;
             updatePopularActions();
         }
@@ -3279,11 +3860,21 @@ public class GalleryListScene extends BaseScene
             }
             mSubscriptionUpdateManager.onSubscriptionOpened(mode);
         }
-        if (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
-                || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
-            mRecentCheckResult =
-                    mSubscriptionUpdateManager.getRecentCheckResult(mode);
+        if (mSubscriptionReusePolicy != SUBSCRIPTION_FORCE_REFRESH
+                && (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
+                || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)) {
+            mRecentCheckResult = mSubscriptionReusePolicy == SUBSCRIPTION_REUSE_RECENT
+                    ? mSubscriptionUpdateManager.getRecentCheckResult(mode)
+                    : mSubscriptionUpdateManager.getReusableCheckResult(mode);
         }
+    }
+
+    private void updateSubscriptionResultTitle() {
+        if (mSearchBar == null) return;
+        if (!isBookmarkSubscriptionMode()) return;
+        mSearchBar.setTitle(mSubscriptionReusedTitle != null ? mSubscriptionReusedTitle
+                : getString(isGlobalSubscriptionMode()
+                        ? R.string.subscription_global_short : R.string.subscription_bookmarks_short));
     }
 
     /** Keep the displayed update markers intact until a refresh actually succeeds. */
@@ -3328,6 +3919,7 @@ public class GalleryListScene extends BaseScene
         result.nextPage = -1;
         result.nextHref = hasMore ? "bookmark-subscription-next" : "";
         result.galleryInfoList = data;
+        result.partialFailure = partialFailure;
         if (noSubscriptions) {
             result.customErrorString = getString(R.string.bookmark_subscription_empty);
         } else if (isGlobalSubscriptionMode() && refresh && data.isEmpty()
@@ -3340,6 +3932,17 @@ public class GalleryListScene extends BaseScene
                     : R.string.bookmark_subscription_partial_failure, LENGTH_SHORT);
         }
         if (mBookmarkSubscriptionCoordinator != null) {
+            if (refresh) {
+                long reusedAt = mBookmarkSubscriptionCoordinator.getReusedResultCompletedTimeMillis();
+                long now = System.currentTimeMillis();
+                mSubscriptionStaleResult = SubscriptionResultAge.shouldOfferRefresh(reusedAt, now);
+                mSubscriptionReusedTitle = reusedAt < 0L ? null : SubscriptionResultAge.title(
+                        getResources(), getString(isGlobalSubscriptionMode()
+                                ? R.string.subscription_global_short : R.string.subscription_bookmarks_short),
+                        now - reusedAt);
+                updateSubscriptionResultTitle();
+                updateModeActions();
+            }
             beginSubscriptionResponse(taskId);
             for (GalleryInfo gallery : data) {
                 if (mBookmarkSubscriptionCoordinator.isNewGallery(gallery)) {
@@ -3363,6 +3966,17 @@ public class GalleryListScene extends BaseScene
     public void onBookmarkSubscriptionFailure(int taskId, Exception error) {
         if (isBookmarkSubscriptionMode()) {
             onGetGalleryListFailure(error, taskId);
+        }
+    }
+
+    @Override public void onBookmarkSubscriptionProgress() {
+        if (mRatingProgressDialog != null) mRatingProgressDialog.setMessage(ratingSortStatus());
+    }
+
+    @Override public void onBookmarkSubscriptionSourcesLoaded(String contextKey, String displayKey,
+            List<SubscriptionUpdateManager.RecentCheckSource> sources) {
+        if (mSubscriptionUpdateManager != null) {
+            mSubscriptionUpdateManager.rememberDisplayedSources(contextKey, displayKey, sources);
         }
     }
 
@@ -3453,6 +4067,8 @@ public class GalleryListScene extends BaseScene
         private final List<GalleryInfo> mDownloadedData = new ArrayList<>();
         private final List<GalleryInfo> mPopularData = new ArrayList<>();
         private final List<GalleryInfo> mViewedData = new ArrayList<>();
+        private final List<GalleryInfo> mSearchRatingData = new ArrayList<>();
+        private List<GalleryInfo> mRatingData = Collections.emptyList();
         private int mPopularNewCount;
         private int mSectionDividerPosition = -1;
 
@@ -3462,8 +4078,33 @@ public class GalleryListScene extends BaseScene
         }
 
         private List<GalleryInfo> getSourceData() {
+            if (hasSearchRatingProjection()) return mSearchRatingData;
+            return getRatingSourceData();
+        }
+
+        private List<GalleryInfo> getRatingSourceData() {
             if (hasPopularProjection()) return mPopularData;
             return hasViewedProjection() ? mViewedData : mHelper.getData();
+        }
+
+        private boolean hasSearchRatingProjection() {
+            return mRetainsRatingCandidates && mUrlBuilder != null
+                    && SearchRating.retainsSearchCandidates(mUrlBuilder.getMode());
+        }
+
+        private void rebuildSearchRatingData() {
+            mSearchRatingData.clear();
+            if (!hasSearchRatingProjection()) return;
+            int minimum = currentRatingMinimum();
+            for (GalleryInfo gallery : getRatingSourceData()) {
+                if (minimum <= 0 || gallery.hasApiRating() && gallery.firstGid != null && gallery.firstGid >= 0
+                        && SearchRating.matches(gallery.apiRating, minimum)) mSearchRatingData.add(gallery);
+            }
+        }
+
+        private boolean hasDisplayProjection() {
+            return mRatingSortMode || mDownloadedOnlyMode || hasPopularProjection() || hasViewedProjection()
+                    || hasSearchRatingProjection();
         }
 
         private boolean hasViewedProjection() {
@@ -3499,7 +4140,11 @@ public class GalleryListScene extends BaseScene
         }
 
         private void rebuildSectionDivider() {
+            mRatingData = mRatingSortMode ? GalleryRatingSort.project(
+                    mDownloadedOnlyMode ? mDownloadedData : getSourceData(), mRatingOrder,
+                    currentRatingMinimum()) : Collections.emptyList();
             mSectionDividerPosition = -1;
+            if (mRatingSortMode) return;
             Set<Long> newGids = new HashSet<>();
             if (hasPopularProjection() && mPopularViewMode == PopularGalleryHistory.UPDATES
                     && mPopularRepeatedExpanded) {
@@ -3518,7 +4163,7 @@ public class GalleryListScene extends BaseScene
         }
 
         private boolean hasSectionDivider() {
-            return mSectionDividerPosition >= 0 && (hasViewedProjection()
+            return !mRatingSortMode && mSectionDividerPosition >= 0 && (hasViewedProjection()
                     || (hasPopularProjection() && mPopularViewMode == PopularGalleryHistory.UPDATES
                     && mPopularRepeatedExpanded));
         }
@@ -3534,10 +4179,12 @@ public class GalleryListScene extends BaseScene
         }
 
         int getGalleryCount() {
+            if (mRatingSortMode) return mRatingData == null ? 0 : mRatingData.size();
             if (mDownloadedOnlyMode) {
                 return mDownloadedData != null ? mDownloadedData.size() : 0;
             }
             if (hasPopularProjection()) return mPopularData != null ? mPopularData.size() : 0;
+            if (hasSearchRatingProjection()) return mSearchRatingData.size();
             if (hasViewedProjection()) return mViewedData.size();
             return null != mHelper ? mHelper.size() : 0;
         }
@@ -3555,6 +4202,8 @@ public class GalleryListScene extends BaseScene
 
         @Nullable
         GalleryInfo getGalleryAtIndex(int position) {
+            if (mRatingSortMode) return mRatingData != null && position >= 0 && position < mRatingData.size()
+                    ? mRatingData.get(position) : null;
             if (mDownloadedOnlyMode) {
                 return mDownloadedData != null && position >= 0
                         && position < mDownloadedData.size()
@@ -3562,6 +4211,9 @@ public class GalleryListScene extends BaseScene
             }
             if (hasPopularProjection()) {
                 return position >= 0 && position < mPopularData.size() ? mPopularData.get(position) : null;
+            }
+            if (hasSearchRatingProjection()) {
+                return position >= 0 && position < mSearchRatingData.size() ? mSearchRatingData.get(position) : null;
             }
             if (hasViewedProjection()) {
                 return position >= 0 && position < mViewedData.size() ? mViewedData.get(position) : null;
@@ -3605,6 +4257,7 @@ public class GalleryListScene extends BaseScene
         void onDownloadedOnlyModeChanged() {
             rebuildPopularData();
             rebuildViewedData();
+            rebuildSearchRatingData();
             rebuildDownloadedData();
             rebuildSectionDivider();
             notifyDataSetChanged();
@@ -3613,6 +4266,7 @@ public class GalleryListScene extends BaseScene
         void onSourceDataSetChanged() {
             rebuildPopularData();
             rebuildViewedData();
+            rebuildSearchRatingData();
             if (mDownloadedOnlyMode) {
                 rebuildDownloadedData();
             }
@@ -3621,7 +4275,7 @@ public class GalleryListScene extends BaseScene
         }
 
         void onSourceItemRangeInserted(int positionStart, int itemCount) {
-            if (hasPopularProjection() || hasViewedProjection()) {
+            if (mRatingSortMode || hasPopularProjection() || hasViewedProjection() || hasSearchRatingProjection()) {
                 onSourceDataSetChanged();
                 return;
             }
@@ -3634,7 +4288,7 @@ public class GalleryListScene extends BaseScene
         }
 
         void onSourceItemRangeRemoved(int positionStart, int itemCount) {
-            if (hasPopularProjection() || hasViewedProjection()) {
+            if (mRatingSortMode || hasPopularProjection() || hasViewedProjection() || hasSearchRatingProjection()) {
                 onSourceDataSetChanged();
                 return;
             }
@@ -3706,9 +4360,11 @@ public class GalleryListScene extends BaseScene
 
     class GalleryListHelper extends GalleryInfoContentHelper {
 
+        void cancelPageTask() { cancelCurrentTask(); }
+
         @Override
         protected int getAdapterPosition(int dataPosition) {
-            if (mAdapter == null || !mAdapter.hasViewedProjection()) return dataPosition;
+            if (mAdapter == null || !mAdapter.hasDisplayProjection()) return dataPosition;
             GalleryInfo gallery = getDataAtEx(dataPosition);
             int position = gallery == null ? -1 : mAdapter.findVisiblePosition(gallery.gid);
             return Math.max(0, position);
@@ -3716,7 +4372,7 @@ public class GalleryListScene extends BaseScene
 
         @Override
         protected int getDataPosition(int adapterPosition) {
-            if (mAdapter == null || !mAdapter.hasViewedProjection()) return adapterPosition;
+            if (mAdapter == null || !mAdapter.hasDisplayProjection()) return adapterPosition;
             if (adapterPosition < 0) return -1;
             GalleryInfo gallery = mAdapter.getDataAt(adapterPosition);
             if (gallery == null) gallery = mAdapter.getDataAt(adapterPosition + 1);
@@ -3725,6 +4381,15 @@ public class GalleryListScene extends BaseScene
 
         @Override
         protected boolean onInterceptFooterRefresh() {
+            if (mRatingSortMode && !mRatingLoading) {
+                GalleryRatingSortController controller = getRatingSortController();
+                boolean cached = getLoadedRangeData(controller.targetPages(), controller.cutoff()).size() < size();
+                controller.setRange(0, null);
+                if (cached) {
+                    controller.restart();
+                    return true;
+                }
+            }
             if (!isPopularMode() || !mPopularResponseReady
                     || mPopularViewMode != PopularGalleryHistory.UPDATES) return false;
             if (!mPopularRequestInFlight && !mMultiSelectMode && !mPopularRepeatedExpanded
@@ -3732,6 +4397,7 @@ public class GalleryListScene extends BaseScene
                     && mAdapter != null) {
                 mPopularRepeatedExpanded = true;
                 if (mAdapter.appendPopularRepeatedGalleries()) scrollToRevealNewContent();
+                if (mRatingSortMode && !mRatingLoading) getRatingSortController().restart();
                 updatePopularActions();
             }
             return true;
@@ -3739,8 +4405,27 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public void refresh() {
+            mRatingSearchCoverage.clear();
+            mSubscriptionReusedTitle = null;
+            mSubscriptionStaleResult = false;
+            updateSubscriptionResultTitle();
+            updateModeActions();
+            stopRatingLoading();
+            if (mRatingSortController != null) mRatingSortController.clearRatings();
             stopDownloadedPageScan(false);
             super.refresh();
+        }
+
+        @Override public void goTo(int page) {
+            mRatingSearchCoverage.clear();
+            boolean wasSorted = mRatingSortMode;
+            restoreRatingOrder();
+            if (wasSorted) showTip(R.string.gallery_rating_sort_jump_reset, LENGTH_SHORT);
+            super.goTo(page);
+        }
+
+        @Override protected boolean shouldRevealNextPage() {
+            return !mRatingLoading && !mRatingSortMode;
         }
 
         private void prepareSeenState(int taskId) {
@@ -3774,6 +4459,32 @@ public class GalleryListScene extends BaseScene
             mLastRequestedRatingMinimum = mUrlBuilder.getEffectiveMinRatingHundredths();
             mLastRequestedPreciseRating = Settings.getEnablePreciseRatingFilter();
 
+            if (isSubscriptionMode() && mSubscriptionUpdateManager != null) {
+                int mode = mUrlBuilder.getMode();
+                if (mSubscriptionUpdateManager.awaitCurrentCheck(result -> {
+                    if (mHelper != this || !isCurrentTask(taskId) || mUrlBuilder == null
+                            || mUrlBuilder.getMode() != mode || getActivity2() == null) return;
+                    if (result == null) {
+                        onGetGalleryListFailure(new IllegalStateException(
+                                getString(R.string.subscription_updates_failed)), taskId);
+                    } else if (isBookmarkSubscriptionMode()) {
+                        mRecentCheckResult = result;
+                        loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode(), true);
+                    } else {
+                        for (var source : result.sources) {
+                            if (source.isEhSubscription() && !source.requiresDisplayPreparation
+                                    && source.ratingMinimumHundredths == mUrlBuilder.getEffectiveMinRatingHundredths()) {
+                                mBorrowedEhTaskId = taskId;
+                                onGetGalleryListSuccess(source.asPageResult(), taskId);
+                                return;
+                            }
+                        }
+                        onGetGalleryListFailure(new IllegalStateException(
+                                getString(R.string.subscription_updates_failed)), taskId);
+                    }
+                })) return;
+            }
+
             if (isPopularMode()) {
                 mPopularRequestInFlight = true;
                 updatePopularActions();
@@ -3789,13 +4500,13 @@ public class GalleryListScene extends BaseScene
                             mUrlBuilder.getEffectiveMinRatingHundredths(), false,
                             SubscriptionGallerySnapshot.copy(
                                     mPopularHistory.galleries(PopularGalleryHistory.CURRENT)));
-                    mClient.execute(request);
+                    executeListRequest(request);
                 });
                 return;
             }
 
             if (isBookmarkSubscriptionMode()) {
-                loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode());
+                loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode(), false);
                 return;
             } else if (mBookmarkSubscriptionCoordinator != null
                     && mBookmarkSubscriptionCoordinator.isLoading()) {
@@ -3811,7 +4522,7 @@ public class GalleryListScene extends BaseScene
                 request.setArgs(new File(StringUtils.avoidNull(mUrlBuilder.getImagePath())),
                         mUrlBuilder.isUseSimilarityScan(),
                         mUrlBuilder.isOnlySearchCovers(), mUrlBuilder.isShowExpunged());
-                mClient.execute(request);
+                executeListRequest(request);
             } else {
                 String url = mUrlBuilder.build();
                 EhRequest request = new EhRequest();
@@ -3819,13 +4530,13 @@ public class GalleryListScene extends BaseScene
                 request.setCallback(new GetGalleryListListener(getContext(),
                         activity.getStageId(), getTag(), taskId));
                 request.setArgs(url, mUrlBuilder.getMode(), false, false,
-                        mUrlBuilder.getEffectiveMinRatingHundredths(), true);
-                mClient.execute(request);
+                        mUrlBuilder.getEffectiveMinRatingHundredths(), !mRatingLoading);
+                executeListRequest(request);
             }
         }
 
         private void loadBookmarkSubscriptions(int taskId, @NonNull MainActivity activity,
-                                               boolean includeEhSubscription) {
+                                               boolean includeEhSubscription, boolean completedCheckOnly) {
             SubscriptionUpdateManager.RecentCheckResult recentCheckResult =
                     mRecentCheckResult;
             mRecentCheckResult = null;
@@ -3851,7 +4562,7 @@ public class GalleryListScene extends BaseScene
                             getBookmarkSubscriptionCoordinator();
                     if (coordinator != null) {
                         coordinator.refresh(taskId, subscriptions, includeEhSubscription,
-                                recentCheckResult, mUrlBuilder.getEffectiveMinRatingHundredths());
+                                recentCheckResult, mUrlBuilder.getEffectiveMinRatingHundredths(), completedCheckOnly);
                     }
                 });
             });
@@ -3896,8 +4607,8 @@ public class GalleryListScene extends BaseScene
             request.setCallback(new GetGalleryListListener(getContext(),
                     activity.getStageId(), getTag(), taskId));
             request.setArgs(url, mUrlBuilder.getMode(), false, false,
-                    mUrlBuilder.getEffectiveMinRatingHundredths(), pageAction == GOTO_NEXT_PAGE);
-            mClient.execute(request);
+                    mUrlBuilder.getEffectiveMinRatingHundredths(), pageAction == GOTO_NEXT_PAGE && !mRatingLoading);
+            executeListRequest(request);
         }
 
 
@@ -3930,13 +4641,19 @@ public class GalleryListScene extends BaseScene
 
         @Override
         protected boolean shouldRequestNextPageOnScroll(int dy) {
+            if (mRatingLoading) return false;
             if (isPopularMode()) return false;
+            if (mRatingSortMode) return mRatingBrowseGestureArmed && dy > 0 && hasNextPage();
             return !mDownloadedOnlyMode || (mDownloadedBrowseGestureArmed
                     && !mDownloadedPageScanActive && dy > 0 && hasNextPage());
         }
 
         @Override
         protected void onNextPageRequestFromScroll() {
+            if (mRatingSortMode) {
+                mRatingBrowseGestureArmed = false;
+                return;
+            }
             if (mDownloadedOnlyMode) {
                 prepareDownloadedPageScan();
             }

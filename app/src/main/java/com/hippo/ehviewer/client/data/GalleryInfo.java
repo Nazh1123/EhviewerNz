@@ -113,6 +113,12 @@ public class GalleryInfo implements Parcelable {
     public String posted;
     public String uploader;
     public float rating;
+    // API provenance for this live object only; a parsed HTML star value is not an exact score.
+    public transient float apiRating = Float.NaN;
+
+    public boolean hasApiRating() {
+        return Float.isFinite(apiRating) && apiRating >= 0 && apiRating <= 5;
+    }
     public boolean rated;
     @Nullable
     public String[] simpleTags;

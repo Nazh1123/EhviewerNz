@@ -4,4 +4,5 @@
     <string name="search_rating_title">最低評価</string>
     <string name="search_rating_hint">0.00～5.00。0.00 で絞り込みを無効化</string>
     <string name="search_rating_invalid">0.00～5.00 の数値を小数点以下 2 桁までで入力してください</string>
+    <string name="search_rating_current">（現在 %1$s）</string>
 </resources>

@@ -8,4 +8,7 @@
     <string name="settings_persistent_min_rating">ตัวกรองคะแนนถาวร</string>
     <string name="settings_persistent_min_rating_description">ตั้งคะแนนขั้นต่ำเริ่มต้นสำหรับทุกการค้นหา แกลเลอรีที่มีคะแนนต่ำกว่าจะถูกซ่อนโดยค่าเริ่มต้น</string>
     <string name="settings_persistent_min_rating_value">ปัจจุบัน: %1$s (0.00 คือปิดตัวกรอง)</string>
+    <string name="settings_search_category_keyword">คำค้น</string>
+    <string name="settings_search_category_gallery_search">ค้นหาแกลเลอรี</string>
+    <string name="settings_search_category_thumbnail">ภาพขนาดย่อ</string>
 </resources>

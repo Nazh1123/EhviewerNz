@@ -36,7 +36,8 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
         }
     }
     private val changed: (GalleryResultIndex.Companion.Change) -> Unit = { event ->
-        if (event.identity == GalleryResultIndex.identity(provider, info)) {
+        if (event.kind != GalleryResultIndex.Kind.ORIGINAL &&
+            event.identity == GalleryResultIndex.identity(provider, info)) {
             noResults = false
             for ((position, source) in sources.toMap()) if (source.name == event.source) {
                 loads.remove(position)?.cancel()
@@ -125,15 +126,16 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
                 supervisorScope {
                     launch {
                         var tiles: EnhancedTilePage? = null
+                        val hit = saved.enhanced?.takeIf { it.state == "complete" && it.scale in listOf(2, 4, 8) }
                         try {
                             withContext(Dispatchers.IO) {
-                                saved.enhanced?.takeIf {
-                                    it.state == "complete" && it.scale in listOf(2, 4, 8) && !provider.hasEnhancedPage(position)
-                                }?.let { hit ->
+                                hit?.takeUnless { provider.hasEnhancedPage(position) }?.let {
                                     EnhancedTilePage(File(app.cacheDir, "result-reader"), hit.width / hit.scale,
                                         hit.height / hit.scale, hit.scale).apply {
                                         tiles = this // Cleanup also owns a decode cancelled before Main delivery.
+                                        fromOriginal = hit.fromOriginal
                                         useFinalImage(checkNotNull(hit.file))
+                                        openFinalImage()
                                         // Prepare a neighbor before exposing it to UI/GL threads, avoiding trim/decode contention.
                                         if (position != page && NativeMemoryPolicy(app).canRetain()) {
                                             val display = app.resources.displayMetrics
@@ -149,25 +151,34 @@ class ReaderExistingResults(context: Context, private val provider: GalleryProvi
                                 tiles?.let { provider.setExistingEnhancedTiles(position, it); tiles = null }
                             }
                         } catch (cancel: CancellationException) { throw cancel }
-                        catch (error: Exception) { android.util.Log.w("ExistingResults", "Enhanced result unavailable", error) }
+                        catch (error: Exception) {
+                            hit?.let { resultIndex.discardUnreadable(saved, GalleryResultIndex.Kind.SR, it) }
+                            android.util.Log.w("ExistingResults", "Enhanced result unavailable", error)
+                        }
+                        catch (error: OutOfMemoryError) {
+                            android.util.Log.w("ExistingResults", "Not enough memory for saved enhancement", error)
+                        }
                         finally { tiles?.trim() }
                     }
                     launch {
                         var translated: Image? = null
+                        val hit = saved.translation?.takeIf { it.state == "complete" }
                         try {
-                            withContext(Dispatchers.IO) {
-                                val hit = saved.translation?.takeIf { it.state == "complete" }
-                                // A large speculative decode must not evict the visible overlay.
-                                if (!provider.hasTranslatedPage(position) && hit != null &&
-                                    (position == page || provider.canPrefetchTranslationResult(page,
-                                        hit.width.toLong() * hit.height * 4))) translated = hit.file?.let(decodeTranslation)
+                            if (!provider.hasTranslatedPage(position) && hit != null &&
+                                (position == page || provider.canPrefetchTranslationResult(page,
+                                    hit.width.toLong() * hit.height * 4))) {
+                                withContext(Dispatchers.IO) { translated = hit.file?.let(decodeTranslation) }
+                                if (translated == null) resultIndex.discardUnreadable(saved, GalleryResultIndex.Kind.TL, hit)
                             }
                             ensureActive()
                             if (epoch == generation && kotlin.math.abs(position - page) <= 1 && !provider.hasTranslatedPage(position)) {
                                 translated?.let { provider.setExistingTranslation(position, it); translated = null }
                             }
                         } catch (cancel: CancellationException) { throw cancel }
-                        catch (error: Exception) { android.util.Log.w("ExistingResults", "Translated result unavailable", error) }
+                        catch (error: Exception) {
+                            hit?.let { resultIndex.discardUnreadable(saved, GalleryResultIndex.Kind.TL, it) }
+                            android.util.Log.w("ExistingResults", "Translated result unavailable", error)
+                        }
                         catch (error: OutOfMemoryError) { android.util.Log.w("ExistingResults", "Not enough memory for saved translation", error) }
                         finally { translated?.recycle() }
                     }

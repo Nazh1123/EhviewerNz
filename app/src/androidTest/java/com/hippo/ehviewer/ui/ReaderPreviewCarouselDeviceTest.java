@@ -74,9 +74,12 @@ public class ReaderPreviewCarouselDeviceTest {
             assertEquals("Slider drag/release committed a page", 0, current(live));
             SystemClock.sleep(3300);
             assertTrue("Preview was hidden by the old slider timer", strip.isShown());
-            assertTrue(strip.getChildCount() <= 6);
             int available = strip.getWidth() - strip.getPaddingLeft() - strip.getPaddingRight();
-            assertEquals(available / 4, strip.getChildAt(0).getWidth(), 1);
+            int portraitWidth = Math.min(strip.getWidth(), strip.getResources().getDisplayMetrics().heightPixels)
+                    - strip.getPaddingLeft() - strip.getPaddingRight();
+            int cardWidth = strip.getChildAt(0).getWidth();
+            assertEquals(portraitWidth / 4, cardWidth, 1);
+            assertTrue(strip.getChildCount() <= (available + cardWidth - 1) / cardWidth + 2);
             int before = strip.getChildAdapterPosition(strip.getChildAt(0));
             swipeStrip(strip);
             waitFor(() -> strip.getScrollState() == RecyclerView.SCROLL_STATE_IDLE);

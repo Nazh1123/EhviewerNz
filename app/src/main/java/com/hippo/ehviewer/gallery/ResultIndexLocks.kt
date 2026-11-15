@@ -13,7 +13,7 @@ internal object ResultIndexLocks {
     private val registry = mutableMapOf<String, WeakReference<State>>()
     class State {
         val lock = ReentrantLock()
-        val deleted = LongArray(2)
+        val deleted = LongArray(GalleryResultIndex.Kind.entries.size)
     }
     fun states(keys: List<String>): List<State> = synchronized(registry) {
         registry.entries.removeAll { it.value.get() == null }

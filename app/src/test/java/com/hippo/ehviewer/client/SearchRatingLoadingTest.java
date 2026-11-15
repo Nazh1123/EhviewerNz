@@ -114,6 +114,27 @@ public class SearchRatingLoadingTest {
         }).build();
     }
 
+    @Test public void htmlCanAdvanceBeforeGdataAndPreparedApiScoresAreReusable() throws Throwable {
+        OkHttpClient network = client(false);
+        GalleryListParser.Result raw = EhEngine.getGalleryListHtml(null, network, FIRST,
+                ListUrlBuilder.MODE_NORMAL, false);
+        assertEquals(1, listRequests.get());
+        assertEquals(0, apiRequests.get());
+        assertEquals(NEXT, raw.nextHref);
+        assertFalse(raw.galleryInfoList.isEmpty());
+        String originalTail = raw.rawTailPosted;
+        EhEngine.prepareGalleryListResult(null, network, FIRST, ListUrlBuilder.MODE_NORMAL,
+                false, false, 450, raw);
+        assertTrue(apiRequests.get() > 0);
+        assertTrue(raw.galleryInfoList.get(0).hasApiRating());
+        assertEquals(4.50f, raw.galleryInfoList.get(0).apiRating, 0);
+        assertEquals(originalTail, raw.rawTailPosted);
+        int calls = apiRequests.get();
+        EhEngine.prepareGalleryListResult(null, network, FIRST, ListUrlBuilder.MODE_NORMAL,
+                false, false, 450, raw);
+        assertEquals(calls, apiRequests.get());
+    }
+
     @Test public void optionalInfoDoesNotDelayListAndRequiredTagsFetchOnlyMissingRows() throws Throwable {
         Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
         Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
@@ -133,10 +154,23 @@ public class SearchRatingLoadingTest {
         assertEquals(20, complete.pages);
     }
 
+    @Test public void rejectedExactRatingsRemainAvailableWithoutAnotherHtmlOrApiRequest() throws Throwable {
+        GalleryListParser.Result result = EhEngine.getGalleryList(null, client(false), FIRST,
+                ListUrlBuilder.MODE_NORMAL, false, false, 451, false);
+        assertTrue(result.galleryInfoList.isEmpty());
+        assertFalse(result.ratingCandidates.isEmpty());
+        assertTrue(result.ratingCandidates.stream().allMatch(gallery -> gallery.hasApiRating()
+                && gallery.apiRating == 4.50f));
+        assertEquals(375, result.ratingCandidateFloor);
+        assertEquals(1, listRequests.get());
+        assertTrue(result.ratingCandidates.stream().anyMatch(gallery -> SearchRating.matches(gallery.apiRating, 450)));
+    }
+
     @Test public void usesApiDecimalsAndAdvancesPastExactlyOneEmptyBatch() throws Throwable {
         GalleryListParser.Result result = EhEngine.getGalleryList(null, client(true), FIRST,
                 ListUrlBuilder.MODE_NORMAL, false, false, 451, true);
         assertEquals(2, listRequests.get());
+        assertEquals(2, result.sourcePages);
         assertFalse(result.galleryInfoList.isEmpty());
         assertTrue(apiRequests.get() >= 2);
         assertEquals(4.51f, result.galleryInfoList.get(0).rating, 0f);
@@ -223,6 +257,14 @@ public class SearchRatingLoadingTest {
         }
         assertFalse(result.galleryInfoList.isEmpty());
         assertEquals(4.51f, result.galleryInfoList.get(0).rating, 0f);
+        assertNotNull(result.firstPageForCache);
+        assertTrue(result.firstPageForCache.galleryInfoList.isEmpty());
+        ListUrlBuilder builder = new ListUrlBuilder();
+        builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
+        var saved = SubscriptionUpdateManager.RecentCheckSource.fromDisplay(builder, null, result, 451);
+        assertTrue(saved.galleryInfoList.isEmpty());
+        assertEquals(result.firstPageForCache.nextHref, saved.nextHref);
+        assertEquals(result.firstPageForCache.rawTailGid, saved.boundaryGid);
     }
 
     private static SubscriptionHomepageMatcher homepageMatcher(String uploader) {

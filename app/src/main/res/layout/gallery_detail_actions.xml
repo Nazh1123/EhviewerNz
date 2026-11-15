@@ -140,8 +140,8 @@
         </LinearLayout>
     </HorizontalScrollView>
 
-    <!-- Keep the stars anchored while the rating label and vote count change. -->
-    <LinearLayout
+    <!-- Reserve room for four-digit rating counts before the first draw. -->
+    <com.hippo.ehviewer.ui.scene.gallery.detail.GalleryRatingLayout
         android:id="@+id/rating_group"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -158,7 +158,7 @@
             android:layout_width="180dp"
             android:layout_height="36dp"
             android:layout_marginStart="40dp"
-            android:layout_marginEnd="10dp">
+            android:layout_marginEnd="18dp">
 
             <!-- Keep the original 48dp AppCompat stars, scaled to 36dp. -->
             <androidx.appcompat.widget.AppCompatRatingBar
@@ -182,12 +182,12 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:gravity="center"
+            android:gravity="start|center_vertical"
             android:maxLines="1"
             android:scrollHorizontally="false"
             android:ellipsize="end"
             android:textColor="?android:attr/textColorPrimary"/>
 
-    </LinearLayout>
+    </com.hippo.ehviewer.ui.scene.gallery.detail.GalleryRatingLayout>
 
 </LinearLayout>

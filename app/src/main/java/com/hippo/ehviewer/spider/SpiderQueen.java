@@ -225,6 +225,20 @@ public final class SpiderQueen implements Runnable {
         return queen;
     }
 
+    @UiThread
+    @Nullable
+    public static String getCachedPageToken(long gid, int index) {
+        OSUtils.checkMainLoop();
+        SpiderQueen queen = sQueenMap.get(gid);
+        if (queen == null) return null;
+        SpiderInfo info = queen.mSpiderInfo.get();
+        if (info == null) return null;
+        synchronized (queen.mPTokenLock) {
+            String token = info.pTokenMap.get(index);
+            return SpiderInfo.TOKEN_FAILED.equals(token) ? null : token;
+        }
+    }
+
     /**
      * Reset the in-memory reading progress for an existing gallery reader.
      * The caller runs on the main thread, alongside the queen map lifecycle.

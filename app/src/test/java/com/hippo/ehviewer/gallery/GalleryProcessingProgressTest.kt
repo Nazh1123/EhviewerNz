@@ -37,6 +37,16 @@ class GalleryProcessingProgressTest {
         file.writeText("image")
         return checkNotNull(UniFile.fromFile(file)).also { files[it.uri] = it }
     }
+
+    @Test fun onlyThreeResultKindsUseTheCompactOriginalCounter() {
+        val counts = GalleryProcessingProgress.Counts(1, 3, 2)
+        assertEquals("1/109 - TL 1/109 - OR 2", counts.format(1, 109))
+        assertEquals("SR 3/109", counts.secondary(109))
+        assertEquals("1/109  -  OR 2/109", counts.copy(translated = 0).format(1, 109))
+        assertEquals("1/109  -  OR 2/109", counts.copy(enhanced = 0).format(1, 109))
+        assertEquals("TL 1/109", counts.copy(enhanced = 0).secondary(109))
+        assertEquals("1/109  -  OR 2/109", counts.copy(translated = 0, enhanced = 0).format(1, 109))
+    }
     @Test fun queryingAbsentImportHistoryDoesNotCreateADatabase() = runBlocking {
         val database = context.getDatabasePath("gallery_processing_progress.db")
         assertFalse(database.exists())
@@ -47,14 +57,14 @@ class GalleryProcessingProgressTest {
     @Test fun oldResultsAreCountedOnlyWhenAccessedAndReadingCountsDoesNotProbeFiles() = runBlocking {
         val old = file("gallery/_translated/001_tl.png")
         file("gallery/_translated/002_tl.png")
-        assertEquals(GalleryProcessingProgress.Counts(0, 0), GalleryProcessingProgress.get(context, -1))
+        assertEquals(GalleryProcessingProgress.Counts(0, 0), legacyCounts(context, -1))
         GalleryProcessingProgress.record(context, -1, Kind.TRANSLATION, "001", old).join()
-        assertEquals(GalleryProcessingProgress.Counts(1, 0), GalleryProcessingProgress.get(context, -1))
+        assertEquals(GalleryProcessingProgress.Counts(1, 0), legacyCounts(context, -1))
         old.delete()
         // A metadata read never scans the folder or verifies files. An explicit access/delete event corrects it.
-        assertEquals(GalleryProcessingProgress.Counts(1, 0), GalleryProcessingProgress.get(context, -1))
+        assertEquals(GalleryProcessingProgress.Counts(1, 0), legacyCounts(context, -1))
         GalleryProcessingProgress.record(context, -1, Kind.TRANSLATION, "001", null).join()
-        assertEquals(GalleryProcessingProgress.Counts(0, 0), GalleryProcessingProgress.get(context, -1))
+        assertEquals(GalleryProcessingProgress.Counts(0, 0), legacyCounts(context, -1))
     }
 
     @Test fun deletingSharedCacheFileUpdatesAllReferencesAndKeepsUnrelatedSavedPages() = runBlocking {
@@ -65,8 +75,8 @@ class GalleryProcessingProgressTest {
         GalleryProcessingProgress.record(context, -2, Kind.TRANSLATION, "002", saved).join()
         GalleryProcessingProgress.record(context, -2, Kind.SUPER_RESOLUTION, "002", saved).join()
         GalleryProcessingProgress.forget(context, listOf(cached.uri)).join()
-        assertEquals(GalleryProcessingProgress.Counts(1, 1), GalleryProcessingProgress.get(context, -2))
-        assertEquals(GalleryProcessingProgress.Counts(0, 0), GalleryProcessingProgress.get(context, -3))
+        assertEquals(GalleryProcessingProgress.Counts(1, 1), legacyCounts(context, -2))
+        assertEquals(GalleryProcessingProgress.Counts(0, 0), legacyCounts(context, -3))
     }
 
     @Test fun clearingTileSubtreePreservesExportedPagesAndSimilarlyNamedSiblings() = runBlocking {
@@ -79,8 +89,8 @@ class GalleryProcessingProgressTest {
         GalleryProcessingProgress.record(context, -5, Kind.SUPER_RESOLUTION, "001",
             reference("file:///cache/sr-other/gallery/page.tiles/page.json")).join()
         GalleryProcessingProgress.forgetUnder(context, Uri.parse("file:///cache/sr")).join()
-        assertEquals(GalleryProcessingProgress.Counts(0, 1), GalleryProcessingProgress.get(context, -4))
-        assertEquals(GalleryProcessingProgress.Counts(0, 1), GalleryProcessingProgress.get(context, -5))
+        assertEquals(GalleryProcessingProgress.Counts(0, 1), legacyCounts(context, -4))
+        assertEquals(GalleryProcessingProgress.Counts(0, 1), legacyCounts(context, -5))
     }
 
     @Test fun cacheEvictionAndClearSendOnlySuccessfullyDeletedFiles() = runBlocking {
@@ -97,10 +107,10 @@ class GalleryProcessingProgressTest {
         events.forEach { it.join() }
         assertFalse(old.exists())
         assertTrue(recent.exists())
-        assertEquals(GalleryProcessingProgress.Counts(1, 0), GalleryProcessingProgress.get(context, -6))
+        assertEquals(GalleryProcessingProgress.Counts(1, 0), legacyCounts(context, -6))
         cache.clear()
         events.forEach { it.join() }
-        assertEquals(GalleryProcessingProgress.Counts(0, 0), GalleryProcessingProgress.get(context, -6))
+        assertEquals(GalleryProcessingProgress.Counts(0, 0), legacyCounts(context, -6))
     }
 
     @Test fun partialBulkDeletionCorrectsOnlyAffectedKnownEntries() = runBlocking {
@@ -112,8 +122,8 @@ class GalleryProcessingProgressTest {
         GalleryProcessingProgress.record(context, -8, Kind.TRANSLATION, "002", removed).join()
         removed.delete()
         GalleryProcessingProgress.removeMissing(context, setOf(-7L), Kind.TRANSLATION).join()
-        assertEquals(GalleryProcessingProgress.Counts(1, 1), GalleryProcessingProgress.get(context, -7))
-        assertEquals(GalleryProcessingProgress.Counts(1, 0), GalleryProcessingProgress.get(context, -8))
+        assertEquals(GalleryProcessingProgress.Counts(1, 1), legacyCounts(context, -7))
+        assertEquals(GalleryProcessingProgress.Counts(1, 0), legacyCounts(context, -8))
     }
 
     @Test fun deletingPreviousCacheAfterAdoptionDoesNotRemoveTheNewSavedReference() = runBlocking {
@@ -122,9 +132,9 @@ class GalleryProcessingProgressTest {
         GalleryProcessingProgress.record(context, -9, Kind.TRANSLATION, "001", cached).join()
         GalleryProcessingProgress.record(context, -9, Kind.TRANSLATION, "001", saved).join()
         GalleryProcessingProgress.forget(context, listOf(cached.uri)).join()
-        assertEquals(GalleryProcessingProgress.Counts(1, 0), GalleryProcessingProgress.get(context, -9))
+        assertEquals(GalleryProcessingProgress.Counts(1, 0), legacyCounts(context, -9))
         GalleryProcessingProgress.forget(context, listOf(saved.uri)).join()
-        assertEquals(GalleryProcessingProgress.Counts(0, 0), GalleryProcessingProgress.get(context, -9))
+        assertEquals(GalleryProcessingProgress.Counts(0, 0), legacyCounts(context, -9))
     }
 
     @Test fun publishedPagesAreDurableDeduplicatedAndCanBeRemovedIndependently() = runBlocking {
@@ -132,11 +142,11 @@ class GalleryProcessingProgressTest {
         GalleryProcessingProgress.record(context, -71, Kind.TRANSLATION, "chapter/001", result).join()
         GalleryProcessingProgress.record(context, -71, Kind.TRANSLATION, "chapter/001", result).join()
         GalleryProcessingProgress.record(context, -71, Kind.SUPER_RESOLUTION, "chapter/001", result).join()
-        assertEquals("1/100  -  TL 1/100", GalleryProcessingProgress.get(context, -71).format(1, 100))
-        assertEquals("SR 1/100", GalleryProcessingProgress.get(context, -71).secondary(100))
+        assertEquals("1/100  -  TL 1/100", legacyCounts(context, -71).format(1, 100))
+        assertEquals("SR 1/100", legacyCounts(context, -71).secondary(100))
         GalleryProcessingProgress.record(context, -71, Kind.TRANSLATION, "chapter/001", null).join()
-        assertEquals(GalleryProcessingProgress.Counts(0, 1), GalleryProcessingProgress.get(context, -71))
-        assertEquals(GalleryProcessingProgress.Counts(0, 0), GalleryProcessingProgress.get(context, -72))
+        assertEquals(GalleryProcessingProgress.Counts(0, 1), legacyCounts(context, -71))
+        assertEquals(GalleryProcessingProgress.Counts(0, 0), legacyCounts(context, -72))
     }
 
     @Test fun progressFitsGalleryBoundsAndSourceKeysMatchSavedFilenameSanitization() {
@@ -155,4 +165,10 @@ class GalleryProcessingProgressTest {
             fail("Traversal must be rejected")
         } catch (_: IllegalArgumentException) { }
     }
+}
+
+internal suspend fun legacyCounts(context: android.content.Context, gid: Long): GalleryProcessingProgress.Counts {
+    val kinds = GalleryProcessingProgress.savedResults(context, gid).groupingBy { it.kind }.eachCount()
+    return GalleryProcessingProgress.Counts(kinds[Kind.TRANSLATION] ?: 0,
+        kinds[Kind.SUPER_RESOLUTION] ?: 0, kinds[Kind.ORIGINAL] ?: 0)
 }

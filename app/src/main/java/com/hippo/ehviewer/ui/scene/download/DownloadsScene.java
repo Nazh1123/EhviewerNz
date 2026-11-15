@@ -68,7 +68,7 @@ import com.hippo.drawable.AddDeleteDrawable;
 import com.hippo.drawerlayout.DrawerLayout;
 import com.hippo.easyrecyclerview.EasyRecyclerView;
 import com.hippo.easyrecyclerview.FastScroller;
-import com.hippo.easyrecyclerview.HandlerDrawable;
+import com.hippo.ehviewer.widget.DownloadFastScroller;
 import com.hippo.easyrecyclerview.MarginItemDecoration;
 import com.hippo.ehviewer.Analytics;
 import com.hippo.ehviewer.EhApplication;
@@ -100,6 +100,7 @@ import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.sync.DownloadListInfosExecutor;
 import com.hippo.ehviewer.sync.DownloadSpiderInfoExecutor;
 import com.hippo.ehviewer.ui.GalleryActivity;
+import com.hippo.ehviewer.ui.GalleryRangeSelection;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadAdapter;
 import com.hippo.ehviewer.ui.scene.download.part.DownloadArchiveImporter;
@@ -171,9 +172,10 @@ public class DownloadsScene extends ToolbarScene
     public static final int LOCAL_GALLERY_INFO_CHANGE = 909;
 
     private static final long ANIMATE_TIME = 300L;
-    private static final int FAB_DELETE_TRANSLATIONS = 4;
-    private static final int FAB_DRAG = 7;
-    private static final int FAB_QUICK_ORGANIZE = 8;
+    private static final int FAB_SELECT_RANGE = 1;
+    private static final int FAB_DELETE_TRANSLATIONS = 5;
+    private static final int FAB_DRAG = 8;
+    private static final int FAB_QUICK_ORGANIZE = 9;
 
     @Nullable
     private AddDeleteDrawable mActionFabDrawable;
@@ -190,6 +192,9 @@ public class DownloadsScene extends ToolbarScene
     @Nullable
     private List<DownloadInfo> mBackList;
     private boolean mContinuousLabelBrowse;
+    private final java.util.LinkedHashSet<Long> mCheckedGalleryOrder = new java.util.LinkedHashSet<>();
+    private boolean mSelectingLabelBatch;
+    private final GalleryRangeSelection mRangeSelection = new GalleryRangeSelection();
     private boolean mForceSingleLabelBrowse;
     private static final java.util.concurrent.atomic.AtomicBoolean sFolderScanRunning =
             new java.util.concurrent.atomic.AtomicBoolean();
@@ -408,7 +413,7 @@ public class DownloadsScene extends ToolbarScene
             List<DownloadInfo> allDownloads = new ArrayList<>(
                     mDownloadManager.getAllDownloadInfoList().size());
             allDownloads.addAll(mDownloadManager.getDefaultDownloadInfoList());
-            for (DownloadLabel label : mDownloadManager.getLabelList()) {
+            for (DownloadLabel label : mDownloadManager.getDownloadLabels()) {
                 List<DownloadInfo> downloads =
                         mDownloadManager.getLabelDownloadInfoList(label.getLabel());
                 if (downloads != null) {
@@ -452,7 +457,7 @@ public class DownloadsScene extends ToolbarScene
         downloadsByLabel.put(null, new ArrayList<>());
         List<DownloadLabel> labels = mDownloadManager.getLabelList();
         for (DownloadLabel label : labels) {
-            downloadsByLabel.put(label.getLabel(), new ArrayList<>());
+            if (!label.getFolder()) downloadsByLabel.put(label.getLabel(), new ArrayList<>());
         }
         for (DownloadInfo info : source) {
             List<DownloadInfo> labelDownloads = downloadsByLabel.get(info.label);
@@ -478,19 +483,36 @@ public class DownloadsScene extends ToolbarScene
                     Long.MIN_VALUE, defaultDownloads, orderedDownloads);
         }
 
+        Map<Long, Boolean> folderExpanded = new HashMap<>();
         for (DownloadLabel label : labels) {
             String labelName = label.getLabel();
-            List<DownloadInfo> downloads = downloadsByLabel.remove(labelName);
-            if (downloads == null) {
-                downloads = Collections.emptyList();
+            Long labelId = label.getId();
+            long stableId = labelId != null ? Long.MIN_VALUE + labelId + 1L
+                    : Long.MIN_VALUE / 2L + labelName.hashCode();
+            if (label.getFolder()) {
+                boolean expanded = Settings.isDownloadLabelExpanded(labelId, labelName);
+                folderExpanded.put(labelId, expanded);
+                boolean hasMatchingDownloads = false;
+                for (DownloadLabel child : labels) {
+                    if (java.util.Objects.equals(labelId, child.getParentId())) {
+                        List<DownloadInfo> childDownloads = downloadsByLabel.get(child.getLabel());
+                        if (childDownloads != null && !childDownloads.isEmpty()) hasMatchingDownloads = true;
+                    }
+                }
+                if (includeEmptyLabels || hasMatchingDownloads) {
+                    mContinuousHeaderPositions.put(labelName, mContinuousItems.size());
+                    mContinuousItems.add(ContinuousDownloadItem.header(labelName, labelId,
+                            labelName, 0, !expanded, stableId));
+                }
+                continue;
             }
-            if (includeEmptyLabels || !downloads.isEmpty()) {
-                Long labelId = label.getId();
-                long stableId = labelId != null
-                        ? Long.MIN_VALUE + labelId + 1L
-                        : Long.MIN_VALUE / 2L + labelName.hashCode();
-                appendContinuousSection(labelName, labelId, labelName, stableId,
-                        downloads, orderedDownloads);
+            List<DownloadInfo> downloads = downloadsByLabel.remove(labelName);
+            if (downloads == null) downloads = Collections.emptyList();
+            if (label.getParentId() != null && !Boolean.TRUE.equals(folderExpanded.get(label.getParentId()))) {
+                // Hidden children remain in the source list so unfolding/searching loses no galleries.
+                orderedDownloads.addAll(downloads);
+            } else if (includeEmptyLabels || !downloads.isEmpty()) {
+                appendContinuousSection(labelName, labelId, labelName, stableId, downloads, orderedDownloads);
             }
         }
 
@@ -651,7 +673,7 @@ public class DownloadsScene extends ToolbarScene
         mProgressView = (ProgressView) ViewUtils.$$(view, R.id.download_progress_view);
         View content = ViewUtils.$$(view, R.id.content);
         mRecyclerView = (MyEasyRecyclerView) ViewUtils.$$(content, R.id.recycler_view);
-        FastScroller fastScroller = (FastScroller) ViewUtils.$$(content, R.id.fast_scroller);
+        DownloadFastScroller fastScroller = (DownloadFastScroller) ViewUtils.$$(content, R.id.fast_scroller);
         mFabLayout = (FabLayout) ViewUtils.$$(view, R.id.fab_layout);
         TextView tip = (TextView) ViewUtils.$$(view, R.id.tip);
         mPaginationController.mPaginationIndicator = (PaginationIndicator) ViewUtils.$$(view, R.id.indicator);
@@ -766,13 +788,11 @@ public class DownloadsScene extends ToolbarScene
         }
 
         fastScroller.attachToRecyclerView(mRecyclerView);
-        HandlerDrawable handlerDrawable = new HandlerDrawable();
-        handlerDrawable.setColor(AttrResources.getAttrColor(context, R.attr.widgetColorThemeAccent));
-        fastScroller.setHandlerDrawable(handlerDrawable);
         fastScroller.setOnDragHandlerListener(this);
         mRecyclerView.post(this::queryVisibleSpiderInfo);
 
         mFabLayout.setExpanded(false, true);
+        mFabLayout.setWrapSecondaryFabs(true);
         mFabLayout.setHidePrimaryFab(false);
         mFabLayout.setAutoCancel(false);
         mFabLayout.setOnClickFabListener(this);
@@ -1043,6 +1063,10 @@ public class DownloadsScene extends ToolbarScene
         }
 
         if (recyclerView.isInCustomChoice()) {
+            if (mRangeSelection.isPending()) {
+                selectGalleryRange(position);
+                return true;
+            }
             recyclerView.toggleItemChecked(position);
             return true;
         } else {
@@ -1152,6 +1176,11 @@ public class DownloadsScene extends ToolbarScene
             } else if (originalLabel.equals(text)) {
                 builder.dismiss();
             } else if (mDownloadManager != null && mDownloadManager.containLabel(text)) {
+                if (mDownloadManager.findDownloadLabel(originalLabel).getFolder()
+                        || mDownloadManager.findDownloadLabel(text).getFolder()) {
+                    builder.setError(getString(R.string.label_text_exist));
+                    return;
+                }
                 new AlertDialog.Builder(context)
                         .setTitle(R.string.label_text_exist)
                         .setMessage(getString(R.string.merge_download_label_message,
@@ -1191,6 +1220,7 @@ public class DownloadsScene extends ToolbarScene
                 ? mLayoutManager.findViewByPosition(position) : null;
         int headerTop = headerView != null ? headerView.getTop() : 0;
         Settings.setDownloadLabelExpanded(header.labelId, header.label, header.collapsed);
+        if (downloadLabelDraw != null) downloadLabelDraw.updateDownloadLabels();
         if (mList != null) {
             boolean includeEmptyLabels = TextUtils.isEmpty(searchKey)
                     && mSelectedCategory == EhUtils.ALL_CATEGORY;
@@ -1215,7 +1245,7 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onLabelHeaderSearchOrSync(int position) {
-        if (!mContinuousLabelBrowse || !isLabelHeaderPosition(position)
+        if (!mContinuousLabelBrowse || !isLabelHeaderPosition(position) || isFolderHeader(position)
                 || mRecyclerView == null || mRecyclerView.isInCustomChoice()) {
             return;
         }
@@ -1243,7 +1273,7 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onLabelHeaderEnter(int position) {
-        if (!mContinuousLabelBrowse || !isLabelHeaderPosition(position)
+        if (!mContinuousLabelBrowse || !isLabelHeaderPosition(position) || isFolderHeader(position)
                 || mRecyclerView == null || mRecyclerView.isInCustomChoice()) {
             return;
         }
@@ -1287,6 +1317,11 @@ public class DownloadsScene extends ToolbarScene
 
     @Override
     public void onClickSecondaryFab(FabLayout view, FloatingActionButton fab, int position) {
+        if (position == FAB_SELECT_RANGE) {
+            selectGalleryRange(RecyclerView.NO_POSITION);
+            return;
+        }
+        if (position == 0) mRangeSelection.clear();
         mBatchActions.onClickSecondaryFab(view, fab, position);
     }
 
@@ -1478,7 +1513,7 @@ public class DownloadsScene extends ToolbarScene
         }
 
         List<String> existingLabels = new ArrayList<>();
-        for (DownloadLabel label : manager.getLabelList()) {
+        for (DownloadLabel label : manager.getDownloadLabels()) {
             existingLabels.add(label.getLabel());
         }
 
@@ -1489,17 +1524,13 @@ public class DownloadsScene extends ToolbarScene
             String concreteLabel = DownloadQuickOrganizer.findEquivalentLabel(
                     existingLabels, desiredLabel);
             if (concreteLabel == null) {
-                manager.addLabel(desiredLabel);
-                existingLabels.add(desiredLabel);
                 concreteLabel = desiredLabel;
-                List<DownloadLabel> labels = manager.getLabelList();
-                if (!labels.isEmpty()) {
-                    DownloadLabel addedLabel = labels.get(labels.size() - 1);
-                    if (desiredLabel.equals(addedLabel.getLabel())
-                            && addedLabel.getId() != null) {
-                        newLabelIds.add(addedLabel.getId());
-                    }
-                }
+                int suffix = 2;
+                while (manager.containLabel(concreteLabel)) concreteLabel = desiredLabel + " (" + suffix++ + ")";
+                manager.addLabel(concreteLabel);
+                existingLabels.add(concreteLabel);
+                DownloadLabel addedLabel = manager.findDownloadLabel(concreteLabel);
+                if (addedLabel != null) newLabelIds.add(addedLabel.getId());
             }
             List<DownloadInfo> infos = assignment.getValue();
             manager.changeLabel(infos, concreteLabel);
@@ -1507,9 +1538,20 @@ public class DownloadsScene extends ToolbarScene
         }
 
         if (!newLabelIds.isEmpty()) {
+            String base = "Sort_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                    .format(new java.util.Date());
+            String name = base;
+            int suffix = 2;
+            while (manager.containLabel(name)) name = base + "_" + suffix++;
+            manager.addLabelFolder(name);
+            DownloadLabel folder = manager.findDownloadLabel(name);
+            for (DownloadLabel label : manager.getDownloadLabels()) {
+                if (newLabelIds.contains(label.getId())) label.setParentId(folder.getId());
+            }
+            Settings.setDownloadLabelExpanded(folder.getId(), folder.getLabel(), true);
             manager.reorderLabels(
                     DownloadLabelListOperations.placeSelectedBeforeFirstNonUnderscore(
-                            manager.getLabelList(), newLabelIds));
+                            manager.getLabelList(), java.util.Collections.singleton(folder.getId())));
         }
 
         updateTitle();
@@ -1784,6 +1826,134 @@ public class DownloadsScene extends ToolbarScene
     }
 
     @Override
+    public void onGallerySelectionChanged(int position, boolean checked) {
+        if (mSelectingLabelBatch || mList == null) return;
+        int index = positionInList(position);
+        if (index < 0 || index >= mList.size()) return;
+        long gid = mList.get(index).gid;
+        mCheckedGalleryOrder.remove(gid);
+        if (checked) mCheckedGalleryOrder.add(gid);
+    }
+
+    @Override public void onGallerySelectionEnded() {
+        mCheckedGalleryOrder.clear();
+        mRangeSelection.clear();
+    }
+
+    private void selectGalleryRange(int clickedPosition) {
+        if (mRecyclerView == null || !mRecyclerView.isInCustomChoice()
+                || mRecyclerView.getAdapter() == null || mList == null) return;
+        List<Long> gids = new ArrayList<>();
+        java.util.Set<Long> selected = new java.util.HashSet<>();
+        android.util.SparseBooleanArray checked = mRecyclerView.getCheckedItemPositions();
+        for (int i = 0; i < mRecyclerView.getAdapter().getItemCount(); i++) {
+            int index = positionInList(i);
+            Long gid = index >= 0 && index < mList.size() ? mList.get(index).gid : null;
+            gids.add(gid);
+            if (gid != null && checked.get(i)) selected.add(gid);
+        }
+        Long scopeGid = mRangeSelection.getAnchorGid();
+        if (clickedPosition == RecyclerView.NO_POSITION) {
+            // Match Select all: use the label of the most recently checked gallery.
+            scopeGid = null;
+            for (Long gid : mCheckedGalleryOrder) {
+                if (selected.contains(gid)) scopeGid = gid;
+            }
+            if (scopeGid == null) {
+                for (Long gid : gids) {
+                    if (gid != null && selected.contains(gid)) scopeGid = gid;
+                }
+            }
+        }
+        if (scopeGid == null && clickedPosition >= 0 && clickedPosition < gids.size()) {
+            scopeGid = gids.get(clickedPosition);
+        }
+        if (scopeGid != null) {
+            DownloadInfo anchor = null;
+            for (DownloadInfo info : mList) {
+                if (info.gid == scopeGid) { anchor = info; break; }
+            }
+            if (anchor != null) {
+                for (int i = 0; i < gids.size(); i++) {
+                    int index = positionInList(i);
+                    if (gids.get(i) != null
+                            && !java.util.Objects.equals(mList.get(index).label, anchor.label)) {
+                        gids.set(i, null);
+                    }
+                }
+            }
+        }
+        if (clickedPosition >= 0 && clickedPosition < gids.size()
+                && gids.get(clickedPosition) == null) {
+            Context context = getEHContext();
+            if (context != null) Toast.makeText(context,
+                    R.string.select_gallery_range_same_label, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (clickedPosition == RecyclerView.NO_POSITION) {
+            mRangeSelection.start(gids, selected);
+        } else if (clickedPosition >= 0 && clickedPosition < gids.size()
+                && gids.get(clickedPosition) != null) {
+            mRangeSelection.onGalleryClick(gids.get(clickedPosition), gids, selected);
+        }
+        mSelectingLabelBatch = true;
+        try {
+            for (int i = 0; i < gids.size(); i++) {
+                if (gids.get(i) != null && selected.contains(gids.get(i)) && !checked.get(i)) {
+                    mRecyclerView.toggleItemChecked(i);
+                }
+            }
+        } finally {
+            mSelectingLabelBatch = false;
+        }
+        // Preserve the explicit endpoint as the anchor used by the label-scoped Select all.
+        if (clickedPosition >= 0 && clickedPosition < gids.size()
+                && gids.get(clickedPosition) != null) {
+            long gid = gids.get(clickedPosition);
+            mCheckedGalleryOrder.remove(gid);
+            mCheckedGalleryOrder.add(gid);
+        }
+        Context context = getEHContext();
+        if (mRangeSelection.isPending() && context != null) {
+            Toast.makeText(context, mRangeSelection.getHint(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void selectAllInLastCheckedLabel() {
+        if (mRecyclerView == null || mList == null) return;
+        Long last = null;
+        for (Long gid : mCheckedGalleryOrder) last = gid;
+        DownloadInfo anchor = null;
+        for (DownloadInfo info : mList) {
+            if (java.util.Objects.equals(last, info.gid)) { anchor = info; break; }
+        }
+        // Defensive fallback for restored choice state without a click history.
+        if (anchor == null) {
+            android.util.SparseBooleanArray checked = mRecyclerView.getCheckedItemPositions();
+            for (int i = 0; i < checked.size(); i++) {
+                int index = positionInList(checked.keyAt(i));
+                if (checked.valueAt(i) && index >= 0 && index < mList.size()) anchor = mList.get(index);
+            }
+        }
+        if (anchor == null) {
+            for (ContinuousDownloadItem item : mContinuousItems) {
+                if (!item.header) { anchor = item.downloadInfo; break; }
+            }
+        }
+        if (anchor == null) return;
+        mSelectingLabelBatch = true;
+        try {
+            android.util.SparseBooleanArray checked = mRecyclerView.getCheckedItemPositions();
+            for (int position = 0; position < mContinuousItems.size(); position++) {
+                ContinuousDownloadItem item = mContinuousItems.get(position);
+                if (!item.header && java.util.Objects.equals(item.label, anchor.label)
+                        && !checked.get(position)) mRecyclerView.toggleItemChecked(position);
+            }
+        } finally { mSelectingLabelBatch = false; }
+    }
+
+    @Override
     public boolean isContinuousLabelBrowse() {
         return mContinuousLabelBrowse;
     }
@@ -1819,6 +1989,22 @@ public class DownloadsScene extends ToolbarScene
     public boolean isLabelHeaderCollapsed(int position) {
         return isLabelHeaderPosition(position)
                 && mContinuousItems.get(position).collapsed;
+    }
+
+    public DownloadLabel getHeaderLabel(int position) {
+        return isLabelHeaderPosition(position) && mDownloadManager != null
+                ? mDownloadManager.findDownloadLabel(mContinuousItems.get(position).label) : null;
+    }
+
+    public boolean isFolderHeader(int position) {
+        DownloadLabel label = getHeaderLabel(position);
+        return label != null && label.getFolder();
+    }
+
+    public String getLabelHeaderCountText(int position) {
+        DownloadLabel label = getHeaderLabel(position);
+        return label != null && label.getFolder() ? mDownloadManager.getFolderCount(label)
+                : Integer.toString(getLabelHeaderGalleryCount(position));
     }
 
     @Override
@@ -1888,6 +2074,16 @@ public class DownloadsScene extends ToolbarScene
     boolean expandAndScrollToDownloadLabel(@Nullable String label) {
         if (!mContinuousLabelBrowse || mList == null) {
             return false;
+        }
+        DownloadLabel downloadLabel = mDownloadManager == null ? null : mDownloadManager.findDownloadLabel(label);
+        if (downloadLabel != null && downloadLabel.getParentId() != null) {
+            for (DownloadLabel folder : mDownloadManager.getLabelList()) {
+                if (java.util.Objects.equals(folder.getId(), downloadLabel.getParentId())) {
+                    Settings.setDownloadLabelExpanded(folder.getId(), folder.getLabel(), true);
+                }
+            }
+            rebuildContinuousItems(new ArrayList<>(mList), TextUtils.isEmpty(searchKey)
+                    && mSelectedCategory == EhUtils.ALL_CATEGORY);
         }
         Integer position = mContinuousHeaderPositions.get(label);
         if (position == null) {

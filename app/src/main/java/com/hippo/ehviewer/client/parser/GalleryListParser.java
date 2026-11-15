@@ -73,6 +73,8 @@ public class GalleryListParser {
     };
 
     public static class Result {
+        public int sourcePages = 1;
+        public boolean partialFailure;
         public int pages;
         public int nextPage;
         public String resultCount;
@@ -92,6 +94,9 @@ public class GalleryListParser {
         public List<GalleryInfo> galleryInfoList = new ArrayList<>();
         // A separate list, sharing immutable identity/metadata objects before filtering removes rows.
         public List<GalleryInfo> rawGalleries;
+        // Candidates after non-rating filters, before applying the exact search threshold.
+        public List<GalleryInfo> ratingCandidates;
+        public int ratingCandidateFloor = -1;
         // API enrichment mutates GalleryInfo.posted; pagination coverage uses the HTML timestamp.
         public final Map<Long, String> rawPublicationTimes = new HashMap<>();
         // Background checks filter only new candidates; retain the full page for later browsing.
@@ -99,6 +104,8 @@ public class GalleryListParser {
         // Display-ready full pages let update-check results open without another metadata request.
         public List<GalleryInfo> subscriptionDisplayGalleries;
         public List<GalleryInfo> ratingMetadata;
+        // Rating filtering may fetch an extra page; persistence still keeps the actual first page.
+        public Result firstPageForCache;
     }
 
     private static int parsePages(Document d, String body) throws ParseException {

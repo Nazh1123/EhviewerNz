@@ -778,7 +778,6 @@
     <string name="settings_advanced_read_cache_size">阅读缓存大小</string>
     <string name="settings_advanced_app_language_title">App 界面语言</string>
     <string name="settings_fork_features">Fork 杂项</string>
-    <string name="settings_fork_category_gallery">画廊与搜索</string>
     <string name="settings_fork_category_reading">阅读与保存</string>
     <string name="settings_fork_category_animated_webp">动态 WebP</string>
     <string name="settings_fork_category_subscriptions">订阅</string>
@@ -789,10 +788,17 @@
     <string name="settings_fork_auto_subscription_updates">自动获取订阅更新</string>
     <string name="settings_fork_auto_subscription_updates_summary">按设定间隔获取订阅内容的更新画廊数量</string>
     <string name="settings_fork_auto_subscription_update_interval">自动更新间隔</string>
+    <string name="subscription_update_interval_minutes">自动更新间隔 (分钟)</string>
+    <string name="manage_subscription_bookmarks">管理订阅书签</string>
+    <string name="settings_update_bookmark_subscriptions_on_open">查看订阅时更新</string>
+    <string name="settings_update_bookmark_subscriptions_on_open_summary">关闭：点击复用，长按更新。开启：点击更新（60 秒内可复用），长按复用。</string>
+    <string name="subscription_result_age_seconds">%1$s - %2$d 秒前</string>
+    <string name="subscription_result_age_minutes">%1$s - %2$d 分前</string>
+    <string name="subscription_result_age_hours">%1$s - %2$s 时前</string>
     <string name="settings_fork_auto_subscription_update_interval_summary">%1$d 分钟</string>
     <string name="settings_fork_auto_subscription_update_interval_invalid">请输入有效的正整数分钟数</string>
     <string name="settings_fork_subscription_update_minutes">分钟</string>
-    <string name="settings_fork_auto_subscription_updates_eh">自动更新 EH订阅</string>
+    <string name="settings_fork_auto_subscription_updates_eh">"自动更新  EH订阅"</string>
     <string name="settings_fork_gallery_immediate_jump">画廊立即跳转</string>
     <string name="settings_fork_long_press_save_summary">长按下一页翻页区域，将当前图片保存到本地</string>
     <string name="settings_fork_long_press_save_then_turn_page_summary">长按保存成功后自动翻至下一页</string>
@@ -826,6 +832,7 @@
     <string name="settings_about">更新与支持</string>
     <string name="settings_about_declaration_summary">EhViewer 与 E-Hentai.org 无任何联系</string>
     <string name="settings_about_author">作者</string>
+    <string name="settings_about_feature_guide">功能说明</string>
     <string name="settings_about_latest_release">最新版本</string>
     <string name="settings_about_website">网站</string>
     <string name="settings_about_source">源码</string>
@@ -1271,4 +1278,7 @@
     <string name="animated_webp_play_pause">播放或暂停动图</string>
     <string name="settings_subscription_homepage_scan">主页扫描更新订阅</string>
     <string name="settings_subscription_homepage_scan_summary">手动及自动“更新订阅”时，订阅数 N 大于 8、距上次更新 T 小于 400 分钟且 T × 0.3 小于 N 时，自动使用主页扫描；其他情况及复杂搜索使用原方式。切换时沿用检查进度，不改变“书签订阅”的浏览方式。</string>
+    <string name="select_gallery_range_same_label">请在同一标签内选择区间终点</string>
+    <string name="subscription_global_short">全局订阅</string>
+    <string name="subscription_bookmarks_short">书签订阅</string>
 </resources>

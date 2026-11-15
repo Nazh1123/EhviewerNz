@@ -71,7 +71,7 @@
                     app:unselected_color="?attr/drawableColorSecondary" />
             </LinearLayout>
 
-            <com.hippo.easyrecyclerview.FastScroller
+            <com.hippo.ehviewer.widget.DownloadFastScroller
                 android:id="@+id/fast_scroller"
                 android:layout_width="30dp"
                 android:layout_height="match_parent"
@@ -106,6 +106,15 @@
                 android:layout_height="wrap_content"
                 app:backgroundTint="?attr/widgetColorThemeAccent"
                 app:srcCompat="@drawable/v_check_all_dark_x24" />
+
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/select_download_range_fab"
+                style="@style/Widget.Design.FloatingActionButton.Mini"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/select_label_range"
+                app:backgroundTint="?attr/widgetColorThemeAccent"
+                app:srcCompat="@drawable/v_select_range_dark_x24" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 style="@style/Widget.Design.FloatingActionButton.Mini"

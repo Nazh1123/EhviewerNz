@@ -51,11 +51,13 @@ class DownloadSpiderInfoExecutor(
 
     private fun getSpiderInfo(info: GalleryInfo): SpiderInfo? {
         val spiderInfo: SpiderInfo?
-        val mDownloadDir = SpiderDen.getGalleryDownloadDir(info)
-        if (mDownloadDir != null && mDownloadDir.isDirectory()) {
-            com.hippo.ehviewer.EhApplication.getInstance()?.let {
+        val mDownloadDir = SpiderDen.getGalleryDownloadDir(info)?.takeIf { it.isDirectory }
+        com.hippo.ehviewer.EhApplication.getInstance()?.let {
+            if (mDownloadDir != null) {
                 com.hippo.ehviewer.download.GalleryDownloadRangeStore.get(it).restore(info.gid, mDownloadDir)
             }
+        }
+        if (mDownloadDir != null) {
             val file = mDownloadDir.findFile(SpiderQueen.SPIDER_INFO_FILENAME)
             spiderInfo = SpiderInfo.readHeader(file)
             if (spiderInfo != null && spiderInfo.gid == info.gid &&

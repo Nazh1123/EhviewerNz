@@ -8,4 +8,7 @@
     <string name="settings_persistent_min_rating">常驻筛选评分</string>
     <string name="settings_persistent_min_rating_description">设定常驻的筛选评分，每次搜索都默认不显示该评分以下的画廊</string>
     <string name="settings_persistent_min_rating_value">当前：%1$s（0.00 为不限制）</string>
+    <string name="settings_search_category_keyword">关键词</string>
+    <string name="settings_search_category_gallery_search">画廊搜索</string>
+    <string name="settings_search_category_thumbnail">缩略图</string>
 </resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="archive_quota_usage">%1$s / %2$s GB · Free quota refreshes in %3$s hours</string>
+    <string name="archive_quota_initial">%1$s / %2$s GB · Free archive quota available</string>
+    <string name="archive_quota_reset">Reset</string>
+    <string name="archive_quota_refresh">Refresh</string>
+    <string name="archive_quota_refreshing">Refreshing…</string>
+    <string name="archive_quota_refresh_failed">Could not refresh donation level. Existing records were kept.</string>
+</resources>

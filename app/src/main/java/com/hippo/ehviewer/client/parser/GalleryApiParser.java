@@ -39,6 +39,7 @@ public class GalleryApiParser {
             if (gi == null) {
                 continue;
             }
+            gi.apiRating = Float.NaN;
             gi.firstGid = resolveFirstGid(gid, g.optString("first_gid"),
                     g.optString("error"));
             if (gi.firstGid < 0L || g.has("error") || g.isNull("title")) {
@@ -55,6 +56,7 @@ public class GalleryApiParser {
             gi.uploader = g.getString("uploader");
             gi.posted = ParserUtils.formatPostedDate(ParserUtils.parseLong(g.getString("posted"), 0) * 1000);
             gi.rating = NumberUtils.parseFloatSafely(g.getString("rating"), 0.0f);
+            gi.apiRating = gi.rating;
             // tags
             JSONArray tagJa = g.getJSONArray("tags");
             int tagLength = tagJa.length();

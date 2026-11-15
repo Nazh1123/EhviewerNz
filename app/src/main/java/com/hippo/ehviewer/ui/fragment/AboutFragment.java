@@ -40,6 +40,7 @@ import androidx.preference.PreferenceFragmentCompat;
 import com.hippo.ehviewer.AppConfig;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
+import com.hippo.ehviewer.UrlOpener;
 import com.hippo.ehviewer.updater.AppUpdater;
 import com.hippo.util.AppHelper;
 import com.hippo.util.ExceptionUtils;
@@ -58,6 +59,7 @@ public class AboutFragment extends BasePreferenceFragmentCompat
     private static final String KEY_AUTHOR = "author";
     private static final String KEY_DONATE = "donate";
     private static final String KEY_CHECK_FOR_UPDATES = "fork_check_for_updates";
+    private static final String KEY_FEATURE_GUIDE = "fork_feature_guide";
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
@@ -72,6 +74,11 @@ public class AboutFragment extends BasePreferenceFragmentCompat
         Preference donate = findPreference(KEY_DONATE);
         if (donate != null) {
             donate.setOnPreferenceClickListener(this);
+        }
+
+        Preference featureGuide = findPreference(KEY_FEATURE_GUIDE);
+        if (featureGuide != null) {
+            featureGuide.setOnPreferenceClickListener(this);
         }
 
         Preference checkForUpdate = findPreference(KEY_CHECK_FOR_UPDATES);
@@ -89,6 +96,8 @@ public class AboutFragment extends BasePreferenceFragmentCompat
                     "About EhViewer", null);
         } else if (KEY_DONATE.equals(key)) {
             showDonationDialog();
+        } else if (KEY_FEATURE_GUIDE.equals(key)&&activity!=null) {
+            UrlOpener.openUrl(activity, "https://github.com/Nazh1123/EhviewerNz", false);
         } else if (KEY_CHECK_FOR_UPDATES.equals(key)&&activity!=null) {
 //            Settings.setCheckUpdate(false);
 //            Distribute.checkForUpdate();

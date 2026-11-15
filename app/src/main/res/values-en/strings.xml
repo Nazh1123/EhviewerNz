@@ -687,6 +687,7 @@
     <string name="settings_about_author">Author</string>
     <string name="settings_about_author_summary" translatable="false">SXJ_LonelyDog &lt;xiaojieonly$foxmail.com&gt;</string>
     <string name="settings_about_telegram">Telegram</string>
+    <string name="settings_about_feature_guide">Feature guide</string>
     <string name="settings_about_latest_release">Latest release</string>
     <string name="settings_about_website">Website</string>
     <string name="settings_about_source">Source</string>
@@ -1312,4 +1313,14 @@
     <string name="navigation_long_press_hint">Long press buttons for special actions</string>
     <string name="title_keyword_search_action">Search keywords</string>
     <string name="top_list_period_title">%1$s</string>
+    <string name="select_gallery_range_same_label">Select a gallery in the same label</string>
+    <string name="settings_update_bookmark_subscriptions_on_open">Update subscriptions on open</string>
+    <string name="manage_subscription_bookmarks">Manage subscription bookmarks</string>
+    <string name="subscription_global_short">Global Subs</string>
+    <string name="subscription_bookmarks_short">Bookmarks</string>
+    <string name="subscription_result_age_seconds">%1$s - %2$ds ago</string>
+    <string name="subscription_result_age_minutes">%1$s - %2$dm ago</string>
+    <string name="subscription_result_age_hours">%1$s - %2$sh ago</string>
+    <string name="settings_update_bookmark_subscriptions_on_open_summary">Off: tap to reuse, hold to update. On: tap to update (60s reuse), hold to reuse.</string>
+    <string name="subscription_update_interval_minutes">Automatic update interval (minutes)</string>
 </resources>

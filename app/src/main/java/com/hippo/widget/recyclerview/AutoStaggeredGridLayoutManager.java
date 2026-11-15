@@ -85,6 +85,16 @@ public class AutoStaggeredGridLayoutManager extends StaggeredGridLayoutManager {
     }
 
     @Override
+    public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+        if (state.getItemCount() == 0) {
+            // StaggeredGridLayoutManager 1.2.1's empty pending-scroll path recycles
+            // children without clearing its spans. Reuse its full span-cache reset.
+            super.onAdapterChanged(null, null);
+        }
+        super.onLayoutChildren(recycler, state);
+    }
+
+    @Override
     public void onMeasure(RecyclerView.Recycler recycler, RecyclerView.State state, int widthSpec, int heightSpec) {
         if (mPortraitColumnSize.getColumns() > 0
                 && View.MeasureSpec.getMode(widthSpec) == View.MeasureSpec.EXACTLY) {

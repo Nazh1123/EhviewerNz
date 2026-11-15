@@ -86,6 +86,83 @@ public class SearchRatingTest {
         assertEquals("3.50", value.getText().toString());
     }
 
+    @Test public void sortDialogUsesSameStarsAndExactInputAndFitsNarrowDialogs() {
+        View content = android.view.LayoutInflater.from(context)
+                .inflate(R.layout.gallery_rating_sort_dialog, null);
+        RatingFilterControl filter = new RatingFilterControl(content, 275, ignored -> {});
+        RatingBar stars = content.findViewById(R.id.search_rating_stars);
+        TextView value = content.findViewById(R.id.search_rating_value);
+        assertEquals("2.75", value.getText().toString());
+        assertEquals(2.75f, stars.getRating(), 0.011f);
+        assertEquals(5, stars.getNumStars());
+        stars.getOnRatingBarChangeListener().onRatingChanged(stars, 3.26f, true);
+        assertEquals(350, filter.getMinimumRating());
+        assertEquals("3.50", value.getText().toString());
+        value.performClick();
+        org.robolectric.shadows.ShadowLooper.idleMainLooper();
+        AlertDialog dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        EditText input = findInput(dialog.getWindow().getDecorView());
+        input.setText("4.99");
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+        assertFalse(dialog.isShowing());
+        assertEquals(499, filter.getMinimumRating());
+        assertEquals("4.99", value.getText().toString());
+        assertEquals(4.99f, stars.getRating(), 0.011f);
+        value.performClick();
+        org.robolectric.shadows.ShadowLooper.idleMainLooper();
+        dialog = (AlertDialog) ShadowDialog.getLatestDialog();
+        findInput(dialog.getWindow().getDecorView()).setText("1.00");
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+        assertEquals(499, filter.getMinimumRating());
+        filter.setMinimumRating(0);
+        assertEquals("0.00", value.getText().toString());
+        content.measure(View.MeasureSpec.makeMeasureSpec(280, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.AT_MOST));
+        content.layout(0, 0, content.getMeasuredWidth(), content.getMeasuredHeight());
+        View row = content.findViewById(R.id.search_rating_row);
+        TextView label = content.findViewById(R.id.search_rating_label);
+        assertTrue(stars.getWidth() > 0);
+        assertEquals(context.getString(R.string.search_rating_title), label.getText().toString());
+        assertTrue(value.getRight() <= ((View) value.getParent()).getWidth());
+        assertEquals(row.getWidth() / 2f, stars.getLeft() + stars.getWidth() / 2f, 1f);
+    }
+
+    @Test public void dialogRatingLabelAndValueStayCenteredWithFixedSpacingAcrossLanguages() {
+        for (String language : new String[]{"en", "de", "es", "fr", "ja", "ko", "th", "zh-CN", "zh-TW", "zh-HK"}) {
+            for (float fontScale : new float[]{1f, 1.3f}) {
+                android.content.res.Configuration config = new android.content.res.Configuration(context.getResources().getConfiguration());
+                config.setLocale(java.util.Locale.forLanguageTag(language));
+                config.fontScale = fontScale;
+                Context localized = new ContextThemeWrapper(context.createConfigurationContext(config), R.style.AppTheme_Main);
+                View content = android.view.LayoutInflater.from(localized).inflate(R.layout.gallery_rating_sort_dialog, null);
+                new RatingFilterControl(content, 275, ignored -> {});
+                content.measure(View.MeasureSpec.makeMeasureSpec(280, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.AT_MOST));
+                content.layout(0, 0, content.getMeasuredWidth(), content.getMeasuredHeight());
+                android.view.ViewGroup root = (android.view.ViewGroup) content;
+                android.graphics.Rect label = bounds(root, content.findViewById(R.id.search_rating_label));
+                android.graphics.Rect value = bounds(root, content.findViewById(R.id.search_rating_value));
+                android.graphics.Rect stars = bounds(root, content.findViewById(R.id.search_rating_stars));
+                android.graphics.Rect row = bounds(root, content.findViewById(R.id.search_rating_row));
+                TextView title = content.findViewById(R.id.search_rating_label);
+                assertEquals(language, Math.round(16 * localized.getResources().getDisplayMetrics().density),
+                        value.left - label.right);
+                assertEquals(language, row.exactCenterX(), (label.left + value.right) / 2f, 1f);
+                assertEquals(language, row.exactCenterX(), stars.exactCenterX(), 1f);
+                assertTrue(language, stars.top >= Math.max(label.bottom, value.bottom));
+                assertTrue(language, title.getLayout().getHeight() <= title.getHeight());
+                if (fontScale == 1f) assertEquals(language, 1, title.getLineCount());
+            }
+        }
+    }
+
+    private android.graphics.Rect bounds(android.view.ViewGroup root, View view) {
+        android.graphics.Rect rect = new android.graphics.Rect();
+        view.getDrawingRect(rect);
+        root.offsetDescendantRectToMyCoords(view, rect);
+        return rect;
+    }
+
     @Test public void preservesThresholdAcrossParcelBookmarksAndAllSearchModes() {
         ListUrlBuilder builder = new ListUrlBuilder();
         builder.setKeyword("artist:test");
@@ -151,6 +228,56 @@ public class SearchRatingTest {
         assertEquals(2, sources.size());
         assertTrue(sources.stream().anyMatch(source -> source.createBuilder().getMinRatingHundredths() == 451));
         assertTrue(sources.stream().anyMatch(source -> source.createBuilder().getMinRatingHundredths() == 499));
+    }
+
+    @Test public void continuationUsesNewRatingButRetainsWebsiteCursorAndOtherConditions() {
+        String url = "https://e-hentai.org/?f_search=test&next=123&f_spf=20&f_sr=on&f_srdd=3";
+        ListUrlBuilder builder = new ListUrlBuilder();
+        builder.setMinRatingHundredths(380);
+        android.net.Uri strict = android.net.Uri.parse(builder.applyRatingToContinuation(url));
+        assertEquals("123", strict.getQueryParameter("next"));
+        assertEquals("test", strict.getQueryParameter("f_search"));
+        assertEquals("20", strict.getQueryParameter("f_spf"));
+        assertEquals(java.util.List.of("4"), strict.getQueryParameters("f_srdd"));
+        assertEquals(375, SearchRating.serverFloor(strict.toString()));
+        assertEquals(375, SearchRating.serverFloor("https://exhentai.org/?next=123&f_srdd=4"));
+        assertEquals(0, SearchRating.serverFloor("https://exhentai.org/?next=123&f_srdd=0"));
+        builder.setMinRatingHundredths(0);
+        String loose = builder.applyRatingToContinuation(strict.toString());
+        assertNull(android.net.Uri.parse(loose).getQueryParameter("f_srdd"));
+        assertEquals(0, SearchRating.serverFloor(loose));
+        assertEquals("123", android.net.Uri.parse(loose).getQueryParameter("next"));
+    }
+
+    @Test public void ratingOnlyComparisonIgnoresPageButRecognizesOtherSearchChanges() {
+        ListUrlBuilder first = new ListUrlBuilder();
+        first.setKeyword("test"); first.setPageIndex(10); first.setMinRatingHundredths(350);
+        ListUrlBuilder second = new ListUrlBuilder(); second.set(first);
+        second.setPageIndex(0); second.setMinRatingHundredths(380);
+        assertTrue(first.sameSearchExceptRating(second));
+        second.setKeyword("changed");
+        assertFalse(first.sameSearchExceptRating(second));
+    }
+
+    @Test public void currentRatingLabelWrapsWithoutClippingAtNarrowWidths() {
+        for (String language : new String[]{"en", "de", "fr", "zh-CN"}) {
+            android.content.res.Configuration config = new android.content.res.Configuration(context.getResources().getConfiguration());
+            config.setLocale(java.util.Locale.forLanguageTag(language)); config.fontScale = 1.3f;
+            Context localized = new ContextThemeWrapper(context.createConfigurationContext(config), R.style.AppTheme_Main);
+            View content = android.view.LayoutInflater.from(localized).inflate(R.layout.gallery_rating_sort_dialog, null);
+            new RatingFilterControl(content, 275, ignored -> {});
+            TextView current = content.findViewById(R.id.search_rating_current);
+            current.setText(localized.getString(R.string.search_rating_current, "0.00")); current.setVisibility(View.VISIBLE);
+            content.measure(View.MeasureSpec.makeMeasureSpec(280, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.AT_MOST));
+            content.layout(0, 0, content.getMeasuredWidth(), content.getMeasuredHeight());
+            android.view.ViewGroup root = (android.view.ViewGroup) content;
+            android.graphics.Rect row = bounds(root, content.findViewById(R.id.search_rating_row));
+            android.graphics.Rect label = bounds(root, current);
+            assertTrue(language, label.left >= row.left && label.right <= row.right);
+            assertTrue(language, label.bottom <= bounds(root, content.findViewById(R.id.search_rating_stars)).top);
+            assertEquals(language, 1, current.getLineCount());
+        }
     }
 
     @Test public void selectsStrongestSafeSiteOptionAtEveryHundredth() {

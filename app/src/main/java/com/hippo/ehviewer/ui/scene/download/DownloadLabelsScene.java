@@ -18,8 +18,9 @@ package com.hippo.ehviewer.ui.scene.download;
 
 import android.content.Context;
 import android.content.DialogInterface;
+import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.NinePatchDrawable;
+import android.view.MotionEvent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -33,20 +34,19 @@ import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
-import com.h6ah4i.android.widget.advrecyclerview.animator.GeneralItemAnimator;
 import com.h6ah4i.android.widget.advrecyclerview.animator.SwipeDismissItemAnimator;
-import com.h6ah4i.android.widget.advrecyclerview.draggable.DraggableItemAdapter;
-import com.h6ah4i.android.widget.advrecyclerview.draggable.ItemDraggableRange;
-import com.h6ah4i.android.widget.advrecyclerview.draggable.RecyclerViewDragDropManager;
-import com.h6ah4i.android.widget.advrecyclerview.utils.AbstractDraggableItemViewHolder;
+import com.hippo.android.resource.AttrResources;
 import com.hippo.app.EditTextDialogBuilder;
 import com.hippo.easyrecyclerview.EasyRecyclerView;
+import com.hippo.ehviewer.widget.DownloadFastScroller;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.dao.DownloadLabel;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.download.DownloadLabelTree;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.util.DrawableManager;
 import com.hippo.view.ViewTransition;
@@ -93,11 +93,11 @@ public class DownloadLabelsScene extends ToolbarScene {
     private boolean mRangeSelectionPending;
     @Nullable
     private Long mRangeSelectionAnchorId;
-    @Nullable
-    private List<Long> mDraggedSelectedIds;
-    @Nullable
-    private List<DownloadLabel> mGroupDragStartOrder;
-    private long mGroupDragAnchorId = -1L;
+    private ItemTouchHelper mTouchHelper;
+    private Set<Long> mDragIds;
+    private Long mDropTargetId;
+    private boolean mDropAfter;
+    private boolean mDragCancelled;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -116,7 +116,7 @@ public class DownloadLabelsScene extends ToolbarScene {
     @Override
     public View onCreateView3(LayoutInflater inflater,
             @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View view = inflater.inflate(R.layout.scene_label_list, container, false);
+        View view = inflater.inflate(R.layout.scene_download_labels, container, false);
 
         mRecyclerView = (EasyRecyclerView) ViewUtils.$$(view, R.id.recycler_view);
         TextView tip = (TextView) ViewUtils.$$(view, R.id.tip);
@@ -129,22 +129,18 @@ public class DownloadLabelsScene extends ToolbarScene {
         tip.setCompoundDrawables(null, drawable, null, null);
         tip.setText(R.string.no_download_label);
 
-        // drag & drop manager
-        RecyclerViewDragDropManager dragDropManager = new RecyclerViewDragDropManager();
-        dragDropManager.setDraggingItemShadowDrawable(
-                (NinePatchDrawable) context.getResources().getDrawable(R.drawable.shadow_8dp));
-
         RecyclerView.Adapter adapter = new LabelAdapter();
         adapter.setHasStableIds(true);
-        adapter = dragDropManager.createWrappedAdapter(adapter); // wrap for dragging
         mAdapter = adapter;
-        final GeneralItemAnimator animator = new SwipeDismissItemAnimator();
-
         mRecyclerView.setLayoutManager(new LinearLayoutManager(context));
         mRecyclerView.setAdapter(adapter);
-        mRecyclerView.setItemAnimator(animator);
-
-        dragDropManager.attachRecyclerView(mRecyclerView);
+        mRecyclerView.setItemAnimator(new SwipeDismissItemAnimator());
+        mTouchHelper = new ItemTouchHelper(new LabelDragCallback());
+        mTouchHelper.attachToRecyclerView(mRecyclerView);
+        ((com.hippo.ehviewer.widget.MyEasyRecyclerView) mRecyclerView)
+                .setTouchCancelListener(() -> mDragCancelled = true);
+        DownloadFastScroller scroller = view.findViewById(R.id.label_fast_scroller);
+        scroller.attachToRecyclerView(mRecyclerView);
 
         updateView();
 
@@ -161,6 +157,7 @@ public class DownloadLabelsScene extends ToolbarScene {
 
     @Override
     public void onDestroyView() {
+        mDragCancelled = true;
         super.onDestroyView();
 
         if (null != mRecyclerView) {
@@ -177,8 +174,10 @@ public class DownloadLabelsScene extends ToolbarScene {
         mClassifySelectionItem = null;
         mDeleteEmptyLabelsItem = null;
         mDeleteSelectionItem = null;
-        mDraggedSelectedIds = null;
-        mGroupDragStartOrder = null;
+        if (mTouchHelper != null) mTouchHelper.attachToRecyclerView(null);
+        mTouchHelper = null;
+        mDragIds = null;
+        mDropTargetId = null;
     }
 
     @Override
@@ -227,10 +226,17 @@ public class DownloadLabelsScene extends ToolbarScene {
         switch (id) {
             case R.id.action_add: {
                 EditTextDialogBuilder builder = new EditTextDialogBuilder(context, null, getString(R.string.download_labels));
-                builder.setTitle(R.string.new_label_title);
+                builder.setTitle(R.string.download_label_new);
+                final boolean[] folder = {false};
+                builder.setSingleChoiceOptions(new String[]{getString(R.string.download_labels),
+                        getString(R.string.download_label_folder)}, type -> {
+                    folder[0] = type == 1;
+                    builder.setHint(getString(folder[0] ? R.string.download_label_folder
+                            : R.string.download_labels));
+                });
                 builder.setPositiveButton(android.R.string.ok, null);
                 AlertDialog dialog = builder.show();
-                new NewLabelDialogHelper(builder, dialog);
+                new NewLabelDialogHelper(builder, dialog, folder);
                 return true;
             }
             case R.id.action_select_all_labels:
@@ -243,7 +249,11 @@ public class DownloadLabelsScene extends ToolbarScene {
                 clearSelection();
                 return true;
             case R.id.action_classify_selected_labels:
-                classifySelectedLabels();
+                new AlertDialog.Builder(context).setTitle(R.string.download_labels_sort_name)
+                        .setMessage(R.string.download_labels_sort_confirm)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setPositiveButton(android.R.string.ok, (dialog, which) -> classifySelectedLabels())
+                        .show();
                 return true;
             case R.id.action_delete_empty_labels:
                 confirmDeleteSelectedEmptyLabels();
@@ -343,7 +353,7 @@ public class DownloadLabelsScene extends ToolbarScene {
         }
 
         List<DownloadLabel> newOrder =
-                DownloadLabelListOperations.sortSelectedAtFirstPosition(
+                DownloadLabelTree.sortSelected(
                         mList, mSelectedLabelIds);
         EhApplication.getDownloadManager(context).reorderLabels(newOrder);
         clearSelection();
@@ -355,23 +365,34 @@ public class DownloadLabelsScene extends ToolbarScene {
             return;
         }
 
-        List<String> selectedLabels = new ArrayList<>();
+        boolean hasFolder = false;
         for (DownloadLabel label : mList) {
-            if (mSelectedLabelIds.contains(label.getId()) && label.getLabel() != null) {
-                selectedLabels.add(label.getLabel());
-            }
+            if (mSelectedLabelIds.contains(label.getId()) && label.getFolder()) hasFolder = true;
         }
-        new AlertDialog.Builder(context)
-                .setTitle(R.string.delete_label_title)
-                .setMessage(getString(R.string.delete_selected_labels_message,
-                        selectedLabels.size()))
+        final boolean[] deleteChildren = {false};
+        AlertDialog.Builder builder = new AlertDialog.Builder(context)
+                .setTitle(R.string.delete)
+                .setMessage(getString(R.string.download_labels_delete_message, mSelectedLabelIds.size()))
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                    EhApplication.getDownloadManager(context).deleteLabels(selectedLabels);
+                    Set<Long> ids = deleteChildren[0]
+                            ? DownloadLabelTree.withChildren(mList, mSelectedLabelIds)
+                            : new LinkedHashSet<>(mSelectedLabelIds);
+                    List<String> names = new ArrayList<>();
+                    for (DownloadLabel label : mList) if (ids.contains(label.getId())) names.add(label.getLabel());
+                    EhApplication.getDownloadManager(context).deleteLabels(names);
                     clearSelection();
                     updateView();
-                })
-                .show();
+                });
+        if (hasFolder) {
+            CheckBox checkbox = new CheckBox(context);
+            checkbox.setText(R.string.download_folder_delete_children);
+            int inset = (int) (24 * getResources().getDisplayMetrics().density);
+            checkbox.setPadding(inset, 0, inset, 0);
+            checkbox.setOnCheckedChangeListener((button, checked) -> deleteChildren[0] = checked);
+            builder.setView(checkbox);
+        }
+        builder.show();
     }
 
     private void confirmDeleteSelectedEmptyLabels() {
@@ -382,8 +403,9 @@ public class DownloadLabelsScene extends ToolbarScene {
 
         DownloadManager downloadManager = EhApplication.getDownloadManager(context);
         List<String> emptyLabels = new ArrayList<>();
+        Set<Long> candidates = DownloadLabelTree.withChildren(mList, mSelectedLabelIds);
         for (DownloadLabel label : mList) {
-            if (!mSelectedLabelIds.contains(label.getId()) || label.getLabel() == null) {
+            if (label.getFolder() || !candidates.contains(label.getId()) || label.getLabel() == null) {
                 continue;
             }
             List<?> downloads = downloadManager.getLabelDownloadInfoList(label.getLabel());
@@ -460,9 +482,11 @@ public class DownloadLabelsScene extends ToolbarScene {
     private class NewLabelDialogHelper implements View.OnClickListener {
 
         private final EditTextDialogBuilder mBuilder;
+        private final boolean[] mFolder;
 
-        public NewLabelDialogHelper(EditTextDialogBuilder builder, AlertDialog dialog) {
+        public NewLabelDialogHelper(EditTextDialogBuilder builder, AlertDialog dialog, boolean[] folder) {
             mBuilder = builder;
+            mFolder = folder;
             Button button = dialog.getButton(DialogInterface.BUTTON_POSITIVE);
             if (button != null) {
                 button.setOnClickListener(this);
@@ -486,7 +510,8 @@ public class DownloadLabelsScene extends ToolbarScene {
             } else {
                 mBuilder.setError(null);
                 mBuilder.dismiss(() -> {
-                    EhApplication.getDownloadManager(context).addLabel(text);
+                    DownloadManager manager = EhApplication.getDownloadManager(context);
+                    if (mFolder[0]) manager.addLabelFolder(text); else manager.addLabel(text);
                     if (mAdapter != null && mList != null) {
                         mAdapter.notifyItemInserted(mList.size() - 1);
                     }
@@ -536,7 +561,11 @@ public class DownloadLabelsScene extends ToolbarScene {
                 mBuilder.setError(null);
                 mBuilder.dismiss();
             } else if (EhApplication.getDownloadManager(context).containLabel(text)) {
-                showMergeLabelDialog(context, text);
+                DownloadManager manager = EhApplication.getDownloadManager(context);
+                if (manager.findDownloadLabel(mOriginalLabel).getFolder()
+                        || manager.findDownloadLabel(text).getFolder()) {
+                    mBuilder.setError(getString(R.string.label_text_exist));
+                } else showMergeLabelDialog(context, text);
             } else {
                 mBuilder.setError(null);
                 mBuilder.dismiss(() -> {
@@ -569,25 +598,41 @@ public class DownloadLabelsScene extends ToolbarScene {
         }
     }
 
-    private class LabelHolder extends AbstractDraggableItemViewHolder
+    private class LabelHolder extends RecyclerView.ViewHolder
             implements View.OnClickListener {
 
         public final CheckBox selection;
         public final TextView label;
+        public final TextView count;
         public final View dragHandler;
-        public final View delete;
+
 
         public LabelHolder(View itemView) {
             super(itemView);
 
             selection = (CheckBox) ViewUtils.$$(itemView, R.id.selection);
             label = (TextView) ViewUtils.$$(itemView, R.id.label);
+            count = itemView.findViewById(R.id.count);
             dragHandler = ViewUtils.$$(itemView, R.id.drag_handler);
-            delete = ViewUtils.$$(itemView, R.id.delete);
+
 
             selection.setOnClickListener(this);
             label.setOnClickListener(this);
-            delete.setOnClickListener(this);
+            dragHandler.setOnTouchListener((view, event) -> {
+                if (event.getActionMasked() != MotionEvent.ACTION_DOWN || mTouchHelper == null
+                        || mList == null || mDragIds != null) return false;
+                int position = getAdapterPosition();
+                if (position == RecyclerView.NO_POSITION) return false;
+                Long id = mList.get(position).getId();
+                if (!mSelectedLabelIds.isEmpty() && !mSelectedLabelIds.contains(id)) return false;
+                mDragIds = mSelectedLabelIds.isEmpty()
+                        ? new LinkedHashSet<>(java.util.Collections.singleton(id))
+                        : new LinkedHashSet<>(mSelectedLabelIds);
+                mDropTargetId = null;
+                mDragCancelled = false;
+                mTouchHelper.startDrag(this);
+                return true;
+            });
         }
 
         @Override
@@ -609,32 +654,11 @@ public class DownloadLabelsScene extends ToolbarScene {
                 builder.setPositiveButton(android.R.string.ok, null);
                 AlertDialog dialog = builder.show();
                 new RenameLabelDialogHelper(builder, dialog, raw.getLabel(), position);
-            } else if (delete == v) {
-                final DownloadLabel label = mList.get(position);
-                new AlertDialog.Builder(context)
-                    .setTitle(R.string.delete_label_title)
-                    .setMessage(getString(R.string.delete_label_message, label.getLabel()))
-                    .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            EhApplication.getDownloadManager(context).deleteLabel(label.getLabel());
-                        }
-                    })
-                    .setOnDismissListener(new DialogInterface.OnDismissListener() {
-                        @Override
-                        public void onDismiss(DialogInterface dialog) {
-                            if (null != mAdapter) {
-                                mAdapter.notifyDataSetChanged();
-                            }
-                            updateView();
-                        }
-                    }).show();
             }
         }
     }
 
-    private class LabelAdapter extends RecyclerView.Adapter<LabelHolder>
-            implements DraggableItemAdapter<LabelHolder> {
+    private class LabelAdapter extends RecyclerView.Adapter<LabelHolder> {
 
         private final LayoutInflater mInflater;
 
@@ -653,11 +677,19 @@ public class DownloadLabelsScene extends ToolbarScene {
             if (mList != null) {
                 DownloadLabel label = mList.get(position);
                 holder.label.setText(label.getLabel());
+                holder.count.setText(label.getFolder()
+                        ? EhApplication.getDownloadManager(getEHContext()).getFolderCount(label) : "");
                 holder.selection.setChecked(mSelectedLabelIds.contains(label.getId()));
                 holder.selection.setContentDescription(getString(
                         R.string.select_download_label, label.getLabel()));
-                holder.delete.setVisibility(hasSelectionContext()
-                        ? View.GONE : View.VISIBLE);
+                int indent = (int) ((label.getParentId() == null ? 0 : 24)
+                        * getResources().getDisplayMetrics().density);
+                ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) holder.selection.getLayoutParams();
+                params.setMarginStart(indent);
+                holder.selection.setLayoutParams(params);
+                holder.label.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                        label.getFolder() ? R.drawable.v_label_folder_x24 : 0, 0, 0, 0);
+                holder.label.setCompoundDrawablePadding((int) (8 * getResources().getDisplayMetrics().density));
             }
         }
 
@@ -671,80 +703,61 @@ public class DownloadLabelsScene extends ToolbarScene {
             return mList != null ? mList.size() : 0;
         }
 
-        @Override
-        public boolean onCheckCanStartDrag(LabelHolder holder, int position, int x, int y) {
-            if (!ViewUtils.isViewUnder(holder.dragHandler, x, y, 0)) {
-                return false;
-            }
-            if (mSelectedLabelIds.isEmpty()) {
-                return true;
-            }
-            return mList != null && position >= 0 && position < mList.size()
-                    && mSelectedLabelIds.contains(mList.get(position).getId());
-        }
+    }
 
-        @Override
-        public ItemDraggableRange onGetItemDraggableRange(LabelHolder holder, int position) {
-            return null;
-        }
+    /** The model changes only on release: cancelling a drag leaves order and ownership intact. */
+    private class LabelDragCallback extends ItemTouchHelper.SimpleCallback {
+        LabelDragCallback() { super(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0); }
+        @Override public boolean isLongPressDragEnabled() { return false; }
+        @Override public boolean onMove(RecyclerView recycler, RecyclerView.ViewHolder from,
+                RecyclerView.ViewHolder to) { return false; }
+        @Override public void onSwiped(RecyclerView.ViewHolder holder, int direction) {}
 
-        @Override
-        public void onMoveItem(int fromPosition, int toPosition) {
-            Context context = getEHContext();
-            if (null == context || mList == null || fromPosition == toPosition
-                    || fromPosition < 0 || fromPosition >= mList.size()
-                    || toPosition < 0 || toPosition >= mList.size()) {
-                return;
-            }
-
-            if (mDraggedSelectedIds != null) {
-                DownloadLabel anchor = mList.remove(fromPosition);
-                mList.add(toPosition, anchor);
-            } else {
-                EhApplication.getDownloadManager(context).moveLabel(fromPosition, toPosition);
-            }
-        }
-
-        @Override
-        public boolean onCheckCanDrop(int draggingPosition, int dropPosition) {
-            return true;
-        }
-
-        @Override
-        public void onItemDragStarted(int position) {
-            if (mList == null || position < 0 || position >= mList.size()) {
-                return;
-            }
-            DownloadLabel anchor = mList.get(position);
-            Long anchorId = anchor.getId();
-            if (anchorId != null && mSelectedLabelIds.contains(anchorId)) {
-                mDraggedSelectedIds = DownloadLabelListOperations.getSelectedIdsInOrder(
-                        mList, mSelectedLabelIds);
-                mGroupDragStartOrder = new ArrayList<>(mList);
-                mGroupDragAnchorId = anchorId;
-            }
-        }
-
-        @Override
-        public void onItemDragFinished(int fromPosition, int toPosition, boolean result) {
-            Context context = getEHContext();
-            if (context != null && mList != null && mDraggedSelectedIds != null
-                    && mGroupDragStartOrder != null) {
-                DownloadManager manager = EhApplication.getDownloadManager(context);
-                if (result) {
-                    manager.reorderLabels(
-                            DownloadLabelListOperations.placeSelectedGroupAtAnchor(
-                                    mList, mDraggedSelectedIds, mGroupDragAnchorId));
-                } else {
-                    manager.reorderLabels(mGroupDragStartOrder);
+        @Override public void onChildDraw(Canvas canvas, RecyclerView recycler,
+                RecyclerView.ViewHolder holder, float dx, float dy, int state, boolean active) {
+            super.onChildDraw(canvas, recycler, holder, dx, dy, state, active);
+            if (!active || mList == null || mDragIds == null) return;
+            float center = holder.itemView.getTop() + dy + holder.itemView.getHeight() / 2f;
+            mDropTargetId = null;
+            Set<Long> carried = DownloadLabelTree.withChildren(mList, mDragIds);
+            for (int i = 0; i < recycler.getChildCount(); i++) {
+                View row = recycler.getChildAt(i);
+                if (center < row.getTop() || center > row.getBottom()) continue;
+                int position = recycler.getChildAdapterPosition(row);
+                if (position < 0 || position >= mList.size()) continue;
+                DownloadLabel target = mList.get(position);
+                if (carried.contains(target.getId())) return;
+                boolean hasFolder = false;
+                for (DownloadLabel item : mList) {
+                    if (mDragIds.contains(item.getId()) && item.getFolder()) hasFolder = true;
                 }
-                if (mAdapter != null) {
-                    mAdapter.notifyDataSetChanged();
-                }
+                mDropAfter = center >= (row.getTop() + row.getBottom()) / 2f;
+                if (hasFolder && target.getParentId() != null
+                        && (!mDropAfter || !DownloadLabelTree.isLastChild(mList, target))) return;
+                mDropTargetId = target.getId();
+                // Show the exact insertion boundary; a folder header means its first child.
+                android.graphics.Paint paint = new android.graphics.Paint();
+                paint.setColor(AttrResources.getAttrColor(recycler.getContext(), R.attr.widgetColorThemeAccent));
+                paint.setStrokeWidth(3 * getResources().getDisplayMetrics().density);
+                float line = target.getFolder() && !hasFolder ? row.getBottom()
+                        : mDropAfter ? row.getBottom() : row.getTop();
+                canvas.drawLine(!hasFolder && (target.getParentId() != null || target.getFolder())
+                        ? 24 * getResources().getDisplayMetrics().density : 0,
+                        line, row.getRight(), line, paint);
+                break;
             }
-            mDraggedSelectedIds = null;
-            mGroupDragStartOrder = null;
-            mGroupDragAnchorId = -1L;
+        }
+
+        @Override public void clearView(RecyclerView recycler, RecyclerView.ViewHolder holder) {
+            super.clearView(recycler, holder);
+            if (!mDragCancelled && mDropTargetId != null && mDragIds != null && mList != null
+                    && getEHContext() != null) {
+                EhApplication.getDownloadManager(getEHContext()).reorderLabels(
+                        DownloadLabelTree.move(mList, mDragIds, mDropTargetId, mDropAfter));
+            }
+            mDragIds = null;
+            mDropTargetId = null;
+            if (mAdapter != null) mAdapter.notifyDataSetChanged();
         }
     }
 }

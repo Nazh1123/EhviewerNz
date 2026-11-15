@@ -30,7 +30,8 @@ object TranslationStorage {
         }
 
     internal fun hasGalleryDirectory(info: DownloadInfo) = info.archiveUri.isNullOrEmpty() ||
-        LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri)
+        LocalFolderGallerySource.isLocalFolderGallery(info.archiveUri) ||
+        com.hippo.ehviewer.ui.scene.download.part.DownloadAlbumImporter.isLocalAlbum(info)
 
     /** Resolve the actual source folder, including imported SAF galleries outside the download root. */
     @JvmStatic fun sourceDir(context: Context, source: LocalFolderGallerySource): UniFile? {
@@ -48,7 +49,7 @@ object TranslationStorage {
             sourceDir(context, source)
         } else if (ArchiveResultStorage.isArchiveUri(info.archiveUri)) {
             ArchiveResultStorage.directory(context, Uri.parse(info.archiveUri), false)
-        } else if (!info.archiveUri.isNullOrEmpty()) null
+        } else if (!hasGalleryDirectory(info)) null
         else {
             val existing = SpiderDen.getExistingGalleryDownloadDir(info)
             // Generic SAF providers use opaque IDs; subFile's guessed URI may not exist.

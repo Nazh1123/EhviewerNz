@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_label_folder">โฟลเดอร์</string>
+    <string name="download_folder_delete_children">ลบป้ายกำกับภายในโฟลเดอร์</string>
+    <string name="download_labels_sort_name">เรียงตามชื่อ</string>
+    <string name="download_labels_sort_confirm">เรียงรายการที่เลือกตามชื่อหรือไม่? รายการระดับบนสุดและภายในแต่ละโฟลเดอร์จะเรียงแยกกัน</string>
+    <string name="download_label_new">เพิ่ม</string>
+    <string name="download_labels_delete_message">ลบรายการที่เลือก %1$d รายการหรือไม่? การดาวน์โหลดในป้ายกำกับที่ถูกลบจะย้ายไปยังป้ายกำกับเริ่มต้น</string>
+    <string name="download_fast_scroll">เลื่อนอย่างรวดเร็ว</string>
+</resources>

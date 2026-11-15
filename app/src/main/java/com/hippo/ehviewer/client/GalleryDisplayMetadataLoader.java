@@ -30,6 +30,9 @@ public final class GalleryDisplayMetadataLoader {
     private final Runnable flush = this::flush;
     private EhRequest active;
     private int generation;
+    private boolean bulk;
+
+    public void setBulk(boolean value) { bulk = value; }
 
     public GalleryDisplayMetadataLoader(Consumer<EhRequest> execute) {
         this(execute, SubscriptionSearchContext::key);
@@ -70,7 +73,7 @@ public final class GalleryDisplayMetadataLoader {
             main.post(flush);
             return;
         }
-        active = new EhRequest().setMethod(EhClient.METHOD_GET_DISPLAY_METADATA).setArgs(copies, context)
+        active = new EhRequest().setMethod(EhClient.METHOD_GET_DISPLAY_METADATA).setBulk(bulk).setArgs(copies, context)
                 .setCallback(new EhClient.Callback<List<GalleryInfo>>() {
                     @Override public void onSuccess(List<GalleryInfo> result) {
                         if (epoch != generation) return;
@@ -84,6 +87,7 @@ public final class GalleryDisplayMetadataLoader {
                                 if (item.target.pages <= 0) item.target.pages = value.pages;
                                 if (item.target.simpleTags == null) item.target.simpleTags = value.simpleTags;
                                 if (item.target.firstGid == null) item.target.firstGid = value.firstGid;
+                                item.target.apiRating = value.apiRating;
                                 item.changed.run();
                             }
                         }

@@ -19,23 +19,16 @@ package com.hippo.ehviewer.widget;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Resources;
-import android.graphics.Paint;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
-import android.text.InputType;
 import android.util.AttributeSet;
 import android.util.SparseArray;
-import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
-import android.view.inputmethod.EditorInfo;
 import android.widget.CompoundButton;
 import android.widget.FrameLayout;
-import android.widget.EditText;
-import android.widget.RatingBar;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.LinearLayout;
@@ -109,8 +102,7 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
     private int mMinRatingHundredths;
     private boolean mRatingOverride;
     private int mSourceMode = ListUrlBuilder.MODE_NORMAL;
-    private RatingBar mRatingStars;
-    private TextView mRatingValue;
+    private RatingFilterControl mRatingFilter;
 
     private View mAdvanceView;
     private AdvanceSearchTable mTableAdvanceSearch;
@@ -160,17 +152,7 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
         // Create normal view
         View normalView = mInflater.inflate(R.layout.search_normal, null);
         mNormalView = normalView;
-        mRatingStars = normalView.findViewById(R.id.search_rating_stars);
-        mRatingStars.setStepSize(0.01f);
-        mRatingStars.setKeyProgressIncrement(50);
-        mRatingValue = normalView.findViewById(R.id.search_rating_value);
-        mRatingValue.setTextSize(TypedValue.COMPLEX_UNIT_PX, mRatingValue.getTextSize()
-                + TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 2, resources.getDisplayMetrics()));
-        mRatingValue.setPaintFlags(mRatingValue.getPaintFlags() | Paint.UNDERLINE_TEXT_FLAG);
-        mRatingValue.setOnClickListener(v -> showRatingInput());
-        mRatingStars.setOnRatingBarChangeListener((bar, rating, fromUser) -> {
-            if (fromUser) setMinimumRating(Math.round(rating * 2) * 50);
-        });
+        mRatingFilter = new RatingFilterControl(normalView, 0, this::setMinimumRating);
         setMinimumRating(0);
         mRatingOverride = false;
         updateRatingDisplay();
@@ -249,49 +231,11 @@ public class SearchLayout extends EasyRecyclerView implements CompoundButton.OnC
 
     private void updateRatingDisplay() {
         int rating = mRatingOverride ? mMinRatingHundredths : Settings.getPersistentMinRatingHundredths();
-        // RatingBar draws clipped stars; render exact values, but retain half-star touch steps.
-        mRatingStars.setRating(rating / 100f);
-        mRatingValue.setText(SearchRating.format(rating));
+        mRatingFilter.setMinimumRating(rating);
     }
 
     public void setSourceMode(int mode) {
         mSourceMode = mode;
-    }
-
-    private void showRatingInput() {
-        EditText input = new EditText(getContext());
-        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        input.setSingleLine(true);
-        input.setImeOptions(EditorInfo.IME_ACTION_DONE);
-        input.setHint(R.string.search_rating_hint);
-        input.setText(mRatingValue.getText());
-        input.selectAll();
-        AlertDialog dialog = new AlertDialog.Builder(getContext())
-                .setTitle(R.string.search_rating_title)
-                .setMessage(R.string.search_rating_hint)
-                .setView(input)
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(android.R.string.ok, null)
-                .create();
-        dialog.setOnShowListener(ignored -> {
-            View.OnClickListener confirm = v -> {
-                try {
-                    setMinimumRating(SearchRating.parse(input.getText().toString()));
-                    dialog.dismiss();
-                } catch (IllegalArgumentException e) {
-                    input.setError(getContext().getString(R.string.search_rating_invalid));
-                }
-            };
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(confirm);
-            input.setOnEditorActionListener((v, actionId, event) -> {
-                if (actionId != EditorInfo.IME_ACTION_DONE) return false;
-                confirm.onClick(v);
-                return true;
-            });
-            input.requestFocus();
-            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-        });
-        dialog.show();
     }
 
     public void syncPresetTags(String query) {

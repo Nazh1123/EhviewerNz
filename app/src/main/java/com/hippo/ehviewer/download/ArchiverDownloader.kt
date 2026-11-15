@@ -88,18 +88,38 @@ class ArchiverDownloader private constructor(appContext: Context) {
         listeners.remove(listener)
     }
 
+    fun resetQuota(account: String) {
+        val ledger = ArchiveQuota.ledger(appContext)
+        synchronized(ledger) {
+            checkpointQuota()
+            ledger.reset(account)
+        }
+    }
+
+    fun checkpointQuota() {
+        activeTasks.values.forEach { checkpointQuota(it) }
+    }
+
+    private fun checkpointQuota(task: ActiveTask) {
+        ArchiveQuota.ledger(appContext).recordProgress(
+            task.taskId, task.downloaded, System.currentTimeMillis())
+    }
+
     fun getProgress(gid: Long): Progress? {
         val task = activeTasks[gid] ?: return null
         return Progress(task.gid, task.taskId, task.downloaded, task.total, task.speed, task.paused)
     }
 
-    fun start(context: Context, info: GalleryInfo, url: String, fileName: String): Long {
+    @JvmOverloads
+    fun start(context: Context, info: GalleryInfo, url: String, fileName: String,
+              quotaEligible: Boolean = false, quotaAccount: String = ""): Long {
         cancel(info.gid)
         val taskId = taskIdGenerator.incrementAndGet()
         Settings.putArchiverDownloadId(info.gid, taskId)
         Settings.putArchiverDownload(taskId, info)
         Settings.putArchiverDownloadUrl(taskId, url)
         Settings.putArchiverDownloadPaused(taskId, false)
+        ArchiveQuota.ledger(appContext).begin(taskId, quotaAccount, quotaEligible)
         startInternal(info, url, fileName, taskId, false)
         return taskId
     }
@@ -126,6 +146,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
 
     fun cancel(gid: Long) {
         val task = activeTasks.remove(gid) ?: return
+        checkpointQuota(task)
         task.paused = false
         task.call?.cancel()
         deleteZipFile(task.zipFile)
@@ -300,6 +321,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
                         if (activeTasks[info.gid]?.taskId != taskId) {
                             return
                         }
+                        checkpointQuota(task)
                         activeTasks.remove(info.gid)
                         deleteZipFile(zipFile)
                         clearTaskSettings(info.gid, taskId)
@@ -349,6 +371,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
         if (!force && now - task.lastNotifyAt < NOTIFY_INTERVAL_MS) {
             return
         }
+        checkpointQuota(task)
         val elapsed = now - task.lastSpeedAt
         if (elapsed > 0) {
             task.speed = if (task.paused) 0L else task.bytesSinceSpeed * 1000L / elapsed
@@ -385,6 +408,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
     }
 
     private fun clearTaskSettings(gid: Long, taskId: Long) {
+        ArchiveQuota.ledger(appContext).finish(taskId)
         Settings.deleteArchiverDownloadId(gid)
         Settings.deleteArchiverDownload(taskId)
         Settings.deleteArchiverDownloadUrl(taskId)
@@ -405,6 +429,8 @@ class ArchiverDownloader private constructor(appContext: Context) {
     }
 
     private fun notifySuccess(gid: Long, taskId: Long, zipFile: File) {
+        ArchiveQuota.ledger(appContext).recordProgress(taskId, zipFile.length(), System.currentTimeMillis())
+        ArchiveQuota.ledger(appContext).finish(taskId)
         for (listener in listeners) {
             listener.onSuccess(gid, taskId, zipFile)
         }
@@ -450,6 +476,7 @@ class ArchiverDownloader private constructor(appContext: Context) {
             for (taskId in Settings.getPendingArchiverDownloadIds()) {
                 val info = Settings.getArchiverDownload(taskId)
                 if (info == null) {
+                    ArchiveQuota.ledger(context).finish(taskId)
                     Settings.deleteArchiverDownloadUrl(taskId)
                     Settings.deleteArchiverDownloadPaused(taskId)
                     Settings.deleteArchiverDownloadTotal(taskId)
@@ -468,6 +495,8 @@ class ArchiverDownloader private constructor(appContext: Context) {
                 }
                 val total = Settings.getArchiverDownloadTotal(taskId)
                 if (zipFile.exists() && total > 0 && zipFile.length() >= total) {
+                    ArchiveQuota.ledger(context).recordProgress(taskId, zipFile.length(), System.currentTimeMillis())
+                    ArchiveQuota.ledger(context).finish(taskId)
                     ArchiverDownloadCompleter.getInstance(context)
                         ?.importDownloadedZip(zipFile, info, taskId)
                     continue

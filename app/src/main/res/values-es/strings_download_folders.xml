@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="download_label_folder">Carpeta</string>
+    <string name="download_folder_delete_children">Eliminar etiquetas dentro de las carpetas</string>
+    <string name="download_labels_sort_name">Ordenar por nombre</string>
+    <string name="download_labels_sort_confirm">¿Ordenar los elementos seleccionados por nombre? El nivel superior y cada carpeta se ordenan por separado.</string>
+    <string name="download_label_new">Añadir</string>
+    <string name="download_labels_delete_message">¿Eliminar los %1$d elementos seleccionados? Las descargas de las etiquetas eliminadas pasarán a la etiqueta predeterminada.</string>
+    <string name="download_fast_scroll">Desplazamiento rápido</string>
+</resources>

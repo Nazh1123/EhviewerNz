@@ -210,6 +210,12 @@ public class EhDB {
         if (!hasColumn(db, "Gallery_Tags", "LOCATION")) {
             db.execSQL("ALTER TABLE \"Gallery_Tags\" ADD COLUMN \"LOCATION\" TEXT");
         }
+        if (!hasColumn(db, "DOWNLOAD_LABELS", "FOLDER")) {
+            db.execSQL("ALTER TABLE DOWNLOAD_LABELS ADD COLUMN FOLDER INTEGER NOT NULL DEFAULT 0");
+        }
+        if (!hasColumn(db, "DOWNLOAD_LABELS", "PARENT_ID")) {
+            db.execSQL("ALTER TABLE DOWNLOAD_LABELS ADD COLUMN PARENT_ID INTEGER");
+        }
     }
 
     private static boolean hasColumn(SQLiteDatabase db, String table, String column) {
@@ -1116,6 +1122,14 @@ public class EhDB {
     private static void makeUpstreamCompatible(SQLiteDatabase db) {
         db.beginTransaction();
         try {
+            // Upstream has a flat label list. Keep every actual label and gallery, omit folders.
+            db.execSQL("CREATE TABLE DOWNLOAD_LABELS_UPSTREAM ("
+                    + "\"_id\" INTEGER PRIMARY KEY ,\"LABEL\" TEXT,\"TIME\" INTEGER NOT NULL )");
+            db.execSQL("INSERT INTO DOWNLOAD_LABELS_UPSTREAM (_id, LABEL, TIME) "
+                    + "SELECT _id, LABEL, TIME FROM DOWNLOAD_LABELS WHERE FOLDER = 0");
+            db.execSQL("DROP TABLE DOWNLOAD_LABELS");
+            db.execSQL("ALTER TABLE DOWNLOAD_LABELS_UPSTREAM RENAME TO DOWNLOAD_LABELS");
+
             db.execSQL("CREATE TABLE \"DOWNLOADS_UPSTREAM\" (" +
                     "\"GID\" INTEGER PRIMARY KEY NOT NULL ," +
                     "\"TOKEN\" TEXT," +
@@ -1206,10 +1220,14 @@ public class EhDB {
             sendImportProgress(handler, 10);
             DownloadManager manager = EhApplication.getDownloadManager(context);
             // Download label
-            List<DownloadLabel> downloadLabelList = session.getDownloadLabelDao().queryBuilder().list();
-            manager.addDownloadLabel(downloadLabelList);
+            List<DownloadLabel> downloadLabelList = session.getDownloadLabelDao().queryBuilder()
+                    .orderAsc(DownloadLabelDao.Properties.Time).list();
+            java.util.Map<String, String> importedLabelNames = manager.addDownloadLabel(downloadLabelList);
             // Downloads
             List<DownloadInfo> downloadInfoList = session.getDownloadsDao().queryBuilder().list();
+            for (DownloadInfo info : downloadInfoList) {
+                if (importedLabelNames.containsKey(info.label)) info.label = importedLabelNames.get(info.label);
+            }
             java.util.Set<Long> acceptedRangeIds = new java.util.HashSet<>();
             for (DownloadInfo info : downloadInfoList) if (!manager.containDownloadInfo(info.gid)) acceptedRangeIds.add(info.gid);
             com.hippo.ehviewer.download.GalleryDownloadRangeStore.get(context).importBackup(db, acceptedRangeIds);

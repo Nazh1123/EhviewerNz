@@ -8,4 +8,7 @@
     <string name="settings_persistent_min_rating">常時適用する評価フィルター</string>
     <string name="settings_persistent_min_rating_description">すべての検索に適用する最低評価を設定します。それ未満のギャラリーは既定で非表示になります。</string>
     <string name="settings_persistent_min_rating_value">現在：%1$s（0.00 で無効化）</string>
+    <string name="settings_search_category_keyword">キーワード</string>
+    <string name="settings_search_category_gallery_search">ギャラリー検索</string>
+    <string name="settings_search_category_thumbnail">サムネイル</string>
 </resources>
