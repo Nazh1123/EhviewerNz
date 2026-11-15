@@ -657,6 +657,7 @@
     <string name="settings_about_author">開発者</string>
     <string name="settings_about_author_summary" translatable="false">SXJ_LonelyDog &lt;xiaojieonly$foxmail.com&gt;</string>
     <string name="settings_about_telegram" translatable="false">Telegram</string>
+    <string name="settings_about_feature_guide">機能説明</string>
     <string name="settings_about_latest_release">最新バージョン</string>
     <string name="settings_about_website">サイト</string>
     <string name="settings_about_source">ソース</string>

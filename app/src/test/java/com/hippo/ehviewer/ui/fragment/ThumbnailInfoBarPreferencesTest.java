@@ -60,8 +60,7 @@ public class ThumbnailInfoBarPreferencesTest {
             assertFalse(list.contains(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR));
             assertFalse(list.contains(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE));
         }
-        assertEquals(eh.indexOf(Settings.KEY_HISTORY_INFO_SIZE) + 1,
-                eh.indexOf(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));
+        assertFalse(eh.contains(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));
         assertFalse(fork.contains(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));
         List<String> history = keys(R.xml.history_settings);
         assertTrue(history.contains(Settings.KEY_GALLERY_UPDATE_RECORD_LIMIT));

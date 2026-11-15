@@ -658,6 +658,7 @@
     <string name="settings_about_author">Autor</string>
     <string name="settings_about_author_summary" translatable="false">SXJ_LonelyDog &lt;xiaojieonly$foxmail.com&gt;</string>
     <string name="settings_about_telegram" translatable="false">Telegram</string>
+    <string name="settings_about_feature_guide">Descripción de funciones</string>
     <string name="settings_about_latest_release">Última versión</string>
     <string name="settings_about_website">Sitio web</string>
     <string name="settings_about_source">Código fuente</string>

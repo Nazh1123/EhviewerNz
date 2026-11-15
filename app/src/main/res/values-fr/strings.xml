@@ -655,6 +655,7 @@
     <string name="settings_about">À propos de l\'application</string>
     <string name="settings_about_declaration_summary">EhViewer ne s\'affilie à E-Hentai de aucune manière.</string>
     <string name="settings_about_author">Développeur</string>
+    <string name="settings_about_feature_guide">Guide des fonctionnalités</string>
     <string name="settings_about_latest_release">Dernière version</string>
     <string name="settings_about_telegram">Telegram</string>
     <string name="settings_about_website">Site</string>

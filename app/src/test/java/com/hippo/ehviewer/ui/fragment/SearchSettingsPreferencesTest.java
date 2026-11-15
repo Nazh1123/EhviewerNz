@@ -2,6 +2,7 @@ package com.hippo.ehviewer.ui.fragment;
 
 import static org.junit.Assert.*;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.res.XmlResourceParser;
 import android.view.ContextThemeWrapper;
@@ -29,6 +30,7 @@ import org.robolectric.util.ReflectionHelpers;
 @Config(application = Application.class, sdk = 28, manifest = Config.NONE)
 public class SearchSettingsPreferencesTest {
     private SearchFragment fragment;
+    private FragmentActivity host;
 
     @Before public void setUp() {
         Application app = RuntimeEnvironment.getApplication();
@@ -38,7 +40,7 @@ public class SearchSettingsPreferencesTest {
                 .putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true)
                 .putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true).commit();
         Settings.initialize(app);
-        FragmentActivity host = Robolectric.buildActivity(FragmentActivity.class).setup().get();
+        host = Robolectric.buildActivity(FragmentActivity.class).setup().get();
         host.setTheme(R.style.AppTheme);
         fragment = new SearchFragment();
         host.getSupportFragmentManager().beginTransaction().add(fragment, "search-settings").commitNow();
@@ -49,7 +51,7 @@ public class SearchSettingsPreferencesTest {
                 Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, Settings.KEY_SHOW_THUMBNAIL_INFO_TITLE,
                 Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, Settings.KEY_SHOW_THUMBNAIL_INFO_HIGHLIGHT,
                 Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE, Settings.KEY_GALLERY_LONG_PRESS_QUICK_DOWNLOAD,
-                "gallery_preview_immediate_jump"};
+                Settings.KEY_GALLERY_PREVIEW_IMMEDIATE_JUMP, Settings.KEY_SHOW_YESTERDAY_TOP_LIST_NEW_BADGE};
         for (String key : moved) {
             assertNotNull(key, fragment.findPreference(key));
             for (int resource : new int[]{R.xml.eh_settings, R.xml.fork_features_settings,
@@ -117,6 +119,19 @@ public class SearchSettingsPreferencesTest {
         change(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
         assertTrue(Settings.getShowThumbnailInfoDetails());
         assertFalse(fragment.findPreference(Settings.KEY_SHOW_THUMBNAIL_DOWNLOAD_BADGE).isVisible());
+    }
+
+    @Test public void groupedControlsStillNotifyRefreshWhenSettingsChange() throws Exception {
+        for (String key : keys(R.xml.search_settings)) {
+            Preference preference = fragment.findPreference(key);
+            if (!(preference instanceof TwoStatePreference)
+                    && !Settings.KEY_THUMB_SIZE.equals(key)
+                    && !Settings.KEY_PREVIEW_THUMB_SIZE.equals(key)) continue;
+            host.setResult(Activity.RESULT_CANCELED);
+            Object value = preference instanceof TwoStatePreference toggle ? !toggle.isChecked() : "2";
+            assertTrue(key, preference.callChangeListener(value));
+            assertEquals(key, Activity.RESULT_OK, org.robolectric.Shadows.shadowOf(host).getResultCode());
+        }
     }
 
     @Test public void persistentRatingFollowsPrecisionSwitchAndValidatesExactInput() throws Exception {

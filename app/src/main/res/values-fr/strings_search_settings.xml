@@ -8,4 +8,7 @@
     <string name="settings_persistent_min_rating">Filtre de note permanent</string>
     <string name="settings_persistent_min_rating_description">Définit la note minimale par défaut pour chaque recherche. Les galeries moins bien notées sont masquées par défaut.</string>
     <string name="settings_persistent_min_rating_value">Actuel : %1$s (0.00 désactive le filtre)</string>
+    <string name="settings_search_category_keyword">Mots-clés</string>
+    <string name="settings_search_category_gallery_search">Recherche de galeries</string>
+    <string name="settings_search_category_thumbnail">Miniatures</string>
 </resources>

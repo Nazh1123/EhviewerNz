@@ -8,4 +8,7 @@
     <string name="settings_persistent_min_rating">Persistent rating filter</string>
     <string name="settings_persistent_min_rating_description">Set the default minimum rating for every search. Galleries below it are hidden by default.</string>
     <string name="settings_persistent_min_rating_value">Current: %1$s (0.00 disables the filter)</string>
+    <string name="settings_search_category_keyword">Keywords</string>
+    <string name="settings_search_category_gallery_search">Gallery search</string>
+    <string name="settings_search_category_thumbnail">Thumbnails</string>
 </resources>

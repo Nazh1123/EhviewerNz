@@ -9,6 +9,7 @@ import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
 import androidx.preference.Preference;
+import androidx.preference.PreferenceGroup;
 import androidx.appcompat.app.AlertDialog;
 
 import com.hippo.ehviewer.R;
@@ -19,12 +20,7 @@ public final class SearchFragment extends BasePreferenceFragmentCompat {
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
         addPreferencesFromResource(R.xml.search_settings);
-        for (int i = 0; i < getPreferenceScreen().getPreferenceCount(); i++) {
-            getPreferenceScreen().getPreference(i).setOnPreferenceChangeListener((preference, value) -> {
-                notifySettingsChanged();
-                return true;
-            });
-        }
+        bindSettingsChanged(getPreferenceScreen());
         bindPersistentRating();
         ThumbnailInfoBarPreferences.bind(this, this::notifySettingsChanged);
     }
@@ -40,6 +36,20 @@ public final class SearchFragment extends BasePreferenceFragmentCompat {
 
     private void notifySettingsChanged() {
         if (getActivity() != null) getActivity().setResult(Activity.RESULT_OK);
+    }
+
+    private void bindSettingsChanged(PreferenceGroup group) {
+        for (int i = 0; i < group.getPreferenceCount(); i++) {
+            Preference preference = group.getPreference(i);
+            if (preference instanceof PreferenceGroup childGroup) {
+                bindSettingsChanged(childGroup);
+            } else {
+                preference.setOnPreferenceChangeListener((changedPreference, value) -> {
+                    notifySettingsChanged();
+                    return true;
+                });
+            }
+        }
     }
 
     private void bindPersistentRating() {

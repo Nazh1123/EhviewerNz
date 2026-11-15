@@ -1150,6 +1150,7 @@
     <string name="my_tags">แท็กของฉัน</string>
     <string name="preset">ค่าเริ่มต้น</string>
     <string name="settings_about_issue_help">มีปัญหาช่วย</string>
+    <string name="settings_about_feature_guide">คำอธิบายฟังก์ชัน</string>
     <string name="settings_about_latest_release">เวอร์ชันล่าสุด</string>
     <string name="settings_read_auto_transfer_time">การเปลี่ยนหน้าอัตโนมัติ (มิลลิวินาที)</string>
     <string name="settings_read_reverse_volume_page">ทิศทางการหมุนหน้าปุ่มปรับระดับเสียงย้อนกลับ</string>

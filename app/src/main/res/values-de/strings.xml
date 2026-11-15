@@ -707,6 +707,7 @@
     <string name="settings_advanced_wifi_client_summary">Migrationsdaten von Wi-Fi-Hotspots empfangen</string>
     <string name="settings_about">Über die App</string>
     <string name="settings_about_author">Entwickler</string>
+    <string name="settings_about_feature_guide">Funktionsübersicht</string>
     <string name="settings_about_latest_release">Aktuelle Version</string>
     <string name="settings_about_telegram">Telegram</string>
     <string name="settings_advanced_built_in_hosts_summary">Host auf die IP, die nach die App festgelegt werden, umstellen\nKann von angepasstem hosts.txt überschrieben werden</string>

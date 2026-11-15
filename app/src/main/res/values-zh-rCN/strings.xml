@@ -778,7 +778,6 @@
     <string name="settings_advanced_read_cache_size">阅读缓存大小</string>
     <string name="settings_advanced_app_language_title">App 界面语言</string>
     <string name="settings_fork_features">Fork 杂项</string>
-    <string name="settings_fork_category_gallery">画廊与搜索</string>
     <string name="settings_fork_category_reading">阅读与保存</string>
     <string name="settings_fork_category_animated_webp">动态 WebP</string>
     <string name="settings_fork_category_subscriptions">订阅</string>
@@ -833,6 +832,7 @@
     <string name="settings_about">更新与支持</string>
     <string name="settings_about_declaration_summary">EhViewer 与 E-Hentai.org 无任何联系</string>
     <string name="settings_about_author">作者</string>
+    <string name="settings_about_feature_guide">功能说明</string>
     <string name="settings_about_latest_release">最新版本</string>
     <string name="settings_about_website">网站</string>
     <string name="settings_about_source">源码</string>
