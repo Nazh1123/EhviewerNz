@@ -793,6 +793,44 @@ public class PopularGalleryRenderingTest {
         assertEquals(Arrays.asList(190L, 180L), visibleIds());
     }
 
+    @Test public void overlappingBookmarksKeepTheirOwnViewedDividerAndGalleryOrder() {
+        assertOverlappingBookmarkBoundaries(false);
+    }
+
+    @Test public void overlappingSubscribedBookmarksKeepTheirOwnViewedDividerAndGalleryOrder() {
+        assertOverlappingBookmarkBoundaries(true);
+    }
+
+    private void assertOverlappingBookmarkBoundaries(boolean subscribed) {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("bookmark-b");
+        QuickSearch second = builder.toQuickSearch();
+        second.subscribed = subscribed;
+        bookmarks.add(second);
+        refresh(100, 90);
+
+        builder.setKeyword("bookmark-a");
+        QuickSearch first = builder.toQuickSearch();
+        first.subscribed = subscribed;
+        bookmarks.add(first);
+        refresh(110, 100, 90);
+
+        builder.set(second);
+        refresh(120, 110, 100, 95, 90);
+        // 110 was displayed under A, but is still new relative to B's own last visit.
+        assertEquals(Arrays.asList(120L, 110L, 95L, null, 100L, 90L), visibleIds());
+        assertEquals(Arrays.asList(120L, 110L, 100L, 95L, 90L), ids(helper.getData()));
+        Bundle saved = new Bundle();
+        scene.onSaveInstanceState(saved);
+        ReflectionHelpers.callInstanceMethod(scene, "onRestore", ClassParameter.from(Bundle.class, saved));
+        builder = ReflectionHelpers.getField(scene, "mUrlBuilder");
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceDataSetChanged");
+        assertEquals(Arrays.asList(120L, 110L, 95L, null, 100L, 90L), visibleIds());
+        refresh(120, 110, 100, 95, 90);
+        assertEquals(Arrays.asList(null, 120L, 110L, 100L, 95L, 90L), visibleIds());
+    }
+
     @Test public void subscriptionRefreshRecomputesUpdatesAgainstPreviousPublicationState() {
         subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 200);
         ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");

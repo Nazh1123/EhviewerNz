@@ -108,6 +108,12 @@ public final class SearchUpdateSession {
         return result;
     }
 
+    public Set<Long> queryDisplayNewGids() {
+        Set<Long> result = new HashSet<>();
+        for (SearchUpdateStore.Pass pass : passes.values()) result.addAll(pass.queryDisplayNewGids());
+        return result;
+    }
+
     public void commit(boolean browsing) {
         if (!scope.equals(SubscriptionSearchContext.key())) return;
         Set<String> active = new HashSet<>();
