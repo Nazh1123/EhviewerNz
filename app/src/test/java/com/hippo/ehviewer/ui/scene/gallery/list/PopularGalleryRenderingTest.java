@@ -428,10 +428,17 @@ public class PopularGalleryRenderingTest {
         assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
         assertEquals(recycler.getWidth() - recycler.getPaddingLeft() - recycler.getPaddingRight(),
                 divider.getWidth());
-        assertEquals(11, divider.getPaddingTop());
-        assertEquals(11, divider.getPaddingBottom());
-        assertEquals(46, divider.getHeight());
+        assertEquals(34, divider.getPaddingTop());
+        assertEquals(34, divider.getPaddingBottom());
+        assertEquals(92, divider.getHeight());
         assertTrue(divider instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
+
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        assertEquals(scene.getContext().getString(R.string.refresh), divider.getContentDescription());
+        assertTrue(divider.performClick());
+        assertNotEquals(task, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+        assertSame(helper, ReflectionHelpers.getField(scene, "mHelper"));
+        assertSame(builder, ReflectionHelpers.getField(scene, "mUrlBuilder"));
     }
 
     @Test public void headerRefreshAndModeSwitchResetExpansion() {
@@ -569,7 +576,7 @@ public class PopularGalleryRenderingTest {
             adapter.setType(GalleryAdapterNew.TYPE_GRID);
             layout();
             View divider = recycler.findViewHolderForAdapterPosition(2).itemView;
-            assertEquals(46, divider.getHeight());
+            assertEquals(92, divider.getHeight());
             assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
             assertEquals(3, helper.getAdapterPosition(0));
             assertEquals(1, helper.getDataPosition(0));

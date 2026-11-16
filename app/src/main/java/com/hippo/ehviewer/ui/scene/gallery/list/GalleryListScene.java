@@ -4236,6 +4236,9 @@ public class GalleryListScene extends BaseScene
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             params.setFullSpan(true);
             divider.setLayoutParams(params);
+            divider.setOnClickListener(v -> {
+                if (mHelper != null) mHelper.refresh();
+            });
             return new GalleryHolder(divider, null, null, TYPE_INVALID);
         }
 
