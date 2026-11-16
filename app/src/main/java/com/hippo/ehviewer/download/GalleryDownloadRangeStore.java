@@ -93,6 +93,19 @@ public final class GalleryDownloadRangeStore {
         try { save(gid, next); } catch (Exception e) { Log.w("DownloadRange", "Unable to save range progress", e); }
     }
 
+    /** Publish reader progress without doing disk I/O on the render thread. */
+    public synchronized void recordReadingPage(long gid, int sourcePage) {
+        Entry entry = ranges.get(gid);
+        if (entry != null && entry.range.contains(sourcePage))
+            ranges.put(gid, new Entry(entry.range, sourcePage, entry.pending));
+    }
+
+    public synchronized void flushReadingPage(long gid) {
+        Entry entry = ranges.get(gid);
+        if (entry == null) return;
+        try { save(gid, entry); } catch (Exception e) { Log.w("DownloadRange", "Unable to save range progress", e); }
+    }
+
     /** Preserve scope when the app's database backup is moved without its image folders. */
     public void exportBackup(android.database.sqlite.SQLiteDatabase database, Set<Long> downloadedIds) {
         database.execSQL("CREATE TABLE IF NOT EXISTS EH_RANGE_DOWNLOADS (gid INTEGER PRIMARY KEY, payload TEXT NOT NULL)");

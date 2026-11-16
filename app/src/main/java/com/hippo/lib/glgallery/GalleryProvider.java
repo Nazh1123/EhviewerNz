@@ -99,6 +99,9 @@ public abstract class GalleryProvider {
     /** Display/source page identity may differ from the position in a filtered reader. */
     public int getSourcePage(int index) { return index; }
 
+    /** Called on the render thread after an incremental file-list update was applied. */
+    public void onPageListUpdated(int currentIndex) { }
+
     /** The reader owns only the visible original result's decoded image. */
     @UiThread
     public void setOriginalResult(int page, Image image, com.hippo.unifile.UniFile file) {
@@ -418,6 +421,16 @@ public abstract class GalleryProvider {
         notify(NotifyTask.TYPE_DATA_CHANGED, index, 0.0f, null, null);
     }
 
+    /** Old reader positions mapped to the same files in an updated local subset. */
+    public void notifyDataChanged(int[] newPositions) {
+        Listener listener = mListener;
+        GLRoot root = mGLRoot;
+        if (listener != null && root != null) root.addOnGLIdleListener((canvas, requested) -> {
+            listener.onDataChanged(newPositions);
+            return false;
+        });
+    }
+
     public void notifyPageWait(int index) {
         notify(NotifyTask.TYPE_WAIT, index, 0.0f, null, null);
     }
@@ -653,6 +666,8 @@ public abstract class GalleryProvider {
     public interface Listener {
 
         void onDataChanged();
+
+        default void onDataChanged(int[] newPositions) { onDataChanged(); }
 
         void onPageWait(int index);
 

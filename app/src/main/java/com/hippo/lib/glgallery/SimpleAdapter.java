@@ -78,6 +78,19 @@ public class SimpleAdapter extends GalleryView.Adapter implements GalleryProvide
     }
 
     @Override
+    public void onDataChanged(int[] newPositions) {
+        mProvider.onPageListUpdated(mGalleryView.onDataChanged(newPositions));
+    }
+
+    @Override
+    public void onReindex(GalleryPageView page, int index) {
+        super.onReindex(page, index);
+        // Loaded textures retain their zoom, pan and animation state. Restart only pending loads,
+        // since the decoder discarded requests made against the previous file list.
+        if (page.getImageTexture() == null) mProvider.request(index);
+    }
+
+    @Override
     public void onPageWait(int index) {
         GalleryPageView page = findPageByIndex(index);
         if (page != null && !page.mResultImagePending && mProvider.getOriginalResultImage(index) == null) {

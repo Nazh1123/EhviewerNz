@@ -765,6 +765,16 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         }
     }
 
+    @RenderThread
+    public int onDataChanged(int[] newPositions) {
+        GalleryUtils.assertInRenderThread();
+        if (mLayoutManager != null) mLayoutManager.onDataChanged(newPositions);
+        int current = mLayoutManager != null ? mLayoutManager.getCurrentIndex() : GalleryPageView.INVALID_INDEX;
+        int previous = mCurrentIndex.getAndSet(current);
+        if (previous != current && mListener != null) mListener.onUpdateCurrentIndex(current);
+        return current;
+    }
+
     private void onSingleTapUpInternal(float x, float y) {
         onSingleTapConfirmedInternal(x, y);
     }
@@ -1294,6 +1304,8 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
 
         public abstract void onUnbind(GalleryPageView view, int index);
 
+        public void onReindex(GalleryPageView view, int index) { view.setIndex(index); }
+
         /**
          * @return Null for no error
          */
@@ -1335,6 +1347,13 @@ public final class GalleryView extends GLView implements GestureRecognizer.Liste
         public abstract boolean onUpdateAnimation(long time);
 
         public abstract void onDataChanged();
+
+        public void onDataChanged(int[] newPositions) { onDataChanged(); }
+
+        protected static int mappedIndex(int index, int[] newPositions) {
+            return index >= 0 && index < newPositions.length
+                    ? newPositions[index] : GalleryPageView.INVALID_INDEX;
+        }
 
         public abstract void onPageLeft();
 

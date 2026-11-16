@@ -31,6 +31,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.dao.DownloadInfo;
+import com.hippo.ehviewer.download.GalleryDownloadRangeStore;
 import com.hippo.ehviewer.gallery.ImportedGalleryProgress;
 import com.hippo.ehviewer.spider.SpiderInfo;
 import com.hippo.ehviewer.sync.DownloadSpiderInfoExecutor;
@@ -249,6 +250,13 @@ public class DownloadPaginationController {
 
     @SuppressLint("NotifyDataSetChanged")
     public void resetReadingProgressInUi() {
+        Context context = mHost.getEHContext();
+        List<DownloadInfo> list = mHost.getList();
+        if (context != null && list != null) for (DownloadInfo info : list) {
+            GalleryDownloadRangeStore.Entry range = GalleryDownloadRangeStore.peek(info.gid);
+            if (range != null) GalleryDownloadRangeStore.get(context).recordReadingPage(
+                    info.gid, range.range().pages()[0]);
+        }
         for (SpiderInfo spiderInfo : mSpiderInfoMap.values()) {
             if (spiderInfo != null) {
                 spiderInfo.startPage = 0;

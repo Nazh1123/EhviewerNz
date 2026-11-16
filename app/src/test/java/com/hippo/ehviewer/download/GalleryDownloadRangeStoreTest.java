@@ -95,16 +95,122 @@ public class GalleryDownloadRangeStoreTest {
         store.apply(gallery, GalleryPageRange.parse("10,11,20,30", 30));
         store.saveReadingPage(gallery.gid, 29);
         RangeGalleryProvider provider = new RangeGalleryProvider(context, gallery, 18);
-        assertTrue(provider.hasReadablePages());
+        assertTrue(provider.hasSelectedPages());
         assertEquals(2, provider.getStartPage());
         assertEquals(19, provider.getSourcePage(provider.getStartPage()));
         assertEquals(30, provider.getSourcePageCount());
         assertEquals("00000020", provider.getTranslationFilename(2));
         SpiderDen.findImageFile(directory, 19).delete();
         provider = new RangeGalleryProvider(context, gallery, 18);
-        assertTrue(provider.hasReadablePages());
+        assertTrue(provider.hasSelectedPages());
+        assertEquals(2, provider.getStartPage());
+        assertEquals(19, provider.getSourcePage(2));
+    }
+
+    @Test public void fixedRangeIncludesMissingPagesAndNeverAddsUnselectedFiles() throws Exception {
+        store.apply(gallery, GalleryPageRange.parse("10,20,30", 30));
+        SpiderDen.findImageFile(directory, 9).delete();
+        SpiderDen.findImageFile(directory, 19).delete();
+        SpiderDen.findImageFile(directory, 29).delete();
+        RangeGalleryProvider provider = new RangeGalleryProvider(context, gallery, 19);
+        assertTrue(provider.hasSelectedPages());
+        UniFile[] before = ReflectionHelpers.callInstanceMethod(provider, "loadImageFiles");
+        assertEquals(3, before.length);
+        assertArrayEquals(new UniFile[]{null, null, null}, before);
         assertEquals(1, provider.getStartPage());
-        assertEquals(10, provider.getSourcePage(1));
+        assertEquals(19, provider.getSourcePage(1));
+        image(19);
+        image(5); // A full-reader/cache file outside the selected interval stays outside this reader.
+        UniFile[] after = ReflectionHelpers.callInstanceMethod(provider, "loadImageFiles");
+        assertEquals(3, after.length);
+        assertNull(after[0]); assertNotNull(after[1]); assertNull(after[2]);
+        assertEquals(1, provider.getStartPage());
+    }
+
+    @Test public void listProgressAlwaysUsesRangePositionWithoutMutatingFullMetadata() throws Exception {
+        store.apply(gallery, GalleryPageRange.parse("10-20,25-30", 30));
+        com.hippo.ehviewer.spider.SpiderInfo full = new com.hippo.ehviewer.spider.SpiderInfo();
+        full.startPage = 28; full.pages = 30;
+        store.recordReadingPage(gallery.gid, 24);
+        assertEquals(new DownloadReadingProgress(12, 17), DownloadReadingProgress.resolve(gallery.gid, full));
+        assertEquals(new DownloadReadingProgress(12, 17), DownloadReadingProgress.resolve(gallery.gid, null));
+        assertEquals(28, full.startPage); assertEquals(30, full.pages);
+        store.flushReadingPage(gallery.gid);
+        ReflectionHelpers.setStaticField(GalleryDownloadRangeStore.class, "instance", null);
+        store = GalleryDownloadRangeStore.get(context);
+        assertEquals(new DownloadReadingProgress(12, 17), DownloadReadingProgress.resolve(gallery.gid, full));
+        store.saveReadingPage(gallery.gid, 9);
+        assertEquals(new DownloadReadingProgress(1, 17), DownloadReadingProgress.resolve(gallery.gid, full));
+        store.apply(gallery, GalleryPageRange.parse("25-30", 30));
+        assertEquals(new DownloadReadingProgress(1, 6), DownloadReadingProgress.resolve(gallery.gid, full));
+        store.remove(gallery.gid);
+        assertEquals(new DownloadReadingProgress(29, 30), DownloadReadingProgress.resolve(gallery.gid, full));
+        assertNull(DownloadReadingProgress.resolve(gallery.gid, null));
+    }
+
+    @Test public void completedRangePagePublishesOnlyItsFixedSlot() throws Exception {
+        store.apply(gallery, GalleryPageRange.parse("10,20,30", 30));
+        SpiderDen.findImageFile(directory, 19).delete();
+        RangeGalleryProvider provider = new RangeGalleryProvider(context, gallery, 19);
+        java.util.concurrent.BlockingQueue<String> changes = new java.util.concurrent.LinkedBlockingQueue<>();
+        provider.setListener((com.hippo.lib.glgallery.GalleryProvider.Listener) java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class[]{com.hippo.lib.glgallery.GalleryProvider.Listener.class},
+                (proxy, method, args) -> {
+                    changes.add(method.getName() + ":" + (args == null ? "all" : args[0]));
+                    return null;
+                }));
+        provider.setGLRoot((com.hippo.lib.glview.view.GLRoot) java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class[]{com.hippo.lib.glview.view.GLRoot.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("addOnGLIdleListener"))
+                        ((com.hippo.lib.glview.view.GLRoot.OnGLIdleListener) args[0]).onGLIdle(null, false);
+                    return null;
+                }));
+        Thread decoder = new Thread(provider);
+        try {
+            decoder.start();
+            assertEquals("onDataChanged:all", changes.poll(5, TimeUnit.SECONDS));
+            assertEquals(3, provider.size());
+            assertEquals(1, provider.getStartPage());
+            image(19);
+            GalleryDownloadRangeStore.changed(gallery.gid);
+            assertEquals("onDataChanged:1", changes.poll(5, TimeUnit.SECONDS));
+            assertEquals(3, provider.size());
+            assertEquals(19, provider.getSourcePage(1));
+            assertTrue(changes.isEmpty());
+        } finally {
+            decoder.interrupt(); decoder.join(5000); assertFalse(decoder.isAlive());
+            provider.stop();
+        }
+    }
+
+    @Test public void returningFromReaderAndResettingProgressKeepTheListInRangeCoordinates() throws Exception {
+        store.apply(gallery, GalleryPageRange.parse("10,20,30", 30));
+        store.recordReadingPage(gallery.gid, 19);
+        com.hippo.ehviewer.spider.SpiderInfo full = new com.hippo.ehviewer.spider.SpiderInfo();
+        full.gid = gallery.gid; full.token = gallery.token; full.pages = 30; full.startPage = 28;
+        full.previewPages = 1; full.previewPerPage = 40; full.pTokenMap = new android.util.SparseArray<>();
+        try (OutputStream output = directory.findFile(".ehviewer").openOutputStream()) { full.write(output); }
+        com.hippo.ehviewer.dao.DownloadInfo row = new com.hippo.ehviewer.dao.DownloadInfo(gallery.gid);
+        var host = (com.hippo.ehviewer.ui.scene.download.part.DownloadPaginationController.Host)
+                java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                        new Class[]{com.hippo.ehviewer.ui.scene.download.part.DownloadPaginationController.Host.class},
+                        (proxy, method, args) -> switch (method.getName()) {
+                            case "getList" -> java.util.List.of(row);
+                            case "getEHContext" -> context;
+                            case "isContinuousLabelBrowse" -> false;
+                            default -> null;
+                        });
+        var controller = new com.hippo.ehviewer.ui.scene.download.part.DownloadPaginationController(host);
+        controller.updateReadProcess(new androidx.activity.result.ActivityResult(
+                com.hippo.ehviewer.ui.scene.download.DownloadsScene.LOCAL_GALLERY_INFO_CHANGE,
+                new android.content.Intent().putExtra("info", gallery)));
+        com.hippo.ehviewer.spider.SpiderInfo cached = controller.getSpiderInfoMap().get(gallery.gid);
+        assertNotNull(cached);
+        assertEquals(30, cached.pages); assertEquals(28, cached.startPage);
+        assertEquals(new DownloadReadingProgress(2, 3), DownloadReadingProgress.resolve(gallery.gid, cached));
+        controller.resetReadingProgressInUi();
+        assertEquals(new DownloadReadingProgress(1, 3), DownloadReadingProgress.resolve(gallery.gid, cached));
     }
 
     @Test public void databaseBackupPreservesScopeWithoutTheOriginalImageDirectory() throws Exception {

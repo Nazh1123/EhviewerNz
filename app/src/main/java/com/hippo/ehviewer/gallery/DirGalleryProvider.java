@@ -94,6 +94,15 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
     /** Changing local subsets can opt into a cheap revision check on the decoder thread. */
     protected long imageFilesVersion() { return 0L; }
 
+    /** Fixed subsets keep a slot for pages whose local file has not arrived yet. */
+    protected boolean hasFixedPagePositions() { return false; }
+    protected boolean hasSamePageSelection() { return true; }
+    protected boolean hasImageContentChanges() { return false; }
+    protected boolean hasChangedImageFile(int index, UniFile previous, UniFile current) {
+        return !sameFile(previous, current);
+    }
+    protected void onMissingFile(int index) { notifyPageWait(index); }
+
     @Override
     public GalleryProvider2 createTranslationProvider(Context context) {
         return mDir != null ? new DirGalleryProvider(mDir) : null;
@@ -186,7 +195,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         if (fileList == null || index < 0 || index >= fileList.length) {
             return null;
         }
-        return fileList[index].getName();
+        return fileList[index] != null ? fileList[index].getName() : null;
     }
 
     public int findPageAtOrBeforeFilename(@Nullable String filename) {
@@ -223,6 +232,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
             return false;
         }
         UniFile source = fileList[index];
+        if (source == null) return false;
         if (source.getUri().equals(file.getUri())) return true;
         try (InputStream input = source.openInputStream();
              OutputStream output = file.openOutputStream(false)) {
@@ -249,6 +259,7 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
         }
 
         UniFile src = fileList[index];
+        if (src == null) return null;
         String extension = FileUtils.getExtensionFromFilename(getFilename(index));
         SaveResult destination = null;
         try (InputStream input = src.openInputStream()) {
@@ -302,13 +313,33 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
             if (version != filesVersion) {
                 filesVersion = version;
                 UniFile[] updated = loadImageFiles();
-                if (updated != null && !sameFiles(files, updated)) {
-                    synchronized (mRequests) { mRequests.clear(); }
-                    for (int page = 0; page < files.length; page++) removeCache(page);
-                    files = updated;
-                    mFileList.set(files);
-                    mSize = files.length;
-                    notifyDataChanged();
+                if (updated != null && (!sameFiles(files, updated) || !hasSamePageSelection() || hasImageContentChanges())) {
+                    if (hasFixedPagePositions() && hasSamePageSelection() && files.length == updated.length) {
+                        UniFile[] previous = files;
+                        files = updated;
+                        mFileList.set(files);
+                        // Only replace changed slots. Existing textures, pending requests and the
+                        // reader's page count stay intact as individual downloads complete.
+                        for (int page = 0; page < files.length; page++) {
+                            if (hasChangedImageFile(page, previous[page], files[page])) {
+                                removeCache(page);
+                                notifyDataChanged(page);
+                            }
+                        }
+                    } else {
+                        synchronized (mRequests) { mRequests.clear(); }
+                        int[] newPositions = hasFixedPagePositions() ? null : mapFiles(files, updated);
+                        boolean retainPages = newPositions != null && files.length > 0;
+                        for (int page = 0; page < files.length; page++) {
+                            if (newPositions == null || newPositions[page] != page) removeCache(page);
+                            if (newPositions != null && newPositions[page] < 0) retainPages = false;
+                        }
+                        files = updated;
+                        mFileList.set(files);
+                        mSize = files.length;
+                        if (retainPages) notifyDataChanged(newPositions);
+                        else notifyDataChanged();
+                    }
                 }
             }
             int index;
@@ -330,6 +361,12 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
             if (index < 0 || index >= files.length) {
                 mDecodingIndex.lazySet(GalleryPageView.INVALID_INDEX);
                 notifyPageFailed(index, GetText.getString(R.string.error_out_of_range));
+                continue;
+            }
+
+            if (files[index] == null) {
+                mDecodingIndex.lazySet(GalleryPageView.INVALID_INDEX);
+                onMissingFile(index);
                 continue;
             }
 
@@ -356,8 +393,22 @@ public class DirGalleryProvider extends GalleryProvider2 implements Runnable {
 
     private static boolean sameFiles(UniFile[] left, UniFile[] right) {
         if (left.length != right.length) return false;
-        for (int i = 0; i < left.length; i++) if (!left[i].getUri().equals(right[i].getUri())) return false;
+        for (int i = 0; i < left.length; i++) if (!sameFile(left[i], right[i])) return false;
         return true;
+    }
+
+    private static boolean sameFile(UniFile left, UniFile right) {
+        return left == right || (left != null && right != null && left.getUri().equals(right.getUri()));
+    }
+
+    static int[] mapFiles(UniFile[] previous, UniFile[] current) {
+        java.util.Map<android.net.Uri, Integer> positions = new java.util.HashMap<>();
+        for (int i = 0; i < current.length; i++) positions.put(current[i].getUri(), i);
+        int[] result = new int[previous.length];
+        for (int i = 0; i < previous.length; i++) {
+            result[i] = positions.getOrDefault(previous[i].getUri(), GalleryPageView.INVALID_INDEX);
+        }
+        return result;
     }
 
     /** Some URI providers return pipes or generic streams instead of seekable files. */

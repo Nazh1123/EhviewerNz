@@ -3042,7 +3042,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         Context application = getApplicationContext();
         EhApplication.getExecutorService(application).execute(() -> {
             boolean valid = false;
-            try { valid = new RangeGalleryProvider(application, gallery, sourcePage).hasReadablePages(); }
+            try { valid = new RangeGalleryProvider(application, gallery, sourcePage).hasSelectedPages(); }
             catch (RuntimeException e) { Log.w(TAG, "Unable to read downloaded range", e); }
             boolean readable = valid;
             SimpleHandler.getInstance().post(() -> {
@@ -4139,6 +4139,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         public static final int KEY_TAP_MENU_AREA = 4;
         public static final int KEY_TAP_ERROR_TEXT = 5;
         public static final int KEY_LONG_PRESS_PAGE = 6;
+        public static final int KEY_SIZE_RETAINED = 7;
 
         private int mKey;
         private int mValue;
@@ -4208,6 +4209,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     }
                     break;
                 case KEY_SIZE:
+                case KEY_SIZE_RETAINED:
                     GalleryActivity.this.mSize = mValue;
                     if (mGalleryProvider instanceof RangeGalleryProvider range
                             && !GalleryDownloadRangeStore.isRange(mGalleryInfo.gid)
@@ -4218,8 +4220,10 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                     }
                     if (mGalleryProvider instanceof RangeGalleryProvider && mValue > 0) {
                         if (mExistingResults != null) mExistingResults.getResultIndex().reload();
-                        mCurrentIndex = Math.min(mValue - 1, mGalleryProvider.getStartPage());
-                        if (mGalleryView != null) mGalleryView.setCurrentPage(mCurrentIndex);
+                        if (mKey == KEY_SIZE) {
+                            mCurrentIndex = Math.min(mValue - 1, mGalleryProvider.getStartPage());
+                            if (mGalleryView != null) mGalleryView.setCurrentPage(mCurrentIndex);
+                        }
                     }
                     if (mPendingUpdateStart && mValue > 0 && mGalleryProvider != null) {
                         mPendingUpdateStart = false;
@@ -4287,13 +4291,23 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
         public void onDataChanged() {
             super.onDataChanged();
 
+            notifySizeChanged(NotifyTask.KEY_SIZE);
+        }
+
+        @Override
+        public void onDataChanged(int[] newPositions) {
+            super.onDataChanged(newPositions);
+            notifySizeChanged(NotifyTask.KEY_SIZE_RETAINED);
+        }
+
+        private void notifySizeChanged(int key) {
             if (mGalleryProvider != null) {
                 int size = mGalleryProvider.size();
                 NotifyTask task = mNotifyTaskPool.pop();
                 if (task == null) {
                     task = new NotifyTask();
                 }
-                task.setData(NotifyTask.KEY_SIZE, size);
+                task.setData(key, size);
                 SimpleHandler.getInstance().post(task);
             }
         }

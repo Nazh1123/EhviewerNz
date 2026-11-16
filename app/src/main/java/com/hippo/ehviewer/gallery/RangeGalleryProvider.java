@@ -8,17 +8,20 @@ import com.hippo.ehviewer.download.GalleryDownloadRangeStore;
 import com.hippo.ehviewer.download.GalleryPageRange;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.unifile.UniFile;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
 
-/** Local-only view of the readable pages belonging to the current download range. */
+/** Fixed download-range pages; missing local files remain waiting slots in the reader. */
 public final class RangeGalleryProvider extends DirGalleryProvider {
     private final Context context;
     private final GalleryInfo gallery;
     private final boolean watch;
     private int anchorSource;
     private boolean repositioning;
+    private boolean sameSelection;
+    private long[] fileSizes = new long[0];
+    private long[] fileTimes = new long[0];
+    private java.util.BitSet changedFiles = new java.util.BitSet();
     private long progressSequence;
     private volatile int start;
     private volatile int[] sourcePages = new int[0];
@@ -36,23 +39,41 @@ public final class RangeGalleryProvider extends DirGalleryProvider {
         GalleryDownloadRangeStore.Entry entry = GalleryDownloadRangeStore.peek(gallery.gid);
         anchorSource = sourceStartPage >= 0 ? sourceStartPage : entry != null ? entry.readingPage() : 0;
     }
-    public boolean hasReadablePages() { return loadImageFiles().length > 0; }
+    public boolean hasSelectedPages() { return loadImageFiles().length > 0; }
     @Override protected long imageFilesVersion() { return watch ? 1L + GalleryDownloadRangeStore.version(gallery.gid) : 0L; }
+    @Override protected boolean hasFixedPagePositions() { return true; }
+    @Override protected boolean hasSamePageSelection() { return sameSelection; }
+    @Override protected boolean hasImageContentChanges() { return !changedFiles.isEmpty(); }
+    @Override protected boolean hasChangedImageFile(int index, UniFile previous, UniFile current) {
+        return changedFiles.get(index) || super.hasChangedImageFile(index, previous, current);
+    }
     @Override protected synchronized UniFile[] loadImageFiles() {
         GalleryDownloadRangeStore.Entry entry = GalleryDownloadRangeStore.peek(gallery.gid);
         directory = SpiderDen.getExistingGalleryDownloadDir(gallery);
         total = entry != null ? entry.range().totalPages : gallery.pages;
-        ArrayList<UniFile> files = new ArrayList<>();
-        ArrayList<Integer> pages = new ArrayList<>();
-        if (entry != null && directory != null) for (int page : entry.range().pages()) {
-            UniFile file = SpiderDen.findImageFile(directory, page);
-            if (file != null && SpiderDen.isReadableImage(file)) { files.add(file); pages.add(page); }
+        int[] next = entry != null ? entry.range().pages() : new int[0];
+        UniFile[] files = new UniFile[next.length];
+        long[] sizes = new long[next.length];
+        long[] times = new long[next.length];
+        java.util.BitSet changes = new java.util.BitSet();
+        if (directory != null) for (int index = 0; index < next.length; index++) {
+            UniFile file = SpiderDen.findImageFile(directory, next[index]);
+            if (file != null && SpiderDen.isReadableImage(file)) {
+                files[index] = file;
+                sizes[index] = file.length();
+                times[index] = file.lastModified();
+            }
+            if (index >= fileSizes.length || sizes[index] != fileSizes[index] || times[index] != fileTimes[index])
+                changes.set(index);
         }
-        int[] next = pages.stream().mapToInt(Integer::intValue).toArray();
+        fileSizes = sizes;
+        fileTimes = times;
+        changedFiles = changes;
         start = Math.max(0, GalleryPageRange.positionForSourcePage(anchorSource, next));
-        if (!Arrays.equals(sourcePages, next)) repositioning = true;
+        sameSelection = Arrays.equals(sourcePages, next);
+        if (!sameSelection) repositioning = true;
         sourcePages = next;
-        return files.toArray(new UniFile[0]);
+        return files;
     }
     @Override public int getStartPage() { return start; }
     public synchronized int getAnchorSourcePage() { return anchorSource; }
@@ -71,15 +92,22 @@ public final class RangeGalleryProvider extends DirGalleryProvider {
     @Override public GalleryProvider2 createTranslationProvider(Context context) {
         return new RangeGalleryProvider(context, gallery, anchorSource, false);
     }
+    @Override public synchronized void onPageListUpdated(int currentIndex) {
+        repositioning = false;
+        if (currentIndex >= 0) start = currentIndex;
+        putStartPage(currentIndex);
+    }
     @Override public synchronized void putStartPage(int page) {
         if (page < 0 || page >= sourcePages.length || (repositioning && page != start)) return;
         repositioning = false;
         anchorSource = sourcePages[page];
-        int source = anchorSource;
+        // The download list can return before the disk worker runs. Publish the latest
+        // source position immediately, then persist the same shared value off the GL thread.
+        GalleryDownloadRangeStore.get(context).recordReadingPage(gallery.gid, anchorSource);
         long sequence = ++progressSequence;
         EhApplication.getExecutorService(context).execute(() -> {
             synchronized (RangeGalleryProvider.this) {
-                if (sequence == progressSequence) GalleryDownloadRangeStore.get(context).saveReadingPage(gallery.gid, source);
+                if (sequence == progressSequence) GalleryDownloadRangeStore.get(context).flushReadingPage(gallery.gid);
             }
         });
     }
