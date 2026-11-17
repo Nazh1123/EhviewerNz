@@ -12,6 +12,12 @@
             android:summary="@string/settings_reader_page_preview_summary"
             app:allowDividerAbove="false" />
 
+        <com.hippo.preference.SwitchPreference
+            android:key="reader_prefer_existing_results"
+            android:defaultValue="false"
+            android:title="@string/reader_prefer_existing_results"
+            android:summary="@string/reader_prefer_existing_results_help" />
+
         <Preference
             android:key="manual_image_save_location"
             android:title="@string/settings_download_manual_save_location"

@@ -886,7 +886,7 @@
     <string name="settings_fork_features">Fork Misc</string>
     <string name="settings_fork_category_gallery">Gallery and Search</string>
     <string name="settings_fork_category_reading">Reading and Saving</string>
-    <string name="settings_fork_category_animated_webp">Animated WebP</string>
+    <string name="settings_fork_category_animated_webp">Animated Image</string>
     <string name="settings_fork_category_subscriptions">Subscriptions</string>
     <string name="settings_fork_category_downloads">Download Management</string>
     <string name="settings_fork_delete_empty_galleries">Delete Empty Galleries</string>
@@ -1341,6 +1341,7 @@
     <string name="offline_gallery_saved_rating">Saved rating</string>
     <string name="settings_bookmark_subscription_management">Manage bookmark subscriptions</string>
     <string name="settings_subscription_sidebar_buttons">Sidebar button visibility</string>
+    <string name="settings_subscription_updates">Subscription Updates</string>
     <string name="settings_subscription_sidebar_eh">EH subscription</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">Automatically update bookmark subscriptions</string>
     <string name="settings_test_bookmark_subscription">Test bookmark subscriptions</string>
