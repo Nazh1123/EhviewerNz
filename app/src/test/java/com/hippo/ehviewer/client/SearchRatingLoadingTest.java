@@ -474,6 +474,35 @@ public class SearchRatingLoadingTest {
         assertEquals(1, apiRequests.get());
     }
 
+    @Test public void queryLocalCheckRetainsSnapshotDataWithoutOptionalDisplayMetadata() throws Throwable {
+        var doc = org.jsoup.Jsoup.parse(html);
+        doc.select(".glname table").remove();
+        html = doc.outerHtml();
+        Settings.putBoolean("show_gallery_pages", true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_BAR, true);
+        Settings.putBoolean(Settings.KEY_SHOW_THUMBNAIL_INFO_DETAILS, true);
+        var result = EhEngine.getGalleryList(null, client(false), FIRST, ListUrlBuilder.MODE_NORMAL,
+                true, false, 0, false, null, null, true);
+        assertNotNull(result.subscriptionDisplayGalleries);
+        assertFalse(result.subscriptionDisplayGalleries.isEmpty());
+        assertEquals(result.galleryInfoList.size(), result.subscriptionDisplayGalleries.size());
+        assertEquals(0, apiRequests.get());
+        assertTrue(result.subscriptionDisplayGalleries.stream().anyMatch(g -> g.simpleTags == null));
+    }
+
+    @Test public void snapshotCheckCorrectsPersonalRatingsBeforeRetainingTheDisplay() throws Throwable {
+        GalleryInfo gallery = new GalleryInfo();
+        gallery.gid = 1; gallery.token = "token"; gallery.rated = true; gallery.rating = 5;
+        var rows = new java.util.ArrayList<>(java.util.List.of(gallery));
+        var method = EhEngine.class.getDeclaredMethod("fillGalleryList", EhClient.Task.class, OkHttpClient.class,
+                java.util.List.class, String.class, boolean.class, String.class, boolean.class, boolean.class, boolean.class);
+        method.setAccessible(true);
+        method.invoke(null, null, client(false), rows, FIRST, true, subscriptionScope, false, true, true);
+        assertEquals(java.util.Set.of(1L), apiGids);
+        assertEquals(4.5f, gallery.rating, 0);
+        assertTrue(gallery.hasApiRating());
+    }
+
     @Test public void checkStillResolvesMissingUploadersForEnabledBlockFilter() throws Throwable {
         var doc = org.jsoup.Jsoup.parse(html);
         doc.select(".glhide a, .gl3e a").remove();

@@ -265,7 +265,7 @@ public class EhEngine {
             boolean needUploader = sEhFilter.needUploader();
             List<GalleryInfo> missing = new ArrayList<>();
             for (GalleryInfo gallery : list) {
-                if (preciseRating || (needTags && gallery.simpleTags == null)
+                if (preciseRating || (gallery.rated && !gallery.hasApiRating()) || (needTags && gallery.simpleTags == null)
                         || (needUploader && TextUtils.isEmpty(gallery.uploader))) missing.add(gallery);
             }
             if (!missing.isEmpty()) {
@@ -456,7 +456,9 @@ public class EhEngine {
         prepareGalleryList(task, okHttpClient, requestUrl, mode, result, subscriptionScope,
                 requireUploader && (checkCursor == null || prepareSubscriptionDisplay), minRatingHundredths,
                 (checkCursor != null && !prepareSubscriptionDisplay) || homepageMatcher != null || queryLocalCheck);
-        if (queryLocalCheck && !needsSubscriptionDisplayMetadata(result.galleryInfoList)) {
+        if (queryLocalCheck) {
+            // Required filters and personal-rating correction are complete. Optional thumbnail
+            // details are filled after display, so retain the usable page for the final snapshot.
             result.subscriptionDisplayGalleries = SubscriptionGallerySnapshot.copy(result.galleryInfoList);
         }
         if (checkCursor != null && prepareSubscriptionDisplay) {
@@ -522,16 +524,6 @@ public class EhEngine {
                     requireUploader, minRatingHundredths, false);
         }
         return result;
-    }
-
-    private static boolean needsSubscriptionDisplayMetadata(List<GalleryInfo> galleries) {
-        boolean details = Settings.isThumbnailInfoBarEffective() && Settings.getShowThumbnailInfoDetails();
-        for (GalleryInfo gallery : galleries) {
-            if ((Settings.getShowGalleryPages() || details) && gallery.pages == 0) return true;
-            if (details && gallery.simpleTags == null) return true;
-            if (gallery.rated) return true;
-        }
-        return false;
     }
 
     /** Enrich a retained search response without repeating the HTML request. */
