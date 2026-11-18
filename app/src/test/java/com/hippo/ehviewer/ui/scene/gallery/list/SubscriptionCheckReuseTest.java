@@ -452,7 +452,7 @@ public class SubscriptionCheckReuseTest {
         var coordinator = new BookmarkSubscriptionCoordinator(client, scene);
         coordinator.refresh(1, bookmarks, true, restored);
         int before = requests.size();
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals("https://e-hentai.org/watched?next=90", requests.get(before).getArgs()[0]);
         succeed(before, page(70, null));
         flushResultWrites();
@@ -618,7 +618,7 @@ public class SubscriptionCheckReuseTest {
         }
         assertEquals(Collections.singletonList(true), more);
         assertEquals(4, requests.size()); // do not scan indefinitely when both extra pages were empty
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals(5, requests.size());
         assertFalse(((String) requests.get(4).getArgs()[0]).contains("f_sr"));
         coordinator.cancel();
@@ -755,7 +755,7 @@ public class SubscriptionCheckReuseTest {
                 manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
         assertEquals(Collections.singletonList(200L), displayed);
         assertEquals(2, requests.size());
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals(3, requests.size());
         assertEquals("https://e-hentai.org/watched?next=90", requests.get(2).getArgs()[0]);
         coordinator.cancel();
@@ -791,7 +791,7 @@ public class SubscriptionCheckReuseTest {
         assertEquals(List.of(List.of(200L, 90L)), shown);
         assertEquals(2, requests.size());
         assertTrue(((List<?>) ReflectionHelpers.getField(coordinator, "mSources")).isEmpty());
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals(3, requests.size());
         assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(2).getMethod());
         assertEquals("https://e-hentai.org/watched?next=90", requests.get(2).getArgs()[0]);
@@ -805,7 +805,7 @@ public class SubscriptionCheckReuseTest {
     @Test public void cancelledPaginationDoesNotChangeTheFrozenFirstBatch() {
         var cached = lightweightCheck();
         var coordinator = refresh(true, cached);
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         requests.get(2).getCallback().onFailure(new java.io.IOException("offline"));
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
         assertEquals(4, requests.size());
@@ -1318,11 +1318,11 @@ public class SubscriptionCheckReuseTest {
         coordinator.refresh(1, List.of(), true, cached);
         assertEquals(List.of(List.of(100L, 99L, 90L)), shown);
         assertEquals(4, requests.size());
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals("https://e-hentai.org/watched?next=80", requests.get(4).getArgs()[0]);
         succeed(4, listPage(null, 70L));
         assertEquals(List.of(89L, 80L, 79L), shown.get(1));
-        coordinator.loadMore(3);
+        coordinator.loadMore(3, 0);
         assertEquals("https://e-hentai.org/?next=79", requests.get(5).getArgs()[0]);
         succeed(5, listPage(null, 69L));
         assertEquals(List.of(70L, 69L), shown.get(2));
@@ -1375,6 +1375,72 @@ public class SubscriptionCheckReuseTest {
         assertSame(previous, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
                 .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
         coordinator.cancel();
+    }
+
+    @Test public void restoredSearchAttributionSurvivesRestartAndChangedBookmarks() throws Exception {
+        enableBookmark();
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        flushResultWrites();
+        manager = new SubscriptionUpdateManager(RuntimeEnvironment.getApplication());
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        bookmarks.get(0).keyword = "edited";
+        var coordinator = refresh(true, cached);
+        assertFalse(coordinator.hasSearchForGallery(200L));
+        assertTrue(coordinator.hasSearchForGallery(199L));
+        assertEquals("test", coordinator.buildSearchForGallery(199L).getKeyword());
+        assertEquals(2, requests.size());
+    }
+
+    @Test public void changedConditionsAllowBufferedResultsButRefreshBeforeRequestingAnotherPage() {
+        enableBookmark();
+        start(true);
+        var watched = page(200, "https://e-hentai.org/watched?next=180");
+        watched.rawTailGid = 180;
+        succeed(0, watched);
+        succeed(1, page(199, null));
+        succeed(2, page(179, null));
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        List<List<Long>> batches = new ArrayList<>();
+        List<Integer> refreshTasks = new ArrayList<>();
+        var coordinator = new BookmarkSubscriptionCoordinator(client, new BookmarkSubscriptionCoordinator.Listener() {
+            @Override public void onBookmarkSubscriptionBatch(int task, List<GalleryInfo> data,
+                    boolean more, boolean refresh, boolean empty, boolean partial) {
+                batches.add(data.stream().map(g -> g.gid).toList());
+            }
+            @Override public void onBookmarkSubscriptionContextChanged(int task) { refreshTasks.add(task); }
+            @Override public void onBookmarkSubscriptionFailure(int task, Exception error) { throw new AssertionError(error); }
+        });
+        // Changing only the subscribed query also invalidates its old cursor.
+        bookmarks.get(0).keyword = "edited";
+        coordinator.refresh(1, List.of(), true, cached, 0);
+        assertEquals(List.of(List.of(200L)), batches);
+        coordinator.loadMore(2, 0);
+        assertEquals(List.of(List.of(200L), List.of(199L)), batches);
+        assertTrue(refreshTasks.isEmpty());
+        coordinator.loadMore(3, 0);
+        assertEquals(List.of(3), refreshTasks);
+        assertEquals(3, requests.size());
+    }
+
+    @Test public void freshSnapshotKeepsBookmarkAttributionFromAnAlreadyConsumedPage() throws Exception {
+        enableBookmark();
+        var scene = new GalleryListScene();
+        ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+        var coordinator = new BookmarkSubscriptionCoordinator(client, scene);
+        coordinator.refresh(1, bookmarks, true, null);
+        succeed(0, listPage(null, 200L, 100L));
+        succeed(1, page(200L, "https://e-hentai.org/?next=200"));
+        assertEquals(3, requests.size());
+        succeed(2, page(150L, null));
+        flushResultWrites();
+        manager = new SubscriptionUpdateManager(RuntimeEnvironment.getApplication());
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        var restored = refresh(true, cached);
+        assertTrue(restored.hasSearchForGallery(200L));
+        assertTrue(restored.hasSearchForGallery(150L));
+        assertEquals("test", restored.buildSearchForGallery(200L).getKeyword());
     }
 
     private static GalleryListParser.Result listPage(String next, Long... gids) {

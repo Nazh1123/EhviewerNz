@@ -19,7 +19,6 @@ import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
@@ -146,7 +145,8 @@ public final class SubscriptionUpdateManager {
         private final List<QuickSearch> mBookmarks;
 
         private RecentCheckSource(ListUrlBuilder builder, @Nullable BookmarkSubscriptionPlanner.Source plan,
-                GalleryListParser.Result page, int rating, long started) {
+                GalleryListParser.Result page, int rating, long started,
+                boolean hasBoundary, boolean exhausted) {
             completedRealtime = SystemClock.elapsedRealtime();
             completedTimeMillis = System.currentTimeMillis();
             startedRealtime = started;
@@ -156,14 +156,14 @@ public final class SubscriptionUpdateManager {
                     && page.subscriptionDisplayGalleries == null;
             mBuilder.set(builder);
             mBookmarkSourceKey = plan != null ? plan.getCacheKey() : null;
-            mBookmarks = plan == null ? List.of() : JSON.parseArray(
-                    JSON.toJSONString(plan.getBookmarks()), QuickSearch.class);
-            galleryInfoList = Collections.unmodifiableList(SubscriptionGallerySnapshot.copy(
-                    page.subscriptionDisplayGalleries != null ? page.subscriptionDisplayGalleries
-                    : page.subscriptionRawGalleries != null ? page.subscriptionRawGalleries : page.galleryInfoList));
-            rawGalleries = Collections.unmodifiableList(SubscriptionGallerySnapshot.copy(
-                    page.rawGalleries != null ? page.rawGalleries
-                    : page.subscriptionRawGalleries != null ? page.subscriptionRawGalleries : page.galleryInfoList));
+            mBookmarks = plan == null ? List.of() : plan.getBookmarks().stream()
+                    .map(RecentCheckSource::copyBookmark).toList();
+            List<GalleryInfo> display = page.subscriptionDisplayGalleries != null ? page.subscriptionDisplayGalleries
+                    : page.subscriptionRawGalleries != null ? page.subscriptionRawGalleries : page.galleryInfoList;
+            List<GalleryInfo> raw = page.rawGalleries != null ? page.rawGalleries
+                    : page.subscriptionRawGalleries != null ? page.subscriptionRawGalleries : page.galleryInfoList;
+            galleryInfoList = List.copyOf(SubscriptionGallerySnapshot.copy(display));
+            rawGalleries = raw == display ? galleryInfoList : List.copyOf(SubscriptionGallerySnapshot.copy(raw));
             rawPublicationTimes = Collections.unmodifiableMap(new HashMap<>(page.rawPublicationTimes));
             observed = page.rawSeenState.observe(page.galleryInfoList);
             initialResultCount = page.rawResultCount;
@@ -171,9 +171,17 @@ public final class SubscriptionUpdateManager {
             nextHref = page.nextHref;
             boundaryPosted = page.rawTailPosted;
             boundaryGid = page.rawTailGid;
-            hasBoundary = page.rawResultCount > 0;
-            exhausted = TextUtils.isEmpty(page.nextHref)
-                    && !(page.pages > 0 && pageIndex + 1 < page.pages);
+            this.hasBoundary = hasBoundary;
+            this.exhausted = exhausted;
+        }
+
+        private static QuickSearch copyBookmark(QuickSearch bookmark) {
+            QuickSearch copy = new QuickSearch(bookmark.id, bookmark.name, bookmark.mode, bookmark.category,
+                    bookmark.keyword, bookmark.advanceSearch, bookmark.minRating, bookmark.pageFrom,
+                    bookmark.pageTo, bookmark.time, bookmark.subscribed);
+            copy.minRatingHundredths = bookmark.minRatingHundredths;
+            copy.ratingOverride = bookmark.ratingOverride;
+            return copy;
         }
 
         public boolean isEhSubscription() {
@@ -199,7 +207,10 @@ public final class SubscriptionUpdateManager {
                 @Nullable BookmarkSubscriptionPlanner.Source plan, GalleryListParser.Result page,
                 int ratingMinimumHundredths, long startedRealtime) {
             if (page.firstPageForCache != null) page = page.firstPageForCache;
-            return new RecentCheckSource(builder, plan, page, ratingMinimumHundredths, startedRealtime);
+            boolean exhausted = TextUtils.isEmpty(page.nextHref)
+                    && !(page.pages > 0 && builder.getPageIndex() + 1 < page.pages);
+            return new RecentCheckSource(builder, plan, page, ratingMinimumHundredths, startedRealtime,
+                    page.rawResultCount > 0, exhausted);
         }
 
         boolean sameSource(RecentCheckSource other) {
@@ -207,15 +218,15 @@ public final class SubscriptionUpdateManager {
                     : mBookmarkSourceKey != null && mBookmarkSourceKey.equals(other.mBookmarkSourceKey);
         }
 
-        RecentCheckSource(JSONObject saved) {
+        RecentCheckSource(JSONObject saved, @Nullable SubscriptionGalleryTable galleryTable) {
             ratingMinimumHundredths = saved.getIntValue("rating");
             requiresDisplayPreparation = saved.getBooleanValue("prepare");
             mBuilder.setMode(saved.getBooleanValue("eh")
                     ? ListUrlBuilder.MODE_SUBSCRIPTION : ListUrlBuilder.MODE_NORMAL);
             mBookmarkSourceKey = saved.getString("bookmark");
             if (!isEhSubscription() && mBookmarkSourceKey == null) throw new IllegalArgumentException("Missing source");
-            galleryInfoList = Collections.unmodifiableList(readGalleries(saved.getJSONArray("galleries")));
-            rawGalleries = Collections.unmodifiableList(readGalleries(saved.getJSONArray("raw")));
+            galleryInfoList = readGalleries(saved.getJSONArray("galleries"), galleryTable);
+            rawGalleries = readGalleries(saved.getJSONArray("raw"), galleryTable);
             observed = GallerySeenState.parse(saved.getString("observed"));
             Map<Long, String> times = new HashMap<>();
             JSONObject savedTimes = saved.getJSONObject("publicationTimes");
@@ -243,11 +254,12 @@ public final class SubscriptionUpdateManager {
             startedRealtime = elapsed - (now - startedTimeMillis);
         }
 
-        JSONObject toJson() {
+        JSONObject toJson(SubscriptionGalleryTable galleryTable) {
             JSONObject saved = new JSONObject();
             saved.put("eh", isEhSubscription()); saved.put("bookmark", mBookmarkSourceKey);
             saved.put("rating", ratingMinimumHundredths); saved.put("prepare", requiresDisplayPreparation);
-            saved.put("galleries", writeGalleries(galleryInfoList)); saved.put("raw", writeGalleries(rawGalleries));
+            saved.put("galleries", galleryTable.references(galleryInfoList));
+            saved.put("raw", galleryTable.references(rawGalleries));
             JSONObject times = new JSONObject();
             rawPublicationTimes.forEach((gid, posted) -> times.put(Long.toString(gid), posted));
             saved.put("observed", observed.serialize()); saved.put("publicationTimes", times);
@@ -259,27 +271,14 @@ public final class SubscriptionUpdateManager {
             return saved;
         }
 
-        static JSONArray writeGalleries(List<GalleryInfo> galleries) {
-            JSONArray saved = new JSONArray();
-            for (GalleryInfo gallery : galleries) {
-                JSONObject item = (JSONObject) JSON.toJSON(gallery);
-                if (Float.isFinite(gallery.apiRating)) item.put("apiRating", gallery.apiRating);
-                saved.add(item);
-            }
-            return saved;
-        }
-
-        static List<GalleryInfo> readGalleries(JSONArray saved) {
+        static List<GalleryInfo> readGalleries(JSONArray saved, @Nullable SubscriptionGalleryTable galleryTable) {
             if (saved == null) throw new IllegalArgumentException("Missing galleries");
-            List<GalleryInfo> galleries = new ArrayList<>();
+            List<GalleryInfo> galleries = new ArrayList<>(saved.size());
             for (int i = 0; i < saved.size(); i++) {
-                JSONObject item = saved.getJSONObject(i);
-                GalleryInfo gallery = item.toJavaObject(GalleryInfo.class);
-                if (gallery.gid <= 0) throw new IllegalArgumentException("Invalid gallery");
-                gallery.apiRating = item.containsKey("apiRating") ? item.getFloatValue("apiRating") : Float.NaN;
-                galleries.add(gallery);
+                galleries.add(galleryTable == null ? SubscriptionGalleryTable.readGallery(saved.getJSONObject(i))
+                        : galleryTable.gallery(saved.getInteger(i)));
             }
-            return galleries;
+            return List.copyOf(galleries);
         }
 
         public ListUrlBuilder continuationBuilder() { return mBuilder.clone(); }
@@ -295,27 +294,49 @@ public final class SubscriptionUpdateManager {
             return plans.get(0);
         }
 
-        RecentCheckSource withGalleries(List<GalleryInfo> galleries) {
-            JSONObject saved = toJson();
-            saved.put("galleries", writeGalleries(galleries));
-            saved.put("prepare", false);
-            return new RecentCheckSource(saved);
+        List<QuickSearch> bookmarks() { return mBookmarks; }
+
+        RecentCheckSource withSortedGalleries() {
+            List<GalleryInfo> sorted = SubscriptionGallerySnapshot.copy(galleryInfoList);
+            sorted.sort(SubscriptionDisplaySnapshot.NEWEST_FIRST);
+            return new RecentCheckSource(this, sorted);
+        }
+
+        private RecentCheckSource(RecentCheckSource source, List<GalleryInfo> galleries) {
+            mBuilder.set(source.mBuilder);
+            mBookmarkSourceKey = source.mBookmarkSourceKey;
+            mBookmarks = source.mBookmarks;
+            ratingMinimumHundredths = source.ratingMinimumHundredths;
+            requiresDisplayPreparation = false;
+            galleryInfoList = List.copyOf(galleries);
+            rawGalleries = source.rawGalleries;
+            rawPublicationTimes = source.rawPublicationTimes;
+            observed = source.observed;
+            initialResultCount = source.initialResultCount;
+            pageIndex = source.pageIndex;
+            nextHref = source.nextHref;
+            boundaryPosted = source.boundaryPosted;
+            boundaryGid = source.boundaryGid;
+            hasBoundary = source.hasBoundary;
+            exhausted = source.exhausted;
+            completedRealtime = source.completedRealtime;
+            completedTimeMillis = source.completedTimeMillis;
+            startedRealtime = source.startedRealtime;
+            startedTimeMillis = source.startedTimeMillis;
         }
 
         public static RecentCheckSource fromCursor(ListUrlBuilder builder,
                 @Nullable BookmarkSubscriptionPlanner.Source plan, List<GalleryInfo> buffer,
                 int pageIndex, @Nullable String nextHref, @Nullable String boundaryPosted,
-                long boundaryGid, boolean hasBoundary, boolean exhausted) {
+                long boundaryGid, boolean hasBoundary, boolean exhausted, int ratingMinimumHundredths) {
             GalleryListParser.Result page = new GalleryListParser.Result();
             page.galleryInfoList = buffer;
             page.rawResultCount = hasBoundary ? buffer.size() : 0;
             page.rawTailPosted = boundaryPosted; page.rawTailGid = boundaryGid;
             page.nextHref = nextHref;
             ListUrlBuilder cursorBuilder = builder.clone(); cursorBuilder.setPageIndex(pageIndex);
-            RecentCheckSource result = fromDisplay(cursorBuilder, plan, page, 0);
-            JSONObject saved = result.toJson();
-            saved.put("hasBoundary", hasBoundary); saved.put("exhausted", exhausted);
-            return new RecentCheckSource(saved);
+            return new RecentCheckSource(cursorBuilder, plan, page, ratingMinimumHundredths,
+                    SystemClock.elapsedRealtime(), hasBoundary, exhausted);
         }
 
         public GalleryListParser.Result asPageResult() {

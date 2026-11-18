@@ -3982,6 +3982,13 @@ public class GalleryListScene extends BaseScene
         }
     }
 
+    @Override
+    public void onBookmarkSubscriptionContextChanged(int taskId) {
+        if (isBookmarkSubscriptionMode() && mHelper != null && mHelper.isCurrentTask(taskId)) {
+            mHelper.refreshChangedSubscription();
+        }
+    }
+
     @Override public void onBookmarkSubscriptionProgress() {
         if (mRatingProgressDialog != null) mRatingProgressDialog.setMessage(ratingSortStatus());
     }
@@ -4424,6 +4431,14 @@ public class GalleryListScene extends BaseScene
             return true;
         }
 
+        private boolean mRefreshChangedSubscription;
+
+        private void refreshChangedSubscription() {
+            mRecentCheckResult = null;
+            mRefreshChangedSubscription = true;
+            refresh();
+        }
+
         @Override
         public void refresh() {
             mRatingSearchCoverage.clear();
@@ -4471,6 +4486,8 @@ public class GalleryListScene extends BaseScene
 
         @Override
         protected void getPageData(int taskId, int type, int page) {
+            boolean refreshChangedSubscription = mRefreshChangedSubscription;
+            mRefreshChangedSubscription = false;
             prepareSeenState(taskId);
             MainActivity activity = getActivity2();
             if (null == activity || null == mClient || null == mUrlBuilder) {
@@ -4480,7 +4497,7 @@ public class GalleryListScene extends BaseScene
             mLastRequestedRatingMinimum = mUrlBuilder.getEffectiveMinRatingHundredths();
             mLastRequestedPreciseRating = Settings.getEnablePreciseRatingFilter();
 
-            if (isSubscriptionMode() && mSubscriptionUpdateManager != null) {
+            if (!refreshChangedSubscription && isSubscriptionMode() && mSubscriptionUpdateManager != null) {
                 int mode = mUrlBuilder.getMode();
                 if (mSubscriptionUpdateManager.awaitCurrentCheck(result -> {
                     if (mHelper != this || !isCurrentTask(taskId) || mUrlBuilder == null
@@ -4617,7 +4634,7 @@ public class GalleryListScene extends BaseScene
                 BookmarkSubscriptionCoordinator coordinator =
                         getBookmarkSubscriptionCoordinator();
                 if (coordinator != null) {
-                    coordinator.loadMore(taskId);
+                    coordinator.loadMore(taskId, mUrlBuilder.getEffectiveMinRatingHundredths());
                 }
                 return;
             }

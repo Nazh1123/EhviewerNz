@@ -2,6 +2,8 @@ package com.hippo.ehviewer.client;
 
 import android.app.Application;
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager.RecentCheckSource;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -51,6 +53,16 @@ public class SubscriptionDisplaySnapshotTest {
 
     private List<Long> ids(List<GalleryInfo> galleries) { return galleries.stream().map(g -> g.gid).toList(); }
 
+    private SubscriptionDisplaySnapshot roundTrip(SubscriptionDisplaySnapshot snapshot) {
+        JSONObject root = new JSONObject();
+        var table = new SubscriptionGalleryTable(new JSONArray());
+        root.put("table", table.rows);
+        root.put("snapshot", snapshot.toJson(table));
+        JSONObject saved = JSON.parseObject(root.toJSONString());
+        return SubscriptionDisplaySnapshot.fromJson(saved.getJSONObject("snapshot"),
+                new SubscriptionGalleryTable(saved.getJSONArray("table")));
+    }
+
     @Test public void mergeUsesExistingBatchSizeDeduplicatesAndFreezesDivider() {
         var snapshot = SubscriptionDisplaySnapshot.merge(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION,
                 List.of(page(true, 4, false, 70, 100L, 90L, 80L, 70L),
@@ -87,7 +99,7 @@ public class SubscriptionDisplaySnapshotTest {
         var snapshot = SubscriptionDisplaySnapshot.merge(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION,
                 List.of(page(true, 2, false, 80, 100L, 80L), page(false, 2, false, 70, 95L, 70L)),
                 Set.of(95L), "old-context");
-        var restored = SubscriptionDisplaySnapshot.fromJson(JSON.parseObject(snapshot.toJson().toJSONString()));
+        var restored = roundTrip(snapshot);
         assertEquals(snapshot.completedTimeMillis, restored.completedTimeMillis);
         assertEquals("old-context", restored.contextKey);
         assertEquals(List.of(95L, 100L), ids(restored.galleries));
@@ -113,17 +125,17 @@ public class SubscriptionDisplaySnapshotTest {
         var empty = SubscriptionDisplaySnapshot.merge(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
                 List.of(), Set.of(), "context");
         assertTrue(empty.galleries.isEmpty()); assertEquals(0, empty.unreadCount); assertFalse(empty.hasMore);
-        assertTrue(SubscriptionDisplaySnapshot.fromJson(empty.toJson()).galleries.isEmpty());
+        assertTrue(roundTrip(empty).galleries.isEmpty());
     }
 
     @Test public void continuationKeepsNumericPageIndexEvenWithoutNextHref() {
         var original = page(false, 1, false, 100, 100L);
         var cursor = RecentCheckSource.fromCursor(original.continuationBuilder(), original.continuationPlan(),
-                original.galleryInfoList, 3, null, "2026-11-16 00:00", 100, true, false);
+                original.galleryInfoList, 3, null, "2026-11-16 00:00", 100, true, false, 0);
         var snapshot = new SubscriptionDisplaySnapshot(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
                 System.currentTimeMillis(), "context", 1, new ArrayList<>(cursor.galleryInfoList), Set.of(),
                 List.of(new SubscriptionDisplaySnapshot.Cursor(cursor, 1)));
-        var restored = SubscriptionDisplaySnapshot.fromJson(JSON.parseObject(snapshot.toJson().toJSONString()));
+        var restored = roundTrip(snapshot);
         assertEquals(3, restored.cursors.get(0).page().pageIndex);
         assertEquals(3, restored.cursors.get(0).page().continuationBuilder().getPageIndex());
         assertTrue(restored.hasMore);

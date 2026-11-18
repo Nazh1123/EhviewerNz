@@ -133,6 +133,18 @@ public final class BookmarkSubscriptionPlanner {
         return plan(bookmarks, true);
     }
 
+    public static List<String> subscriptionKeys(List<QuickSearch> bookmarks) {
+        List<String> keys = new ArrayList<>();
+        for (QuickSearch bookmark : bookmarks) {
+            if (!isSupported(bookmark) || !bookmark.subscribed) continue;
+            ListUrlBuilder builder = new ListUrlBuilder();
+            builder.set(bookmark);
+            keys.add(bookmark.id + ":" + bookmark.ratingOverride + ":" + queryKey(builder, true));
+        }
+        Collections.sort(keys);
+        return keys;
+    }
+
     private static List<Source> plan(List<QuickSearch> bookmarks, boolean exact) {
         List<Entry> entries = new ArrayList<>();
         for (QuickSearch q : bookmarks) if (isSupported(q) && q.subscribed) entries.add(entry(q));
