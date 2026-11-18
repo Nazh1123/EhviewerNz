@@ -326,6 +326,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private TextView mSimilar;
     @Nullable
     private TextView mSearchCover;
+    @Nullable
+    private TextView mOfflineNotice;
     // Tags
     @Nullable
     private LinearLayout mTags;
@@ -871,6 +873,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mSearchCover.setOnClickListener(this);
         ensureActionDrawable(context);
 
+        mOfflineNotice = belowHeader.findViewById(R.id.offline_notice);
         mTags = (LinearLayout) ViewUtils.$$(belowHeader, R.id.tags);
         mNoTags = (TextView) ViewUtils.$$(mTags, R.id.no_tags);
 
@@ -882,9 +885,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         }
         if (!Settings.getShowGalleryRating()) {
             mRatingGroup.setVisibility(View.INVISIBLE);
-            mRating.setVisibility(View.INVISIBLE);
-            ((View) mRating.getParent()).setVisibility(View.INVISIBLE);
-            mRatingText.setVisibility(View.INVISIBLE);
         }
 
         Ripple.addRipple(mComments, isDarkTheme);
@@ -1080,6 +1080,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mSimilar = null;
         mSearchCover = null;
 
+        mOfflineNotice = null;
         mTags = null;
         mNoTags = null;
         mBoundTagSignature = null;
@@ -1762,17 +1763,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             action.setVisibility(offline ? View.GONE : View.VISIBLE);
         }
         updateLocalActionsVisibility();
-        mRatingGroup.setVisibility(offline || Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
+        mRatingGroup.setVisibility(Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
         mRatingGroup.setEnabled(!offline);
-        mRating.setVisibility(offline ? View.GONE : Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
-        ((View) mRating.getParent()).setVisibility(mRating.getVisibility());
-        mRatingText.setVisibility(offline || Settings.getShowGalleryRating() ? View.VISIBLE : View.INVISIBLE);
-        mRatingText.setSingleLine(!offline);
-        // Keep the normal rating text anchored after setSingleLine enables scrolling.
-        mRatingText.setHorizontallyScrolling(false);
-        mRatingText.setGravity(offline ? Gravity.CENTER : Gravity.START | Gravity.CENTER_VERTICAL);
-        int textPadding = offline ? getResources().getDimensionPixelSize(R.dimen.keyline_margin) : 0;
-        mRatingText.setPadding(textPadding, 0, textPadding, 0);
+        mOfflineNotice.setVisibility(offline ? View.VISIBLE : View.GONE);
         mComments.setVisibility(offline || Settings.getShowGalleryComment() ? View.VISIBLE : View.GONE);
         if (offline) mCommentsText.setVisibility(View.VISIBLE);
         mFavoredTimes.setVisibility(offline ? View.GONE : View.VISIBLE);
@@ -1818,7 +1811,13 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         info.size = local.imageBytes > 0 ? getString(R.string.offline_gallery_local_size,
                 android.text.format.Formatter.formatFileSize(getEHContext(), local.imageBytes)) : null;
         mSize.setText(info.size);
-        mRatingText.setText("\n" + getString(R.string.offline_gallery_notice)
+        boolean hasRating = Float.isFinite(info.rating) && info.rating >= 0 && info.rating <= 5;
+        String ratingText = hasRating ? getString(R.string.rating_text_without_count,
+                getRatingText(info.rating, getResources()), info.rating) : "";
+        reserveRatingTextWidth(mRatingText.getPaint().measureText(ratingText));
+        mRatingText.setText(ratingText);
+        mRating.setRating(hasRating ? info.rating : 0);
+        mOfflineNotice.setText(getString(R.string.offline_gallery_notice)
                 + (TextUtils.isEmpty(mOfflineError) ? "" : "\n" + mOfflineError));
         updateDownloadText();
         mRead.setEnabled(!local.previews.isEmpty());

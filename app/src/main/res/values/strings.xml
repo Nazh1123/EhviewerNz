@@ -374,6 +374,7 @@
     </plurals>
     <string name="favored_times">\u2665 %d</string>
     <string name="rating_text">%1$s (%2$.2f, %3$d)</string>
+    <string name="rating_text_without_count" translatable="false">%1$s (%2$.2f)</string>
     <string name="favorites">Favorites</string>
     <string name="torrent_count">Torrent (%d)</string>
     <string name="share">Share</string>
