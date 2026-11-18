@@ -368,12 +368,17 @@ public final class SubscriptionUpdateManager {
         }
 
         RecentCheckResult(@NonNull List<RecentCheckSource> sources, String contextKey, String displayKey) {
+            this(sources, contextKey, displayKey, false);
+        }
+
+        private RecentCheckResult(List<RecentCheckSource> sources, String contextKey, String displayKey,
+                boolean allowExpired) {
             this.sources = Collections.unmodifiableList(new ArrayList<>(sources));
             this.completedTimeMillis = sources.stream().mapToLong(source -> source.completedTimeMillis)
                     .min().orElse(System.currentTimeMillis());
             this.contextKey = contextKey;
             this.displayKey = displayKey;
-            this.allowExpired = false;
+            this.allowExpired = allowExpired;
         }
 
         private RecentCheckResult(RecentCheckResult result) {
@@ -399,6 +404,14 @@ public final class SubscriptionUpdateManager {
 
         boolean hasSourceForMode(int mode) {
             return displaySnapshot(mode) != null;
+        }
+
+        public boolean hasCheckedResultForMode(int mode) {
+            if (hasSourceForMode(mode)) return true;
+            return sources.stream().anyMatch(source -> !source.requiresDisplayPreparation
+                    && (mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
+                    || (mode == ListUrlBuilder.MODE_SUBSCRIPTION && source.isEhSubscription())
+                    || (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION && !source.isEhSubscription())));
         }
     }
 
@@ -529,12 +542,10 @@ public final class SubscriptionUpdateManager {
         return true;
     }
 
-    private void deliverCheckCompletions() {
+    private void deliverCheckCompletions(@Nullable RecentCheckResult result) {
         if (mCheckCompletions.isEmpty()) return;
         List<CheckCompletion> completions = new ArrayList<>(mCheckCompletions);
         mCheckCompletions.clear();
-        RecentCheckResult saved = mResultStore.get();
-        RecentCheckResult result = saved == null ? null : new RecentCheckResult(saved);
         mMainHandler.post(() -> {
             for (CheckCompletion completion : completions) completion.onCompleted(result);
         });
@@ -732,8 +743,8 @@ public final class SubscriptionUpdateManager {
         mChecking = false;
         Settings.putLong(KEY_CANCEL_RETRY_NOT_BEFORE_TIME,
                 System.currentTimeMillis() + CANCEL_RETRY_DELAY_MS);
+        deliverCheckCompletions(null);
         notifyStateChanged();
-        deliverCheckCompletions();
     }
 
     public void onSubscriptionOpened(int mode) {
@@ -982,12 +993,11 @@ public final class SubscriptionUpdateManager {
                 || (!mBookmarkPreparationFailed && mBookmarkFailureCount == 0
                 && mCompletedSourcesFor(Group.BOOKMARK) == mBookmarkSourceCount));
 
-        if (ehSuccess && bookmarkSuccess) {
-            cacheRecentCheckResult();
-        }
+        RecentCheckResult completedRound = ehSuccess && bookmarkSuccess ? cacheRecentCheckResult() : null;
 
         resetCheckTimer();
         mChecking = false;
+        deliverCheckCompletions(completedRound);
         reloadUnread();
         Set<Long> newEh = new HashSet<>(), newBookmark = new HashSet<>();
         for (Source source : mSources) if (source.successful) {
@@ -1003,7 +1013,6 @@ public final class SubscriptionUpdateManager {
         mPendingCheckResult = result;
         mPendingCheckContext = mSearchContext;
         dispatchPendingCheckResult();
-        deliverCheckCompletions();
     }
 
     private int mCompletedSourcesFor(@NonNull Group group) {
@@ -1016,7 +1025,7 @@ public final class SubscriptionUpdateManager {
         return count;
     }
 
-    private void cacheRecentCheckResult() {
+    private RecentCheckResult cacheRecentCheckResult() {
         ArrayList<RecentCheckSource> sources = new ArrayList<>();
         for (Source source : mSources) {
             if (source.successful && source.firstPage != null) {
@@ -1038,6 +1047,12 @@ public final class SubscriptionUpdateManager {
                     ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION, sources, unread, mSearchContext));
         }
         mResultStore.recordSnapshots(mSearchContext, mCheckDisplayKey, sources, snapshots);
+        // Waiting pages receive this round only. The store retains earlier snapshots for explicit reuse.
+        RecentCheckResult completedRound = new RecentCheckResult(sources, mSearchContext, mCheckDisplayKey, true);
+        for (SubscriptionDisplaySnapshot snapshot : snapshots) {
+            completedRound.displaySnapshots.put(snapshot.mode, snapshot);
+        }
+        return completedRound;
     }
 
     private void clearEhUnread() {

@@ -405,6 +405,29 @@ public class SubscriptionCheckReuseTest {
         coordinator.cancel();
     }
 
+    @Test public void waitingForAnotherKindOfCheckDoesNotReturnTheSavedBookmarkSnapshot() {
+        enableBookmark();
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        int bookmarkMode = ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION;
+        var previous = manager.getReusableCheckResult(bookmarkMode).displaySnapshot(bookmarkMode);
+
+        Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, false);
+        start(false);
+        List<SubscriptionUpdateManager.RecentCheckResult> delivered = new ArrayList<>();
+        assertTrue(manager.awaitCurrentCheck(delivered::add));
+        succeed(2, page(300, null));
+        shadowOf(Looper.getMainLooper()).idle();
+
+        assertEquals(1, delivered.size());
+        var result = delivered.get(0);
+        assertTrue(result.hasCheckedResultForMode(ListUrlBuilder.MODE_SUBSCRIPTION));
+        assertFalse(result.hasCheckedResultForMode(bookmarkMode));
+        assertNull(result.displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertSame(previous, manager.getReusableCheckResult(bookmarkMode).displaySnapshot(bookmarkMode));
+    }
+
     @Test public void bothSubscriptionSourcesRestoreAcrossManagerRestartWithoutChangingTheTimer() {
         enableBookmark();
         start(true);
@@ -1291,16 +1314,38 @@ public class SubscriptionCheckReuseTest {
         succeed(0, page(200, null)); succeed(1, page(199, null));
         var previous = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
                 .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        List<SubscriptionUpdateManager.RecentCheckResult> delivered = new ArrayList<>();
         start(true);
+        assertTrue(manager.awaitCurrentCheck(delivered::add));
         succeed(2, page(300, null));
         requests.get(3).getCallback().onFailure(new IllegalArgumentException("bad query"));
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, delivered.size());
+        assertNull(delivered.get(0));
         assertSame(previous, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
                 .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
-        start(true); succeed(4, page(400, null)); manager.cancelCheck();
+        start(true);
+        assertTrue(manager.awaitCurrentCheck(delivered::add));
+        succeed(4, page(400, null));
+        manager.cancelCheck();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(2, delivered.size());
+        assertNull(delivered.get(1));
         assertSame(previous, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
                 .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
         succeed(5, page(399, null)); // A late response cannot publish a cancelled round.
         assertSame(previous, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+
+        start(true);
+        assertTrue(manager.awaitCurrentCheck(delivered::add));
+        succeed(6, page(500, null));
+        succeed(7, page(499, null));
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(3, delivered.size());
+        var replacement = delivered.get(2).displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        assertEquals(500L, replacement.galleries.get(0).gid);
+        assertSame(replacement, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
                 .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
     }
 

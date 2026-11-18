@@ -4502,7 +4502,7 @@ public class GalleryListScene extends BaseScene
                 if (mSubscriptionUpdateManager.awaitCurrentCheck(result -> {
                     if (mHelper != this || !isCurrentTask(taskId) || mUrlBuilder == null
                             || mUrlBuilder.getMode() != mode || getActivity2() == null) return;
-                    if (result == null) {
+                    if (result == null || !result.hasCheckedResultForMode(mode)) {
                         onGetGalleryListFailure(new IllegalStateException(
                                 getString(R.string.subscription_updates_failed)), taskId);
                     } else if (isBookmarkSubscriptionMode()) {
@@ -4520,7 +4520,11 @@ public class GalleryListScene extends BaseScene
                         onGetGalleryListFailure(new IllegalStateException(
                                 getString(R.string.subscription_updates_failed)), taskId);
                     }
-                })) return;
+                })) {
+                    // A retry should fetch again after a failed wait. Reopening can still select the saved result.
+                    mRecentCheckResult = null;
+                    return;
+                }
             }
 
             if (isPopularMode()) {
