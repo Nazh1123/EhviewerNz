@@ -1160,6 +1160,7 @@
     <string name="settings_fork_category_subscriptions">Abonnements</string>
     <string name="settings_bookmark_subscription_management">Gérer les abonnements aux favoris</string>
     <string name="settings_subscription_sidebar_buttons">Afficher les boutons de la barre latérale</string>
+    <string name="settings_subscription_updates">Mises à jour des abonnements</string>
     <string name="settings_subscription_sidebar_eh">Abonnement EH</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">Mettre à jour automatiquement les abonnements aux favoris</string>
     <string name="settings_test_bookmark_subscription">Tester les abonnements aux favoris</string>
@@ -1213,7 +1214,7 @@
     <string name="gallery_update_available">Une version plus récente peut réutiliser cette galerie téléchargée</string>
     <string name="settings_fork_category_gallery">Galeries et recherche</string>
     <string name="settings_fork_category_reading">Lecture et enregistrement</string>
-    <string name="settings_fork_category_animated_webp">WebP animé</string>
+    <string name="settings_fork_category_animated_webp">Image animée</string>
     <string name="settings_fork_category_downloads">Gestion des téléchargements</string>
     <string name="settings_save_image_aliPay">Enregistrer le code QR Alipay</string>
     <string name="settings_save_image_weChat">Enregistrer le code QR WeChat</string>

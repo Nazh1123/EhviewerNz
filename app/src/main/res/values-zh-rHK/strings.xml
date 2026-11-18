@@ -1231,7 +1231,7 @@
     <string name="settings_fork_features">Fork 雜項</string>
     <string name="settings_fork_category_gallery">畫廊與搜尋</string>
     <string name="settings_fork_category_reading">閱讀與儲存</string>
-    <string name="settings_fork_category_animated_webp">動態 WebP</string>
+    <string name="settings_fork_category_animated_webp">動態圖片</string>
     <string name="settings_fork_category_subscriptions">訂閱</string>
     <string name="settings_fork_category_downloads">下載管理</string>
     <string name="settings_fork_gallery_immediate_jump">畫廊立即跳轉</string>
@@ -1272,6 +1272,7 @@
     <string name="offline_gallery_saved_rating">已儲存的評分</string>
     <string name="settings_bookmark_subscription_management">書籤訂閱管理</string>
     <string name="settings_subscription_sidebar_buttons">側邊欄按鈕顯示</string>
+    <string name="settings_subscription_updates">訂閱更新</string>
     <string name="settings_subscription_sidebar_eh">EH 訂閱</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">自動更新 書籤訂閱</string>
     <string name="settings_test_bookmark_subscription">測試書籤訂閱</string>

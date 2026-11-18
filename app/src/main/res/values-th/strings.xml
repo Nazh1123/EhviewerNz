@@ -1174,6 +1174,7 @@
     <string name="settings_fork_category_subscriptions">การสมัครรับข้อมูล</string>
     <string name="settings_bookmark_subscription_management">จัดการการสมัครรับข้อมูลบุ๊กมาร์ก</string>
     <string name="settings_subscription_sidebar_buttons">แสดงปุ่มในแถบด้านข้าง</string>
+    <string name="settings_subscription_updates">การอัปเดตการสมัครรับข้อมูล</string>
     <string name="settings_subscription_sidebar_eh">การสมัครรับข้อมูล EH</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">อัปเดตการสมัครรับข้อมูลบุ๊กมาร์กอัตโนมัติ</string>
     <string name="settings_test_bookmark_subscription">ทดสอบการสมัครรับข้อมูลบุ๊กมาร์ก</string>
@@ -1227,7 +1228,7 @@
     <string name="gallery_update_available">เวอร์ชันใหม่สามารถนำแกลเลอรีที่ดาวน์โหลดนี้มาใช้ซ้ำได้</string>
     <string name="settings_fork_category_gallery">แกลเลอรีและการค้นหา</string>
     <string name="settings_fork_category_reading">การอ่านและการบันทึก</string>
-    <string name="settings_fork_category_animated_webp">WebP เคลื่อนไหว</string>
+    <string name="settings_fork_category_animated_webp">ภาพเคลื่อนไหว</string>
     <string name="settings_fork_category_downloads">การจัดการดาวน์โหลด</string>
     <string name="dummy_button">ปุ่มตัวอย่าง</string>
     <string name="dummy_content">เนื้อหา\nตัวอย่าง</string>

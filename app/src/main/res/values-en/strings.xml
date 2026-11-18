@@ -929,6 +929,7 @@
     <string name="settings_fork_category_subscriptions">Subscriptions</string>
     <string name="settings_bookmark_subscription_management">Manage bookmark subscriptions</string>
     <string name="settings_subscription_sidebar_buttons">Sidebar button visibility</string>
+    <string name="settings_subscription_updates">Subscription Updates</string>
     <string name="settings_subscription_sidebar_eh">EH subscription</string>
     <string name="settings_fork_auto_subscription_updates_eh">Automatically update EH subscriptions</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">Automatically update bookmark subscriptions</string>
@@ -1141,7 +1142,7 @@
     <string name="gallery_update_available">A newer version can reuse this downloaded gallery</string>
     <string name="settings_fork_category_gallery">Gallery and Search</string>
     <string name="settings_fork_category_reading">Reading and Saving</string>
-    <string name="settings_fork_category_animated_webp">Animated WebP</string>
+    <string name="settings_fork_category_animated_webp">Animated Image</string>
     <string name="settings_fork_category_downloads">Download Management</string>
     <string name="settings_fork_delete_empty_galleries">Delete Empty Galleries</string>
     <string name="settings_fork_download_label_continuous_browse">Continuous Download Label Browsing</string>

@@ -779,7 +779,7 @@
     <string name="settings_advanced_app_language_title">App 界面语言</string>
     <string name="settings_fork_features">Fork 杂项</string>
     <string name="settings_fork_category_reading">阅读与保存</string>
-    <string name="settings_fork_category_animated_webp">动态 WebP</string>
+    <string name="settings_fork_category_animated_webp">动态图片</string>
     <string name="settings_fork_category_subscriptions">订阅</string>
     <string name="settings_fork_category_downloads">下载管理</string>
     <string name="settings_fork_delete_empty_galleries">删除空画廊</string>
@@ -1242,6 +1242,7 @@
     <string name="offline_gallery_saved_rating">已保存的评分</string>
     <string name="settings_bookmark_subscription_management">书签订阅管理</string>
     <string name="settings_subscription_sidebar_buttons">侧边栏按钮显示</string>
+    <string name="settings_subscription_updates">订阅更新</string>
     <string name="settings_subscription_sidebar_eh">EH 订阅</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">自动更新 书签订阅</string>
     <string name="settings_test_bookmark_subscription">测试书签订阅</string>

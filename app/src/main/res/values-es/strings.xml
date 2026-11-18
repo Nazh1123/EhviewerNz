@@ -1166,6 +1166,7 @@
     <string name="settings_fork_category_subscriptions">Suscripciones</string>
     <string name="settings_bookmark_subscription_management">Administrar suscripciones a marcadores</string>
     <string name="settings_subscription_sidebar_buttons">Mostrar botones en la barra lateral</string>
+    <string name="settings_subscription_updates">Actualizaciones de suscripciones</string>
     <string name="settings_subscription_sidebar_eh">Suscripción de EH</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">Actualizar automáticamente las suscripciones a marcadores</string>
     <string name="settings_test_bookmark_subscription">Probar suscripciones a marcadores</string>
@@ -1219,7 +1220,7 @@
     <string name="gallery_update_available">Una versión más reciente puede reutilizar esta galería descargada</string>
     <string name="settings_fork_category_gallery">Galerías y búsqueda</string>
     <string name="settings_fork_category_reading">Lectura y guardado</string>
-    <string name="settings_fork_category_animated_webp">WebP animado</string>
+    <string name="settings_fork_category_animated_webp">Imagen animada</string>
     <string name="settings_fork_category_downloads">Gestión de descargas</string>
     <string name="import_local_folder">Importar carpeta local</string>
     <string name="import_folder_title">Seleccionar carpeta de imágenes</string>
