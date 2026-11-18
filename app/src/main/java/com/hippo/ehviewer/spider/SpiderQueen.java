@@ -416,7 +416,7 @@ public final class SpiderQueen implements Runnable {
 
     private void notifyPageSuccess(int index) {
         if (com.hippo.ehviewer.download.GalleryDownloadRangeStore.isRange(mGalleryInfo.gid))
-            com.hippo.ehviewer.download.GalleryDownloadRangeStore.changed(mGalleryInfo.gid);
+            com.hippo.ehviewer.download.GalleryDownloadRangeStore.imageChanged(mGalleryInfo.gid, index);
         int size = -1;
         int[] temp = mPageStateArray;
         if (temp != null) {

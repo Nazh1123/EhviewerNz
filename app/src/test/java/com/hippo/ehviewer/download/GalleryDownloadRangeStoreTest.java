@@ -31,6 +31,11 @@ import static org.junit.Assert.*;
 @Config(application = Application.class, sdk = 28, manifest = Config.NONE,
         shadows = GalleryDownloadRangeStoreTest.Directory.class)
 public class GalleryDownloadRangeStoreTest {
+    private static final java.util.concurrent.ConcurrentLinkedQueue<Integer> imageLookups =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private static final java.util.concurrent.ConcurrentLinkedQueue<String> imageValidations =
+            new java.util.concurrent.ConcurrentLinkedQueue<>();
+
     @Rule public TemporaryFolder folder = new TemporaryFolder();
     private static UniFile directory;
     private Context context;
@@ -168,15 +173,43 @@ public class GalleryDownloadRangeStoreTest {
                 }));
         Thread decoder = new Thread(provider);
         try {
+            imageLookups.clear();
+            imageValidations.clear();
+            assertTrue(provider.hasSelectedPages());
+            assertTrue(imageLookups.isEmpty());
+            assertTrue(imageValidations.isEmpty());
             decoder.start();
             assertEquals("onDataChanged:all", changes.poll(5, TimeUnit.SECONDS));
             assertEquals(3, provider.size());
             assertEquals(1, provider.getStartPage());
+            assertEquals(java.util.List.of(9, 19, 29), java.util.List.copyOf(imageLookups));
+            imageLookups.clear();
+            imageValidations.clear();
             image(19);
-            GalleryDownloadRangeStore.changed(gallery.gid);
+            GalleryDownloadRangeStore.imageChanged(gallery.gid, 19);
             assertEquals("onDataChanged:1", changes.poll(5, TimeUnit.SECONDS));
+            assertEquals(java.util.List.of(19), java.util.List.copyOf(imageLookups));
+            assertEquals(java.util.List.of("00000020.png"), java.util.List.copyOf(imageValidations));
             assertEquals(3, provider.size());
             assertEquals(19, provider.getSourcePage(1));
+            assertNotNull(provider.getPreviewFile(1));
+            imageLookups.clear();
+            imageValidations.clear();
+            GalleryDownloadRangeStore.imageChanged(gallery.gid, 19);
+            // Even if the replacement keeps its URI, length and precise timestamp, refresh the slot.
+            assertEquals("onDataChanged:1", changes.poll(5, TimeUnit.SECONDS));
+            assertEquals(java.util.List.of(19), java.util.List.copyOf(imageLookups));
+            assertEquals(java.util.List.of("00000020.png"), java.util.List.copyOf(imageValidations));
+
+            assertTrue(directory.findFile("00000020.png").delete());
+            GalleryDownloadRangeStore.imageChanged(gallery.gid, 19);
+            assertEquals("onDataChanged:1", changes.poll(5, TimeUnit.SECONDS));
+            assertNull(provider.getPreviewFile(1));
+
+            store.apply(gallery, GalleryPageRange.parse("20,30", 30));
+            assertEquals("onDataChanged:all", changes.poll(5, TimeUnit.SECONDS));
+            assertEquals(2, provider.size());
+            assertEquals(19, provider.getSourcePage(0));
             assertTrue(changes.isEmpty());
         } finally {
             decoder.interrupt(); decoder.join(5000); assertFalse(decoder.isAlive());
@@ -245,5 +278,16 @@ public class GalleryDownloadRangeStoreTest {
     public static class Directory {
         @Implementation protected static UniFile getGalleryDownloadDir(GalleryInfo info) { return directory; }
         @Implementation protected static UniFile getExistingGalleryDownloadDir(GalleryInfo info) { return directory; }
+        @Implementation protected static UniFile findImageFile(UniFile dir, int page) {
+            imageLookups.add(page);
+            return org.robolectric.shadow.api.Shadow.directlyOn(SpiderDen.class, "findImageFile",
+                    ReflectionHelpers.ClassParameter.from(UniFile.class, dir),
+                    ReflectionHelpers.ClassParameter.from(int.class, page));
+        }
+        @Implementation protected static boolean isReadableImage(UniFile file) {
+            imageValidations.add(file.getName());
+            return org.robolectric.shadow.api.Shadow.directlyOn(SpiderDen.class, "isReadableImage",
+                    ReflectionHelpers.ClassParameter.from(UniFile.class, file));
+        }
     }
 }
