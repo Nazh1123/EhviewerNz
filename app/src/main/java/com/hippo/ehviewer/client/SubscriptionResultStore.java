@@ -55,8 +55,19 @@ final class SubscriptionResultStore {
             sources.add(update);
         }
         current = new RecentCheckResult(sources, contextKey, displayKey);
+        if (previous != null) current.displaySnapshots.putAll(previous.displaySnapshots);
         RecentCheckResult snapshot = current;
         IO.execute(() -> write(snapshot));
+    }
+
+    synchronized void recordSnapshots(String contextKey, String displayKey,
+            List<RecentCheckSource> sources, List<SubscriptionDisplaySnapshot> snapshots) {
+        RecentCheckResult previous = get();
+        current = new RecentCheckResult(sources, contextKey, displayKey);
+        if (previous != null) current.displaySnapshots.putAll(previous.displaySnapshots);
+        for (SubscriptionDisplaySnapshot snapshot : snapshots) current.displaySnapshots.put(snapshot.mode, snapshot);
+        RecentCheckResult saved = current;
+        IO.execute(() -> write(saved));
     }
 
     synchronized void clear() {
@@ -68,17 +79,29 @@ final class SubscriptionResultStore {
     private RecentCheckResult read() {
         try {
             JSONObject root = JSON.parseObject(new String(file.readFully(), StandardCharsets.UTF_8));
-            if (root.getIntValue("version") != 1) return null;
+            int version = root.getIntValue("version");
+            if (version < 1 || version > 3) return null;
+            SubscriptionGalleryTable galleryTable = version == 3
+                    ? new SubscriptionGalleryTable(root.getJSONArray("galleryTable")) : null;
             String context = root.getString("context"), display = root.getString("display");
             if (context == null || display == null) return null;
             List<RecentCheckSource> sources = new ArrayList<>();
             JSONArray saved = root.getJSONArray("sources");
             if (saved == null) return null;
             for (int i = 0; i < saved.size(); i++) {
-                try { sources.add(new RecentCheckSource(saved.getJSONObject(i))); }
+                try { sources.add(new RecentCheckSource(saved.getJSONObject(i), galleryTable)); }
                 catch (RuntimeException ignored) { /* A damaged source cannot erase other sources. */ }
             }
-            return sources.isEmpty() ? null : new RecentCheckResult(sources, context, display);
+            RecentCheckResult result = new RecentCheckResult(sources, context, display);
+            JSONArray snapshots = root.getJSONArray("snapshots");
+            if (snapshots != null) for (int i = 0; i < snapshots.size(); i++) {
+                try {
+                    SubscriptionDisplaySnapshot snapshot = SubscriptionDisplaySnapshot.fromJson(
+                            snapshots.getJSONObject(i), galleryTable);
+                    result.displaySnapshots.put(snapshot.mode, snapshot);
+                } catch (RuntimeException ignored) { /* A broken snapshot cannot affect the other entry. */ }
+            }
+            return sources.isEmpty() && result.displaySnapshots.isEmpty() ? null : result;
         } catch (Exception e) {
             // Missing or damaged results always fall back to an ordinary fresh request.
             return null;
@@ -89,12 +112,19 @@ final class SubscriptionResultStore {
         FileOutputStream output = null;
         try {
             JSONObject root = new JSONObject();
-            root.put("version", 1);
+            root.put("version", 3);
             root.put("context", snapshot.contextKey);
             root.put("display", snapshot.displayKey);
+            SubscriptionGalleryTable galleryTable = new SubscriptionGalleryTable(new JSONArray());
+            root.put("galleryTable", galleryTable.rows);
             JSONArray sources = new JSONArray();
-            for (RecentCheckSource source : snapshot.sources) sources.add(source.toJson());
+            for (RecentCheckSource source : snapshot.sources) sources.add(source.toJson(galleryTable));
             root.put("sources", sources);
+            JSONArray snapshots = new JSONArray();
+            for (SubscriptionDisplaySnapshot display : snapshot.displaySnapshots.values()) {
+                snapshots.add(display.toJson(galleryTable));
+            }
+            root.put("snapshots", snapshots);
             byte[] bytes = JSON.toJSONString(root).getBytes(StandardCharsets.UTF_8);
             output = file.startWrite();
             output.write(bytes);

@@ -3,6 +3,7 @@ package com.hippo.ehviewer.client;
 import android.app.Application;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -23,6 +24,7 @@ import org.robolectric.shadows.ShadowSystemClock;
 
 import java.io.File;
 import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 
@@ -164,6 +166,59 @@ public class SubscriptionResultStoreTest {
         var restored = new SubscriptionResultStore(directory).get();
         assertEquals(1, restored.sources.size());
         assertFalse(restored.sources.get(0).isEhSubscription());
+    }
+
+    @Test public void galleryTableSharesIdenticalRowsAndKeepsDistinctMetadataForTheSameGid() throws Exception {
+        var eh = source(true, 200);
+        var bookmark = source(false, 200);
+        bookmark.galleryInfoList.get(0).title = "bookmark title";
+        var sources = List.of(eh, bookmark);
+        var global = SubscriptionDisplaySnapshot.merge(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION,
+                sources, java.util.Set.of(200L), context);
+        var local = SubscriptionDisplaySnapshot.merge(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
+                sources, java.util.Set.of(), context);
+        var store = new SubscriptionResultStore(directory);
+        store.recordSnapshots(context, display, sources, List.of(global, local));
+        finishWrites();
+        var file = new File(directory, SubscriptionResultStore.FILE_NAME).toPath();
+        var root = JSON.parseObject(new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
+        assertEquals(3, root.getIntValue("version"));
+        assertEquals(2, root.getJSONArray("galleryTable").size());
+        var restored = new SubscriptionResultStore(directory).get();
+        assertEquals("saved title", restored.displaySnapshot(global.mode).galleries.get(0).title);
+        assertEquals("bookmark title", restored.displaySnapshot(local.mode).galleries.get(0).title);
+    }
+
+    @Test public void restoresLegacyInlineGalleryRecords() throws Exception {
+        var table = new SubscriptionGalleryTable(new JSONArray());
+        var source = source(true, 200).toJson(table);
+        source.put("galleries", table.rows);
+        source.put("raw", table.rows);
+        var cursor = new JSONObject();
+        cursor.put("page", source);
+        cursor.put("position", 1);
+        int mode = ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION;
+        var snapshot = new JSONObject();
+        snapshot.put("mode", mode);
+        snapshot.put("context", context);
+        snapshot.put("completed", source.getLongValue("completed"));
+        snapshot.put("freshness", source.getLongValue("started"));
+        snapshot.put("batchSize", 25);
+        snapshot.put("unreadCount", 1);
+        snapshot.put("galleries", table.rows);
+        snapshot.put("chronological", table.rows);
+        snapshot.put("cursors", List.of(cursor));
+        var root = new JSONObject();
+        root.put("version", 2);
+        root.put("context", context);
+        root.put("display", display);
+        root.put("sources", List.of(source));
+        root.put("snapshots", List.of(snapshot));
+        Files.write(new File(directory, SubscriptionResultStore.FILE_NAME).toPath(),
+                root.toJSONString().getBytes(StandardCharsets.UTF_8));
+        var restored = new SubscriptionResultStore(directory).get();
+        assertEquals(java.util.Set.of(200L), restored.displaySnapshot(mode).unreadGids());
+        assertEquals(1, restored.displaySnapshot(mode).cursors.get(0).position());
     }
 
     @Implements(SubscriptionSearchContext.class)

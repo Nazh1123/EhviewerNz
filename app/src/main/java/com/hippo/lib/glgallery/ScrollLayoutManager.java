@@ -867,6 +867,43 @@ class ScrollLayoutManager extends GalleryView.LayoutManager {
     }
 
     @Override
+    public void onDataChanged(int[] newPositions) {
+        GalleryPageView anchor = null;
+        for (GalleryPageView page : mPages) {
+            if (isInScreen(page) && mappedIndex(page.getIndex(), newPositions) >= 0) {
+                anchor = page;
+                break;
+            }
+        }
+        if (anchor == null) {
+            onDataChanged();
+            return;
+        }
+        int anchorIndex = mappedIndex(anchor.getIndex(), newPositions);
+        int anchorTop = anchor.bounds().top;
+        boolean shifted = false;
+        for (int i = 0; i < newPositions.length; i++) shifted |= newPositions[i] != i;
+        if (shifted) cancelAllAnimations();
+        for (Iterator<GalleryPageView> it = mPages.iterator(); it.hasNext();) {
+            GalleryPageView page = it.next();
+            if (mappedIndex(page.getIndex(), newPositions) < 0) {
+                removePage(page);
+                it.remove();
+            }
+        }
+        for (GalleryPageView page : mPages) {
+            mAdapter.onReindex(page, mappedIndex(page.getIndex(), newPositions));
+        }
+        mIndex = mPages.getFirst().getIndex();
+        if (shifted) {
+            mKeepTopPageIndex = anchorIndex;
+            mFirstShownPageIndex = anchorIndex;
+            mKeepTop = anchorTop;
+        }
+        mGalleryView.requestFill();
+    }
+
+    @Override
     public void onPageLeft() {
         int size = mAdapter.size();
         if (size <= 0 || mPages.isEmpty()) {

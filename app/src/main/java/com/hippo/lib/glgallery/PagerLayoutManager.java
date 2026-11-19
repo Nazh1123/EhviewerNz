@@ -724,6 +724,29 @@ class PagerLayoutManager extends GalleryView.LayoutManager {
     }
 
     @Override
+    public void onDataChanged(int[] newPositions) {
+        int current = mappedIndex(mIndex, newPositions);
+        if (mCurrent == null || current == GalleryPageView.INVALID_INDEX) {
+            onDataChanged();
+            return;
+        }
+        // Keep the current texture even if earlier downloads shifted its reader position.
+        if (mPrevious != null && mappedIndex(mPrevious.getIndex(), newPositions) != current - 1) {
+            removePage(mPrevious);
+            mPrevious = null;
+        }
+        if (mNext != null && mappedIndex(mNext.getIndex(), newPositions) != current + 1) {
+            removePage(mNext);
+            mNext = null;
+        }
+        mIndex = current;
+        mAdapter.onReindex(mCurrent, current);
+        if (mPrevious != null) mAdapter.onReindex(mPrevious, current - 1);
+        if (mNext != null) mAdapter.onReindex(mNext, current + 1);
+        mGalleryView.requestFill();
+    }
+
+    @Override
     public void onDataChanged() {
         AssertUtils.assertNotNull("The PagerLayoutManager is not attached", mAdapter);
 

@@ -134,12 +134,12 @@ public class OfflineGalleryDetailSceneTest {
                 "mArchiverDownloadProgress", "mUpdateActionGroup", "mUpdateGallery", "mGalleryHistory", "mUpdateActionDivider",
                 "mLanguage", "mPages", "mSize", "mPosted", "mFavoredTimes", "mHeartGroup", "mRatingGroup", "mShare", "mTorrent",
                 "mArchiver", "mHaH", "mSearchCover", "mRating", "mRatingText", "mComments", "mCommentsText",
-                "mTags", "mNoTags", "mGridLayout", "mPreviewText", "mHeart", "mHeartOutline"};
+                "mOfflineNotice", "mTags", "mNoTags", "mGridLayout", "mPreviewText", "mHeart", "mHeartOutline"};
         int[] ids = {R.id.thumb, R.id.title, R.id.uploader, R.id.category, R.id.download, R.id.read, R.id.new_version,
                 R.id.archiver_download_progress, R.id.update_action_card, R.id.update_gallery, R.id.gallery_history, R.id.update_action_divider,
                 R.id.language, R.id.pages, R.id.size, R.id.posted, R.id.favoredTimes, R.id.heart_group, R.id.rating_group, R.id.share, R.id.torrent,
                 R.id.archiver, R.id.h_h, R.id.search_cover, R.id.rating, R.id.rating_text, R.id.comments, R.id.comments_text,
-                R.id.tags, R.id.no_tags, R.id.grid_layout, R.id.preview_text, R.id.heart, R.id.heart_outline};
+                R.id.offline_notice, R.id.tags, R.id.no_tags, R.id.grid_layout, R.id.preview_text, R.id.heart, R.id.heart_outline};
         for (int i = 0; i < fields.length; i++) ReflectionHelpers.setField(scene, fields[i], content.findViewById(ids[i]));
         TextView tip = new TextView(context);
         ReflectionHelpers.setField(scene, "mTip", tip);
@@ -1802,16 +1802,38 @@ public class OfflineGalleryDetailSceneTest {
         fail("Gallery removed");
         assertEquals("Saved title", text(R.id.title));
         assertEquals(context.getString(R.string.refresh), text(R.id.download));
-        assertEquals("\n" + context.getString(R.string.offline_gallery_notice) + "\nGallery removed", text(R.id.rating_text));
+        assertEquals(context.getString(R.string.offline_gallery_notice) + "\nGallery removed", text(R.id.offline_notice));
         assertEquals(context.getString(R.string.offline_gallery_refresh), text(R.id.comments_text));
-        for (int id : new int[]{R.id.artist, R.id.similar, R.id.comments, R.id.rating_text}) assertEquals(View.VISIBLE, content.findViewById(id).getVisibility());
+        for (int id : new int[]{R.id.artist, R.id.similar, R.id.comments, R.id.offline_notice}) assertEquals(View.VISIBLE, content.findViewById(id).getVisibility());
+        assertEquals(View.INVISIBLE, content.findViewById(R.id.rating_group).getVisibility());
         assertFalse(content.findViewById(R.id.rating_group).isEnabled());
         for (int id : new int[]{R.id.heart_group, R.id.share, R.id.torrent, R.id.archiver, R.id.h_h, R.id.search_cover,
-                R.id.rating, R.id.favoredTimes, R.id.update_action_card}) assertEquals(View.GONE, content.findViewById(id).getVisibility());
+                R.id.favoredTimes, R.id.update_action_card}) assertEquals(View.GONE, content.findViewById(id).getVisibility());
         assertFalse(imageNetworkLoads.isEmpty());
         assertFalse(imageNetworkLoads.contains(true));
         assertNull(ReflectionHelpers.getField(scene, "mGalleryDetail"));
         assertTrue(requests.isEmpty());
+    }
+
+    @Test public void offlineNoticeAppearsBetweenSavedRatingAndTags() {
+        GalleryInfo info = ReflectionHelpers.getField(scene, "mGalleryInfo");
+        info.rating = 4.5f;
+        fail("Offline");
+
+        ViewGroup sections = (ViewGroup) content;
+        View notice = content.findViewById(R.id.offline_notice);
+        int noticeIndex = sections.indexOfChild(notice);
+        assertSame(content.findViewById(R.id.actions), sections.getChildAt(noticeIndex - 1));
+        assertSame(content.findViewById(R.id.tags), sections.getChildAt(noticeIndex + 1));
+        assertEquals(View.VISIBLE, notice.getVisibility());
+        View ratingGroup = content.findViewById(R.id.rating_group);
+        RatingBar stars = content.findViewById(R.id.rating);
+        assertEquals(View.VISIBLE, ratingGroup.getVisibility());
+        assertEquals(View.VISIBLE, stars.getVisibility());
+        assertEquals(4.5f, stars.getRating(), 0f);
+        assertEquals(context.getString(R.string.rating_text_without_count,
+                context.getString(R.string.rating9), info.rating), text(R.id.rating_text));
+        assertFalse(ratingGroup.isEnabled());
     }
 
     @Test public void downloadAndLongPressRefreshOnceWithoutDeletingLocalDownload() {
@@ -1826,7 +1848,7 @@ public class OfflineGalleryDetailSceneTest {
         ((EhApplication) RuntimeEnvironment.getApplication()).removeGlobalStuff(requests.get(0).getCallback());
         fail("Another error");
         assertTrue(content.findViewById(R.id.download).isEnabled());
-        assertTrue(text(R.id.rating_text).endsWith("\nAnother error"));
+        assertEquals(context.getString(R.string.offline_gallery_notice) + "\nAnother error", text(R.id.offline_notice));
     }
 
     @Test public void removeRecordButtonKeepsLocalFilesRegardlessOfOldPreference() throws Exception {
@@ -1963,7 +1985,8 @@ public class OfflineGalleryDetailSceneTest {
         assertEquals("Online title", text(R.id.title));
         assertEquals(View.VISIBLE, content.findViewById(R.id.share).getVisibility());
         assertEquals(View.VISIBLE, content.findViewById(R.id.rating).getVisibility());
-        assertFalse(text(R.id.rating_text).contains("Stale failure"));
+        assertEquals(View.GONE, content.findViewById(R.id.offline_notice).getVisibility());
+        assertTrue(content.findViewById(R.id.rating_group).isEnabled());
         assertEquals(context.getString(R.string.download), text(R.id.download));
     }
 

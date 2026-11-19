@@ -235,21 +235,19 @@ public class SubscriptionCheckReuseTest {
         }
     }
 
-    @Test public void reuseIndicatorRequiresAMatchingSourceAndResetsForFreshRequests() {
+    @Test public void reuseIgnoresChangedBookmarksButExplicitRefreshStillRequests() {
         enableBookmark();
         start(true);
-        succeed(0, page(200, null));
-        succeed(1, page(199, null));
-        var cached = manager.getRecentCheckResult(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        succeed(0, page(200, null)); succeed(1, page(199, null));
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
         bookmarks.get(0).keyword = "changed";
         var coordinator = refresh(false, cached);
-        assertEquals(-1L, coordinator.getReusedResultCompletedTimeMillis());
-        coordinator.cancel();
-        bookmarks.get(0).keyword = "test";
-        coordinator = refresh(false, cached);
         assertEquals(reusedTime(cached, false), coordinator.getReusedResultCompletedTimeMillis());
+        assertEquals(2, requests.size());
         coordinator.refresh(2, bookmarks, false, null);
         assertEquals(-1L, coordinator.getReusedResultCompletedTimeMillis());
+        assertEquals(3, requests.size());
+        assertTrue(((String) requests.get(2).getArgs()[0]).contains("changed"));
         coordinator.cancel();
     }
 
@@ -286,7 +284,7 @@ public class SubscriptionCheckReuseTest {
         var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
         assertNotNull(cached);
         assertEquals(2, cached.sources.size());
-        long ehCompletedAt = cached.sources.get(0).completedTimeMillis;
+        long ehCompletedAt = reusedTime(cached, true);
         var reused = refresh(true, cached);
         assertEquals(ehCompletedAt, reused.getReusedResultCompletedTimeMillis());
         reused.cancel();
@@ -305,13 +303,17 @@ public class SubscriptionCheckReuseTest {
         assertEquals(2, cached.sources.size());
         assertEquals(300, cached.sources.get(0).galleryInfoList.get(0).gid);
         assertEquals(299, cached.sources.get(1).galleryInfoList.get(0).gid);
+        assertEquals(299, cached.displaySnapshot(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION).galleries.get(0).gid);
         refresh(true, cached).cancel();
         assertEquals(4, requests.size());
         coordinator.cancel();
     }
 
     private long reusedTime(SubscriptionUpdateManager.RecentCheckResult result, boolean includeEh) {
-        return result.sources.stream().filter(source -> includeEh || !source.isEhSubscription())
+        var snapshot = result.displaySnapshot(includeEh ? ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
+                : ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        return snapshot != null ? snapshot.completedTimeMillis : result.sources.stream()
+                .filter(source -> includeEh || !source.isEhSubscription())
                 .mapToLong(source -> source.completedTimeMillis).min().orElse(-1L);
     }
 
@@ -403,6 +405,29 @@ public class SubscriptionCheckReuseTest {
         coordinator.cancel();
     }
 
+    @Test public void waitingForAnotherKindOfCheckDoesNotReturnTheSavedBookmarkSnapshot() {
+        enableBookmark();
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        int bookmarkMode = ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION;
+        var previous = manager.getReusableCheckResult(bookmarkMode).displaySnapshot(bookmarkMode);
+
+        Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_BOOKMARK, false);
+        start(false);
+        List<SubscriptionUpdateManager.RecentCheckResult> delivered = new ArrayList<>();
+        assertTrue(manager.awaitCurrentCheck(delivered::add));
+        succeed(2, page(300, null));
+        shadowOf(Looper.getMainLooper()).idle();
+
+        assertEquals(1, delivered.size());
+        var result = delivered.get(0);
+        assertTrue(result.hasCheckedResultForMode(ListUrlBuilder.MODE_SUBSCRIPTION));
+        assertFalse(result.hasCheckedResultForMode(bookmarkMode));
+        assertNull(result.displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertSame(previous, manager.getReusableCheckResult(bookmarkMode).displaySnapshot(bookmarkMode));
+    }
+
     @Test public void bothSubscriptionSourcesRestoreAcrossManagerRestartWithoutChangingTheTimer() {
         enableBookmark();
         start(true);
@@ -450,7 +475,7 @@ public class SubscriptionCheckReuseTest {
         var coordinator = new BookmarkSubscriptionCoordinator(client, scene);
         coordinator.refresh(1, bookmarks, true, restored);
         int before = requests.size();
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals("https://e-hentai.org/watched?next=90", requests.get(before).getArgs()[0]);
         succeed(before, page(70, null));
         flushResultWrites();
@@ -458,40 +483,38 @@ public class SubscriptionCheckReuseTest {
         coordinator.cancel();
     }
 
-    @Test public void failureDoesNotDiscardOtherSuccessfulSources() {
-        enableBookmark();
-        start(true);
+    @Test public void partiallySuccessfulFirstRoundDoesNotPublishAReusableSnapshot() {
+        enableBookmark(); start(true);
         succeed(0, page(200, null));
         requests.get(1).getCallback().onFailure(new IllegalArgumentException("invalid query"));
-        refresh(true, manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
-        assertEquals(3, requests.size());
-        assertEquals(ListUrlBuilder.MODE_NORMAL, requests.get(2).getArgs()[1]);
+        assertFalse(manager.isChecking());
+        assertNull(manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertNull(manager.getReusableCheckResult(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION));
+        assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION).isEmpty());
     }
 
-    @Test public void freshnessStartsAtRequestAndIsRecheckedByConsumers() {
+    @Test public void freshnessStillStartsAtTheOriginalRequestAndIsRechecked() {
         start(true);
         ShadowSystemClock.advanceBy(Duration.ofSeconds(59));
         succeed(0, page(200, null));
-        SubscriptionUpdateManager.RecentCheckResult cached =
-                manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        var cached = manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
         ShadowSystemClock.advanceBy(Duration.ofSeconds(1));
-        refresh(true, cached);
+        refresh(true, cached).cancel();
         assertEquals(1, requests.size());
         ShadowSystemClock.advanceBy(Duration.ofMillis(1));
         assertNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
-        refresh(true, cached);
+        refresh(true, cached).cancel();
         assertEquals(2, requests.size());
+        assertNotNull(manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
     }
 
-    @Test public void changedContextCannotReuseCachedResults() {
-        start(true);
-        succeed(0, page(200, null));
-        SubscriptionUpdateManager.RecentCheckResult cached =
-                manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+    @Test public void completedSnapshotRemainsReusableAfterContextChanges() {
+        start(true); succeed(0, page(200, null));
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
         contextKey = "account-b";
-        assertNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
-        refresh(true, cached);
-        assertEquals(2, requests.size());
+        assertNotNull(manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        refresh(true, cached).cancel();
+        assertEquals(1, requests.size());
     }
 
     @Test public void explicitReuseRetainsOlderCompatibleResultsAndTheirOriginalTime() {
@@ -516,7 +539,7 @@ public class SubscriptionCheckReuseTest {
             coordinator.cancel();
         }
         contextKey = "account-b";
-        assertNull(manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertNotNull(manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
     }
 
     @Test public void reusingBothAggregatedEntriesPreservesLastCheckAndAutomaticDeadline() {
@@ -538,17 +561,13 @@ public class SubscriptionCheckReuseTest {
         }
     }
 
-    @Test public void preparingReusedDataDoesNotAdvanceTheAutomaticDeadline() {
+    @Test public void displayingFrozenResultsDoesNotAdvanceTheAutomaticDeadline() {
         var cached = lightweightCheck();
-        long lastCheck = manager.getLastCheckTime();
-        long deadline = manager.getNextAutomaticCheckTime();
+        long lastCheck = manager.getLastCheckTime(), deadline = manager.getNextAutomaticCheckTime();
         ShadowSystemClock.advanceBy(Duration.ofMinutes(2));
-        manager.onSubscriptionOpened(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
-        var coordinator = refresh(true,
-                manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
-        var prepared = new GalleryListParser.Result();
-        prepared.galleryInfoList = SubscriptionGallerySnapshot.copy(cached.sources.get(0).galleryInfoList);
-        succeed(2, prepared);
+        var coordinator = refresh(true, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertNotNull(coordinator.getRestoredSnapshot());
+        assertEquals(2, requests.size());
         assertEquals(lastCheck, manager.getLastCheckTime());
         assertEquals(deadline, manager.getNextAutomaticCheckTime());
         coordinator.cancel();
@@ -608,8 +627,8 @@ public class SubscriptionCheckReuseTest {
                     }
                 });
         coordinator.refresh(1, bookmarks, true,
-                manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION), 490);
-        // Unfiltered cached pages can carry half-star ratings, so the filtered feed requests metadata.
+                null, 490);
+        // An explicit fresh request still applies the current exact rating and pagination rules.
         assertEquals(4, requests.size());
         assertEquals(490, requests.get(2).getArgs()[4]);
         assertEquals(490, requests.get(3).getArgs()[4]);
@@ -622,7 +641,7 @@ public class SubscriptionCheckReuseTest {
         }
         assertEquals(Collections.singletonList(true), more);
         assertEquals(4, requests.size()); // do not scan indefinitely when both extra pages were empty
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals(5, requests.size());
         assertFalse(((String) requests.get(4).getArgs()[0]).contains("f_sr"));
         coordinator.cancel();
@@ -673,13 +692,15 @@ public class SubscriptionCheckReuseTest {
                     }
                 });
         coordinator.refresh(2, bookmarks, true, cached, 0);
+        assertEquals(2, requests.size()); // Reuse deliberately ignores changed rating conditions.
+        coordinator.refresh(3, bookmarks, true, null, 0);
         assertEquals(4, requests.size());
         for (int i = 2; i < 4; i++) assertEquals(0, requests.get(i).getArgs()[4]);
         assertEquals(400, Settings.getPersistentMinRatingHundredths());
         coordinator.cancel();
         assertNotNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
         Settings.putPersistentMinRatingHundredths(350);
-        assertNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertNotNull(manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
         assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION).isEmpty());
         start(true);
         for (int i = 4; i < 6; i++) assertEquals(350, requests.get(i).getArgs()[4]);
@@ -757,7 +778,7 @@ public class SubscriptionCheckReuseTest {
                 manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
         assertEquals(Collections.singletonList(200L), displayed);
         assertEquals(2, requests.size());
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals(3, requests.size());
         assertEquals("https://e-hentai.org/watched?next=90", requests.get(2).getArgs()[0]);
         coordinator.cancel();
@@ -773,7 +794,7 @@ public class SubscriptionCheckReuseTest {
         checked.rawResultCount = 2;
         checked.rawTailPosted = "2026-09-19 00:00";
         checked.rawTailGid = 90;
-        checked.galleryInfoList.clear();
+        checked.subscriptionDisplayGalleries = SubscriptionGallerySnapshot.copy(checked.galleryInfoList);
         succeed(0, checked);
         assertTrue(manager.isChecking());
         GalleryListParser.Result closing=datedPage(80,"2026-09-18 00:00","https://e-hentai.org/watched?next=80");
@@ -784,54 +805,42 @@ public class SubscriptionCheckReuseTest {
         return manager.getRecentCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
     }
 
-    @Test public void lightweightCachePreparesFullPageWithoutRepeatingSearchAndRetainsPagination() {
+    @Test public void snapshotDisplaysWithoutPreparationAndRetainsPagination() {
         var cached = lightweightCheck();
-        assertTrue(cached.sources.get(0).requiresDisplayPreparation);
-        assertEquals(2, cached.sources.get(0).galleryInfoList.size());
-        List<Long> displayed = new ArrayList<>();
-        BookmarkSubscriptionCoordinator coordinator = new BookmarkSubscriptionCoordinator(client,
-                new BookmarkSubscriptionCoordinator.Listener() {
-                    @Override public void onBookmarkSubscriptionBatch(int taskId, List<GalleryInfo> data,
-                            boolean hasMore, boolean refresh, boolean noSubscriptions, boolean partialFailure) {
-                        assertFalse(partialFailure);
-                        assertTrue(hasMore);
-                        for (GalleryInfo gallery : data) displayed.add(gallery.gid);
-                    }
-                    @Override public void onBookmarkSubscriptionFailure(int taskId, Exception error) {
-                        throw new AssertionError(error);
-                    }
-                });
+        assertFalse(cached.sources.get(0).requiresDisplayPreparation);
+        List<List<Long>> shown = new ArrayList<>();
+        var coordinator = recordingCoordinator(shown);
         coordinator.refresh(1, bookmarks, true, cached, 0);
+        assertEquals(List.of(List.of(200L, 90L)), shown);
+        assertEquals(2, requests.size());
+        assertTrue(((List<?>) ReflectionHelpers.getField(coordinator, "mSources")).isEmpty());
+        coordinator.loadMore(2, 0);
         assertEquals(3, requests.size());
-        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(2).getMethod());
-        assertEquals(2, ((List<?>) requests.get(2).getArgs()[1]).size());
-        var prepared = new GalleryListParser.Result();
-        prepared.galleryInfoList = SubscriptionGallerySnapshot.copy(cached.sources.get(0).galleryInfoList);
-        succeed(2, prepared);
-        assertEquals(java.util.Arrays.asList(200L, 90L), displayed);
-        assertEquals(3, requests.size());
-        coordinator.loadMore(2);
-        assertEquals(4, requests.size());
-        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(3).getMethod());
-        assertEquals("https://e-hentai.org/watched?next=90", requests.get(3).getArgs()[0]);
+        assertEquals(EhClient.METHOD_GET_GALLERY_LIST, requests.get(2).getMethod());
+        assertEquals("https://e-hentai.org/watched?next=90", requests.get(2).getArgs()[0]);
+        succeed(2, page(70, null));
+        assertEquals(List.of(List.of(200L, 90L), List.of(70L)), shown);
+        assertEquals(List.of(200L, 90L), cached.displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .chronologicalGalleries.stream().map(g -> g.gid).toList());
         coordinator.cancel();
     }
 
-    @Test public void lightweightPreparationRetriesAndCanBeCancelledWithoutLosingRawCache() {
+    @Test public void cancelledPaginationDoesNotChangeTheFrozenFirstBatch() {
         var cached = lightweightCheck();
         var coordinator = refresh(true, cached);
+        coordinator.loadMore(2, 0);
         requests.get(2).getCallback().onFailure(new java.io.IOException("offline"));
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2));
         assertEquals(4, requests.size());
-        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(3).getMethod());
-        assertEquals(2, ((List<?>) requests.get(3).getArgs()[1]).size());
         coordinator.cancel();
         assertTrue(requests.get(3).isCancelled());
-        succeed(3, new GalleryListParser.Result());
-        // Opening again starts a separate consumer and keeps the retained raw page intact.
-        refresh(true, cached);
-        assertEquals(EhClient.METHOD_PREPARE_SUBSCRIPTION_LIST, requests.get(4).getMethod());
-        assertEquals(2, cached.sources.get(0).galleryInfoList.size());
+        succeed(3, page(999, null));
+        List<List<Long>> shown = new ArrayList<>();
+        coordinator = recordingCoordinator(shown);
+        coordinator.refresh(3, List.of(), true, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertEquals(List.of(List.of(200L, 90L)), shown);
+        assertEquals(4, requests.size());
+        coordinator.cancel();
     }
 
     @Test public void scannerUsesPublicationTimeAndScansAcrossSameMinuteAndLowGidTail() {
@@ -1298,6 +1307,203 @@ public class SubscriptionCheckReuseTest {
         });
         coordinator.refresh(1, bookmarks, includeEh, cached);
         return coordinator;
+    }
+
+    @Test public void failedOrCancelledRoundKeepsTheLastWhollySuccessfulSnapshot() {
+        enableBookmark(); start(true);
+        succeed(0, page(200, null)); succeed(1, page(199, null));
+        var previous = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        List<SubscriptionUpdateManager.RecentCheckResult> delivered = new ArrayList<>();
+        start(true);
+        assertTrue(manager.awaitCurrentCheck(delivered::add));
+        succeed(2, page(300, null));
+        requests.get(3).getCallback().onFailure(new IllegalArgumentException("bad query"));
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, delivered.size());
+        assertNull(delivered.get(0));
+        assertSame(previous, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        start(true);
+        assertTrue(manager.awaitCurrentCheck(delivered::add));
+        succeed(4, page(400, null));
+        manager.cancelCheck();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(2, delivered.size());
+        assertNull(delivered.get(1));
+        assertSame(previous, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        succeed(5, page(399, null)); // A late response cannot publish a cancelled round.
+        assertSame(previous, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+
+        start(true);
+        assertTrue(manager.awaitCurrentCheck(delivered::add));
+        succeed(6, page(500, null));
+        succeed(7, page(499, null));
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(3, delivered.size());
+        var replacement = delivered.get(2).displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        assertEquals(500L, replacement.galleries.get(0).gid);
+        assertSame(replacement, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+    }
+
+    @Test public void restoredSnapshotContinuesFromUnconsumedBuffersWithoutDuplicatesOrRewriting() throws Exception {
+        enableBookmark(); start(true);
+        succeed(0, listPage("https://e-hentai.org/watched?next=80", 100L, 90L, 80L));
+        succeed(1, listPage("https://e-hentai.org/?next=79", 99L, 89L, 79L));
+        succeed(2, listPage(null, 70L)); succeed(3, listPage(null, 69L));
+        assertFalse(manager.isChecking()); flushResultWrites();
+        var file = new java.io.File(RuntimeEnvironment.getApplication().getFilesDir(), "subscription-results-v1.json");
+        byte[] saved = java.nio.file.Files.readAllBytes(file.toPath());
+        manager = new SubscriptionUpdateManager(RuntimeEnvironment.getApplication());
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        List<List<Long>> shown = new ArrayList<>(); var coordinator = recordingCoordinator(shown);
+        coordinator.refresh(1, List.of(), true, cached);
+        assertEquals(List.of(List.of(100L, 99L, 90L)), shown);
+        assertEquals(4, requests.size());
+        coordinator.loadMore(2, 0);
+        assertEquals("https://e-hentai.org/watched?next=80", requests.get(4).getArgs()[0]);
+        succeed(4, listPage(null, 70L));
+        assertEquals(List.of(89L, 80L, 79L), shown.get(1));
+        coordinator.loadMore(3, 0);
+        assertEquals("https://e-hentai.org/?next=79", requests.get(5).getArgs()[0]);
+        succeed(5, listPage(null, 69L));
+        assertEquals(List.of(70L, 69L), shown.get(2));
+        flushResultWrites(); assertArrayEquals(saved, java.nio.file.Files.readAllBytes(file.toPath()));
+        coordinator.cancel();
+        shown.clear(); coordinator = recordingCoordinator(shown);
+        coordinator.refresh(4, List.of(), true, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        assertEquals(List.of(List.of(100L, 99L, 90L)), shown);
+        assertEquals(6, requests.size()); coordinator.cancel();
+    }
+
+    @Test public void savedDividerSurvivesAcknowledgementRestartAndChangedConditions() throws Exception {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        seedEh(page(100, null).galleryInfoList); start(true);
+        var result = datedPage(200, "2026-09-21 00:00", null);
+        result.galleryInfoList.addAll(page(100, null).galleryInfoList);
+        result.rawResultCount = 2; result.rawTailPosted = "2026-09-20 00:00"; result.rawTailGid = 100;
+        succeed(0, result);
+        var snapshot = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        assertEquals(1, snapshot.unreadCount); assertEquals(java.util.Set.of(200L), snapshot.unreadGids());
+        flushResultWrites();
+        assertEquals(java.util.Set.of(200L), manager.getUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION));
+        manager.acknowledgeSnapshot(snapshot);
+        assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION).isEmpty());
+        manager = new SubscriptionUpdateManager(RuntimeEnvironment.getApplication());
+        contextKey = "different-account";
+        Settings.putPersistentMinRatingHundredths(490);
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        List<List<Long>> shown = new ArrayList<>(); var coordinator = recordingCoordinator(shown);
+        coordinator.refresh(1, List.of(), true, cached, 490);
+        assertEquals(List.of(List.of(200L, 100L)), shown);
+        assertEquals(1, coordinator.getRestoredSnapshot().unreadCount);
+        assertTrue(coordinator.isNewGallery(result.galleryInfoList.get(0)));
+        assertFalse(coordinator.isNewGallery(result.galleryInfoList.get(1)));
+        assertEquals(1, requests.size()); coordinator.cancel();
+    }
+
+    @Test public void failedInteractiveRefreshDoesNotReplaceTheFrozenSnapshot() {
+        enableBookmark(); start(true);
+        succeed(0, page(200, null)); succeed(1, page(199, null));
+        var previous = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        GalleryListScene scene = new GalleryListScene();
+        ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+        var coordinator = new BookmarkSubscriptionCoordinator(client, scene);
+        coordinator.refresh(1, bookmarks, true, null);
+        succeed(2, page(300, null));
+        requests.get(3).getCallback().onFailure(new IllegalArgumentException("bad query"));
+        assertSame(previous, manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION)
+                .displaySnapshot(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION));
+        coordinator.cancel();
+    }
+
+    @Test public void restoredSearchAttributionSurvivesRestartAndChangedBookmarks() throws Exception {
+        enableBookmark();
+        start(true);
+        succeed(0, page(200, null));
+        succeed(1, page(199, null));
+        flushResultWrites();
+        manager = new SubscriptionUpdateManager(RuntimeEnvironment.getApplication());
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        bookmarks.get(0).keyword = "edited";
+        var coordinator = refresh(true, cached);
+        assertFalse(coordinator.hasSearchForGallery(200L));
+        assertTrue(coordinator.hasSearchForGallery(199L));
+        assertEquals("test", coordinator.buildSearchForGallery(199L).getKeyword());
+        assertEquals(2, requests.size());
+    }
+
+    @Test public void changedConditionsAllowBufferedResultsButRefreshBeforeRequestingAnotherPage() {
+        enableBookmark();
+        start(true);
+        var watched = page(200, "https://e-hentai.org/watched?next=180");
+        watched.rawTailGid = 180;
+        succeed(0, watched);
+        succeed(1, page(199, null));
+        succeed(2, page(179, null));
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        List<List<Long>> batches = new ArrayList<>();
+        List<Integer> refreshTasks = new ArrayList<>();
+        var coordinator = new BookmarkSubscriptionCoordinator(client, new BookmarkSubscriptionCoordinator.Listener() {
+            @Override public void onBookmarkSubscriptionBatch(int task, List<GalleryInfo> data,
+                    boolean more, boolean refresh, boolean empty, boolean partial) {
+                batches.add(data.stream().map(g -> g.gid).toList());
+            }
+            @Override public void onBookmarkSubscriptionContextChanged(int task) { refreshTasks.add(task); }
+            @Override public void onBookmarkSubscriptionFailure(int task, Exception error) { throw new AssertionError(error); }
+        });
+        // Changing only the subscribed query also invalidates its old cursor.
+        bookmarks.get(0).keyword = "edited";
+        coordinator.refresh(1, List.of(), true, cached, 0);
+        assertEquals(List.of(List.of(200L)), batches);
+        coordinator.loadMore(2, 0);
+        assertEquals(List.of(List.of(200L), List.of(199L)), batches);
+        assertTrue(refreshTasks.isEmpty());
+        coordinator.loadMore(3, 0);
+        assertEquals(List.of(3), refreshTasks);
+        assertEquals(3, requests.size());
+    }
+
+    @Test public void freshSnapshotKeepsBookmarkAttributionFromAnAlreadyConsumedPage() throws Exception {
+        enableBookmark();
+        var scene = new GalleryListScene();
+        ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
+        var coordinator = new BookmarkSubscriptionCoordinator(client, scene);
+        coordinator.refresh(1, bookmarks, true, null);
+        succeed(0, listPage(null, 200L, 100L));
+        succeed(1, page(200L, "https://e-hentai.org/?next=200"));
+        assertEquals(3, requests.size());
+        succeed(2, page(150L, null));
+        flushResultWrites();
+        manager = new SubscriptionUpdateManager(RuntimeEnvironment.getApplication());
+        var cached = manager.getReusableCheckResult(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION);
+        var restored = refresh(true, cached);
+        assertTrue(restored.hasSearchForGallery(200L));
+        assertTrue(restored.hasSearchForGallery(150L));
+        assertEquals("test", restored.buildSearchForGallery(200L).getKeyword());
+    }
+
+    private static GalleryListParser.Result listPage(String next, Long... gids) {
+        var result = page(gids[0], next);
+        for (int i = 1; i < gids.length; i++) result.galleryInfoList.addAll(page(gids[i], null).galleryInfoList);
+        result.rawResultCount = gids.length; result.rawTailGid = gids[gids.length - 1];
+        return result;
+    }
+
+    private BookmarkSubscriptionCoordinator recordingCoordinator(List<List<Long>> batches) {
+        return new BookmarkSubscriptionCoordinator(client, new BookmarkSubscriptionCoordinator.Listener() {
+            @Override public void onBookmarkSubscriptionBatch(int task, List<GalleryInfo> data,
+                    boolean more, boolean refresh, boolean empty, boolean partial) {
+                assertFalse(partial);
+                batches.add(data.stream().map(g -> g.gid).toList());
+            }
+            @Override public void onBookmarkSubscriptionFailure(int task, Exception error) { throw new AssertionError(error); }
+        });
     }
 
     @Implements(EhApplication.class)

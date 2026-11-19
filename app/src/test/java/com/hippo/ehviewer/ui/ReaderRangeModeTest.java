@@ -22,6 +22,8 @@ import com.hippo.ehviewer.gallery.GalleryProvider2;
 import com.hippo.ehviewer.gallery.RangeGalleryProvider;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.unifile.UniFile;
+import com.hippo.lib.glgallery.GalleryPageView;
+import com.hippo.lib.glgallery.GalleryView;
 import java.util.ArrayDeque;
 import java.util.Base64;
 import java.util.List;
@@ -96,7 +98,7 @@ public class ReaderRangeModeTest {
         ReflectionHelpers.callInstanceMethod(reader, "onInit");
         GalleryProvider2 provider = ReflectionHelpers.getField(reader, "mGalleryProvider");
         if (provider instanceof RangeGalleryProvider range) {
-            assertTrue(range.hasReadablePages()); ReflectionHelpers.setField(provider, "mSize", 3);
+            assertTrue(range.hasSelectedPages()); ReflectionHelpers.setField(provider, "mSize", 3);
         } else ReflectionHelpers.setField(reader, "mGalleryProvider", new DirGalleryProvider(directory) {
             @Override public int size() { return 30; }
         });
@@ -112,6 +114,60 @@ public class ReaderRangeModeTest {
         assertFalse(ReflectionHelpers.getField(full, "mRangeReaderMode"));
         assertEquals("阅读完整画廊", menu(range, 1).getListView().getAdapter().getItem(6));
         assertEquals("仅阅读已下载区间", menu(full, 18).getListView().getAdapter().getItem(6));
+    }
+    @Test public void incrementalSizeNotificationDoesNotScheduleAReaderJump() throws Exception {
+        TestReader reader = reader(false);
+        GalleryView view = new GalleryView.Builder(context, new GalleryView.Adapter() {
+            @Override public void onBind(GalleryPageView page, int index) { }
+            @Override public void onUnbind(GalleryPageView page, int index) { }
+            @Override public String getError() { return null; }
+            @Override public int size() { return 3; }
+        }).build();
+        ReflectionHelpers.setField(reader, "mGalleryView", view);
+        ReflectionHelpers.setField(reader, "mCurrentIndex", 1);
+        ReflectionHelpers.setField(reader, "mPendingUpdateStart", false);
+        Class<?> type = Class.forName(GalleryActivity.class.getName() + "$NotifyTask");
+        Runnable task = (Runnable) ReflectionHelpers.callConstructor(type,
+                ReflectionHelpers.ClassParameter.from(GalleryActivity.class, reader));
+        ReflectionHelpers.callInstanceMethod(task, "setData",
+                ReflectionHelpers.ClassParameter.from(int.class, ReflectionHelpers.<Integer>getStaticField(type, "KEY_SIZE_RETAINED")),
+                ReflectionHelpers.ClassParameter.from(int.class, 3));
+        task.run();
+        assertEquals(1, (int) ReflectionHelpers.getField(reader, "mCurrentIndex"));
+        assertTrue(ReflectionHelpers.<List<?>>getField(view, "mMethodList").isEmpty());
+        assertEquals(3, (int) ReflectionHelpers.getField(reader, "mSize"));
+    }
+    @Test public void incrementalReaderUpdateKeepsSourceAnchorAndAllowsFurtherNavigation() throws Exception {
+        SpiderDen.findImageFile(directory, 9).delete();
+        RangeGalleryProvider provider = new RangeGalleryProvider(context, info, 19);
+        assertTrue(provider.hasSelectedPages());
+        provider.putStartPage(1);
+        try (java.io.InputStream input = SpiderDen.findImageFile(directory, 19).openInputStream();
+                java.io.OutputStream output = directory.createFile(SpiderDen.generateImageFilename(9, ".png")).openOutputStream()) {
+            com.hippo.lib.yorozuya.IOUtils.copy(input, output);
+        }
+        assertTrue(provider.hasSelectedPages());
+        assertEquals(1, provider.getStartPage());
+        provider.onPageListUpdated(1);
+        assertEquals(19, provider.getAnchorSourcePage());
+        provider.putStartPage(2);
+        assertEquals(29, provider.getAnchorSourcePage());
+        assertEquals(29, GalleryDownloadRangeStore.peek(info.gid).readingPage());
+        com.hippo.ehviewer.spider.SpiderInfo full = new com.hippo.ehviewer.spider.SpiderInfo();
+        full.pages = 30; full.startPage = 0;
+        assertEquals(new com.hippo.ehviewer.download.DownloadReadingProgress(3, 3),
+                com.hippo.ehviewer.download.DownloadReadingProgress.resolve(info.gid, full));
+        assertFalse(work.isEmpty()); // List progress is fresh even before the disk worker executes.
+    }
+
+    @Test public void fullToRangeCanOpenBeforeAnySelectedPageHasFinishedDownloading() {
+        for (int page : new int[]{9, 19, 29}) SpiderDen.findImageFile(directory, page).delete();
+        TestReader reader = reader(true);
+        menu(reader, 18).getListView().performItemClick(null, 6, 6);
+        while (!work.isEmpty()) work.remove().run();
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertNotNull(reader.switched);
+        assertTrue(reader.switched.getBooleanExtra(GalleryActivity.KEY_RANGE_READER_MODE, false));
     }
     @Test public void rangeToFullUsesSourcePageAndRetainsTheSameDownloadRecord() {
         TestReader reader = reader(false);
@@ -131,7 +187,7 @@ public class ReaderRangeModeTest {
         assertTrue(reader.switched.getBooleanExtra(GalleryActivity.KEY_RANGE_READER_MODE, false));
         assertEquals(18, reader.switched.getIntExtra("range_source_page", -1));
         RangeGalleryProvider provider = new RangeGalleryProvider(context, info, 18);
-        assertTrue(provider.hasReadablePages()); assertEquals(1, provider.getStartPage());
+        assertTrue(provider.hasSelectedPages()); assertEquals(1, provider.getStartPage());
         assertEquals(19, provider.getSourcePage(1));
     }
     @Test public void menuTypographyMatchesOriginalAcrossAllReaderThemes() {

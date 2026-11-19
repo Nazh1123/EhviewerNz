@@ -12,6 +12,8 @@ import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.BitSet;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,12 +25,46 @@ public final class GalleryDownloadRangeStore {
     private static volatile GalleryDownloadRangeStore instance;
     private static final Map<Long, ReentrantReadWriteLock> locks = new ConcurrentHashMap<>();
     private static final Set<Long> editing = ConcurrentHashMap.newKeySet();
-    private static final Map<Long, java.util.concurrent.atomic.AtomicLong> versions = new ConcurrentHashMap<>();
+    private static final Map<Long, Set<ImageChanges>> imageReaders = new ConcurrentHashMap<>();
     private final SharedPreferences preferences;
     private final Context application;
     private final Map<Long, Entry> ranges = new ConcurrentHashMap<>();
 
     public record Entry(GalleryPageRange range, int readingPage, boolean pending) { }
+
+    public record ImageUpdate(boolean rescan, BitSet pages) { }
+
+    /** Accumulates changes only while a range reader is running. */
+    public static final class ImageChanges implements AutoCloseable {
+        private final long gid;
+        private long version;
+        private boolean rescan = true;
+        private BitSet pages = new BitSet();
+
+        private ImageChanges(long gid) { this.gid = gid; }
+
+        private synchronized void add(int page) {
+            if (page < 0) rescan = true;
+            else pages.set(page);
+            version++;
+        }
+
+        public synchronized long version() { return version; }
+
+        public synchronized ImageUpdate drain() {
+            ImageUpdate update = new ImageUpdate(rescan, pages);
+            rescan = false;
+            pages = new BitSet();
+            return update;
+        }
+
+        @Override public void close() {
+            imageReaders.computeIfPresent(gid, (ignored, readers) -> {
+                readers.remove(this);
+                return readers.isEmpty() ? null : readers;
+            });
+        }
+    }
 
     private GalleryDownloadRangeStore(Context context) {
         application = context.getApplicationContext();
@@ -45,8 +81,24 @@ public final class GalleryDownloadRangeStore {
     }
     @Nullable public static Entry peek(long gid) { return instance != null ? instance.ranges.get(gid) : null; }
     public static boolean isRange(long gid) { return peek(gid) != null; }
-    public static long version(long gid) { return versions.computeIfAbsent(gid, ignored -> new java.util.concurrent.atomic.AtomicLong()).get(); }
-    public static void changed(long gid) { versions.computeIfAbsent(gid, ignored -> new java.util.concurrent.atomic.AtomicLong()).incrementAndGet(); }
+    public static ImageChanges trackImages(long gid) {
+        ImageChanges changes = new ImageChanges(gid);
+        imageReaders.compute(gid, (ignored, readers) -> {
+            if (readers == null) readers = new HashSet<>();
+            readers.add(changes);
+            return readers;
+        });
+        return changes;
+    }
+
+    public static void changed(long gid) { imageChanged(gid, -1); }
+
+    public static void imageChanged(long gid, int page) {
+        imageReaders.computeIfPresent(gid, (ignored, readers) -> {
+            for (ImageChanges reader : readers) reader.add(page);
+            return readers;
+        });
+    }
     public static boolean isEditing(long gid) { return editing.contains(gid); }
     public static boolean beginEdit(long gid) { return editing.add(gid); }
     public static void endEdit(long gid) { editing.remove(gid); }
@@ -91,6 +143,19 @@ public final class GalleryDownloadRangeStore {
         if (entry == null || !entry.range.contains(sourcePage)) return;
         Entry next = new Entry(entry.range, sourcePage, entry.pending);
         try { save(gid, next); } catch (Exception e) { Log.w("DownloadRange", "Unable to save range progress", e); }
+    }
+
+    /** Publish reader progress without doing disk I/O on the render thread. */
+    public synchronized void recordReadingPage(long gid, int sourcePage) {
+        Entry entry = ranges.get(gid);
+        if (entry != null && entry.range.contains(sourcePage))
+            ranges.put(gid, new Entry(entry.range, sourcePage, entry.pending));
+    }
+
+    public synchronized void flushReadingPage(long gid) {
+        Entry entry = ranges.get(gid);
+        if (entry == null) return;
+        try { save(gid, entry); } catch (Exception e) { Log.w("DownloadRange", "Unable to save range progress", e); }
     }
 
     /** Preserve scope when the app's database backup is moved without its image folders. */

@@ -1112,6 +1112,7 @@
     <string name="settings_fork_category_subscriptions">購読</string>
     <string name="settings_bookmark_subscription_management">ブックマーク購読の管理</string>
     <string name="settings_subscription_sidebar_buttons">サイドバーのボタンを表示</string>
+    <string name="settings_subscription_updates">サブスクリプションの更新</string>
     <string name="settings_subscription_sidebar_eh">EH 購読</string>
     <string name="settings_fork_auto_subscription_updates_bookmark">ブックマーク購読を自動更新</string>
     <string name="settings_test_bookmark_subscription">ブックマーク購読をテスト</string>
@@ -1165,7 +1166,7 @@
     <string name="gallery_update_available">新しいバージョンでこのダウンロード済みギャラリーを再利用できます</string>
     <string name="settings_fork_category_gallery">ギャラリーと検索</string>
     <string name="settings_fork_category_reading">読書と保存</string>
-    <string name="settings_fork_category_animated_webp">アニメーション WebP</string>
+    <string name="settings_fork_category_animated_webp">アニメーション画像</string>
     <string name="settings_fork_category_downloads">ダウンロード管理</string>
     <string name="import_local_folder">ローカルフォルダーをインポート</string>
     <string name="import_folder_title">画像フォルダーを選択</string>

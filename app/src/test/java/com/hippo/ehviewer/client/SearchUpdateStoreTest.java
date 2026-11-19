@@ -154,6 +154,75 @@ public class SearchUpdateStoreTest {
         assertFalse(page("b",List.of(gallery(110,110),gallery(90,90))).newGids().contains(110L));
         assertTrue(read("b").isNew(gallery(105,105)));
     }
+
+    @Test public void anotherQueryConfirmationDoesNotMoveTheLocalViewedBoundary() {
+        seed("a");seed("b");
+        store.commit(page("a",List.of(gallery(110,110),gallery(90,90))),true);
+        SearchUpdateStore.Pass browsing=page("b",List.of(gallery(120,120),gallery(110,110),gallery(90,90)));
+        assertEquals(Set.of(120L),browsing.newGids()); // Notifications still deduplicate 110.
+        assertEquals(Set.of(120L,110L),browsing.queryDisplayNewGids());
+        store.commit(browsing,true);
+        assertTrue(page("b",List.of(gallery(120,120),gallery(110,110),gallery(90,90)))
+                .queryDisplayNewGids().isEmpty());
+    }
+
+    @Test public void backgroundCheckKeepsQueryLocalUpdatesEvenWhenAnotherQueryConfirmedThem() {
+        seed("a");seed("b");
+        store.commit(page("a",List.of(gallery(110,110),gallery(90,90))),true);
+        store.commit(page("b",List.of(gallery(110,110),gallery(90,90))),false);
+        assertTrue(read("b").unread().isEmpty());
+        store.close();store=new SearchUpdateStore(RuntimeEnvironment.getApplication());
+        SearchUpdateStore.Pass browsing=page("b",List.of(gallery(110,110),gallery(90,90)));
+        assertTrue(browsing.displayNewGids().isEmpty());
+        assertEquals(Set.of(110L),browsing.queryDisplayNewGids());
+        store.commit(browsing,true);
+        assertTrue(page("b",List.of(gallery(110,110),gallery(90,90))).queryDisplayNewGids().isEmpty());
+    }
+
+    @Test public void laterCrossQueryConfirmationCannotClearCapturedLocalUpdates() {
+        seed("a");seed("b");
+        store.commit(page("b",List.of(gallery(110,110),gallery(90,90))),false);
+        store.commit(page("a",List.of(gallery(110,110),gallery(90,90))),true);
+        assertTrue(read("b").unread().isEmpty());
+        assertEquals(Set.of(110L),page("b",List.of(gallery(110,110),gallery(90,90))).queryDisplayNewGids());
+    }
+
+    @Test public void staleBrowsingCannotConsumeNewerLocalUpdates() {
+        seed("a");
+        store.commit(page("a",List.of(gallery(110,110),gallery(90,90))),false);
+        SearchUpdateStore.Pass browsing=page("a",List.of(gallery(110,110)));
+        store.commit(page("a",List.of(gallery(120,120),gallery(110,110),gallery(90,90))),false);
+        store.commit(browsing,true);
+        assertEquals(Set.of(120L),page("a",List.of(gallery(120,120),gallery(110,110),gallery(90,90)))
+                .queryDisplayNewGids());
+    }
+
+    @Test public void upgradeRecoversOnlyTheQueryLocalViewedFrontier() {
+        seed("a");seed("b");
+        store.commit(page("b",List.of(gallery(110,110),gallery(90,90))),false);
+        store.commit(page("a",List.of(gallery(110,110),gallery(90,90))),true);
+        // Rebuild the galleries table as version 1, retaining real checkpoint/acknowledgement data.
+        android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();
+        db.execSQL("ALTER TABLE galleries RENAME TO galleries_v2");
+        db.execSQL("CREATE TABLE galleries (query_id TEXT NOT NULL, gid INTEGER NOT NULL, "
+                + "posted INTEGER NOT NULL, qualified INTEGER NOT NULL DEFAULT 0, "
+                + "active INTEGER NOT NULL DEFAULT 0, detected INTEGER NOT NULL DEFAULT 0, "
+                + "acknowledged INTEGER NOT NULL DEFAULT 0, snapshot INTEGER NOT NULL DEFAULT 0, "
+                + "touched INTEGER NOT NULL, PRIMARY KEY(query_id,gid)) WITHOUT ROWID");
+        db.execSQL("INSERT INTO galleries SELECT query_id,gid,posted,qualified,active,detected,"
+                + "acknowledged,snapshot,touched FROM galleries_v2");
+        db.execSQL("DROP TABLE galleries_v2");
+        db.execSQL("CREATE INDEX galleries_identity ON galleries(gid,acknowledged)");
+        db.setVersion(1);
+        store.close();store=new SearchUpdateStore(RuntimeEnvironment.getApplication());
+        assertEquals(2,store.getReadableDatabase().getVersion());
+        assertTrue(page("a",List.of(gallery(110,110),gallery(90,90))).queryDisplayNewGids().isEmpty());
+        assertEquals(Set.of(110L),page("b",List.of(gallery(110,110),gallery(90,90))).queryDisplayNewGids());
+        assertTrue(read("b").unread().isEmpty());
+        store.commit(page("b",List.of(gallery(120,120),gallery(110,110),gallery(90,90))),true);
+        assertTrue(page("b",List.of(gallery(120,120),gallery(110,110),gallery(90,90)))
+                .queryDisplayNewGids().isEmpty());
+    }
     @Test public void accountAndSiteScopesDoNotShareConfirmation() {
         seed("a");store.commit(page("a",List.of(gallery(110,110),gallery(90,90))),true);
         assertFalse(store.read("other-account/site","a").initialized);
@@ -189,6 +258,23 @@ public class SearchUpdateStoreTest {
         store.commit(next,false);
         assertEquals(2000,read("a").unread().size());
         assertEquals(2000,store.unread("account/site",List.of("a")).size());
+    }
+
+    @Test public void sharedConfirmationCannotEvictUpdatesStillUnviewedInAnotherQuery() {
+        seed("a");seed("b");
+        List<GalleryInfo> rows=new ArrayList<>();
+        for(int i=0;i<1100;i++)rows.add(gallery(10000+i,3000-i));
+        store.commit(page("a",rows),true);
+        SearchUpdateStore.Pass check=pass("b");
+        check.observe(rows.subList(0,25),rows.subList(0,25),rows.get(24).posted,true);
+        check.observe(rows.subList(25,rows.size()),rows.subList(25,rows.size()),rows.get(1099).posted,false);
+        store.commit(check,false);
+        SearchUpdateStore.Pass next=pass("b");
+        next.observe(rows.subList(0,25),rows.subList(0,25),rows.get(24).posted,true);
+        next.observe(rows.subList(25,26),rows.subList(25,26),rows.get(25).posted,true);
+        store.commit(next,false);
+        assertTrue(read("b").unread().isEmpty());
+        assertEquals(1100,pass("b").queryDisplayNewGids().size());
     }
 
     @Test public void absenceOutsideSuccessfullyScannedWindowDoesNotClearUnread() {

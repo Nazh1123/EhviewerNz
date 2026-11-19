@@ -19,7 +19,7 @@ public final class SeenGalleryHistory {
         public Search(String key, GallerySeenState baseline, boolean bookmarked, boolean subscribed) {
             this(key, baseline, bookmarked, subscribed, null);
         }
-        public Set<Long> newGids() { return session == null ? Set.of() : session.displayNewGids(); }
+        public Set<Long> newGids() { return session == null ? Set.of() : session.queryDisplayNewGids(); }
     }
 
     public static boolean supports(ListUrlBuilder builder) {

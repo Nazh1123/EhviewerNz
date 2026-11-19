@@ -428,10 +428,17 @@ public class PopularGalleryRenderingTest {
         assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
         assertEquals(recycler.getWidth() - recycler.getPaddingLeft() - recycler.getPaddingRight(),
                 divider.getWidth());
-        assertEquals(11, divider.getPaddingTop());
-        assertEquals(11, divider.getPaddingBottom());
-        assertEquals(46, divider.getHeight());
+        assertEquals(34, divider.getPaddingTop());
+        assertEquals(34, divider.getPaddingBottom());
+        assertEquals(92, divider.getHeight());
         assertTrue(divider instanceof com.hippo.ehviewer.widget.GallerySectionDivider);
+
+        int task = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        assertEquals(scene.getContext().getString(R.string.refresh), divider.getContentDescription());
+        assertTrue(divider.performClick());
+        assertNotEquals(task, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+        assertSame(helper, ReflectionHelpers.getField(scene, "mHelper"));
+        assertSame(builder, ReflectionHelpers.getField(scene, "mUrlBuilder"));
     }
 
     @Test public void headerRefreshAndModeSwitchResetExpansion() {
@@ -569,7 +576,7 @@ public class PopularGalleryRenderingTest {
             adapter.setType(GalleryAdapterNew.TYPE_GRID);
             layout();
             View divider = recycler.findViewHolderForAdapterPosition(2).itemView;
-            assertEquals(46, divider.getHeight());
+            assertEquals(92, divider.getHeight());
             assertTrue(((StaggeredGridLayoutManager.LayoutParams) divider.getLayoutParams()).isFullSpan());
             assertEquals(3, helper.getAdapterPosition(0));
             assertEquals(1, helper.getDataPosition(0));
@@ -791,6 +798,44 @@ public class PopularGalleryRenderingTest {
         builder.set(second);
         refresh(190, 180);
         assertEquals(Arrays.asList(190L, 180L), visibleIds());
+    }
+
+    @Test public void overlappingBookmarksKeepTheirOwnViewedDividerAndGalleryOrder() {
+        assertOverlappingBookmarkBoundaries(false);
+    }
+
+    @Test public void overlappingSubscribedBookmarksKeepTheirOwnViewedDividerAndGalleryOrder() {
+        assertOverlappingBookmarkBoundaries(true);
+    }
+
+    private void assertOverlappingBookmarkBoundaries(boolean subscribed) {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("bookmark-b");
+        QuickSearch second = builder.toQuickSearch();
+        second.subscribed = subscribed;
+        bookmarks.add(second);
+        refresh(100, 90);
+
+        builder.setKeyword("bookmark-a");
+        QuickSearch first = builder.toQuickSearch();
+        first.subscribed = subscribed;
+        bookmarks.add(first);
+        refresh(110, 100, 90);
+
+        builder.set(second);
+        refresh(120, 110, 100, 95, 90);
+        // 110 was displayed under A, but is still new relative to B's own last visit.
+        assertEquals(Arrays.asList(120L, 110L, 95L, null, 100L, 90L), visibleIds());
+        assertEquals(Arrays.asList(120L, 110L, 100L, 95L, 90L), ids(helper.getData()));
+        Bundle saved = new Bundle();
+        scene.onSaveInstanceState(saved);
+        ReflectionHelpers.callInstanceMethod(scene, "onRestore", ClassParameter.from(Bundle.class, saved));
+        builder = ReflectionHelpers.getField(scene, "mUrlBuilder");
+        ReflectionHelpers.callInstanceMethod(adapter, "onSourceDataSetChanged");
+        assertEquals(Arrays.asList(120L, 110L, 95L, null, 100L, 90L), visibleIds());
+        refresh(120, 110, 100, 95, 90);
+        assertEquals(Arrays.asList(null, 120L, 110L, 100L, 95L, 90L), visibleIds());
     }
 
     @Test public void subscriptionRefreshRecomputesUpdatesAgainstPreviousPublicationState() {

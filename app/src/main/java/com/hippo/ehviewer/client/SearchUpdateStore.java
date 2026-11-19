@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Query-local checkpoints and one shared identity ledger. No per-check history is retained. */
+/** Query-local checkpoints/browsing and shared notification confirmations. No per-check history is retained. */
 public final class SearchUpdateStore extends SQLiteOpenHelper {
     public static final String DATABASE = "search-updates.db";
     public static final int HISTORY_LIMIT = 1000;
@@ -28,7 +28,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
     public static void initialize(Context context) { defaultContext = context.getApplicationContext(); }
 
     public SearchUpdateStore(Context context) {
-        super(context.getApplicationContext(), DATABASE, null, 1);
+        super(context.getApplicationContext(), DATABASE, null, 2);
     }
 
     public static SearchUpdateStore open() {
@@ -45,6 +45,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                 + "posted INTEGER NOT NULL, qualified INTEGER NOT NULL DEFAULT 0, "
                 + "active INTEGER NOT NULL DEFAULT 0, "
                 + "detected INTEGER NOT NULL DEFAULT 0, acknowledged INTEGER NOT NULL DEFAULT 0, "
+                + "browsed INTEGER NOT NULL DEFAULT 0, "
                 + "snapshot INTEGER NOT NULL DEFAULT 0, touched INTEGER NOT NULL, "
                 + "PRIMARY KEY(query_id,gid)) WITHOUT ROWID");
         db.execSQL("CREATE INDEX galleries_identity ON galleries(gid,acknowledged)");
@@ -52,7 +53,14 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-        throw new IllegalStateException("Unsupported search state version: " + oldVersion);
+        if (oldVersion == 1 && newVersion == 2) {
+            db.execSQL("ALTER TABLE galleries ADD COLUMN browsed INTEGER NOT NULL DEFAULT 0");
+            // Recover query-local browsing from its own frontier, never from shared acknowledgements.
+            db.execSQL("UPDATE galleries SET browsed=1 WHERE EXISTS (SELECT 1 FROM queries q "
+                    + "WHERE q.id=galleries.query_id AND q.viewed>0 AND galleries.detected<=q.viewed)");
+        } else {
+            throw new IllegalStateException("Unsupported search state version: " + oldVersion);
+        }
     }
 
     /** Pagination and presentation do not define the identity of a logical search. */
@@ -82,7 +90,8 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
         }
     }
 
-    private record Entry(long posted, boolean qualified, long detected, boolean acknowledged, long snapshot, boolean active) { }
+    private record Entry(long posted, boolean qualified, long detected, boolean acknowledged,
+                         long snapshot, boolean active, boolean browsed) { }
 
     public static final class Snapshot {
         public final String scope;
@@ -104,7 +113,11 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
         }
 
         public boolean isNew(GalleryInfo gallery) {
-            if (!initialized || gallery.gid <= 0 || confirmed.contains(gallery.gid)) return false;
+            return !confirmed.contains(gallery.gid) && isNewInQuery(gallery);
+        }
+
+        private boolean isNewInQuery(GalleryInfo gallery) {
+            if (!initialized || gallery.gid <= 0) return false;
             Entry entry = entries.get(gallery.gid);
             if (entry != null && entry.qualified) return false;
             long posted = GallerySeenState.postedMinute(gallery.posted);
@@ -124,6 +137,20 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             Entry entry = entries.get(gallery.gid);
             return entry != null && entry.detected > 0 && !entry.acknowledged
                     && !confirmed.contains(gallery.gid) || isNew(gallery);
+        }
+
+        // Shared acknowledgements suppress duplicate alerts, but cannot advance another query's divider.
+        private Set<Long> unviewedInQuery() {
+            Set<Long> result = new HashSet<>();
+            entries.forEach((gid, row) -> {
+                if (row.active && row.detected > 0 && !row.browsed) result.add(gid);
+            });
+            return result;
+        }
+
+        private boolean isUnviewedInQuery(GalleryInfo gallery) {
+            Entry entry = entries.get(gallery.gid);
+            return (entry != null && entry.detected > 0 && !entry.browsed) || isNewInQuery(gallery);
         }
 
         /** Legacy UI bundle adapter only; durable membership lives in the SQLite ledger. */
@@ -168,10 +195,11 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             }
         }
         Map<Long, Entry> entries = new HashMap<>();
-        try (Cursor c = db.rawQuery("SELECT gid,posted,qualified,detected,acknowledged,snapshot,active "
+        try (Cursor c = db.rawQuery("SELECT gid,posted,qualified,detected,acknowledged,snapshot,active,browsed "
                 + "FROM galleries WHERE query_id=?", new String[]{key})) {
             while (c.moveToNext()) entries.put(c.getLong(0), new Entry(c.getLong(1),
-                    c.getInt(2) != 0, c.getLong(3), c.getInt(4) != 0, c.getLong(5), c.getInt(6) != 0));
+                    c.getInt(2) != 0, c.getLong(3), c.getInt(4) != 0, c.getLong(5), c.getInt(6) != 0,
+                    c.getInt(7) != 0));
         }
         Set<Long> confirmed = new HashSet<>();
         try (Cursor c = db.rawQuery("SELECT DISTINCT g.gid FROM galleries g JOIN queries q "
@@ -233,6 +261,21 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             return result;
         }
 
+        private Set<Long> newGidsInQuery() {
+            Set<Long> result = new HashSet<>();
+            for (GalleryInfo gallery : eligible.values()) if (baseline.isNewInQuery(gallery)) result.add(gallery.gid);
+            return result;
+        }
+
+        /** The divider describes this query's last visit; notification deduplication is separate. */
+        public Set<Long> queryDisplayNewGids() {
+            Set<Long> result = baseline.unviewedInQuery();
+            for (GalleryInfo gallery : eligible.values()) {
+                if (baseline.isUnviewedInQuery(gallery)) result.add(gallery.gid);
+            }
+            return result;
+        }
+
         public Set<Long> displayNewGids() {
             Set<Long> result = baseline.unread();
             for (GalleryInfo gallery : eligible.values()) {
@@ -255,7 +298,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             long version = current.version + 1;
             boolean replaceCheckpoint = (pass.complete() || !current.initialized)
                     && current.version == pass.expectedVersion;
-            Set<Long> detected = pass.newGids();
+            Set<Long> detected = pass.newGidsInQuery();
             ContentValues state = new ContentValues();
             state.put("id", key); state.put("scope", pass.baseline.scope);
             state.put("touched", System.currentTimeMillis());
@@ -285,6 +328,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                 row.put("active", qualified || current.version != pass.expectedVersion
                         && old != null && old.active ? 1 : 0);
                 row.put("detected", firstDetected); row.put("acknowledged", acknowledged ? 1 : 0);
+                row.put("browsed", (browsing && qualified) || (old != null && old.browsed) ? 1 : 0);
                 boolean inSnapshot = pass.floor == 0 || GallerySeenState.postedMinute(gallery.posted) >= pass.floor;
                 row.put("snapshot", replaceCheckpoint ? (inSnapshot ? version : 0)
                         : old != null ? old.snapshot : 0);
@@ -299,6 +343,14 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                     args.addAll(captured.subList(start, Math.min(start + 400, captured.size())));
                     String placeholders = String.join(",", java.util.Collections.nCopies(args.size() - 2, "?"));
                     db.execSQL("UPDATE galleries SET acknowledged=1 WHERE query_id=? AND detected<=? "
+                            + "AND gid IN (" + placeholders + ")", args.toArray());
+                }
+                List<Long> unviewed = new ArrayList<>(pass.baseline.unviewedInQuery());
+                for (int start = 0; start < unviewed.size(); start += 400) {
+                    List<Object> args = new ArrayList<>(); args.add(key); args.add(pass.baseline.version);
+                    args.addAll(unviewed.subList(start, Math.min(start + 400, unviewed.size())));
+                    String placeholders = String.join(",", java.util.Collections.nCopies(args.size() - 2, "?"));
+                    db.execSQL("UPDATE galleries SET browsed=1 WHERE query_id=? AND detected<=? "
                             + "AND gid IN (" + placeholders + ")", args.toArray());
                 }
                 db.execSQL("UPDATE galleries SET acknowledged=1 WHERE gid IN (SELECT gid FROM galleries "
@@ -324,9 +376,11 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             db.update("queries", state, "id=?", new String[]{key});
             db.execSQL("DELETE FROM galleries WHERE query_id=? AND snapshot=0 "
                             + "AND (acknowledged=1 OR detected=0 OR active=0) AND gid NOT IN "
+                            + "(SELECT gid FROM galleries WHERE query_id=? AND active=1 AND detected>0 AND browsed=0) "
+                            + "AND gid NOT IN "
                             + "(SELECT gid FROM galleries WHERE query_id=? AND snapshot=0 "
                             + "AND (acknowledged=1 OR detected=0 OR active=0) ORDER BY touched DESC,gid DESC LIMIT ?)",
-                    new Object[]{key, key, HISTORY_LIMIT});
+                    new Object[]{key, key, key, HISTORY_LIMIT});
             db.setTransactionSuccessful();
             pass.expectedVersion = version;
         } finally { db.endTransaction(); }

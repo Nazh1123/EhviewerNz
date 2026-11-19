@@ -25,11 +25,13 @@ import android.os.Looper;
 import androidx.annotation.Nullable;
 
 import com.hippo.ehviewer.client.EhClient;
+import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.client.BookmarkSubscriptionPlanner;
 import com.hippo.ehviewer.client.EhRequest;
 import com.hippo.ehviewer.client.SubscriptionUpdateManager;
 import com.hippo.ehviewer.client.SubscriptionSearchContext;
 import com.hippo.ehviewer.client.SubscriptionGallerySnapshot;
+import com.hippo.ehviewer.client.SubscriptionDisplaySnapshot;
 import com.hippo.ehviewer.client.SubscriptionRetry;
 import com.hippo.ehviewer.client.SearchRating;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -66,9 +68,14 @@ final class BookmarkSubscriptionCoordinator {
 
         void onBookmarkSubscriptionFailure(int taskId, Exception error);
 
+        default void onBookmarkSubscriptionContextChanged(int taskId) { }
+
         default void onBookmarkSubscriptionProgress() { }
 
         default void onBookmarkSubscriptionSourcesLoaded(String contextKey, String displayKey,
+                List<SubscriptionUpdateManager.RecentCheckSource> sources) { }
+
+        default void onBookmarkSubscriptionSnapshots(List<SubscriptionDisplaySnapshot> snapshots,
                 List<SubscriptionUpdateManager.RecentCheckSource> sources) { }
     }
 
@@ -77,7 +84,8 @@ final class BookmarkSubscriptionCoordinator {
         @Nullable final BookmarkSubscriptionPlanner.Source plan;
         final ListUrlBuilder builder = new ListUrlBuilder();
         final ArrayList<GalleryInfo> buffer = new ArrayList<>();
-        final SearchUpdateSession session;
+        SearchUpdateSession session;
+        @Nullable SubscriptionUpdateManager.RecentCheckSource restoredPage;
         boolean responseReady;
         final Set<String> visitedUrls = new HashSet<>();
 
@@ -97,19 +105,28 @@ final class BookmarkSubscriptionCoordinator {
         @Nullable SubscriptionUpdateManager.RecentCheckSource cachedCheck;
 
         Source(int id, BookmarkSubscriptionPlanner.Source plan) {
+            this(id, plan, false);
+        }
+
+        Source(int id, @Nullable BookmarkSubscriptionPlanner.Source plan, boolean deferSession) {
             this.id = id;
             this.plan = plan;
-            builder.set(plan.createBuilder());
+            if (plan == null) builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
+            else builder.set(plan.createBuilder());
             builder.setPageIndex(0);
-            session = new SearchUpdateSession(builder, plan);
+            if (!deferSession) session = new SearchUpdateSession(builder, plan);
         }
 
         Source(int id) {
-            this.id = id;
-            plan = null;
-            builder.setMode(ListUrlBuilder.MODE_SUBSCRIPTION);
-            builder.setPageIndex(0);
-            session = new SearchUpdateSession(builder, plan);
+            this(id, null, false);
+        }
+
+        SearchUpdateSession session() {
+            if (session == null) {
+                session = new SearchUpdateSession(builder, plan);
+                if (restoredPage != null) session.observe(restoredPage.asPageResult(), !restoredPage.exhausted);
+            }
+            return session;
         }
 
         boolean hasVisibleItem() {
@@ -173,6 +190,10 @@ final class BookmarkSubscriptionCoordinator {
     private boolean mHasCachedInitialSource;
     private boolean mMissingInitialSources;
     private boolean mCompletedCheckOnly;
+    @Nullable private SubscriptionDisplaySnapshot mRestoredSnapshot;
+    private boolean mIncludeEhSubscription;
+
+    @Nullable SubscriptionDisplaySnapshot getRestoredSnapshot() { return mRestoredSnapshot; }
     private long mReusedResultCompletedTimeMillis = -1L;
 
     long getReusedResultCompletedTimeMillis() { return mReusedResultCompletedTimeMillis; }
@@ -220,6 +241,7 @@ final class BookmarkSubscriptionCoordinator {
 
     boolean matchesSubscriptions(List<QuickSearch> quickSearches,
                                  boolean includeEhSubscription) {
+        if (mRestoredSnapshot != null) return true;
         return mSubscriptionFingerprint.equals(
                 getFingerprint(quickSearches, includeEhSubscription));
     }
@@ -310,10 +332,12 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     boolean hasSearchForGallery(long gid) {
+        restoreSources();
         return mUnresolvedQuickSearches.containsKey(gid) || buildSearchForGallery(gid) != null;
     }
 
     void resolveSearchForGallery(long gid, EhClient.Callback<ListUrlBuilder> callback) {
+        restoreSources();
         if (mResolution != null) return;
         Set<QuickSearch> candidates = mUnresolvedQuickSearches.get(gid);
         if (candidates == null || candidates.isEmpty()) {
@@ -382,6 +406,23 @@ final class BookmarkSubscriptionCoordinator {
                  @Nullable SubscriptionUpdateManager.RecentCheckResult recentResult,
                  int minRatingHundredths, boolean completedCheckOnly) {
         cancel();
+        mIncludeEhSubscription = includeEhSubscription;
+        SubscriptionDisplaySnapshot snapshot = recentResult == null ? null : recentResult.displaySnapshot(
+                includeEhSubscription ? ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION : ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        if (snapshot != null) {
+            mTaskId = taskId;
+            mMinRatingHundredths = minRatingHundredths;
+            mBatchSize = snapshot.batchSize;
+            mRestoredSnapshot = snapshot;
+            mReusedResultCompletedTimeMillis = snapshot.completedTimeMillis;
+            mSessionNewGids.addAll(snapshot.unreadGids());
+            for (GalleryInfo gallery : snapshot.galleries) mEmittedGids.add(gallery.gid);
+            mListener.onBookmarkSubscriptionBatch(taskId,
+                    SubscriptionGallerySnapshot.copy(com.hippo.ehviewer.Settings.getShowViewedGalleries()
+                            ? snapshot.galleries : snapshot.chronologicalGalleries),
+                    snapshot.hasMore, true, snapshot.cursors.isEmpty(), false);
+            return;
+        }
         mCompletedCheckOnly = completedCheckOnly;
         mMinRatingHundredths = minRatingHundredths;
         mTaskId = taskId;
@@ -413,6 +454,10 @@ final class BookmarkSubscriptionCoordinator {
 
         if (mSources.isEmpty()) {
             mLoading = false;
+            if (!completedCheckOnly && recentResult == null) mListener.onBookmarkSubscriptionSnapshots(
+                    List.of(new SubscriptionDisplaySnapshot(includeEhSubscription ? ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
+                            : ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION, System.currentTimeMillis(), mCacheContext,
+                            DEFAULT_BATCH_SIZE, List.of(), Set.of(), List.of())), List.of());
             mListener.onBookmarkSubscriptionBatch(taskId, Collections.emptyList(),
                     false, true, !mMissingInitialSources, mMissingInitialSources);
             return;
@@ -446,10 +491,27 @@ final class BookmarkSubscriptionCoordinator {
         }
     }
 
-    void loadMore(int taskId) {
-        if (mLoading) {
-            return;
+    private void restoreSources() {
+        if (mRestoredSnapshot == null || !mSources.isEmpty()) return;
+        for (SubscriptionDisplaySnapshot.Cursor cursor : mRestoredSnapshot.cursors) {
+            var page = cursor.page();
+            Source source = new Source(mSources.size(), page.continuationPlan(), true);
+            source.builder.set(page.continuationBuilder());
+            source.pageIndex = page.pageIndex; source.nextHref = page.nextHref;
+            source.boundaryPosted = page.boundaryPosted; source.boundaryGid = page.boundaryGid;
+            source.hasBoundary = page.hasBoundary; source.exhausted = page.exhausted;
+            source.restoredPage = page;
+            source.buffer.addAll(SubscriptionGallerySnapshot.copy(page.galleryInfoList));
+            source.bufferIndex = cursor.position();
+            recordSourceGalleries(source, source.buffer);
+            mSources.add(source);
         }
+    }
+
+    void loadMore(int taskId, int minRatingHundredths) {
+        if (mLoading) return;
+        restoreSources();
+        if (mRestoredSnapshot != null) mMinRatingHundredths = minRatingHundredths;
         mTaskId = taskId;
         mRefresh = false;
         mLoading = true;
@@ -504,6 +566,7 @@ final class BookmarkSubscriptionCoordinator {
         mHasCachedInitialSource = false;
         mMissingInitialSources = false;
         mCompletedCheckOnly = false;
+        mRestoredSnapshot = null;
         mNewInitialSources.clear();
         mReusedResultCompletedTimeMillis = -1L;
         mRequestQueue.clear();
@@ -563,9 +626,9 @@ final class BookmarkSubscriptionCoordinator {
         page.rawPublicationTimes.putAll(cachedSource.rawPublicationTimes);
         page.galleryInfoList = source.buffer;
         page.rawTailPosted = cachedSource.boundaryPosted;
-        source.session.observe(page, !source.exhausted);
+        source.session().observe(page, !source.exhausted);
         source.responseReady = true;
-        mSessionNewGids.addAll(source.session.displayNewGids());
+        mSessionNewGids.addAll(source.session().displayNewGids());
         if (source.plan == null) mLatestEhState = mLatestEhState.merge(cachedSource.observed);
         else mLatestBookmarkState = mLatestBookmarkState.merge(cachedSource.observed);
     }
@@ -584,6 +647,14 @@ final class BookmarkSubscriptionCoordinator {
 
     private void pumpRequests() {
         pumpResolution();
+        if (mRestoredSnapshot != null && !mRequestQueue.isEmpty()
+                && (!mBulk || mLoading) && mActiveRequests < MAX_CONCURRENT_REQUESTS
+                && !canContinueSnapshot()) {
+            int taskId = mTaskId;
+            cancel();
+            mListener.onBookmarkSubscriptionContextChanged(taskId);
+            return;
+        }
         while ((!mBulk || mLoading) && mActiveRequests < MAX_CONCURRENT_REQUESTS && !mRequestQueue.isEmpty()) {
             PendingRequest pending = mRequestQueue.removeFirst();
             Source source = pending.source();
@@ -653,6 +724,17 @@ final class BookmarkSubscriptionCoordinator {
         }
     }
 
+    private boolean canContinueSnapshot() {
+        String context = SubscriptionSearchContext.key();
+        if (!mRestoredSnapshot.contextKey.equals(context)) return false;
+        try {
+            return mRestoredSnapshot.matchesContinuation(context, EhDB.getSubscribedQuickSearch(), mMinRatingHundredths);
+        } catch (RuntimeException error) {
+            // A fresh load will handle any error reading the current subscriptions.
+            return false;
+        }
+    }
+
     private void onPageSuccess(int generation, int sourceId, boolean initial,
                                GalleryListParser.Result result) {
         if (generation != mGeneration || sourceId < 0 || sourceId >= mSources.size()) {
@@ -700,9 +782,9 @@ final class BookmarkSubscriptionCoordinator {
         boolean hasHref = !TextUtils.isEmpty(result.nextHref);
         boolean hasIndexedPage = result.pages > 0 && source.pageIndex + 1 < result.pages;
         source.exhausted = !hasHref && !hasIndexedPage;
-        source.session.observe(result, !source.exhausted);
+        source.session().observe(result, !source.exhausted);
         source.responseReady = result.customErrorString == null;
-        mSessionNewGids.addAll(source.session.displayNewGids());
+        mSessionNewGids.addAll(source.session().displayNewGids());
         if (initial && !reused) {
             mNewInitialSources.add(SubscriptionUpdateManager.RecentCheckSource.fromDisplay(
                     source.builder, source.plan, result, sourceRatingMinimum(source)));
@@ -715,13 +797,19 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     private void setSourceGalleryInfos(Source source, List<GalleryInfo> galleryInfoList) {
-        List<GalleryInfo> retained = mBulk && source.bufferIndex < source.buffer.size()
-                ? new ArrayList<>(source.buffer.subList(source.bufferIndex, source.buffer.size()))
-                : Collections.emptyList();
-        source.buffer.clear();
-        source.bufferIndex = 0;
-        source.buffer.addAll(retained);
+        if (!mRefresh || mHasCachedInitialSource) {
+            int discarded = mBulk ? source.bufferIndex : source.buffer.size();
+            source.buffer.subList(0, discarded).clear();
+            source.bufferIndex = 0;
+        }
+        // Preserve consumed first-batch pages so the snapshot can recover bookmark attribution.
         source.buffer.addAll(galleryInfoList);
+        source.buffer.subList(source.bufferIndex, source.buffer.size())
+                .sort((first, second) -> -compareGalleryOrder(first, second));
+        recordSourceGalleries(source, galleryInfoList);
+    }
+
+    private void recordSourceGalleries(Source source, List<GalleryInfo> galleryInfoList) {
         if (source.plan == null) mLatestEhState = mLatestEhState.observe(galleryInfoList);
         else mLatestBookmarkState = mLatestBookmarkState.observe(galleryInfoList);
         for (GalleryInfo galleryInfo : galleryInfoList) {
@@ -740,8 +828,6 @@ final class BookmarkSubscriptionCoordinator {
                 }
             }
         }
-        Collections.sort(source.buffer,
-                (first, second) -> -compareGalleryOrder(first, second));
     }
 
     private void onPageFailure(int generation, int sourceId, boolean initial, Exception error) {
@@ -981,10 +1067,31 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     private void finishBatch() {
-        if (mRefresh && !mNewInitialSources.isEmpty()) {
-            mListener.onBookmarkSubscriptionSourcesLoaded(mCacheContext, mDisplayCacheContext,
-                    new ArrayList<>(mNewInitialSources));
-            mNewInitialSources.clear();
+        SubscriptionDisplaySnapshot snapshot = null;
+        List<SubscriptionDisplaySnapshot> snapshots = new ArrayList<>();
+        if (mRefresh && mFirstFailure == null && !mMissingInitialSources && !mHasCachedInitialSource) {
+            List<SubscriptionDisplaySnapshot.Cursor> cursors = new ArrayList<>();
+            for (Source source : mSources) {
+                cursors.add(new SubscriptionDisplaySnapshot.Cursor(SubscriptionUpdateManager.RecentCheckSource.fromCursor(
+                        source.builder, source.plan, source.buffer, source.pageIndex, source.nextHref,
+                        source.boundaryPosted, source.boundaryGid, source.hasBoundary, source.exhausted,
+                        sourceRatingMinimum(source)), source.bufferIndex));
+            }
+            snapshot = new SubscriptionDisplaySnapshot(mIncludeEhSubscription ? ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
+                    : ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION, mNewInitialSources.stream()
+                    .mapToLong(page -> page.completedTimeMillis).min().orElse(System.currentTimeMillis()), mCacheContext,
+                    mBatchSize, mPendingBatch, mSessionNewGids, cursors, mNewInitialSources.stream()
+                    .mapToLong(SubscriptionUpdateManager.RecentCheckSource::startedTimeMillis)
+                    .min().orElse(System.currentTimeMillis()), mNewInitialSources.stream()
+                    .mapToLong(SubscriptionUpdateManager.RecentCheckSource::startedRealtime)
+                    .min().orElse(android.os.SystemClock.elapsedRealtime()));
+            snapshots.add(snapshot);
+            if (mIncludeEhSubscription) {
+                Set<Long> bookmarkUnread = new HashSet<>();
+                for (Source source : mSources) if (source.plan != null) bookmarkUnread.addAll(source.session().displayNewGids());
+                snapshots.add(SubscriptionDisplaySnapshot.merge(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
+                        mNewInitialSources, bookmarkUnread, mCacheContext));
+            }
         }
         boolean hasMore = hasMore();
         if (mPendingBatch.isEmpty() && mFirstFailure != null && !hasMore) {
@@ -996,7 +1103,7 @@ final class BookmarkSubscriptionCoordinator {
 
         for (Source source : mSources) {
             if (source.responseReady) {
-                source.session.commit(true);
+                source.session().commit(true);
                 source.responseReady = false;
             }
         }
@@ -1006,6 +1113,8 @@ final class BookmarkSubscriptionCoordinator {
         mPendingBatch.clear();
         mLoading = false;
         mRefresh = false;
+        if (snapshot != null) mListener.onBookmarkSubscriptionSnapshots(snapshots, new ArrayList<>(mNewInitialSources));
+        mNewInitialSources.clear();
         mListener.onBookmarkSubscriptionBatch(mTaskId, data, hasMore,
                 refresh, false, partialFailure);
     }

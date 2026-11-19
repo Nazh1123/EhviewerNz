@@ -441,7 +441,10 @@ public final class SpiderDen {
 
     public boolean remove(int index) {
         boolean result = removeFromCache(index);
-        result |= removeFromDownloadDir(index);
+        if (removeFromDownloadDir(index)) {
+            com.hippo.ehviewer.download.GalleryDownloadRangeStore.imageChanged(mGid, index);
+            result = true;
+        }
         Context app = com.hippo.ehviewer.EhApplication.getInstance();
         if (app != null) com.hippo.ehviewer.gallery.GalleryResultIndex.invalidatePage(app, mGid, index, getDownloadDir());
         return result;

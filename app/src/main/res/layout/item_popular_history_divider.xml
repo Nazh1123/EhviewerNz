@@ -5,4 +5,6 @@
     android:layout_height="wrap_content"
     android:paddingTop="@dimen/gallery_section_divider_gap"
     android:paddingBottom="@dimen/gallery_section_divider_gap"
-    android:importantForAccessibility="no" />
+    android:background="?attr/selectableItemBackground"
+    android:contentDescription="@string/refresh"
+    android:focusable="true" />

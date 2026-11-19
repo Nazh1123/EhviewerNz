@@ -19,7 +19,6 @@ import android.text.TextUtils;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 
@@ -143,9 +142,11 @@ public final class SubscriptionUpdateManager {
 
         private final ListUrlBuilder mBuilder = new ListUrlBuilder();
         @Nullable private final String mBookmarkSourceKey;
+        private final List<QuickSearch> mBookmarks;
 
         private RecentCheckSource(ListUrlBuilder builder, @Nullable BookmarkSubscriptionPlanner.Source plan,
-                GalleryListParser.Result page, int rating, long started) {
+                GalleryListParser.Result page, int rating, long started,
+                boolean hasBoundary, boolean exhausted) {
             completedRealtime = SystemClock.elapsedRealtime();
             completedTimeMillis = System.currentTimeMillis();
             startedRealtime = started;
@@ -155,12 +156,14 @@ public final class SubscriptionUpdateManager {
                     && page.subscriptionDisplayGalleries == null;
             mBuilder.set(builder);
             mBookmarkSourceKey = plan != null ? plan.getCacheKey() : null;
-            galleryInfoList = Collections.unmodifiableList(SubscriptionGallerySnapshot.copy(
-                    page.subscriptionDisplayGalleries != null ? page.subscriptionDisplayGalleries
-                    : page.subscriptionRawGalleries != null ? page.subscriptionRawGalleries : page.galleryInfoList));
-            rawGalleries = Collections.unmodifiableList(SubscriptionGallerySnapshot.copy(
-                    page.rawGalleries != null ? page.rawGalleries
-                    : page.subscriptionRawGalleries != null ? page.subscriptionRawGalleries : page.galleryInfoList));
+            mBookmarks = plan == null ? List.of() : plan.getBookmarks().stream()
+                    .map(RecentCheckSource::copyBookmark).toList();
+            List<GalleryInfo> display = page.subscriptionDisplayGalleries != null ? page.subscriptionDisplayGalleries
+                    : page.subscriptionRawGalleries != null ? page.subscriptionRawGalleries : page.galleryInfoList;
+            List<GalleryInfo> raw = page.rawGalleries != null ? page.rawGalleries
+                    : page.subscriptionRawGalleries != null ? page.subscriptionRawGalleries : page.galleryInfoList;
+            galleryInfoList = List.copyOf(SubscriptionGallerySnapshot.copy(display));
+            rawGalleries = raw == display ? galleryInfoList : List.copyOf(SubscriptionGallerySnapshot.copy(raw));
             rawPublicationTimes = Collections.unmodifiableMap(new HashMap<>(page.rawPublicationTimes));
             observed = page.rawSeenState.observe(page.galleryInfoList);
             initialResultCount = page.rawResultCount;
@@ -168,9 +171,17 @@ public final class SubscriptionUpdateManager {
             nextHref = page.nextHref;
             boundaryPosted = page.rawTailPosted;
             boundaryGid = page.rawTailGid;
-            hasBoundary = page.rawResultCount > 0;
-            exhausted = TextUtils.isEmpty(page.nextHref)
-                    && !(page.pages > 0 && pageIndex + 1 < page.pages);
+            this.hasBoundary = hasBoundary;
+            this.exhausted = exhausted;
+        }
+
+        private static QuickSearch copyBookmark(QuickSearch bookmark) {
+            QuickSearch copy = new QuickSearch(bookmark.id, bookmark.name, bookmark.mode, bookmark.category,
+                    bookmark.keyword, bookmark.advanceSearch, bookmark.minRating, bookmark.pageFrom,
+                    bookmark.pageTo, bookmark.time, bookmark.subscribed);
+            copy.minRatingHundredths = bookmark.minRatingHundredths;
+            copy.ratingOverride = bookmark.ratingOverride;
+            return copy;
         }
 
         public boolean isEhSubscription() {
@@ -196,7 +207,10 @@ public final class SubscriptionUpdateManager {
                 @Nullable BookmarkSubscriptionPlanner.Source plan, GalleryListParser.Result page,
                 int ratingMinimumHundredths, long startedRealtime) {
             if (page.firstPageForCache != null) page = page.firstPageForCache;
-            return new RecentCheckSource(builder, plan, page, ratingMinimumHundredths, startedRealtime);
+            boolean exhausted = TextUtils.isEmpty(page.nextHref)
+                    && !(page.pages > 0 && builder.getPageIndex() + 1 < page.pages);
+            return new RecentCheckSource(builder, plan, page, ratingMinimumHundredths, startedRealtime,
+                    page.rawResultCount > 0, exhausted);
         }
 
         boolean sameSource(RecentCheckSource other) {
@@ -204,22 +218,28 @@ public final class SubscriptionUpdateManager {
                     : mBookmarkSourceKey != null && mBookmarkSourceKey.equals(other.mBookmarkSourceKey);
         }
 
-        RecentCheckSource(JSONObject saved) {
+        RecentCheckSource(JSONObject saved, @Nullable SubscriptionGalleryTable galleryTable) {
             ratingMinimumHundredths = saved.getIntValue("rating");
             requiresDisplayPreparation = saved.getBooleanValue("prepare");
             mBuilder.setMode(saved.getBooleanValue("eh")
                     ? ListUrlBuilder.MODE_SUBSCRIPTION : ListUrlBuilder.MODE_NORMAL);
             mBookmarkSourceKey = saved.getString("bookmark");
             if (!isEhSubscription() && mBookmarkSourceKey == null) throw new IllegalArgumentException("Missing source");
-            galleryInfoList = Collections.unmodifiableList(readGalleries(saved.getJSONArray("galleries")));
-            rawGalleries = Collections.unmodifiableList(readGalleries(saved.getJSONArray("raw")));
+            galleryInfoList = readGalleries(saved.getJSONArray("galleries"), galleryTable);
+            rawGalleries = readGalleries(saved.getJSONArray("raw"), galleryTable);
             observed = GallerySeenState.parse(saved.getString("observed"));
             Map<Long, String> times = new HashMap<>();
             JSONObject savedTimes = saved.getJSONObject("publicationTimes");
             if (savedTimes != null) savedTimes.forEach((gid, posted) -> times.put(Long.parseLong(gid), (String) posted));
             rawPublicationTimes = Collections.unmodifiableMap(times);
             initialResultCount = saved.getIntValue("count");
-            pageIndex = 0;
+            pageIndex = saved.getIntValue("pageIndex");
+            JSONArray bookmarks = saved.getJSONArray("bookmarks");
+            mBookmarks = bookmarks == null ? List.of() : bookmarks.toJavaList(QuickSearch.class);
+            if (!isEhSubscription() && !mBookmarks.isEmpty()) {
+                mBuilder.set(continuationPlan().createBuilder());
+            }
+            mBuilder.setPageIndex(pageIndex);
             nextHref = saved.getString("next");
             boundaryPosted = saved.getString("boundaryPosted");
             boundaryGid = saved.getLongValue("boundaryGid");
@@ -234,42 +254,89 @@ public final class SubscriptionUpdateManager {
             startedRealtime = elapsed - (now - startedTimeMillis);
         }
 
-        JSONObject toJson() {
+        JSONObject toJson(SubscriptionGalleryTable galleryTable) {
             JSONObject saved = new JSONObject();
             saved.put("eh", isEhSubscription()); saved.put("bookmark", mBookmarkSourceKey);
             saved.put("rating", ratingMinimumHundredths); saved.put("prepare", requiresDisplayPreparation);
-            saved.put("galleries", writeGalleries(galleryInfoList)); saved.put("raw", writeGalleries(rawGalleries));
+            saved.put("galleries", galleryTable.references(galleryInfoList));
+            saved.put("raw", galleryTable.references(rawGalleries));
             JSONObject times = new JSONObject();
             rawPublicationTimes.forEach((gid, posted) -> times.put(Long.toString(gid), posted));
             saved.put("observed", observed.serialize()); saved.put("publicationTimes", times);
             saved.put("count", initialResultCount); saved.put("next", nextHref);
+            saved.put("pageIndex", pageIndex); saved.put("bookmarks", mBookmarks);
             saved.put("boundaryPosted", boundaryPosted); saved.put("boundaryGid", boundaryGid);
             saved.put("hasBoundary", hasBoundary); saved.put("exhausted", exhausted);
             saved.put("completed", completedTimeMillis); saved.put("started", startedTimeMillis);
             return saved;
         }
 
-        private static JSONArray writeGalleries(List<GalleryInfo> galleries) {
-            JSONArray saved = new JSONArray();
-            for (GalleryInfo gallery : galleries) {
-                JSONObject item = (JSONObject) JSON.toJSON(gallery);
-                if (Float.isFinite(gallery.apiRating)) item.put("apiRating", gallery.apiRating);
-                saved.add(item);
+        static List<GalleryInfo> readGalleries(JSONArray saved, @Nullable SubscriptionGalleryTable galleryTable) {
+            if (saved == null) throw new IllegalArgumentException("Missing galleries");
+            List<GalleryInfo> galleries = new ArrayList<>(saved.size());
+            for (int i = 0; i < saved.size(); i++) {
+                galleries.add(galleryTable == null ? SubscriptionGalleryTable.readGallery(saved.getJSONObject(i))
+                        : galleryTable.gallery(saved.getInteger(i)));
             }
-            return saved;
+            return List.copyOf(galleries);
         }
 
-        private static List<GalleryInfo> readGalleries(JSONArray saved) {
-            if (saved == null) throw new IllegalArgumentException("Missing galleries");
-            List<GalleryInfo> galleries = new ArrayList<>();
-            for (int i = 0; i < saved.size(); i++) {
-                JSONObject item = saved.getJSONObject(i);
-                GalleryInfo gallery = item.toJavaObject(GalleryInfo.class);
-                if (gallery.gid <= 0) throw new IllegalArgumentException("Invalid gallery");
-                gallery.apiRating = item.containsKey("apiRating") ? item.getFloatValue("apiRating") : Float.NaN;
-                galleries.add(gallery);
-            }
-            return galleries;
+        public ListUrlBuilder continuationBuilder() { return mBuilder.clone(); }
+
+        public long startedTimeMillis() { return startedTimeMillis; }
+
+        public long startedRealtime() { return startedRealtime; }
+
+        @Nullable public BookmarkSubscriptionPlanner.Source continuationPlan() {
+            if (isEhSubscription()) return null;
+            List<BookmarkSubscriptionPlanner.Source> plans = BookmarkSubscriptionPlanner.planExact(mBookmarks);
+            if (plans.size() != 1) throw new IllegalArgumentException("Missing continuation plan");
+            return plans.get(0);
+        }
+
+        List<QuickSearch> bookmarks() { return mBookmarks; }
+
+        RecentCheckSource withSortedGalleries() {
+            List<GalleryInfo> sorted = SubscriptionGallerySnapshot.copy(galleryInfoList);
+            sorted.sort(SubscriptionDisplaySnapshot.NEWEST_FIRST);
+            return new RecentCheckSource(this, sorted);
+        }
+
+        private RecentCheckSource(RecentCheckSource source, List<GalleryInfo> galleries) {
+            mBuilder.set(source.mBuilder);
+            mBookmarkSourceKey = source.mBookmarkSourceKey;
+            mBookmarks = source.mBookmarks;
+            ratingMinimumHundredths = source.ratingMinimumHundredths;
+            requiresDisplayPreparation = false;
+            galleryInfoList = List.copyOf(galleries);
+            rawGalleries = source.rawGalleries;
+            rawPublicationTimes = source.rawPublicationTimes;
+            observed = source.observed;
+            initialResultCount = source.initialResultCount;
+            pageIndex = source.pageIndex;
+            nextHref = source.nextHref;
+            boundaryPosted = source.boundaryPosted;
+            boundaryGid = source.boundaryGid;
+            hasBoundary = source.hasBoundary;
+            exhausted = source.exhausted;
+            completedRealtime = source.completedRealtime;
+            completedTimeMillis = source.completedTimeMillis;
+            startedRealtime = source.startedRealtime;
+            startedTimeMillis = source.startedTimeMillis;
+        }
+
+        public static RecentCheckSource fromCursor(ListUrlBuilder builder,
+                @Nullable BookmarkSubscriptionPlanner.Source plan, List<GalleryInfo> buffer,
+                int pageIndex, @Nullable String nextHref, @Nullable String boundaryPosted,
+                long boundaryGid, boolean hasBoundary, boolean exhausted, int ratingMinimumHundredths) {
+            GalleryListParser.Result page = new GalleryListParser.Result();
+            page.galleryInfoList = buffer;
+            page.rawResultCount = hasBoundary ? buffer.size() : 0;
+            page.rawTailPosted = boundaryPosted; page.rawTailGid = boundaryGid;
+            page.nextHref = nextHref;
+            ListUrlBuilder cursorBuilder = builder.clone(); cursorBuilder.setPageIndex(pageIndex);
+            return new RecentCheckSource(cursorBuilder, plan, page, ratingMinimumHundredths,
+                    SystemClock.elapsedRealtime(), hasBoundary, exhausted);
         }
 
         public GalleryListParser.Result asPageResult() {
@@ -294,18 +361,24 @@ public final class SubscriptionUpdateManager {
         final String contextKey;
         final String displayKey;
         private final boolean allowExpired;
+        final Map<Integer, SubscriptionDisplaySnapshot> displaySnapshots = new HashMap<>();
 
         RecentCheckResult(@NonNull List<RecentCheckSource> sources, String contextKey) {
             this(sources, contextKey, SubscriptionSearchContext.cacheKey());
         }
 
         RecentCheckResult(@NonNull List<RecentCheckSource> sources, String contextKey, String displayKey) {
+            this(sources, contextKey, displayKey, false);
+        }
+
+        private RecentCheckResult(List<RecentCheckSource> sources, String contextKey, String displayKey,
+                boolean allowExpired) {
             this.sources = Collections.unmodifiableList(new ArrayList<>(sources));
             this.completedTimeMillis = sources.stream().mapToLong(source -> source.completedTimeMillis)
                     .min().orElse(System.currentTimeMillis());
             this.contextKey = contextKey;
             this.displayKey = displayKey;
-            this.allowExpired = false;
+            this.allowExpired = allowExpired;
         }
 
         private RecentCheckResult(RecentCheckResult result) {
@@ -314,6 +387,12 @@ public final class SubscriptionUpdateManager {
             contextKey = result.contextKey;
             displayKey = result.displayKey;
             allowExpired = true;
+            displaySnapshots.putAll(result.displaySnapshots);
+        }
+
+        @Nullable public SubscriptionDisplaySnapshot displaySnapshot(int mode) {
+            SubscriptionDisplaySnapshot snapshot = displaySnapshots.get(mode);
+            return snapshot != null && (allowExpired || snapshot.isFresh()) ? snapshot : null;
         }
 
         public boolean matchesContext() { return contextKey.equals(SubscriptionSearchContext.key())
@@ -324,14 +403,15 @@ public final class SubscriptionUpdateManager {
         }
 
         boolean hasSourceForMode(int mode) {
-            for (RecentCheckSource source : sources) {
-                if (canReuseSource(source) && (mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
-                        || (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
-                        && !source.isEhSubscription()))) {
-                    return true;
-                }
-            }
-            return false;
+            return displaySnapshot(mode) != null;
+        }
+
+        public boolean hasCheckedResultForMode(int mode) {
+            if (hasSourceForMode(mode)) return true;
+            return sources.stream().anyMatch(source -> !source.requiresDisplayPreparation
+                    && (mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION
+                    || (mode == ListUrlBuilder.MODE_SUBSCRIPTION && source.isEhSubscription())
+                    || (mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION && !source.isEhSubscription())));
         }
     }
 
@@ -427,7 +507,7 @@ public final class SubscriptionUpdateManager {
         clearBookmarkUnread();
         Settings.putString(KEY_UNREAD_RATING_POLICY, policy);
         cancelCheck();
-        mResultStore.clear();
+        // Completed display snapshots deliberately survive changed browsing conditions.
         notifyStateChanged();
     }
 
@@ -462,13 +542,10 @@ public final class SubscriptionUpdateManager {
         return true;
     }
 
-    private void deliverCheckCompletions() {
+    private void deliverCheckCompletions(@Nullable RecentCheckResult result) {
         if (mCheckCompletions.isEmpty()) return;
         List<CheckCompletion> completions = new ArrayList<>(mCheckCompletions);
         mCheckCompletions.clear();
-        RecentCheckResult saved = mResultStore.get();
-        RecentCheckResult result = saved != null && saved.matchesContext()
-                ? new RecentCheckResult(saved) : null;
         mMainHandler.post(() -> {
             for (CheckCompletion completion : completions) completion.onCompleted(result);
         });
@@ -493,21 +570,18 @@ public final class SubscriptionUpdateManager {
         if (result == null) {
             return null;
         }
-        if (!result.matchesContext()) {
-            return null;
-        }
         if (!result.hasSourceForMode(mode)) {
             return null;
         }
         return result;
     }
 
-    /** Explicit reuse keeps the last compatible result until another check replaces it. */
+    /** Explicit reuse keeps the last completed display, regardless of changed browsing conditions. */
     @Nullable
     public RecentCheckResult getReusableCheckResult(int mode) {
         syncRatingPolicy();
         RecentCheckResult saved = mResultStore.get();
-        if (saved == null || !saved.matchesContext()) return null;
+        if (saved == null) return null;
         RecentCheckResult result = new RecentCheckResult(saved);
         return result.hasSourceForMode(mode) ? result : null;
     }
@@ -524,6 +598,36 @@ public final class SubscriptionUpdateManager {
         mResultStore.record(contextKey, displayKey, sources);
         // Only a newly fetched list advances the timer; opening or preparing cached data does not.
         resetCheckTimer();
+    }
+
+    /** Only a wholly successful fresh first batch can replace an entry's frozen display. */
+    public void rememberDisplayedSnapshots(List<SubscriptionDisplaySnapshot> snapshots,
+            List<RecentCheckSource> sources) {
+        if (snapshots.isEmpty() || !snapshots.get(0).contextKey.equals(SubscriptionSearchContext.key())) return;
+        mResultStore.recordSnapshots(snapshots.get(0).contextKey, SubscriptionSearchContext.cacheKey(), sources, snapshots);
+        resetCheckTimer();
+    }
+
+    /** Keep browsing acknowledgements out of the direct display path and never rewrite the snapshot. */
+    public void acknowledgeSnapshot(SubscriptionDisplaySnapshot snapshot) {
+        mExecutor.execute(() -> {
+            if (!snapshot.contextKey.equals(SubscriptionSearchContext.key())) return;
+            try {
+                for (SubscriptionDisplaySnapshot.Cursor cursor : snapshot.cursors) {
+                    RecentCheckSource page = cursor.page();
+                    SearchUpdateSession session = new SearchUpdateSession(page.continuationBuilder(), page.continuationPlan());
+                    session.observe(page.asPageResult(), !page.exhausted);
+                    session.commit(true);
+                }
+                try (SearchUpdateStore store = SearchUpdateStore.open()) {
+                    store.acknowledgeLegacy(snapshot.contextKey, "bookmark");
+                    if (snapshot.mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) store.acknowledgeLegacy(snapshot.contextKey, "eh");
+                }
+            } catch (RuntimeException e) {
+                android.util.Log.w("SubscriptionResults", "Unable to acknowledge restored subscription results", e);
+            }
+            mMainHandler.post(this::onSearchStatesChanged);
+        });
     }
 
     public void resetCheckTimer() {
@@ -626,7 +730,6 @@ public final class SubscriptionUpdateManager {
         if (!mChecking) {
             return;
         }
-        if (mSearchContext.equals(SubscriptionSearchContext.key())) cacheRecentCheckResult();
         mGeneration++;
         for (Source source : mSources) {
             if (source.request != null) {
@@ -640,8 +743,8 @@ public final class SubscriptionUpdateManager {
         mChecking = false;
         Settings.putLong(KEY_CANCEL_RETRY_NOT_BEFORE_TIME,
                 System.currentTimeMillis() + CANCEL_RETRY_DELAY_MS);
+        deliverCheckCompletions(null);
         notifyStateChanged();
-        deliverCheckCompletions();
     }
 
     public void onSubscriptionOpened(int mode) {
@@ -890,12 +993,11 @@ public final class SubscriptionUpdateManager {
                 || (!mBookmarkPreparationFailed && mBookmarkFailureCount == 0
                 && mCompletedSourcesFor(Group.BOOKMARK) == mBookmarkSourceCount));
 
-        if (sameContext) {
-            cacheRecentCheckResult();
-        }
+        RecentCheckResult completedRound = ehSuccess && bookmarkSuccess ? cacheRecentCheckResult() : null;
 
         resetCheckTimer();
         mChecking = false;
+        deliverCheckCompletions(completedRound);
         reloadUnread();
         Set<Long> newEh = new HashSet<>(), newBookmark = new HashSet<>();
         for (Source source : mSources) if (source.successful) {
@@ -911,7 +1013,6 @@ public final class SubscriptionUpdateManager {
         mPendingCheckResult = result;
         mPendingCheckContext = mSearchContext;
         dispatchPendingCheckResult();
-        deliverCheckCompletions();
     }
 
     private int mCompletedSourcesFor(@NonNull Group group) {
@@ -924,17 +1025,34 @@ public final class SubscriptionUpdateManager {
         return count;
     }
 
-    private void cacheRecentCheckResult() {
+    private RecentCheckResult cacheRecentCheckResult() {
         ArrayList<RecentCheckSource> sources = new ArrayList<>();
         for (Source source : mSources) {
             if (source.successful && source.firstPage != null) {
                 sources.add(source.firstPage);
             }
         }
-        if (mSearchContext.equals(SubscriptionSearchContext.key())
-                && mCheckDisplayKey.equals(SubscriptionSearchContext.cacheKey())) {
-            mResultStore.record(mSearchContext, mCheckDisplayKey, sources);
+        Set<Long> unread = new HashSet<>(), bookmarkUnread = new HashSet<>();
+        for (Source source : mSources) {
+            Set<Long> sourceUnread = source.session.displayNewGids();
+            unread.addAll(sourceUnread);
+            if (source.plan != null) bookmarkUnread.addAll(sourceUnread);
         }
+        List<SubscriptionDisplaySnapshot> snapshots = new ArrayList<>();
+        if (mBookmarkEnabled) snapshots.add(SubscriptionDisplaySnapshot.merge(
+                ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION, sources, bookmarkUnread, mSearchContext));
+        // An unchecked source cannot silently disappear from a new global snapshot.
+        if (mEhEnabled && (mBookmarkEnabled || EhDB.getSubscribedQuickSearch().isEmpty())) {
+            snapshots.add(SubscriptionDisplaySnapshot.merge(
+                    ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION, sources, unread, mSearchContext));
+        }
+        mResultStore.recordSnapshots(mSearchContext, mCheckDisplayKey, sources, snapshots);
+        // Waiting pages receive this round only. The store retains earlier snapshots for explicit reuse.
+        RecentCheckResult completedRound = new RecentCheckResult(sources, mSearchContext, mCheckDisplayKey, true);
+        for (SubscriptionDisplaySnapshot snapshot : snapshots) {
+            completedRound.displaySnapshots.put(snapshot.mode, snapshot);
+        }
+        return completedRound;
     }
 
     private void clearEhUnread() {

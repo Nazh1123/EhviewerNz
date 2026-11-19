@@ -104,7 +104,7 @@ public class BookmarkSubscriptionConcurrencyTest {
         coordinator.refresh(1, bookmarks(8), false, null);
         for (int i = 0; i < 8; i++) complete(i, 100 - i, "https://e-hentai.org/?next=" + i);
         int before = requests.size();
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals(before + 8, requests.size());
         List<EhRequest> pending = new ArrayList<>(requests.subList(before, requests.size()));
         coordinator.pauseLoading();
@@ -112,7 +112,7 @@ public class BookmarkSubscriptionConcurrencyTest {
         int emitted = batches.size();
         for (int i = before; i < requests.size(); i++) complete(i, 999, null);
         assertEquals(emitted, batches.size());
-        coordinator.loadMore(3);
+        coordinator.loadMore(3, 0);
         assertTrue(requests.size() > before + pending.size());
         assertEquals(pending.get(0).getArgs()[0], requests.get(before + pending.size()).getArgs()[0]);
     }
@@ -123,12 +123,12 @@ public class BookmarkSubscriptionConcurrencyTest {
         complete(0, List.of(100L, 90L), "https://e-hentai.org/?next=90");
         complete(1, List.of(99L, 89L), "https://e-hentai.org/?next=89");
         assertEquals(List.of(List.of(100L, 99L)), batches);
-        coordinator.loadMore(2);
+        coordinator.loadMore(2, 0);
         assertEquals(4, requests.size());
         complete(3, 79, null);
         complete(2, 80, null);
         assertEquals(List.of(List.of(100L, 99L), List.of(90L, 89L)), batches);
-        coordinator.loadMore(3);
+        coordinator.loadMore(3, 0);
         assertEquals(List.of(List.of(100L, 99L), List.of(90L, 89L), List.of(80L, 79L)), batches);
     }
 

@@ -225,10 +225,12 @@ public class DownloadAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolde
 
     private void bindReadProgress(DownloadHolder holder, long gid) {
         SpiderInfo spiderInfo = mCallback.getSpiderInfoMap().get(gid);
+        com.hippo.ehviewer.download.DownloadReadingProgress progress =
+                com.hippo.ehviewer.download.DownloadReadingProgress.resolve(gid, spiderInfo);
         GalleryProcessingProgress.Counts counts = holder.boundInfo == null
                 ? new GalleryProcessingProgress.Counts(0, 0, 0) : mResultProgress.get(holder.boundInfo);
-        int pages = spiderInfo == null ? holder.boundPageCount : spiderInfo.pages;
-        holder.readProgress.setText(spiderInfo == null ? null : (spiderInfo.startPage + 1) + "/" + spiderInfo.pages);
+        int pages = progress == null ? holder.boundPageCount : progress.total();
+        holder.readProgress.setText(progress == null ? null : progress.current() + "/" + progress.total());
         holder.processingSeparator.setText(holder.readProgress.length() == 0 ? "" : counts.separator(pages));
         holder.processingProgress.setText(counts.primary(pages));
         holder.srProgress.setText(counts.secondary(pages));
