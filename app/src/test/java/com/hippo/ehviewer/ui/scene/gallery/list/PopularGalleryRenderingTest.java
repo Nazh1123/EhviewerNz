@@ -343,8 +343,8 @@ public class PopularGalleryRenderingTest {
         ReflectionHelpers.setField(scene, "mShowActionFab", false);
         setDefaultUpdates(true);
         refresh(1, 2);
-        assertNotNull(ReflectionHelpers.getField(actions.findViewById(R.id.popular_actions), "mNoticeAnimator"));
-        assertEquals(View.VISIBLE, actions.findViewById(R.id.popular_actions).getVisibility());
+        assertNotNull(ReflectionHelpers.getField(actions.findViewById(R.id.gallery_list_actions), "mNoticeAnimator"));
+        assertEquals(View.VISIBLE, actions.findViewById(R.id.gallery_list_actions).getVisibility());
         assertEquals(PopularGalleryHistory.CURRENT,
                 (int) ReflectionHelpers.<Integer>getField(scene, "mPopularViewMode"));
         assertEquals(0, scene.lastTip);
@@ -367,7 +367,7 @@ public class PopularGalleryRenderingTest {
         FabLayout menu = actions.findViewById(R.id.fab_layout);
         menu.setExpanded(false, false);
         ReflectionHelpers.setField(scene, "mFabLayout", menu);
-        ReflectionHelpers.setField(scene, "mPopularActions", actions.findViewById(R.id.popular_actions));
+        ReflectionHelpers.setField(scene, "mOutsideActions", actions.findViewById(R.id.gallery_list_actions));
         ReflectionHelpers.setField(scene, "mPopularUpdates", actions.findViewById(R.id.popular_updates));
         ReflectionHelpers.setField(scene, "mPopularPrevious", actions.findViewById(R.id.popular_previous));
         ReflectionHelpers.setField(scene, "mPopularUpdatesMenu", actions.findViewById(R.id.popular_updates_menu));

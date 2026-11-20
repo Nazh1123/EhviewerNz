@@ -89,8 +89,7 @@ import com.hippo.ehviewer.FavouriteStatusRouter;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.widget.HoldThumbnailPreview;
 import com.hippo.ehviewer.Settings;
-import com.hippo.ehviewer.widget.PopularGalleryActions;
-import com.hippo.ehviewer.widget.GalleryListModeActions;
+import com.hippo.ehviewer.widget.GalleryListActions;
 import com.hippo.ehviewer.gallery.ReadingHistory;
 import com.hippo.ehviewer.callBack.SubscriptionCallback;
 import com.hippo.ehviewer.client.EhCacheKeyFactory;
@@ -243,6 +242,7 @@ public class GalleryListScene extends BaseScene
     private static final int FAB_POPULAR_PREVIOUS = 10;
     private static final int FAB_RATING_SORT = 11;
 
+    private static final int RATING_SORT_SHORTCUT_VIEWPORT_PERCENT = 70;
     private static final int DOWNLOADED_SCAN_PAGE_LIMIT = 5;
     private static final int DOWNLOADED_SUBSCRIPTION_SCAN_PAGE_LIMIT = 2;
 
@@ -287,7 +287,7 @@ public class GalleryListScene extends BaseScene
     @Nullable
     private FloatingActionButton mDownloadedOnlyFab;
     private FloatingActionButton mRatingSortFab;
-    private GalleryListModeActions mModeActions;
+    private GalleryListActions mOutsideActions;
     private boolean mRatingSortMode;
     private int mRestoredRatingPages;
     private String mRestoredRatingCutoff;
@@ -307,7 +307,6 @@ public class GalleryListScene extends BaseScene
     private AlertDialog mRatingProgressDialog;
     private EhRequest mListRequest;
     private GalleryListRequestPipeline mRatingPagePipeline;
-    private PopularGalleryActions mPopularActions;
     private FloatingActionButton mPopularUpdates;
     private FloatingActionButton mPopularPrevious;
     private FloatingActionButton mPopularUpdatesMenu;
@@ -368,6 +367,11 @@ public class GalleryListScene extends BaseScene
 
     private int mHideActionFabSlop;
     private boolean mShowActionFab = true;
+    private boolean mRatingSortShortcutInRange;
+    private final View.OnLayoutChangeListener mRatingSortShortcutLayoutListener =
+            (view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+                if (updateRatingSortShortcutRange((RecyclerView) view)) updateOutsideActions(true);
+            };
 
     @Nullable
     private final RecyclerView.OnScrollListener mOnScrollListener = new RecyclerView.OnScrollListener() {
@@ -381,16 +385,19 @@ public class GalleryListScene extends BaseScene
 
         @Override
         public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+            boolean rangeChanged = updateRatingSortShortcutRange(recyclerView);
             if (mMultiSelectMode) {
                 return;
             }
+            boolean wasShowingActionFab = mShowActionFab;
             if (dy >= mHideActionFabSlop) {
-                if (recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_DRAGGING) {
-                    dismissRatingSortShortcut();
-                }
                 hideActionFab();
             } else if (dy <= -mHideActionFabSlop / 2) {
                 showActionFab();
+            }
+            // A change to the main FAB already updates the stack.
+            if (rangeChanged && wasShowingActionFab && mShowActionFab && !mRatingSortMode) {
+                updateOutsideActions(true);
             }
         }
     };
@@ -949,6 +956,7 @@ public class GalleryListScene extends BaseScene
 
         mHideActionFabSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         mShowActionFab = true;
+        mRatingSortShortcutInRange = false;
 
         View mainLayout = ViewUtils.$$(view, R.id.main_layout);
         boolean longPressQuickDownload = Settings.getGalleryLongPressQuickDownload();
@@ -970,7 +978,7 @@ public class GalleryListScene extends BaseScene
         mDownloadedOnlyFab = (FloatingActionButton) ViewUtils.$$(mFabLayout,
                 R.id.downloaded_only_fab);
         mRatingSortFab = mainLayout.findViewById(R.id.rating_sort_fab);
-        mModeActions = mainLayout.findViewById(R.id.gallery_mode_actions);
+        mOutsideActions = mainLayout.findViewById(R.id.gallery_list_actions);
         View ratingActive = mainLayout.findViewById(R.id.rating_sort_active);
         View downloadedActive = mainLayout.findViewById(R.id.downloaded_only_active);
         View subscriptionRefresh = mainLayout.findViewById(R.id.subscription_refresh_active);
@@ -982,7 +990,6 @@ public class GalleryListScene extends BaseScene
         TooltipCompat.setTooltipText(subscriptionRefresh, getString(R.string.refresh));
         TooltipCompat.setTooltipText(ratingActive, getString(R.string.gallery_rating_sort_active));
         TooltipCompat.setTooltipText(downloadedActive, getString(R.string.gallery_downloaded_only_active));
-        mPopularActions = mainLayout.findViewById(R.id.popular_actions);
         mPopularUpdates = mainLayout.findViewById(R.id.popular_updates);
         mPopularPrevious = mainLayout.findViewById(R.id.popular_previous);
         mPopularUpdatesMenu = mainLayout.findViewById(R.id.popular_updates_menu);
@@ -1021,6 +1028,7 @@ public class GalleryListScene extends BaseScene
         mThumbnailPreview.attachToRecyclerView(mRecyclerView);
         assert mOnScrollListener != null;
         mRecyclerView.addOnScrollListener(mOnScrollListener);
+        mRecyclerView.addOnLayoutChangeListener(mRatingSortShortcutLayoutListener);
         mRecyclerView.addOnItemTouchListener(new RecyclerView.SimpleOnItemTouchListener() {
             @Override
             public boolean onInterceptTouchEvent(@NonNull RecyclerView recyclerView,
@@ -1346,6 +1354,8 @@ public class GalleryListScene extends BaseScene
             mHasFirstRefresh = false;
         }
         if (null != mRecyclerView) {
+            mRecyclerView.removeOnScrollListener(mOnScrollListener);
+            mRecyclerView.removeOnLayoutChangeListener(mRatingSortShortcutLayoutListener);
             mRecyclerView.stopScroll();
             mRecyclerView = null;
         }
@@ -1367,10 +1377,8 @@ public class GalleryListScene extends BaseScene
         mMultiSelectFab = null;
         mDownloadedOnlyFab = null;
         mRatingSortFab = null;
-        if (mModeActions != null) mModeActions.destroy();
-        mModeActions = null;
-        if (mPopularActions != null) mPopularActions.destroy();
-        mPopularActions = null;
+        if (mOutsideActions != null) mOutsideActions.destroy();
+        mOutsideActions = null;
         mPopularUpdates = null;
         mPopularPrevious = null;
         mPopularUpdatesMenu = null;
@@ -1594,6 +1602,7 @@ public class GalleryListScene extends BaseScene
     public void onResume() {
         super.onResume();
         markYesterdayTopListReadIfVisible();
+        updateOutsideActions(true);
         if (mSearchLayout != null && mSearchBar != null) {
             mSearchLayout.syncPresetTags(mSearchBar.getText());
         }
@@ -2125,33 +2134,60 @@ public class GalleryListScene extends BaseScene
             mRatingSortFab.setContentDescription(label);
             TooltipCompat.setTooltipText(mRatingSortFab, label);
         }
-        boolean showSort = mRatingSortMode || shouldShowRatingSortShortcut();
-        int reserved = (showSort ? 1 : 0) + (mDownloadedOnlyMode ? 1 : 0);
-        if (mPopularActions != null) mPopularActions.setReservedSlots(reserved);
-        if (mModeActions != null) {
-            FloatingActionButton ratingActive = mModeActions.findViewById(R.id.rating_sort_active);
+        if (mOutsideActions != null) {
+            FloatingActionButton ratingActive = mOutsideActions.findViewById(R.id.rating_sort_active);
             ratingActive.setImageResource(sortIcon);
             CharSequence label = ratingActive.getContext().getText(sortLabel);
             ratingActive.setContentDescription(label);
             TooltipCompat.setTooltipText(ratingActive, label);
-            mModeActions.update(mFabLayout.getPrimaryFab(), canShowOutsideActions(), showSort, mDownloadedOnlyMode,
-                    isBookmarkSubscriptionMode() && mSubscriptionStaleResult, mShowActionFab);
         }
+        updateOutsideActions(true);
+    }
+
+    private void updateOutsideActions(boolean animate) {
+        if (mOutsideActions == null || mFabLayout == null) return;
+        boolean outside = canShowOutsideActions();
+        boolean popular = outside && canUsePopularActions();
+        boolean current = mPopularViewMode == PopularGalleryHistory.CURRENT;
+        boolean menuVisible = hasVisibleMenuActions();
+        boolean waitForOtherActions = outside && (menuVisible || isFabVisible(mSearchFab)
+                || isFabVisible(mSearchOptionsFab));
+        boolean showRatingShortcut = mShowActionFab && mRatingSortShortcutInRange && !mRatingLoading
+                && mUrlBuilder != null && (!isPopularMode() || popular);
+        boolean showSort = outside && (mRatingSortMode || showRatingShortcut);
+        boolean showRefresh = outside && mShowActionFab && isBookmarkSubscriptionMode() && mSubscriptionStaleResult;
+        mOutsideActions.update(mFabLayout.getPrimaryFab(), mPopularUpdatesMenu, mShowActionFab,
+                animate && mState == STATE_NORMAL && !(mFabLayout.isExpanded() && menuVisible),
+                waitForOtherActions, showSort, outside && mDownloadedOnlyMode, showRefresh,
+                popular && (mPopularViewMode == PopularGalleryHistory.PREVIOUS || (current && mShowActionFab)),
+                popular && (mPopularViewMode == PopularGalleryHistory.UPDATES || (current && mShowActionFab)));
+    }
+
+    private boolean hasVisibleMenuActions() {
+        for (int i = 0; i < mFabLayout.getSecondaryFabCount(); i++) {
+            View button = mFabLayout.getSecondaryFabAt(i);
+            if (isFabVisible(button)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isFabVisible(View button) {
+        return button != null && button.getVisibility() == View.VISIBLE
+                && button.getAlpha() > 0f && button.getScaleY() > 0f;
     }
 
     private boolean canShowOutsideActions() {
         return mFabLayout != null && mState == STATE_NORMAL && !mMultiSelectMode && !mFabLayout.isExpanded();
     }
 
-    private boolean shouldShowRatingSortShortcut() {
-        return mModeActions != null && mUrlBuilder != null && canShowOutsideActions()
-                && mShowActionFab && !mRatingSortMode && Settings.getGuideRatingSort();
-    }
-
-    private boolean dismissRatingSortShortcut() {
-        if (!shouldShowRatingSortShortcut()) return false;
-        Settings.putGuideRatingSort(false);
-        return true;
+    private boolean updateRatingSortShortcutRange(RecyclerView recyclerView) {
+        int viewportHeight = recyclerView.getHeight() - recyclerView.getPaddingTop() - recyclerView.getPaddingBottom();
+        int shortcutRange = viewportHeight * RATING_SORT_SHORTCUT_VIEWPORT_PERCENT / 100;
+        boolean inRange = viewportHeight > 0 && recyclerView.getLayoutManager() != null
+                && recyclerView.computeVerticalScrollOffset() <= shortcutRange;
+        boolean changed = mRatingSortShortcutInRange != inRange;
+        mRatingSortShortcutInRange = inRange;
+        return changed;
     }
 
     private String ratingSortStatus() {
@@ -2333,7 +2369,6 @@ public class GalleryListScene extends BaseScene
         }
         // Popular is one bounded snapshot. Sort its current projection (including updates-only)
         // without asking for a page/date range or showing a progress dialog.
-        dismissRatingSortShortcut();
         stopDownloadedPageScan(false);
         mRatingSortScrollToTop = true;
         getRatingSortController().start(0, null);
@@ -2396,7 +2431,6 @@ public class GalleryListScene extends BaseScene
                 (dialog, which) -> restoreRatingOrder());
         AlertDialog dialog = builder.create();
         dialog.show();
-        if (dismissRatingSortShortcut()) updateModeActions();
         DialogActionLayout.placeNeutralAtStart(dialog);
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(view -> {
             int selection = range.getCheckedRadioButtonId();
@@ -2570,23 +2604,25 @@ public class GalleryListScene extends BaseScene
         return mUrlBuilder != null && mUrlBuilder.getMode() == ListUrlBuilder.MODE_WHATS_HOT;
     }
 
+    private boolean canUsePopularActions() {
+        return isPopularMode() && mPopularResponseReady && !mPopularRequestInFlight
+                && !mMultiSelectMode && !mRatingLoading;
+    }
+
     private void updatePopularActions() {
-        updateModeActions();
+        if (mFabLayout == null) return;
         if (!isPopularMode() || mPopularRequestInFlight) cancelPopularNoUpdatesNotice();
-        if (mPopularActions == null || mFabLayout == null) return;
+        if (mOutsideActions == null) return;
         boolean popular = isPopularMode();
         mFabLayout.setSecondaryFabVisibilityAt(FAB_POPULAR_UPDATES, popular);
         mFabLayout.setSecondaryFabVisibilityAt(FAB_POPULAR_PREVIOUS, popular);
-        boolean enabled = popular && mPopularResponseReady && !mPopularRequestInFlight
-                && !mMultiSelectMode && !mRatingLoading;
+        boolean enabled = canUsePopularActions();
         int updatesText = mPopularViewMode == PopularGalleryHistory.UPDATES
                 ? R.string.popular_show_all : R.string.popular_updates_only;
         int previousText = mPopularViewMode == PopularGalleryHistory.PREVIOUS
                 ? R.string.popular_return_current : R.string.popular_previous;
-        for (FloatingActionButton button : new FloatingActionButton[]{
-                mPopularUpdates, mPopularUpdatesMenu, mPopularPrevious, mPopularPreviousMenu}) {
-            button.setEnabled(enabled);
-        }
+        mPopularUpdatesMenu.setEnabled(enabled);
+        mPopularPreviousMenu.setEnabled(enabled);
         int previousIcon = mPopularViewMode == PopularGalleryHistory.PREVIOUS
                 ? R.drawable.v_history_off_x24 : R.drawable.v_history_dark_x24;
         if (mPopularViewMode == PopularGalleryHistory.UPDATES) {
@@ -2603,12 +2639,7 @@ public class GalleryListScene extends BaseScene
         }
         updatePopularAction(mPopularPrevious, previousIcon, previousText);
         updatePopularAction(mPopularPreviousMenu, previousIcon, previousText);
-        boolean active = mPopularViewMode != PopularGalleryHistory.CURRENT;
-        // The active mode always offers a way back, even when scrolling hides the main FAB.
-        int activeIndex = !active ? -1 : mPopularViewMode == PopularGalleryHistory.UPDATES ? 0 : 1;
-        mPopularActions.update(mFabLayout.getPrimaryFab(), mPopularUpdatesMenu,
-                enabled && (active || mShowActionFab) && canShowOutsideActions(),
-                activeIndex, mShowActionFab);
+        updateModeActions();
     }
 
     private void updatePopularAction(FloatingActionButton button, int icon, int description) {
@@ -2632,11 +2663,11 @@ public class GalleryListScene extends BaseScene
     }
 
     private void cancelPopularNoUpdatesNotice() {
-        if (mPopularActions != null) mPopularActions.cancelNoUpdatesNotice();
+        if (mOutsideActions != null) mOutsideActions.cancelNoUpdatesNotice();
     }
 
     private void showPopularNoUpdatesNotice() {
-        if (mPopularActions != null) mPopularActions.showNoUpdatesNotice();
+        if (mOutsideActions != null) mOutsideActions.showNoUpdatesNotice();
     }
 
     private void loadPopularHistory(int site, Runnable continuation) {
@@ -3009,8 +3040,6 @@ public class GalleryListScene extends BaseScene
             return;
         }
         if (STATE_NORMAL == mState) {
-            updatePopularActions();
-            if (!view.isExpanded()) dismissRatingSortShortcut();
             view.toggle();
         }
 
@@ -3237,9 +3266,9 @@ public class GalleryListScene extends BaseScene
 
     private void showActionFab() {
         if (null != mFabLayout && STATE_NORMAL == mState && !mShowActionFab) {
-            long delay = mPopularActions != null ? mPopularActions.primaryShowDelay() : 0L;
-            if (mModeActions != null) delay = Math.max(delay, mModeActions.primaryShowDelay());
             mShowActionFab = true;
+            updateOutsideActions(true);
+            long delay = mOutsideActions != null ? mOutsideActions.primaryShowDelay() : 0L;
             View fab = mFabLayout.getPrimaryFab();
             fab.animate().setListener(null);
             fab.animate().cancel();
@@ -3248,7 +3277,6 @@ public class GalleryListScene extends BaseScene
             fab.animate().scaleX(1.0f).scaleY(1.0f).rotation(0.0f).setListener(null)
                     .setDuration(ANIMATE_TIME).setStartDelay(delay)
                     .setInterpolator(AnimationUtils.FAST_SLOW_INTERPOLATOR).start();
-            updatePopularActions();
         }
     }
 
@@ -3261,7 +3289,7 @@ public class GalleryListScene extends BaseScene
             fab.animate().scaleX(0.0f).scaleY(0.0f).setListener(mActionFabAnimatorListener)
                     .setDuration(ANIMATE_TIME).setStartDelay(0L)
                     .setInterpolator(AnimationUtils.SLOW_FAST_INTERPOLATOR).start();
-            updatePopularActions();
+            updateOutsideActions(true);
         }
     }
 
@@ -3310,8 +3338,8 @@ public class GalleryListScene extends BaseScene
             }
             setSearchFabsVisible(false, true, 0L);
             View fab = mFabLayout.getPrimaryFab();
-            delay = Math.max(delay, mPopularActions != null ? mPopularActions.primaryShowDelay() : 0L);
-            if (mModeActions != null) delay = Math.max(delay, mModeActions.primaryShowDelay());
+            updateOutsideActions(true);
+            if (mOutsideActions != null) delay = Math.max(delay, mOutsideActions.primaryShowDelay());
             fab.animate().setListener(null);
             fab.animate().cancel();
             fab.setVisibility(View.VISIBLE);
@@ -3326,8 +3354,7 @@ public class GalleryListScene extends BaseScene
             fab.setVisibility(View.VISIBLE);
             fab.animate().setListener(null);
             fab.animate().cancel();
-            if (mPopularActions != null) mPopularActions.snapAbovePrimary();
-            if (mModeActions != null) mModeActions.snapAbovePrimary();
+            updateOutsideActions(false);
             fab.setScaleX(1.0f);
             fab.setScaleY(1.0f);
             setSearchFabsVisible(false, false, 0L);

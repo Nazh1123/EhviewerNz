@@ -11,16 +11,22 @@ import android.graphics.Canvas;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.view.ContextThemeWrapper;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.recyclerview.widget.StaggeredGridLayoutManager;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.hippo.easyrecyclerview.LayoutManagerUtils;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
-import com.hippo.ehviewer.widget.PopularGalleryActions;
+import com.hippo.ehviewer.widget.GalleryListActions;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.widget.FabLayout;
+import com.hippo.widget.recyclerview.AutoStaggeredGridLayoutManager;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -45,7 +51,7 @@ public class PopularGalleryActionsTest {
     private View root;
     private FabLayout menu;
     private ListUrlBuilder builder;
-    private PopularGalleryActions actions;
+    private GalleryListActions actions;
 
     @Before public void setUp() {
         Context app = RuntimeEnvironment.getApplication();
@@ -53,7 +59,7 @@ public class PopularGalleryActionsTest {
                 app.getSharedPreferences("popular-actions-test", Context.MODE_PRIVATE));
         Context context = new ContextThemeWrapper(app, R.style.AppTheme);
         root = LayoutInflater.from(context).inflate(R.layout.scene_gallery_list, null);
-        actions = root.findViewById(R.id.popular_actions);
+        actions = root.findViewById(R.id.gallery_list_actions);
         menu = root.findViewById(R.id.fab_layout);
         menu.setExpanded(false, false);
         scene = new GalleryListScene();
@@ -61,7 +67,7 @@ public class PopularGalleryActionsTest {
         builder.setMode(ListUrlBuilder.MODE_WHATS_HOT);
         ReflectionHelpers.setField(scene, "mUrlBuilder", builder);
         ReflectionHelpers.setField(scene, "mFabLayout", menu);
-        bind("mPopularActions", R.id.popular_actions);
+        bind("mOutsideActions", R.id.gallery_list_actions);
         bind("mPopularUpdates", R.id.popular_updates);
         bind("mPopularPrevious", R.id.popular_previous);
         bind("mPopularUpdatesMenu", R.id.popular_updates_menu);
@@ -77,16 +83,16 @@ public class PopularGalleryActionsTest {
         RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(scene, "mOnScrollListener");
         // Refreshing while far down the list can reposition it by more than half a screen.
         listener.onScrolled(recycler, 0, -1200);
-        assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
+        assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_list_actions).getVisibility());
         ReflectionHelpers.setField(recycler, "mScrollState", RecyclerView.SCROLL_STATE_DRAGGING);
         // Small steps do not hide the main FAB, regardless of their total distance.
         ReflectionHelpers.setField(scene, "mHideActionFabSlop", 20);
         for (int i = 0; i < 100; i++) listener.onScrolled(recycler, 0, 10);
-        assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
+        assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_list_actions).getVisibility());
         listener.onScrolled(recycler, 0, 20);
         assertEquals(View.INVISIBLE, actions.getVisibility());
         listener.onScrolled(recycler, 0, -20);
-        assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
+        assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_list_actions).getVisibility());
         menu.setExpanded(true, false);
         assertEquals(View.VISIBLE, root.findViewById(R.id.popular_updates_menu).getVisibility());
         assertEquals(View.VISIBLE, root.findViewById(R.id.popular_previous_menu).getVisibility());
@@ -99,7 +105,7 @@ public class PopularGalleryActionsTest {
         assertTrue(menu.isExpanded());
         assertEquals(View.INVISIBLE, actions.getVisibility());
         menu.setExpanded(false, false);
-        assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
+        assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_list_actions).getVisibility());
     }
 
     @Test public void activeModeKeepsOnlyItsReturnButtonAndOccupiesHiddenFabPosition() {
@@ -122,7 +128,7 @@ public class PopularGalleryActionsTest {
             assertCenterAbove(root.findViewById(activeId), menu.getPrimaryFab(), 1);
             listener.onScrolled(recycler, 0, 1200);
             settle();
-            assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
+            assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_list_actions).getVisibility());
             assertCenterAbove(root.findViewById(activeId), menu.getPrimaryFab(), 0);
             listener.onScrolled(recycler, 0, -1200);
             settle();
@@ -133,7 +139,7 @@ public class PopularGalleryActionsTest {
             assertEquals(View.INVISIBLE, actions.getVisibility());
             menu.setExpanded(false, false);
             settle();
-            assertEquals(View.VISIBLE, root.findViewById(R.id.popular_actions).getVisibility());
+            assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_list_actions).getVisibility());
         }
         ReflectionHelpers.setField(scene, "mPopularViewMode", PopularGalleryHistory.CURRENT);
         update();
@@ -186,8 +192,6 @@ public class PopularGalleryActionsTest {
         layout(600, 1200);
         View updates = root.findViewById(R.id.popular_updates);
         ReflectionHelpers.callInstanceMethod(scene, "hideActionFab");
-        assertEquals(300L, updates.animate().getDuration());
-        assertSame(menu.getPrimaryFab().animate().getInterpolator(), updates.animate().getInterpolator());
         assertEquals(View.VISIBLE, updates.getVisibility());
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
         assertEquals(menu.getPrimaryFab().getScaleY(), updates.getScaleY(), 0.08f);
@@ -239,15 +243,17 @@ public class PopularGalleryActionsTest {
     }
 
     private void assertNonOverlappingDuringTransition() {
-        View[] buttons = {root.findViewById(R.id.popular_updates),
+        View[] buttons = {root.findViewById(R.id.rating_sort_active), root.findViewById(R.id.downloaded_only_active),
+                root.findViewById(R.id.subscription_refresh_active), root.findViewById(R.id.popular_updates),
                 root.findViewById(R.id.popular_previous), menu.getPrimaryFab()};
-        for (int frame = 0; frame < 14; frame++) {
+        for (int frame = 0; frame < 20; frame++) {
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(50));
             for (int i = 0; i < buttons.length; i++) {
                 for (int j = i + 1; j < buttons.length; j++) {
                     View a = buttons[i], b = buttons[j];
                     if (a.getVisibility() != View.VISIBLE || b.getVisibility() != View.VISIBLE) continue;
-                    float distance = Math.abs(a.getY() + a.getHeight() / 2f - b.getY() - b.getHeight() / 2f);
+                    double distance = Math.hypot(a.getX() + a.getWidth() / 2f - b.getX() - b.getWidth() / 2f,
+                            a.getY() + a.getHeight() / 2f - b.getY() - b.getHeight() / 2f);
                     float radiusSum = root.getResources().getDimension(R.dimen.fab_size) / 2f
                             * (a.getScaleY() + b.getScaleY());
                     assertTrue("Visible FAB circles overlap at frame " + frame, distance + 0.5f >= radiusSum);
@@ -382,8 +388,6 @@ public class PopularGalleryActionsTest {
     }
 
     @Test public void staleSubscriptionRefreshFollowsPrimaryFabAndReservesItsOwnSlot() {
-        Settings.putGuideRatingSort(false);
-        bind("mModeActions", R.id.gallery_mode_actions);
         View refresh = root.findViewById(R.id.subscription_refresh_active);
         for (int mode : new int[]{ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
                 ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION}) {
@@ -396,8 +400,9 @@ public class PopularGalleryActionsTest {
             assertCenterAbove(refresh, menu.getPrimaryFab(), 1);
 
             ReflectionHelpers.callInstanceMethod(scene, "hideActionFab");
-            assertEquals(menu.getPrimaryFab().animate().getDuration(), refresh.animate().getDuration());
-            assertSame(menu.getPrimaryFab().animate().getInterpolator(), refresh.animate().getInterpolator());
+            assertEquals(View.VISIBLE, refresh.getVisibility());
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100));
+            assertEquals(menu.getPrimaryFab().getScaleY(), refresh.getScaleY(), 0.08f);
             settle();
             assertEquals(View.INVISIBLE, refresh.getVisibility());
             ReflectionHelpers.callInstanceMethod(scene, "showActionFab");
@@ -438,8 +443,7 @@ public class PopularGalleryActionsTest {
         assertEquals(View.INVISIBLE, refresh.getVisibility());
     }
 
-    @Test public void independentActiveModesRemainVisibleAndReservePopularSlots() {
-        bind("mModeActions", R.id.gallery_mode_actions);
+    @Test public void independentActiveModesShareTheStackAndRemainVisibleWhenScrolling() {
         bind("mRatingSortFab", R.id.rating_sort_fab);
         ReflectionHelpers.setField(scene, "mRatingSortMode", true);
         ReflectionHelpers.setField(scene, "mDownloadedOnlyMode", true);
@@ -454,21 +458,20 @@ public class PopularGalleryActionsTest {
         assertCenterAbove(downloaded, menu.getPrimaryFab(), 2);
         assertCenterAbove(root.findViewById(R.id.popular_previous), menu.getPrimaryFab(), 3);
         assertCenterAbove(root.findViewById(R.id.popular_updates), menu.getPrimaryFab(), 4);
-        ReflectionHelpers.setField(scene, "mShowActionFab", false);
-        update();
+        ReflectionHelpers.callInstanceMethod(scene, "hideActionFab");
         settle();
         assertCenterAbove(sort, menu.getPrimaryFab(), 0);
         assertCenterAbove(downloaded, menu.getPrimaryFab(), 1);
         menu.setExpanded(true, false);
         settle();
-        assertEquals(View.INVISIBLE, root.findViewById(R.id.gallery_mode_actions).getVisibility());
+        assertEquals(View.INVISIBLE, root.findViewById(R.id.gallery_list_actions).getVisibility());
         menu.setExpanded(false, false);
         settle();
-        assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_mode_actions).getVisibility());
+        assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_list_actions).getVisibility());
     }
 
     @Test public void ratingSortShortcutSharesSlotsWithPopularAndSubscriptionActions() {
-        bind("mModeActions", R.id.gallery_mode_actions);
+        bindScrollableGalleryList();
         layout(600, 1200);
         update();
         settle();
@@ -488,8 +491,93 @@ public class PopularGalleryActionsTest {
         assertCenterAbove(refresh, menu.getPrimaryFab(), 2);
     }
 
-    @Test public void ratingSortShortcutIsDismissedByScrollingAndStillAvailableInMenu() {
-        bind("mModeActions", R.id.gallery_mode_actions);
+    @Test public void retiringRatingShortcutDoesNotMoveOtherButtonsThroughItsSlot() {
+        RecyclerView recycler = bindScrollableGalleryList();
+        ReflectionHelpers.setField(scene, "mHideActionFabSlop", 1000);
+        ReflectionHelpers.setField(scene, "mPopularViewMode", PopularGalleryHistory.PREVIOUS);
+        ReflectionHelpers.setField(scene, "mDownloadedOnlyMode", true);
+        // There are only three rows above the bottom edge at this height.
+        layout(600, Math.round(255 * root.getResources().getDisplayMetrics().density));
+        update();
+        settle();
+        View shortcut = root.findViewById(R.id.rating_sort_active);
+        View downloaded = root.findViewById(R.id.downloaded_only_active);
+        View previous = root.findViewById(R.id.popular_previous);
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+        assertTrue(previous.getX() < downloaded.getX());
+
+        recycler.scrollBy(0, recycler.getHeight());
+        ValueAnimator retirement = ReflectionHelpers.getField(actions, "mTransition");
+        retirement.setCurrentPlayTime(150L);
+        assertTrue(shortcut.getScaleY() > 0f && shortcut.getScaleY() < 1f);
+        assertCenterAbove(downloaded, menu.getPrimaryFab(), 2);
+        assertNonOverlappingDuringTransition();
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        assertCenterAbove(downloaded, menu.getPrimaryFab(), 1);
+        assertCenterAbove(previous, menu.getPrimaryFab(), 2);
+
+        ReflectionHelpers.callInstanceMethod(scene, "hideActionFab");
+        assertNonOverlappingDuringTransition();
+        assertCenterAbove(downloaded, menu.getPrimaryFab(), 0);
+        ReflectionHelpers.callInstanceMethod(scene, "showActionFab");
+        assertNonOverlappingDuringTransition();
+        assertCenterAbove(previous, menu.getPrimaryFab(), 2);
+    }
+
+    @Test public void collapsedMenuWaitsForItsButtonsToLeaveBeforeShowingOutsideActions() {
+        bindScrollableGalleryList();
+        layout(600, 1200);
+        update();
+        settle();
+        scene.onClickPrimaryFab(menu, menu.getPrimaryFab());
+        settle();
+        View shortcut = root.findViewById(R.id.rating_sort_active);
+        View inside = root.findViewById(R.id.rating_sort_fab);
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        assertEquals(View.VISIBLE, inside.getVisibility());
+        menu.setExpanded(false);
+        assertEquals(View.VISIBLE, inside.getVisibility());
+        ValueAnimator handoff = ReflectionHelpers.getField(actions, "mTransition");
+        assertEquals(600L, handoff.getDuration());
+        handoff.setCurrentPlayTime(150L);
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        settle();
+        assertEquals(View.INVISIBLE, inside.getVisibility());
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+    }
+
+    @Test public void returningFromSearchRevealsTheShortcutAfterSearchButtonsLeave() {
+        bindScrollableGalleryList();
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        bind("mSearchFab", R.id.search_fab);
+        bind("mSearchOptionsFab", R.id.search_options_fab);
+        layout(600, 1200);
+        update();
+        settle();
+        View shortcut = root.findViewById(R.id.rating_sort_active);
+        View search = root.findViewById(R.id.search_fab);
+        View searchOptions = root.findViewById(R.id.search_options_fab);
+        ReflectionHelpers.setField(scene, "mState", GalleryListScene.STATE_SIMPLE_SEARCH);
+        ReflectionHelpers.callInstanceMethod(scene, "selectSearchFab", ClassParameter.from(boolean.class, false));
+        update();
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        assertEquals(View.VISIBLE, search.getVisibility());
+        assertEquals(View.VISIBLE, searchOptions.getVisibility());
+
+        ReflectionHelpers.setField(scene, "mState", GalleryListScene.STATE_NORMAL);
+        ReflectionHelpers.callInstanceMethod(scene, "selectActionFab", ClassParameter.from(boolean.class, true));
+        ValueAnimator handoff = ReflectionHelpers.getField(actions, "mTransition");
+        handoff.setCurrentPlayTime(150L);
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        settle();
+        assertEquals(View.INVISIBLE, search.getVisibility());
+        assertEquals(View.INVISIBLE, searchOptions.getVisibility());
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+    }
+
+    @Test public void ratingSortShortcutFollowsThePrimaryFabAndReturnsWithinSeventyPercentOfTheViewport() {
+        RecyclerView recycler = bindScrollableGalleryList();
+        recycler.setPadding(0, 80, 0, 40);
         bind("mRatingSortFab", R.id.rating_sort_fab);
         View shortcut = root.findViewById(R.id.rating_sort_active);
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
@@ -500,79 +588,86 @@ public class PopularGalleryActionsTest {
         assertEquals(root.getContext().getText(R.string.gallery_rating_sort), shortcut.getContentDescription());
         assertCenterAbove(shortcut, menu.getPrimaryFab(), 1);
 
-        RecyclerView recycler = new RecyclerView(root.getContext());
-        ReflectionHelpers.setField(scene, "mHideActionFabSlop", 20);
-        ReflectionHelpers.setField(recycler, "mScrollState", RecyclerView.SCROLL_STATE_DRAGGING);
-        RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(scene, "mOnScrollListener");
-        listener.onScrolled(recycler, 0, 20);
+        recycler.scrollBy(0, 20);
         settle();
         assertEquals(View.INVISIBLE, shortcut.getVisibility());
-        assertFalse(Settings.getGuideRatingSort());
-        ReflectionHelpers.callInstanceMethod(scene, "showActionFab");
+        assertEquals(View.INVISIBLE, menu.getPrimaryFab().getVisibility());
+        recycler.scrollBy(0, -20);
         settle();
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+
+        int shortcutRange = (recycler.getHeight() - 120) * 70 / 100;
+        recycler.scrollBy(0, shortcutRange + 21);
+        settle();
+        recycler.scrollBy(0, -20);
+        settle();
+        assertEquals(shortcutRange + 1, recycler.computeVerticalScrollOffset());
+        assertEquals(View.VISIBLE, menu.getPrimaryFab().getVisibility());
         assertEquals(View.INVISIBLE, shortcut.getVisibility());
-        builder.setMode(ListUrlBuilder.MODE_WHATS_HOT);
-        update();
+
+        recycler.scrollBy(0, -1);
+        settle();
+        assertEquals(shortcutRange, recycler.computeVerticalScrollOffset());
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+        recycler.scrollBy(0, 1);
         settle();
         assertEquals(View.INVISIBLE, shortcut.getVisibility());
         menu.setExpanded(true, false);
         assertEquals(View.VISIBLE, root.findViewById(R.id.rating_sort_fab).getVisibility());
-    }
-
-    @Test public void ratingSortShortcutDoesNotReappearWhenMenuCloses() {
-        bind("mModeActions", R.id.gallery_mode_actions);
-        builder.setMode(ListUrlBuilder.MODE_NORMAL);
-        update();
-        View shortcut = root.findViewById(R.id.rating_sort_active);
-        assertEquals(View.VISIBLE, shortcut.getVisibility());
-        scene.onClickPrimaryFab(menu, menu.getPrimaryFab());
-        assertEquals(View.INVISIBLE, shortcut.getVisibility());
         menu.setExpanded(false, false);
+        settle();
         assertEquals(View.INVISIBLE, shortcut.getVisibility());
-        assertFalse(Settings.getGuideRatingSort());
     }
 
-    @Test public void popularLayoutChangesKeepTheRatingSortShortcutAvailable() {
-        root.getContext().getSharedPreferences("popular-actions-test", Context.MODE_PRIVATE)
-                .edit().putBoolean("guide_rating_sort", false).apply();
-        bind("mModeActions", R.id.gallery_mode_actions);
+    @Test public void ratingSortShortcutReevaluatesTheViewportAfterResizeAndSearchResultJump() {
+        RecyclerView recycler = bindScrollableGalleryList();
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("first search");
         layout(600, 1200);
         update();
         settle();
         View shortcut = root.findViewById(R.id.rating_sort_active);
+        LayoutManagerUtils.scrollToPositionWithOffset(recycler.getLayoutManager(), 11, 0);
+        layout(600, 1200);
+        settle();
+        assertEquals(660, recycler.computeVerticalScrollOffset());
         assertEquals(View.VISIBLE, shortcut.getVisibility());
 
+        layout(600, 900);
+        settle();
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        assertEquals(View.VISIBLE, menu.getPrimaryFab().getVisibility());
+
+        builder.setKeyword("second search");
+        LayoutManagerUtils.scrollToPositionWithOffset(recycler.getLayoutManager(), 0, 0);
+        layout(600, 900);
+        settle();
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+        LayoutManagerUtils.scrollToPositionWithOffset(recycler.getLayoutManager(), 11, 0);
+        layout(600, 900);
+        settle();
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+    }
+
+    @Test public void previousDismissalDoesNotPreventTheShortcutWhenPopularIsReady() {
+        root.getContext().getSharedPreferences("popular-actions-test", Context.MODE_PRIVATE)
+                .edit().putBoolean("guide_rating_sort_manual_dismissal", false).apply();
+        bindScrollableGalleryList();
+        ReflectionHelpers.setField(scene, "mPopularRequestInFlight", true);
+        layout(600, 1200);
+        update();
+        settle();
+        View shortcut = root.findViewById(R.id.rating_sort_active);
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+
+        ReflectionHelpers.setField(scene, "mPopularRequestInFlight", false);
         ReflectionHelpers.setField(scene, "mPopularViewMode", PopularGalleryHistory.PREVIOUS);
         update();
         settle();
         assertEquals(View.VISIBLE, shortcut.getVisibility());
-
-        RecyclerView recycler = new RecyclerView(root.getContext());
-        ReflectionHelpers.setField(scene, "mHideActionFabSlop", 20);
-        ReflectionHelpers.setField(recycler, "mScrollState", RecyclerView.SCROLL_STATE_SETTLING);
-        RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(scene, "mOnScrollListener");
-        listener.onScrolled(recycler, 0, 20);
-        settle();
-        assertEquals(View.INVISIBLE, shortcut.getVisibility());
-        assertEquals(View.VISIBLE, root.findViewById(R.id.popular_previous).getVisibility());
-        assertTrue(Settings.getGuideRatingSort());
-        listener.onScrolled(recycler, 0, -20);
-        settle();
-        assertEquals(View.VISIBLE, shortcut.getVisibility());
-
-        menu.setExpanded(true, false);
-        settle();
-        assertEquals(View.INVISIBLE, shortcut.getVisibility());
-        menu.setExpanded(false, false);
-        builder.setMode(ListUrlBuilder.MODE_NORMAL);
-        update();
-        settle();
-        assertEquals(View.VISIBLE, shortcut.getVisibility());
-        assertTrue(Settings.getGuideRatingSort());
     }
 
     @Test public void activeRatingSortUsesPopularModeMovementAndMenuVisibilityAnimations() {
-        bind("mModeActions", R.id.gallery_mode_actions);
         bind("mRatingSortFab", R.id.rating_sort_fab);
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
         ReflectionHelpers.setField(scene, "mRatingSortMode", true);
@@ -586,12 +681,10 @@ public class PopularGalleryActionsTest {
         ReflectionHelpers.callInstanceMethod(scene, "hideActionFab");
         // The active button waits for the main FAB to leave, then slides into its position.
         assertCenterAbove(sort, menu.getPrimaryFab(), 1);
-        ValueAnimator movement = ReflectionHelpers.getField(root.findViewById(R.id.gallery_mode_actions),
-                "mPositionAnimator");
+        ValueAnimator movement = ReflectionHelpers.getField(actions, "mTransition");
         assertNotNull(movement);
-        assertEquals(300L, movement.getDuration());
-        assertEquals(300L, movement.getStartDelay());
-        movement.setCurrentPlayTime(150L);
+        assertEquals(600L, movement.getDuration());
+        movement.setCurrentPlayTime(450L);
         float step = root.getResources().getDimension(R.dimen.fab_size)
                 + root.getResources().getDimension(R.dimen.fab_layout_secondary_margin);
         float distance = menu.getPrimaryFab().getY() + menu.getPrimaryFab().getHeight() / 2f
@@ -606,8 +699,7 @@ public class PopularGalleryActionsTest {
         settle();
         assertCenterAbove(sort, menu.getPrimaryFab(), 1);
 
-        menu.setExpanded(true, false);
-        assertEquals(300L, sort.animate().getDuration());
+        menu.setExpanded(true);
         assertEquals(View.VISIBLE, sort.getVisibility());
         settle();
         assertEquals(View.INVISIBLE, sort.getVisibility());
@@ -662,16 +754,42 @@ public class PopularGalleryActionsTest {
     private void update() {
         ReflectionHelpers.callInstanceMethod(scene, "updatePopularActions");
     }
+
+    private RecyclerView bindScrollableGalleryList() {
+        RecyclerView recycler = root.findViewById(R.id.recycler_view);
+        recycler.setLayoutManager(new AutoStaggeredGridLayoutManager(0, StaggeredGridLayoutManager.VERTICAL));
+        recycler.setAdapter(new RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+            @NonNull @Override public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int type) {
+                View row = new View(parent.getContext());
+                row.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 60));
+                return new RecyclerView.ViewHolder(row) {};
+            }
+
+            @Override public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {}
+
+            @Override public int getItemCount() {
+                return 40;
+            }
+        });
+        recycler.addOnScrollListener(ReflectionHelpers.getField(scene, "mOnScrollListener"));
+        recycler.addOnLayoutChangeListener(ReflectionHelpers.getField(scene, "mRatingSortShortcutLayoutListener"));
+        ReflectionHelpers.setField(scene, "mHideActionFabSlop", 20);
+        return recycler;
+    }
+
     private void layout(int width, int height) {
+        FrameLayout.LayoutParams size = new FrameLayout.LayoutParams(width, height);
         if (!root.isAttachedToWindow()) {
-            Robolectric.buildActivity(Activity.class).setup().get().setContentView(root);
+            Robolectric.buildActivity(Activity.class).setup().get().setContentView(root, size);
+        } else {
+            root.setLayoutParams(size);
         }
         root.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
         root.layout(0, 0, width, height);
     }
     private void settle() {
-        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(650));
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1000));
         actions.getViewTreeObserver().dispatchOnPreDraw();
     }
     private void assertCenterAbove(View button, View anchor, int slots) {

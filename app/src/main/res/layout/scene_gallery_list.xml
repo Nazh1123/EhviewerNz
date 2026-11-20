@@ -162,37 +162,8 @@
 
     </com.hippo.widget.FabLayout>
 
-    <com.hippo.ehviewer.widget.PopularGalleryActions
-        android:id="@+id/popular_actions"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:visibility="invisible">
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/popular_updates"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="right"
-            android:contentDescription="@string/popular_updates_only"
-            app:srcCompat="@drawable/v_popular_updates_x24"
-            app:backgroundTint="?attr/widgetColorThemePrimary"
-            app:tint="@color/primary_drawable_dark"
-            style="@style/Widget.PopularAction"/>
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/popular_previous"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="right"
-            android:contentDescription="@string/popular_previous"
-            app:srcCompat="@drawable/v_history_dark_x24"
-            app:backgroundTint="?attr/widgetColorThemePrimary"
-            app:tint="@color/primary_drawable_dark"
-            style="@style/Widget.PopularAction"/>
-    </com.hippo.ehviewer.widget.PopularGalleryActions>
-
-    <com.hippo.ehviewer.widget.GalleryListModeActions
-        android:id="@+id/gallery_mode_actions"
+    <com.hippo.ehviewer.widget.GalleryListActions
+        android:id="@+id/gallery_list_actions"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="invisible">
@@ -225,7 +196,27 @@
             app:backgroundTint="?attr/widgetColorThemePrimary"
             app:tint="@color/primary_drawable_dark"
             style="@style/Widget.PopularAction"/>
-    </com.hippo.ehviewer.widget.GalleryListModeActions>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/popular_previous"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/popular_previous"
+            app:srcCompat="@drawable/v_history_dark_x24"
+            app:backgroundTint="?attr/widgetColorThemePrimary"
+            app:tint="@color/primary_drawable_dark"
+            style="@style/Widget.PopularAction"/>
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/popular_updates"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/popular_updates_only"
+            app:srcCompat="@drawable/v_popular_updates_x24"
+            app:backgroundTint="?attr/widgetColorThemePrimary"
+            app:tint="@color/primary_drawable_dark"
+            style="@style/Widget.PopularAction"/>
+    </com.hippo.ehviewer.widget.GalleryListActions>
 
     <LinearLayout
         android:layout_width="wrap_content"
