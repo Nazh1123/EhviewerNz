@@ -385,6 +385,9 @@ public class GalleryListScene extends BaseScene
                 return;
             }
             if (dy >= mHideActionFabSlop) {
+                if (recyclerView.getScrollState() == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    dismissRatingSortShortcut();
+                }
                 hideActionFab();
             } else if (dy <= -mHideActionFabSlop / 2) {
                 showActionFab();
@@ -2114,25 +2117,41 @@ public class GalleryListScene extends BaseScene
         if (mFabLayout == null) return;
         int activeSortLabel = isPopularMode() ? R.string.gallery_rating_sort_restore
                 : R.string.gallery_rating_sort_active;
+        int sortIcon = mRatingSortMode ? R.drawable.v_star_x16 : R.drawable.v_star_outline_x16;
+        int sortLabel = mRatingSortMode ? activeSortLabel : R.string.gallery_rating_sort;
         if (mRatingSortFab != null) {
-            mRatingSortFab.setImageResource(mRatingSortMode ? R.drawable.v_star_x16 : R.drawable.v_star_outline_x16);
-            CharSequence label = mRatingSortFab.getContext().getText(mRatingSortMode
-                    ? activeSortLabel : R.string.gallery_rating_sort);
+            mRatingSortFab.setImageResource(sortIcon);
+            CharSequence label = mRatingSortFab.getContext().getText(sortLabel);
             mRatingSortFab.setContentDescription(label);
             TooltipCompat.setTooltipText(mRatingSortFab, label);
         }
+        boolean showSort = mRatingSortMode || shouldShowRatingSortShortcut();
+        int reserved = (showSort ? 1 : 0) + (mDownloadedOnlyMode ? 1 : 0);
+        if (mPopularActions != null) mPopularActions.setReservedSlots(reserved);
         if (mModeActions != null) {
-            View ratingActive = mModeActions.findViewById(R.id.rating_sort_active);
-            CharSequence label = ratingActive.getContext().getText(activeSortLabel);
+            FloatingActionButton ratingActive = mModeActions.findViewById(R.id.rating_sort_active);
+            ratingActive.setImageResource(sortIcon);
+            CharSequence label = ratingActive.getContext().getText(sortLabel);
             ratingActive.setContentDescription(label);
             TooltipCompat.setTooltipText(ratingActive, label);
+            mModeActions.update(mFabLayout.getPrimaryFab(), canShowOutsideActions(), showSort, mDownloadedOnlyMode,
+                    isBookmarkSubscriptionMode() && mSubscriptionStaleResult, mShowActionFab);
         }
-        int reserved = (mRatingSortMode ? 1 : 0) + (mDownloadedOnlyMode ? 1 : 0);
-        if (mPopularActions != null) mPopularActions.setReservedSlots(reserved);
-        if (mModeActions != null) mModeActions.update(mFabLayout.getPrimaryFab(),
-                mState == STATE_NORMAL && !mMultiSelectMode && !mFabLayout.isExpanded(),
-                mRatingSortMode, mDownloadedOnlyMode,
-                isBookmarkSubscriptionMode() && mSubscriptionStaleResult, mShowActionFab);
+    }
+
+    private boolean canShowOutsideActions() {
+        return mFabLayout != null && mState == STATE_NORMAL && !mMultiSelectMode && !mFabLayout.isExpanded();
+    }
+
+    private boolean shouldShowRatingSortShortcut() {
+        return mModeActions != null && mUrlBuilder != null && canShowOutsideActions()
+                && mShowActionFab && !mRatingSortMode && Settings.getGuideRatingSort();
+    }
+
+    private boolean dismissRatingSortShortcut() {
+        if (!shouldShowRatingSortShortcut()) return false;
+        Settings.putGuideRatingSort(false);
+        return true;
     }
 
     private String ratingSortStatus() {
@@ -2314,6 +2333,7 @@ public class GalleryListScene extends BaseScene
         }
         // Popular is one bounded snapshot. Sort its current projection (including updates-only)
         // without asking for a page/date range or showing a progress dialog.
+        dismissRatingSortShortcut();
         stopDownloadedPageScan(false);
         mRatingSortScrollToTop = true;
         getRatingSortController().start(0, null);
@@ -2327,8 +2347,12 @@ public class GalleryListScene extends BaseScene
         View content = LayoutInflater.from(context).inflate(R.layout.gallery_rating_sort_dialog, null);
         ((TextView) content.findViewById(R.id.rating_sort_status)).setText(ratingSortStatus());
         RadioGroup range = content.findViewById(R.id.rating_sort_range);
-        EditText pages = content.findViewById(R.id.rating_sort_page_count);
-        EditText months = content.findViewById(R.id.rating_sort_month_count);
+        RatingSortCountInput pages = new RatingSortCountInput(content.findViewById(R.id.rating_sort_page_count),
+                content.findViewById(R.id.rating_sort_page_decrease), content.findViewById(R.id.rating_sort_page_increase),
+                GalleryRatingSort.MAX_PAGES);
+        RatingSortCountInput months = new RatingSortCountInput(content.findViewById(R.id.rating_sort_month_count),
+                content.findViewById(R.id.rating_sort_month_decrease), content.findViewById(R.id.rating_sort_month_increase),
+                GalleryRatingSort.MAX_MONTHS);
         boolean canLoad = mHelper.getLoadedSourcePages() > 0 && !isPopularMode()
                 && mUrlBuilder.getMode() != ListUrlBuilder.MODE_IMAGE_SEARCH;
         boolean canUseMonths = supportsRatingMonthRange();
@@ -2337,11 +2361,11 @@ public class GalleryListScene extends BaseScene
         if (isBookmarkSubscriptionMode()) ((TextView) content.findViewById(R.id.rating_sort_page_unit))
                 .setText(R.string.gallery_rating_sort_batches);
         GalleryRatingSortController controller = getRatingSortController();
-        pages.setText(String.valueOf(controller.targetPages() > 0 ? controller.targetPages()
+        pages.input.setText(String.valueOf(controller.targetPages() > 0 ? controller.targetPages()
                 : Math.min(GalleryRatingSort.MAX_PAGES, mHelper.getLoadedSourcePages() + 5)));
-        months.setText(String.valueOf(mRatingSortMonths));
-        pages.setEnabled(false);
-        months.setEnabled(false);
+        months.input.setText(String.valueOf(mRatingSortMonths));
+        pages.input.setEnabled(false);
+        months.input.setEnabled(false);
         // Include the native site filter when precise rating filtering is disabled.
         int searchMinimum = Math.max(mUrlBuilder.getEffectiveMinRatingHundredths(),
                 mUrlBuilder.getSubscriptionMinRatingHundredths());
@@ -2354,8 +2378,8 @@ public class GalleryListScene extends BaseScene
         content.findViewById(R.id.search_rating_row).setVisibility(
                 Settings.getEnablePreciseRatingFilter() ? View.VISIBLE : View.GONE);
         range.setOnCheckedChangeListener((group, id) -> {
-            pages.setEnabled(id == R.id.rating_sort_pages);
-            months.setEnabled(id == R.id.rating_sort_months);
+            pages.input.setEnabled(canLoad && id == R.id.rating_sort_pages);
+            months.input.setEnabled(canLoad && canUseMonths && id == R.id.rating_sort_months);
         });
         if (mRatingSortMode) {
             if (controller.cutoff() != null && canLoad && canUseMonths) range.check(R.id.rating_sort_months);
@@ -2372,18 +2396,16 @@ public class GalleryListScene extends BaseScene
                 (dialog, which) -> restoreRatingOrder());
         AlertDialog dialog = builder.create();
         dialog.show();
+        if (dismissRatingSortShortcut()) updateModeActions();
         DialogActionLayout.placeNeutralAtStart(dialog);
         dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(view -> {
             int selection = range.getCheckedRadioButtonId();
             int target = 0;
             String date = null;
             if (selection != R.id.rating_sort_loaded) {
-                EditText input = selection == R.id.rating_sort_pages ? pages : months;
-                int value;
-                try { value = Integer.parseInt(input.getText().toString().trim()); }
-                catch (NumberFormatException error) { input.setError(getString(R.string.error_invalid_number)); return; }
-                int maximum = selection == R.id.rating_sort_pages ? GalleryRatingSort.MAX_PAGES : 240;
-                if (value < 1 || value > maximum) { input.setError(getString(R.string.error_out_of_range)); return; }
+                RatingSortCountInput count = selection == R.id.rating_sort_pages ? pages : months;
+                int value = count.readValue();
+                if (value == 0) return;
                 if (selection == R.id.rating_sort_pages) target = value;
                 else {
                     mRatingSortMonths = value;
@@ -2400,6 +2422,44 @@ public class GalleryListScene extends BaseScene
                 next.setMinRatingHundredths(ratingFilter.getMinimumRating());
             applyRatingSearch(next, true, target, date);
         });
+    }
+
+    private static final class RatingSortCountInput {
+        final EditText input;
+        private final int maximum;
+
+        RatingSortCountInput(EditText input, View decrease, View increase, int maximum) {
+            this.input = input;
+            this.maximum = maximum;
+            decrease.setOnClickListener(v -> step(-1));
+            increase.setOnClickListener(v -> step(1));
+        }
+
+        private int parseValue() {
+            return Integer.parseInt(input.getText().toString().trim());
+        }
+
+        int readValue() {
+            try {
+                int value = parseValue();
+                if (value >= 1 && value <= maximum) return value;
+                input.setError(input.getContext().getText(R.string.error_out_of_range));
+            } catch (NumberFormatException error) {
+                input.setError(input.getContext().getText(R.string.error_invalid_number));
+            }
+            return 0;
+        }
+
+        private void step(int delta) {
+            int value;
+            try {
+                value = parseValue() + delta;
+            } catch (NumberFormatException error) {
+                value = 1;
+            }
+            input.setText(String.valueOf(Math.max(1, Math.min(maximum, value))));
+            input.setSelection(input.length());
+        }
     }
 
     private int currentRatingMinimum() {
@@ -2547,7 +2607,7 @@ public class GalleryListScene extends BaseScene
         // The active mode always offers a way back, even when scrolling hides the main FAB.
         int activeIndex = !active ? -1 : mPopularViewMode == PopularGalleryHistory.UPDATES ? 0 : 1;
         mPopularActions.update(mFabLayout.getPrimaryFab(), mPopularUpdatesMenu,
-                enabled && (active || mShowActionFab) && mState == STATE_NORMAL && !mFabLayout.isExpanded(),
+                enabled && (active || mShowActionFab) && canShowOutsideActions(),
                 activeIndex, mShowActionFab);
     }
 
@@ -2950,6 +3010,7 @@ public class GalleryListScene extends BaseScene
         }
         if (STATE_NORMAL == mState) {
             updatePopularActions();
+            if (!view.isExpanded()) dismissRatingSortShortcut();
             view.toggle();
         }
 

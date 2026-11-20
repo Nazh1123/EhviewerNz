@@ -7,9 +7,13 @@
     <string name="gallery_rating_sort_page_unit">页</string>
     <string name="gallery_rating_sort_batches">批结果</string>
     <string name="gallery_rating_sort_page_hint">1–200</string>
+    <string name="gallery_rating_sort_page_decrease">减少页数或批数</string>
+    <string name="gallery_rating_sort_page_increase">增加页数或批数</string>
     <string name="gallery_rating_sort_months">加载至</string>
     <string name="gallery_rating_sort_month_unit">月前</string>
     <string name="gallery_rating_sort_month_hint">1–240</string>
+    <string name="gallery_rating_sort_month_decrease">减少月数</string>
+    <string name="gallery_rating_sort_month_increase">增加月数</string>
     <string name="gallery_rating_sort_month_note">复用已加载结果，仅显示范围内的画廊；不足时继续加载。月份范围保留边界整页。</string>
     <string name="gallery_rating_sort_month_unavailable">此列表或跳转后不支持月份范围。</string>
     <string name="gallery_rating_sort_status">已加载 %1$d 页 · %2$d 个画廊\n当前显示 %3$d 个</string>

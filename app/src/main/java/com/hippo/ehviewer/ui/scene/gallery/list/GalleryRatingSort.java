@@ -15,6 +15,7 @@ import java.util.Map;
 
 final class GalleryRatingSort {
     static final int MAX_PAGES = 200;
+    static final int MAX_MONTHS = 240;
     static final int MAX_GALLERIES = 10000;
     private static final DateTimeFormatter TIME = DateTimeFormatter
             .ofPattern("uuuu-MM-dd HH:mm", Locale.ROOT).withResolverStyle(ResolverStyle.STRICT);
@@ -55,7 +56,7 @@ final class GalleryRatingSort {
     }
 
     static String cutoff(ZonedDateTime now, int months) {
-        if (months < 1 || months > 240) throw new IllegalArgumentException("months");
+        if (months < 1 || months > MAX_MONTHS) throw new IllegalArgumentException("months");
         return now.minusMonths(months).withZoneSameInstant(ZoneOffset.UTC).format(TIME);
     }
 

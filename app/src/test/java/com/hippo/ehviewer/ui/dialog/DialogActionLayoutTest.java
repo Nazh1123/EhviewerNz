@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Rect;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
@@ -15,7 +16,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.RadioGroup;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.graphics.ColorUtils;
 import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.ui.fragment.SubscriptionUpdatePreferences;
@@ -122,6 +125,25 @@ public class DialogActionLayoutTest {
         ShadowLooper.idleMainLooper();
         assertEquals(1, restored.get());
         assertFalse(dialog.isShowing());
+    }
+
+    @Test public void ratingStepButtonsContrastWithBlackDialogBackground() throws Exception {
+        Context context = new ContextThemeWrapper(activity, R.style.AppTheme_Black);
+        View content = LayoutInflater.from(context).inflate(R.layout.gallery_rating_sort_dialog, null);
+        AlertDialog dialog = new AlertDialog.Builder(context)
+                .setTitle(R.string.gallery_rating_sort).setView(content)
+                .setPositiveButton(R.string.gallery_rating_sort_execute, null).show();
+        RadioGroup range = content.findViewById(R.id.rating_sort_range);
+        for (int selection : new int[]{R.id.rating_sort_loaded, R.id.rating_sort_pages, R.id.rating_sort_months}) {
+            range.check(selection);
+            for (int id : new int[]{R.id.rating_sort_page_decrease, R.id.rating_sort_page_increase,
+                    R.id.rating_sort_month_decrease, R.id.rating_sort_month_increase}) {
+                Button step = content.findViewById(id);
+                assertTrue(ColorUtils.calculateContrast(step.getCurrentTextColor(), Color.BLACK) >= 4.5);
+            }
+        }
+        save(layout(dialog, context), "rating-black.png");
+        dialog.dismiss();
     }
 
     private ViewGroup layout(AlertDialog dialog, Context context) {

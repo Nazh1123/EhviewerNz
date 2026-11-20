@@ -2008,6 +2008,17 @@ public class Settings {
         putBoolean(KEY_GUIDE_GALLERY, value);
     }
 
+    // Earlier builds could dismiss the shortcut during a temporary visibility change.
+    private static final String KEY_GUIDE_RATING_SORT = "guide_rating_sort_manual_dismissal";
+
+    public static boolean getGuideRatingSort() {
+        return getBoolean(KEY_GUIDE_RATING_SORT, true);
+    }
+
+    public static void putGuideRatingSort(boolean value) {
+        putBoolean(KEY_GUIDE_RATING_SORT, value);
+    }
+
     private static final String KEY_CLIPBOARD_TEXT_HASH_CODE = "clipboard_text_hash_code";
     private static final int DEFAULT_CLIPBOARD_TEXT_HASH_CODE = 0;
 

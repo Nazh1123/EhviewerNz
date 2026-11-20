@@ -382,6 +382,7 @@ public class PopularGalleryActionsTest {
     }
 
     @Test public void staleSubscriptionRefreshFollowsPrimaryFabAndReservesItsOwnSlot() {
+        Settings.putGuideRatingSort(false);
         bind("mModeActions", R.id.gallery_mode_actions);
         View refresh = root.findViewById(R.id.subscription_refresh_active);
         for (int mode : new int[]{ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION,
@@ -464,6 +465,110 @@ public class PopularGalleryActionsTest {
         menu.setExpanded(false, false);
         settle();
         assertEquals(View.VISIBLE, root.findViewById(R.id.gallery_mode_actions).getVisibility());
+    }
+
+    @Test public void ratingSortShortcutSharesSlotsWithPopularAndSubscriptionActions() {
+        bind("mModeActions", R.id.gallery_mode_actions);
+        layout(600, 1200);
+        update();
+        settle();
+        View shortcut = root.findViewById(R.id.rating_sort_active);
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+        assertCenterAbove(shortcut, menu.getPrimaryFab(), 1);
+        assertCenterAbove(root.findViewById(R.id.popular_previous), menu.getPrimaryFab(), 2);
+        assertCenterAbove(root.findViewById(R.id.popular_updates), menu.getPrimaryFab(), 3);
+
+        builder.setMode(ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION);
+        ReflectionHelpers.setField(scene, "mSubscriptionStaleResult", true);
+        update();
+        settle();
+        View refresh = root.findViewById(R.id.subscription_refresh_active);
+        assertEquals(View.VISIBLE, refresh.getVisibility());
+        assertCenterAbove(shortcut, menu.getPrimaryFab(), 1);
+        assertCenterAbove(refresh, menu.getPrimaryFab(), 2);
+    }
+
+    @Test public void ratingSortShortcutIsDismissedByScrollingAndStillAvailableInMenu() {
+        bind("mModeActions", R.id.gallery_mode_actions);
+        bind("mRatingSortFab", R.id.rating_sort_fab);
+        View shortcut = root.findViewById(R.id.rating_sort_active);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        layout(600, 1200);
+        update();
+        settle();
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+        assertEquals(root.getContext().getText(R.string.gallery_rating_sort), shortcut.getContentDescription());
+        assertCenterAbove(shortcut, menu.getPrimaryFab(), 1);
+
+        RecyclerView recycler = new RecyclerView(root.getContext());
+        ReflectionHelpers.setField(scene, "mHideActionFabSlop", 20);
+        ReflectionHelpers.setField(recycler, "mScrollState", RecyclerView.SCROLL_STATE_DRAGGING);
+        RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(scene, "mOnScrollListener");
+        listener.onScrolled(recycler, 0, 20);
+        settle();
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        assertFalse(Settings.getGuideRatingSort());
+        ReflectionHelpers.callInstanceMethod(scene, "showActionFab");
+        settle();
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        builder.setMode(ListUrlBuilder.MODE_WHATS_HOT);
+        update();
+        settle();
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        menu.setExpanded(true, false);
+        assertEquals(View.VISIBLE, root.findViewById(R.id.rating_sort_fab).getVisibility());
+    }
+
+    @Test public void ratingSortShortcutDoesNotReappearWhenMenuCloses() {
+        bind("mModeActions", R.id.gallery_mode_actions);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        update();
+        View shortcut = root.findViewById(R.id.rating_sort_active);
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+        scene.onClickPrimaryFab(menu, menu.getPrimaryFab());
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        menu.setExpanded(false, false);
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        assertFalse(Settings.getGuideRatingSort());
+    }
+
+    @Test public void popularLayoutChangesKeepTheRatingSortShortcutAvailable() {
+        root.getContext().getSharedPreferences("popular-actions-test", Context.MODE_PRIVATE)
+                .edit().putBoolean("guide_rating_sort", false).apply();
+        bind("mModeActions", R.id.gallery_mode_actions);
+        layout(600, 1200);
+        update();
+        settle();
+        View shortcut = root.findViewById(R.id.rating_sort_active);
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+
+        ReflectionHelpers.setField(scene, "mPopularViewMode", PopularGalleryHistory.PREVIOUS);
+        update();
+        settle();
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+
+        RecyclerView recycler = new RecyclerView(root.getContext());
+        ReflectionHelpers.setField(scene, "mHideActionFabSlop", 20);
+        ReflectionHelpers.setField(recycler, "mScrollState", RecyclerView.SCROLL_STATE_SETTLING);
+        RecyclerView.OnScrollListener listener = ReflectionHelpers.getField(scene, "mOnScrollListener");
+        listener.onScrolled(recycler, 0, 20);
+        settle();
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        assertEquals(View.VISIBLE, root.findViewById(R.id.popular_previous).getVisibility());
+        assertTrue(Settings.getGuideRatingSort());
+        listener.onScrolled(recycler, 0, -20);
+        settle();
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+
+        menu.setExpanded(true, false);
+        settle();
+        assertEquals(View.INVISIBLE, shortcut.getVisibility());
+        menu.setExpanded(false, false);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        update();
+        settle();
+        assertEquals(View.VISIBLE, shortcut.getVisibility());
+        assertTrue(Settings.getGuideRatingSort());
     }
 
     @Test public void activeRatingSortUsesPopularModeMovementAndMenuVisibilityAnimations() {

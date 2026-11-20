@@ -8,6 +8,7 @@ import android.os.Looper;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.EditText;
 import android.widget.TextView;
 
 import androidx.appcompat.view.ContextThemeWrapper;
@@ -1832,6 +1833,61 @@ public class PopularGalleryRenderingTest {
         assertEquals("1", ((TextView) dialog.findViewById(R.id.rating_sort_page_count)).getText().toString());
         assertEquals(R.id.rating_sort_pages, ((android.widget.RadioGroup)
                 dialog.findViewById(R.id.rating_sort_range)).getCheckedRadioButtonId());
+        dialog.dismiss();
+    }
+
+    @Test public void ratingDialogStepsBothRangesWithoutChangingSelectionAndKeepsValuesInBounds() {
+        cacheRatingPages(1);
+        ReflectionHelpers.setField(scene, "mClient", new EhClient(scene.getContext()));
+        ReflectionHelpers.callInstanceMethod(scene, "showRatingSortDialog");
+        androidx.appcompat.app.AlertDialog dialog = latestRatingDialog();
+        EditText pages = dialog.findViewById(R.id.rating_sort_page_count);
+        View pageDecrease = dialog.findViewById(R.id.rating_sort_page_decrease);
+        View pageIncrease = dialog.findViewById(R.id.rating_sort_page_increase);
+        EditText months = dialog.findViewById(R.id.rating_sort_month_count);
+        View monthDecrease = dialog.findViewById(R.id.rating_sort_month_decrease);
+        View monthIncrease = dialog.findViewById(R.id.rating_sort_month_increase);
+        android.widget.RadioGroup range = dialog.findViewById(R.id.rating_sort_range);
+        assertFalse(pages.isEnabled());
+        assertFalse(months.isEnabled());
+        assertTrue(pageIncrease.isEnabled());
+        assertTrue(monthIncrease.isEnabled());
+        pageIncrease.performClick();
+        monthIncrease.performClick();
+        assertEquals("7", pages.getText().toString());
+        assertEquals("2", months.getText().toString());
+        assertEquals(R.id.rating_sort_loaded, range.getCheckedRadioButtonId());
+
+        dialog.findViewById(R.id.rating_sort_pages).performClick();
+        assertTrue(pages.isEnabled());
+        assertTrue(pageDecrease.isEnabled());
+        assertTrue(pageIncrease.isEnabled());
+        pages.setText("198");
+        pageIncrease.performClick();
+        assertEquals("199", pages.getText().toString());
+        pageIncrease.performClick();
+        pageIncrease.performClick();
+        assertEquals("200", pages.getText().toString());
+
+        dialog.findViewById(R.id.rating_sort_months).performClick();
+        assertFalse(pages.isEnabled());
+        assertTrue(pageDecrease.isEnabled());
+        pageDecrease.performClick();
+        assertEquals("199", pages.getText().toString());
+        assertEquals(R.id.rating_sort_months, range.getCheckedRadioButtonId());
+        assertTrue(months.isEnabled());
+        assertTrue(monthDecrease.isEnabled());
+        assertTrue(monthIncrease.isEnabled());
+        monthDecrease.performClick();
+        assertEquals("1", months.getText().toString());
+        months.setText("240");
+        monthIncrease.performClick();
+        assertEquals("240", months.getText().toString());
+        monthDecrease.performClick();
+        assertEquals("239", months.getText().toString());
+        months.setText("");
+        monthIncrease.performClick();
+        assertEquals("1", months.getText().toString());
         dialog.dismiss();
     }
 

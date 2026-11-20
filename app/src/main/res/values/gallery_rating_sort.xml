@@ -7,9 +7,13 @@
     <string name="gallery_rating_sort_page_unit">pages</string>
     <string name="gallery_rating_sort_batches">batches</string>
     <string name="gallery_rating_sort_page_hint">1–200</string>
+    <string name="gallery_rating_sort_page_decrease">Decrease page or batch count</string>
+    <string name="gallery_rating_sort_page_increase">Increase page or batch count</string>
     <string name="gallery_rating_sort_months">Load back</string>
     <string name="gallery_rating_sort_month_unit">months</string>
     <string name="gallery_rating_sort_month_hint">1–240</string>
+    <string name="gallery_rating_sort_month_decrease">Decrease month count</string>
+    <string name="gallery_rating_sort_month_increase">Increase month count</string>
     <string name="gallery_rating_sort_month_note">Reuses loaded results and shows only the selected range; loads more if needed. Month ranges keep the boundary page.</string>
     <string name="gallery_rating_sort_month_unavailable">Date range unavailable for this list or after a jump.</string>
     <string name="gallery_rating_sort_status">Loaded: %1$d pages · %2$d galleries\nVisible: %3$d</string>
@@ -22,4 +26,14 @@
     <string name="gallery_rating_sort_stop">Stop and sort loaded</string>
     <string name="gallery_rating_sort_incomplete">Loaded results sorted; some loading or ratings are incomplete.</string>
     <string name="gallery_rating_sort_jump_reset">Original order restored for jump.</string>
+
+    <style name="Widget.RatingSort.StepButton" parent="Widget.AppCompat.Button.Borderless">
+        <item name="android:layout_width">48dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:minWidth">0dp</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:padding">0dp</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textColor">?android:attr/textColorPrimary</item>
+    </style>
 </resources>
