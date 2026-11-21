@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
 
 /** One execution source may serve several logical queries, without sharing their checkpoints. */
 public final class SearchUpdateSession {
@@ -164,14 +165,15 @@ public final class SearchUpdateSession {
     public Runnable captureBrowsingCommit() {
         Map<String, SearchUpdateStore.Pass> captured = new LinkedHashMap<>();
         passes.forEach((query, pass) -> captured.put(query, pass.snapshotForCommit()));
-        return () -> commit(captured, true);
+        return () -> commit(captured, SearchUpdateStore::commitCapturedPage);
     }
 
     public void commit(boolean browsing) {
-        commit(passes, browsing);
+        commit(passes, (store, pass) -> store.commit(pass, browsing));
     }
 
-    private void commit(Map<String, SearchUpdateStore.Pass> pending, boolean browsing) {
+    private void commit(Map<String, SearchUpdateStore.Pass> pending,
+                        BiConsumer<SearchUpdateStore, SearchUpdateStore.Pass> save) {
         if (!scope.equals(SubscriptionSearchContext.key())) return;
         Set<String> active = new HashSet<>();
         if (plan != null && subscription) for (QuickSearch bookmark : EhDB.getSubscribedQuickSearch()) {
@@ -181,7 +183,7 @@ public final class SearchUpdateSession {
         try (SearchUpdateStore store = SearchUpdateStore.open()) {
             for (Map.Entry<String, SearchUpdateStore.Pass> entry : pending.entrySet()) {
                 if (plan != null && subscription && !active.contains(entry.getKey())) continue;
-                store.commit(entry.getValue(), browsing);
+                save.accept(store, entry.getValue());
             }
         }
     }

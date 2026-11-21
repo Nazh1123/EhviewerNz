@@ -4,6 +4,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.util.Log;
 
@@ -229,13 +230,19 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
         public final Snapshot baseline;
         private final Map<Long, GalleryInfo> raw = new LinkedHashMap<>();
         private final Map<Long, GalleryInfo> eligible = new LinkedHashMap<>();
+        private final Set<Long> pendingGids = new HashSet<>();
+        private PageChanges pageChanges;
         private long floor, head, scannedFloor;
         private boolean first = true, done, exhausted;
-        // Successive queued snapshots share the optimistic version of the same browsing pass.
+        // Successive queued snapshots share the last successful write of this browsing pass.
         private final CommitVersion commitVersion;
+
+        private record PageChanges(int number, PageChanges previous, Set<Long> gids) { }
 
         private static final class CommitVersion {
             long expected;
+            PageChanges savedPage;
+            boolean superseded;
             CommitVersion(long expected) { this.expected = expected; }
         }
 
@@ -249,12 +256,16 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
         }
 
         Pass snapshotForCommit() {
+            int number = pageChanges == null ? 1 : pageChanges.number + 1;
+            pageChanges = new PageChanges(number, pageChanges, Set.copyOf(pendingGids));
+            pendingGids.clear();
             Pass copy = new Pass(new Snapshot(baseline.scope, baseline.query, baseline.initialized,
                     baseline.version, baseline.checked, baseline.viewed, baseline.head, baseline.floor,
                     baseline.complete, baseline.exhausted, baseline.entries, new HashSet<>(baseline.confirmed)),
                     commitVersion);
             copy.raw.putAll(raw);
             copy.eligible.putAll(eligible);
+            copy.pageChanges = pageChanges;
             copy.floor = floor;
             copy.head = head;
             copy.scannedFloor = scannedFloor;
@@ -278,11 +289,13 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             for (GalleryInfo gallery : rawPage) {
                 if (gallery.gid <= 0) continue;
                 raw.put(gallery.gid, gallery);
+                pendingGids.add(gallery.gid);
                 head = Math.max(head, GallerySeenState.postedMinute(gallery.posted));
             }
             for (GalleryInfo gallery : qualifiedPage) if (gallery.gid > 0) {
                 eligible.put(gallery.gid, gallery);
                 raw.putIfAbsent(gallery.gid, gallery);
+                pendingGids.add(gallery.gid);
             }
             baseline.confirmed.addAll(confirmed);
             long tail = GallerySeenState.postedMinute(rawTailPosted);
@@ -305,10 +318,17 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             return result;
         }
 
-        private Set<Long> newGidsInQuery() {
-            Set<Long> result = new HashSet<>();
-            for (GalleryInfo gallery : eligible.values()) if (baseline.isNewInQuery(gallery)) result.add(gallery.gid);
-            return result;
+        private Set<Long> unsavedGids() {
+            Set<Long> gids = new HashSet<>();
+            for (PageChanges page = pageChanges; page != commitVersion.savedPage && page != null;
+                    page = page.previous) {
+                gids.addAll(page.gids);
+            }
+            return gids;
+        }
+
+        private boolean isInCheckpoint(GalleryInfo gallery) {
+            return floor == 0 || GallerySeenState.postedMinute(gallery.posted) >= floor;
         }
 
         /** The divider describes this query's last visit; notification deduplication is separate. */
@@ -332,53 +352,81 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
     /** A completed source advances atomically. Browsing may confirm a partial page without
      * advancing a newer check checkpoint past results which it has not actually scanned. */
     public synchronized void commit(Pass pass, boolean browsing) {
-        if (!browsing && !pass.complete()) throw new IllegalStateException("Incomplete check");
+        if (browsing) {
+            commitCapturedPage(pass.snapshotForCommit());
+        } else {
+            if (!pass.complete()) throw new IllegalStateException("Incomplete check");
+            commitPage(pass, false);
+        }
+    }
+
+    synchronized void commitCapturedPage(Pass page) {
+        synchronized (page.commitVersion) {
+            commitPage(page, true);
+        }
+    }
+
+    private void commitPage(Pass pass, boolean browsing) {
+        Pass.CommitVersion progress = pass.commitVersion;
+        if (browsing && progress.savedPage != null && pass.pageChanges.number <= progress.savedPage.number) return;
         SQLiteDatabase db = getWritableDatabase();
         String key = id(pass.baseline.scope, pass.baseline.query);
+        long version;
+        boolean stale;
         db.beginTransaction();
         try {
-            Snapshot current = read(pass.baseline.scope, pass.baseline.query);
-            current.confirmed.addAll(confirmed(pass.baseline.scope, pass.raw.keySet()));
-            long version = current.version + 1;
-            long expectedVersion = pass.commitVersion.expected;
-            boolean replaceCheckpoint = (pass.complete() || !current.initialized)
-                    && current.version == expectedVersion;
-            Set<Long> detected = pass.newGidsInQuery();
+            Snapshot current = readSnapshot(pass.baseline.scope, pass.baseline.query);
+            version = current.version + 1;
+            boolean conflict = current.version != progress.expected;
+            // Later pages of a superseded pass can acknowledge what they show but cannot
+            // replace the newer check's coverage or deactivate its results.
+            stale = conflict || browsing && progress.superseded;
+            boolean replaceCheckpoint = (pass.complete() || !current.initialized) && !stale;
+            Set<Long> gidsToSave = !browsing || conflict ? pass.raw.keySet() : pass.unsavedGids();
+            if (browsing && replaceCheckpoint) {
+                // Reuse checkpoint membership when its meaning is unchanged, regardless of its revision.
+                for (GalleryInfo gallery : pass.raw.values()) {
+                    Entry old = current.entries.get(gallery.gid);
+                    if (pass.isInCheckpoint(gallery) != (old != null && old.snapshot != 0)) {
+                        gidsToSave.add(gallery.gid);
+                    }
+                }
+            }
+            current.confirmed.addAll(confirmed(pass.baseline.scope, gidsToSave));
             ContentValues state = new ContentValues();
             state.put("id", key); state.put("scope", pass.baseline.scope);
             state.put("touched", System.currentTimeMillis());
             db.insertWithOnConflict("queries", null, state, SQLiteDatabase.CONFLICT_IGNORE);
-            if (replaceCheckpoint && pass.complete()) {
+            if (browsing && replaceCheckpoint) {
+                reconcileMissingGalleries(db, key, pass, current);
+            } else if (replaceCheckpoint && pass.complete()) {
                 // Only absence inside a fully scanned interval proves that an old match vanished.
                 // Keep qualified/discovery history so restoring a tag cannot trigger a new reminder.
-                if (pass.exhausted) db.execSQL("UPDATE galleries SET active=0 WHERE query_id=?", new Object[]{key});
+                if (pass.exhausted) db.execSQL("UPDATE galleries SET active=0 WHERE query_id=? AND active=1", new Object[]{key});
                 else if (pass.scannedFloor > 0) db.execSQL(
-                        "UPDATE galleries SET active=0 WHERE query_id=? AND posted>=?",
+                        "UPDATE galleries SET active=0 WHERE query_id=? AND active=1 AND posted>=?",
                         new Object[]{key, pass.scannedFloor});
             }
-            for (GalleryInfo gallery : pass.raw.values()) {
-                Entry old = current.entries.get(gallery.gid);
-                boolean qualified = pass.eligible.containsKey(gallery.gid);
+            for (long gid : gidsToSave) {
+                GalleryInfo gallery = pass.raw.get(gid);
+                Entry old = current.entries.get(gid);
+                GalleryInfo eligible = pass.eligible.get(gid);
+                boolean qualified = eligible != null;
                 long firstDetected = old == null ? 0 : old.detected;
-                if (detected.contains(gallery.gid) && firstDetected == 0
-                        && (old == null || !old.qualified)) firstDetected = version;
-                boolean acknowledged = current.confirmed.contains(gallery.gid)
-                        || old != null && old.acknowledged;
+                if (qualified && firstDetected == 0 && (old == null || !old.qualified)
+                        && pass.baseline.isNewInQuery(eligible)) firstDetected = version;
                 // Only this browsing pass's results are confirmed; unrelated newer checks survive.
-                if (browsing && qualified) acknowledged = true;
-                ContentValues row = new ContentValues();
-                row.put("query_id", key); row.put("gid", gallery.gid);
-                row.put("posted", GallerySeenState.postedMinute(gallery.posted));
-                row.put("qualified", qualified || old != null && old.qualified ? 1 : 0);
-                row.put("active", qualified || current.version != expectedVersion
-                        && old != null && old.active ? 1 : 0);
-                row.put("detected", firstDetected); row.put("acknowledged", acknowledged ? 1 : 0);
-                row.put("browsed", (browsing && qualified) || (old != null && old.browsed) ? 1 : 0);
-                boolean inSnapshot = pass.floor == 0 || GallerySeenState.postedMinute(gallery.posted) >= pass.floor;
-                row.put("snapshot", replaceCheckpoint ? (inSnapshot ? version : 0)
-                        : old != null ? old.snapshot : 0);
-                row.put("touched", System.currentTimeMillis());
-                db.insertWithOnConflict("galleries", null, row, SQLiteDatabase.CONFLICT_REPLACE);
+                boolean acknowledged = browsing && qualified || current.confirmed.contains(gid)
+                        || old != null && old.acknowledged;
+                long snapshot = old == null ? 0 : old.snapshot;
+                if (replaceCheckpoint) {
+                    if (!pass.isInCheckpoint(gallery)) snapshot = 0;
+                    else if (!browsing || snapshot == 0) snapshot = version;
+                }
+                Entry next = new Entry(GallerySeenState.postedMinute(gallery.posted),
+                        qualified || old != null && old.qualified, firstDetected, acknowledged, snapshot,
+                        qualified || stale && old != null && old.active, browsing && qualified || old != null && old.browsed);
+                if (!browsing || !next.equals(old)) writeGallery(db, key, gid, next);
             }
             if (browsing) {
                 // Overall acknowledgement includes captured unread entries outside the display batch.
@@ -387,7 +435,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                     List<Object> args = new ArrayList<>(); args.add(key); args.add(pass.baseline.version);
                     args.addAll(captured.subList(start, Math.min(start + 400, captured.size())));
                     String placeholders = String.join(",", java.util.Collections.nCopies(args.size() - 2, "?"));
-                    db.execSQL("UPDATE galleries SET acknowledged=1 WHERE query_id=? AND detected<=? "
+                    db.execSQL("UPDATE galleries SET acknowledged=1 WHERE query_id=? AND acknowledged=0 AND detected<=? "
                             + "AND gid IN (" + placeholders + ")", args.toArray());
                 }
                 List<Long> unviewed = new ArrayList<>(pass.baseline.unviewedInQuery());
@@ -395,10 +443,10 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                     List<Object> args = new ArrayList<>(); args.add(key); args.add(pass.baseline.version);
                     args.addAll(unviewed.subList(start, Math.min(start + 400, unviewed.size())));
                     String placeholders = String.join(",", java.util.Collections.nCopies(args.size() - 2, "?"));
-                    db.execSQL("UPDATE galleries SET browsed=1 WHERE query_id=? AND detected<=? "
+                    db.execSQL("UPDATE galleries SET browsed=1 WHERE query_id=? AND browsed=0 AND detected<=? "
                             + "AND gid IN (" + placeholders + ")", args.toArray());
                 }
-                db.execSQL("UPDATE galleries SET acknowledged=1 WHERE gid IN (SELECT gid FROM galleries "
+                db.execSQL("UPDATE galleries SET acknowledged=1 WHERE acknowledged=0 AND gid IN (SELECT gid FROM galleries "
                                 + "WHERE query_id=? AND acknowledged=1) AND query_id IN "
                                 + "(SELECT id FROM queries WHERE scope=?)",
                         new Object[]{key, pass.baseline.scope});
@@ -415,7 +463,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                 state.put("floor", pass.exhausted && pass.raw.isEmpty() ? 0 : pass.floor);
                 state.put("complete", pass.complete() ? 1 : 0);
                 state.put("exhausted", pass.exhausted ? 1 : 0);
-                db.execSQL("UPDATE galleries SET snapshot=0 WHERE query_id=? AND snapshot<>?",
+                if (!browsing) db.execSQL("UPDATE galleries SET snapshot=0 WHERE query_id=? AND snapshot<>0 AND snapshot<>?",
                         new Object[]{key, version});
             }
             db.update("queries", state, "id=?", new String[]{key});
@@ -427,8 +475,39 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                             + "AND (acknowledged=1 OR detected=0 OR active=0) ORDER BY touched DESC,gid DESC LIMIT ?)",
                     new Object[]{key, key, key, HISTORY_LIMIT});
             db.setTransactionSuccessful();
-            pass.commitVersion.expected = version;
         } finally { db.endTransaction(); }
+        progress.expected = version;
+        if (browsing) {
+            progress.superseded = stale;
+            progress.savedPage = pass.pageChanges;
+        }
+    }
+
+    private static void reconcileMissingGalleries(SQLiteDatabase db, String key, Pass pass, Snapshot current) {
+        for (Map.Entry<Long, Entry> row : current.entries.entrySet()) {
+            long gid = row.getKey();
+            if (pass.raw.containsKey(gid)) continue;
+            Entry old = row.getValue();
+            boolean covered = pass.exhausted || pass.scannedFloor > 0 && old.posted >= pass.scannedFloor;
+            boolean deactivate = old.active && pass.complete() && covered;
+            if (!deactivate && old.snapshot == 0) continue;
+            ContentValues values = new ContentValues();
+            if (deactivate) values.put("active", 0);
+            if (old.snapshot != 0) values.put("snapshot", 0);
+            db.update("galleries", values, "query_id=? AND gid=?", new String[]{key, Long.toString(gid)});
+        }
+    }
+
+    private static void writeGallery(SQLiteDatabase db, String key, long gid, Entry entry) {
+        ContentValues row = new ContentValues();
+        row.put("query_id", key); row.put("gid", gid);
+        row.put("posted", entry.posted); row.put("qualified", entry.qualified ? 1 : 0);
+        row.put("active", entry.active ? 1 : 0); row.put("detected", entry.detected);
+        row.put("acknowledged", entry.acknowledged ? 1 : 0); row.put("browsed", entry.browsed ? 1 : 0);
+        row.put("snapshot", entry.snapshot); row.put("touched", System.currentTimeMillis());
+        if (db.insertWithOnConflict("galleries", null, row, SQLiteDatabase.CONFLICT_REPLACE) < 0) {
+            throw new SQLiteException("Unable to save gallery browsing state");
+        }
     }
 
     public Set<Long> unread(String scope, List<String> queries) {
@@ -465,7 +544,9 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
     }
 
     public void acknowledgeLegacy(String scope, String group) {
-        Pass pass = new Pass(read(scope, "legacy-unread:" + group));
+        Snapshot baseline = read(scope, "legacy-unread:" + group);
+        if (baseline.initialized && baseline.unread().isEmpty() && baseline.unviewedInQuery().isEmpty()) return;
+        Pass pass = new Pass(baseline);
         pass.observe(List.of(), List.of(), null, false);
         commit(pass, true);
     }

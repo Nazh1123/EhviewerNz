@@ -2,6 +2,8 @@ package com.hippo.ehviewer.client;
 
 import android.app.Application;
 import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteException;
 import org.junit.Before;
 import org.junit.After;
 import org.junit.Test;
@@ -11,6 +13,7 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import static org.junit.Assert.*;
@@ -57,6 +60,127 @@ public class SearchUpdateStoreTest {
         assertTrue(read("a").viewed>checked);
         assertTrue(read("a").unread().isEmpty());
         assertEquals(GallerySeenState.postedMinute(gallery(100,100).posted),read("a").head);
+    }
+
+    @Test public void tenBrowsingPagesWriteEachNewGalleryOnceEvenWithOverlaps() {
+        auditGalleryWrites();
+        SearchUpdateStore.Pass browsing = pass("a");
+        for (int page = 0; page < 10; page++) {
+            List<GalleryInfo> rows = new ArrayList<>();
+            if (page > 0) {
+                long overlap = 1001 - page * 25L;
+                rows.add(gallery(overlap, overlap));
+            }
+            for (int i = 0; i < 25; i++) {
+                long gid = 1000 - page * 25L - i;
+                rows.add(gallery(gid, gid));
+            }
+            browsing.observe(rows, rows, rows.get(rows.size() - 1).posted, page < 9);
+            store.commit(browsing, true);
+            assertEquals("Rows written after page " + (page + 1), (page + 1) * 25, galleryWrites().size());
+        }
+        var written = galleryWrites();
+        assertEquals(250, new HashSet<>(written).size());
+        try (Cursor cursor = store.getReadableDatabase().rawQuery("SELECT count(*) FROM galleries", null)) {
+            assertTrue(cursor.moveToFirst());
+            assertEquals(250, cursor.getInt(0));
+        }
+        assertTrue(read("a").complete);
+        assertTrue(read("a").exhausted);
+    }
+
+    @Test public void repeatedGalleryIsWrittenWhenItBecomesEligible() {
+        auditGalleryWrites();
+        SearchUpdateStore.Pass browsing = pass("a");
+        GalleryInfo laterMatch = gallery(100, 100);
+        browsing.observe(List.of(laterMatch), List.of(), laterMatch.posted, true);
+        store.commit(browsing, true);
+        assertEquals(List.of(100L), galleryWrites());
+
+        browsing.observe(List.of(laterMatch), List.of(laterMatch), laterMatch.posted, false);
+        store.commit(browsing, true);
+        assertEquals(List.of(100L, 100L), galleryWrites());
+        assertFalse(read("a").isNew(laterMatch));
+        assertFalse(read("a").isUnconfirmed(laterMatch));
+    }
+
+    @Test public void completedBrowsingReconcilesOnlyMissingRowsInItsCoverage() {
+        SearchUpdateStore.Pass initial = pass("a");
+        List<GalleryInfo> head = List.of(gallery(120, 120), gallery(110, 110), gallery(100, 100));
+        initial.observe(head, head, head.get(2).posted, true);
+        List<GalleryInfo> tail = List.of(gallery(90, 90), gallery(80, 80));
+        initial.observe(tail, tail, tail.get(1).posted, false);
+        store.commit(initial, false);
+
+        SearchUpdateStore.Pass browsing = pass("a");
+        browsing.observe(head.subList(0, 2), head.subList(0, 2), head.get(1).posted, true);
+        store.commit(browsing, true);
+        assertFalse(browsing.complete());
+        auditGalleryWrites();
+
+        List<GalleryInfo> next = List.of(gallery(97, 97), gallery(95, 95));
+        browsing.observe(next, next, next.get(1).posted, true);
+        store.commit(browsing, true);
+        assertTrue(read("a").complete);
+        assertFalse(read("a").exhausted);
+        List<Long> written = galleryWrites();
+        assertEquals(3, written.size());
+        assertEquals(Set.of(100L, 97L, 95L), new HashSet<>(written));
+        try (Cursor cursor = store.getReadableDatabase().rawQuery(
+                "SELECT gid,active,snapshot FROM galleries WHERE gid IN (80,90,100) ORDER BY gid", null)) {
+            assertTrue(cursor.moveToFirst());
+            assertEquals(80, cursor.getLong(0));
+            assertEquals(1, cursor.getInt(1));
+            assertTrue(cursor.moveToNext());
+            assertEquals(90, cursor.getLong(0));
+            assertEquals(1, cursor.getInt(1));
+            assertTrue(cursor.moveToNext());
+            assertEquals(100, cursor.getLong(0));
+            assertEquals(0, cursor.getInt(1));
+            assertEquals(0, cursor.getLong(2));
+        }
+    }
+
+    @Test public void nextQueuedPageRetriesRowsFromARolledBackWrite() {
+        SearchUpdateStore.Pass browsing = pass("a");
+        List<GalleryInfo> first = List.of(gallery(100, 100));
+        browsing.observe(first, first, first.get(0).posted, true);
+        SearchUpdateStore.Pass firstWrite = browsing.snapshotForCommit();
+        List<GalleryInfo> next = List.of(gallery(90, 90));
+        browsing.observe(next, next, next.get(0).posted, false);
+        SearchUpdateStore.Pass nextWrite = browsing.snapshotForCommit();
+
+        var db = store.getWritableDatabase();
+        db.execSQL("CREATE TRIGGER reject_gallery BEFORE INSERT ON galleries WHEN NEW.gid=100 "
+                + "BEGIN SELECT RAISE(ABORT, 'test rollback'); END");
+        assertThrows(SQLiteException.class, () -> store.commitCapturedPage(firstWrite));
+        assertFalse(read("a").initialized);
+        db.execSQL("DROP TRIGGER reject_gallery");
+
+        auditGalleryWrites();
+        store.commitCapturedPage(nextWrite);
+        store.commitCapturedPage(firstWrite); // Retrying an older, already included page is harmless.
+        assertEquals(2, galleryWrites().size());
+        assertEquals(Set.of(100L, 90L), new HashSet<>(galleryWrites()));
+        assertEquals(2, read("a").displayWatermark().retainedCount());
+        assertTrue(read("a").complete);
+    }
+
+    private void auditGalleryWrites() {
+        var db = store.getWritableDatabase();
+        db.execSQL("CREATE TABLE gallery_writes (gid INTEGER NOT NULL)");
+        db.execSQL("CREATE TRIGGER gallery_insert AFTER INSERT ON galleries "
+                + "BEGIN INSERT INTO gallery_writes VALUES (NEW.gid); END");
+        db.execSQL("CREATE TRIGGER gallery_update AFTER UPDATE ON galleries "
+                + "BEGIN INSERT INTO gallery_writes VALUES (NEW.gid); END");
+    }
+
+    private List<Long> galleryWrites() {
+        List<Long> gids = new ArrayList<>();
+        try (Cursor cursor = store.getReadableDatabase().rawQuery("SELECT gid FROM gallery_writes ORDER BY rowid", null)) {
+            while (cursor.moveToNext()) gids.add(cursor.getLong(0));
+        }
+        return gids;
     }
 
     @Test public void lateTagWithinCoverageIsNewButOutsideCoverageIsNot() {
@@ -147,6 +271,27 @@ public class SearchUpdateStoreTest {
         assertEquals(Set.of(120L),read("a").unread());
         assertEquals(GallerySeenState.postedMinute(gallery(120,120).posted),read("a").head);
     }
+    @Test public void laterPagesOfAnOlderBrowseCannotDeactivateANewerUnreadGallery() {
+        seed("a");
+        SearchUpdateStore.Pass browsing = pass("a");
+        List<GalleryInfo> first = List.of(gallery(110, 110), gallery(100, 100));
+        browsing.observe(first, first, first.get(1).posted, true);
+        store.commit(browsing, true);
+
+        store.commit(page("a", List.of(gallery(120, 120), gallery(110, 110), gallery(90, 90))), false);
+        long checked = read("a").checked;
+        List<GalleryInfo> next = List.of(gallery(95, 95));
+        browsing.observe(next, next, next.get(0).posted, true);
+        store.commit(browsing, true);
+        List<GalleryInfo> last = List.of(gallery(90, 90));
+        browsing.observe(last, last, last.get(0).posted, false);
+        store.commit(browsing, true);
+
+        assertEquals(checked, read("a").checked);
+        assertEquals(Set.of(120L), read("a").unread());
+        assertEquals(Set.of(120L), pass("a").queryDisplayNewGids());
+    }
+
     @Test public void queriesHaveIndependentProgressButExplicitConfirmationDeduplicatesIdentity() {
         seed("a");seed("b");
         store.commit(page("a",List.of(gallery(110,110),gallery(90,90))),true);

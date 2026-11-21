@@ -791,25 +791,57 @@ public class PopularGalleryRenderingTest {
         assertFalse(com.hippo.ehviewer.client.SeenGalleryHistory.open(discarded).baseline().initialized());
     }
 
-    @Test public void subscriptionDividerRemainsAfterBackgroundUnreadAcknowledgement() {
+    @Test public void subscriptionDividerRemainsThroughSuccessivePagesAfterUnreadAcknowledgement() {
         Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
-        SubscriptionUpdateManager manager = subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 5);
+        SubscriptionUpdateManager manager = subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 7);
         assertEquals(1, manager.getSnapshot().ehCount);
         List<Runnable> historyJobs = new ArrayList<>();
         historyExecutor = historyJobs::add;
         ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
-        refresh(4, 5, 3);
+        helper.refresh();
+        deliverSubscriptionPage(true, 6, 7, 5);
         historyJobs.remove(0).run();
         historyJobs.remove(0).run();
 
-        assertEquals(Arrays.asList(5L, null, 4L, 3L), visibleIds());
+        assertEquals(Arrays.asList(7L, null, 6L, 5L), visibleIds());
         assertEquals(1, manager.getCachedSnapshot().ehCount);
         historyJobs.remove(0).run(); // Persist the displayed page and acknowledge the captured unread.
         assertEquals(1, manager.getCachedSnapshot().ehCount);
         historyJobs.remove(0).run(); // Recompute the sidebar badge from the saved database state.
         shadowOf(Looper.getMainLooper()).idle();
         assertEquals(0, manager.getCachedSnapshot().ehCount);
-        assertEquals(Arrays.asList(5L, null, 4L, 3L), visibleIds());
+
+        assertTrue(helper.requestNextPage());
+        deliverSubscriptionPage(true, 5, 4, 3);
+        while (!historyJobs.isEmpty()) historyJobs.remove(0).run();
+        assertEquals(Arrays.asList(7L, null, 6L, 5L, 4L, 3L), visibleIds());
+
+        assertTrue(helper.requestNextPage());
+        deliverSubscriptionPage(false, 3, 2, 1);
+        while (!historyJobs.isEmpty()) historyJobs.remove(0).run();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(Arrays.asList(7L, null, 6L, 5L, 4L, 3L, 2L, 1L), visibleIds());
+        assertEquals(0, manager.getCachedSnapshot().ehCount);
+        assertFalse(helper.hasNextPage());
+        try (SearchUpdateStore store = SearchUpdateStore.open()) {
+            assertTrue(store.read(SubscriptionSearchContext.key(), "eh-subscription").exhausted);
+            try (var rows = store.getReadableDatabase().rawQuery("SELECT count(*) FROM galleries WHERE posted>0", null)) {
+                assertTrue(rows.moveToFirst());
+                assertEquals(7, rows.getInt(0));
+            }
+        }
+    }
+
+    private void deliverSubscriptionPage(boolean hasNext, long... gids) {
+        GalleryListParser.Result page = new GalleryListParser.Result();
+        page.pages = -1;
+        page.nextPage = -1;
+        page.nextHref = hasNext ? "https://e-hentai.org/watched?next=" + gids[gids.length - 1] : "";
+        page.galleryInfoList = galleries(gids);
+        page.rawTailPosted = page.galleryInfoList.get(page.galleryInfoList.size() - 1).posted;
+        ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListSuccess",
+                ClassParameter.from(GalleryListParser.Result.class, page),
+                ClassParameter.from(int.class, ReflectionHelpers.getField(helper, "mCurrentTaskId")));
     }
 
     @Test public void viewedSearchUsesPreviousMaximumAndPaginationKeepsTheBoundary() {
