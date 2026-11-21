@@ -4202,7 +4202,8 @@ public class GalleryListScene extends BaseScene
 
         private boolean hasSearchRatingProjection() {
             return mRetainsRatingCandidates && mUrlBuilder != null
-                    && SearchRating.retainsSearchCandidates(mUrlBuilder.getMode());
+                    && SearchRating.retainsSearchCandidates(mUrlBuilder.getMode())
+                    && currentRatingMinimum() > 0;
         }
 
         private void rebuildSearchRatingData() {
@@ -4210,7 +4211,7 @@ public class GalleryListScene extends BaseScene
             if (!hasSearchRatingProjection()) return;
             int minimum = currentRatingMinimum();
             for (GalleryInfo gallery : getRatingSourceData()) {
-                if (minimum <= 0 || gallery.hasApiRating() && gallery.firstGid != null && gallery.firstGid >= 0
+                if (gallery.hasApiRating() && gallery.firstGid != null && gallery.firstGid >= 0
                         && SearchRating.matches(gallery.apiRating, minimum)) mSearchRatingData.add(gallery);
             }
         }

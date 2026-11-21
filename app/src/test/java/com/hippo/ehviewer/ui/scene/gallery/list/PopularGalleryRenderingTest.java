@@ -505,14 +505,63 @@ public class PopularGalleryRenderingTest {
         assertEquals(1, revealScrollCount);
     }
 
-    @Test public void normalSearchNextPageStillUsesTheSameScrollFeedback() {
+    @Test public void normalSearchWithRetainedCandidatesInsertsOnlyTheNextPage() {
         builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        ReflectionHelpers.setField(scene, "mRetainsRatingCandidates", true);
+        refresh(1, 2);
+        assertEquals(0, builder.getEffectiveMinRatingHundredths());
+
+        List<List<Integer>> insertions = new ArrayList<>();
+        adapter.registerAdapterDataObserver(new RecyclerView.AdapterDataObserver() {
+            @Override public void onChanged() {
+                fail("Appending an unfiltered page must not refresh the whole adapter");
+            }
+
+            @Override public void onItemRangeInserted(int positionStart, int itemCount) {
+                insertions.add(List.of(positionStart, itemCount));
+            }
+        });
         helper.doGetData(ContentLayout.ContentHelper.TYPE_NEXT_PAGE_KEEP_POS, 1,
                 ContentLayout.ContentHelper.REFRESH_TYPE_FOOTER);
-        helper.onGetPageData(ReflectionHelpers.getField(helper, "mCurrentTaskId"), 2, 0, galleries(3, 4));
-        assertEquals(Arrays.asList(1L, 2L, 3L, 4L), visibleIds());
+        GalleryListParser.Result result = new GalleryListParser.Result();
+        result.pages = 2;
+        result.galleryInfoList = galleries(3, 4);
+        result.ratingCandidates = new ArrayList<>(result.galleryInfoList);
+        result.ratingCandidateFloor = 0;
+        ReflectionHelpers.callInstanceMethod(scene, "onGetGalleryListSuccess",
+                ClassParameter.from(GalleryListParser.Result.class, result),
+                ClassParameter.from(int.class, ReflectionHelpers.getField(helper, "mCurrentTaskId")));
+
+        assertEquals(List.of(List.of(2, 2)), insertions);
+        assertEquals(List.of(1L, 2L, 3L, 4L), visibleIds());
         assertEquals(1, revealScrollCount);
         assertFalse(content.getRefreshLayout().isRefreshing());
+    }
+
+    @Test public void cursorPaginationNeedsANextLinkAfterJumpingToTheLastPage() {
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        helper.goTo(-996);
+        int lastPageTask = ReflectionHelpers.getField(helper, "mCurrentTaskId");
+        GalleryListParser.Result result = new GalleryListParser.Result();
+        result.pages = -1;
+        result.nextPage = -1;
+        result.nextHref = "";
+        result.galleryInfoList = galleries(3, 4);
+        helper.onGetPageData(lastPageTask, result, result.galleryInfoList);
+        layout();
+
+        RefreshLayout refreshLayout = content.getRefreshLayout();
+        assertTrue(refreshLayout.isAlmostBottom());
+        RecyclerView.OnScrollListener scroll = ReflectionHelpers.getField(helper, "mOnScrollListener");
+        scroll.onScrolled(recycler, 0, 10);
+        assertEquals(lastPageTask, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+        assertFalse(refreshLayout.isRefreshing());
+        assertFalse(helper.hasNextPage());
+
+        helper.nextHref = "https://e-hentai.org/?next=123";
+        scroll.onScrolled(recycler, 0, 10);
+        assertNotEquals(lastPageTask, (int) ReflectionHelpers.<Integer>getField(helper, "mCurrentTaskId"));
+        assertTrue(refreshLayout.isRefreshing());
     }
 
     @Test public void footerInAllPopularKeepsTheNormalLastPageRefresh() {

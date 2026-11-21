@@ -276,8 +276,7 @@ public class ContentLayout extends FrameLayout {
         private final RecyclerView.OnScrollListener mOnScrollListener = new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
-                if (!mRefreshLayout.isRefreshing() && mRefreshLayout.isAlmostBottom()
-                        && (mEndPage < mPages || mNextPage == -1 || mPages == -1)
+                if (!mRefreshLayout.isRefreshing() && hasNextPage() && mRefreshLayout.isAlmostBottom()
                         && shouldRequestNextPageOnScroll(dy)) {
                     // Get next page
                     onNextPageRequestFromScroll();
@@ -527,11 +526,10 @@ public class ContentLayout extends FrameLayout {
          * legacy footer behaviour, this does not treat refreshing the last page as loading more.
          */
         public boolean hasNextPage() {
-            if (mEndPage < mPages) {
-                return true;
+            if (mEndPage == -1 || mPages == -1) {
+                return nextHref != null && !nextHref.isEmpty();
             }
-            return (mPages == -1 || mNextPage == -1)
-                    && nextHref != null && !nextHref.isEmpty();
+            return mEndPage < mPages;
         }
 
         /**
