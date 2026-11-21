@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 import android.app.Application;
 import android.content.Context;
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.client.*;
 import com.hippo.ehviewer.client.data.*;
@@ -11,6 +12,7 @@ import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.dao.QuickSearch;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -23,14 +25,16 @@ import org.robolectric.util.ReflectionHelpers;
 @RunWith(RobolectricTestRunner.class)
 @Config(application = Application.class, sdk = 28, manifest = Config.NONE, shadows = {
         BookmarkSubscriptionConcurrencyTest.ClientShadow.class, BookmarkSubscriptionConcurrencyTest.ContextShadow.class,
-        BookmarkSubscriptionConcurrencyTest.DbShadow.class})
+        BookmarkSubscriptionConcurrencyTest.DbShadow.class, BookmarkSubscriptionConcurrencyTest.AppShadow.class})
 public class BookmarkSubscriptionConcurrencyTest {
     private static final List<EhRequest> requests = new ArrayList<>();
+    private static Executor historyExecutor;
     private final List<List<Long>> batches = new ArrayList<>();
     private BookmarkSubscriptionCoordinator coordinator;
 
     @Before public void setUp() {
         requests.clear();
+        historyExecutor = Runnable::run;
         Application app = RuntimeEnvironment.getApplication();
         app.deleteDatabase(SearchUpdateStore.DATABASE);
         SearchUpdateStore.initialize(app);
@@ -86,6 +90,22 @@ public class BookmarkSubscriptionConcurrencyTest {
         ((EhClient.Callback<GalleryListParser.Result>) requests.get(index).getCallback()).onSuccess(result);
     }
 
+    @Test public void sourceRequestsStartWhileTheirHistoryIsStillQueued() {
+        List<Runnable> historyJobs = new ArrayList<>();
+        historyExecutor = historyJobs::add;
+        coordinator.refresh(1, bookmarks(1), true, null);
+        historyJobs.remove(0).run(); // Read the bookmark planner inputs.
+        assertEquals(2, requests.size());
+        assertEquals(2, historyJobs.size()); // Both baselines are still pending.
+        complete(0, 100, null);
+        complete(1, 90, null);
+        assertTrue(batches.isEmpty());
+        while (batches.isEmpty() && !historyJobs.isEmpty()) historyJobs.remove(0).run();
+        assertEquals(List.of(List.of(100L)), batches);
+        assertEquals(2, historyJobs.size()); // Both accepted sources will save separately.
+        while (!historyJobs.isEmpty()) historyJobs.remove(0).run();
+    }
+
     @Test public void bulkGlobalFeedStartsEightSourcesAndDisablesHiddenExtraPages() {
         coordinator.setBulk(true);
         coordinator.refresh(1, bookmarks(9), true, null);
@@ -132,6 +152,9 @@ public class BookmarkSubscriptionConcurrencyTest {
         assertEquals(List.of(List.of(100L, 99L), List.of(90L, 89L), List.of(80L, 79L)), batches);
     }
 
+    @Implements(EhApplication.class) public static class AppShadow {
+        @Implementation protected static Executor getSearchHistoryExecutor() { return historyExecutor; }
+    }
     @Implements(EhClient.class) public static class ClientShadow {
         @Implementation protected void execute(EhRequest request) { requests.add(request); }
     }

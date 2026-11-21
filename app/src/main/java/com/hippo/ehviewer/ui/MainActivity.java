@@ -673,6 +673,7 @@ public final class MainActivity extends StageActivity
             return;
         }
         AlertDialog dialog = SubscriptionUpdatePreferences.showDialog(this, () -> {
+            if (mSubscriptionUpdateManager != null) mSubscriptionUpdateManager.onSearchStatesChanged();
             renderSubscriptionUpdateState();
             scheduleSubscriptionUpdateCheck();
         }, () -> {
@@ -1286,7 +1287,7 @@ public final class MainActivity extends StageActivity
         if (manager == null) {
             return;
         }
-        SubscriptionUpdateManager.Snapshot snapshot = manager.getSnapshot();
+        SubscriptionUpdateManager.Snapshot snapshot = manager.getCachedSnapshot();
         setSubscriptionUpdateBadge(mEhSubscriptionBadge,
                 snapshot.ehCount, snapshot.ehEnabled);
         setSubscriptionUpdateBadge(mBookmarkSubscriptionBadge,

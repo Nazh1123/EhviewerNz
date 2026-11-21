@@ -32,12 +32,17 @@ public final class SeenGalleryHistory {
     static String queryKey(ListUrlBuilder builder) { return SearchUpdateStore.queryKey(builder); }
 
     public static Search open(ListUrlBuilder builder) {
-        if (!supports(builder)) return null;
-        Search search = open(builder, EhDB.getAllQuickSearch());
-        return Settings.getShowViewedGalleries() || search.subscribed ? search : null;
+        return supports(builder) ? open(builder, SubscriptionSearchContext.key()) : null;
     }
 
-    static Search open(ListUrlBuilder builder, List<QuickSearch> bookmarks) {
+    public static Search open(ListUrlBuilder builder, String scope) {
+        if (!supports(builder)) return null;
+        boolean showViewed = Settings.getShowViewedGalleries();
+        List<QuickSearch> bookmarks = showViewed ? EhDB.getAllQuickSearch() : EhDB.getSubscribedQuickSearch();
+        return open(builder, bookmarks, showViewed, scope);
+    }
+
+    private static Search open(ListUrlBuilder builder, List<QuickSearch> bookmarks, boolean showViewed, String scope) {
         String query = queryKey(builder);
         boolean bookmarked = false, subscribed = false;
         for (QuickSearch bookmark : bookmarks) {
@@ -46,10 +51,11 @@ public final class SeenGalleryHistory {
                 bookmarked = true; subscribed |= bookmark.subscribed;
             }
         }
+        if (!showViewed && !subscribed) return null;
         try (SearchUpdateStore store = SearchUpdateStore.open()) {
-            SearchUpdateStore.Snapshot snapshot = store.read(SubscriptionSearchContext.key(), query);
+            SearchUpdateStore.Snapshot snapshot = store.read(scope, query);
             return new Search(query, snapshot.displayWatermark(), bookmarked, subscribed,
-                    new SearchUpdateSession(builder, null, false));
+                    new SearchUpdateSession(snapshot));
         }
     }
 
@@ -64,25 +70,37 @@ public final class SeenGalleryHistory {
         if (search == null || search.session == null
                 || !Settings.getShowViewedGalleries() && !search.subscribed) return false;
         search.session.observe(result, hasMore);
-        search.session.commit(true);
-        trim(EhDB.getAllQuickSearch(), Settings.getHistoryInfoSize());
+        captureSave(search).run();
         return search.subscribed;
     }
 
-    public static void onBookmarksChanged(List<QuickSearch> bookmarks) {
-        trim(bookmarks, Settings.getHistoryInfoSize());
+    public static Runnable captureSave(Search search) {
+        Runnable commit = search.session.captureBrowsingCommit();
+        String scope = search.session.scope();
+        return () -> {
+            commit.run();
+            if (scope.equals(SubscriptionSearchContext.key())) {
+                trim(scope, EhDB.getAllQuickSearch(), Settings.getHistoryInfoSize());
+            }
+        };
     }
 
-    public static void trimToHistorySize(int historySize) { trim(EhDB.getAllQuickSearch(), historySize); }
+    public static void onBookmarksChanged(List<QuickSearch> bookmarks) {
+        trim(SubscriptionSearchContext.key(), bookmarks, Settings.getHistoryInfoSize());
+    }
 
-    private static void trim(List<QuickSearch> bookmarks, int historySize) {
+    public static void trimToHistorySize(int historySize) {
+        trim(SubscriptionSearchContext.key(), EhDB.getAllQuickSearch(), historySize);
+    }
+
+    private static void trim(String scope, List<QuickSearch> bookmarks, int historySize) {
         Set<String> queries = new HashSet<>();
         for (QuickSearch bookmark : bookmarks) {
             ListUrlBuilder builder = new ListUrlBuilder(); builder.set(bookmark);
             if (supports(builder)) queries.add(queryKey(builder));
         }
         try (SearchUpdateStore store = SearchUpdateStore.open()) {
-            store.trim(SubscriptionSearchContext.key(), queries, SeenGalleryStore.limit(historySize));
+            store.trim(scope, queries, SeenGalleryStore.limit(historySize));
         }
     }
 }

@@ -15,7 +15,7 @@ import java.util.Set;
 
 /** One execution source may serve several logical queries, without sharing their checkpoints. */
 public final class SearchUpdateSession {
-    private final String scope = SubscriptionSearchContext.key();
+    private final String scope;
     private final BookmarkSubscriptionPlanner.Source plan;
     private final Map<String, SearchUpdateStore.Pass> passes = new LinkedHashMap<>();
     private final Map<QuickSearch, String> owners = new LinkedHashMap<>();
@@ -23,7 +23,10 @@ public final class SearchUpdateSession {
 
     /** An empty child's unbounded historical frontier must not force a populated union to EOF. */
     public static List<BookmarkSubscriptionPlanner.Source> plan(List<QuickSearch> bookmarks) {
-        String scope = SubscriptionSearchContext.key();
+        return plan(bookmarks, SubscriptionSearchContext.key());
+    }
+
+    public static List<BookmarkSubscriptionPlanner.Source> plan(List<QuickSearch> bookmarks, String scope) {
         List<QuickSearch> normal = new ArrayList<>();
         Map<String, List<QuickSearch>> empty = new LinkedHashMap<>();
         try (SearchUpdateStore store = SearchUpdateStore.open()) {
@@ -46,6 +49,12 @@ public final class SearchUpdateSession {
     }
 
     public SearchUpdateSession(ListUrlBuilder builder, BookmarkSubscriptionPlanner.Source plan, boolean subscription) {
+        this(builder, plan, subscription, SubscriptionSearchContext.key());
+    }
+
+    public SearchUpdateSession(ListUrlBuilder builder, BookmarkSubscriptionPlanner.Source plan,
+                               boolean subscription, String scope) {
+        this.scope = scope;
         this.plan = plan;
         this.subscription = subscription;
         try (SearchUpdateStore store = SearchUpdateStore.open()) {
@@ -61,19 +70,54 @@ public final class SearchUpdateSession {
         }
     }
 
+    SearchUpdateSession(SearchUpdateStore.Snapshot baseline) {
+        scope = baseline.scope;
+        plan = null;
+        subscription = false;
+        passes.put(baseline.query, new SearchUpdateStore.Pass(baseline));
+    }
+
     public void observe(GalleryListParser.Result result, boolean hasMore) {
-        List<GalleryInfo> raw = result.rawGalleries != null ? result.rawGalleries
-                : result.subscriptionRawGalleries != null ? result.subscriptionRawGalleries : result.galleryInfoList;
-        List<GalleryInfo> qualified = result.subscriptionDisplayGalleries != null
-                ? result.subscriptionDisplayGalleries : result.galleryInfoList;
+        observe(result, hasMore, loadPageConfirmations(scope, result));
+    }
+
+    public static Set<Long> loadPageConfirmations(String scope, GalleryListParser.Result result) {
+        Set<Long> ids = new HashSet<>();
+        for (GalleryInfo gallery : rawGalleries(result)) ids.add(gallery.gid);
+        for (GalleryInfo gallery : qualifiedGalleries(result)) ids.add(gallery.gid);
+        if (ids.isEmpty()) return Set.of();
+        try (SearchUpdateStore store = SearchUpdateStore.open()) {
+            return store.confirmed(scope, ids);
+        }
+    }
+
+    public void observe(GalleryListParser.Result result, boolean hasMore, Set<Long> confirmed) {
+        List<GalleryInfo> raw = rawGalleries(result);
+        List<GalleryInfo> qualified = qualifiedGalleries(result);
         for (Map.Entry<String, SearchUpdateStore.Pass> entry : passes.entrySet()) {
             List<GalleryInfo> ownRaw = new ArrayList<>(), ownQualified = new ArrayList<>();
-            for (GalleryInfo gallery : raw) if (matches(entry.getKey(), gallery)) ownRaw.add(identity(result, gallery));
-            for (GalleryInfo gallery : qualified) if (matches(entry.getKey(), gallery)) ownQualified.add(identity(result, gallery));
+            Set<Long> ownConfirmed = new HashSet<>();
+            for (GalleryInfo gallery : raw) if (matches(entry.getKey(), gallery)) {
+                ownRaw.add(identity(result, gallery));
+                if (confirmed.contains(gallery.gid)) ownConfirmed.add(gallery.gid);
+            }
+            for (GalleryInfo gallery : qualified) if (matches(entry.getKey(), gallery)) {
+                ownQualified.add(identity(result, gallery));
+                if (confirmed.contains(gallery.gid)) ownConfirmed.add(gallery.gid);
+            }
             String tail = result.rawTailPosted;
             if (tail == null && !raw.isEmpty()) tail = raw.get(raw.size() - 1).posted;
-            entry.getValue().observe(ownRaw, ownQualified, tail, hasMore);
+            entry.getValue().observe(ownRaw, ownQualified, tail, hasMore, ownConfirmed);
         }
+    }
+
+    private static List<GalleryInfo> rawGalleries(GalleryListParser.Result result) {
+        return result.rawGalleries != null ? result.rawGalleries
+                : result.subscriptionRawGalleries != null ? result.subscriptionRawGalleries : result.galleryInfoList;
+    }
+
+    private static List<GalleryInfo> qualifiedGalleries(GalleryListParser.Result result) {
+        return result.subscriptionDisplayGalleries != null ? result.subscriptionDisplayGalleries : result.galleryInfoList;
     }
 
     private static GalleryInfo identity(GalleryListParser.Result page, GalleryInfo gallery) {
@@ -114,7 +158,20 @@ public final class SearchUpdateSession {
         return result;
     }
 
+    public String scope() { return scope; }
+
+    /** Capture the accepted page before the display thread can append another one. */
+    public Runnable captureBrowsingCommit() {
+        Map<String, SearchUpdateStore.Pass> captured = new LinkedHashMap<>();
+        passes.forEach((query, pass) -> captured.put(query, pass.snapshotForCommit()));
+        return () -> commit(captured, true);
+    }
+
     public void commit(boolean browsing) {
+        commit(passes, browsing);
+    }
+
+    private void commit(Map<String, SearchUpdateStore.Pass> pending, boolean browsing) {
         if (!scope.equals(SubscriptionSearchContext.key())) return;
         Set<String> active = new HashSet<>();
         if (plan != null && subscription) for (QuickSearch bookmark : EhDB.getSubscribedQuickSearch()) {
@@ -122,7 +179,7 @@ public final class SearchUpdateSession {
             active.add(SearchUpdateStore.queryKey(builder));
         }
         try (SearchUpdateStore store = SearchUpdateStore.open()) {
-            for (Map.Entry<String, SearchUpdateStore.Pass> entry : passes.entrySet()) {
+            for (Map.Entry<String, SearchUpdateStore.Pass> entry : pending.entrySet()) {
                 if (plan != null && subscription && !active.contains(entry.getKey())) continue;
                 store.commit(entry.getValue(), browsing);
             }

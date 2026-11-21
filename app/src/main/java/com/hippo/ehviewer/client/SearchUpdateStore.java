@@ -5,6 +5,9 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.util.Log;
+
+import com.hippo.ehviewer.EhApplication;
 
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.GalleryInfo;
@@ -33,6 +36,16 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
 
     public static SearchUpdateStore open() {
         return new SearchUpdateStore(defaultContext != null ? defaultContext : Settings.getApplicationContext());
+    }
+
+    public static void saveBrowsingInBackground(Runnable save) {
+        EhApplication.getSearchHistoryExecutor().execute(() -> {
+            try {
+                save.run();
+            } catch (RuntimeException error) {
+                Log.w("SearchUpdateStore", "Unable to save browsing state", error);
+            }
+        });
     }
 
     @Override public void onCreate(SQLiteDatabase db) {
@@ -218,12 +231,50 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
         private final Map<Long, GalleryInfo> eligible = new LinkedHashMap<>();
         private long floor, head, scannedFloor;
         private boolean first = true, done, exhausted;
-        private long expectedVersion;
+        // Successive queued snapshots share the optimistic version of the same browsing pass.
+        private final CommitVersion commitVersion;
 
-        public Pass(Snapshot baseline) { this.baseline = baseline; expectedVersion = baseline.version; }
+        private static final class CommitVersion {
+            long expected;
+            CommitVersion(long expected) { this.expected = expected; }
+        }
+
+        public Pass(Snapshot baseline) {
+            this(baseline, new CommitVersion(baseline.version));
+        }
+
+        private Pass(Snapshot baseline, CommitVersion commitVersion) {
+            this.baseline = baseline;
+            this.commitVersion = commitVersion;
+        }
+
+        Pass snapshotForCommit() {
+            Pass copy = new Pass(new Snapshot(baseline.scope, baseline.query, baseline.initialized,
+                    baseline.version, baseline.checked, baseline.viewed, baseline.head, baseline.floor,
+                    baseline.complete, baseline.exhausted, baseline.entries, new HashSet<>(baseline.confirmed)),
+                    commitVersion);
+            copy.raw.putAll(raw);
+            copy.eligible.putAll(eligible);
+            copy.floor = floor;
+            copy.head = head;
+            copy.scannedFloor = scannedFloor;
+            copy.done = done;
+            copy.exhausted = exhausted;
+            return copy;
+        }
 
         public void observe(List<GalleryInfo> rawPage, List<GalleryInfo> qualifiedPage,
                             String rawTailPosted, boolean hasMore) {
+            Set<Long> ids = new HashSet<>();
+            for (GalleryInfo gallery : rawPage) ids.add(gallery.gid);
+            for (GalleryInfo gallery : qualifiedPage) ids.add(gallery.gid);
+            try (SearchUpdateStore store = SearchUpdateStore.open()) {
+                observe(rawPage, qualifiedPage, rawTailPosted, hasMore, store.confirmed(baseline.scope, ids));
+            }
+        }
+
+        void observe(List<GalleryInfo> rawPage, List<GalleryInfo> qualifiedPage,
+                     String rawTailPosted, boolean hasMore, Set<Long> confirmed) {
             for (GalleryInfo gallery : rawPage) {
                 if (gallery.gid <= 0) continue;
                 raw.put(gallery.gid, gallery);
@@ -233,14 +284,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                 eligible.put(gallery.gid, gallery);
                 raw.putIfAbsent(gallery.gid, gallery);
             }
-            // Resolve cross-query confirmations in one bounded SQL lookup, not one query per GID
-            // and not a copy of every confirmed gallery in the account for every search condition.
-            Set<Long> ids = new HashSet<>();
-            for (GalleryInfo gallery : rawPage) ids.add(gallery.gid);
-            for (GalleryInfo gallery : qualifiedPage) ids.add(gallery.gid);
-            try (SearchUpdateStore store = SearchUpdateStore.open()) {
-                baseline.confirmed.addAll(store.confirmed(baseline.scope, ids));
-            }
+            baseline.confirmed.addAll(confirmed);
             long tail = GallerySeenState.postedMinute(rawTailPosted);
             if (tail > 0) scannedFloor = tail;
             if (first) { floor = tail; first = false; }
@@ -296,8 +340,9 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             Snapshot current = read(pass.baseline.scope, pass.baseline.query);
             current.confirmed.addAll(confirmed(pass.baseline.scope, pass.raw.keySet()));
             long version = current.version + 1;
+            long expectedVersion = pass.commitVersion.expected;
             boolean replaceCheckpoint = (pass.complete() || !current.initialized)
-                    && current.version == pass.expectedVersion;
+                    && current.version == expectedVersion;
             Set<Long> detected = pass.newGidsInQuery();
             ContentValues state = new ContentValues();
             state.put("id", key); state.put("scope", pass.baseline.scope);
@@ -325,7 +370,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                 row.put("query_id", key); row.put("gid", gallery.gid);
                 row.put("posted", GallerySeenState.postedMinute(gallery.posted));
                 row.put("qualified", qualified || old != null && old.qualified ? 1 : 0);
-                row.put("active", qualified || current.version != pass.expectedVersion
+                row.put("active", qualified || current.version != expectedVersion
                         && old != null && old.active ? 1 : 0);
                 row.put("detected", firstDetected); row.put("acknowledged", acknowledged ? 1 : 0);
                 row.put("browsed", (browsing && qualified) || (old != null && old.browsed) ? 1 : 0);
@@ -382,7 +427,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                             + "AND (acknowledged=1 OR detected=0 OR active=0) ORDER BY touched DESC,gid DESC LIMIT ?)",
                     new Object[]{key, key, key, HISTORY_LIMIT});
             db.setTransactionSuccessful();
-            pass.expectedVersion = version;
+            pass.commitVersion.expected = version;
         } finally { db.endTransaction(); }
     }
 
@@ -403,7 +448,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
         return result;
     }
 
-    private Set<Long> confirmed(String scope, Set<Long> gids) {
+    Set<Long> confirmed(String scope, Set<Long> gids) {
         List<Long> ids = new ArrayList<>(gids);
         Set<Long> result = new HashSet<>();
         for (int start = 0; start < ids.size(); start += 400) {

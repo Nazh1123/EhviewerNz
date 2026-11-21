@@ -455,9 +455,24 @@ public final class SubscriptionUpdateManager {
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
     private final ArrayDeque<Source> mQueue = new ArrayDeque<>();
     private final ArrayList<Source> mSources = new ArrayList<>();
-    private final Set<Long> mEhUnreadGids;
-    private final Set<Long> mBookmarkUnreadGids;
+    private Unread mUnread = Unread.EMPTY;
     private String mSearchContext;
+    @Nullable private String mUnreadScope;
+    private int mUnreadGeneration;
+
+    private record Unread(Set<Long> eh, Set<Long> bookmarks, Set<Long> global) {
+        private static final Unread EMPTY = new Unread(Set.of(), Set.of(), Set.of());
+
+        Set<Long> forMode(int mode, boolean includeGlobal) {
+            Set<Long> ids = switch (mode) {
+                case ListUrlBuilder.MODE_SUBSCRIPTION -> eh;
+                case ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION -> bookmarks;
+                case ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION -> includeGlobal ? global : Set.of();
+                default -> Set.of();
+            };
+            return new HashSet<>(ids);
+        }
+    }
 
     @Nullable private Listener mListener;
     @Nullable private CheckResult mPendingCheckResult;
@@ -485,16 +500,16 @@ public final class SubscriptionUpdateManager {
         SearchUpdateStore.initialize(applicationContext);
         mClient = EhApplication.getEhClient(applicationContext);
         mExecutor = EhApplication.getExecutorService(applicationContext);
-        mEhUnreadGids = parseGids(Settings.getString(KEY_UNREAD_EH_GIDS, ""));
-        mBookmarkUnreadGids = parseGids(
-                Settings.getString(KEY_UNREAD_BOOKMARK_GIDS, ""));
+        Set<Long> legacyEh = parseGids(Settings.getString(KEY_UNREAD_EH_GIDS, ""));
+        Set<Long> legacyBookmarks = parseGids(Settings.getString(KEY_UNREAD_BOOKMARK_GIDS, ""));
         String scope = SubscriptionSearchContext.key();
         String owner = Settings.getString("search_updates_legacy_owner", "");
         if (owner.isEmpty()) { Settings.putString("search_updates_legacy_owner", scope); owner = scope; }
         if (owner.equals(scope)) try (SearchUpdateStore store = SearchUpdateStore.open()) {
-            store.migrateUnread(scope, "eh", mEhUnreadGids);
-            store.migrateUnread(scope, "bookmark", mBookmarkUnreadGids);
+            store.migrateUnread(scope, "eh", legacyEh);
+            store.migrateUnread(scope, "bookmark", legacyBookmarks);
         }
+        mUnread = new Unread(legacyEh, legacyBookmarks, Set.of());
         mRatingPolicy = Settings.getString(KEY_UNREAD_RATING_POLICY, "true:0");
         syncRatingPolicy();
     }
@@ -503,8 +518,11 @@ public final class SubscriptionUpdateManager {
         String policy = Settings.getEnablePreciseRatingFilter() + ":" + Settings.getPersistentMinRatingHundredths();
         if (policy.equals(mRatingPolicy)) return;
         mRatingPolicy = policy;
-        clearEhUnread();
-        clearBookmarkUnread();
+        mUnreadGeneration++;
+        if (!mUnread.eh.isEmpty()) persistGids(KEY_UNREAD_EH_GIDS, Set.of());
+        if (!mUnread.bookmarks.isEmpty()) persistGids(KEY_UNREAD_BOOKMARK_GIDS, Set.of());
+        mUnread = Unread.EMPTY;
+        mUnreadScope = null;
         Settings.putString(KEY_UNREAD_RATING_POLICY, policy);
         cancelCheck();
         // Completed display snapshots deliberately survive changed browsing conditions.
@@ -514,6 +532,7 @@ public final class SubscriptionUpdateManager {
     public void setListener(@Nullable Listener listener) {
         mListener = listener;
         dispatchPendingCheckResult();
+        if (listener != null) onSearchStatesChanged();
     }
 
     private void dispatchPendingCheckResult() {
@@ -610,7 +629,7 @@ public final class SubscriptionUpdateManager {
 
     /** Keep browsing acknowledgements out of the direct display path and never rewrite the snapshot. */
     public void acknowledgeSnapshot(SubscriptionDisplaySnapshot snapshot) {
-        mExecutor.execute(() -> {
+        SearchUpdateStore.saveBrowsingInBackground(() -> {
             if (!snapshot.contextKey.equals(SubscriptionSearchContext.key())) return;
             try {
                 for (SubscriptionDisplaySnapshot.Cursor cursor : snapshot.cursors) {
@@ -626,8 +645,8 @@ public final class SubscriptionUpdateManager {
             } catch (RuntimeException e) {
                 android.util.Log.w("SubscriptionResults", "Unable to acknowledge restored subscription results", e);
             }
-            mMainHandler.post(this::onSearchStatesChanged);
         });
+        onSearchStatesChanged();
     }
 
     public void resetCheckTimer() {
@@ -637,12 +656,17 @@ public final class SubscriptionUpdateManager {
 
     @NonNull
     public Snapshot getSnapshot() {
+        syncRatingPolicy();
+        reloadUnread();
+        return getCachedSnapshot();
+    }
+
+    public Snapshot getCachedSnapshot() {
         boolean ehEnabled = Settings.getAutoSubscriptionUpdatesEh();
         boolean bookmarkEnabled = Settings.getAutoSubscriptionUpdatesBookmark();
-        reloadUnread();
-        int globalCount = getUnreadGalleryGids(ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION).size();
-        return new Snapshot(ehEnabled, bookmarkEnabled,
-                mEhUnreadGids.size(), mBookmarkUnreadGids.size(), globalCount);
+        Unread unread = cachedUnread();
+        int globalCount = ehEnabled && bookmarkEnabled ? unread.global.size() : 0;
+        return new Snapshot(ehEnabled, bookmarkEnabled, unread.eh.size(), unread.bookmarks.size(), globalCount);
     }
 
     /** Copies the same GIDs counted by the sidebar before opening clears its badge. */
@@ -650,23 +674,24 @@ public final class SubscriptionUpdateManager {
     public Set<Long> getUnreadGalleryGids(int mode) {
         syncRatingPolicy();
         reloadUnread();
-        Set<Long> gids = new HashSet<>();
-        switch (mode) {
-            case ListUrlBuilder.MODE_SUBSCRIPTION:
-                gids.addAll(mEhUnreadGids);
-                break;
-            case ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION:
-                gids.addAll(mBookmarkUnreadGids);
-                break;
-            case ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION:
-                if (Settings.getAutoSubscriptionUpdatesEh()
-                        && Settings.getAutoSubscriptionUpdatesBookmark()) {
-                    gids.addAll(mEhUnreadGids);
-                    gids.addAll(mBookmarkUnreadGids);
-                }
-                break;
-        }
-        return gids;
+        return getCachedUnreadGalleryGids(mode);
+    }
+
+    public Set<Long> getCachedUnreadGalleryGids(int mode) {
+        return unreadForMode(cachedUnread(), mode);
+    }
+
+    public Set<Long> loadUnreadGalleryGids(String scope, int mode) {
+        return unreadForMode(readUnread(scope), mode);
+    }
+
+    private static Set<Long> unreadForMode(Unread unread, int mode) {
+        return unread.forMode(mode, Settings.getAutoSubscriptionUpdatesEh()
+                && Settings.getAutoSubscriptionUpdatesBookmark());
+    }
+
+    private Unread cachedUnread() {
+        return mUnreadScope != null && mUnreadScope.equals(SubscriptionSearchContext.key()) ? mUnread : Unread.EMPTY;
     }
 
     /** Returns false when another check is active or no source is enabled. */
@@ -754,8 +779,7 @@ public final class SubscriptionUpdateManager {
         notifyStateChanged();
     }
 
-    private void reloadUnread() {
-        String scope = SubscriptionSearchContext.key();
+    private static Unread readUnread(String scope) {
         List<String> queries = new ArrayList<>();
         if (Settings.getAutoSubscriptionUpdatesBookmark()) {
             for (QuickSearch bookmark : EhDB.getSubscribedQuickSearch()) {
@@ -765,16 +789,40 @@ public final class SubscriptionUpdateManager {
         }
         queries.add("legacy-unread:bookmark");
         try (SearchUpdateStore store = SearchUpdateStore.open()) {
-            mEhUnreadGids.clear();
-            mEhUnreadGids.addAll(store.unread(scope, List.of("eh-subscription", "legacy-unread:eh")));
-            mBookmarkUnreadGids.clear();
-            mBookmarkUnreadGids.addAll(store.unread(scope, queries));
+            Set<Long> eh = store.unread(scope, List.of("eh-subscription", "legacy-unread:eh"));
+            Set<Long> bookmarks = store.unread(scope, queries);
+            Set<Long> global = new HashSet<>(eh);
+            global.addAll(bookmarks);
+            return new Unread(eh, bookmarks, global);
         }
     }
 
+    private void applyUnread(String scope, Unread unread) {
+        mUnreadScope = scope;
+        mUnread = unread;
+    }
+
+    private void reloadUnread() {
+        mUnreadGeneration++;
+        String scope = SubscriptionSearchContext.key();
+        applyUnread(scope, readUnread(scope));
+    }
+
     public void onSearchStatesChanged() {
-        reloadUnread();
-        notifyStateChanged();
+        String scope = SubscriptionSearchContext.key();
+        int generation = ++mUnreadGeneration;
+        EhApplication.getSearchHistoryExecutor().execute(() -> {
+            try {
+                Unread unread = readUnread(scope);
+                mMainHandler.post(() -> {
+                    if (generation != mUnreadGeneration || !scope.equals(SubscriptionSearchContext.key())) return;
+                    applyUnread(scope, unread);
+                    notifyStateChanged();
+                });
+            } catch (RuntimeException error) {
+                android.util.Log.w("SubscriptionResults", "Unable to load unread subscription state", error);
+            }
+        });
     }
 
     /** Compatibility display adapter; matching uses query-local SQLite state. */
@@ -1003,8 +1051,8 @@ public final class SubscriptionUpdateManager {
         for (Source source : mSources) if (source.successful) {
             (source.group == Group.EH ? newEh : newBookmark).addAll(source.session.newGids());
         }
-        newEh.retainAll(mEhUnreadGids);
-        newBookmark.retainAll(mBookmarkUnreadGids);
+        newEh.retainAll(mUnread.eh);
+        newBookmark.retainAll(mUnread.bookmarks);
         int newEhCount = newEh.size(), newBookmarkCount = newBookmark.size();
         CheckResult result = new CheckResult(mManual,
                 !ehSuccess || !bookmarkSuccess, newEhCount, newBookmarkCount,
@@ -1053,20 +1101,6 @@ public final class SubscriptionUpdateManager {
             completedRound.displaySnapshots.put(snapshot.mode, snapshot);
         }
         return completedRound;
-    }
-
-    private void clearEhUnread() {
-        if (!mEhUnreadGids.isEmpty()) {
-            mEhUnreadGids.clear();
-            persistGids(KEY_UNREAD_EH_GIDS, mEhUnreadGids);
-        }
-    }
-
-    private void clearBookmarkUnread() {
-        if (!mBookmarkUnreadGids.isEmpty()) {
-            mBookmarkUnreadGids.clear();
-            persistGids(KEY_UNREAD_BOOKMARK_GIDS, mBookmarkUnreadGids);
-        }
     }
 
     private void notifyStateChanged() {

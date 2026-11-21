@@ -4,6 +4,7 @@ import android.app.Application;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
+import com.hippo.ehviewer.client.parser.GalleryListParser;
 import com.hippo.ehviewer.dao.QuickSearch;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,6 +45,32 @@ public class SeenGalleryHistoryTest {
         Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, false);
         SeenGalleryHistory.record(search, List.of(gallery(100, 100)));
         assertEquals("", Settings.getString("seen_gallery_searches_v2", ""));
+    }
+
+    @Test public void queuedSavesPreserveEachPageAndAdvanceTheSharedBrowsingVersion() {
+        SeenGalleryHistory.Search search = SeenGalleryHistory.open(builder);
+        GalleryListParser.Result firstPage = new GalleryListParser.Result();
+        firstPage.galleryInfoList = List.of(gallery(200, 200));
+        search.session().observe(firstPage, true);
+        Runnable saveFirst = SeenGalleryHistory.captureSave(search);
+
+        GalleryListParser.Result lastPage = new GalleryListParser.Result();
+        lastPage.galleryInfoList = List.of(gallery(100, 100));
+        search.session().observe(lastPage, false);
+        Runnable saveLast = SeenGalleryHistory.captureSave(search);
+
+        try (SearchUpdateStore store = SearchUpdateStore.open()) {
+            saveFirst.run();
+            var first = store.read(search.session().scope(), search.key());
+            assertFalse(first.complete);
+            assertEquals(1, first.displayWatermark().retainedCount());
+
+            saveLast.run();
+            var last = store.read(search.session().scope(), search.key());
+            assertTrue(last.complete);
+            assertTrue(last.exhausted);
+            assertEquals(2, last.displayWatermark().retainedCount());
+        }
     }
 
     @Test public void differentExactDefaultsDoNotShareViewedHistoryWithinTheSameSiteOption() {

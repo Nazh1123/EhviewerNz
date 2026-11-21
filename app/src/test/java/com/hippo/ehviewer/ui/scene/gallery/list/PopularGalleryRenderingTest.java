@@ -61,6 +61,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
@@ -76,6 +77,7 @@ public class PopularGalleryRenderingTest {
     private static final List<QuickSearch> bookmarks = new ArrayList<>();
     private static FavouriteStatusRouter router;
     private static DownloadManager downloads;
+    private static Executor historyExecutor;
     private static final Set<Long> downloadedGids = new HashSet<>();
     private TestScene scene;
     private ContentLayout content;
@@ -86,6 +88,7 @@ public class PopularGalleryRenderingTest {
     private int revealScrollCount;
 
     @Before public void setUp() throws Exception {
+        historyExecutor = Runnable::run;
         Context app = RuntimeEnvironment.getApplication();
         app.deleteDatabase(SearchUpdateStore.DATABASE);
         SearchUpdateStore.initialize(app);
@@ -745,6 +748,68 @@ public class PopularGalleryRenderingTest {
         SubscriptionUpdateManager manager = new SubscriptionUpdateManager(scene.getContext());
         ReflectionHelpers.setField(scene, "mSubscriptionUpdateManager", manager);
         return manager;
+    }
+
+    @Test public void searchResponseWaitsForItsHistoryButRendersBeforeSaving() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("delayed-history");
+        refresh(3, 2);
+
+        List<Runnable> historyJobs = new ArrayList<>();
+        historyExecutor = historyJobs::add;
+        refresh(5, 3, 2);
+        assertEquals(List.of(3L, 2L), visibleIds());
+
+        historyJobs.remove(0).run(); // Open the history snapshot while the request can complete.
+        assertEquals(List.of(3L, 2L), visibleIds());
+        historyJobs.remove(0).run(); // Resolve the received page against that snapshot.
+        assertEquals(Arrays.asList(5L, null, 3L, 2L), visibleIds());
+        assertEquals(seen(3).minute(),
+                com.hippo.ehviewer.client.SeenGalleryHistory.open(builder).baseline().minute());
+
+        ListUrlBuilder acceptedSearch = builder.clone();
+        builder.setKeyword("another search");
+        helper.refresh();
+        historyJobs.remove(0).run(); // The already displayed search still saves after switching queries.
+        assertEquals(seen(5).minute(),
+                com.hippo.ehviewer.client.SeenGalleryHistory.open(acceptedSearch).baseline().minute());
+    }
+
+    @Test public void historyForAReplacedSearchCannotPublishOrAcknowledgeItsPage() {
+        Settings.putBoolean(Settings.KEY_SHOW_VIEWED_GALLERIES, true);
+        builder.setMode(ListUrlBuilder.MODE_NORMAL);
+        builder.setKeyword("discarded");
+        ListUrlBuilder discarded = builder.clone();
+        List<Runnable> historyJobs = new ArrayList<>();
+        historyExecutor = historyJobs::add;
+        refresh(80);
+        builder.setKeyword("current");
+        refresh(90);
+        while (!historyJobs.isEmpty()) historyJobs.remove(0).run();
+        assertEquals(List.of(90L), visibleIds());
+        assertFalse(com.hippo.ehviewer.client.SeenGalleryHistory.open(discarded).baseline().initialized());
+    }
+
+    @Test public void subscriptionDividerRemainsAfterBackgroundUnreadAcknowledgement() {
+        Settings.putBoolean(Settings.KEY_AUTO_SUBSCRIPTION_UPDATES_EH, true);
+        SubscriptionUpdateManager manager = subscriptionManager(ListUrlBuilder.MODE_SUBSCRIPTION, 5);
+        assertEquals(1, manager.getSnapshot().ehCount);
+        List<Runnable> historyJobs = new ArrayList<>();
+        historyExecutor = historyJobs::add;
+        ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
+        refresh(4, 5, 3);
+        historyJobs.remove(0).run();
+        historyJobs.remove(0).run();
+
+        assertEquals(Arrays.asList(5L, null, 4L, 3L), visibleIds());
+        assertEquals(1, manager.getCachedSnapshot().ehCount);
+        historyJobs.remove(0).run(); // Persist the displayed page and acknowledge the captured unread.
+        assertEquals(1, manager.getCachedSnapshot().ehCount);
+        historyJobs.remove(0).run(); // Recompute the sidebar badge from the saved database state.
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(0, manager.getCachedSnapshot().ehCount);
+        assertEquals(Arrays.asList(5L, null, 4L, 3L), visibleIds());
     }
 
     @Test public void viewedSearchUsesPreviousMaximumAndPaginationKeepsTheBoundary() {
@@ -2069,6 +2134,7 @@ public class PopularGalleryRenderingTest {
     public static class AppShadow extends org.robolectric.shadows.ShadowApplication {
         @Implementation protected static EhClient getEhClient(Context context) { return null; }
         @Implementation protected static ExecutorService getExecutorService(Context context) { return null; }
+        @Implementation protected static Executor getSearchHistoryExecutor() { return historyExecutor; }
         @Implementation protected static DownloadManager getDownloadManager(Context context) { return downloads; }
         @Implementation protected static FavouriteStatusRouter getFavouriteStatusRouter() { return router; }
         @Implementation protected static Conaco<Image> getConaco(Context context) { return null; }

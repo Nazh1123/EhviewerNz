@@ -1509,6 +1509,7 @@ public class SubscriptionCheckReuseTest {
     @Implements(EhApplication.class)
     public static class AppShadow {
         @Implementation protected static EhClient getEhClient(Context context) { return client; }
+        @Implementation protected static java.util.concurrent.Executor getSearchHistoryExecutor() { return Runnable::run; }
         @Implementation protected static ExecutorService getExecutorService(Context context) {
             return new AbstractExecutorService() {
                 @Override public void execute(Runnable command) { command.run(); }
