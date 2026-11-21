@@ -1311,7 +1311,10 @@
     <string name="top_list_click_to_view">Tap to view</string>
     <string name="settings_yesterday_top_list_new_badge">Yesterday ranking reminder</string>
     <string name="settings_yesterday_top_list_new_badge_summary">Show New! beside Top Lists until yesterday’s ranking is viewed. Resets daily at 00:05 UTC.</string>
-    <string name="navigation_long_press_hint">Long press buttons for special actions</string>
+    <string name="guide_drawer_popular">Tap to open Popular.\nTouch and hold to see only galleries that are new since last time.\nSwap these actions in Settings → %1$s → %2$s.</string>
+    <string name="guide_drawer_popular_reversed">Tap to see only popular galleries that are new since last time.\nTouch and hold to see all popular galleries.\nSwap these actions in Settings → %1$s → %2$s.</string>
+    <string name="guide_top_list_title">Rankings as a gallery list</string>
+    <string name="guide_top_list_yesterday">Tap Yesterday to browse the rankings as a gallery list.</string>
     <string name="title_keyword_search_action">Search keywords</string>
     <string name="top_list_period_title">%1$s</string>
     <string name="select_gallery_range_same_label">Select a gallery in the same label</string>

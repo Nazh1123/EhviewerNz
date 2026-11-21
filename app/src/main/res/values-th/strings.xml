@@ -1256,7 +1256,10 @@
     <string name="top_list_click_to_view">แตะเพื่อดู</string>
     <string name="settings_yesterday_top_list_new_badge">แจ้งเตือนอันดับเมื่อวาน</string>
     <string name="settings_yesterday_top_list_new_badge_summary">แสดง New! ข้างรายการอันดับจนกว่าจะดูอันดับเมื่อวาน รีเซ็ตทุกวันเวลา 00:05 UTC</string>
-    <string name="navigation_long_press_hint">กดปุ่มค้างไว้เพื่อใช้การทำงานพิเศษ</string>
+    <string name="guide_drawer_popular">แตะเพื่อเปิดหน้ายอดนิยม\nกดค้างเพื่อดูเฉพาะแกลเลอรียอดนิยมที่เพิ่มเข้ามาตั้งแต่ครั้งก่อน\nสลับการทำงานได้ที่การตั้งค่า → %1$s → %2$s</string>
+    <string name="guide_drawer_popular_reversed">แตะเพื่อดูเฉพาะแกลเลอรียอดนิยมที่เพิ่มเข้ามาตั้งแต่ครั้งก่อน\nกดค้างเพื่อดูแกลเลอรียอดนิยมทั้งหมด\nสลับการทำงานได้ที่การตั้งค่า → %1$s → %2$s</string>
+    <string name="guide_top_list_title">ดูอันดับเป็นรายการแกลเลอรี</string>
+    <string name="guide_top_list_yesterday">แตะ «เมื่อวาน» เพื่อดูอันดับเป็นรายการแกลเลอรี</string>
     <string name="title_keyword_search_action">ค้นหาคำสำคัญ</string>
     <string name="download_remove_record">ลบเฉพาะรายการ</string>
     <string name="download_redownload">ดาวน์โหลดอีกครั้ง</string>

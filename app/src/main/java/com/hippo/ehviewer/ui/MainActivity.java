@@ -118,6 +118,7 @@ import com.hippo.ehviewer.ui.splash.SplashActivity;
 import com.hippo.ehviewer.updater.AppUpdater;
 import com.hippo.ehviewer.widget.EhDrawerLayout;
 import com.hippo.ehviewer.widget.LimitsCountView;
+import com.hippo.ehviewer.widget.ShowcaseGuide;
 import com.hippo.io.UniFileInputStreamPipe;
 import com.hippo.network.Network;
 import com.hippo.scene.Announcer;
@@ -161,6 +162,8 @@ public final class MainActivity extends StageActivity
     private EhDrawerLayout mDrawerLayout;
     @Nullable
     private NavigationView mNavView;
+    @Nullable
+    private ShowcaseGuide mPopularGuide;
     @Nullable
     private FrameLayout mRightDrawer;
     @Nullable
@@ -907,6 +910,7 @@ public final class MainActivity extends StageActivity
 
     @Override
     protected void onDestroy() {
+        dismissPopularGuide();
         if (mSubscriptionUpdateSettingsDialog != null) {
             mSubscriptionUpdateSettingsDialog.dismiss();
             mSubscriptionUpdateSettingsDialog = null;
@@ -950,6 +954,9 @@ public final class MainActivity extends StageActivity
         setNavCheckedItem(mNavCheckedItem);
         renderSubscriptionUpdateState();
         scheduleSubscriptionUpdateCheck();
+        if (mDrawerLayout != null && mDrawerLayout.isDrawerOpen(Gravity.LEFT)) {
+            showPopularGuide();
+        }
 
         checkClipboardUrl();
         showGalleryVersionUpdatePromptIfNeeded();
@@ -987,6 +994,7 @@ public final class MainActivity extends StageActivity
 
     @Override
     protected void onPause() {
+        dismissPopularGuide();
         mYesterdayTopListBadgeRunning = false;
         unregisterReceiver(mYesterdayTopListClockReceiver);
         mSubscriptionUpdateHandler.removeCallbacks(mYesterdayTopListBadgeRunnable);
@@ -1533,6 +1541,9 @@ public final class MainActivity extends StageActivity
     @SuppressLint("RtlHardcoded")
     @Override
     public void onBackPressed() {
+        if (mPopularGuide != null && mPopularGuide.isShowing()) {
+            return;
+        }
         if (mDrawerLayout != null && (mDrawerLayout.isDrawerOpen(Gravity.LEFT) ||
                 mDrawerLayout.isDrawerOpen(Gravity.RIGHT))) {
             mDrawerLayout.closeDrawers();
@@ -1683,6 +1694,7 @@ public final class MainActivity extends StageActivity
         if (isSubscriptionDrawer(drawerView)) {
             startSubscriptionUpdateCountdown();
             renderYesterdayTopListBadge();
+            showPopularGuide();
         }
         if (limitsCountView != null) {
             limitsCountView.onLoadData(drawerView, true);
@@ -1695,6 +1707,7 @@ public final class MainActivity extends StageActivity
     @Override
     public void onDrawerClosed(View drawerView) {
         if (isSubscriptionDrawer(drawerView)) {
+            dismissPopularGuide();
             stopSubscriptionUpdateCountdown();
         }
         if (limitsCountView != null) {
@@ -1717,6 +1730,39 @@ public final class MainActivity extends StageActivity
     @Override
     public void onDrawerStateChanged(View drawerView, int newState) {
 
+    }
+
+    private void showPopularGuide() {
+        NavigationView navigation = mNavView;
+        if (mPopularGuide != null || navigation == null || !Settings.getGuideDrawerLongPress()) {
+            return;
+        }
+        int message = Settings.getPopularUpdatesOnly() ? R.string.guide_drawer_popular_reversed
+                : R.string.guide_drawer_popular;
+        mPopularGuide = new ShowcaseGuide(this, navigation, () -> findPopularGuideTarget(navigation),
+                R.string.whats_hot, getString(message, getText(R.string.settings_search),
+                        getText(R.string.settings_popular_updates_only)), () -> {
+                    Settings.finishGuideDrawerLongPress();
+                    mPopularGuide = null;
+                });
+    }
+
+    @Nullable
+    private static View findPopularGuideTarget(NavigationView navigation) {
+        MenuItem item = navigation.getMenu().findItem(R.id.nav_whats_hot);
+        View row = navigation.findViewById(R.id.nav_whats_hot);
+        if (item == null || !item.isVisible() || row == null) {
+            return null;
+        }
+        View title = row.findViewById(com.google.android.material.R.id.design_menu_item_text);
+        return title != null ? title : row;
+    }
+
+    private void dismissPopularGuide() {
+        if (mPopularGuide != null) {
+            mPopularGuide.dismiss();
+            mPopularGuide = null;
+        }
     }
 
     private boolean isSubscriptionDrawer(@NonNull View drawerView) {

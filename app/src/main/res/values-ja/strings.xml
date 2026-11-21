@@ -1192,7 +1192,10 @@
     <string name="top_list_click_to_view">タップして表示</string>
     <string name="settings_yesterday_top_list_new_badge">昨日のランキングの未読通知</string>
     <string name="settings_yesterday_top_list_new_badge_summary">昨日のランキングを見るまで、ランキングの横に New! を表示します。毎日 UTC 00:05 にリセットされます。</string>
-    <string name="navigation_long_press_hint">ボタンを長押しすると特殊な操作ができます</string>
+    <string name="guide_drawer_popular">タップで人気ページを開きます。\n長押しで前回から新たに登場した人気ギャラリーだけを表示します。\n「設定 → %1$s → %2$s」で操作を入れ替えられます。</string>
+    <string name="guide_drawer_popular_reversed">タップで前回から新たに登場した人気ギャラリーだけを表示します。\n長押しですべての人気ギャラリーを表示します。\n「設定 → %1$s → %2$s」で操作を入れ替えられます。</string>
+    <string name="guide_top_list_title">ギャラリー一覧でランキングを表示</string>
+    <string name="guide_top_list_yesterday">「昨日」をタップすると、ギャラリー一覧でランキングを閲覧できます。</string>
     <string name="title_keyword_search_action">キーワードを検索</string>
     <string name="download_remove_record">記録のみ削除</string>
     <string name="download_redownload">再ダウンロード</string>

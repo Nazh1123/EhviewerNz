@@ -1247,7 +1247,10 @@
     <string name="top_list_click_to_view">Appuyer pour afficher</string>
     <string name="settings_yesterday_top_list_new_badge">Rappel du classement d’hier</string>
     <string name="settings_yesterday_top_list_new_badge_summary">Affiche New! à côté des classements jusqu’à la consultation de celui d’hier. Réinitialisation quotidienne à 00:05 UTC.</string>
-    <string name="navigation_long_press_hint">Appuyez longuement sur les boutons pour les actions spéciales</string>
+    <string name="guide_drawer_popular">Touchez pour ouvrir la page des galeries populaires.\nMaintenez enfoncé pour voir uniquement les nouvelles galeries depuis la dernière visite.\nInversez ces actions dans Réglages → %1$s → %2$s.</string>
+    <string name="guide_drawer_popular_reversed">Touchez pour voir uniquement les nouvelles galeries populaires depuis la dernière visite.\nMaintenez enfoncé pour voir toutes les galeries populaires.\nInversez ces actions dans Réglages → %1$s → %2$s.</string>
+    <string name="guide_top_list_title">Classement sous forme de liste de galeries</string>
+    <string name="guide_top_list_yesterday">Touchez « Hier » pour consulter le classement sous forme de liste de galeries.</string>
     <string name="title_keyword_search_action">Rechercher les mots-clés</string>
     <string name="download_remove_record">Supprimer uniquement l’entrée</string>
     <string name="download_redownload">Télécharger à nouveau</string>

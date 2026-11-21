@@ -61,7 +61,10 @@
     <string name="top_list_click_to_view">點擊以查看</string>
     <string name="settings_yesterday_top_list_new_badge">昨日排行榜未讀提醒</string>
     <string name="settings_yesterday_top_list_new_badge_summary">未查看昨日排行榜時，在側邊欄「排行榜」右側顯示 New!，每天 UTC 00:05 重設</string>
-    <string name="navigation_long_press_hint">長按按鈕以執行特殊操作</string>
+    <string name="guide_drawer_popular">點擊進入熱門頁\n長按只查看較上次新增的熱門畫廊\n可在「設定 → %1$s → %2$s」中對調兩者</string>
+    <string name="guide_drawer_popular_reversed">點擊只查看較上次新增的熱門畫廊\n長按查看所有熱門畫廊\n可在「設定 → %1$s → %2$s」中對調兩者</string>
+    <string name="guide_top_list_title">以畫廊列表查看排行</string>
+    <string name="guide_top_list_yesterday">點擊「昨日」，以畫廊列表的方式瀏覽排行榜。</string>
     <string name="favourite">收藏</string>
     <string name="history">歷史</string>
     <string name="downloads">下載</string>
@@ -797,6 +800,8 @@
     <string name="settings_about_author">作者</string>
     <string name="settings_about_author_summary" translatable="false">SXJ_LonelyDog &lt;xiaojieonly$foxmail.com&gt;</string>
     <string name="settings_about_telegram" translatable="false">Telegram</string>
+    <string name="settings_about_reset_guides">重設導覽</string>
+    <string name="settings_about_reset_guides_done">導覽已重設，下次進入相關畫面時會再次顯示。</string>
     <string name="settings_about_feature_guide">功能說明</string>
     <string name="settings_about_latest_release">最新版本</string>
     <string name="settings_about_website">網站</string>

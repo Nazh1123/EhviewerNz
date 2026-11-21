@@ -1268,7 +1268,10 @@
     <string name="top_list_click_to_view">탭하여 보기</string>
     <string name="settings_yesterday_top_list_new_badge">어제 순위 알림</string>
     <string name="settings_yesterday_top_list_new_badge_summary">어제 순위를 확인할 때까지 순위 옆에 New!를 표시합니다. 매일 UTC 00:05에 초기화됩니다.</string>
-    <string name="navigation_long_press_hint">버튼을 길게 누르면 특수 동작을 실행합니다</string>
+    <string name="guide_drawer_popular">탭하여 인기 페이지를 엽니다.\n길게 눌러 지난번 이후 새로 등장한 인기 갤러리만 봅니다.\n설정 → %1$s → %2$s에서 두 동작을 바꿀 수 있습니다.</string>
+    <string name="guide_drawer_popular_reversed">탭하여 지난번 이후 새로 등장한 인기 갤러리만 봅니다.\n길게 눌러 모든 인기 갤러리를 봅니다.\n설정 → %1$s → %2$s에서 두 동작을 바꿀 수 있습니다.</string>
+    <string name="guide_top_list_title">갤러리 목록에서 순위 보기</string>
+    <string name="guide_top_list_yesterday">‘어제’를 탭하여 갤러리 목록으로 순위를 볼 수 있습니다.</string>
     <string name="title_keyword_search_action">키워드 검색</string>
     <string name="download_remove_record">기록만 삭제</string>
     <string name="download_redownload">다시 다운로드</string>

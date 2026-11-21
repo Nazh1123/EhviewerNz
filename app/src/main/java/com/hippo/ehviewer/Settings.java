@@ -2008,6 +2008,37 @@ public class Settings {
         putBoolean(KEY_GUIDE_GALLERY, value);
     }
 
+    private static final String KEY_GUIDE_DRAWER_LONG_PRESS = "guide_drawer_long_press";
+    private static final String KEY_GUIDE_TOP_LIST_YESTERDAY = "guide_top_list_yesterday";
+
+    public static boolean getGuideDrawerLongPress() {
+        return getBoolean(KEY_GUIDE_DRAWER_LONG_PRESS, true);
+    }
+
+    public static void finishGuideDrawerLongPress() {
+        putBoolean(KEY_GUIDE_DRAWER_LONG_PRESS, false);
+    }
+
+    public static boolean getGuideTopListYesterday() {
+        return getBoolean(KEY_GUIDE_TOP_LIST_YESTERDAY, true);
+    }
+
+    public static void finishGuideTopListYesterday() {
+        putBoolean(KEY_GUIDE_TOP_LIST_YESTERDAY, false);
+    }
+
+    public static void resetGuides() {
+        sSettingsPre.edit()
+                .remove(KEY_GUIDE_QUICK_SEARCH)
+                .remove(KEY_GUIDE_COLLECTIONS)
+                .remove(KEY_GUIDE_DOWNLOAD_THUMB)
+                .remove(KEY_GUIDE_DOWNLOAD_LABELS)
+                .remove(KEY_GUIDE_GALLERY)
+                .remove(KEY_GUIDE_DRAWER_LONG_PRESS)
+                .remove(KEY_GUIDE_TOP_LIST_YESTERDAY)
+                .apply();
+    }
+
     private static final String KEY_CLIPBOARD_TEXT_HASH_CODE = "clipboard_text_hash_code";
     private static final int DEFAULT_CLIPBOARD_TEXT_HASH_CODE = 0;
 

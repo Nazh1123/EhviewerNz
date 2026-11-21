@@ -52,7 +52,10 @@
     <string name="top_list_click_to_view">点击以查看</string>
     <string name="settings_yesterday_top_list_new_badge">昨日排行榜未读提醒</string>
     <string name="settings_yesterday_top_list_new_badge_summary">未查看昨日排行榜时，在侧边栏“排行榜”右侧显示 New!，每天 UTC 00:05 重置</string>
-    <string name="navigation_long_press_hint">长按按钮以执行特殊操作</string>
+    <string name="guide_drawer_popular">点击以进入热门页\n长按以仅查看较上次新增的热门画廊\n可在「设置 → %1$s → %2$s」中调换两者</string>
+    <string name="guide_drawer_popular_reversed">点击以仅查看较上次新增的热门画廊\n长按以查看全部热门画廊\n可在「设置 → %1$s → %2$s」中调换两者</string>
+    <string name="guide_top_list_title">用画廊列表查看排行</string>
+    <string name="guide_top_list_yesterday">点击「昨日」，以画廊列表的形式浏览排行榜。</string>
     <string name="favourite">收藏</string>
     <string name="history">历史</string>
     <string name="downloads">下载</string>
@@ -832,6 +835,8 @@
     <string name="settings_about">更新与支持</string>
     <string name="settings_about_declaration_summary">EhViewer 与 E-Hentai.org 无任何联系</string>
     <string name="settings_about_author">作者</string>
+    <string name="settings_about_reset_guides">重置向导</string>
+    <string name="settings_about_reset_guides_done">向导已重置，下次进入相关界面时会再次显示。</string>
     <string name="settings_about_feature_guide">功能说明</string>
     <string name="settings_about_latest_release">最新版本</string>
     <string name="settings_about_website">网站</string>

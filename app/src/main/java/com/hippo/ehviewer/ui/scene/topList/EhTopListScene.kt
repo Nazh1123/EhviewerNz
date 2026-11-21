@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.R
+import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.client.EhClient
 import com.hippo.ehviewer.client.EhRequest
 import com.hippo.ehviewer.client.EhUrl
@@ -28,6 +29,7 @@ import com.hippo.ehviewer.ui.scene.ProgressScene
 import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene
 import com.hippo.ehviewer.util.ClipboardUtil.createAnnouncerFromClipboardUrl
+import com.hippo.ehviewer.widget.ShowcaseGuide
 import com.hippo.scene.Announcer
 import com.hippo.scene.SceneFragment
 import com.hippo.view.ViewTransition
@@ -57,6 +59,7 @@ class EhTopListScene : BaseScene() {
     private var ehTopListDetail: EhTopListDetail? = null
     private var viewTransition: ViewTransition? = null
     private var recyclerView: RecyclerView? = null
+    private var yesterdayGuide: ShowcaseGuide? = null
     private var client: EhClient? = null
     private var request: EhRequest? = null
     private var hasFirstRefresh = false
@@ -100,12 +103,52 @@ class EhTopListScene : BaseScene() {
         return view
     }
 
+    override fun onResume() {
+        super.onResume()
+        val activity = activity ?: return
+        val host = view ?: return
+        if (Settings.getGuideTopListYesterday()) {
+            yesterdayGuide = ShowcaseGuide(
+                activity,
+                host,
+                ::findYesterdayTitle,
+                R.string.guide_top_list_title,
+                getText(R.string.guide_top_list_yesterday),
+            ) {
+                Settings.finishGuideTopListYesterday()
+                yesterdayGuide = null
+            }
+        }
+    }
+
+    override fun onPause() {
+        dismissYesterdayGuide()
+        super.onPause()
+    }
+
     override fun onDestroyView() {
+        dismissYesterdayGuide()
         super.onDestroyView()
         viewTransition = null
+        recyclerView = null
+    }
+
+    private fun findYesterdayTitle(): View? {
+        val list = recyclerView ?: return null
+        val adapter = list.adapter as? EhTopListAdapterView ?: return null
+        if (!adapter.showsGalleryRanking) return null
+        val holder = list.findViewHolderForAdapterPosition(0) ?: return null
+        if (holder.bindingAdapter != adapter) return null
+        return holder.itemView.findViewById(R.id.list_of_time)
+    }
+
+    private fun dismissYesterdayGuide() {
+        yesterdayGuide?.dismiss()
+        yesterdayGuide = null
     }
 
     override fun onBackPressed() {
+        if (yesterdayGuide?.isShowing == true) return
         val handle = checkDoubleClickExit()
         if (!handle) {
             if (state == STATE_INIT) {
@@ -206,6 +249,7 @@ class EhTopListScene : BaseScene() {
         searchType: Int,
     ) : EhTopListAdapter(context, topListInfo, searchType) {
 
+        val showsGalleryRanking = topListInfo.type == EhTopListDetail.ListType.GALLERY
         private val hashMap = HashMap<Int, Int>()
 
         override fun clickTitle(urlFollow: String) {

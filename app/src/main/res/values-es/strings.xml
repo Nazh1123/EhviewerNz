@@ -1246,7 +1246,10 @@
     <string name="top_list_click_to_view">Toca para ver</string>
     <string name="settings_yesterday_top_list_new_badge">Recordatorio de la clasificación de ayer</string>
     <string name="settings_yesterday_top_list_new_badge_summary">Muestra New! junto a las clasificaciones hasta que veas la de ayer. Se restablece cada día a las 00:05 UTC.</string>
-    <string name="navigation_long_press_hint">Mantén pulsados los botones para acciones especiales</string>
+    <string name="guide_drawer_popular">Toca para abrir la página de populares.\nMantén pulsado para ver solo las galerías nuevas desde la última vez.\nIntercambia las acciones en Ajustes → %1$s → %2$s.</string>
+    <string name="guide_drawer_popular_reversed">Toca para ver solo las galerías populares nuevas desde la última vez.\nMantén pulsado para ver todas las galerías populares.\nIntercambia las acciones en Ajustes → %1$s → %2$s.</string>
+    <string name="guide_top_list_title">Clasificación como lista de galerías</string>
+    <string name="guide_top_list_yesterday">Toca «Ayer» para ver la clasificación como una lista de galerías.</string>
     <string name="title_keyword_search_action">Buscar palabras clave</string>
     <string name="download_remove_record">Eliminar solo el registro</string>
     <string name="download_redownload">Volver a descargar</string>

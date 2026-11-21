@@ -112,7 +112,10 @@
     <string name="top_list_new_badge" translatable="false">New!</string>
     <string name="settings_yesterday_top_list_new_badge">Yesterday ranking reminder</string>
     <string name="settings_yesterday_top_list_new_badge_summary">Show New! beside Top Lists until yesterday’s ranking is viewed. Resets daily at 00:05 UTC.</string>
-    <string name="navigation_long_press_hint">Long press buttons for special actions</string>
+    <string name="guide_drawer_popular">Tap to open Popular.\nTouch and hold to see only galleries that are new since last time.\nSwap these actions in Settings → %1$s → %2$s.</string>
+    <string name="guide_drawer_popular_reversed">Tap to see only popular galleries that are new since last time.\nTouch and hold to see all popular galleries.\nSwap these actions in Settings → %1$s → %2$s.</string>
+    <string name="guide_top_list_title">Rankings as a gallery list</string>
+    <string name="guide_top_list_yesterday">Tap Yesterday to browse the rankings as a gallery list.</string>
     <string name="favourite">Favourite</string>
     <string name="history">History</string>
     <string name="downloads">Downloads</string>
@@ -929,6 +932,8 @@
     <string name="settings_about_author">Author</string>
     <string name="settings_about_author_summary" translatable="false">SXJ_LonelyDog &lt;xiaojieonly$foxmail.com&gt;</string>
     <string name="settings_about_telegram" translatable="false">Telegram</string>
+    <string name="settings_about_reset_guides">Reset guides</string>
+    <string name="settings_about_reset_guides_done">Guides reset. They will appear the next time you open the relevant screens.</string>
     <string name="settings_about_feature_guide">Feature guide</string>
     <string name="settings_about_latest_release">Latest release</string>
     <string name="settings_about_website">Website</string>

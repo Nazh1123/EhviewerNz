@@ -64,6 +64,11 @@
             android:title="@string/settings_about_author" />
 
         <Preference
+            android:key="reset_guides"
+            android:persistent="false"
+            android:title="@string/settings_about_reset_guides" />
+
+        <Preference
             android:key="fork_feature_guide"
             android:title="@string/settings_about_feature_guide" />
 

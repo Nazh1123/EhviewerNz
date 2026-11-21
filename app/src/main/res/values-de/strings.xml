@@ -1183,7 +1183,10 @@
     <string name="top_list_click_to_view">Zum Anzeigen tippen</string>
     <string name="settings_yesterday_top_list_new_badge">Erinnerung an die gestrige Rangliste</string>
     <string name="settings_yesterday_top_list_new_badge_summary">Zeigt New! neben den Ranglisten, bis die gestrige Rangliste angesehen wurde. Wird täglich um 00:05 UTC zurückgesetzt.</string>
-    <string name="navigation_long_press_hint">Tasten für Sonderaktionen gedrückt halten</string>
+    <string name="guide_drawer_popular">Tippe, um „Beliebt“ zu öffnen.\nHalte den Eintrag gedrückt, um nur seit dem letzten Besuch hinzugekommene Galerien zu sehen.\nTausche die Aktionen in den Einstellungen unter %1$s → %2$s.</string>
+    <string name="guide_drawer_popular_reversed">Tippe, um nur seit dem letzten Besuch hinzugekommene beliebte Galerien zu sehen.\nHalte den Eintrag gedrückt, um alle beliebten Galerien zu sehen.\nTausche die Aktionen in den Einstellungen unter %1$s → %2$s.</string>
+    <string name="guide_top_list_title">Rangliste als Galerieliste</string>
+    <string name="guide_top_list_yesterday">Tippe auf „Gestern“, um die Rangliste als Galerieliste anzuzeigen.</string>
     <string name="title_keyword_search_action">Suchbegriffe suchen</string>
     <string name="download_remove_record">Nur Eintrag entfernen</string>
     <string name="download_redownload">Erneut herunterladen</string>
