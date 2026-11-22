@@ -163,9 +163,14 @@ public final class SearchUpdateSession {
 
     /** Capture the accepted page before the display thread can append another one. */
     public Runnable captureBrowsingCommit() {
+        return captureBrowsingCommit(false);
+    }
+
+    /** A restored cursor only confirms galleries fetched by this continuation. */
+    public Runnable captureBrowsingCommit(boolean continuation) {
         Map<String, SearchUpdateStore.Pass> captured = new LinkedHashMap<>();
         passes.forEach((query, pass) -> captured.put(query, pass.snapshotForCommit()));
-        return () -> commit(captured, SearchUpdateStore::commitCapturedPage);
+        return () -> commit(captured, (store, pass) -> store.commitCapturedPage(pass, continuation));
     }
 
     public void commit(boolean browsing) {

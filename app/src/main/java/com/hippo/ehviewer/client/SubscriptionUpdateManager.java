@@ -38,6 +38,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 
 /**
@@ -531,18 +532,18 @@ public final class SubscriptionUpdateManager {
 
     public void setListener(@Nullable Listener listener) {
         mListener = listener;
-        dispatchPendingCheckResult();
+        dispatchPendingCheckResult(null);
         if (listener != null) onSearchStatesChanged();
     }
 
-    private void dispatchPendingCheckResult() {
+    private void dispatchPendingCheckResult(@Nullable Snapshot currentSnapshot) {
         Listener listener = mListener;
         CheckResult result = mPendingCheckResult;
         if (listener == null || result == null) return;
         mPendingCheckResult = null;
         if (!SubscriptionSearchContext.key().equals(mPendingCheckContext)) return;
         // A subscription may have been opened while this activity was stopped.
-        Snapshot snapshot = getSnapshot();
+        Snapshot snapshot = currentSnapshot == null ? getSnapshot() : currentSnapshot;
         listener.onSubscriptionUpdateCheckFinished(new CheckResult(result.manual, result.failed,
                 Math.min(result.newEhCount, snapshot.ehCount),
                 Math.min(result.newBookmarkCount, snapshot.bookmarkCount), snapshot));
@@ -585,23 +586,25 @@ public final class SubscriptionUpdateManager {
     @Nullable
     public RecentCheckResult getRecentCheckResult(int mode) {
         syncRatingPolicy();
-        RecentCheckResult result = mResultStore.get();
-        if (result == null) {
-            return null;
-        }
-        if (!result.hasSourceForMode(mode)) {
-            return null;
-        }
-        return result;
+        return resultForMode(mResultStore.get(), mode, false);
     }
 
     /** Explicit reuse keeps the last completed display, regardless of changed browsing conditions. */
     @Nullable
     public RecentCheckResult getReusableCheckResult(int mode) {
         syncRatingPolicy();
-        RecentCheckResult saved = mResultStore.get();
+        return resultForMode(mResultStore.get(), mode, true);
+    }
+
+    public CompletableFuture<RecentCheckResult> loadSavedCheckResult(int mode, boolean allowExpired) {
+        syncRatingPolicy();
+        return mResultStore.getAsync().thenApply(saved -> resultForMode(saved, mode, allowExpired));
+    }
+
+    @Nullable
+    private static RecentCheckResult resultForMode(@Nullable RecentCheckResult saved, int mode, boolean allowExpired) {
         if (saved == null) return null;
-        RecentCheckResult result = new RecentCheckResult(saved);
+        RecentCheckResult result = allowExpired ? new RecentCheckResult(saved) : saved;
         return result.hasSourceForMode(mode) ? result : null;
     }
 
@@ -629,18 +632,34 @@ public final class SubscriptionUpdateManager {
 
     /** Keep browsing acknowledgements out of the direct display path and never rewrite the snapshot. */
     public void acknowledgeSnapshot(SubscriptionDisplaySnapshot snapshot) {
+        if (snapshot.capturedUnreadGids().isEmpty()) return;
         SearchUpdateStore.saveBrowsingInBackground(() -> {
             if (!snapshot.contextKey.equals(SubscriptionSearchContext.key())) return;
             try {
+                Set<String> activeBookmarks = new HashSet<>();
+                for (QuickSearch bookmark : EhDB.getSubscribedQuickSearch()) {
+                    ListUrlBuilder builder = new ListUrlBuilder();
+                    builder.set(bookmark);
+                    activeBookmarks.add(SearchUpdateStore.queryKey(builder));
+                }
+                Set<String> queries = new HashSet<>();
                 for (SubscriptionDisplaySnapshot.Cursor cursor : snapshot.cursors) {
                     RecentCheckSource page = cursor.page();
-                    SearchUpdateSession session = new SearchUpdateSession(page.continuationBuilder(), page.continuationPlan());
-                    session.observe(page.asPageResult(), !page.exhausted);
-                    session.commit(true);
+                    if (page.isEhSubscription()) {
+                        queries.add(SearchUpdateStore.queryKey(page.continuationBuilder()));
+                    } else {
+                        for (QuickSearch bookmark : page.bookmarks()) {
+                            ListUrlBuilder builder = new ListUrlBuilder();
+                            builder.set(bookmark);
+                            String query = SearchUpdateStore.queryKey(builder);
+                            if (activeBookmarks.contains(query)) queries.add(query);
+                        }
+                    }
                 }
+                queries.add("legacy-unread:bookmark");
+                if (snapshot.mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) queries.add("legacy-unread:eh");
                 try (SearchUpdateStore store = SearchUpdateStore.open()) {
-                    store.acknowledgeLegacy(snapshot.contextKey, "bookmark");
-                    if (snapshot.mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) store.acknowledgeLegacy(snapshot.contextKey, "eh");
+                    store.acknowledgeSnapshot(snapshot.contextKey, queries, snapshot.capturedUnreadGids());
                 }
             } catch (RuntimeException e) {
                 android.util.Log.w("SubscriptionResults", "Unable to acknowledge restored subscription results", e);
@@ -713,7 +732,6 @@ public final class SubscriptionUpdateManager {
 
         mSearchContext = SubscriptionSearchContext.key();
         mCheckDisplayKey = SubscriptionSearchContext.cacheKey();
-        reloadUnread();
 
         mChecking = true;
         mManual = manual;
@@ -770,6 +788,7 @@ public final class SubscriptionUpdateManager {
                 System.currentTimeMillis() + CANCEL_RETRY_DELAY_MS);
         deliverCheckCompletions(null);
         notifyStateChanged();
+        onSearchStatesChanged();
     }
 
     public void onSubscriptionOpened(int mode) {
@@ -1012,7 +1031,6 @@ public final class SubscriptionUpdateManager {
         source.queued = false;
         if (success && mSearchContext.equals(SubscriptionSearchContext.key())) {
             source.session.commit(false);
-            reloadUnread();
         }
         mCompletedSources++;
         if (!success) {
@@ -1056,11 +1074,11 @@ public final class SubscriptionUpdateManager {
         int newEhCount = newEh.size(), newBookmarkCount = newBookmark.size();
         CheckResult result = new CheckResult(mManual,
                 !ehSuccess || !bookmarkSuccess, newEhCount, newBookmarkCount,
-                getSnapshot());
+                getCachedSnapshot());
         notifyStateChanged();
         mPendingCheckResult = result;
         mPendingCheckContext = mSearchContext;
-        dispatchPendingCheckResult();
+        dispatchPendingCheckResult(result.snapshot);
     }
 
     private int mCompletedSourcesFor(@NonNull Group group) {

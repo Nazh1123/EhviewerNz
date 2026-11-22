@@ -479,7 +479,7 @@ public class GalleryListScene extends BaseScene
     private boolean mSubscriptionRefreshPending;
     private final Set<Long> mSubscriptionPendingUnread = new HashSet<>();
     @Nullable
-    private SubscriptionUpdateManager.RecentCheckResult mRecentCheckResult;
+    private CompletableFuture<SubscriptionUpdateManager.RecentCheckResult> mSavedSubscriptionResult;
     private int mSubscriptionReusePolicy = SUBSCRIPTION_REUSE_AVAILABLE;
     @Nullable private String mSubscriptionReusedTitle;
     private boolean mSubscriptionStaleResult;
@@ -751,7 +751,7 @@ public class GalleryListScene extends BaseScene
         }
         mClient = null;
         mUrlBuilder = null;
-        mRecentCheckResult = null;
+        mSavedSubscriptionResult = null;
         mSubscriptionUpdateManager = null;
         mDownloadManager.removeDownloadInfoListener(mDownloadInfoListener);
         mFavouriteStatusRouter.removeListener(mFavouriteStatusRouterListener);
@@ -4076,21 +4076,18 @@ public class GalleryListScene extends BaseScene
             return;
         }
         int mode = mUrlBuilder.getMode();
-        mRecentCheckResult = null;
+        mSavedSubscriptionResult = null;
         if (mSubscriptionReusePolicy != SUBSCRIPTION_FORCE_REFRESH && isBookmarkSubscriptionMode()) {
-            mRecentCheckResult = mSubscriptionReusePolicy == SUBSCRIPTION_REUSE_RECENT
-                    ? mSubscriptionUpdateManager.getRecentCheckResult(mode)
-                    : mSubscriptionUpdateManager.getReusableCheckResult(mode);
+            mSavedSubscriptionResult = mSubscriptionUpdateManager.loadSavedCheckResult(
+                    mode, mSubscriptionReusePolicy != SUBSCRIPTION_REUSE_RECENT);
         }
         if (mode == ListUrlBuilder.MODE_SUBSCRIPTION
                 || mode == ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION
                 || mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION) {
             if (captureUnread) {
-                SubscriptionDisplaySnapshot snapshot = mRecentCheckResult == null ? null : mRecentCheckResult.displaySnapshot(mode);
-                mSubscriptionNewGids.addAll(snapshot == null
-                        ? mSubscriptionUpdateManager.getCachedUnreadGalleryGids(mode) : snapshot.unreadGids());
+                mSubscriptionNewGids.addAll(mSubscriptionUpdateManager.getCachedUnreadGalleryGids(mode));
             }
-            if (mRecentCheckResult == null) mSubscriptionUpdateManager.onSubscriptionOpened(mode);
+            if (mSavedSubscriptionResult == null) mSubscriptionUpdateManager.onSubscriptionOpened(mode);
         }
     }
 
@@ -4189,7 +4186,7 @@ public class GalleryListScene extends BaseScene
                     mSubscriptionNewGids.add(gallery.gid);
                 }
             }
-            if (snapshot == null && !partialFailure) {
+            if (mBookmarkSubscriptionCoordinator.getRestoredSnapshot() == null && !partialFailure) {
                 String scope = SubscriptionSearchContext.key();
                 boolean global = isGlobalSubscriptionMode();
                 saveGalleryBrowsing(() -> {
@@ -4673,7 +4670,7 @@ public class GalleryListScene extends BaseScene
         private boolean mRefreshChangedSubscription;
 
         private void refreshChangedSubscription() {
-            mRecentCheckResult = null;
+            mSavedSubscriptionResult = null;
             mRefreshChangedSubscription = true;
             refresh();
         }
@@ -4703,12 +4700,11 @@ public class GalleryListScene extends BaseScene
             return !mRatingLoading && !mRatingSortMode;
         }
 
-        private void prepareSeenState(int taskId) {
+        private void prepareSeenState(int taskId, boolean restoringSavedResult) {
             if (!isCurrentTaskRefresh(taskId) || mUrlBuilder == null) return;
             mProjectionResetPending = true;
             boolean captureUnread = isSubscriptionMode() && mSubscriptionUpdateManager != null
-                    && !mSubscriptionPreserveSnapshot && (mRecentCheckResult == null
-                    || mRecentCheckResult.displaySnapshot(mUrlBuilder.getMode()) == null);
+                    && !mSubscriptionPreserveSnapshot && !restoringSavedResult;
             if (isSubscriptionMode()) {
                 mSubscriptionPendingUnread.clear();
                 if (!captureUnread) {
@@ -4724,11 +4720,14 @@ public class GalleryListScene extends BaseScene
         protected void getPageData(int taskId, int type, int page) {
             boolean refreshChangedSubscription = mRefreshChangedSubscription;
             mRefreshChangedSubscription = false;
-            prepareSeenState(taskId);
+            CompletableFuture<SubscriptionUpdateManager.RecentCheckResult> saved = mSavedSubscriptionResult;
+            mSavedSubscriptionResult = null;
             MainActivity activity = getActivity2();
             if (null == activity || null == mClient || null == mUrlBuilder) {
+                prepareSeenState(taskId, false);
                 return;
             }
+            if (saved == null) prepareSeenState(taskId, false);
             prepareYesterdayTopListRequest(page);
             mLastRequestedRatingMinimum = mUrlBuilder.getEffectiveMinRatingHundredths();
             mLastRequestedPreciseRating = Settings.getEnablePreciseRatingFilter();
@@ -4742,8 +4741,7 @@ public class GalleryListScene extends BaseScene
                         onGetGalleryListFailure(new IllegalStateException(
                                 getString(R.string.subscription_updates_failed)), taskId);
                     } else if (isBookmarkSubscriptionMode()) {
-                        mRecentCheckResult = result;
-                        loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode(), true);
+                        loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode(), result, true);
                     } else {
                         for (var source : result.sources) {
                             if (source.isEhSubscription() && !source.requiresDisplayPreparation
@@ -4758,7 +4756,7 @@ public class GalleryListScene extends BaseScene
                     }
                 })) {
                     // A retry should fetch again after a failed wait. Reopening can still select the saved result.
-                    mRecentCheckResult = null;
+                    if (saved != null) prepareSeenState(taskId, false);
                     return;
                 }
             }
@@ -4784,7 +4782,21 @@ public class GalleryListScene extends BaseScene
             }
 
             if (isBookmarkSubscriptionMode()) {
-                loadBookmarkSubscriptions(taskId, activity, isGlobalSubscriptionMode(), false);
+                boolean includeEh = isGlobalSubscriptionMode();
+                if (saved == null) {
+                    loadBookmarkSubscriptions(taskId, activity, includeEh, null, false);
+                } else {
+                    int mode = mUrlBuilder.getMode();
+                    saved.exceptionally(error -> null).thenAccept(result -> activity.runOnUiThread(() -> {
+                        if (!isCurrentSubscriptionTask(taskId, includeEh, activity)) return;
+                        boolean hasSnapshot = result != null && result.displaySnapshot(mode) != null;
+                        prepareSeenState(taskId, hasSnapshot);
+                        if (!hasSnapshot && mSubscriptionUpdateManager != null) {
+                            mSubscriptionUpdateManager.onSubscriptionOpened(mode);
+                        }
+                        loadBookmarkSubscriptions(taskId, activity, includeEh, result, false);
+                    }));
+                }
                 return;
             } else if (mBookmarkSubscriptionCoordinator != null
                     && mBookmarkSubscriptionCoordinator.isLoading()) {
@@ -4813,11 +4825,14 @@ public class GalleryListScene extends BaseScene
             }
         }
 
+        private boolean isCurrentSubscriptionTask(int taskId, boolean includeEh, MainActivity activity) {
+            return mHelper == this && isCurrentTask(taskId) && getActivity2() == activity
+                    && isBookmarkSubscriptionMode() && isGlobalSubscriptionMode() == includeEh;
+        }
+
         private void loadBookmarkSubscriptions(int taskId, @NonNull MainActivity activity,
-                                               boolean includeEhSubscription, boolean completedCheckOnly) {
-            SubscriptionUpdateManager.RecentCheckResult recentCheckResult =
-                    mRecentCheckResult;
-            mRecentCheckResult = null;
+                boolean includeEhSubscription, @Nullable SubscriptionUpdateManager.RecentCheckResult recentCheckResult,
+                boolean completedCheckOnly) {
             if (recentCheckResult != null && recentCheckResult.displaySnapshot(includeEhSubscription
                     ? ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION : ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION) != null) {
                 BookmarkSubscriptionCoordinator coordinator = getBookmarkSubscriptionCoordinator();
@@ -4831,7 +4846,7 @@ public class GalleryListScene extends BaseScene
                     subscriptions = EhDB.getSubscribedQuickSearch();
                 } catch (Exception e) {
                     activity.runOnUiThread(() -> {
-                        if (mHelper != null && mHelper.isCurrentTask(taskId)) {
+                        if (isCurrentSubscriptionTask(taskId, includeEhSubscription, activity)) {
                             onGetGalleryListFailure(e, taskId);
                         }
                     });
@@ -4839,10 +4854,7 @@ public class GalleryListScene extends BaseScene
                 }
 
                 activity.runOnUiThread(() -> {
-                    if (!isBookmarkSubscriptionMode() || mHelper == null
-                            || !mHelper.isCurrentTask(taskId)) {
-                        return;
-                    }
+                    if (!isCurrentSubscriptionTask(taskId, includeEhSubscription, activity)) return;
                     BookmarkSubscriptionCoordinator coordinator =
                             getBookmarkSubscriptionCoordinator();
                     if (coordinator != null) {
@@ -4869,7 +4881,7 @@ public class GalleryListScene extends BaseScene
                 getPageData(taskId, pageAction, page);
                 return;
             }
-            prepareSeenState(taskId);
+            prepareSeenState(taskId, false);
             if (isBookmarkSubscriptionMode()) {
                 BookmarkSubscriptionCoordinator coordinator =
                         getBookmarkSubscriptionCoordinator();

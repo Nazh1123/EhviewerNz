@@ -14,6 +14,7 @@ import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -22,57 +23,58 @@ final class SubscriptionResultStore {
     static final String FILE_NAME = "subscription-results-v1.json";
     static final ExecutorService IO = Executors.newSingleThreadExecutor();
     private final AtomicFile file;
-    private RecentCheckResult current;
-    private boolean loaded;
+    private CompletableFuture<RecentCheckResult> current;
 
     SubscriptionResultStore(File directory) {
         file = new AtomicFile(new File(directory, FILE_NAME));
+        current = CompletableFuture.supplyAsync(this::read, IO);
     }
 
-    synchronized RecentCheckResult get() {
-        if (!loaded) {
-            try {
-                // Queued writes finish before a newly created manager restores the same file.
-                current = IO.submit(this::read).get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } catch (Exception e) {
-                Log.w("SubscriptionResults", "Unable to restore subscription results", e);
-            }
-            loaded = true;
-        }
+    RecentCheckResult get() {
+        return getAsync().join();
+    }
+
+    synchronized CompletableFuture<RecentCheckResult> getAsync() {
         return current;
     }
 
     synchronized void record(String contextKey, String displayKey, List<RecentCheckSource> updates) {
         if (updates.isEmpty()) return;
-        RecentCheckResult previous = get();
-        List<RecentCheckSource> sources = new ArrayList<>();
-        if (previous != null && previous.contextKey.equals(contextKey)
-                && previous.displayKey.equals(displayKey)) sources.addAll(previous.sources);
-        for (RecentCheckSource update : updates) {
-            sources.removeIf(update::sameSource);
-            sources.add(update);
-        }
-        current = new RecentCheckResult(sources, contextKey, displayKey);
-        if (previous != null) current.displaySnapshots.putAll(previous.displaySnapshots);
-        RecentCheckResult snapshot = current;
-        IO.execute(() -> write(snapshot));
+        List<RecentCheckSource> incoming = List.copyOf(updates);
+        persist(current.thenApply(previous -> {
+            List<RecentCheckSource> sources = new ArrayList<>();
+            if (previous != null && previous.contextKey.equals(contextKey)
+                    && previous.displayKey.equals(displayKey)) sources.addAll(previous.sources);
+            for (RecentCheckSource update : incoming) {
+                sources.removeIf(update::sameSource);
+                sources.add(update);
+            }
+            return replace(previous, contextKey, displayKey, sources, List.of());
+        }));
     }
 
     synchronized void recordSnapshots(String contextKey, String displayKey,
             List<RecentCheckSource> sources, List<SubscriptionDisplaySnapshot> snapshots) {
-        RecentCheckResult previous = get();
-        current = new RecentCheckResult(sources, contextKey, displayKey);
-        if (previous != null) current.displaySnapshots.putAll(previous.displaySnapshots);
-        for (SubscriptionDisplaySnapshot snapshot : snapshots) current.displaySnapshots.put(snapshot.mode, snapshot);
-        RecentCheckResult saved = current;
-        IO.execute(() -> write(saved));
+        List<RecentCheckSource> incoming = List.copyOf(sources);
+        List<SubscriptionDisplaySnapshot> displays = List.copyOf(snapshots);
+        persist(current.thenApply(previous -> replace(previous, contextKey, displayKey, incoming, displays)));
+    }
+
+    private static RecentCheckResult replace(RecentCheckResult previous, String contextKey, String displayKey,
+            List<RecentCheckSource> sources, List<SubscriptionDisplaySnapshot> snapshots) {
+        RecentCheckResult result = new RecentCheckResult(sources, contextKey, displayKey);
+        if (previous != null) result.displaySnapshots.putAll(previous.displaySnapshots);
+        for (SubscriptionDisplaySnapshot snapshot : snapshots) result.displaySnapshots.put(snapshot.mode, snapshot);
+        return result;
+    }
+
+    private void persist(CompletableFuture<RecentCheckResult> result) {
+        current = result;
+        IO.execute(() -> write(result.join()));
     }
 
     synchronized void clear() {
-        loaded = true;
-        current = null;
+        current = CompletableFuture.completedFuture(null);
         IO.execute(file::delete);
     }
 

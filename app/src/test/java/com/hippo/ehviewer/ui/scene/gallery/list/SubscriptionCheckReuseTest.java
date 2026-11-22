@@ -39,7 +39,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -216,8 +218,7 @@ public class SubscriptionCheckReuseTest {
                 ReflectionHelpers.callInstanceMethod(scene, "handleArgs",
                         ReflectionHelpers.ClassParameter.from(android.os.Bundle.class, args));
                 ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
-                SubscriptionUpdateManager.RecentCheckResult cached =
-                        ReflectionHelpers.getField(scene, "mRecentCheckResult");
+                SubscriptionUpdateManager.RecentCheckResult cached = savedEntryResult(scene);
                 int before = requests.size();
                 var coordinator = refresh(mode == ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION, cached);
                 if (force) {
@@ -330,7 +331,13 @@ public class SubscriptionCheckReuseTest {
         ReflectionHelpers.callInstanceMethod(scene, "handleArgs",
                 ReflectionHelpers.ClassParameter.from(android.os.Bundle.class, args));
         ReflectionHelpers.callInstanceMethod(scene, "markSubscriptionOpened");
-        return ReflectionHelpers.getField(scene, "mRecentCheckResult");
+        return savedEntryResult(scene);
+    }
+
+    private static SubscriptionUpdateManager.RecentCheckResult savedEntryResult(GalleryListScene scene) {
+        CompletableFuture<SubscriptionUpdateManager.RecentCheckResult> pending =
+                ReflectionHelpers.getField(scene, "mSavedSubscriptionResult");
+        return pending == null ? null : pending.join();
     }
 
     @Test public void openingDuringEitherCheckWaitsWithoutCancellingOrAddingRequests() {
@@ -1404,6 +1411,88 @@ public class SubscriptionCheckReuseTest {
         assertTrue(coordinator.isNewGallery(result.galleryInfoList.get(0)));
         assertFalse(coordinator.isNewGallery(result.galleryInfoList.get(1)));
         assertEquals(1, requests.size()); coordinator.cancel();
+    }
+
+    @Test public void reopeningAndPagingAnOlderSnapshotPreserveLaterUnreadResults() throws Exception {
+        enableBookmark();
+        seedEh(page(100, null).galleryInfoList);
+        start(true);
+        String next = "https://e-hentai.org/watched?next=200";
+        succeed(0, datedPage(200, "2026-09-21 00:00", next));
+        succeed(1, page(190, null));
+        var older = datedPage(150, "2026-09-20 00:01", null);
+        succeed(2, older);
+        int mode = ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION;
+        var first = manager.getReusableCheckResult(mode).displaySnapshot(mode);
+        assertEquals(Set.of(200L), first.unreadGids());
+        assertEquals(Set.of(150L, 200L), manager.getUnreadGalleryGids(mode));
+
+        start(true);
+        var newer = datedPage(300, "2026-09-22 00:00", null);
+        newer.galleryInfoList.addAll(first.galleries);
+        newer.galleryInfoList.addAll(older.galleryInfoList);
+        newer.rawResultCount = 3;
+        newer.rawTailPosted = older.rawTailPosted;
+        newer.rawTailGid = older.rawTailGid;
+        succeed(3, newer);
+        requests.get(4).getCallback().onFailure(new IllegalArgumentException("bad query"));
+        assertFalse(manager.isChecking());
+        assertEquals(Set.of(150L, 200L, 300L), manager.getUnreadGalleryGids(mode));
+
+        flushResultWrites();
+        manager = new SubscriptionUpdateManager(RuntimeEnvironment.getApplication());
+        var saved = manager.getReusableCheckResult(mode);
+        var snapshot = saved.displaySnapshot(mode);
+        assertEquals(Set.of(200L), snapshot.unreadGids());
+        manager.acknowledgeSnapshot(snapshot);
+        assertEquals(Set.of(300L), manager.getUnreadGalleryGids(mode));
+
+        var coordinator = refresh(true, saved);
+        coordinator.loadMore(2, 0);
+        assertEquals(next, requests.get(5).getArgs()[0]);
+        succeed(5, older);
+        assertEquals(Set.of(300L), manager.getUnreadGalleryGids(mode));
+        try (SearchUpdateStore store = SearchUpdateStore.open()) {
+            assertEquals(GallerySeenState.postedMinute("2026-09-22 00:00"),
+                    store.read(contextKey, "eh-subscription").head);
+        }
+        coordinator.cancel();
+    }
+
+    @Test public void exhaustedAutomaticRetriesKeepTheFailedPageAvailableForManualRetry() {
+        var errors = new ArrayList<Exception>();
+        var batches = new ArrayList<List<Long>>();
+        var coordinator = new BookmarkSubscriptionCoordinator(client, new BookmarkSubscriptionCoordinator.Listener() {
+            @Override public void onBookmarkSubscriptionBatch(int task, List<GalleryInfo> data,
+                    boolean more, boolean refresh, boolean empty, boolean partial) {
+                assertFalse(partial);
+                batches.add(data.stream().map(g -> g.gid).toList());
+            }
+            @Override public void onBookmarkSubscriptionFailure(int task, Exception error) { errors.add(error); }
+        });
+        coordinator.refresh(1, List.of(), true, null, 0);
+        var first = page(200, null);
+        first.pages = 3;
+        succeed(0, first);
+        coordinator.loadMore(2, 0);
+        String failedUrl = (String) requests.get(1).getArgs()[0];
+        for (int i = 1; i <= 3; i++) {
+            assertEquals(failedUrl, requests.get(i).getArgs()[0]);
+            requests.get(i).getCallback().onFailure(new java.io.IOException("offline"));
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(6));
+        }
+        assertEquals(1, errors.size());
+        assertEquals(4, requests.size());
+        coordinator.loadMore(3, 0);
+        assertEquals(failedUrl, requests.get(4).getArgs()[0]);
+        var recovered = page(150, null);
+        recovered.pages = 3;
+        succeed(4, recovered);
+        coordinator.loadMore(4, 0);
+        assertNotEquals(failedUrl, requests.get(5).getArgs()[0]);
+        succeed(5, page(100, null));
+        assertEquals(List.of(List.of(200L), List.of(150L), List.of(100L)), batches);
+        coordinator.cancel();
     }
 
     @Test public void failedInteractiveRefreshDoesNotReplaceTheFrozenSnapshot() {

@@ -232,6 +232,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
         private final Map<Long, GalleryInfo> eligible = new LinkedHashMap<>();
         private final Set<Long> pendingGids = new HashSet<>();
         private PageChanges pageChanges;
+        private boolean continuation;
         private long floor, head, scannedFloor;
         private boolean first = true, done, exhausted;
         // Successive queued snapshots share the last successful write of this browsing pass.
@@ -361,6 +362,11 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
     }
 
     synchronized void commitCapturedPage(Pass page) {
+        commitCapturedPage(page, false);
+    }
+
+    synchronized void commitCapturedPage(Pass page, boolean continuation) {
+        page.continuation = continuation;
         synchronized (page.commitVersion) {
             commitPage(page, true);
         }
@@ -381,7 +387,7 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             // Later pages of a superseded pass can acknowledge what they show but cannot
             // replace the newer check's coverage or deactivate its results.
             stale = conflict || browsing && progress.superseded;
-            boolean replaceCheckpoint = (pass.complete() || !current.initialized) && !stale;
+            boolean replaceCheckpoint = (pass.complete() || !current.initialized) && !stale && !pass.continuation;
             Set<Long> gidsToSave = !browsing || conflict ? pass.raw.keySet() : pass.unsavedGids();
             if (browsing && replaceCheckpoint) {
                 // Reuse checkpoint membership when its meaning is unchanged, regardless of its revision.
@@ -425,10 +431,10 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
                 }
                 Entry next = new Entry(GallerySeenState.postedMinute(gallery.posted),
                         qualified || old != null && old.qualified, firstDetected, acknowledged, snapshot,
-                        qualified || stale && old != null && old.active, browsing && qualified || old != null && old.browsed);
+                        qualified || (stale || pass.continuation) && old != null && old.active, browsing && qualified || old != null && old.browsed);
                 if (!browsing || !next.equals(old)) writeGallery(db, key, gid, next);
             }
-            if (browsing) {
+            if (browsing && !pass.continuation) {
                 // Overall acknowledgement includes captured unread entries outside the display batch.
                 List<Long> captured = new ArrayList<>(pass.baseline.unread());
                 for (int start = 0; start < captured.size(); start += 400) {
@@ -541,6 +547,32 @@ public final class SearchUpdateStore extends SQLiteOpenHelper {
             }
         }
         return result;
+    }
+
+    void acknowledgeSnapshot(String scope, Set<String> queries, Set<Long> captured) {
+        if (captured.isEmpty()) return;
+        SQLiteDatabase db = getWritableDatabase();
+        List<Long> gids = new ArrayList<>(captured);
+        db.beginTransaction();
+        try {
+            for (int start = 0; start < gids.size(); start += 400) {
+                List<Long> batch = gids.subList(start, Math.min(start + 400, gids.size()));
+                String placeholders = String.join(",", java.util.Collections.nCopies(batch.size(), "?"));
+                Object[] args = new Object[batch.size() + 1];
+                for (int i = 0; i < batch.size(); i++) args[i + 1] = batch.get(i);
+                args[0] = scope;
+                db.execSQL("UPDATE galleries SET acknowledged=1 WHERE acknowledged=0 AND query_id IN "
+                        + "(SELECT id FROM queries WHERE scope=?) AND gid IN (" + placeholders + ")", args);
+                for (String query : queries) {
+                    args[0] = id(scope, query);
+                    db.execSQL("UPDATE galleries SET browsed=1 WHERE browsed=0 AND query_id=? AND gid IN ("
+                            + placeholders + ")", args);
+                }
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     public void acknowledgeLegacy(String scope, String group) {

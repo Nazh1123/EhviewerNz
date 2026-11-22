@@ -30,6 +30,7 @@ public final class SubscriptionDisplaySnapshot {
     public final List<GalleryInfo> chronologicalGalleries;
     /** Number of entries before the viewed divider; size means no divider yet. */
     public final int unreadCount;
+    private final Set<Long> capturedUnread;
     public final List<Cursor> cursors;
     public final boolean hasMore;
 
@@ -61,6 +62,7 @@ public final class SubscriptionDisplaySnapshot {
         this.freshnessRealtime = freshnessRealtime;
         this.contextKey = contextKey;
         this.batchSize = Math.max(1, batchSize);
+        capturedUnread = Set.copyOf(unread);
         chronologicalGalleries = List.copyOf(copyBatch ? SubscriptionGallerySnapshot.copy(batch) : batch);
         List<GalleryInfo> ordered = new ArrayList<>();
         for (GalleryInfo gallery : chronologicalGalleries) if (unread.contains(gallery.gid)) ordered.add(gallery);
@@ -133,6 +135,8 @@ public final class SubscriptionDisplaySnapshot {
         return result;
     }
 
+    Set<Long> capturedUnreadGids() { return capturedUnread; }
+
     public boolean isFresh() {
         long age = SystemClock.elapsedRealtime() - freshnessRealtime;
         return age >= 0L && age <= SubscriptionUpdateManager.CHECK_REUSE_WINDOW_MS;
@@ -157,7 +161,8 @@ public final class SubscriptionDisplaySnapshot {
         saved.put("freshness", freshnessTimeMillis);
         saved.put("context", contextKey); saved.put("batchSize", batchSize);
         saved.put("chronological", galleryTable.references(chronologicalGalleries));
-        saved.put("unread", new JSONArray(new ArrayList<>(unreadGids())));
+        // Older snapshots store only the displayed unread IDs in this field.
+        saved.put("unread", new JSONArray(new ArrayList<>(capturedUnread)));
         JSONArray sources = new JSONArray();
         for (Cursor cursor : cursors) {
             JSONObject source = new JSONObject();

@@ -97,7 +97,6 @@ final class BookmarkSubscriptionCoordinator {
         final ArrayList<GalleryInfo> buffer = new ArrayList<>();
         SearchUpdateSession session;
         CompletableFuture<SearchUpdateSession> history;
-        @Nullable SubscriptionUpdateManager.RecentCheckSource restoredPage;
         boolean responseReady;
         final Set<String> visitedUrls = new HashSet<>();
 
@@ -111,6 +110,7 @@ final class BookmarkSubscriptionCoordinator {
         boolean queued;
         boolean loading;
         boolean ratingBatchEmpty;
+        boolean pageFailed;
         @Nullable EhRequest request;
         int retries;
         @Nullable String retryUrl;
@@ -127,11 +127,9 @@ final class BookmarkSubscriptionCoordinator {
         void startHistory(String scope) {
             if (history != null) return;
             ListUrlBuilder requestBuilder = builder.clone();
-            history = CompletableFuture.supplyAsync(() -> {
-                SearchUpdateSession opened = new SearchUpdateSession(requestBuilder, plan, true, scope);
-                if (restoredPage != null) opened.observe(restoredPage.asPageResult(), !restoredPage.exhausted);
-                return opened;
-            }, EhApplication.getSearchHistoryExecutor());
+            history = CompletableFuture.supplyAsync(
+                    () -> new SearchUpdateSession(requestBuilder, plan, true, scope),
+                    EhApplication.getSearchHistoryExecutor());
         }
 
         boolean hasVisibleItem() {
@@ -515,7 +513,6 @@ final class BookmarkSubscriptionCoordinator {
             source.pageIndex = page.pageIndex; source.nextHref = page.nextHref;
             source.boundaryPosted = page.boundaryPosted; source.boundaryGid = page.boundaryGid;
             source.hasBoundary = page.hasBoundary; source.exhausted = page.exhausted;
-            source.restoredPage = page;
             source.buffer.addAll(SubscriptionGallerySnapshot.copy(page.galleryInfoList));
             source.bufferIndex = cursor.position();
             recordSourceGalleries(source, source.buffer);
@@ -531,7 +528,13 @@ final class BookmarkSubscriptionCoordinator {
         mRefresh = false;
         mLoading = true;
         mFirstFailure = null;
-        for (Source source : mSources) source.ratingBatchEmpty = false;
+        for (Source source : mSources) {
+            source.ratingBatchEmpty = false;
+            if (source.pageFailed) {
+                source.pageFailed = false;
+                source.retries = 0;
+            }
+        }
         if (mBulk) {
             // One bounded lookahead per source; buffers are merged only when their order is safe.
             int available = MAX_CONCURRENT_REQUESTS - mActiveRequests - mRequestQueue.size();
@@ -560,8 +563,6 @@ final class BookmarkSubscriptionCoordinator {
                 EhRequest request = source.request;
                 source.request = null;
                 request.cancel();
-                // Retry this exact URL rather than advancing its numeric page index twice.
-                source.retries = Math.max(1, source.retries);
             }
             source.loading = false;
             source.queued = false;
@@ -651,7 +652,7 @@ final class BookmarkSubscriptionCoordinator {
     }
 
     private void enqueue(Source source, boolean initial) {
-        if (source.exhausted || source.queued || source.loading) {
+        if (source.exhausted || source.queued || source.loading || source.pageFailed) {
             return;
         }
         source.queued = true;
@@ -677,9 +678,11 @@ final class BookmarkSubscriptionCoordinator {
             Source source = pending.source();
             source.queued = false;
             source.loading = true;
+            mActiveRequests++;
 
+            boolean retrying = source.retryUrl != null;
             String url;
-            if (source.retries > 0 && source.retryUrl != null) {
+            if (retrying) {
                 url = source.retryUrl;
             } else if (pending.initial()) {
                 source.pageIndex = 0;
@@ -700,7 +703,7 @@ final class BookmarkSubscriptionCoordinator {
             }
 
             url = SearchRating.withoutServerFilter(url);
-            if (source.retries == 0 && (source.pageIndex >= 1000 || !source.visitedUrls.add(url))) {
+            if (!retrying && (source.pageIndex >= 1000 || !source.visitedUrls.add(url))) {
                 onPageFailure(mGeneration, source.id, pending.initial(),
                         new IllegalStateException("Subscription pagination made no progress"));
                 continue;
@@ -737,7 +740,6 @@ final class BookmarkSubscriptionCoordinator {
             }
             source.startHistory(mCacheContext);
             source.request = request;
-            mActiveRequests++;
             mClient.execute(request);
         }
     }
@@ -914,7 +916,8 @@ final class BookmarkSubscriptionCoordinator {
             return;
         }
         finishRequest(source, initial);
-        source.exhausted = true;
+        source.pageFailed = !initial && source.retryUrl != null;
+        source.exhausted = !source.pageFailed;
         if (mFirstFailure == null) {
             mFirstFailure = error;
         }
@@ -960,8 +963,8 @@ final class BookmarkSubscriptionCoordinator {
                     finishBatch();
                     return;
                 }
-                if (blockingSource.ratingBatchEmpty) {
-                    // The engine already tried the one extra page for this request.
+                if (blockingSource.pageFailed || blockingSource.ratingBatchEmpty) {
+                    // Keep the source's ordering boundary until the next load can fetch this page.
                     finishBatch();
                     return;
                 }
@@ -1160,7 +1163,7 @@ final class BookmarkSubscriptionCoordinator {
             }
         }
         boolean hasMore = hasMore();
-        if (mPendingBatch.isEmpty() && mFirstFailure != null && !hasMore) {
+        if (mPendingBatch.isEmpty() && mFirstFailure != null && (!mRefresh || !hasMore)) {
             Exception error = mFirstFailure;
             mLoading = false;
             mListener.onBookmarkSubscriptionFailure(mTaskId, error);
@@ -1170,7 +1173,7 @@ final class BookmarkSubscriptionCoordinator {
         List<Runnable> browsingSaves = new ArrayList<>();
         for (Source source : mSources) {
             if (source.responseReady) {
-                browsingSaves.add(source.session.captureBrowsingCommit());
+                browsingSaves.add(source.session.captureBrowsingCommit(mRestoredSnapshot != null));
                 source.responseReady = false;
             }
         }

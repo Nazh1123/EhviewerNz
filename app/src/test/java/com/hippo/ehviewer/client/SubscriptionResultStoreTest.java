@@ -27,6 +27,9 @@ import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
 
@@ -79,6 +82,32 @@ public class SubscriptionResultStoreTest {
         page.rawTailPosted = gallery.posted; page.rawTailGid = gid;
         page.nextHref = "https://e-hentai.org/?next=" + gid;
         return SubscriptionUpdateManager.RecentCheckSource.fromDisplay(builder, plan, page, 0);
+    }
+
+    @Test public void coldStoreQueuesReadsAndWritesWithoutBlockingTheCaller() throws Exception {
+        var prior = new SubscriptionResultStore(directory);
+        prior.record(context, display, List.of(source(true, 200)));
+        finishWrites();
+
+        var release = new CountDownLatch(1);
+        SubscriptionResultStore.IO.submit(() -> {
+            release.await();
+            return null;
+        });
+        try {
+            var store = new SubscriptionResultStore(directory);
+            assertFalse(store.getAsync().isDone());
+            var recorded = CompletableFuture.runAsync(
+                    () -> store.record(context, display, List.of(source(false, 199))));
+            recorded.get(5, TimeUnit.SECONDS);
+            var pending = store.getAsync();
+            assertFalse(pending.isDone());
+            release.countDown();
+            assertEquals(2, pending.get(5, TimeUnit.SECONDS).sources.size());
+            assertEquals(2, new SubscriptionResultStore(directory).get().sources.size());
+        } finally {
+            release.countDown();
+        }
     }
 
     @Test public void bothSourcesRestoreFullMetadataFirstPageCursorAndOriginalTime() throws Exception {
