@@ -430,7 +430,7 @@ class ResumablePipelineTest {
                 assertTrue(engine.translatePrepared(source, prepared, false) is PageResult.Failed)
                 assertEquals(3, calls)
                 assertTrue(engine.translatePrepared(source, prepared, true) is PageResult.Failed)
-                // The learned single-region limit skips a second doomed page-sized attempt.
+                // An exact context rejection skips a second doomed page-sized attempt.
                 assertEquals(5, calls)
             }
         }

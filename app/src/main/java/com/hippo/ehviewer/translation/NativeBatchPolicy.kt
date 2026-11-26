@@ -5,20 +5,22 @@ internal class NativeBatchPolicy {
     private var regionLimit = MAX_REGIONS
     private var successes = 0
 
-    fun batchSize(tokenCounts: List<Int>, offset: Int): Int {
-        var tokens = 0L
-        var count = 0
-        while (offset + count < tokenCounts.size && count < regionLimit) {
-            // Reserve space for numbering and separators; begin() still checks the exact context.
-            val next = tokenCounts[offset + count].toLong() + 8
-            if (count > 0 && tokens + next > SOURCE_TOKENS) break
+    fun batchSize(remaining: Int, tokenCount: (Int) -> Int): Int {
+        val limit = minOf(remaining, regionLimit)
+        if (limit <= 1) return limit
+        // Reserve space for numbering and separators; begin() still checks the exact context.
+        var tokens = tokenCount(0).toLong() + 8
+        var count = 1
+        while (count < limit) {
+            val next = tokenCount(count).toLong() + 8
+            if (tokens + next > SOURCE_TOKENS) break
             tokens += next
             count++
         }
         return count
     }
 
-    fun failed(size: Int) {
+    fun protocolFailed(size: Int) {
         successes = 0
         if (size <= 1) return
         regionLimit = minOf(regionLimit, (size / 2).coerceAtLeast(1))

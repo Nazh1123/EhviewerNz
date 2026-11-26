@@ -2,6 +2,7 @@ package com.hippo.ehviewer.translation
 
 import android.app.Application
 import com.hippo.ehviewer.translation.engine.NativeSampling
+import com.hippo.ehviewer.translation.engine.Usage
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -14,27 +15,46 @@ import org.robolectric.annotation.Config
 class NativeAdaptiveBatchTest {
     @Test fun tokenLimitNeverDropsAnOversizedRegion() {
         val policy = NativeBatchPolicy()
-        assertEquals(2, policy.batchSize(listOf(180, 180, 180), 0))
-        assertEquals(1, policy.batchSize(listOf(10000, 1), 0))
-        assertEquals(1, policy.batchSize(listOf(10000, 1), 1))
-        assertEquals(8, policy.batchSize(List(30) { 1 }, 0))
+        assertEquals(2, policy.batchSize(3) { 180 })
+        assertEquals(1, policy.batchSize(2) { if (it == 0) 10000 else 1 })
+        assertEquals(1, policy.batchSize(1) { error("No need to count a single remaining region") })
+        assertEquals(8, policy.batchSize(30) { 1 })
     }
 
     @Test fun repeatedFailuresShrinkButPrimarySuccessesEventuallyProbeLargerBatches() {
         val policy = NativeBatchPolicy()
-        val tokens = List(20) { 1 }
         for (size in listOf(8, 4, 2)) {
-            assertEquals(size, policy.batchSize(tokens, 0))
-            policy.failed(size)
+            assertEquals(size, policy.batchSize(20) { 1 })
+            policy.protocolFailed(size)
         }
         repeat(7) { policy.succeeded(1) }
-        assertEquals(1, policy.batchSize(tokens, 0))
+        assertEquals(1, policy.batchSize(20) { error("No need to count when limited to one region") })
         policy.succeeded(1)
-        assertEquals(2, policy.batchSize(tokens, 0))
+        assertEquals(2, policy.batchSize(20) { 1 })
         repeat(3) { policy.succeeded(2) }
-        assertEquals(3, policy.batchSize(tokens, 0))
-        policy.failed(2)
-        assertEquals(1, policy.batchSize(tokens, 0))
+        assertEquals(3, policy.batchSize(20) { 1 })
+        policy.protocolFailed(2)
+        assertEquals(1, policy.batchSize(20) { 1 })
+    }
+
+    @Test fun contextAndOutputLimitsDoNotShrinkTheNextPage() = runBlocking<Unit> {
+        for (contextLimit in listOf(true, false)) {
+            val sizes = mutableListOf<Int>()
+            NativeTranslator(TranslationOptions()) { messages ->
+                val count = Regex("<\\|\\d+\\|>").findAll(messages.getJSONObject(1).getString("content")).count()
+                sizes.add(count)
+                if (sizes.size == 1) {
+                    if (contextLimit) null
+                    else throw NativeGenerationStopped("unfinished", Usage(30, 192), true)
+                } else {
+                    (1..count).joinToString("\n") { "<|$it|>译文" } to null
+                }
+            }.use { translator ->
+                assertTrue(translator.translateDetailed(listOf("a", "b")).missingIndices.isEmpty())
+                assertTrue(translator.translateDetailed(listOf("c", "d")).missingIndices.isEmpty())
+            }
+            assertEquals(listOf(2, 1, 1, 2), sizes)
+        }
     }
 
     @Test fun largeRequestsCheckpointChunksWithOriginalOffsetsAndRepeatedSources() = runBlocking<Unit> {

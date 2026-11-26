@@ -42,6 +42,7 @@ class NativeTranslator private constructor(
     private val lock = Mutex()
     private var userOnlyTemplate = false
     private val batchPolicy = NativeBatchPolicy()
+    private var contextRejectedBatch: List<String>? = null
     private val numberedInstruction by lazy { numberedInstruction(options) }
     private val userOnlyInstruction by lazy { numberedInstruction + "\n\n" }
     /** Explicit fixture diagnostics only; production never installs this observer. */
@@ -59,6 +60,7 @@ class NativeTranslator private constructor(
     @Synchronized internal fun unloadModel() {
         native?.close()
         native = null
+        contextRejectedBatch = null
     }
 
     override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult =
@@ -76,17 +78,24 @@ class NativeTranslator private constructor(
             val indices = queries.indices.filter { queries[it].isNotBlank() && it !in preserved }
             if (indices.isEmpty()) return@withLock LlmTranslator.TranslateResult(queries)
             val sources = indices.map { queries[it] }
-            val tokenCounts = sources.map { source ->
-                currentCoroutineContext().ensureActive()
-                checkRelevant()
-                // JVM adapter fixtures have no native tokenizer. Production measures the selected GGUF.
-                if (inferenceOverride != null) 1 else model().countTokens(source)
-            }
+            val tokenCounts = IntArray(sources.size) { -1 }
+            val coroutine = currentCoroutineContext()
             var result: LlmTranslator.TranslateResult? = null
             var start = 0
             while (start < sources.size) {
-                val end = start + batchPolicy.batchSize(tokenCounts, start)
                 val chunkStart = start
+                val end = start + batchPolicy.batchSize(sources.size - start) { offset ->
+                    coroutine.ensureActive()
+                    checkRelevant()
+                    val index = chunkStart + offset
+                    val cached = tokenCounts[index]
+                    if (cached >= 0) cached else {
+                        // JVM adapter fixtures have no native tokenizer.
+                        val count = if (inferenceOverride != null) 1 else model().countTokens(sources[index])
+                        tokenCounts[index] = count
+                        count
+                    }
+                }
                 val chunk = LlmBatching.translateIndexed(sources.subList(start, end)) { batch, offset ->
                     currentCoroutineContext().ensureActive()
                     checkRelevant()
@@ -109,16 +118,16 @@ class NativeTranslator private constructor(
 
     private suspend fun translateNumbered(queries: List<String>, learn: Boolean = true,
                                          onCompleted: suspend (Map<Int, String>) -> Unit): LlmTranslator.TranslateResult? {
+        if (queries == contextRejectedBatch) return null
         var interrupted = false
         var budgetExceeded = false
         val response = try {
             inferTranslation(queries) ?: run {
-                if (learn) batchPolicy.failed(queries.size)
+                // The same prompt cannot fit on retry in this model session. Other pages
+                // still get their ordinary batch size.
+                if (queries.size > 1) contextRejectedBatch = queries.toList()
                 return null
             }
-        } catch (error: TranslationOutputLimitException) {
-            if (learn) batchPolicy.failed(queries.size)
-            throw error
         } catch (error: NativeGenerationStopped) {
             interrupted = true
             budgetExceeded = error.budgetExceeded
@@ -138,7 +147,7 @@ class NativeTranslator private constructor(
         else NativeTranslationResponse.parse(queries, raw, usage, truncated = interrupted)
         if (learn) {
             if (parsed.missingIndices.isEmpty()) batchPolicy.succeeded(queries.size)
-            else batchPolicy.failed(queries.size)
+            else if (!budgetExceeded) batchPolicy.protocolFailed(queries.size)
         }
         // If a token budget produced no complete segments, retain the existing
         // bounded split policy. Otherwise salvage completed regions first.
