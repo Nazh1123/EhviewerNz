@@ -46,13 +46,22 @@ class NativeTranslator private constructor(
     private val numberedInstruction by lazy { numberedInstruction(options) }
     private val userOnlyInstruction by lazy { numberedInstruction + "\n\n" }
     /** Explicit fixture diagnostics only; production never installs this observer. */
-    internal var inferenceObserver: ((JSONArray, String, Usage, Int, Long, String?) -> Unit)? = null
+    internal var inferenceObserver: ((JSONArray, String, Usage, Int, InferenceTiming, String?) -> Unit)? = null
+    private var pendingModelLoadMs: Long? = null
+
+    internal data class InferenceTiming(val modelLoadMs: Long?, val promptSetupMs: Long,
+                                        val firstTextMs: Long?, val remainingGenerationMs: Long?,
+                                        val inferenceMs: Long)
 
     @Synchronized private fun model(): NativeLlm {
         check(!closed) { "Native translator is closed" }
         return native ?: run {
+            val loadStarted = if (inferenceObserver != null) System.nanoTime() else null
             val cache = prefixCache ?: (prefixCacheProvider?.invoke() ?: NativePrefixCache()).also { prefixCache = it }
-            checkNotNull(loadModel)(cache).also { native = it }
+            checkNotNull(loadModel)(cache).also {
+                native = it
+                pendingModelLoadMs = loadStarted?.let { start -> elapsedMs(start, System.nanoTime()) }
+            }
         }
     }
 
@@ -60,6 +69,7 @@ class NativeTranslator private constructor(
     @Synchronized internal fun unloadModel() {
         native?.close()
         native = null
+        pendingModelLoadMs = null
         contextRejectedBatch = null
     }
 
@@ -229,45 +239,63 @@ class NativeTranslator private constructor(
         val native = model()
         currentCoroutineContext().ensureActive()
         checkRelevant()
+        val observer = inferenceObserver
+        val promptStarted = if (observer != null) System.nanoTime() else 0L
         val promptTokens = native.begin(messages, maxOutputTokens = NativeTranslationResponse.outputBudget(queries),
             lastUserPrefix = lastUserPrefix, fixedUserSuffix = fixedUserSuffix)
         if (promptTokens < 0) return null
+        val generationStarted = if (observer != null) System.nanoTime() else 0L
+        val modelLoadMs = pendingModelLoadMs
+        pendingModelLoadMs = null
+        var firstTextAt: Long? = null
         val output = ByteArrayOutputStream()
         var checkedTokens = 0
-        val began = System.nanoTime()
+        var checkedBytes = 0
+        var checkedText = ""
+        fun checkedOutput(): String {
+            if (checkedBytes == output.size()) return checkedText
+            checkedText = output.toString(Charsets.UTF_8.name())
+            checkedBytes = output.size()
+            if (NativeTranslationResponse.generationFailure(checkedText, queries, validateRegionMarkers))
+                throw NativeGenerationStopped(checkedText, Usage(promptTokens, native.completionTokens()), budgetExceeded = false)
+            return checkedText
+        }
         var failure: String? = null
-        try {
+        val text = try {
             while (true) {
                 currentCoroutineContext().ensureActive()
                 checkRelevant()
                 val piece = native.nextChunk() ?: break
+                if (observer != null && firstTextAt == null && piece.isNotEmpty()) firstTextAt = System.nanoTime()
                 output.write(piece)
                 // Chunk size/time are bounded in native code. Keep the guard measured in tokens,
                 // not chunks, so batching does not delay protocol/repetition detection by 4x.
                 val generated = native.chunkCompletionTokens()
                 if (generated - checkedTokens >= 16) {
                     checkedTokens = generated
-                    val text = output.toString(Charsets.UTF_8.name())
-                    if (NativeTranslationResponse.generationFailure(text, queries, validateRegionMarkers)) throw NativeGenerationStopped(text,
-                        Usage(promptTokens, native.completionTokens()), budgetExceeded = false)
+                    checkedOutput()
                 }
             }
-            val text = output.toString(Charsets.UTF_8.name())
-            if (NativeTranslationResponse.generationFailure(text, queries, validateRegionMarkers)) throw NativeGenerationStopped(text,
-                Usage(promptTokens, native.completionTokens()), budgetExceeded = false)
+            checkedOutput()
         } catch (error: TranslationOutputLimitException) {
             failure = error.javaClass.simpleName
-            throw NativeGenerationStopped(output.toString(Charsets.UTF_8.name()),
+            throw NativeGenerationStopped(if (checkedBytes == output.size()) checkedText else output.toString(Charsets.UTF_8.name()),
                 Usage(promptTokens, native.completionTokens()), budgetExceeded = true)
         } catch (error: NativeGenerationStopped) {
             failure = error.javaClass.simpleName
             throw error
         } finally {
-            inferenceObserver?.invoke(messages, output.toString(Charsets.UTF_8.name()),
-                Usage(promptTokens, native.completionTokens()), native.cachedPromptTokens(),
-                (System.nanoTime() - began) / 1_000_000, failure)
+            if (observer != null) {
+                val ended = System.nanoTime()
+                val timing = InferenceTiming(modelLoadMs, elapsedMs(promptStarted, generationStarted),
+                    firstTextAt?.let { elapsedMs(promptStarted, it) },
+                    firstTextAt?.let { elapsedMs(it, ended) }, elapsedMs(generationStarted, ended))
+                val observedText = if (checkedBytes == output.size()) checkedText else output.toString(Charsets.UTF_8.name())
+                observer(messages, observedText, Usage(promptTokens, native.completionTokens()),
+                    native.cachedPromptTokens(), timing, failure)
+            }
         }
-        return output.toString(Charsets.UTF_8.name()) to Usage(promptTokens, native.completionTokens())
+        return text to Usage(promptTokens, native.completionTokens())
     }
 
     @Synchronized override fun close() {
@@ -278,6 +306,8 @@ class NativeTranslator private constructor(
     }
 
     companion object {
+        private fun elapsedMs(from: Long, to: Long): Long = (to - from) / 1_000_000
+
         internal fun sampling(modelId: String): NativeSampling = when (modelId) {
             // HY-MT2 1.8B recommends the same top-k/top-p/temperature/repetition profile.
             "4383ac0c3c8e476de98ff979c2a3f069f8c4fb385e7860cf2d28da896cc477c7",

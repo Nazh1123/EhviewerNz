@@ -82,10 +82,13 @@ class NativeComplexPageDeviceTest {
             val models = TranslationModels(context).verified()
             GallerySourceTranslator({ resolved() }) { current ->
                 NativeTranslator(context, current).apply {
-                    inferenceObserver = { messages, raw, usage, cached, ms, failure ->
+                    inferenceObserver = { messages, raw, usage, cached, timing, failure ->
                         activePage!!.getJSONArray("requests").put(JSONObject().put("messages", messages).put("raw", raw)
                             .put("prompt", usage.promptTokens).put("completion", usage.completionTokens)
-                            .put("cached", cached).put("ms", ms).put("failure", failure))
+                            .put("cached", cached).put("ms", timing.inferenceMs)
+                            .put("modelLoadMs", timing.modelLoadMs).put("promptSetupMs", timing.promptSetupMs)
+                            .put("firstTextMs", timing.firstTextMs).put("remainingGenerationMs", timing.remainingGenerationMs)
+                            .put("failure", failure))
                         save()
                     }
                 }
