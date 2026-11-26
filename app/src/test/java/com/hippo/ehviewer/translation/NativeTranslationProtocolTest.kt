@@ -54,6 +54,29 @@ class NativeTranslationProtocolTest {
         }
     }
 
+    @Test fun userOnlyTemplateReceivesTheSameRulesAndNumberedTextAcrossBatches() = runBlocking<Unit> {
+        val options = TranslationOptions(target = "zh-TW")
+        val inputs = listOf("こんにちは", "ありがとう")
+        val instruction = NativeTranslator.buildNumberedMessages(options, emptyList())
+            .getJSONObject(0).getString("content")
+        var systemAttempts = 0
+        val received = mutableListOf<String>()
+        NativeTranslator(options) { messages ->
+            if (messages.length() == 2) {
+                systemAttempts++
+                throw UnsupportedOperationException("No system role")
+            }
+            val user = messages.getJSONObject(0)
+            assertEquals("user", user.getString("role"))
+            received.add(user.getString("content"))
+            "<|1|>譯文" to null
+        }.use { translator ->
+            for (input in inputs) assertEquals(listOf("譯文"), translator.translate(listOf(input)))
+        }
+        assertEquals(1, systemAttempts)
+        assertEquals(inputs.map { "$instruction\n\n<|1|>$it" }, received)
+    }
+
     @Test fun repetitionGuardStopsTheActualHeartLoopButPreservesShortOrSourceRepetitions() {
         val source = listOf("こんなの置いてあった、食ってみたくなりません⁉", "うどんも選べるの７")
         assertTrue(NativeTranslationResponse.generationFailure("<|1|>还放着这种东西呢～～" + "♥".repeat(24), source))

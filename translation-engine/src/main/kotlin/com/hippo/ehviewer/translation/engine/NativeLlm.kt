@@ -26,12 +26,13 @@ class NativeLlm(path: String, prefixCache: NativePrefixCache? = null,
 
 
     @Synchronized fun begin(messages: JSONArray, maxOutputTokens: Int = 1024,
-                            lastUserPrefix: String? = null, cacheEnabled: Boolean = true): Int {
+                            lastUserPrefix: String? = null, cacheEnabled: Boolean = true,
+                            fixedUserSuffix: String? = null): Int {
         check(handle != 0L) { "Native translator is closed" }
         val roles = Array(messages.length()) { messages.getJSONObject(it).getString("role").toByteArray(Charsets.UTF_8) }
         val contents = Array(messages.length()) { messages.getJSONObject(it).getString("content").toByteArray(Charsets.UTF_8) }
         val tokens = beginMessages(handle, roles, contents, maxOutputTokens,
-            lastUserPrefix?.toByteArray(Charsets.UTF_8), cacheEnabled)
+            lastUserPrefix?.toByteArray(Charsets.UTF_8), cacheEnabled, fixedUserSuffix?.toByteArray(Charsets.UTF_8))
         if (tokens == -2) throw UnsupportedOperationException("GGUF chat template does not support these message roles")
         return tokens
     }
@@ -85,7 +86,8 @@ class NativeLlm(path: String, prefixCache: NativePrefixCache? = null,
     }
 
     private external fun beginMessages(handle: Long, roles: Array<ByteArray>, contents: Array<ByteArray>,
-                                      maxOutputTokens: Int, lastUserPrefix: ByteArray?, cacheEnabled: Boolean): Int
+                                      maxOutputTokens: Int, lastUserPrefix: ByteArray?, cacheEnabled: Boolean,
+                                      fixedUserSuffix: ByteArray?): Int
     private external fun completionTokens(handle: Long): Int
     private external fun cachedPromptTokens(handle: Long): Int
     private external fun systemInfo(handle: Long): String

@@ -42,6 +42,8 @@ class NativeTranslator private constructor(
     private val lock = Mutex()
     private var userOnlyTemplate = false
     private val batchPolicy = NativeBatchPolicy()
+    private val numberedInstruction by lazy { numberedInstruction(options) }
+    private val userOnlyInstruction by lazy { numberedInstruction + "\n\n" }
     /** Explicit fixture diagnostics only; production never installs this observer. */
     internal var inferenceObserver: ((JSONArray, String, Usage, Int, Long, String?) -> Unit)? = null
 
@@ -175,16 +177,18 @@ class NativeTranslator private constructor(
     }
 
     private suspend fun inferTranslation(queries: List<String>): Pair<String, Usage?>? {
-        val messages = buildNumberedMessages(options, queries)
+        val source = numberedSource(queries)
         if (!userOnlyTemplate) {
-            try { return infer(messages, queries = queries) }
+            try {
+                return infer(numberedMessages(numberedInstruction, source), queries = queries,
+                    fixedUserSuffix = FIRST_REGION_MARKER)
+            }
             catch (_: UnsupportedOperationException) { userOnlyTemplate = true }
         }
         // Preserve the complete system instruction for templates accepting only a user role.
-        val fixed = messages.getJSONObject(0).getString("content") + "\n\n"
         val user = JSONArray().put(JSONObject().put("role", "user")
-            .put("content", fixed + messages.getJSONObject(1).getString("content")))
-        return infer(user, fixed, queries)
+            .put("content", userOnlyInstruction + source))
+        return infer(user, userOnlyInstruction, queries, fixedUserSuffix = FIRST_REGION_MARKER)
     }
 
     /** Only the settings screen's single-sentence test uses this unnumbered instruction. */
@@ -208,7 +212,8 @@ class NativeTranslator private constructor(
     }
 
     private suspend fun infer(messages: JSONArray, lastUserPrefix: String? = null,
-                              queries: List<String>, validateRegionMarkers: Boolean = true): Pair<String, Usage?>? {
+                              queries: List<String>, validateRegionMarkers: Boolean = true,
+                              fixedUserSuffix: String? = null): Pair<String, Usage?>? {
         currentCoroutineContext().ensureActive()
         checkRelevant()
         inferenceOverride?.let { return it(messages) }
@@ -216,7 +221,7 @@ class NativeTranslator private constructor(
         currentCoroutineContext().ensureActive()
         checkRelevant()
         val promptTokens = native.begin(messages, maxOutputTokens = NativeTranslationResponse.outputBudget(queries),
-            lastUserPrefix = lastUserPrefix)
+            lastUserPrefix = lastUserPrefix, fixedUserSuffix = fixedUserSuffix)
         if (promptTokens < 0) return null
         val output = ByteArrayOutputStream()
         var checkedTokens = 0
@@ -283,19 +288,30 @@ class NativeTranslator private constructor(
                 "Output only each original <|number|> followed by its translation; keep regions separate, no source, explanation or analysis.\n" +
                 "{target_script}Translate the following {from_lang} text into {to_lang}:"
 
-        /** Full manga translation rules, shared by every native model and region count. */
-        internal fun buildNumberedMessages(options: TranslationOptions, queries: List<String>): JSONArray {
+        internal val FIRST_REGION_MARKER = regionMarker(1)
+
+        private fun regionMarker(number: Int) = "<|$number|>"
+
+        private fun numberedInstruction(options: TranslationOptions): String {
             val fromClause = options.sourceLanguageName().trim().let { if (it.isEmpty()) "" else "$it " }
             // Consume the placeholder's space too when the source is automatic/unnamed.
-            val system = SYSTEM_PROMPT.replace("{from_lang} ", fromClause)
+            return SYSTEM_PROMPT.replace("{from_lang} ", fromClause)
                 .replace("{to_lang}", options.targetLanguageName())
                 .replace("{target_script}", options.engineConfig().translator.targetScriptInstruction()
                     .let { if (it.isEmpty()) "" else "$it\n" })
-            val source = queries.mapIndexed { i, text -> "<|${i + 1}|>$text" }.joinToString("\n")
-            return JSONArray()
-                .put(JSONObject().put("role", "system").put("content", system))
-                .put(JSONObject().put("role", "user").put("content", source))
         }
+
+        private fun numberedSource(queries: List<String>): String =
+            queries.mapIndexed { i, text -> regionMarker(i + 1) + text }.joinToString("\n")
+
+        private fun numberedMessages(instruction: String, source: String): JSONArray =
+            JSONArray()
+                .put(JSONObject().put("role", "system").put("content", instruction))
+                .put(JSONObject().put("role", "user").put("content", source))
+
+        /** Full manga translation rules, shared by every native model and region count. */
+        internal fun buildNumberedMessages(options: TranslationOptions, queries: List<String>): JSONArray =
+            numberedMessages(numberedInstruction(options), numberedSource(queries))
 
         /** Try the page first; input/output budget failures use the same bounded split policy. */
         internal suspend fun translateBatches(queries: List<String>,

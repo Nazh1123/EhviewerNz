@@ -189,7 +189,8 @@ class NativeTranslationPerformanceDeviceTest {
         fun request(model: NativeLlm, name: String, messages: JSONArray,
                     enabled: Boolean = true, fixed: String? = null): Pair<String, Int> {
             val began = SystemClock.elapsedRealtime()
-            val prompt = model.begin(messages, lastUserPrefix = fixed, cacheEnabled = enabled)
+            val suffix = if (fixed == null) NativeTranslator.FIRST_REGION_MARKER else null
+            val prompt = model.begin(messages, lastUserPrefix = fixed, cacheEnabled = enabled, fixedUserSuffix = suffix)
             assertTrue(prompt > 0)
             val cached = model.cachedPromptTokens()
             val output = ByteArrayOutputStream()
@@ -231,7 +232,7 @@ class NativeTranslationPerformanceDeviceTest {
                 assertEquals("Only fixed instructions enter the snapshot", fixedBytes, cache.sizeBytes())
 
                 // Abandon a request after decoding its new source, without completing its output.
-                assertTrue(model.begin(otherPage) > 0)
+                assertTrue(model.begin(otherPage, fixedUserSuffix = NativeTranslator.FIRST_REGION_MARKER) > 0)
                 assertTrue(model.cachedPromptTokens() > 0)
                 assertNotNull(model.next())
                 assertEquals(expected, request(model, "afterInterruptedSource", original).first)
@@ -297,7 +298,8 @@ class NativeTranslationPerformanceDeviceTest {
         assertEquals(bytes, cache.sizeBytes())
         val modelId = options.nativeModelId
         NativeModelStore(context).load(modelId, cache).use { model ->
-            assertTrue(model.begin(NativeTranslator.buildNumberedMessages(options, source)) > 0)
+            assertTrue(model.begin(NativeTranslator.buildNumberedMessages(options, source),
+                fixedUserSuffix = NativeTranslator.FIRST_REGION_MARKER) > 0)
             assertTrue(model.cachedPromptTokens() > 0)
             TranslationRuntime.trimMemory()
             assertEquals(0L, cache.sizeBytes())
@@ -305,7 +307,8 @@ class NativeTranslationPerformanceDeviceTest {
             while (model.next() != null) { }
         }
         NativeModelStore(context).load(modelId, cache).use { model ->
-            assertTrue(model.begin(NativeTranslator.buildNumberedMessages(options, source)) > 0)
+            assertTrue(model.begin(NativeTranslator.buildNumberedMessages(options, source),
+                fixedUserSuffix = NativeTranslator.FIRST_REGION_MARKER) > 0)
             assertEquals("Trimmed snapshots must not survive model reload", 0, model.cachedPromptTokens())
         }
         File(context.getExternalFilesDir(null), "translation-smoke/native-prefix-cache-turns.txt")

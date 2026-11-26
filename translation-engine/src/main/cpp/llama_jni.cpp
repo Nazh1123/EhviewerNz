@@ -61,6 +61,7 @@ struct Session {
     CacheHandle cache;
     std::string model_key;
     FixedPrompt fixed_prompt;
+    FixedPrompt extended_fixed_prompt;
     std::vector<llama_token> prefix, live_prefix;
     bool cache_enabled = true;
     int cached_tokens = 0;
@@ -158,8 +159,8 @@ std::vector<llama_token> chatTokens(Session &s, const std::vector<ehnz::ChatMess
     return tokenize(vocab, std::vector<char>(text.begin(), text.end()), text.size());
 }
 
-const std::vector<llama_token> &fixedPromptTokens(Session &s, std::vector<ehnz::ChatMessage> messages) {
-    auto &cached = s.fixed_prompt;
+const std::vector<llama_token> &fixedPromptTokens(Session &s, FixedPrompt &cached,
+                                                 const std::vector<ehnz::ChatMessage> &messages) {
     const bool same = std::equal(messages.begin(), messages.end(), cached.messages.begin(), cached.messages.end(),
         [](const auto &left, const auto &right) {
             return left.role == right.role && left.content == right.content;
@@ -172,9 +173,15 @@ const std::vector<llama_token> &fixedPromptTokens(Session &s, std::vector<ehnz::
             // The same template can reject a fixed probe while accepting full requests.
             // Remember that rejection for this session as an empty token sequence.
         }
-        cached = {std::move(messages), std::move(tokens)};
+        cached = {messages, std::move(tokens)};
     }
     return cached.tokens;
+}
+
+size_t matchingFixedPrefix(const std::vector<llama_token> &prompt, const std::vector<llama_token> &fixed) {
+    size_t common = 0;
+    while (common < fixed.size() && common + 1 < prompt.size() && fixed[common] == prompt[common]) ++common;
+    return common <= MAX_PREFIX_TOKENS ? common : 0;
 }
 
 void configureSampler(Session &s, int profile) {
@@ -374,7 +381,7 @@ Java_com_hippo_ehviewer_translation_engine_NativePrefixCache_createModel(JNIEnv 
 extern "C" JNIEXPORT jint JNICALL
 Java_com_hippo_ehviewer_translation_engine_NativeLlm_beginMessages(JNIEnv *env, jobject, jlong handle,
         jobjectArray roleBytes, jobjectArray contentBytes, jint maxOutput,
-        jbyteArray lastUserPrefix, jboolean cacheEnabled) {
+        jbyteArray lastUserPrefix, jboolean cacheEnabled, jbyteArray fixedUserSuffix) {
     try {
         auto &s = session(handle);
         s.finished = true;
@@ -405,16 +412,21 @@ Java_com_hippo_ehviewer_translation_engine_NativeLlm_beginMessages(JNIEnv *env, 
         s.prefix.clear();
         if (s.cache_enabled && messages.back().role == "user") {
             const std::string fixed = lastUserPrefix ? utf8(env, lastUserPrefix) : "";
-            if (messages.back().content.compare(0, fixed.size(), fixed) != 0)
+            const std::string extended = fixedUserSuffix ? fixed + utf8(env, fixedUserSuffix) : fixed;
+            if (messages.back().content.compare(0, extended.size(), extended) != 0)
                 throw std::runtime_error("Invalid fixed user prefix");
-            std::string(fixed).swap(messages.back().content);
             try {
-                const auto &fixed_tokens = fixedPromptTokens(s, std::move(messages));
                 size_t common = 0;
-                while (common < fixed_tokens.size() && common + 1 < prompt.size() &&
-                       fixed_tokens[common] == prompt[common]) ++common;
-                if (common <= MAX_PREFIX_TOKENS)
-                    s.prefix.assign(prompt.begin(), prompt.begin() + common);
+                if (extended != fixed) {
+                    messages.back().content = extended;
+                    common = matchingFixedPrefix(prompt, fixedPromptTokens(s, s.extended_fixed_prompt, messages));
+                }
+                // Some custom templates accept a full page but reject the extended probe.
+                if (common == 0) {
+                    messages.back().content = fixed;
+                    common = matchingFixedPrefix(prompt, fixedPromptTokens(s, s.fixed_prompt, messages));
+                }
+                s.prefix.assign(prompt.begin(), prompt.begin() + common);
             } catch (const std::exception &) {
                 // A failed probe must not prevent inference on the full prompt.
             }
