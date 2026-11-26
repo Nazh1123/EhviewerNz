@@ -32,8 +32,18 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
     init { require(options.validApiUrl()) }
 
     override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult =
-        if (queries.all { it.isBlank() }) LlmTranslator.TranslateResult(queries)
-        else LlmBatching.translate(queries, delegate::translateDetailed)
+        translateDetailed(queries) { }
+
+    override suspend fun translateDetailed(queries: List<String>, onCompleted: suspend (Map<Int, String>) -> Unit):
+        LlmTranslator.TranslateResult = LlmBatching.translateIndexed(queries) { batch, offset ->
+        val result = delegate.translateDetailed(batch)
+        if (result.error == null && result.missingIndices.isEmpty()) {
+            val completed = batch.indices.filter { batch[it].isNotBlank() }
+                .associate { index -> (offset + index) to result.translations[index] }
+            if (completed.isNotEmpty()) onCompleted(completed)
+        }
+        result
+    }
 
     /** Settings diagnostics use the same single-sentence protocol as native GGUF. */
     internal suspend fun translateSample(source: String): LlmTranslator.TranslateResult =

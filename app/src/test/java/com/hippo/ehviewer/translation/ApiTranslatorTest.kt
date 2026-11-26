@@ -260,8 +260,10 @@ class ApiTranslatorTest {
                     .put("usage", JSONObject().put("prompt_tokens", 50).put("completion_tokens", 10)).toString()))
             }
             ApiTranslator(options(server)).use { translator ->
-                val result = translator.translateDetailed(listOf("a", "b", "c", "d"))
+                val checkpoints = mutableListOf<Map<Int, String>>()
+                val result = translator.translateDetailed(listOf("a", "b", "c", "d")) { checkpoints.add(it) }
                 assertEquals(listOf("甲", "乙", "丙", "丁"), result.translations)
+                assertEquals(listOf(mapOf(0 to "甲", 1 to "乙"), mapOf(2 to "丙", 3 to "丁")), checkpoints)
                 assertNull(result.error)
                 assertEquals(Usage(200, 1020), result.usage)
             }
@@ -272,6 +274,36 @@ class ApiTranslatorTest {
                 messages.getJSONObject(messages.length() - 1).getString("content")
             }
             assertEquals(listOf("<|1|>a\n<|2|>b\n<|3|>c\n<|4|>d", "<|1|>a\n<|2|>b", "<|1|>c\n<|2|>d"), inputs)
+        }
+    }
+
+    @Test fun splitApiPageCanResumeFromTheCompletedHalfAfterNavigation() = runBlocking<Unit> {
+        MockWebServer().use { server ->
+            server.enqueue(sampleResponse("<|1|>truncated", "length"))
+            server.enqueue(sampleResponse("<|1|>甲"))
+            server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+            server.enqueue(sampleResponse("<|1|>乙"))
+            ApiTranslator(options(server)).use { translator ->
+                val oldPage = TranslationPageRequest(2, false)
+                val sources = listOf("a", "b")
+                val completed = mutableMapOf<Int, String>()
+                val worker = async(Dispatchers.IO) {
+                    try {
+                        oldPage.apiCall { translator.translateDetailed(sources) { completed.putAll(it) } }
+                        fail("Old page should have been interrupted")
+                    } catch (_: SupersededTranslationPage) { }
+                }
+                try {
+                    repeat(3) { assertNotNull(withContext(Dispatchers.IO) { server.takeRequest(3, TimeUnit.SECONDS) }) }
+                } finally { oldPage.supersede() }
+                withTimeout(3000) { worker.await() }
+                assertEquals(mapOf(0 to "甲"), completed)
+                val missing = sources.filterIndexed { index, _ -> index !in completed }
+                assertEquals(listOf("乙"), translator.translate(missing))
+                val body = server.takeRequest(1, TimeUnit.SECONDS)!!.body.readUtf8()
+                val messages = JSONObject(body).getJSONArray("messages")
+                assertEquals("<|1|>b", messages.getJSONObject(1).getString("content"))
+            }
         }
     }
 
