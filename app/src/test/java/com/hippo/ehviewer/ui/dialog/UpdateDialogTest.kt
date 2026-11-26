@@ -4,11 +4,16 @@ import android.app.Activity
 import android.app.Application
 import android.content.Intent
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.text.Spanned
+import android.text.style.ClickableSpan
 import androidx.appcompat.app.AlertDialog
 import com.alibaba.fastjson.JSON
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.updater.AppUpdateDownloadService
 import com.hippo.ehviewer.updater.AppUpdater
+import com.hippo.ehviewer.updater.ReleaseNotes
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -83,5 +88,28 @@ class UpdateDialogTest {
         assertTrue(dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled)
         assertTrue(dialog.getButton(AlertDialog.BUTTON_NEGATIVE).isEnabled)
         assertTrue(dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isEnabled)
+    }
+
+    @Test fun olderVersionsHaveTheirOwnMarkdownSectionsAndReleaseLinks() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        activity.setTheme(R.style.AppTheme)
+        val latest = JSON.parseObject("""{"name":"3.0","body":"```\nLatest change"}""")
+        val data = AppUpdater.createDialogData(latest, "3.0", "https://example.com/releases/3")
+        UpdateDialog(activity).showUpdateDialog(data, listOf(
+            ReleaseNotes("2.0", "[Details](#changes)", "https://example.com/releases/2"),
+            ReleaseNotes("1.5", "**Earlier** change", "https://example.com/releases/1.5")
+        ))
+        ShadowLooper.idleMainLooper()
+
+        val dialog = ShadowDialog.getLatestDialog() as AlertDialog
+        val body = dialog.findViewById<FrameLayout>(androidx.appcompat.R.id.custom)!!.getChildAt(0) as UpdateNotesView
+        val sections = body.getChildAt(0) as LinearLayout
+        val sectionText = (0 until sections.childCount).map { (sections.getChildAt(it) as TextView).text.toString() }
+        assertTrue(sectionText.first().contains("Latest change"))
+        assertEquals(listOf("2.0", "Details", "1.5", "Earlier change"), sectionText.drop(1))
+        val olderNotes = sections.getChildAt(2) as TextView
+        val markdown = olderNotes.text as Spanned
+        markdown.getSpans(0, markdown.length, ClickableSpan::class.java).single().onClick(olderNotes)
+        assertEquals("https://example.com/releases/2#changes", shadowOf(activity).nextStartedActivity.data.toString())
     }
 }

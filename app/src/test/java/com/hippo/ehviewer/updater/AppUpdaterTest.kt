@@ -1,6 +1,9 @@
 package com.hippo.ehviewer.updater
 
 import com.alibaba.fastjson.JSON
+import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -49,6 +52,47 @@ class AppUpdaterTest {
             val content = AppUpdater.createDialogData(release, "3.0", "https://example.com/releases/3")
                 .getJSONObject(AppUpdater.UPDATE_CONTENT)
             assertEquals("https://example.com/releases/3", content.getString(AppUpdater.CONTENT))
+        }
+    }
+
+    @Test fun historyContainsOnlyStableAppVersionsBetweenCurrentAndLatest() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""[
+                {"tag_name":"2.0.2.10"},
+                {"tag_name":"2.0.2.11"},
+                {"tag_name":"manga-models-v1","name":"Translation models"},
+                {"tag_name":"2.0.2.8.0"},
+                {"tag_name":"2.0.2.7"},
+                {"tag_name":"2.0.2.9-rc","prerelease":true},
+                {"tag_name":"2.0.2.9","draft":true},
+                {"tag_name":"2.0.2.9.1","body":"  - Nested\n\nDetails"},
+                {"tag_name":"2.0.2.9","html_url":"https://example.com/releases/9","body":"  "}
+            ]"""))
+
+            val notes = AppUpdater.loadPreviousReleaseNotes(
+                OkHttpClient(), server.url("/releases").toString(), "2.0.2.8", "2.0.2.10"
+            )
+
+            assertEquals(listOf("2.0.2.9.1", "2.0.2.9"), notes.map { it.version })
+            assertEquals("  - Nested\n\nDetails", notes.first().markdown)
+            assertEquals("<https://example.com/releases/9>", notes.last().markdown)
+        }
+    }
+
+    @Test fun historySortsAcrossPagesAndReservesOneOfTenSlotsForLatest() {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse()
+                .addHeader("Link", "<${server.url("/releases?page=2")}>; rel=\"next\"")
+                .setBody((1..11).joinToString(",", "[", "]") { """{"tag_name":"2.0.$it"}""" }))
+            server.enqueue(MockResponse().setBody("""[{"tag_name":"v2.0.12"}]"""))
+
+            val notes = AppUpdater.loadPreviousReleaseNotes(
+                OkHttpClient(), server.url("/releases").toString(), "2.0.1", "2.0.13"
+            )
+
+            assertEquals((12 downTo 4).map { "2.0.$it" }, notes.map { it.version })
+            assertEquals("/releases?per_page=100&page=1", server.takeRequest().path)
+            assertEquals("/releases?per_page=100&page=2", server.takeRequest().path)
         }
     }
 }

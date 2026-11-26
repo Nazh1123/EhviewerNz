@@ -12,6 +12,7 @@ import com.hippo.ehviewer.Analytics
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.updater.AppUpdateDownload
 import com.hippo.ehviewer.updater.AppUpdater
+import com.hippo.ehviewer.updater.ReleaseNotes
 
 class UpdateDialog(private val activity: Activity) {
     companion object {
@@ -39,7 +40,10 @@ class UpdateDialog(private val activity: Activity) {
         }
     }
 
-    fun showUpdateDialog(tempUpdateData: JSONObject) {
+    internal fun showUpdateDialog(
+        tempUpdateData: JSONObject,
+        previousReleases: List<ReleaseNotes> = emptyList()
+    ) {
         try {
             val mustUpdate = tempUpdateData.getBooleanValue(AppUpdater.MUST_UPDATE)
             val content = tempUpdateData.getJSONObject(AppUpdater.UPDATE_CONTENT)
@@ -57,7 +61,7 @@ class UpdateDialog(private val activity: Activity) {
                 val dialog = builder
                     .setIcon(R.mipmap.ic_launcher)
                     .setTitle(content.getString(AppUpdater.TITLE))
-                    .setView(UpdateNotesView(builder.context, notes, releaseUrl, ::openPage))
+                    .setView(UpdateNotesView(builder.context, notes, releaseUrl, ::openPage, previousReleases))
                     .setPositiveButton(R.string.update, null)
                     .setNeutralButton(R.string.update_dialog_sponsor, null)
                     .apply {

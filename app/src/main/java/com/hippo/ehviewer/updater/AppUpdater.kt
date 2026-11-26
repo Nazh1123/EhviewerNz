@@ -14,16 +14,21 @@ import com.hippo.ehviewer.ui.dialog.UpdateDialog
 import com.hippo.util.AppHelper.Companion.compareVersion
 import com.hippo.util.ExceptionUtils
 import com.hippo.util.IoThreadPoolExecutor
+import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.util.Date
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
 
+internal data class ReleaseNotes(val version: String, val markdown: String, val url: String)
+
 class AppUpdater private constructor() {
 
     companion object {
-        private const val GITHUB_LATEST_RELEASE_API =
-            "https://api.github.com/repos/Nazh1123/Ehviewer_CN_SXJ/releases/latest"
+        private const val GITHUB_RELEASES_API =
+            "https://api.github.com/repos/Nazh1123/Ehviewer_CN_SXJ/releases"
+        private const val MAX_RELEASE_NOTES = 10
 
         const val VERSION: String = "version"
         const val VERSION_CODE: String = "versionCode"
@@ -49,23 +54,12 @@ class AppUpdater private constructor() {
                 }
                 try {
                     val client = EhApplication.getOkHttpClient(EhApplication.getInstance())
-                    val request = Request.Builder()
-                        .url(GITHUB_LATEST_RELEASE_API)
-                        .header("Accept", "application/vnd.github+json")
-                        .header("User-Agent", "EhViewerNz/${BuildConfig.VERSION_NAME}")
-                        .build()
-                    val release = client.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) {
-                            throw IllegalStateException("GitHub returned HTTP ${response.code()}")
-                        }
-                        val body = response.body()?.string()
-                            ?: throw IllegalStateException("GitHub returned an empty response")
-                        JSON.parseObject(body)
+                    val release = client.newCall(releaseRequest("$GITHUB_RELEASES_API/latest")).execute().use {
+                        JSON.parseObject(it.readReleaseBody())
                     }
 
                     Settings.putUpdateTime(Date().time)
-                    val latestVersion = extractVersion(release.getString("tag_name"))
-                        ?: extractVersion(release.getString("name"))
+                    val latestVersion = releaseVersion(release)
                         ?: throw IllegalStateException("Release version is missing")
                     val currentVersion = extractVersion(BuildConfig.VERSION_NAME)
                         ?: BuildConfig.VERSION_NAME
@@ -83,10 +77,15 @@ class AppUpdater private constructor() {
                         return@execute
                     }
 
-                    val releaseUrl = release.getString("html_url")
-                        ?: UpdateDialog.GITHUB_RELEASE_URL
+                    val previousReleases = try {
+                        loadPreviousReleaseNotes(client, GITHUB_RELEASES_API, currentVersion, latestVersion)
+                    } catch (e: Exception) {
+                        Analytics.recordException(e)
+                        emptyList()
+                    }
                     UpdateDialog(activity).showUpdateDialog(
-                        createDialogData(release, latestVersion, releaseUrl)
+                        createDialogData(release, latestVersion, releaseUrl(release)),
+                        previousReleases
                     )
                 } catch (t: Throwable) {
                     ExceptionUtils.throwIfFatal(t)
@@ -100,8 +99,58 @@ class AppUpdater private constructor() {
             }
         }
 
+        private fun releaseRequest(url: String): Request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", "EhViewerNz/${BuildConfig.VERSION_NAME}")
+            .build()
+
+        private fun Response.readReleaseBody(): String {
+            check(isSuccessful) { "GitHub returned HTTP ${code()}" }
+            return body()?.string() ?: error("GitHub returned an empty response")
+        }
+
+        private fun releaseVersion(release: JSONObject): String? =
+            extractVersion(release.getString("tag_name")) ?: extractVersion(release.getString("name"))
+
         private fun extractVersion(value: String?): String? {
-            return value?.let { numericVersion.find(it)?.value }
+            return value?.let { numericVersion.find(it)?.value }?.takeIf { version ->
+                version.split('.').all { it.toIntOrNull() != null }
+            }
+        }
+
+        private fun releaseUrl(release: JSONObject): String =
+            release.getString("html_url")?.takeIf { it.isNotBlank() } ?: UpdateDialog.GITHUB_RELEASE_URL
+
+        internal fun loadPreviousReleaseNotes(
+            client: OkHttpClient,
+            releasesApi: String,
+            currentVersion: String,
+            latestVersion: String
+        ): List<ReleaseNotes> {
+            val notes = mutableListOf<ReleaseNotes>()
+            var page = 1
+            // The API pages follow release creation order, which can differ from version order.
+            do {
+                val request = releaseRequest("$releasesApi?per_page=100&page=$page")
+                val hasNextPage = client.newCall(request).execute().use { response ->
+                    for (release in JSON.parseArray(response.readReleaseBody()).filterIsInstance<JSONObject>()) {
+                        if (release.getBooleanValue("draft") || release.getBooleanValue("prerelease")) continue
+                        val version = releaseVersion(release) ?: continue
+                        if (compareVersion(version, currentVersion) <= 0 || compareVersion(version, latestVersion) >= 0) {
+                            continue
+                        }
+                        val url = releaseUrl(release)
+                        val markdown = release.getString("body")?.takeIf { it.isNotBlank() } ?: "<$url>"
+                        notes.add(ReleaseNotes(version, markdown, url))
+                    }
+                    response.headers("Link").any { it.contains("rel=\"next\"") }
+                }
+                page++
+            } while (hasNextPage)
+
+            return notes.sortedWith { first, second -> compareVersion(second.version, first.version) }
+                .take(MAX_RELEASE_NOTES - 1)
         }
 
         internal fun createDialogData(
