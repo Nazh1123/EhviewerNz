@@ -14,7 +14,8 @@ class Inpainter @JvmOverloads constructor(modelPath: String, private val cfg: In
         return model ?: ImageModel(files, 4, true).also { model = it }
     }
 
-    suspend fun inpaint(page: Bitmap, regions: List<TextRegion>, textMask: Bitmap): Bitmap {
+    suspend fun inpaint(page: Bitmap, regions: List<TextRegion>, textMask: Bitmap,
+                        checkRelevant: () -> Unit = {}): Bitmap {
         check(!closed)
         val width = page.width; val height = page.height
         require(textMask.width == width && textMask.height == height)
@@ -30,6 +31,7 @@ class Inpainter @JvmOverloads constructor(modelPath: String, private val cfg: In
             }
         }
         val mask = RemovalMask.dilate(seed, width, height, cfg.maskRadius)
+        checkRelevant()
         if (mask.none { it.toInt() != 0 }) return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
         val backgrounds = bounds.map { RemovalBackground.sample(pixels, mask, width, it) }
         val complex = regions.indices.filter { cfg.method == "aot" && !backgrounds[it].flat }
@@ -58,6 +60,7 @@ class Inpainter @JvmOverloads constructor(modelPath: String, private val cfg: In
             }
         }
         if (aiMask.any { it.toInt() != 0 }) {
+            checkRelevant()
             val side = cfg.tileSize
             val resized = Bitmap.createScaledBitmap(page, side, side, true)
             val small = IntArray(side * side)
@@ -72,6 +75,7 @@ class Inpainter @JvmOverloads constructor(modelPath: String, private val cfg: In
                 else for (channel in 0..2) input[channel * small.size + i] =
                     ((small[i] ushr (16 - channel * 8)) and 255) / 127.5f - 1f
             }
+            checkRelevant()
             val restored = FloatArray(input.size)
             model().inpaint(input, holes, side, restored)
             for (i in small.indices) {

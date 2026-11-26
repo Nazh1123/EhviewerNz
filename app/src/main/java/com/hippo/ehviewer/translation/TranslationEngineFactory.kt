@@ -23,9 +23,9 @@ object TranslationEngineFactory {
         val alphabet by lazy { context.assets.open("models/alphabet-all-v5.txt").bufferedReader().use { it.readLines() } }
         val batchSize = translationBatchSize(options)
         val sourceSeparator = TranslationLanguages.lineSeparator(options.source)
-        suspend fun detectPage(detector: Detector, page: android.graphics.Bitmap): Detection {
+        suspend fun pageRelevanceCheck(): () -> Unit {
             val coroutine = currentCoroutineContext()
-            return detector.detect(page) {
+            return {
                 coroutine.ensureActive()
                 coroutine[TranslationPageRequest]?.ensureRelevant()
             }
@@ -61,7 +61,7 @@ object TranslationEngineFactory {
             return ResumablePipeline(
                 detect = { page ->
                     policy.beforeImage()
-                    try { detectPage(detector.get(), page) } finally { policy.afterImage() }
+                    try { detector.get().detect(page, pageRelevanceCheck()) } finally { policy.afterImage() }
                 },
                 recognize = { page, lines ->
                     policy.beforeImage()
@@ -69,7 +69,7 @@ object TranslationEngineFactory {
                 },
                 inpaint = { page, regions, mask ->
                     policy.beforeImage()
-                    try { inpainter.get().inpaint(page, regions, mask) } finally { policy.afterImage() }
+                    try { inpainter.get().inpaint(page, regions, mask, pageRelevanceCheck()) } finally { policy.afterImage() }
                 },
                 translator = guarded, cfg = config, release = ::releaseImages, warm = {},
                 translationIdentity = options.cacheIdentity(),
@@ -86,8 +86,8 @@ object TranslationEngineFactory {
             ocr = recognizer()
             val inpainter = Inpainter(models.aotInpainterNcnn, config.inpainter, models.imageFiles(models.aotInpainterNcnn))
             val recognizer = ocr
-            return ResumablePipeline({ page -> detectPage(detector, page) }, recognizer::recognize,
-                inpainter::inpaint, translator, config,
+            return ResumablePipeline({ page -> detector.detect(page, pageRelevanceCheck()) }, recognizer::recognize,
+                { page, regions, mask -> inpainter.inpaint(page, regions, mask, pageRelevanceCheck()) }, translator, config,
                 release = { runCatching { detector.close() }; runCatching { recognizer.close() }; runCatching { inpainter.close() } },
                 warm = { detector.warmUp(); recognizer.warmUp(); inpainter.warmUp() },
                 translationIdentity = options.cacheIdentity(), translationBatchSize = batchSize,
