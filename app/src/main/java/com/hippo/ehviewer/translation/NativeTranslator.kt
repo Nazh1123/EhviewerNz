@@ -178,21 +178,24 @@ class NativeTranslator private constructor(
         if (completed.isNotEmpty()) onCompleted(completed)
         if (parsed.missingIndices.isEmpty()) return parsed
         if (queries.size == 1) return parsed
-        // Never guess how a free-form paragraph maps to multiple bubbles. Keep valid
-        // numbered outputs, and request only missing regions with one input per call.
+        // Numbering failures need isolated inputs. A budget limit can instead retry the
+        // unresolved regions in smaller numbered batches, preserving completed translations.
         val translations = parsed.translations.toMutableList()
         val missing = retryIndices.toMutableSet()
         val errors = mutableListOf<String>()
         var totalUsage = usage
-        for (index in retryIndices) {
-            val fallback = translateBatches(listOf(queries[index])) { batch ->
+        val retryBatchSize = if (budgetExceeded && retryIndices.size > 2) queries.size / 2 else 1
+        for (indices in retryIndices.chunked(retryBatchSize)) {
+            val fallback = LlmBatching.translateIndexed(indices.map(queries::get)) { batch, offset ->
                 translateNumbered(batch, learn = false) { completedRegion ->
-                    onCompleted(completedRegion.mapKeys { index })
+                    onCompleted(completedRegion.mapKeys { (index, _) -> indices[offset + index] })
                 }
             }
-            translations[index] = fallback.translations.single()
             totalUsage = LlmBatching.addUsage(totalUsage, fallback.usage)
-            if (fallback.missingIndices.isEmpty()) missing.remove(index)
+            for ((offset, index) in indices.withIndex()) {
+                translations[index] = fallback.translations[offset]
+                if (offset !in fallback.missingIndices) missing.remove(index)
+            }
             fallback.error?.let { errors.add(it) }
         }
         return parsed.copy(translations = translations, usage = totalUsage,

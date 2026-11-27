@@ -120,6 +120,29 @@ class NativeTranslationCheckpointTest {
         }
     }
 
+    @Test fun denseOutputLimitRetriesOnlyUnresolvedRegionsInSmallerBatches() = runBlocking<Unit> {
+        val inputs = ('a'..'h').map(Char::toString)
+        val requests = mutableListOf<List<String>>()
+        val checkpoints = linkedMapOf<Int, String>()
+        NativeTranslator(TranslationOptions()) { messages ->
+            val numbered = messages.getJSONObject(1).getString("content")
+            val batch = numbered.lines().map { it.substringAfter("|>") }
+            requests.add(batch)
+            if (batch.size == 8)
+                throw NativeGenerationStopped("<|1|>译文a\n<|2|>译文b\n<|3|>unfinished", Usage(100, 192), true)
+            batch.mapIndexed { index, source -> "<|${index + 1}|>译文$source" }.joinToString("\n") to Usage(40, 10)
+        }.use { translator ->
+            val expected = inputs.map { "译文$it" }
+            val result = translator.translateDetailed(inputs) { checkpoints.putAll(it) }
+            assertEquals(listOf(inputs, inputs.subList(2, 6), inputs.subList(6, 8)), requests)
+            assertEquals(expected, result.translations)
+            assertEquals(expected.withIndex().associate { it.index to it.value }, checkpoints)
+            assertTrue(result.missingIndices.isEmpty())
+            assertNull(result.error)
+            assertEquals(Usage(180, 212), result.usage)
+        }
+    }
+
     @Test fun completedTruncatedPrefixIsSavedBeforeCancelledRetry() = runBlocking<Unit> {
         val checkpoints = linkedMapOf<Int, String>()
         NativeTranslator(TranslationOptions()) { messages ->
