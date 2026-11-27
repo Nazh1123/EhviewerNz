@@ -13,6 +13,33 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = android.app.Application::class)
 class AdaptiveInpaintingTest {
+    @Test fun croppedDilationPreservesEdgeHaloAndIgnoresTextOutsideRegions() = runBlocking<Unit> {
+        val white = Color.WHITE
+        val page = Bitmap.createBitmap(100, 110, Bitmap.Config.ARGB_8888).apply { eraseColor(white) }
+        val mask = Bitmap.createBitmap(100, 110, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLACK) }
+        fun region(left: Float, top: Float, right: Float, bottom: Float) = TextRegion(listOf(
+            TextLine(listOf(Pt(left, top), Pt(right, top), Pt(right, bottom), Pt(left, bottom)), 1f)), "h")
+        val regions = listOf(region(0f, 0f, 20f, 20f), region(25f, 28f, 40f, 45f))
+        for ((x, y) in listOf(0 to 1, 38 to 43, 41 to 44, 62 to 62)) {
+            page.setPixel(x, y, Color.BLACK)
+            mask.setPixel(x, y, white)
+        }
+        try {
+            Inpainter("/missing/model.param", InpainterConfig(method = "boxfill", maskRadius = 3, regionPad = 0)).use {
+                val result = it.inpaint(page, regions, mask)
+                try {
+                    assertEquals(white, result.getPixel(0, 1))
+                    assertEquals(white, result.getPixel(38, 43))
+                    assertEquals(white, result.getPixel(41, 44))
+                    assertEquals(Color.BLACK, result.getPixel(62, 62))
+                } finally { result.recycle() }
+            }
+        } finally {
+            page.recycle()
+            mask.recycle()
+        }
+    }
+
     @Test fun obsoleteComplexPageStopsBeforeLoadingTheInpaintingModel() = runBlocking<Unit> {
         val page = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888)
         val mask = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLACK) }
