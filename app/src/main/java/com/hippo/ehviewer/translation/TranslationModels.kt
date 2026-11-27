@@ -62,9 +62,8 @@ class TranslationModels internal constructor(private val context: Context, manif
                 if (it.moveToFirst()) it.getString(0) else null
             } }.getOrNull() ?: if (uri.scheme == "file") File(uri.path.orEmpty()).name else uri.lastPathSegment.orEmpty()
         }
-        require(sources.keys == requiredNames.toSet() && uris.size == requiredNames.size) {
-            "Please select all required manga model files"
-        }
+        if (sources.keys != requiredNames.toSet() || uris.size != requiredNames.size)
+            throw TranslationInputFailure(R.string.translation_error_model_files, "Please select all required manga model files")
         if (mode == ImportMode.REFERENCE) { importReferences(sources, progress); return }
         val staged = mutableListOf<Pair<File, File>>()
         try {
@@ -96,13 +95,16 @@ class TranslationModels internal constructor(private val context: Context, manif
                     // Match an exact manifest name; never resolve a ZIP path on disk.
                     val name = archiveNames[item.name]
                     if (name == null && ignoreUnlisted) { zip.closeEntry(); continue }
-                    val entry = requireNotNull(remaining.remove(name)) { "Unexpected or duplicate model: ${item.name}" }
+                    val entry = remaining.remove(name) ?: throw TranslationInputFailure(
+                        R.string.translation_error_model_files, "Unexpected or duplicate model: ${item.name}"
+                    )
                     copyVerified(zip, entry, staged) { copied -> progress(entry.name, completed + copied, totalBytes) }
                     zip.closeEntry()
                     completed += entry.size
                 }
             }
-            check(remaining.isEmpty()) { "Incomplete manga model bundle" }
+            if (remaining.isNotEmpty())
+                throw TranslationModelFailure(R.string.translation_error_model_files, "Incomplete manga model bundle")
             publishWithMaintenance(staged)
         } finally { staged.forEach { it.first.delete() } }
     }
@@ -125,15 +127,15 @@ class TranslationModels internal constructor(private val context: Context, manif
                 val count = input.read(buffer)
                 if (count < 0) break
                 copied += count
-                check(copied <= entry.size) { "Model larger than manifest: ${entry.name}" }
+                if (copied > entry.size)
+                    throw modelVerificationFailure(entry.name, "Model larger than manifest: ${entry.name}")
                 output.write(buffer, 0, count)
                 digest.update(buffer, 0, count)
                 if (copied - reported >= 1048576) { progress(copied); reported = copied }
             }
         }
-        check(copied == entry.size && digest.digest().joinToString("") { "%02x".format(it) } == entry.sha256) {
-            "Model checksum mismatch: ${entry.name}"
-        }
+        if (copied != entry.size || digest.digest().joinToString("") { "%02x".format(it) } != entry.sha256)
+            throw modelVerificationFailure(entry.name, "Model size or checksum mismatch: ${entry.name}")
         progress(copied)
     }
 
@@ -196,20 +198,24 @@ class TranslationModels internal constructor(private val context: Context, manif
 
     private fun externalStamp(descriptor: ParcelFileDescriptor, entry: Entry): String {
         val stat = Os.fstat(descriptor.fileDescriptor)
-        require(OsConstants.S_ISREG(stat.st_mode) && stat.st_size == entry.size) {
-            context.getString(R.string.translation_image_external_unsupported)
-        }
+        if (!OsConstants.S_ISREG(stat.st_mode) || stat.st_size != entry.size)
+            throw TranslationInputFailure(R.string.translation_image_external_unsupported,
+                context.getString(R.string.translation_image_external_unsupported))
         Os.lseek(descriptor.fileDescriptor, 0, OsConstants.SEEK_SET)
         val nanos = if (Build.VERSION.SDK_INT >= 27) stat.st_mtim.tv_nsec else 0L
         return "${stat.st_size}:${stat.st_mtime}:$nanos"
     }
 
+    private fun externalModelChanged() =
+        TranslationModelFailure(R.string.translation_image_external_changed,
+            context.getString(R.string.translation_image_external_changed))
+
     private fun openReference(entry: Entry, reference: ImageModelReferences.Reference): ParcelFileDescriptor {
-        val descriptor = requireNotNull(context.contentResolver.openFileDescriptor(reference.uri, "r")) {
-            context.getString(R.string.translation_image_external_changed)
-        }
+        val descriptor = context.contentResolver.openFileDescriptor(reference.uri, "r")
+            ?: throw TranslationInputFailure(R.string.translation_image_external_changed,
+                context.getString(R.string.translation_image_external_changed))
         try {
-            check(externalStamp(descriptor, entry) == reference.stamp) { context.getString(R.string.translation_image_external_changed) }
+            if (externalStamp(descriptor, entry) != reference.stamp) throw externalModelChanged()
             return descriptor
         } catch (error: Throwable) { descriptor.close(); throw error }
     }
@@ -226,14 +232,14 @@ class TranslationModels internal constructor(private val context: Context, manif
             val count = Os.read(descriptor.fileDescriptor, buffer, 0, buffer.size)
             if (count == 0) break
             read += count
-            check(read <= entry.size) { "Model larger than manifest: ${entry.name}" }
+            if (read > entry.size)
+                throw modelVerificationFailure(entry.name, "Model larger than manifest: ${entry.name}")
             digest.update(buffer, 0, count)
             if (read - reported >= 1048576) { progress(read); reported = read }
         }
-        check(read == entry.size && digest.digest().joinToString("") { "%02x".format(it) } == entry.sha256) {
-            "Model checksum mismatch: ${entry.name}"
-        }
-        check(externalStamp(descriptor, entry) == before) { context.getString(R.string.translation_image_external_changed) }
+        if (read != entry.size || digest.digest().joinToString("") { "%02x".format(it) } != entry.sha256)
+            throw modelVerificationFailure(entry.name, "Model size or checksum mismatch: ${entry.name}")
+        if (externalStamp(descriptor, entry) != before) throw externalModelChanged()
         progress(read)
     }
 
@@ -264,7 +270,7 @@ class TranslationModels internal constructor(private val context: Context, manif
                         val address = Os.mmap(0, entry.size, OsConstants.PROT_READ, OsConstants.MAP_PRIVATE, descriptor.fileDescriptor, 0)
                         Os.munmap(address, entry.size)
                     }
-                    check(externalStamp(descriptor, entry) == stamp) { context.getString(R.string.translation_image_external_changed) }
+                    if (externalStamp(descriptor, entry) != stamp) throw externalModelChanged()
                     verified[entry.name] = ImageModelReferences.Reference(uri, stamp)
                 }
             }
@@ -284,7 +290,8 @@ class TranslationModels internal constructor(private val context: Context, manif
 
     private fun stamps() = files.map { entry ->
         val attrs = Files.readAttributes(File(dir, entry.name).toPath(), BasicFileAttributes::class.java)
-        check(attrs.isRegularFile && attrs.size() == entry.size) { "Model missing or wrong size: ${entry.name}" }
+        if (!attrs.isRegularFile || attrs.size() != entry.size)
+            throw modelVerificationFailure(entry.name, "Model missing or wrong size: ${entry.name}")
         Stamp(attrs.size(), attrs.lastModifiedTime(), attrs.fileKey())
     }
 
@@ -314,7 +321,8 @@ class TranslationModels internal constructor(private val context: Context, manif
         if (current.any { it.key == null } || current != verifiedStamps) {
             for (entry in files) {
                 currentCoroutineContext().ensureActive()
-                check(ModelChecksum.sha256(File(dir, entry.name)) == entry.sha256) { "Model checksum mismatch: ${entry.name}" }
+                if (ModelChecksum.sha256(File(dir, entry.name)) != entry.sha256)
+                    throw modelVerificationFailure(entry.name, "Model checksum mismatch: ${entry.name}")
             }
             verifiedStamps = current
         }

@@ -100,8 +100,8 @@ class TranslationNavigationTest {
             val backend = requireNotNull(settings.findPreference<ListPreference>("translation_backend"))
             assertSame(backend.parent, management.parent)
             val engineGroup = requireNotNull(backend.parent)
-            assertSame(backend, engineGroup.getPreference(0))
-            assertSame(management, engineGroup.getPreference(1))
+            assertSame(management, engineGroup.getPreference(0))
+            assertSame(backend, engineGroup.getPreference(1))
             for (index in 0 until settings.preferenceScreen.preferenceCount)
                 assertNotEquals("离线模型", settings.preferenceScreen.getPreference(index).title)
             for (mode in listOf("NATIVE_LLM", "LLM_API", "ML_KIT")) {

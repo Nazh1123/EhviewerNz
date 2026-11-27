@@ -1,6 +1,8 @@
 package com.hippo.ehviewer.translation
 
 import android.app.Application
+import com.hippo.ehviewer.R
+import com.hippo.ehviewer.Settings
 import kotlinx.coroutines.*
 import com.hippo.ehviewer.translation.engine.Usage
 import okhttp3.mockwebserver.MockResponse
@@ -11,6 +13,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.io.IOException
 import java.net.InetAddress
@@ -26,6 +29,29 @@ class ApiTranslatorTest {
         JSONObject().put("choices", org.json.JSONArray().put(JSONObject().put("finish_reason", finishReason)
             .put("message", JSONObject().put("content", content))))
             .put("usage", JSONObject().put("prompt_tokens", 20).put("completion_tokens", 8)).toString())
+
+    @Test @Config(qualifiers = "en")
+    fun sampleHttpErrorsAndUnknownFailuresUseAppLanguageAndKeepRawDetailsOutOfTheUi() {
+        val context = RuntimeEnvironment.getApplication()
+        Settings.initialize(context)
+        Settings.putAppLanguage("ja")
+        try {
+            MockWebServer().use { server ->
+                server.enqueue(MockResponse().setResponseCode(503).setBody("private response text"))
+                ApiTranslator(options(server)).use { translator ->
+                    val failure = assertThrows(IOException::class.java) {
+                        runBlocking { translator.translateSample("sample") }
+                    }
+                    assertEquals("API テストに失敗しました：サーバーから HTTP 503 が返されました。",
+                        translationFailureMessage(context, R.string.translation_api_test_failed, failure))
+                }
+            }
+            val fallback = translationFailureMessage(context, R.string.translation_model_operation_failed,
+                IllegalStateException("raw internal error"))
+            assertEquals("操作に失敗しました：もう一度お試しください。問題が続く場合は、設定または選択したモデルを確認してください。",
+                fallback)
+        } finally { Settings.putAppLanguage("system") }
+    }
 
     @Test fun apiSettingsSampleAcceptsPlainTranslationAndUsesTheNativeSampleProtocol() = runBlocking<Unit> {
         MockWebServer().use { server ->

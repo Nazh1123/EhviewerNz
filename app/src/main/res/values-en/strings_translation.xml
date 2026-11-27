@@ -213,4 +213,13 @@
     <string name="translation_source_detected">Translating: %1$s → %2$s</string>
     <string name="translation_source_unknown">Cannot reliably identify the source. Select a language manually before using ML Kit.</string>
     <string name="translation_source_auto_mlkit_help">Auto prepares Japanese, Korean, Chinese and the target language packs. English needs no separate pack.</string>
+    <string name="translation_error_retry">Try again. If the problem persists, check your settings or the selected model.</string>
+    <string name="translation_error_network">Check your network connection and whether the service is available, then try again.</string>
+    <string name="translation_error_http">The server returned HTTP %1$d.</string>
+    <string name="translation_error_api_response">The API returned an invalid response. Check the service address and model settings.</string>
+    <string name="translation_error_incomplete">The model did not return a complete translation.</string>
+    <string name="translation_error_gguf">Select a valid GGUF model file.</string>
+    <string name="translation_error_model_integrity">Could not verify model file %1$s. Download it again or select the correct file.</string>
+    <string name="translation_error_model_files">The model bundle contains incorrect or missing files. Select the correct bundle with all required files or download it again.</string>
+    <string name="translation_error_storage">Could not access the file. Check file permissions and available storage.</string>
 </resources>

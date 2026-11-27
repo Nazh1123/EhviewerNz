@@ -37,7 +37,7 @@ class PpOcrModels(context: Context) {
                 }
                 try {
                     call.awaitModelResponse().use {
-                        check(it.isSuccessful) { "PP-OCR download HTTP ${it.code()}" }
+                        it.requireModelDownloadSuccess()
                         store(language).installFile(entry.name, requireNotNull(it.body()).byteStream(), progress)
                     }
                 } finally { cancellation.cancel() }

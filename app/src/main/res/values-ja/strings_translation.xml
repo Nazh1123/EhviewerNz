@@ -194,7 +194,7 @@
     <string name="translation_native_pair_help">このモデルは日本語 → 簡体字中国語向けです。他の言語ペアにはモデル管理で多言語モデルを選択またはインポートしてください。</string>
     <string name="translation_mobile_download">モバイルデータ通信でダウンロードしています</string>
     <string name="translation_source_auto">自動</string>
-    <string name="translation_source_auto_help">十分な OCR テキストから作品の言語を判定し、今回の翻訳にのみ使用します。次回は OCR と判定をやり直します。短い文章や混在する言語は次のページで再判定します。手動設定が優先されます。</string>
+    <string name="translation_source_auto_help">まず漫画用 OCR で作品の言語を判定します。日本語以外の場合は、対応する PP-OCRv5 モデルに切り替えて現在のページを読み直し、以降のページにも同じモデルを使います。対応するモデルは事前にインストールしてください。判定結果は今回の翻訳にのみ適用されます。文字が少なすぎる場合や複数の言語が混在する場合は次のページで再判定します。手動設定が優先されます。</string>
     <string name="translation_source_detected">翻訳中: %1$s → %2$s</string>
     <string name="translation_source_unknown">元の言語を確実に判定できません。ML Kit を使用する前に手動で選択してください。</string>
     <string name="translation_source_auto_mlkit_help">自動モードでは日本語、韓国語、中国語と翻訳先の言語パックを準備します。英語の個別パックは不要です。</string>
@@ -213,4 +213,13 @@
     <string name="translation_model_external_changed">外部モデルが変更されたか利用できません。GGUF ファイルを選び直してください。</string>
     <string name="translation_gallery">このギャラリーを翻訳</string>
     <string name="translation_gallery_submitted">ギャラリーの翻訳タスクを送信しました</string>
+    <string name="translation_error_retry">もう一度お試しください。問題が続く場合は、設定または選択したモデルを確認してください。</string>
+    <string name="translation_error_network">ネットワーク接続とサービスの稼働状況を確認してから、もう一度お試しください。</string>
+    <string name="translation_error_http">サーバーから HTTP %1$d が返されました。</string>
+    <string name="translation_error_api_response">API から無効な応答が返されました。サービスのアドレスとモデル設定を確認してください。</string>
+    <string name="translation_error_incomplete">モデルから完全な翻訳結果が返されませんでした。</string>
+    <string name="translation_error_gguf">有効な GGUF モデルファイルを選択してください。</string>
+    <string name="translation_error_model_integrity">モデルファイル %1$s を検証できませんでした。再ダウンロードするか、正しいファイルを選択してください。</string>
+    <string name="translation_error_model_files">モデルパッケージに誤ったファイルがあるか、必要なファイルが不足しています。必要なファイルがすべて揃ったパッケージを選ぶか、再ダウンロードしてください。</string>
+    <string name="translation_error_storage">ファイルにアクセスできませんでした。ファイルのアクセス権限と空き容量を確認してください。</string>
 </resources>

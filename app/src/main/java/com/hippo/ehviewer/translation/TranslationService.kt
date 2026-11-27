@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -15,6 +16,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.net.Uri
 import androidx.core.app.NotificationCompat
+import com.hippo.ehviewer.AppLanguage
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.client.data.GalleryInfo
 import com.hippo.ehviewer.superresolution.SuperResolutionTasks
@@ -26,6 +28,8 @@ import com.hippo.scene.StageActivity
 class TranslationService : Service() {
     private lateinit var notifications: NotificationManager
     private lateinit var channel: String
+    private var channelName: String? = null
+    private var localizedContext: Context? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = Runnable { refreshNotifications() }
@@ -45,10 +49,7 @@ class TranslationService : Service() {
         super.onCreate()
         notifications = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         channel = "$packageName.translation"
-        notifications.createNotificationChannel(NotificationChannel(channel,
-            getString(R.string.gallery_processing_service), NotificationManager.IMPORTANCE_LOW).apply {
-            setShowBadge(false)
-        })
+        notificationResources()
         TranslationTasks.listener = {
             if (!refreshQueued) {
                 refreshQueued = true
@@ -57,7 +58,7 @@ class TranslationService : Service() {
         }
         SuperResolutionTasks.listener = TranslationTasks.listener
         TranslationTasks.completionListener = { session, total, failed, partial ->
-            notifications.notify(taskId(session), notification(session, completed = true,
+            notifications.notify(taskId(session), notification(notificationResources(), session, completed = true,
                 completedTotal = total, completedFailed = failed, completedPartial = partial))
         }
         TranslationTasks.deliverCompletions()
@@ -66,10 +67,11 @@ class TranslationService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // A startForegroundService request must be promoted even if its queue has just finished.
         if (!foreground) {
-            val initial = progressNotification()
+            val strings = notificationResources()
+            val initial = progressNotification(strings)
                 ?: NotificationCompat.Builder(this, channel)
                     .setSmallIcon(R.drawable.v_translate_x24)
-                    .setContentTitle(getString(R.string.gallery_processing_service))
+                    .setContentTitle(strings.getString(R.string.gallery_processing_service))
                     .setOnlyAlertOnce(true).build()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
                 startForeground(FOREGROUND_ID, initial, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
@@ -106,7 +108,7 @@ class TranslationService : Service() {
                 }
             handler.postDelayed(renewWakeLock, 60_000)
         }
-        progressNotification()?.let { notifications.notify(FOREGROUND_ID, it) }
+        progressNotification(notificationResources())?.let { notifications.notify(FOREGROUND_ID, it) }
         val running = (active.map { it.identity } + enhancements.map { it.identity }).toSet()
         taskIds.forEach { (identity, id) ->
             if (identity in running) {
@@ -127,7 +129,20 @@ class TranslationService : Service() {
     private fun taskId(session: GalleryTranslationSession) = taskId(session.identity)
     private fun taskId(identity: String) = taskIds.getOrPut(identity) { TranslationTasks.notificationId(identity) }
 
-    private fun progressNotification(): Notification? {
+    private fun notificationResources(): Context {
+        val strings = AppLanguage.context(localizedContext ?: this)
+        localizedContext = strings
+        val name = strings.getString(R.string.gallery_processing_service)
+        if (channelName != name) {
+            notifications.createNotificationChannel(
+                NotificationChannel(channel, name, NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) }
+            )
+            channelName = name
+        }
+        return strings
+    }
+
+    private fun progressNotification(strings: Context): Notification? {
         val translations = TranslationTasks.active()
         val enhancements = SuperResolutionTasks.active()
         val identities = (translations.map { it.identity } + enhancements.map { it.identity }).toSet()
@@ -141,48 +156,49 @@ class TranslationService : Service() {
         val translation = translations.firstOrNull { it.identity == identity }
         val enhancement = enhancements.firstOrNull { it.identity == identity }
         if (translation != null && (translation.activePage != null || enhancement?.activePage == null))
-            return notification(translation, queuedGalleries = queued)
+            return notification(strings, translation, queuedGalleries = queued)
         val session = checkNotNull(enhancement)
-        val progress = getString(R.string.sr_queue_progress, session.completed, session.total)
-        val status = session.activePage?.let { getString(R.string.sr_page_progress, it + 1, session.progress) }
+        val progress = strings.getString(R.string.sr_queue_progress, session.completed, session.total)
+        val status = session.activePage?.let { strings.getString(R.string.sr_page_progress, it + 1, session.progress) }
             ?: session.message
-        val text = queueText(progress + (status?.let { " · $it" } ?: ""), queued)
+        val text = queueText(strings, progress + (status?.let { " · $it" } ?: ""), queued)
         return NotificationCompat.Builder(this, channel)
             .setSmallIcon(R.drawable.v_super_resolution_x24).setContentTitle(session.title)
             .setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setSubText(getString(R.string.sr_title)).setOngoing(true).setOnlyAlertOnce(true).setShowWhen(false)
+            .setSubText(strings.getString(R.string.sr_title)).setOngoing(true).setOnlyAlertOnce(true).setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setContentIntent(openGallery(session.identity, session.galleryInfo))
             .setProgress(session.total.coerceAtLeast(1), session.completed, session.total <= 0)
-            .addAction(stopAction(session.identity)).build()
+            .addAction(stopAction(strings, session.identity)).build()
     }
 
-    private fun queueText(text: String, queued: Int?) = text +
-        (queued?.let { " · " + getString(R.string.gallery_processing_queued, it) } ?: "")
+    private fun queueText(strings: Context, text: String, queued: Int?) = text +
+        (queued?.let { " · " + strings.getString(R.string.gallery_processing_queued, it) } ?: "")
 
-    private fun notification(session: GalleryTranslationSession, completed: Boolean = false,
+    private fun notification(strings: Context, session: GalleryTranslationSession, completed: Boolean = false,
                              completedTotal: Int = session.total, completedFailed: Int = session.failed,
                              completedPartial: Int = session.partial, queuedGalleries: Int? = null): Notification {
-        val baseText = if (completed) getString(R.string.translation_gallery_completed, completedTotal, completedFailed)
-        else if (session.activePage != null) getString(R.string.translation_notification_active_progress,
+        val baseText = if (completed) strings.getString(R.string.translation_gallery_completed, completedTotal, completedFailed)
+        else if (session.activePage != null) strings.getString(R.string.translation_notification_active_progress,
             session.completed, session.total, checkNotNull(session.activePage) + 1,
             (session.pageProgress.value + 5) / 10, session.failed)
-        else getString(R.string.translation_notification_progress, session.completed, session.total, session.failed)
+        else strings.getString(R.string.translation_notification_progress, session.completed, session.total, session.failed)
         val partial = if (completed) completedPartial else session.partial
-        val text = queueText(baseText + (if (partial > 0) getString(R.string.translation_partial_count, partial) else ""), queuedGalleries)
+        val partialText = if (partial > 0) strings.getString(R.string.translation_partial_count, partial) else ""
+        val text = queueText(strings, baseText + partialText, queuedGalleries)
         val builder = NotificationCompat.Builder(this, channel)
             .setSmallIcon(R.drawable.v_translate_x24)
             .setContentTitle(session.title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setSubText(getString(if (session.fullGallery || completed)
+            .setSubText(strings.getString(if (session.fullGallery || completed)
                 R.string.translation_full_gallery else R.string.translation_service_label))
             .setOnlyAlertOnce(true).setShowWhen(false).setOngoing(!completed)
             .setAutoCancel(completed).setCategory(NotificationCompat.CATEGORY_PROGRESS)
         builder.setContentIntent(openGallery(session.identity, session.galleryInfo))
         if (!completed) {
             builder.setProgress(session.total.coerceAtLeast(1), session.completed, session.total <= 0)
-            builder.addAction(stopAction(session.identity))
+            builder.addAction(stopAction(strings, session.identity))
         }
         return builder.build()
     }
@@ -202,11 +218,11 @@ class TranslationService : Service() {
         return PendingIntent.getActivity(this, taskId(identity), open, PENDING_FLAGS)
     }
 
-    private fun stopAction(identity: String): NotificationCompat.Action {
+    private fun stopAction(strings: Context, identity: String): NotificationCompat.Action {
         val stop = Intent(this, TranslationService::class.java).setAction(ACTION_STOP)
             .putExtra(EXTRA_IDENTITY, identity)
             .setData(Uri.parse("ehviewer-translation://stop/${Uri.encode(identity)}"))
-        return NotificationCompat.Action(R.drawable.ic_pause_x24, getString(R.string.gallery_processing_stop),
+        return NotificationCompat.Action(R.drawable.ic_pause_x24, strings.getString(R.string.gallery_processing_stop),
             PendingIntent.getService(this, taskId(identity), stop, PENDING_FLAGS))
     }
 

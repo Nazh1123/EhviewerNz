@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.NetworkCapabilities
 import android.os.Looper
 import com.hippo.ehviewer.R
+import com.hippo.ehviewer.Settings
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -37,6 +38,15 @@ class TranslationDownloadNetworkTest {
         notify(capabilities(NetworkCapabilities.TRANSPORT_CELLULAR))
         assertEquals("正在使用移动网络下载", ShadowToast.getTextOfLatestToast())
         assertEquals(1, ShadowToast.shownToastCount())
+    }
+
+    @Test fun cellularNoticeUsesTheAppLanguageInsteadOfThePhoneLanguage() {
+        Settings.initialize(RuntimeEnvironment.getApplication())
+        Settings.putAppLanguage("en")
+        try {
+            notify(capabilities(NetworkCapabilities.TRANSPORT_CELLULAR))
+            assertEquals("Downloading over mobile data", ShadowToast.getTextOfLatestToast())
+        } finally { Settings.putAppLanguage("system") }
     }
 
     @Test fun wifiEthernetAndMissingNetworkDoNotRaiseAMobileNoticeOrBlockDownloads() {

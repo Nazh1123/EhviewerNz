@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.widget.Toast
+import com.hippo.ehviewer.AppLanguage
 import com.hippo.ehviewer.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,6 +18,6 @@ internal suspend fun notifyModelDownloadNetwork(context: Context, capabilities: 
     val mobile = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
     val wifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     if (mobile && !wifi) withContext(Dispatchers.Main.immediate) {
-        Toast.makeText(context, R.string.translation_mobile_download, Toast.LENGTH_LONG).show()
+        AppLanguage.showToast(context, R.string.translation_mobile_download, Toast.LENGTH_LONG)
     }
 }

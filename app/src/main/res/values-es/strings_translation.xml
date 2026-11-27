@@ -194,7 +194,7 @@
     <string name="translation_native_pair_help">Este modelo está ajustado para japonés → chino simplificado. Para otros pares, selecciona o importa un modelo multilingüe en la gestión de modelos.</string>
     <string name="translation_mobile_download">Descargando con datos móviles</string>
     <string name="translation_source_auto">Automático</string>
-    <string name="translation_source_auto_help">Se detecta el idioma del texto OCR solo para esta traducción. Al empezar de nuevo se repiten OCR y detección. Un texto breve o mixto se reevalúa en la página siguiente. La selección manual tiene prioridad.</string>
+    <string name="translation_source_auto_help">Primero se usa el OCR de manga para detectar el idioma de la galería. Si no es japonés, el modelo PP-OCRv5 correspondiente vuelve a leer la página actual y se usa en las siguientes. Instala ese modelo antes de empezar. La detección solo se aplica a esta tarea. Si hay poco texto o se mezclan idiomas, se vuelve a intentar en la página siguiente. La selección manual tiene prioridad.</string>
     <string name="translation_source_detected">Traduciendo: %1$s → %2$s</string>
     <string name="translation_source_unknown">No se pudo identificar el idioma con seguridad. Selecciónalo manualmente antes de usar ML Kit.</string>
     <string name="translation_source_auto_mlkit_help">El modo automático prepara japonés, coreano, chino y el idioma de destino. Inglés no necesita un paquete separado.</string>
@@ -213,4 +213,13 @@
     <string name="translation_model_external_changed">El modelo externo cambió o no está disponible. Selecciona el archivo GGUF de nuevo.</string>
     <string name="translation_gallery">Traducir esta galería</string>
     <string name="translation_gallery_submitted">Tarea de traducción de galería enviada</string>
+    <string name="translation_error_retry">Inténtalo de nuevo. Si el problema continúa, revisa los ajustes o el modelo seleccionado.</string>
+    <string name="translation_error_network">Comprueba la conexión de red y que el servicio esté disponible. Luego, inténtalo de nuevo.</string>
+    <string name="translation_error_http">El servidor devolvió HTTP %1$d.</string>
+    <string name="translation_error_api_response">La API devolvió una respuesta no válida. Revisa la dirección del servicio y la configuración del modelo.</string>
+    <string name="translation_error_incomplete">El modelo no devolvió una traducción completa.</string>
+    <string name="translation_error_gguf">Selecciona un archivo de modelo GGUF válido.</string>
+    <string name="translation_error_model_integrity">No se pudo verificar el archivo de modelo %1$s. Vuelve a descargarlo o selecciona el archivo correcto.</string>
+    <string name="translation_error_model_files">El paquete contiene archivos incorrectos o faltan archivos. Selecciona el paquete correcto con todos los archivos necesarios o vuelve a descargarlo.</string>
+    <string name="translation_error_storage">No se pudo acceder al archivo. Comprueba los permisos del archivo y el espacio disponible.</string>
 </resources>

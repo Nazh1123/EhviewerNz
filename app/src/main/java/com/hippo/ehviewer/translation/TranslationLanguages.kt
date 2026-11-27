@@ -1,6 +1,7 @@
 package com.hippo.ehviewer.translation
 
 import android.content.Context
+import com.hippo.ehviewer.AppLanguage
 import com.hippo.ehviewer.R
 import com.google.mlkit.nl.translate.TranslateLanguage
 import java.util.Locale
@@ -48,9 +49,11 @@ object TranslationLanguages {
             ?: displayName(code, context.resources.configuration.locales[0])
     }
 
-    internal fun sourceDetectedMessage(context: Context, source: String, target: String): String =
-        context.getString(R.string.translation_source_detected,
-            displayName(source, context.resources.configuration.locales[0]), targetDisplayName(target, context))
+    internal fun sourceDetectedMessage(context: Context, source: String, target: String): String {
+        val strings = AppLanguage.context(context)
+        return strings.getString(R.string.translation_source_detected,
+            displayName(source, strings.resources.configuration.locales[0]), targetDisplayName(target, strings))
+    }
 
     /** ML Kit has one Chinese model; keep the selected script in app settings/prompts. */
     fun mlKitSource(source: String): String = when (source) {

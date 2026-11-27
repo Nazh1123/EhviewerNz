@@ -5,10 +5,12 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.PowerManager
 import androidx.appcompat.app.AppCompatActivity
 import android.widget.ImageButton
 import com.hippo.ehviewer.R
+import com.hippo.ehviewer.Settings
 import com.hippo.ehviewer.gallery.GalleryProvider2
 import com.hippo.lib.image.Image
 import com.hippo.unifile.UniFile
@@ -22,10 +24,48 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.util.ReflectionHelpers
+import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [26, 34, 36])
 class TranslationBackgroundTest {
+    @Test @Config(sdk = [34], qualifiers = "en")
+    fun serviceLocalizesProgressChannelActionsAndCompletionWithTheAppPreference() = withSession { session ->
+        val context = RuntimeEnvironment.getApplication()
+        Settings.initialize(context)
+        Settings.putAppLanguage("ja")
+        ReflectionHelpers.setField(session, "enabled", true)
+        ReflectionHelpers.setField(session, "working", true)
+        ReflectionHelpers.setField(session, "fullGallery", true)
+        val controller = Robolectric.buildService(TranslationService::class.java).create()
+        try {
+            val service = controller.get()
+            service.onStartCommand(Intent(context, TranslationService::class.java), 0, 1)
+            val manager = context.getSystemService(NotificationManager::class.java)
+            val active = manager.activeNotifications.single()
+            val notification = active.notification
+            val japanese = context.createConfigurationContext(Configuration().apply { setLocale(Locale.JAPANESE) })
+            assertEquals(japanese.getString(R.string.translation_notification_progress, 0, 8, 0) +
+                " · " + japanese.getString(R.string.gallery_processing_queued, 0),
+                notification.extras.getString(Notification.EXTRA_TEXT))
+            assertEquals(japanese.getString(R.string.gallery_processing_stop), notification.actions.single().title.toString())
+            assertEquals(japanese.getString(R.string.gallery_processing_service),
+                manager.getNotificationChannel(notification.channelId).name.toString())
+
+            Settings.putAppLanguage("fr")
+            TranslationTasks.completed(session, 8, 0)
+            val completed = manager.activeNotifications.single { it.id != active.id }.notification
+            val french = context.createConfigurationContext(Configuration().apply { setLocale(Locale.FRENCH) })
+            assertEquals(french.getString(R.string.translation_gallery_completed, 8, 0),
+                completed.extras.getString(Notification.EXTRA_TEXT))
+            assertEquals(french.getString(R.string.gallery_processing_service),
+                manager.getNotificationChannel(notification.channelId).name.toString())
+        } finally {
+            controller.destroy()
+            Settings.putAppLanguage("system")
+        }
+    }
+
     @Test fun backgroundNotificationAdvancesWithinAPageBeforeItsCompletionCountChanges() = withSession { session ->
         val context = RuntimeEnvironment.getApplication()
         session.reader = Reader()

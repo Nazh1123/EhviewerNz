@@ -2,6 +2,7 @@ package com.hippo.ehviewer.translation
 
 import android.content.Context
 import android.widget.Toast
+import com.hippo.ehviewer.AppLanguage
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.EhDB
@@ -110,8 +111,8 @@ object TranslationStorage {
             }.getOrDefault(false)
             GalleryProcessingProgress.removeMissing(app, ids, GalleryProcessingProgress.Kind.TRANSLATION)
             withContext(Dispatchers.Main) {
-                Toast.makeText(app, if (success) R.string.translation_results_deleted
-                    else R.string.translation_results_delete_failed, Toast.LENGTH_LONG).show()
+                AppLanguage.showToast(app, if (success) R.string.translation_results_deleted
+                    else R.string.translation_results_delete_failed, Toast.LENGTH_LONG)
             }
         }
     }

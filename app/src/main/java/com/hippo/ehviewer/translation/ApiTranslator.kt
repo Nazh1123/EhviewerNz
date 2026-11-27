@@ -1,5 +1,6 @@
 package com.hippo.ehviewer.translation
 
+import com.hippo.ehviewer.R
 import kotlinx.coroutines.suspendCancellableCoroutine
 import com.hippo.ehviewer.translation.engine.DetailedTranslator
 import com.hippo.ehviewer.translation.engine.LlmTranslator
@@ -29,7 +30,10 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
         .retryOnConnectionFailure(false)
         .build()
 
-    init { require(options.validApiUrl()) }
+    init {
+        if (!options.validApiUrl())
+            throw TranslationInputFailure(R.string.translation_api_invalid_url, "Invalid API URL")
+    }
 
     override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult =
         translateDetailed(queries) { }
@@ -68,7 +72,7 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     if (continuation.isActive) continuation.resumeWithException(
-                        IOException("API connection failed (check address, service and timeout)"))
+                        TranslationRequestFailure(R.string.translation_error_network, "API connection failed"))
                 }
                 override fun onResponse(call: Call, response: Response) {
                     val result = runCatching {
@@ -79,7 +83,7 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
                                 if (includeTemperature && it.code() == 400 && body.contains("temperature", true) &&
                                     listOf("unsupported", "not supported", "not allowed", "invalid").any { word -> body.contains(word, true) })
                                     throw UnsupportedTemperature()
-                                throw IOException("API HTTP ${it.code()}")
+                                throw TranslationRequestFailure(R.string.translation_error_http, "API HTTP ${it.code()}", it.code())
                             }
                             val responseJson = JSONObject(body)
                             val choice = responseJson.getJSONArray("choices").getJSONObject(0)
@@ -89,15 +93,15 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
                             if (choice.optString("finish_reason") == "length")
                                 throw TranslationOutputLimitException("API output budget exhausted", usage)
                             if (choice.optString("finish_reason") == "content_filter")
-                                throw IOException("API returned an incomplete translation")
+                                throw TranslationRequestFailure(R.string.translation_error_incomplete, "API returned an incomplete translation")
                             val content = choice.getJSONObject("message").opt("content") as? String
-                                ?: throw IOException("API response has no text")
-                            if (content.isBlank()) throw IOException("API returned no translation")
+                            if (content.isNullOrBlank())
+                                throw TranslationRequestFailure(R.string.translation_error_incomplete, "API response has no text")
                             content to usage
                         }
                     }.recoverCatching { error ->
                         if (error is IOException || error is TranslationOutputLimitException) throw error
-                        throw IOException("Invalid API response")
+                        throw TranslationRequestFailure(R.string.translation_error_api_response, "Invalid API response")
                     }
                     if (continuation.isActive) continuation.resumeWith(result)
                 }

@@ -3,6 +3,7 @@ package com.hippo.ehviewer.gallery
 import android.content.Context
 import android.net.Uri
 import android.widget.Toast
+import com.hippo.ehviewer.AppLanguage
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.client.data.GalleryInfo
@@ -27,7 +28,7 @@ object DownloadedGalleryTasks {
     private fun enqueue(context: Context, info: GalleryInfo, enhance: Boolean) {
         val app = context.applicationContext
         if (com.hippo.ehviewer.download.GalleryDownloadRangeStore.isEditing(info.gid)) {
-            Toast.makeText(app, R.string.range_download_busy, Toast.LENGTH_SHORT).show()
+            AppLanguage.showToast(app, R.string.range_download_busy, Toast.LENGTH_SHORT)
             return
         }
         scope.launch {
@@ -43,22 +44,22 @@ object DownloadedGalleryTasks {
                     } catch (_: RuntimeException) { null }
                 }
                 if (provider == null) {
-                    Toast.makeText(app, R.string.no_local_gallery_files, Toast.LENGTH_SHORT).show()
+                    AppLanguage.showToast(app, R.string.no_local_gallery_files, Toast.LENGTH_SHORT)
                     return@withLock
                 }
                 val persist = if (enhance) com.hippo.ehviewer.superresolution.SuperResolutionSettings(app).read().persist
                     else com.hippo.ehviewer.translation.TranslationSettings(app).read().persistDownloaded
                 val submit = Runnable {
                     if (start(app, provider, info, enhance)) {
-                        Toast.makeText(app, if (enhance) R.string.sr_gallery_submitted
-                            else R.string.translation_gallery_submitted, Toast.LENGTH_SHORT).show()
+                        AppLanguage.showToast(app, if (enhance) R.string.sr_gallery_submitted
+                            else R.string.translation_gallery_submitted, Toast.LENGTH_SHORT)
                     }
                 }
                 if (provider is ArchiveGalleryProvider && persist) {
                     val activity = context as? androidx.fragment.app.FragmentActivity
                     if (activity != null) ArchiveResultPermission.withAccess(activity, provider, true, submit)
                     else if (withContext(Dispatchers.IO) { ArchiveResultStorage.canWrite(app, provider.archiveUri) }) submit.run()
-                    else Toast.makeText(app, R.string.archive_results_permission_message, Toast.LENGTH_LONG).show()
+                    else AppLanguage.showToast(app, R.string.archive_results_permission_message, Toast.LENGTH_LONG)
                 } else submit.run()
             }
         }

@@ -4,6 +4,8 @@ import android.content.Context
 import com.hippo.ehviewer.image.WebpEncoder
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.widget.Toast
+import com.hippo.ehviewer.AppLanguage
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.EhApplication
 import com.hippo.ehviewer.client.data.GalleryInfo
@@ -58,8 +60,8 @@ internal class GalleryTranslationSession(
         if (detected != null) withContext(Dispatchers.Main) {
             if (generation != epoch) throw SupersededTranslationPage()
             request.ensureRelevant()
-            android.widget.Toast.makeText(context, TranslationLanguages.sourceDetectedMessage(context, detected, options.target),
-                android.widget.Toast.LENGTH_LONG).show()
+            Toast.makeText(context, TranslationLanguages.sourceDetectedMessage(context, detected, options.target),
+                Toast.LENGTH_LONG).show()
         }
     }
     private val models = TranslationModels(context)
@@ -137,7 +139,7 @@ internal class GalleryTranslationSession(
     internal fun takeIdleModels(): AutoCloseable? = retainedModels.take()
 
     val title: String get() = galleryInfo?.title?.takeIf { it.isNotBlank() }
-        ?: context.getString(R.string.translation_service_label)
+        ?: AppLanguage.context(context).getString(R.string.translation_service_label)
     val total: Int get() = if (fullGallery) size.coerceAtLeast(0) else
         TranslationWindow.pages(current, size, activeOptions.ahead).size
     val completed: Int get() = queueCompleted()
@@ -613,7 +615,7 @@ internal class GalleryTranslationSession(
                                         if (pageOptions.source == TranslationLanguages.AUTO_SOURCE) {
                                             status(epoch, page, R.string.translation_failed)
                                             withContext(Dispatchers.Main) {
-                                                android.widget.Toast.makeText(context, R.string.translation_source_unknown, android.widget.Toast.LENGTH_LONG).show()
+                                                AppLanguage.showToast(context, R.string.translation_source_unknown, Toast.LENGTH_LONG)
                                             }
                                             return@withContext
                                         }
@@ -655,8 +657,8 @@ internal class GalleryTranslationSession(
                                 modelsUnavailable = true
                                 modelsRequired(epoch, request)
                                 withContext(Dispatchers.Main) {
-                                    if (generation == epoch) android.widget.Toast.makeText(context,
-                                        R.string.translation_ppocr_required, android.widget.Toast.LENGTH_LONG).show()
+                                    if (generation == epoch) AppLanguage.showToast(context,
+                                        R.string.translation_ppocr_required, Toast.LENGTH_LONG)
                                 }
                             } catch (error: Exception) {
                                 android.util.Log.w("GalleryTranslation",
@@ -695,7 +697,7 @@ internal class GalleryTranslationSession(
                         withContext(Dispatchers.Main) {
                             if (generation == epoch) {
                                 disable()
-                                android.widget.Toast.makeText(context, R.string.translation_prepare_required, android.widget.Toast.LENGTH_LONG).show()
+                                AppLanguage.showToast(context, R.string.translation_prepare_required, Toast.LENGTH_LONG)
                             }
                         }
                     } finally {
@@ -714,8 +716,7 @@ internal class GalleryTranslationSession(
                 withContext(Dispatchers.Main) {
                     if (generation == epoch) {
                         disable()
-                        android.widget.Toast.makeText(context, R.string.translation_gallery_unavailable,
-                            android.widget.Toast.LENGTH_LONG).show()
+                        AppLanguage.showToast(context, R.string.translation_gallery_unavailable, Toast.LENGTH_LONG)
                     }
                 }
             } finally {
@@ -757,8 +758,7 @@ internal class GalleryTranslationSession(
         true
     } catch (_: RuntimeException) {
         disable()
-        android.widget.Toast.makeText(context, R.string.translation_background_unavailable,
-            android.widget.Toast.LENGTH_LONG).show()
+        AppLanguage.showToast(context, R.string.translation_background_unavailable, Toast.LENGTH_LONG)
         false
     }
 
@@ -875,7 +875,7 @@ internal class GalleryTranslationSession(
         status(epoch, request.page, if (request.retryMissing) R.string.translation_partial else R.string.translation_models_required)
         withContext(Dispatchers.Main) {
             if (enabled && generation == epoch && !request.isObsolete && browsing && request.page == current)
-                android.widget.Toast.makeText(context, R.string.translation_models_required, android.widget.Toast.LENGTH_LONG).show()
+                AppLanguage.showToast(context, R.string.translation_models_required, Toast.LENGTH_LONG)
         }
     }
 

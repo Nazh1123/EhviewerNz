@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.appcompat.app.AlertDialog
+import com.hippo.ehviewer.AppLanguage
 import com.hippo.ehviewer.R
 import com.hippo.ehviewer.translation.*
 import com.hippo.ehviewer.ui.SettingsActivity
@@ -62,7 +63,9 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                                 val selected = settings.read()
                                 NativeTranslator(context.applicationContext, selected).use {
                                     val translated = it.translateSample(selected.sampleText())
-                                    check(translated.error == null) { translated.error ?: "Invalid translation" }
+                                    translated.error?.let {
+                                        throw TranslationModelFailure(R.string.translation_error_incomplete, it)
+                                    }
                                     "${selected.sampleText()}\n\n${translated.translations.single()}"
                                 }
                             }
@@ -72,7 +75,8 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                             .setPositiveButton(android.R.string.ok, null).show()
                     } catch (cancel: CancellationException) { throw cancel
                     } catch (error: Exception) {
-                        Toast.makeText(context, getString(R.string.translation_native_failed, error.message.orEmpty()), Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, translationFailureMessage(context, R.string.translation_native_failed, error),
+                            Toast.LENGTH_LONG).show()
                     } catch (_: LinkageError) {
                         Toast.makeText(context, R.string.translation_native_unavailable, Toast.LENGTH_LONG).show()
                     } finally {
@@ -127,7 +131,9 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                         val result = withContext(Dispatchers.IO) {
                             ApiTranslator(selected).use {
                                 val translated = it.translateSample(selected.sampleText())
-                                check(translated.error == null) { translated.error ?: "Invalid translation" }
+                                translated.error?.let {
+                                    throw TranslationModelFailure(R.string.translation_error_incomplete, it)
+                                }
                                 translated.translations.single()
                             }
                         }
@@ -136,7 +142,8 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                             .setPositiveButton(android.R.string.ok, null).show()
                     } catch (cancel: CancellationException) { throw cancel
                     } catch (error: Exception) {
-                        Toast.makeText(context, getString(R.string.translation_api_test_failed, error.message.orEmpty()), Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, translationFailureMessage(context, R.string.translation_api_test_failed, error),
+                            Toast.LENGTH_LONG).show()
                     } finally {
                         isEnabled = true
                         setSummary(R.string.translation_api_test_help)
@@ -228,7 +235,7 @@ class TranslationFragment : BasePreferenceFragmentCompat() {
                             TranslationRuntime.preparedPages.clear()
                         }
                     }
-                    Toast.makeText(app, R.string.translation_cache_cleared, Toast.LENGTH_SHORT).show()
+                    AppLanguage.showToast(app, R.string.translation_cache_cleared, Toast.LENGTH_SHORT)
                 }
                 true
             }

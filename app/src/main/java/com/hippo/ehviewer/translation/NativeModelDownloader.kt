@@ -47,7 +47,7 @@ class NativeModelDownloader(private val store: NativeModelStore,
                 }
                 try {
                     call.awaitModelResponse().use { response ->
-                        check(response.isSuccessful) { "Model download HTTP ${response.code()}" }
+                        response.requireModelDownloadSuccess()
                         requireNotNull(response.body()).byteStream().use { input ->
                             temp.outputStream().use { output ->
                                 val buffer = ByteArray(65536)
@@ -59,7 +59,8 @@ class NativeModelDownloader(private val store: NativeModelStore,
                                     val count = input.read(buffer)
                                     if (count < 0) break
                                     total += count
-                                    check(total <= model.size) { "Model larger than expected" }
+                                    if (total > model.size)
+                                        throw modelVerificationFailure(model.name, "Model larger than expected")
                                     output.write(buffer, 0, count)
                                     digest.update(buffer, 0, count)
                                     if (total / 1048576 != reported) {
@@ -67,15 +68,15 @@ class NativeModelDownloader(private val store: NativeModelStore,
                                         progress(total, model.size)
                                     }
                                 }
-                                check(total == model.size) { "Incomplete model download" }
+                                if (total != model.size)
+                                    throw modelVerificationFailure(model.name, "Incomplete model download")
                             }
                         }
                     }
                 } finally { cancellation.cancel() }
             }
-            check(digest.digest().joinToString("") { "%02x".format(it) } == model.sha256) {
-                "Model checksum mismatch"
-            }
+            if (digest.digest().joinToString("") { "%02x".format(it) } != model.sha256)
+                throw modelVerificationFailure(model.name, "Model checksum mismatch")
             currentCoroutineContext().ensureActive()
             progress(model.size, model.size)
             importing()

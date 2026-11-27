@@ -19,7 +19,7 @@ class MangaModelDownloader(private val models: TranslationModels,
                 }
                 try {
                     call.awaitModelResponse().use { response ->
-                        check(response.isSuccessful) { "Manga model download HTTP ${response.code()}" }
+                        response.requireModelDownloadSuccess()
                         models.installArchive(requireNotNull(response.body()).byteStream(), progress)
                     }
                 } finally { cancellation.cancel() }

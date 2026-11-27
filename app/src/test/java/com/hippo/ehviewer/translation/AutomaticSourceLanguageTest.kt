@@ -2,6 +2,7 @@ package com.hippo.ehviewer.translation
 
 import android.app.Application
 import android.graphics.Bitmap
+import com.hippo.ehviewer.Settings
 import kotlinx.coroutines.*
 import com.hippo.ehviewer.translation.engine.*
 import okhttp3.mockwebserver.MockResponse
@@ -30,6 +31,16 @@ class AutomaticSourceLanguageTest {
             TranslationLanguages.sourceDetectedMessage(context, "en", "zh-TW"))
         assertEquals("Translating: English → Traditional Chinese (Hong Kong)",
             TranslationLanguages.sourceDetectedMessage(context, "en", "zh-HK"))
+    }
+
+    @Test @Config(qualifiers = "zh-rCN")
+    fun detectionNoticeLocalizesTheMessageAndLanguagesWithTheAppPreference() {
+        Settings.initialize(context)
+        Settings.putAppLanguage("en")
+        try {
+            assertEquals("Translating: Japanese → Traditional Chinese (Taiwan)",
+                TranslationLanguages.sourceDetectedMessage(context, "ja", "zh-TW"))
+        } finally { Settings.putAppLanguage("system") }
     }
 
     @Test fun automaticEnglishDetectionPreservesTaiwanTargetInNativeRequests() = runBlocking<Unit> {

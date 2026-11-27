@@ -196,7 +196,7 @@
     <string name="translation_native_pair_help">目前模型針對日語 → 簡體中文微調。其他語言對請在模型管理中選擇多語模型或自行匯入。</string>
     <string name="translation_mobile_download">正在使用流動網絡下載</string>
     <string name="translation_source_auto">自動</string>
-    <string name="translation_source_auto_help">自動在首次取得足夠 OCR 文字後判斷目前畫廊語言，僅用於本次翻譯，退出後重新 OCR 和判斷。文字太少或混雜時下一頁再次判斷；手動選擇優先。</string>
+    <string name="translation_source_auto_help">先以漫畫 OCR 判斷畫廊語言。如判斷為非日語，便會切換至對應的 PP-OCRv5 模型，重新識別目前頁面，後續頁面亦會使用同一模型。請先安裝對應模型。判斷結果只適用於本次工作。文字太少或混有多種語言時，會在下一頁再次判斷。手動選擇優先。</string>
     <string name="translation_source_detected">正在翻譯: %1$s → %2$s</string>
     <string name="translation_source_unknown">無法可靠辨識來源語言，請手動選擇後再使用 ML Kit。</string>
     <string name="translation_source_auto_mlkit_help">自動模式會準備日語、韓語、中文及目標語言包；英語無需獨立包。</string>
@@ -213,4 +213,13 @@
     <string name="translation_model_external_help">直接讀取原始 GGUF，不保留應用私有副本。請勿移動、刪除或修改原文件。再次複製導入可改爲私有副本；再次引用同一模型會移除已有的私有副本。移除引用不會刪除原文件。</string>
     <string name="translation_model_external_unsupported">該外部文件不支持直接加載，請選擇“複製到應用私有目錄”。</string>
     <string name="translation_model_external_changed">外部模型文件已改變或不可用，請重新選擇 GGUF 文件。</string>
+    <string name="translation_error_retry">請重試。如果問題持續，請檢查設定或所選模型。</string>
+    <string name="translation_error_network">請檢查網絡連線及服務是否可用，然後重試。</string>
+    <string name="translation_error_http">伺服器回傳 HTTP %1$d。</string>
+    <string name="translation_error_api_response">API 回應無效。請確認服務網址和模型設定。</string>
+    <string name="translation_error_incomplete">模型未回傳完整的譯文。</string>
+    <string name="translation_error_gguf">請選擇有效的 GGUF 模型檔案。</string>
+    <string name="translation_error_model_integrity">模型檔案驗證失敗：%1$s。請重新下載或選擇正確的檔案。</string>
+    <string name="translation_error_model_files">模型套件中的檔案不符合要求。請選擇包括所有所需檔案的正確套件，或重新下載。</string>
+    <string name="translation_error_storage">無法存取檔案。請檢查檔案權限及可用儲存空間。</string>
 </resources>

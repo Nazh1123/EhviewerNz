@@ -1903,13 +1903,21 @@ public class Settings {
 
     //获取系统语言
     public static String getAppLanguage() {
-        return getString(KEY_APP_LANGUAGE, DEFAULT_APP_LANGUAGE);
+        return sSettingsPre == null ? DEFAULT_APP_LANGUAGE : getString(KEY_APP_LANGUAGE, DEFAULT_APP_LANGUAGE);
+    }
+
+    public static Locale getAppLocale() {
+        return appLocale(getAppLanguage());
+    }
+
+    private static Locale appLocale(String language) {
+        return language == null || DEFAULT_APP_LANGUAGE.equals(language)
+                ? Resources.getSystem().getConfiguration().getLocales().get(0)
+                : Locale.forLanguageTag(language);
     }
 
     public static void putAppLanguage(String value) {
-        Locale locale = "system".equals(value)
-                ? Resources.getSystem().getConfiguration().getLocales().get(0)
-                : Locale.forLanguageTag(value);
+        Locale locale = appLocale(value);
         // Apply both before recreating activities so they see a consistent language choice.
         sSettingsPre.edit()
                 .putString(KEY_APP_LANGUAGE, value)

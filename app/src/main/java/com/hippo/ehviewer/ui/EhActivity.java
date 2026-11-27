@@ -18,7 +18,6 @@ package com.hippo.ehviewer.ui;
 
 import android.content.Context;
 import android.content.res.Configuration;
-import android.content.res.Resources;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
@@ -32,7 +31,6 @@ import com.hippo.content.ContextLocalWrapper;
 import com.hippo.ehviewer.Analytics;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.Settings;
-import java.util.Locale;
 
 public abstract class EhActivity extends AppCompatActivity {
 
@@ -73,25 +71,7 @@ public abstract class EhActivity extends AppCompatActivity {
 
     @Override
     protected void attachBaseContext(Context newBase) {
-        Locale locale = null;
-        String language = Settings.getAppLanguage();
-        if (language != null && !language.equals("system")) {
-            String[] split = language.split("-");
-            if (split.length == 1) {
-                locale = new Locale(split[0]);
-            } else if (split.length == 2) {
-                locale = new Locale(split[0], split[1]);
-            } else if (split.length == 3) {
-                locale = new Locale(split[0], split[1], split[2]);
-            }
-        }
-
-        if (locale == null) {
-            locale = Resources.getSystem().getConfiguration().locale;
-        }
-        newBase = ContextLocalWrapper.wrap(newBase, locale);
-        super.attachBaseContext(newBase);
-        Context context = newBase;
+        super.attachBaseContext(ContextLocalWrapper.wrap(newBase, Settings.getAppLocale()));
     }
 
     @Override

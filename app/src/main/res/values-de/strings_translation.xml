@@ -194,7 +194,7 @@
     <string name="translation_native_pair_help">Dieses Modell ist für Japanisch → vereinfachtes Chinesisch optimiert. Für andere Sprachpaare in der Modellverwaltung ein mehrsprachiges Modell auswählen oder importieren.</string>
     <string name="translation_mobile_download">Download über mobile Daten</string>
     <string name="translation_source_auto">Automatisch</string>
-    <string name="translation_source_auto_help">Die Sprache wird aus genügend OCR-Text nur für diesen Übersetzungsauftrag erkannt. Beim Neustart erfolgen OCR und Erkennung erneut. Kurzer oder gemischter Text wird auf der nächsten Seite erneut geprüft. Die manuelle Auswahl hat Vorrang.</string>
+    <string name="translation_source_auto_help">Die Sprache der Galerie wird zuerst per Manga-OCR erkannt. Bei anderen Sprachen als Japanisch liest das passende PP-OCRv5-Modell die aktuelle Seite erneut und übernimmt die folgenden Seiten. Installiere dieses Modell vorher. Die Spracherkennung gilt nur für diesen Auftrag. Bei zu wenig Text oder gemischten Sprachen wird auf der nächsten Seite erneut geprüft. Die manuelle Auswahl hat Vorrang.</string>
     <string name="translation_source_detected">Übersetzung: %1$s → %2$s</string>
     <string name="translation_source_unknown">Sprache nicht sicher erkannt. Vor ML Kit bitte manuell auswählen.</string>
     <string name="translation_source_auto_mlkit_help">Automatisch bereitet Japanisch, Koreanisch, Chinesisch und die Zielsprache vor. Englisch benötigt kein eigenes Paket.</string>
@@ -213,4 +213,13 @@
     <string name="translation_model_external_changed">Das externe Modell wurde geändert oder ist nicht verfügbar. GGUF-Datei erneut auswählen.</string>
     <string name="translation_gallery">Diese Galerie übersetzen</string>
     <string name="translation_gallery_submitted">Galerieübersetzung eingereiht</string>
+    <string name="translation_error_retry">Versuche es erneut. Prüfe bei anhaltenden Problemen die Einstellungen oder das ausgewählte Modell.</string>
+    <string name="translation_error_network">Prüfe die Netzwerkverbindung und die Erreichbarkeit des Dienstes und versuche es erneut.</string>
+    <string name="translation_error_http">Der Server hat HTTP %1$d zurückgegeben.</string>
+    <string name="translation_error_api_response">Die API hat eine ungültige Antwort zurückgegeben. Prüfe die Adresse des Dienstes und die Modelleinstellungen.</string>
+    <string name="translation_error_incomplete">Das Modell hat keine vollständige Übersetzung zurückgegeben.</string>
+    <string name="translation_error_gguf">Wähle eine gültige GGUF-Modelldatei aus.</string>
+    <string name="translation_error_model_integrity">Die Modelldatei %1$s konnte nicht überprüft werden. Lade sie erneut herunter oder wähle die richtige Datei aus.</string>
+    <string name="translation_error_model_files">Das Modellpaket enthält falsche Dateien oder es fehlen Dateien. Wähle das richtige Paket mit allen erforderlichen Dateien oder lade es erneut herunter.</string>
+    <string name="translation_error_storage">Auf die Datei konnte nicht zugegriffen werden. Prüfe die Dateiberechtigungen und den verfügbaren Speicherplatz.</string>
 </resources>

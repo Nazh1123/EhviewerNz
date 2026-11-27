@@ -44,7 +44,7 @@ class PpOcrRuntime internal constructor(private val context: Context, manifestOv
                 }
                 try {
                     call.awaitModelResponse().use { response ->
-                        check(response.isSuccessful) { "OCR component download HTTP ${response.code()}" }
+                        response.requireModelDownloadSuccess()
                         installOfficialArchive(requireNotNull(response.body()).byteStream(), progress)
                     }
                 } finally { cancellation.cancel() }
@@ -69,15 +69,18 @@ class PpOcrRuntime internal constructor(private val context: Context, manifestOv
                     val count = input.read(buffer)
                     if (count < 0) break
                     copied += count
-                    check(copied <= downloadBytes) { "OCR component larger than manifest" }
+                    if (copied > downloadBytes)
+                        throw modelVerificationFailure("PP-OCRv5", "OCR component larger than manifest")
                     output.write(buffer, 0, count)
                     if (copied - reported >= 1048576) { progress("PP-OCRv5", copied, downloadBytes); reported = copied }
                 }
-                check(copied == downloadBytes) { "Incomplete OCR component" }
+                if (copied != downloadBytes)
+                    throw modelVerificationFailure("PP-OCRv5", "Incomplete OCR component")
                 progress("PP-OCRv5", copied, downloadBytes)
             }
             currentCoroutineContext().ensureActive()
-            check(ModelChecksum.sha256(archive) == bundle.getString("sha256")) { "OCR component checksum mismatch" }
+            if (ModelChecksum.sha256(archive) != bundle.getString("sha256"))
+                throw modelVerificationFailure("PP-OCRv5", "OCR component checksum mismatch")
             currentCoroutineContext().ensureActive()
             archive.inputStream().use {
                 store.installMappedArchive(it, store.requiredNames.associate { name -> "jni/arm64-v8a/$name" to name },

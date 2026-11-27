@@ -53,7 +53,8 @@ class NativeModelStore internal constructor(private val context: Context,
     /** Caller holds TranslationRuntime.lock. Selecting does not remove other installed models. */
     suspend fun select(id: String) {
         currentCoroutineContext().ensureActive()
-        val model = installed().firstOrNull { it.id == id } ?: error("Model missing")
+        val model = installed().firstOrNull { it.id == id }
+            ?: throw TranslationModelFailure(R.string.translation_native_not_selected, "Model missing")
         val uri = externalUri(id)
         if (uri == null) validateModel(file(id)) else withExternalFile(id, uri) { validateExternalModel(it.fd) }
         currentCoroutineContext().ensureActive()
@@ -88,7 +89,8 @@ class NativeModelStore internal constructor(private val context: Context,
     }
 
     fun file(id: String): File {
-        require(id.matches(Regex("[a-f0-9]{64}"))) { "Import a GGUF model first" }
+        if (!id.matches(Regex("[a-f0-9]{64}")))
+            throw TranslationInputFailure(R.string.translation_native_not_selected, "Import a GGUF model first")
         return File(directory, "$id.gguf")
     }
 
@@ -111,9 +113,8 @@ class NativeModelStore internal constructor(private val context: Context,
 
     private fun stamp(descriptor: ParcelFileDescriptor): String {
         val stat = Os.fstat(descriptor.fileDescriptor)
-        require(OsConstants.S_ISREG(stat.st_mode) && stat.st_size > 24) {
-            context.getString(R.string.translation_model_external_unsupported)
-        }
+        if (!OsConstants.S_ISREG(stat.st_mode) || stat.st_size <= 24)
+            throw TranslationInputFailure(R.string.translation_model_external_unsupported, "External GGUF file is unsupported")
         Os.lseek(descriptor.fileDescriptor, 0, OsConstants.SEEK_SET)
         // Remounts can change device/inode numbers; shared-storage permission/xattr updates change ctime.
         // Neither means the GGUF contents changed. Use size and data modification time instead.
@@ -127,12 +128,17 @@ class NativeModelStore internal constructor(private val context: Context,
         return count == 4 && magic.contentEquals(byteArrayOf(71, 71, 85, 70))
     }
 
+    private fun invalidGguf() =
+        TranslationInputFailure(R.string.translation_error_gguf, "Please choose a GGUF model")
+
+    private fun externalModelChanged() =
+        TranslationModelFailure(R.string.translation_model_external_changed, "External GGUF file changed")
+
     private fun <T> withExternalFile(id: String, uri: Uri, block: (ParcelFileDescriptor) -> T): T {
-        val descriptor = requireNotNull(context.contentResolver.openFileDescriptor(uri, "r")) { "Cannot open model" }
+        val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
+            ?: throw TranslationInputFailure(R.string.translation_error_storage, "Cannot open model")
         return descriptor.use {
-            check(stamp(it) == names.getString("stamp_$id", null)) {
-                context.getString(R.string.translation_model_external_changed)
-            }
+            if (stamp(it) != names.getString("stamp_$id", null)) throw externalModelChanged()
             block(it)
         }
     }
@@ -152,7 +158,9 @@ class NativeModelStore internal constructor(private val context: Context,
         val temp = File.createTempFile("import-", ".part", directory)
         try {
             val digest = MessageDigest.getInstance("SHA-256")
-            requireNotNull(resolver.openInputStream(uri)) { "Cannot open model" }.use { input ->
+            val source = resolver.openInputStream(uri)
+                ?: throw TranslationInputFailure(R.string.translation_error_storage, "Cannot open model")
+            source.use { input ->
                 temp.outputStream().use { output ->
                     val buffer = ByteArray(1024 * 1024)
                     while (true) {
@@ -178,10 +186,11 @@ class NativeModelStore internal constructor(private val context: Context,
             val name = runCatching { resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                 if (it.moveToFirst()) it.getString(0) else null
             } }.getOrNull() ?: uri.lastPathSegment ?: "model.gguf"
-            val descriptor = requireNotNull(resolver.openFileDescriptor(uri, "r")) { "Cannot open model" }
+            val descriptor = resolver.openFileDescriptor(uri, "r")
+                ?: throw TranslationInputFailure(R.string.translation_error_storage, "Cannot open model")
             val (id, size, signature) = descriptor.use {
                 val before = stamp(it)
-                require(hasGgufHeader(it)) { "Please choose a GGUF model" }
+                if (!hasGgufHeader(it)) throw invalidGguf()
                 val digest = MessageDigest.getInstance("SHA-256")
                 val buffer = ByteArray(1024 * 1024)
                 var size = 0L
@@ -192,9 +201,9 @@ class NativeModelStore internal constructor(private val context: Context,
                     digest.update(buffer, 0, count)
                     size += count
                 }
-                check(before == stamp(it) && size == it.statSize) { context.getString(R.string.translation_model_external_changed) }
+                if (before != stamp(it) || size != it.statSize) throw externalModelChanged()
                 validateExternalModel(it.fd) // Also verifies mmap support; never silently copies an external import.
-                check(before == stamp(it)) { context.getString(R.string.translation_model_external_changed) }
+                if (before != stamp(it)) throw externalModelChanged()
                 Triple(digest.digest().joinToString("") { byte -> "%02x".format(byte) }, size, before)
             }
             currentCoroutineContext().ensureActive()
@@ -241,10 +250,11 @@ class NativeModelStore internal constructor(private val context: Context,
     internal suspend fun publish(temp: File, name: String, id: String) {
         currentCoroutineContext().ensureActive()
         require(temp.canonicalFile.parentFile == directory.canonicalFile)
-        require(temp.length() > 24 && temp.inputStream().use {
+        val validHeader = temp.length() > 24 && temp.inputStream().use {
             val magic = ByteArray(4)
             it.read(magic) == 4 && magic.contentEquals(byteArrayOf(71, 71, 85, 70))
-        }) { "Please choose a GGUF model" }
+        }
+        if (!validHeader) throw invalidGguf()
         // Validate architecture, tensors, chat template and context allocation before replacing anything.
         validateModel(temp)
         currentCoroutineContext().ensureActive()

@@ -474,7 +474,7 @@ class TranslationModelsFragment : Fragment() {
                 if (isAdded && view != null) taskText.setText(R.string.translation_model_cancelled)
                 throw cancel
             } catch (error: Exception) {
-                taskText.text = getString(R.string.translation_model_operation_failed, error.message.orEmpty())
+                taskText.text = translationFailureMessage(requireContext(), R.string.translation_model_operation_failed, error)
             } catch (_: LinkageError) { taskText.setText(R.string.translation_native_unavailable) }
             finally {
                 downloader = null; mangaDownloader = null; busy = false
