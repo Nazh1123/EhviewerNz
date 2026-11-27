@@ -66,6 +66,53 @@ public class GalleryUpdateLogDialogTest {
                 ReflectionHelpers.ClassParameter.from(String.class, "gallery-token"));
     }
 
+    @Test public void checkingRendersEmptyFieldsAndLetsUserConfirmImmediately() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setTheme(R.style.AppTheme);
+        AtomicInteger confirms = new AtomicInteger();
+        AtomicInteger dismisses = new AtomicInteger();
+        var preview = new GalleryUpdateLogDialog.Preview(activity, 200, confirms::incrementAndGet,
+                () -> fail("History opened"), () -> fail("Versions opened"), dismisses::incrementAndGet);
+        View root = preview.dialog.getWindow().getDecorView();
+        assertNotNull(findText(root, activity.getString(R.string.gallery_update_preview_added)));
+        assertNotNull(findText(root, activity.getString(R.string.gallery_update_preview_deleted)));
+        assertNotNull(findText(root, activity.getString(R.string.gallery_update_preview_cancel)));
+        assertNull(findText(root, "+0"));
+        assertTrue(root.findViewById(R.id.gallery_update_log_history_action).isEnabled());
+        assertTrue(preview.dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isEnabled());
+        root.findViewById(R.id.gallery_update_log_read_action).performClick();
+        ShadowLooper.idleMainLooper();
+        assertFalse(preview.dialog.isShowing());
+        assertEquals(1, confirms.get());
+        assertEquals(1, dismisses.get());
+        activity.finish();
+    }
+
+    @Test public void checkingCancelAndDeletionOnlyPreviewHaveDistinctActions() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setTheme(R.style.AppTheme);
+        AtomicInteger confirms = new AtomicInteger();
+        AtomicInteger dismisses = new AtomicInteger();
+        var preview = new GalleryUpdateLogDialog.Preview(activity, 200, confirms::incrementAndGet,
+                () -> {}, () -> {}, dismisses::incrementAndGet);
+        findText(preview.dialog.getWindow().getDecorView(), activity.getString(R.string.gallery_update_preview_cancel)).performClick();
+        ShadowLooper.idleMainLooper();
+        assertEquals(0, confirms.get());
+        assertEquals(1, dismisses.get());
+        preview = new GalleryUpdateLogDialog.Preview(activity, 200, confirms::incrementAndGet,
+                () -> {}, () -> {}, dismisses::incrementAndGet);
+        preview.ready(record(true, true, new int[0]), "2026-11-26");
+        View root = preview.dialog.getWindow().getDecorView();
+        assertNotNull(findText(root, "+0"));
+        assertNotNull(findText(root, "-2"));
+        assertNotNull(findText(root, "p1–2"));
+        root.findViewById(R.id.gallery_update_log_read_action).performClick();
+        ShadowLooper.idleMainLooper();
+        assertEquals(1, confirms.get());
+        assertEquals(2, dismisses.get());
+        activity.finish();
+    }
+
     @Test public void versionHistoryIsIdleUntilClickedAndLogUsesCorrectPageRanges() {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
         activity.setTheme(R.style.AppTheme);

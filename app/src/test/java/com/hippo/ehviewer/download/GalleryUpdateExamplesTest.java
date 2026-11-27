@@ -138,11 +138,12 @@ public class GalleryUpdateExamplesTest {
         assertFalse(reuse(0, A));
     }
 
-    @Test public void existingCorruptTargetStillSatisfiesWorkerExistenceCheck() throws Exception {
+    @Test public void existingCorruptTargetCanBeReplacedByAReadableParentPage() throws Exception {
         File broken = new File(targetDir, SpiderDen.generateImageFilename(0, ".png"));
         Files.write(broken.toPath(), "interrupted download".getBytes());
         assertFalse(SpiderDen.isReadableImage(UniFile.fromFile(broken)));
-        // SpiderQueen checks contain() before resolving pToken or attempting parent reuse.
+        assertFalse(den.contain(0));
+        copied(0, A);
         assertTrue(den.contain(0));
     }
 

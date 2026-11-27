@@ -122,6 +122,82 @@ final class GalleryUpdateLogDialog {
         return dialog;
     }
 
+    static final class Preview {
+        final AlertDialog dialog;
+        private final Context context;
+        private final TextView time;
+        private final TextView totals;
+        private final PageFields added;
+        private final PageFields deleted;
+        private final LinearLayout statusCard;
+        private final TextView status;
+        private final Button statusAction;
+
+        Preview(Context host, long gid, Runnable confirm, Runnable history, Runnable versions,
+                Runnable onDismiss) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(host);
+            context = builder.getContext();
+            View root = LayoutInflater.from(context).inflate(R.layout.dialog_gallery_update_log, null);
+            LinearLayout content = root.findViewById(R.id.gallery_update_log_content);
+            int secondary = AttrResources.getAttrColor(context, android.R.attr.textColorSecondary);
+            int primary = AttrResources.getAttrColor(context, android.R.attr.textColorPrimary);
+            content.addView(label(context, context.getString(R.string.gallery_update_log_time), 12, secondary));
+            time = label(context, "", 16, primary);
+            content.addView(time);
+            content.addView(label(context, context.getString(R.string.gallery_update_log_target, gid), 12, secondary));
+            totals = label(context, "", 14, primary);
+            totals.setPadding(0, dp(context, 4), 0, dp(context, 12));
+            content.addView(totals);
+            added = pageSection(context, content, R.string.gallery_update_preview_added,
+                    null, "+", context.getColor(R.color.deep_green_600));
+            deleted = pageSection(context, content, R.string.gallery_update_preview_deleted,
+                    null, "-", context.getColor(R.color.red_500));
+            statusCard = card(context, 0);
+            statusCard.setGravity(Gravity.CENTER);
+            status = label(context, "", 14, primary);
+            status.setGravity(Gravity.CENTER);
+            statusCard.addView(status);
+            statusAction = new Button(context);
+            statusCard.addView(statusAction, LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            addCard(context, content, statusCard);
+
+            Button update = root.findViewById(R.id.gallery_update_log_read_action);
+            update.setText(R.string.gallery_update_preview_confirm);
+            dialog = builder.setTitle(R.string.gallery_update_preview_title).setView(root)
+                    .setNeutralButton(R.string.gallery_update_log_versions, (d, which) -> versions.run())
+                    .setPositiveButton(R.string.gallery_update_preview_later, null).create();
+            update.setOnClickListener(v -> { confirm.run(); dialog.dismiss(); });
+            root.findViewById(R.id.gallery_update_log_history_action).setOnClickListener(v -> {
+                dialog.dismiss();
+                history.run();
+            });
+            dialog.setOnDismissListener(d -> onDismiss.run());
+            checking();
+            dialog.show();
+        }
+
+        void checking() {
+            statusCard.setVisibility(View.VISIBLE);
+            status.setText(R.string.gallery_update_preview_checking);
+            statusAction.setText(R.string.gallery_update_preview_cancel);
+            statusAction.setOnClickListener(v -> dialog.dismiss());
+        }
+
+        void ready(GalleryUpdateRecord record, String versionTime) {
+            time.setText(versionTime);
+            totals.setText(context.getString(R.string.gallery_update_preview_totals, record.oldPages, record.newPages));
+            added.bind(record.addedPages);
+            deleted.bind(record.deletedPages);
+            statusCard.setVisibility(View.GONE);
+        }
+
+        void failed(String error, Runnable retry) {
+            status.setText(error);
+            statusAction.setText(R.string.try_again);
+            statusAction.setOnClickListener(v -> retry.run());
+        }
+    }
+
     static CharSequence historyName(Context context, GalleryUpdateRecord record, int number) {
         String time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                 .format(new Date(record.completedAt));
@@ -141,11 +217,6 @@ final class GalleryUpdateLogDialog {
         return name;
     }
 
-    private static String pages(Context context, int[] pages) {
-        return pages.length == 0 ? context.getString(R.string.gallery_update_log_none)
-                : GalleryUpdateRecord.formatPages(pages);
-    }
-
     private static void section(Context context, LinearLayout content, String title,
                                 String value, int color) {
         LinearLayout card = card(context, 0);
@@ -154,7 +225,7 @@ final class GalleryUpdateLogDialog {
         addCard(context, content, card);
     }
 
-    private static void pageSection(Context context, LinearLayout content, int title,
+    private static PageFields pageSection(Context context, LinearLayout content, int title,
                                     int[] pageNumbers, String sign, int color) {
         LinearLayout card = card(context, color);
         card.setOrientation(LinearLayout.HORIZONTAL);
@@ -163,11 +234,12 @@ final class GalleryUpdateLogDialog {
         details.setOrientation(LinearLayout.VERTICAL);
         details.addView(heading(context, context.getString(title),
                 AttrResources.getAttrColor(context, android.R.attr.textColorSecondary)));
-        details.addView(body(context, pages(context, pageNumbers), true));
+        TextView numbers = body(context, "", true);
+        details.addView(numbers);
         card.addView(details, new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
-        TextView count = label(context, sign + pageNumbers.length, 44, color);
+        TextView count = label(context, "", 44, color);
         count.setTypeface(count.getTypeface(), Typeface.BOLD);
         count.setIncludeFontPadding(false);
         count.setGravity(Gravity.TOP | Gravity.END);
@@ -177,6 +249,19 @@ final class GalleryUpdateLogDialog {
         countParams.gravity = Gravity.TOP;
         card.addView(count, countParams);
         addCard(context, content, card);
+        PageFields fields = new PageFields(numbers, count, sign);
+        if (pageNumbers != null) {
+            fields.bind(pageNumbers);
+            if (pageNumbers.length == 0) numbers.setText(R.string.gallery_update_log_none);
+        }
+        return fields;
+    }
+
+    private record PageFields(TextView numbers, TextView count, String sign) {
+        void bind(int[] indexes) {
+            numbers.setText(GalleryUpdateRecord.formatPages(indexes));
+            count.setText(sign + indexes.length);
+        }
     }
 
     private static void addCard(Context context, LinearLayout content, LinearLayout card) {

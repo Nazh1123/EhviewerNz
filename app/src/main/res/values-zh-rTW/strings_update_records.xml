@@ -82,4 +82,13 @@
     <string name="gallery_update_history_no_pages">當次新增頁已無可閱讀的本地圖片，可能已被後續版本刪除或本地文件缺失。未保存頁面 ptoken 快照的舊記錄僅能在原本地版本中閱讀。</string>
     <string name="gallery_update_history_incomplete">頁面信息不完整</string>
     <string name="gallery_update_history_empty">該版本鏈暫無保存的更新記錄。較早記錄可能已被保存數量上限清除。</string>
+    <string name="gallery_update_preview_title">畫廊更新預覽</string>
+    <string name="gallery_update_preview_checking">正在檢查更新 . . .</string>
+    <string name="gallery_update_preview_cancel">點擊取消</string>
+    <string name="gallery_update_preview_confirm">確認更新</string>
+    <string name="gallery_update_preview_later">暫不更新</string>
+    <string name="gallery_update_preview_added">新增（新版頁碼）</string>
+    <string name="gallery_update_preview_deleted">刪除（舊版頁碼）</string>
+    <string name="gallery_update_preview_totals">舊版 %1$d 頁 · 新版 %2$d 頁</string>
+    <string name="gallery_update_preview_source_changed">本機舊版本已變更，請重新檢查更新。</string>
 </resources>

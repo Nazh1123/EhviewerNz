@@ -70,6 +70,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
     private var m509Delay: NotificationDelay? = null
     private var mUpdatingDelay: NotificationDelay? = null
     private var mGalleryUpdatedDelay: NotificationDelay? = null
+    private val previewChecks = mutableMapOf<Long, GalleryUpdatePreviewCheck>()
     private val mGalleryUpdateTasks = mutableMapOf<Long, GalleryVersionMetadataTask>()
     private val mGalleryUpdateTargets = mutableMapOf<Long, GalleryDetail>()
     private val mActiveGalleryUpdateGids = mutableSetOf<Long>()
@@ -128,6 +129,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
     }
 
     override fun onDestroy() {
+        cancelPreviewChecks()
         GalleryUpdateManager.removeUpdateStateListener(this)
         super.onDestroy()
 
@@ -257,7 +259,9 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
             ACTION_START_GALLERY_UPDATE -> {
                 val gallery = intent!!.getParcelableExtra<GalleryDetail>(KEY_GALLERY_INFO)
                 if (gallery != null) {
-                    startGalleryUpdate(gallery)
+                    val sourceGid = intent.getLongExtra(KEY_UPDATE_SOURCE, 0L)
+                    if (intent.getBooleanExtra(KEY_AWAIT_PREVIEW, false)) awaitPreview(gallery, sourceGid)
+                    else startGalleryUpdate(gallery, sourceGid)
                 }
             }
         }
@@ -429,12 +433,52 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
             NotificationDelay(this, mNotifyManager, mUpdatingBuilder!!, ID_UPDATE_PREPARING)
     }
 
-    private fun startGalleryUpdate(target: GalleryDetail) {
+    private fun awaitPreview(target: GalleryDetail, sourceGid: Long) {
+        val check = GalleryUpdatePreviewCheck.take(target.gid)
+        if (previewChecks.containsKey(target.gid)) {
+            check?.cancel()
+            return
+        }
+        if (check == null) {
+            previewFailed(target, getString(R.string.gallery_update_error_interrupted))
+            return
+        }
+        previewChecks[target.gid] = check
+        GalleryUpdateManager.notifyUpdateStateChanged(target.gid, GalleryUpdateManager.UPDATE_STATE_PREPARING)
+        acquireWakeLock()
+        refreshGalleryUpdateNotification()
+        check.observe { result ->
+            if (previewChecks.remove(target.gid) !== check) return@observe
+            refreshGalleryUpdateNotification()
+            if (result.record() != null) startGalleryUpdate(target, sourceGid)
+            else previewFailed(target, result.error())
+            checkStopSelf()
+        }
+    }
+
+    private fun previewFailed(target: GalleryDetail, reason: String) {
+        GalleryUpdateManager.notifyUpdateStateChanged(target.gid, GalleryUpdateManager.UPDATE_STATE_FAILED)
+        showGalleryUpdateFailure(target, reason, recordFailure = false)
+    }
+
+    private fun cancelPreviewChecks() {
+        previewChecks.forEach { (gid, check) ->
+            check.cancel()
+            GalleryUpdateManager.notifyUpdateStateChanged(gid, GalleryUpdateManager.UPDATE_STATE_FAILED)
+        }
+        previewChecks.clear()
+    }
+
+    private fun startGalleryUpdate(target: GalleryDetail, expectedSource: Long) {
+        if (expectedSource > 0 && findGalleryUpdateSource(target)?.gid != expectedSource) {
+            previewFailed(target, getString(R.string.gallery_update_preview_source_changed))
+            return
+        }
         // Updating an existing range target still means obtaining the complete new version.
         if (GalleryDownloadRangeStore.isRange(target.gid)) {
             mDownloadManager?.changePageRange(target, null,
                 { error -> showGalleryUpdateFailure(target, error) },
-                { startGalleryUpdate(target) })
+                { startGalleryUpdate(target, expectedSource) })
             return
         }
         if (mGalleryUpdateTasks.containsKey(target.gid)) {
@@ -508,6 +552,12 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
                 firstGid, target.gid
             )
             val olderGids = downloadManager.getOlderGalleryVersionGids(firstGid, target.gid)
+            if (expectedSource > 0 && source?.gid != expectedSource) {
+                previewFailed(target, getString(R.string.gallery_update_preview_source_changed))
+                refreshGalleryUpdateNotification()
+                checkStopSelf()
+                return
+            }
             if (source == null || olderGids.isEmpty()) {
                 showGalleryUpdateFailure(
                     target,
@@ -567,6 +617,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
     }
 
     private fun cancelGalleryUpdateTasks() {
+        cancelPreviewChecks()
         mGalleryUpdateTargets.values.forEach { target ->
             GalleryUpdateManager.reportUnplannedFailure(applicationContext, target.gid,
                 findGalleryUpdateSource(target), getString(R.string.gallery_update_error_cancelled))
@@ -610,7 +661,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
     }
 
     private fun refreshGalleryUpdateNotification() {
-        if (mGalleryUpdateTasks.isEmpty()) {
+        if (mGalleryUpdateTasks.isEmpty() && previewChecks.isEmpty()) {
             mUpdatingDelay?.cancel()
             return
         }
@@ -618,10 +669,8 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
         mUpdatingBuilder!!
             .setContentTitle(getString(R.string.gallery_update_notification_preparing_title))
             .setContentText(
-                getString(
-                    R.string.gallery_update_notification_preparing_count,
-                    mGalleryUpdateTasks.size
-                )
+                if (previewChecks.isNotEmpty()) getString(R.string.gallery_update_preview_checking)
+                else getString(R.string.gallery_update_notification_preparing_count, mGalleryUpdateTasks.size)
             )
             .setProgress(0, 0, true)
         mUpdatingDelay!!.startForeground()
@@ -945,7 +994,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
 
     private fun checkStopSelf() {
         if ((mDownloadManager == null || mDownloadManager!!.isIdle)
-            && mGalleryUpdateTasks.isEmpty()
+            && mGalleryUpdateTasks.isEmpty() && previewChecks.isEmpty()
             && mActiveGalleryUpdateGids.none { gid ->
                 mDownloadManager?.getDownloadInfo(gid)?.state == DownloadInfo.STATE_FINISH
                     && GalleryUpdateManager.getPlan(gid) != null
@@ -1213,6 +1262,8 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
         const val ACTION_CLEAR: String = "clear"
         const val ACTION_START_GALLERY_UPDATE: String = "start_gallery_update"
 
+        const val KEY_UPDATE_SOURCE = "gallery_update_source"
+        const val KEY_AWAIT_PREVIEW = "await_gallery_update_preview"
         const val KEY_GALLERY_INFO: String = "gallery_info"
         const val KEY_LABEL: String = "label"
         const val KEY_KEEP_PAGE_RANGE: String = "keep_page_range"

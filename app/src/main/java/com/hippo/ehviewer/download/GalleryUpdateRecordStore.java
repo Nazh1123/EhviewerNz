@@ -13,6 +13,9 @@ import androidx.annotation.Nullable;
 
 import com.hippo.ehviewer.Settings;
 
+import com.hippo.ehviewer.spider.SpiderInfo;
+
+import org.json.JSONArray;
 import org.json.JSONException;
 import java.io.IOException;
 import java.io.StringReader;
@@ -38,10 +41,11 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
     }
 
     GalleryUpdateRecordStore(Context context) {
-        super(context, "gallery_update_records.db", null, 2);
+        super(context, "gallery_update_records.db", null, 3);
     }
 
     @Override public void onCreate(SQLiteDatabase db) {
+        createPreviews(db);
         for (String table : new String[]{"records", "pending"}) {
             db.execSQL("CREATE TABLE " + table + " (gid INTEGER PRIMARY KEY, source_gid INTEGER NOT NULL, "
                     + "completed_at INTEGER NOT NULL, reading_page INTEGER NOT NULL DEFAULT 0, "
@@ -52,10 +56,72 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion < 3) createPreviews(db);
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE records ADD COLUMN first_gid INTEGER NOT NULL DEFAULT 0");
             db.execSQL("ALTER TABLE pending ADD COLUMN first_gid INTEGER NOT NULL DEFAULT 0");
             db.execSQL("CREATE INDEX records_family ON records(first_gid, completed_at)");
+        }
+    }
+
+    private static void createPreviews(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE previews (gid INTEGER PRIMARY KEY, source_gid INTEGER NOT NULL, "
+                + "source_token TEXT NOT NULL, target_token TEXT NOT NULL, checked_at INTEGER NOT NULL, payload TEXT NOT NULL, "
+                + "source_pages TEXT NOT NULL)");
+    }
+
+    @Nullable public synchronized GalleryUpdateRecord findPreview(long gid, String token, long sourceGid,
+                                                                  String sourceToken) {
+        try (Cursor row = getReadableDatabase().query("previews", new String[]{"checked_at", "payload"},
+                "gid=? AND source_gid=? AND source_token=? AND target_token=?", new String[]{Long.toString(gid),
+                        Long.toString(sourceGid), sourceToken, token}, null, null, null)) {
+            if (!row.moveToFirst()) return null;
+            GalleryUpdateRecord record = GalleryUpdateRecord.fromJson(gid, sourceGid, row.getLong(0), 0, row.getString(1));
+            return record.complete && record.hasTokenSnapshot() && record.targetToken.equals(token) ? record : null;
+        } catch (JSONException | android.database.SQLException e) {
+            Log.w("GalleryUpdateRecords", "Unable to read preview for " + gid, e);
+            return null;
+        }
+    }
+
+    synchronized void savePreview(GalleryUpdateRecord record, SpiderInfo source) {
+        if (!record.complete || !record.hasTokenSnapshot()) return;
+        try {
+            ContentValues values = new ContentValues();
+            values.put("gid", record.targetGid);
+            values.put("source_gid", record.sourceGid);
+            values.put("source_token", source.token);
+            values.put("target_token", record.targetToken);
+            values.put("checked_at", System.currentTimeMillis());
+            JSONArray pages = new JSONArray();
+            for (int i = 0; i < source.pages; i++) pages.put(source.pTokenMap.get(i));
+            values.put("source_pages", pages.toString());
+            values.put("payload", record.toJson());
+            SQLiteDatabase db = getWritableDatabase();
+            db.insertWithOnConflict("previews", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            db.execSQL("DELETE FROM previews WHERE gid IN (SELECT gid FROM previews "
+                    + "ORDER BY checked_at DESC, gid DESC LIMIT -1 OFFSET 64)");
+        } catch (JSONException | android.database.SQLException e) {
+            Log.w("GalleryUpdateRecords", "Unable to cache preview for " + record.targetGid, e);
+        }
+    }
+
+    synchronized void fillPreviewSource(long targetGid, String targetToken, SpiderInfo source) {
+        try (Cursor row = getReadableDatabase().query("previews", new String[]{"source_pages"},
+                "gid=? AND source_gid=? AND source_token=? AND target_token=?", new String[]{Long.toString(targetGid),
+                        Long.toString(source.gid), source.token, targetToken}, null, null, null)) {
+            if (!row.moveToFirst()) return;
+            JSONArray pages = new JSONArray(row.getString(0));
+            if (pages.length() != source.pages) return;
+            for (int i = 0; i < source.pages; i++) {
+                String saved = pages.getString(i);
+                String local = source.pTokenMap.get(i);
+                if (saved.isEmpty() || "failed".equals(saved)
+                        || (local != null && !local.isEmpty() && !"failed".equals(local) && !local.equals(saved))) return;
+            }
+            for (int i = 0; i < source.pages; i++) source.pTokenMap.put(i, pages.getString(i));
+        } catch (JSONException | android.database.SQLException e) {
+            Log.w("GalleryUpdateRecords", "Unable to restore source page identities for " + targetGid, e);
         }
     }
 
@@ -311,6 +377,7 @@ public final class GalleryUpdateRecordStore extends SQLiteOpenHelper {
             values.put("payload", record.toJson());
             if (db.insertWithOnConflict("records", null, values,
                     SQLiteDatabase.CONFLICT_REPLACE) == -1) return false;
+            db.delete("previews", "gid=?", new String[]{Long.toString(gid)});
             // Keep the draft until the update plan has been removed, allowing crash recovery.
             trim(db, Settings.getGalleryUpdateRecordLimit());
             db.setTransactionSuccessful();

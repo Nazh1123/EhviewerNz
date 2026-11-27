@@ -82,4 +82,13 @@
     <string name="gallery_updated">Mise à jour</string>
     <string name="gallery_read_full">Lire toute la galerie</string>
     <string name="gallery_update_record_invalid">Enregistrement de mise à jour invalide</string>
+    <string name="gallery_update_preview_title">Aperçu de la mise à jour</string>
+    <string name="gallery_update_preview_checking">Recherche des modifications . . .</string>
+    <string name="gallery_update_preview_cancel">Appuyer pour annuler</string>
+    <string name="gallery_update_preview_confirm">Confirmer la mise à jour</string>
+    <string name="gallery_update_preview_later">Plus tard</string>
+    <string name="gallery_update_preview_added">Pages ajoutées (nouvelle version)</string>
+    <string name="gallery_update_preview_deleted">Pages supprimées (ancienne version)</string>
+    <string name="gallery_update_preview_totals">Ancienne version : %1$d pages · Nouvelle version : %2$d pages</string>
+    <string name="gallery_update_preview_source_changed">La version locale a changé. Vérifiez à nouveau les modifications.</string>
 </resources>

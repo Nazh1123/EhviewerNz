@@ -83,4 +83,13 @@
         <item>500</item>
         <item>1000</item>
     </string-array>
+    <string name="gallery_update_preview_title">画廊更新预览</string>
+    <string name="gallery_update_preview_checking">正在检查更新 . . .</string>
+    <string name="gallery_update_preview_cancel">点击取消</string>
+    <string name="gallery_update_preview_confirm">确认更新</string>
+    <string name="gallery_update_preview_later">暂不更新</string>
+    <string name="gallery_update_preview_added">新增（新版页码）</string>
+    <string name="gallery_update_preview_deleted">删除（旧版页码）</string>
+    <string name="gallery_update_preview_totals">旧版 %1$d 页 · 新版 %2$d 页</string>
+    <string name="gallery_update_preview_source_changed">本地旧版本已变更，请重新检查更新。</string>
 </resources>

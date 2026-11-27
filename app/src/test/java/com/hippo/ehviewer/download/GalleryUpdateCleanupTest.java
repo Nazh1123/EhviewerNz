@@ -410,8 +410,8 @@ public class GalleryUpdateCleanupTest {
         try {
             com.hippo.ehviewer.client.data.GalleryDetail target = new com.hippo.ehviewer.client.data.GalleryDetail();
             target.gid = 300; target.title = "new"; target.firstGid = 0L;
-            ReflectionHelpers.callInstanceMethod(service, "startGalleryUpdate",
-                    ReflectionHelpers.ClassParameter.from(com.hippo.ehviewer.client.data.GalleryDetail.class, target));
+            service.onStartCommand(new android.content.Intent(DownloadService.ACTION_START_GALLERY_UPDATE)
+                    .putExtra(DownloadService.KEY_GALLERY_INFO, target), 0, 1);
             long deadline = System.nanoTime() + 10_000_000_000L;
             while (!Integer.valueOf(GalleryUpdateManager.UPDATE_STATE_FAILED).equals(
                     GalleryUpdateManager.getUpdateState(300)) && System.nanoTime() < deadline) {
@@ -496,6 +496,86 @@ public class GalleryUpdateCleanupTest {
         dialog.dismiss(); activity.finish();
     }
 
+    @Test public void previewFetchesMissingMetadataAndReopensFromCacheWithoutStartingUpdate() throws Exception {
+        disk(sourceDir, metadata(100, 1, "1111111111", "2222222222"));
+        var requests = new java.util.concurrent.CopyOnWriteArrayList<okhttp3.HttpUrl>();
+        var client = new okhttp3.OkHttpClient.Builder().addInterceptor(chain -> {
+            var request = chain.request();
+            requests.add(request.url());
+            String html = "<table><tr><td>Length:</td><td>3 pages</td></tr></table>"
+                    + "<a href=\"https://e-hentai.org/s/3333333333/200-3\">"
+                    + "<div title=\"Page 3: test\" style=\"background:url(https://example.com/3.jpg) 0 0\"></div></a>";
+            return new okhttp3.Response.Builder().request(request).protocol(okhttp3.Protocol.HTTP_1_1)
+                    .code(200).message("OK").body(okhttp3.ResponseBody.create(null, html)).build();
+        }).build();
+        ReflectionHelpers.setField(context, "mBrowsingOkHttpClient", client);
+        var detail = new com.hippo.ehviewer.client.data.GalleryDetail();
+        detail.gid = 200;
+        detail.token = "0123456789";
+        detail.pages = detail.SpiderInfoPages = 3;
+        detail.SpiderInfoPreviewPages = 2;
+        var previews = new com.hippo.ehviewer.client.data.LargePreviewSet();
+        previews.addItem(0, "", "https://e-hentai.org/s/2222222222/200-1");
+        previews.addItem(1, "", "https://e-hentai.org/s/4444444444/200-2");
+        detail.SpiderInfoPreviewSet = previews;
+
+        for (int attempt = 0; attempt < 2; attempt++) {
+            var check = new GalleryUpdatePreviewCheck(context, manager.getDownloadInfo(100), detail);
+            var result = new AtomicReference<GalleryUpdatePreviewCheck.Result>();
+            check.start(result::set);
+            long deadline = System.nanoTime() + 10_000_000_000L;
+            while (result.get() == null && System.nanoTime() < deadline) {
+                ShadowLooper.idleMainLooper();
+                Thread.sleep(10);
+            }
+            assertNotNull(result.get());
+            assertNull(result.get().error());
+            assertArrayEquals(new int[]{1, 2}, result.get().record().addedPages);
+            assertArrayEquals(new int[]{0}, result.get().record().deletedPages);
+        }
+        assertEquals(1, requests.size());
+        assertEquals("1", requests.get(0).queryParameter("p"));
+        assertTrue(GalleryUpdateRecordStore.get(context).listSummaries().isEmpty());
+        assertNull(GalleryUpdateManager.getPlan(200));
+        assertTrue(sourceDir.exists());
+    }
+
+    @Test public void confirmedPreviewWaitsForComparisonBeforeRunningCleanup() throws Exception {
+        SpiderInfo old = metadata(100, 1, "1111111111", "2222222222");
+        SpiderInfo target = metadata(200, 0, "1111111111", "3333333333", "2222222222");
+        GalleryUpdateRecord preview = GalleryUpdateRecord.compare(200, 100, old, target);
+        GalleryUpdateRecordStore.get(context).savePreview(preview, old);
+        old.pTokenMap.remove(1);
+        disk(sourceDir, old);
+        disk(targetDir, target);
+        GalleryUpdateManager.register(200, 100, List.of(100L));
+        var controller = Robolectric.buildService(DownloadService.class).create();
+        DownloadService service = controller.get();
+        try {
+            var detail = new com.hippo.ehviewer.client.data.GalleryDetail();
+            detail.gid = 200;
+            detail.token = target.token;
+            detail.firstGid = 100L;
+            detail.title = "new";
+            var task = new GalleryUpdatePreviewCheck(context, manager.getDownloadInfo(100), detail);
+            task.handOff();
+            service.onStartCommand(new android.content.Intent(DownloadService.ACTION_START_GALLERY_UPDATE)
+                    .putExtra(DownloadService.KEY_GALLERY_INFO, detail)
+                    .putExtra(DownloadService.KEY_UPDATE_SOURCE, 100L)
+                    .putExtra(DownloadService.KEY_AWAIT_PREVIEW, true), 0, 1);
+            ShadowLooper.idleMainLooper();
+            assertTrue(sourceDir.exists());
+            assertNull(GalleryUpdateRecordStore.get(context).find(200));
+            task.deliver(new GalleryUpdatePreviewCheck.Result(preview, null));
+            awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
+            assertFalse(sourceDir.exists());
+            assertEquals(2, GalleryUpdateManager.readDownloadedSpiderInfo(200).startPage);
+            assertArrayEquals(new int[]{1}, GalleryUpdateRecordStore.get(context).find(200).addedPages);
+        } finally {
+            controller.destroy();
+        }
+    }
+
     @Test public void serviceDefersSuccessNotificationAndRetriesFinishedDownloadCleanup() throws Exception {
         disk(sourceDir, metadata(100, 0, "1111111111", "2222222222"));
         disk(targetDir, metadata(200, 0, "1111111111", "2222222222", "3333333333"));
@@ -509,9 +589,8 @@ public class GalleryUpdateCleanupTest {
             com.hippo.ehviewer.client.data.GalleryDetail detail =
                     new com.hippo.ehviewer.client.data.GalleryDetail();
             detail.gid = 200; detail.token = "0123456789"; detail.title = "test";
-            ReflectionHelpers.callInstanceMethod(service, "startGalleryUpdate",
-                    ReflectionHelpers.ClassParameter.from(
-                            com.hippo.ehviewer.client.data.GalleryDetail.class, detail));
+            service.onStartCommand(new android.content.Intent(DownloadService.ACTION_START_GALLERY_UPDATE)
+                    .putExtra(DownloadService.KEY_GALLERY_INFO, detail), 0, 1);
             awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
             ShadowLooper.idleMainLooper();
             assertNotNull(ReflectionHelpers.getField(service, "mGalleryUpdatedBuilder"));

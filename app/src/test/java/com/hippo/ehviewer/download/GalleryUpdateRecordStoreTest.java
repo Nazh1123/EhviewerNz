@@ -41,6 +41,44 @@ public class GalleryUpdateRecordStoreTest {
                 2, 5, true, new int[]{1, 3, 4}, new int[0], 0)));
     }
 
+    @Test public void previewSurvivesReopenAndOnlyEntersHistoryOnCompletion() {
+        var old = new com.hippo.ehviewer.spider.SpiderInfo();
+        old.gid = 100;
+        old.token = "source";
+        old.pages = 1;
+        old.pTokenMap = new android.util.SparseArray<>();
+        old.pTokenMap.put(0, "before");
+        var target = new com.hippo.ehviewer.spider.SpiderInfo();
+        target.pages = 1;
+        target.token = "target";
+        target.pTokenMap = new android.util.SparseArray<>();
+        target.pTokenMap.put(0, "after");
+        var record = GalleryUpdateRecord.compare(200, 100, old, target);
+        store.savePreview(record, old);
+        store.close();
+        store = new GalleryUpdateRecordStore(context);
+        assertNull(store.find(200));
+        assertTrue(store.listSummaries().isEmpty());
+        assertTrue(store.findHistory(200, 100).isEmpty());
+        assertNull(store.findPreview(200, "target", 99, "source"));
+        assertNull(store.findPreview(200, "target", 100, "other"));
+        assertNull(store.findPreview(200, "other", 100, "source"));
+        var cached = store.findPreview(200, "target", 100, "source");
+        assertNotNull(cached);
+        assertArrayEquals(new int[]{0}, cached.addedPages);
+        old.pTokenMap.clear();
+        store.fillPreviewSource(200, "other", old);
+        assertNull(old.pTokenMap.get(0));
+        store.fillPreviewSource(200, "target", old);
+        assertEquals("before", old.pTokenMap.get(0));
+        assertTrue(store.stage(new GalleryUpdateManager.UpdatePlan(200, 100, List.of(100L)), () -> cached));
+        assertTrue(store.listSummaries().isEmpty());
+        assertTrue(store.complete(200, 100));
+        assertEquals(1, store.listSummaries().size());
+        assertTrue(store.find(200).completedAt >= cached.completedAt);
+        assertNull(store.findPreview(200, "target", 100, "source"));
+    }
+
     @Test public void actionMetadataIsPublishedAtCompletionButNotForDrafts() {
         java.util.ArrayDeque<Runnable> jobs = new java.util.ArrayDeque<>();
         store.prefetchActionSnapshot(200, jobs::add);
@@ -170,7 +208,7 @@ public class GalleryUpdateRecordStoreTest {
             db.setVersion(1);
         }
         store = new GalleryUpdateRecordStore(context);
-        assertEquals(2, store.getReadableDatabase().getVersion());
+        assertEquals(3, store.getReadableDatabase().getVersion());
         assertEquals(123, store.find(200).completedAt);
         assertEquals(2, store.find(200).readingPage);
         assertEquals(0, store.find(200).firstGid);
@@ -275,7 +313,7 @@ public class GalleryUpdateRecordStoreTest {
         assertEquals("token150", cards.get(1).targetToken());
     }
 
-    @Test public void targetTokenSurvivesCleanupFailureAndReopeningWithoutChangingDatabaseVersion() {
+    @Test public void targetTokenSurvivesCleanupFailureAndReopening() {
         GalleryUpdateManager.UpdatePlan plan = new GalleryUpdateManager.UpdatePlan(200, 100, List.of(100L));
         assertTrue(store.stage(plan, () -> new GalleryUpdateRecord(200, 100, 0,
                 2, 5, true, new int[]{1, 3, 4}, new int[0], 0).withTargetToken("target200")));
@@ -287,7 +325,6 @@ public class GalleryUpdateRecordStoreTest {
         store = new GalleryUpdateRecordStore(context);
         assertEquals("target200", store.find(200).targetToken);
         assertEquals("target200", store.listSummaries().get(0).targetToken());
-        assertEquals(2, store.getReadableDatabase().getVersion());
     }
 
     @Test public void failureReplacesPreviousAttemptAndSharesRecordLimit() {

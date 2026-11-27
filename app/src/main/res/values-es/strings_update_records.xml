@@ -82,4 +82,13 @@
     <string name="gallery_updated">Actualizada</string>
     <string name="gallery_read_full">Leer galería completa</string>
     <string name="gallery_update_record_invalid">Registro de actualización no válido</string>
+    <string name="gallery_update_preview_title">Vista previa de la actualización</string>
+    <string name="gallery_update_preview_checking">Buscando cambios . . .</string>
+    <string name="gallery_update_preview_cancel">Toca para cancelar</string>
+    <string name="gallery_update_preview_confirm">Confirmar actualización</string>
+    <string name="gallery_update_preview_later">Ahora no</string>
+    <string name="gallery_update_preview_added">Añadidas en la versión nueva</string>
+    <string name="gallery_update_preview_deleted">Eliminadas de la versión anterior</string>
+    <string name="gallery_update_preview_totals">Versión anterior: %1$d páginas · Nueva: %2$d páginas</string>
+    <string name="gallery_update_preview_source_changed">La versión local ha cambiado. Vuelve a comprobar los cambios.</string>
 </resources>

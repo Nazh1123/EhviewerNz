@@ -331,7 +331,7 @@ public final class SpiderQueen implements Runnable {
     }
 
     @Nullable
-    private static SpiderInfo readSpiderInfoFromCache(@NonNull Context context, long gid) {
+    public static SpiderInfo readSpiderInfoFromCache(@NonNull Context context, long gid) {
         EhApplication application = (EhApplication) context.getApplicationContext();
         SimpleDiskCache cache = EhApplication.getSpiderInfoCache(application);
         InputStreamPipe pipe = cache.getInputStreamPipe(Long.toString(gid));
@@ -1087,6 +1087,12 @@ public final class SpiderQueen implements Runnable {
         // Check interrupted
         if (Thread.currentThread().isInterrupted()) {
             return;
+        }
+
+        GalleryUpdateManager.UpdatePlan plan = GalleryUpdateManager.getPlan(mGalleryInfo.gid);
+        if (plan != null) {
+            var preview = GalleryUpdateManager.getPlanPreview(EhApplication.getInstance(), plan, mGalleryInfo.token);
+            if (preview != null) spiderInfo = preview.seedDownload(spiderInfo);
         }
 
         // Spider info from internet

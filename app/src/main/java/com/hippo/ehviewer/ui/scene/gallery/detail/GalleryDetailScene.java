@@ -114,6 +114,7 @@ import com.hippo.ehviewer.dao.Filter;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.download.GalleryUpdateManager;
 import com.hippo.ehviewer.download.GalleryUpdateRecord;
+import com.hippo.ehviewer.download.GalleryUpdatePreviewCheck;
 import com.hippo.ehviewer.download.GalleryUpdateRecordStore;
 import com.hippo.ehviewer.download.GalleryUpdateState;
 import com.hippo.ehviewer.download.GalleryVersionMetadataTask;
@@ -417,6 +418,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
     private boolean mUpdateRecordLookupPending;
     private boolean mPendingUpdateLog;
     private AlertDialog mUpdateLogDialog;
+    private UpdatePreview updatePreview;
     private long mGalleryUpdateSessionGid = -1L;
     private int mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_AVAILABLE;
     private int mRequestId = IntIdGenerator.INVALID_ID;
@@ -1034,6 +1036,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         mGalleryUpdateRecord = null;
         mUpdateRecordLookupToken = null;
         mPendingUpdateLog = false;
+        if (updatePreview != null) updatePreview.close();
         if (mUpdateLogDialog != null) {
             mUpdateLogDialog.dismiss();
             mUpdateLogDialog = null;
@@ -2664,13 +2667,12 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             if (mGalleryDetail == null || TextUtils.isEmpty(mGalleryDetail.parent)) {
                 return;
             }
-            mGalleryUpdateSessionGid = mGalleryDetail.gid;
-            mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_UPDATING;
-            bindGalleryUpdateButtonState();
-            setGalleryVersionActionVisibility(true, true);
-            GalleryUpdateManager.notifyUpdateStateChanged(mGalleryDetail.gid,
-                    GalleryUpdateManager.UPDATE_STATE_PREPARING);
-            CommonOperations.startGalleryUpdate(activity, mGalleryDetail);
+            if (GalleryUpdateManager.getPlan(mGalleryDetail.gid) != null) {
+                startConfirmedUpdate(mGalleryDetail, 0, false);
+            } else if (updatePreview == null) {
+                updatePreview = new UpdatePreview(mGalleryDetail);
+                updatePreview.check();
+            }
         } else if (mGalleryHistory == v) {
             if (mGalleryUpdateRecord != null && mGalleryDetail != null
                     && mGalleryUpdateRecord.targetGid == mGalleryDetail.gid
@@ -3439,8 +3441,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             setGalleryVersionActionVisibility(true, true);
             return;
         }
-        if (mGalleryUpdateSessionGid != detail.gid && updatePlan != null
-                && exactDownload != null) {
+        if (mGalleryUpdateSessionGid != detail.gid && (updatePlan != null && exactDownload != null
+                || Integer.valueOf(GalleryUpdateManager.UPDATE_STATE_PREPARING)
+                        .equals(GalleryUpdateManager.getUpdateState(detail.gid)))) {
             // Recover an interrupted update after returning to or recreating the detail page.
             mGalleryUpdateSessionGid = detail.gid;
         }
@@ -3448,8 +3451,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             Integer updateState = GalleryUpdateManager.getUpdateState(detail.gid);
             updateGalleryUpdateButtonState(GalleryUpdateState.resolve(
                     updateState, exactDownload, updatePlan != null));
-            if (exactDownload != null
-                    && exactDownload.state != DownloadInfo.STATE_FINISH
+            if (!Integer.valueOf(GalleryUpdateManager.UPDATE_STATE_PREPARING).equals(updateState)
+                    && exactDownload != null && exactDownload.state != DownloadInfo.STATE_FINISH
                     && !downloadManager.isDownloadActive(detail.gid)) {
                 mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_FAILED;
             }
@@ -3627,6 +3630,83 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         startActivity(intent);
     }
 
+    private void startConfirmedUpdate(GalleryDetail target, long sourceGid, boolean awaitCheck) {
+        mGalleryUpdateSessionGid = target.gid;
+        mGalleryUpdateButtonState = GALLERY_UPDATE_BUTTON_UPDATING;
+        bindGalleryUpdateButtonState();
+        setGalleryVersionActionVisibility(true, true);
+        GalleryUpdateManager.notifyUpdateStateChanged(target.gid, GalleryUpdateManager.UPDATE_STATE_PREPARING);
+        CommonOperations.startGalleryUpdate(activity, target, sourceGid, awaitCheck);
+    }
+
+    private final class UpdatePreview {
+        private final GalleryDetail target;
+        private final GalleryUpdateLogDialog.Preview window;
+        private GalleryUpdatePreviewCheck task;
+        private DownloadInfo source;
+        private boolean checkFailed;
+
+        UpdatePreview(GalleryDetail target) {
+            this.target = target;
+            window = new GalleryUpdateLogDialog.Preview(getEHContext(), target.gid, this::confirm,
+                    GalleryDetailScene.this::showGalleryUpdateHistory, GalleryDetailScene.this::showVersionChain,
+                    this::release);
+        }
+
+        void check() {
+            if (task != null) task.cancel();
+            checkFailed = false;
+            window.checking();
+            source = findLocalUpdateSource(EhApplication.getDownloadManager(getEHContext()), target);
+            if (source == null || source.token == null) {
+                checkFailed = true;
+                window.failed(getString(R.string.gallery_update_no_downloaded_parent), this::check);
+                return;
+            }
+            task = new GalleryUpdatePreviewCheck(getEHContext(), source, target);
+            task.start(result -> {
+                if (!window.dialog.isShowing()) return;
+                if (result.record() != null) window.ready(result.record(), GalleryTimeFormatter.format(target.posted));
+                else {
+                    checkFailed = true;
+                    window.failed(result.error(), this::check);
+                }
+            });
+        }
+
+        private void confirm() {
+            boolean wait = !checkFailed && task != null;
+            if (wait) {
+                task.handOff();
+                task = null;
+            }
+            startConfirmedUpdate(target, source != null ? source.gid : 0, wait);
+        }
+
+        void close() {
+            release();
+            window.dialog.dismiss();
+        }
+
+        private void release() {
+            if (task != null) task.cancel();
+            task = null;
+            if (updatePreview == this) updatePreview = null;
+        }
+    }
+
+    private void showVersionChain() {
+        if (mGalleryDetail == null || getEHContext() == null) return;
+        if (TextUtils.isEmpty(mGalleryDetail.parent)) {
+            showTip(R.string.gallery_history_empty, LENGTH_SHORT);
+            return;
+        }
+        if (mParentChainDialog == null) {
+            mParentChainDialog = new GalleryParentChainDialog(this, mContext, mGalleryDetail);
+        }
+        mParentChainDialog.show();
+    }
+
     private void showGalleryUpdateLog() {
         showGalleryUpdateLog(mGalleryUpdateRecord);
     }
@@ -3638,17 +3718,7 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         Runnable read = local != null && local.state == DownloadInfo.STATE_FINISH
                 && GalleryUpdateManager.getPlan(local.gid) == null ? () -> readGalleryUpdates(record) : null;
         mUpdateLogDialog = GalleryUpdateLogDialog.show(getEHContext(), record, read,
-                this::showGalleryUpdateHistory, () -> {
-            if (mGalleryDetail == null || getEHContext() == null) return;
-            if (TextUtils.isEmpty(mGalleryDetail.parent)) {
-                showTip(R.string.gallery_history_empty, LENGTH_SHORT);
-                return;
-            }
-            if (mParentChainDialog == null) {
-                mParentChainDialog = new GalleryParentChainDialog(this, mContext, mGalleryDetail);
-            }
-            mParentChainDialog.show();
-        });
+                this::showGalleryUpdateHistory, this::showVersionChain);
     }
 
     private void showGalleryUpdateHistory() {

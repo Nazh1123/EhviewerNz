@@ -54,10 +54,12 @@ public final class CommonOperations {
     }
 
     public static void startGalleryUpdate(@NonNull MainActivity activity,
-                                          @NonNull GalleryDetail galleryDetail) {
+                                          @NonNull GalleryDetail galleryDetail, long sourceGid, boolean awaitCheck) {
         Intent intent = new Intent(activity, DownloadService.class);
         intent.setAction(DownloadService.ACTION_START_GALLERY_UPDATE);
         intent.putExtra(DownloadService.KEY_GALLERY_INFO, galleryDetail);
+        intent.putExtra(DownloadService.KEY_UPDATE_SOURCE, sourceGid);
+        intent.putExtra(DownloadService.KEY_AWAIT_PREVIEW, awaitCheck);
         activity.startService(intent);
         activity.showTip(R.string.gallery_update_background_started, BaseScene.LENGTH_SHORT);
     }

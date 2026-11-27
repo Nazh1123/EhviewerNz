@@ -153,7 +153,23 @@ public final class GalleryUpdateRecord {
         return result;
     }
 
-    private static boolean hasAllTokens(SpiderInfo info) {
+    /** Merge checked page identities without replacing the reader's position or other metadata. */
+    public SpiderInfo seedDownload(SpiderInfo local) {
+        if (!complete || !hasTokenSnapshot() || (local != null
+                && (local.gid != targetGid || !targetToken.equals(local.token) || local.pages != newPages))) return local;
+        SpiderInfo info = local != null ? local : new SpiderInfo();
+        info.gid = targetGid;
+        info.token = targetToken;
+        info.pages = newPages;
+        if (info.pTokenMap == null) info.pTokenMap = new android.util.SparseArray<>(newPages);
+        for (int i = 0; i < newPages; i++) {
+            String token = info.pTokenMap.get(i);
+            if (token == null || token.isEmpty() || "failed".equals(token)) info.pTokenMap.put(i, targetTokens[i]);
+        }
+        return info;
+    }
+
+    static boolean hasAllTokens(SpiderInfo info) {
         if (info == null || info.pages <= 0 || info.pTokenMap == null) return false;
         for (int page = 0; page < info.pages; page++) {
             String token = info.pTokenMap.get(page);

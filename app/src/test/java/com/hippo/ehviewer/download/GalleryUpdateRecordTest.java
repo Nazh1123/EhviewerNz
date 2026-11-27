@@ -23,6 +23,26 @@ public class GalleryUpdateRecordTest {
         return info;
     }
 
+    @Test public void previewSeedsOnlyMissingPageTokensAndPreservesReadingPosition() {
+        var record = GalleryUpdateRecord.compare(200, 100, info("A"), info("A", "B")).withTargetToken("target");
+        SpiderInfo seeded = record.seedDownload(null);
+        assertEquals(200, seeded.gid);
+        assertEquals("target", seeded.token);
+        assertEquals("A", seeded.pTokenMap.get(0));
+        assertEquals("B", seeded.pTokenMap.get(1));
+        seeded.startPage = 1;
+        seeded.pTokenMap.put(0, "another");
+        seeded.pTokenMap.put(1, "failed");
+        assertSame(seeded, record.seedDownload(seeded));
+        assertEquals(1, seeded.startPage);
+        assertEquals("another", seeded.pTokenMap.get(0));
+        assertEquals("B", seeded.pTokenMap.get(1));
+        seeded.token = "other-version";
+        seeded.pTokenMap.remove(1);
+        record.seedDownload(seeded);
+        assertNull(seeded.pTokenMap.get(1));
+    }
+
     @Test public void insertionDeletionAndReorderKeepActualPageNumbers() {
         GalleryUpdateRecord record = GalleryUpdateRecord.compare(200, 100,
                 info("A", "B", "C", "D"), info("D", "X", "A", "Y", "C"));

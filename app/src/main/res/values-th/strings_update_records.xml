@@ -82,4 +82,13 @@
     <string name="gallery_updated">อัปเดตแล้ว</string>
     <string name="gallery_read_full">อ่านทั้งแกลเลอรี</string>
     <string name="gallery_update_record_invalid">บันทึกการอัปเดตไม่ถูกต้อง</string>
+    <string name="gallery_update_preview_title">ตัวอย่างการอัปเดตแกลเลอรี</string>
+    <string name="gallery_update_preview_checking">กำลังตรวจสอบการอัปเดต . . .</string>
+    <string name="gallery_update_preview_cancel">แตะเพื่อยกเลิก</string>
+    <string name="gallery_update_preview_confirm">ยืนยันการอัปเดต</string>
+    <string name="gallery_update_preview_later">ไว้ภายหลัง</string>
+    <string name="gallery_update_preview_added">หน้าที่เพิ่มในรุ่นใหม่</string>
+    <string name="gallery_update_preview_deleted">หน้าที่ลบจากรุ่นเก่า</string>
+    <string name="gallery_update_preview_totals">รุ่นเก่า %1$d หน้า · รุ่นใหม่ %2$d หน้า</string>
+    <string name="gallery_update_preview_source_changed">รุ่นเดิมในเครื่องเปลี่ยนไปแล้ว โปรดตรวจสอบการอัปเดตอีกครั้ง</string>
 </resources>

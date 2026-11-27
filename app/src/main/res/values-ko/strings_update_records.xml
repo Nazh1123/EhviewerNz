@@ -82,4 +82,13 @@
     <string name="gallery_updated">업데이트됨</string>
     <string name="gallery_read_full">전체 갤러리 읽기</string>
     <string name="gallery_update_record_invalid">잘못된 업데이트 기록</string>
+    <string name="gallery_update_preview_title">갤러리 업데이트 미리보기</string>
+    <string name="gallery_update_preview_checking">업데이트 확인 중 . . .</string>
+    <string name="gallery_update_preview_cancel">눌러서 취소</string>
+    <string name="gallery_update_preview_confirm">업데이트 확인</string>
+    <string name="gallery_update_preview_later">나중에</string>
+    <string name="gallery_update_preview_added">추가됨(새 버전 쪽 번호)</string>
+    <string name="gallery_update_preview_deleted">삭제됨(이전 버전 쪽 번호)</string>
+    <string name="gallery_update_preview_totals">이전 버전 %1$d쪽 · 새 버전 %2$d쪽</string>
+    <string name="gallery_update_preview_source_changed">기기의 이전 버전이 변경되었습니다. 업데이트를 다시 확인하세요.</string>
 </resources>

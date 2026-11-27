@@ -82,4 +82,13 @@
     <string name="gallery_updated">Aktualisiert</string>
     <string name="gallery_read_full">Gesamte Galerie lesen</string>
     <string name="gallery_update_record_invalid">Ungültiger Update-Eintrag</string>
+    <string name="gallery_update_preview_title">Galerieaktualisierung prüfen</string>
+    <string name="gallery_update_preview_checking">Änderungen werden geprüft . . .</string>
+    <string name="gallery_update_preview_cancel">Zum Abbrechen antippen</string>
+    <string name="gallery_update_preview_confirm">Aktualisierung bestätigen</string>
+    <string name="gallery_update_preview_later">Später</string>
+    <string name="gallery_update_preview_added">Hinzugefügt (neue Seitenzahlen)</string>
+    <string name="gallery_update_preview_deleted">Entfernt (alte Seitenzahlen)</string>
+    <string name="gallery_update_preview_totals">Alte Version: %1$d Seiten · Neue Version: %2$d Seiten</string>
+    <string name="gallery_update_preview_source_changed">Die lokale Ausgangsversion hat sich geändert. Bitte erneut prüfen.</string>
 </resources>

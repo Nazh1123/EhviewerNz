@@ -399,8 +399,10 @@ public final class GalleryUpdateManager {
                     ? sourceGid : targetInfo.gid, source == null || source.pTokenMap == null);
         }
 
+        fillPreviewSource(context, targetInfo.gid, targetInfo.token, source);
+
         // Reading progress is also kept in the spider-info cache. Merge only startPage here:
-        // the downloaded file owns the current gallery metadata and pToken table.
+        // page identities are obtained from the download and the checked preview above.
         source.startPage = Math.max(source.startPage,
                 readCachedStartPage(context, sourceGid));
         target.startPage = Math.max(target.startPage,
@@ -739,12 +741,27 @@ public final class GalleryUpdateManager {
                 : R.string.gallery_update_error_target_metadata, gid, problem);
     }
 
+    @Nullable public static GalleryUpdateRecord getPlanPreview(Context context, UpdatePlan plan, String token) {
+        DownloadInfo source = EhApplication.getDownloadManager(context).getDownloadInfo(plan.sourceGid);
+        return source == null || source.token == null ? null : GalleryUpdateRecordStore.get(context)
+                .findPreview(plan.targetGid, token, plan.sourceGid, source.token);
+    }
+
+    private static void fillPreviewSource(Context context, long targetGid, String targetToken, SpiderInfo source) {
+        if (source != null && source.token != null && source.pTokenMap != null && targetToken != null
+                && !GalleryUpdateRecord.hasAllTokens(source)) {
+            GalleryUpdateRecordStore.get(context).fillPreviewSource(targetGid, targetToken, source);
+        }
+    }
+
     /** Worker-thread checkpoint; source metadata must survive retries after partial cleanup. */
     public static boolean stageUpdateRecord(Context context, UpdatePlan plan) {
         if (getPlan(plan.targetGid) != plan) return false;
-        GalleryUpdateRecord snapshot = GalleryUpdateRecord.compare(
-                plan.targetGid, plan.sourceGid, readDownloadedSpiderInfo(plan.sourceGid),
-                readDownloadedSpiderInfo(plan.targetGid)).withFirstGid(recordFirstGid(plan));
+        SpiderInfo target = readDownloadedSpiderInfo(plan.targetGid);
+        SpiderInfo sourcePages = readDownloadedSpiderInfo(plan.sourceGid);
+        if (target != null) fillPreviewSource(context, plan.targetGid, target.token, sourcePages);
+        GalleryUpdateRecord snapshot = GalleryUpdateRecord.compare(plan.targetGid, plan.sourceGid,
+                sourcePages, target).withFirstGid(recordFirstGid(plan));
         synchronized (GalleryUpdateManager.class) {
             if (getPlan(plan.targetGid) != plan) return false;
             // Older app versions did not save titles in plans. Snapshot one before cleanup

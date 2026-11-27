@@ -75,4 +75,13 @@
     <string name="gallery_update_history_no_pages">No added pages from this update remain readable locally. They may have been deleted in a later version or be missing locally. Older records without page-token snapshots can only be read in their original local version.</string>
     <string name="gallery_update_history_incomplete">Page information incomplete</string>
     <string name="gallery_update_history_empty">No saved update records for this version chain. Older records may have been removed by the record count limit.</string>
+    <string name="gallery_update_preview_title">Gallery update preview</string>
+    <string name="gallery_update_preview_checking">Checking for updates . . .</string>
+    <string name="gallery_update_preview_cancel">Tap to cancel</string>
+    <string name="gallery_update_preview_confirm">Confirm update</string>
+    <string name="gallery_update_preview_later">Not now</string>
+    <string name="gallery_update_preview_added">Added in the new version</string>
+    <string name="gallery_update_preview_deleted">Removed from the old version</string>
+    <string name="gallery_update_preview_totals">Old version: %1$d pages · New version: %2$d pages</string>
+    <string name="gallery_update_preview_source_changed">The local source version changed. Check for updates again.</string>
 </resources>

@@ -82,4 +82,13 @@
     <string name="gallery_updated">更新済み</string>
     <string name="gallery_read_full">ギャラリー全体を読む</string>
     <string name="gallery_update_record_invalid">無効な更新記録</string>
+    <string name="gallery_update_preview_title">ギャラリー更新のプレビュー</string>
+    <string name="gallery_update_preview_checking">更新を確認中 . . .</string>
+    <string name="gallery_update_preview_cancel">タップしてキャンセル</string>
+    <string name="gallery_update_preview_confirm">更新する</string>
+    <string name="gallery_update_preview_later">後で</string>
+    <string name="gallery_update_preview_added">追加（新版のページ番号）</string>
+    <string name="gallery_update_preview_deleted">削除（旧版のページ番号）</string>
+    <string name="gallery_update_preview_totals">旧版 %1$d ページ · 新版 %2$d ページ</string>
+    <string name="gallery_update_preview_source_changed">端末の旧版が変更されました。更新をもう一度確認してください。</string>
 </resources>
