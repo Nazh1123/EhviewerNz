@@ -95,6 +95,53 @@ class ResumablePipelineTest {
         companion object { val copies = mutableListOf<Bitmap>() }
     }
 
+    @Test fun completedApiRegionsSurviveEvictionOfThePreparedBitmap() = runBlocking<Unit> {
+        val source = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+        val identity = TranslationOptions(backend = TranslationBackend.LLM_API).cacheIdentity()
+        val cache = PreparedPageCache(limit = 0)
+        var requests = 0
+        val translator = object : DetailedTranslator {
+            override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult =
+                error("Checkpoint callback required")
+
+            override suspend fun translateDetailed(queries: List<String>, onCompleted: suspend (Map<Int, String>) -> Unit):
+                LlmTranslator.TranslateResult {
+                if (++requests == 1) {
+                    assertEquals(listOf("こんにちは", "ありがとう"), queries)
+                    onCompleted(mapOf(0 to "你好"))
+                    throw CancellationException("Second API batch cancelled")
+                }
+                assertEquals(listOf("ありがとう"), queries)
+                return LlmTranslator.TranslateResult(listOf("谢谢"))
+            }
+        }
+        try {
+            Stages().engine(identity, batchSize = Int.MAX_VALUE, detailed = translator) { error("Detailed translator required") }.use { engine ->
+                val first = twoRegions(source)
+                try {
+                    engine.translatePrepared(source, first, false)
+                    fail("Translation should have been interrupted")
+                } catch (_: CancellationException) {
+                    cache.put("page", first, identity)
+                }
+                assertTrue(first.mask.isRecycled)
+                assertNull(cache.take("page"))
+                assertNull(cache.takeCheckpoint("page", "another-model"))
+                twoRegions(source).use { reopened ->
+                    assertTrue(reopened.restoreTranslations(identity, checkNotNull(cache.takeCheckpoint("page", identity))))
+                    val result = engine.translatePrepared(source, reopened, false) as PageResult.Translated
+                    result.page.recycle()
+                    assertEquals(listOf("你好", "谢谢"), reopened.regions.map { it.translatedText })
+                }
+                assertEquals(2, requests)
+                assertNull(cache.takeCheckpoint("page", identity))
+            }
+        } finally {
+            cache.clear()
+            source.recycle()
+        }
+    }
+
     @Test @Config(shadows = [TrackingBitmap::class])
     fun renderProgressFailureRecyclesTheUnreturnedOutputAndKeepsPreparation() = runBlocking {
         for (cancel in listOf(false, true)) {

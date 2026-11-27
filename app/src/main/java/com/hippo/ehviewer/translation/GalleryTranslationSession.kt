@@ -625,7 +625,11 @@ internal class GalleryTranslationSession(
                                             return@withContext
                                         }
                                     }
-                                    if (resume != null) prepared?.restoreTranslations(pageOptions.cacheIdentity(), resume!!)
+                                    val translationIdentity = pageOptions.cacheIdentity()
+                                    TranslationRuntime.preparedPages.takeCheckpoint(preparationKey, translationIdentity)?.let {
+                                        prepared?.restoreTranslations(translationIdentity, it)
+                                    }
+                                    if (resume != null) prepared?.restoreTranslations(translationIdentity, resume!!)
                                     if (withContext(Dispatchers.Main) { TranslationTasks.scheduler.shouldYield(checkNotNull(turn)) }) {
                                         yielded.set(true)
                                         throw YieldTranslationTurn()
@@ -642,7 +646,7 @@ internal class GalleryTranslationSession(
                                             R.string.translation_partial else R.string.translation_failed)
                                 } finally {
                                     prepared?.let {
-                                        if (retainPreparation) TranslationRuntime.preparedPages.put(preparationKey, it)
+                                        if (retainPreparation) TranslationRuntime.preparedPages.put(preparationKey, it, pageOptions.cacheIdentity())
                                         else it.close()
                                     }
                                     bitmap.recycle()
