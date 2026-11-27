@@ -87,6 +87,20 @@ class NativeTranslationProtocolTest {
         assertFalse(NativeTranslationResponse.generationFailure("请看 https://wanimap.app", source))
     }
 
+    @Test fun doubleClosingMarkerDoesNotLeaveADelimiterInTheTranslation() = runBlocking<Unit> {
+        val sources = listOf("こんにちは。", "おはようございます。\nよく眠れましたか？", "> 引用")
+        val raw = "<|1|>你好。\n<|2>>早上好。\n睡得好吗？\n<|3|>> 引用"
+        val expected = listOf("你好。", "早上好。\n睡得好吗？", "> 引用")
+        val completed = mutableMapOf<Int, String>()
+        NativeTranslator(TranslationOptions()) { raw to null }.use { translator ->
+            val result = translator.translateDetailed(sources) { completed.putAll(it) }
+            assertNull(result.error)
+            assertTrue(result.missingIndices.isEmpty())
+            assertEquals(expected, result.translations)
+            assertEquals(expected.withIndex().associate { it.index to it.value }, completed)
+        }
+    }
+
     @Test fun brokenSlashMarkersDoNotEnterASingleBubble() = runBlocking<Unit> {
         val retries = mutableListOf<String>()
         NativeTranslator(TranslationOptions()) { messages ->

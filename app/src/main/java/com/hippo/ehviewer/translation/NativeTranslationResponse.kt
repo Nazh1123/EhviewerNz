@@ -5,7 +5,8 @@ import com.hippo.ehviewer.translation.engine.Usage
 
 /** Strict local protocol. Never assign an ambiguous segment to a bubble. */
 internal object NativeTranslationResponse {
-    private val marker = Regex("""<\|[^>\r\n]*>|<\d+\s*[|>]+|[/／]\s*\d+\s*[>＞]|＜[|｜][^＞>\r\n]*[＞>]|</[|｜]?\d+[^>\r\n]*>""")
+    // Match <|1>> before the generic delimiter so its second '>' stays out of the translation.
+    private val marker = Regex("""<\|(?:\d+>>|[^>\r\n]*>)|<\d+\s*[|>]+|[/／]\s*\d+\s*[>＞]|＜[|｜][^＞>\r\n]*[＞>]|</[|｜]?\d+[^>\r\n]*>""")
     private val numeric = Regex("""<\|?(\d+)\s*[|>]+""")
     private val repetition = Regex("""(\S)\1{23,}|(\S{2,32}?)\2{11,}""")
 
