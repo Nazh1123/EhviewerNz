@@ -16,8 +16,13 @@ internal class PreparedPageCache(private val limit: Long = 64L * 1024 * 1024, pr
 
     @Synchronized fun take(key: String): PreparedPage? = entries.remove(key)?.page
 
-    @Synchronized fun takeCheckpoint(key: String, identity: String): TranslationResume? =
-        checkpoints[key]?.takeIf { it.identity == identity }?.let { checkpoints.remove(key)?.resume }
+    @Synchronized fun takeCheckpoint(key: String, identity: String, retranslate: Boolean = false): TranslationResume? {
+        if (retranslate) {
+            invalidate(key)
+            return null
+        }
+        return checkpoints[key]?.takeIf { it.identity == identity }?.let { checkpoints.remove(key)?.resume }
+    }
 
     @Synchronized fun put(key: String, page: PreparedPage, translationIdentity: String? = null) {
         entries.remove(key)?.page?.takeIf { it !== page }?.close()

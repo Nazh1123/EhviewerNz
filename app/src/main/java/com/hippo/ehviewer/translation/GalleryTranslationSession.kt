@@ -429,6 +429,11 @@ internal class GalleryTranslationSession(
                                 var key = results.key(source)
                                 var preparationKey = results.preparationKey(source)
                                 var lookupKeys = listOf(key)
+                                val retranslate = request.force && !request.retryMissing
+                                suspend fun invalidateRenderedResult() = resultLock.withLock {
+                                    lookupKeys.forEach { results.invalidate(it) }
+                                    results.invalidateLegacy(source)
+                                }
                                 suspend fun reuseResult(): Boolean = resultLock.withLock {
                                     if (request.force) return@withLock false
                                     var hit = results.findResult(lookupKeys)
@@ -555,9 +560,8 @@ internal class GalleryTranslationSession(
                                         } else { _ -> })
                                     if (options.backend == TranslationBackend.LLM_API) checkNotNull(engine).warmUp()
                                 }
-                                if (request.force && !request.retryMissing) resultLock.withLock {
-                                    lookupKeys.forEach { results.invalidate(it) }
-                                    results.invalidateLegacy(source)
+                                if (retranslate) {
+                                    invalidateRenderedResult()
                                     TranslationRuntime.preparedPages.invalidate(preparationKey)
                                 }
                                 val activeEngine = checkNotNull(engine)
@@ -601,10 +605,15 @@ internal class GalleryTranslationSession(
                                         key = results.key(source)
                                         preparationKey = results.preparationKey(source)
                                         lookupKeys = results.lookupKeys(source, key)
+                                        if (retranslate) invalidateRenderedResult()
                                         resume = if (request.retryMissing) lookupKeys.firstNotNullOfOrNull { results.readResume(it) } else null
                                     }
                                     // Concurrent OCR may resolve the language while this page is being prepared.
                                     if (reuseResult()) return@withContext
+                                    val translationIdentity = pageOptions.cacheIdentity()
+                                    TranslationRuntime.preparedPages.takeCheckpoint(preparationKey, translationIdentity, retranslate)?.let {
+                                        prepared?.restoreTranslations(translationIdentity, it)
+                                    }
                                     if (pageOptions.backend == TranslationBackend.NATIVE_LLM && prepared!!.regions.isNotEmpty() &&
                                         !NativeModelStore(context).ready(pageOptions)) {
                                         modelsUnavailable = true
@@ -624,10 +633,6 @@ internal class GalleryTranslationSession(
                                             modelsRequired(epoch, request)
                                             return@withContext
                                         }
-                                    }
-                                    val translationIdentity = pageOptions.cacheIdentity()
-                                    TranslationRuntime.preparedPages.takeCheckpoint(preparationKey, translationIdentity)?.let {
-                                        prepared?.restoreTranslations(translationIdentity, it)
                                     }
                                     if (resume != null) prepared?.restoreTranslations(translationIdentity, resume!!)
                                     if (withContext(Dispatchers.Main) { TranslationTasks.scheduler.shouldYield(checkNotNull(turn)) }) {
