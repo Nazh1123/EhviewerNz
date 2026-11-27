@@ -163,9 +163,11 @@ class NativeTranslator private constructor(
             if (parsed.missingIndices.isEmpty()) batchPolicy.succeeded(queries.size)
             else if (!budgetExceeded) batchPolicy.protocolFailed(queries.size)
         }
-        // If a token budget produced no complete segments, retain the existing
-        // bounded split policy. Otherwise salvage completed regions first.
-        if (budgetExceeded && parsed.missingIndices.size == queries.size)
+        // A second interrupted batch has already shown it cannot finish reliably.
+        // Retry every region in isolation before publishing any of that batch.
+        val interruptedRetry = interrupted && !learn && queries.size > 1
+        // The first attempt can still split when it exhausts its budget without usable text.
+        if (budgetExceeded && !interruptedRetry && parsed.missingIndices.size == queries.size)
             throw TranslationOutputLimitException(usage = usage)
         // An EOS with just IDs 1..k can also mean the model merged two sources
         // and shifted every later ID. The real fixture did exactly this. Do not
@@ -173,10 +175,10 @@ class NativeTranslator private constructor(
         val complete = queries.size - parsed.missingIndices.size
         val incompletePrefix = !interrupted && complete > 0 && parsed.missingIndices.isNotEmpty() &&
             parsed.missingIndices == (complete until queries.size).toSet()
-        val retryIndices = if (incompletePrefix) queries.indices.toSet() else parsed.missingIndices
+        val retryIndices = if (incompletePrefix || interruptedRetry) queries.indices.toSet() else parsed.missingIndices
         val completed = queries.indices.filter { it !in retryIndices }.associateWith { parsed.translations[it] }
         if (completed.isNotEmpty()) onCompleted(completed)
-        if (parsed.missingIndices.isEmpty()) return parsed
+        if (retryIndices.isEmpty()) return parsed
         if (queries.size == 1) return parsed
         // Numbering failures need isolated inputs. A budget limit can instead retry the
         // unresolved regions in smaller numbered batches, preserving completed translations.
@@ -184,7 +186,7 @@ class NativeTranslator private constructor(
         val missing = retryIndices.toMutableSet()
         val errors = mutableListOf<String>()
         var totalUsage = usage
-        val retryBatchSize = if (budgetExceeded && retryIndices.size > 2) queries.size / 2 else 1
+        val retryBatchSize = if (budgetExceeded && !interruptedRetry && retryIndices.size > 2) queries.size / 2 else 1
         for (indices in retryIndices.chunked(retryBatchSize)) {
             val fallback = LlmBatching.translateIndexed(indices.map(queries::get)) { batch, offset ->
                 translateNumbered(batch, learn = false) { completedRegion ->

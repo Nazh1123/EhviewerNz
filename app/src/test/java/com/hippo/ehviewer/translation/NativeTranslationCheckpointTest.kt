@@ -143,6 +143,36 @@ class NativeTranslationCheckpointTest {
         }
     }
 
+    @Test fun secondInterruptedBatchIsRetriedIndividuallyBeforeCheckpointing() = runBlocking<Unit> {
+        val inputs = ('a'..'h').map(Char::toString)
+        for (budgetExceeded in listOf(true, false)) {
+            val requests = mutableListOf<List<String>>()
+            val checkpoints = linkedMapOf<Int, String>()
+            NativeTranslator(TranslationOptions()) { messages ->
+                val batch = messages.getJSONObject(1).getString("content").lines().map { it.substringAfter("|>") }
+                requests.add(batch)
+                when (batch.size) {
+                    8 -> throw NativeGenerationStopped("<|1|>译文a<|2|>译文b<|3|>unfinished", Usage(100, 192), true)
+                    4 -> throw NativeGenerationStopped("<|1|>合并c和d<|2|>错位e<|3|>unfinished", Usage(60, 192), budgetExceeded)
+                    else -> {
+                        if (batch == listOf("c")) assertEquals(mapOf(0 to "译文a", 1 to "译文b"), checkpoints)
+                        batch.mapIndexed { index, source -> "<|${index + 1}|>译文$source" }
+                            .joinToString("\n") to Usage(20, 4)
+                    }
+                }
+            }.use { translator ->
+                val expected = inputs.map { "译文$it" }
+                val result = translator.translateDetailed(inputs) { checkpoints.putAll(it) }
+                assertEquals(listOf(inputs, inputs.subList(2, 6)) + inputs.subList(2, 6).map(::listOf) +
+                    listOf(inputs.subList(6, 8)), requests)
+                assertEquals(expected, result.translations)
+                assertEquals(expected.withIndex().associate { it.index to it.value }, checkpoints)
+                assertTrue(result.missingIndices.isEmpty())
+                assertEquals(Usage(260, 404), result.usage)
+            }
+        }
+    }
+
     @Test fun completedTruncatedPrefixIsSavedBeforeCancelledRetry() = runBlocking<Unit> {
         val checkpoints = linkedMapOf<Int, String>()
         NativeTranslator(TranslationOptions()) { messages ->
