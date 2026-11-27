@@ -38,9 +38,13 @@ class LlmTranslator(
         val headers = marker.findAll(content).toList()
         val responses = arrayOfNulls<String>(queries.size)
         val occurrences = IntArray(queries.size)
+        var unexpectedRegion = false
         for (i in headers.indices) {
-            val index = headers[i].groupValues[1].toIntOrNull()?.minus(1) ?: continue
-            if (index !in responses.indices) continue
+            val index = headers[i].groupValues[1].toIntOrNull()?.minus(1)
+            if (index == null || index !in responses.indices) {
+                unexpectedRegion = true
+                continue
+            }
             occurrences[index]++
             val value = content.substring(headers[i].range.last + 1,
                 headers.getOrNull(i + 1)?.range?.first ?: content.length).trim()
@@ -48,6 +52,11 @@ class LlmTranslator(
         }
         for (index in responses.indices) if (occurrences[index] > 1) responses[index] = null
         val missing = queries.indices.filterTo(linkedSetOf()) { queries[it].isNotBlank() && responses[it] == null }
+        if (unexpectedRegion && missing.isEmpty()) {
+            // A complete set plus extra IDs can be a split dialogue with shifted numbering.
+            return TranslateResult(queries, usage, "API returned unexpected region markers",
+                queries.indices.filterTo(linkedSetOf()) { queries[it].isNotBlank() })
+        }
         return TranslateResult(queries.mapIndexed { index, original ->
             if (original.isBlank()) original else responses[index] ?: original
         }, usage, if (missing.isEmpty()) null else "Parsed ${queries.size - missing.size}/${queries.size} regions", missing)

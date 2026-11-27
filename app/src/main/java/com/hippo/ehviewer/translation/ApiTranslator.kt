@@ -39,15 +39,13 @@ class ApiTranslator(private val options: TranslationOptions) : DetailedTranslato
         translateDetailed(queries) { }
 
     override suspend fun translateDetailed(queries: List<String>, onCompleted: suspend (Map<Int, String>) -> Unit):
-        LlmTranslator.TranslateResult = LlmBatching.translateIndexed(queries) { batch, offset ->
-        val result = delegate.translateDetailed(batch)
+        LlmTranslator.TranslateResult = LlmBatching.translateIndexed(queries, onAccepted = { batch, offset, result ->
         if (result.error == null && result.missingIndices.isEmpty()) {
             val completed = batch.indices.filter { batch[it].isNotBlank() }
                 .associate { index -> (offset + index) to result.translations[index] }
             if (completed.isNotEmpty()) onCompleted(completed)
         }
-        result
-    }
+    }) { batch, _ -> delegate.translateDetailed(batch) }
 
     /** Settings diagnostics use the same single-sentence protocol as native GGUF. */
     internal suspend fun translateSample(source: String): LlmTranslator.TranslateResult =

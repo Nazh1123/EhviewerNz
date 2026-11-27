@@ -333,6 +333,36 @@ class ApiTranslatorTest {
         }
     }
 
+    @Test fun unexpectedRegionDoesNotBecomeACompletedSplitBatch() = runBlocking<Unit> {
+        MockWebServer().use { server ->
+            server.enqueue(sampleResponse("truncated", "length"))
+            server.enqueue(sampleResponse("<|1|>甲\n<|2|>越界"))
+            server.enqueue(sampleResponse("<|1|>乙"))
+            ApiTranslator(options(server)).use { translator ->
+                val checkpoints = mutableListOf<Map<Int, String>>()
+                val result = translator.translateDetailed(listOf("first", "second")) { checkpoints.add(it) }
+                assertEquals(listOf(mapOf(1 to "乙")), checkpoints)
+                assertEquals(listOf("first", "乙"), result.translations)
+                assertEquals(setOf(0), result.missingIndices)
+            }
+            assertEquals(3, server.requestCount)
+        }
+    }
+
+    @Test fun outputLimitThrownByTheCheckpointDoesNotRetryAnAcceptedRequest() = runBlocking<Unit> {
+        MockWebServer().use { server ->
+            server.enqueue(sampleResponse("<|1|>甲\n<|2|>乙"))
+            ApiTranslator(options(server)).use { translator ->
+                val failure = com.hippo.ehviewer.translation.engine.TranslationOutputLimitException()
+                val received = runCatching {
+                    translator.translateDetailed(listOf("a", "b")) { throw failure }
+                }.exceptionOrNull()
+                assertSame(failure, received)
+            }
+            assertEquals(1, server.requestCount)
+        }
+    }
+
     @Test fun oneOverBudgetApiRegionDoesNotDiscardTheOtherHalf() = runBlocking<Unit> {
         MockWebServer().use { server ->
             val limit = MockResponse().setBody("""{"choices":[{"finish_reason":"length","message":{"content":"<|1|>unfinished"}}]}""")

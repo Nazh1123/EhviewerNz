@@ -9,17 +9,24 @@ object LlmBatching {
 
     /** Offset stays relative to the original request through every context/budget split. */
     suspend fun translateIndexed(queries: List<String>,
+        onAccepted: (suspend (List<String>, Int, LlmTranslator.TranslateResult) -> Unit)? = null,
         attempt: suspend (List<String>, Int) -> LlmTranslator.TranslateResult?): LlmTranslator.TranslateResult =
-        translateAt(queries, 0, attempt)
+        translateAt(queries, 0, onAccepted, attempt)
 
     private suspend fun translateAt(queries: List<String>, offset: Int,
+        onAccepted: (suspend (List<String>, Int, LlmTranslator.TranslateResult) -> Unit)?,
         attempt: suspend (List<String>, Int) -> LlmTranslator.TranslateResult?): LlmTranslator.TranslateResult {
         if (queries.all { it.isBlank() }) return LlmTranslator.TranslateResult(queries)
         var exhausted: TranslationOutputLimitException? = null
-        try {
-            attempt(queries, offset)?.let { return it }
+        val accepted = try {
+            attempt(queries, offset)
         } catch (error: TranslationOutputLimitException) {
             exhausted = error
+            null
+        }
+        if (accepted != null) {
+            onAccepted?.invoke(queries, offset, accepted)
+            return accepted
         }
         val result = if (queries.size == 1) {
             LlmTranslator.TranslateResult(queries,
@@ -27,8 +34,8 @@ object LlmBatching {
                 missingIndices = setOf(0))
         } else {
             val middle = queries.size / 2
-            val first = translateAt(queries.take(middle), offset, attempt)
-            val second = translateAt(queries.drop(middle), offset + middle, attempt)
+            val first = translateAt(queries.take(middle), offset, onAccepted, attempt)
+            val second = translateAt(queries.drop(middle), offset + middle, onAccepted, attempt)
             merge(first, second)
         }
         return result.copy(usage = addUsage(exhausted?.usage, result.usage))
