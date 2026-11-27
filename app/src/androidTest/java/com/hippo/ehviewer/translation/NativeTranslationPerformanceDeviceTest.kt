@@ -275,6 +275,33 @@ class NativeTranslationPerformanceDeviceTest {
         }
     }
 
+    @Test(timeout = 180000) fun longerProbeReusesFullyMatchingShorterSnapshot() = runBlocking<Unit>(Dispatchers.IO) {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("testNativePerformance") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val options = TranslationSettings(context).read().copy(backend = TranslationBackend.NATIVE_LLM)
+        assertTrue(NativeModelStore(context).ready(options))
+        val sources = listOf("明日は学校へ行きます。", "この本を読んでください。")
+        val messages = NativeTranslator.buildNumberedMessages(options, sources)
+        val extended = NativeTranslator.FIRST_REGION_MARKER + sources.first()
+        NativePrefixCache().use { cache ->
+            var shortCount = 0
+            NativeModelStore(context).load(options.nativeModelId, cache).use { model ->
+                assertTrue(model.begin(messages, fixedUserSuffix = NativeTranslator.FIRST_REGION_MARKER) > 0)
+                while (model.nextChunk() != null) { }
+                assertTrue(model.begin(messages, fixedUserSuffix = NativeTranslator.FIRST_REGION_MARKER) > 0)
+                shortCount = model.cachedPromptTokens()
+                assertTrue(shortCount > 0)
+            }
+            NativeModelStore(context).load(options.nativeModelId, cache).use { model ->
+                assertTrue(model.begin(messages, fixedUserSuffix = extended) > 0)
+                assertEquals(shortCount, model.cachedPromptTokens())
+                while (model.nextChunk() != null) { }
+                assertTrue(model.begin(messages, fixedUserSuffix = extended) > 0)
+                assertTrue("Prefilling the remainder should warm the longer prefix", model.cachedPromptTokens() > shortCount)
+            }
+        }
+    }
+
     @Test(timeout = 180000) fun readerTurnsShareCacheAndMemoryTrimDropsSnapshots() = runBlocking<Unit>(Dispatchers.IO) {
         assumeTrue(InstrumentationRegistry.getArguments().getString("testNativePerformance") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext

@@ -184,6 +184,11 @@ size_t matchingFixedPrefix(const std::vector<llama_token> &prompt, const std::ve
     return common <= MAX_PREFIX_TOKENS ? common : 0;
 }
 
+bool canReusePrefix(const std::vector<llama_token> &cached, const std::vector<llama_token> &requested) {
+    return !cached.empty() && cached.size() <= requested.size() &&
+           std::equal(cached.begin(), cached.end(), requested.begin());
+}
+
 void configureSampler(Session &s, int profile) {
     if (profile < 0 || profile > 2) throw std::runtime_error("Unknown translation sampling profile");
     auto *sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
@@ -222,35 +227,37 @@ void savePrefix(Session &s) noexcept {
 }
 size_t restorePrefix(Session &s) {
     auto mem = llama_get_memory(s.ctx);
-    if (!s.prefix.empty() && s.prefix == s.live_prefix &&
-        llama_memory_seq_rm(mem, 0, static_cast<llama_pos>(s.prefix.size()), -1)) {
+    if (canReusePrefix(s.live_prefix, s.prefix) &&
+        llama_memory_seq_rm(mem, 0, static_cast<llama_pos>(s.live_prefix.size()), -1)) {
         std::lock_guard<std::mutex> guard(s.cache->mutex);
         auto &entries = s.cache->entries;
         for (size_t i = 0; i < entries.size(); ++i) {
-            if (entries[i].model_key == s.model_key && entries[i].tokens == s.prefix) {
+            if (entries[i].model_key == s.model_key && entries[i].tokens == s.live_prefix) {
                 std::rotate(entries.begin() + i, entries.begin() + i + 1, entries.end());
                 break;
             }
         }
-        return s.prefix.size();
+        return s.live_prefix.size();
     }
     s.live_prefix.clear();
     llama_memory_clear(mem, true);
     if (s.prefix.empty()) return 0;
     std::lock_guard<std::mutex> guard(s.cache->mutex);
     auto &entries = s.cache->entries;
-    for (size_t i = 0; i < entries.size(); ++i) {
-        auto &entry = entries[i];
-        if (entry.model_key != s.model_key || entry.tokens != s.prefix) continue;
-        if (llama_state_seq_set_data(s.ctx, entry.state.data(), entry.state.size(), 0) == entry.state.size()) {
-            s.live_prefix = s.prefix;
-            std::rotate(entries.begin() + i, entries.begin() + i + 1, entries.end());
-            return s.prefix.size();
-        }
-        entries.erase(entries.begin() + i);
-        llama_memory_clear(mem, true);
-        break;
+    auto best = entries.end();
+    for (auto entry = entries.begin(); entry != entries.end(); ++entry) {
+        if (entry->model_key == s.model_key && canReusePrefix(entry->tokens, s.prefix) &&
+            (best == entries.end() || entry->tokens.size() >= best->tokens.size()))
+            best = entry;
     }
+    if (best == entries.end()) return 0;
+    if (llama_state_seq_set_data(s.ctx, best->state.data(), best->state.size(), 0) == best->state.size()) {
+        s.live_prefix = best->tokens;
+        std::rotate(best, best + 1, entries.end());
+        return s.live_prefix.size();
+    }
+    entries.erase(best);
+    llama_memory_clear(mem, true);
     return 0;
 }
 void initializeBackend() {
@@ -416,15 +423,14 @@ Java_com_hippo_ehviewer_translation_engine_NativeLlm_beginMessages(JNIEnv *env, 
             if (messages.back().content.compare(0, extended.size(), extended) != 0)
                 throw std::runtime_error("Invalid fixed user prefix");
             try {
-                size_t common = 0;
+                messages.back().content = fixed;
+                size_t common = matchingFixedPrefix(prompt, fixedPromptTokens(s, s.fixed_prompt, messages));
                 if (extended != fixed) {
                     messages.back().content = extended;
-                    common = matchingFixedPrefix(prompt, fixedPromptTokens(s, s.extended_fixed_prompt, messages));
-                }
-                // Some custom templates accept a full page but reject the extended probe.
-                if (common == 0) {
-                    messages.back().content = fixed;
-                    common = matchingFixedPrefix(prompt, fixedPromptTokens(s, s.fixed_prompt, messages));
+                    // Templates can change an earlier part of their output based on user content.
+                    // The shorter probe can then match more tokens than the extended one.
+                    common = std::max(common,
+                        matchingFixedPrefix(prompt, fixedPromptTokens(s, s.extended_fixed_prompt, messages)));
                 }
                 s.prefix.assign(prompt.begin(), prompt.begin() + common);
             } catch (const std::exception &) {
