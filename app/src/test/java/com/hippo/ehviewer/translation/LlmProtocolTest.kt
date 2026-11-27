@@ -37,13 +37,23 @@ class LlmProtocolTest {
         assertEquals(Usage(100, 20), result.usage)
     }
 
-    @Test fun unexpectedOrEmptyIdsCannotHideAMissingExpectedRegion() = runBlocking<Unit> {
-        for (response in listOf("<|1|>你好\n<|99|>extra", "<|1|>你好\n<|2|>   ")) {
+    @Test fun unexpectedIdInvalidatesEvenAPartialResponse() = runBlocking<Unit> {
+        val source = listOf("先", "次", "最後", "")
+        for (response in listOf("<|1|>合并前两句\n<|2|>第三句\n<|99|>extra",
+            "<|1|>第一句\n<|2|>第二句\n<|3|>第三句\n<|999999999999|>extra")) {
             val translator = LlmTranslator(transport = { response to null })
-            val result = translator.translateDetailed(listOf("こんにちは", "ありがとう"))
-            assertEquals(listOf("你好", "ありがとう"), result.translations)
+            val result = translator.translateDetailed(source)
+            assertEquals(source, result.translations)
+            assertEquals(setOf(0, 1, 2), result.missingIndices)
             assertNotNull(result.error)
         }
+    }
+
+    @Test fun emptyExpectedIdKeepsTheOtherTranslation() = runBlocking<Unit> {
+        val translator = LlmTranslator(transport = { "<|1|>你好\n<|2|>   " to null })
+        val result = translator.translateDetailed(listOf("こんにちは", "ありがとう"))
+        assertEquals(listOf("你好", "ありがとう"), result.translations)
+        assertEquals(setOf(1), result.missingIndices)
     }
 
     @Test fun injectedTransportCancellationIsNotConvertedToSourceText() = runBlocking<Unit> {
