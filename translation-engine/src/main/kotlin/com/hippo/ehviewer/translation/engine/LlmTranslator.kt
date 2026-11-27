@@ -39,7 +39,8 @@ class LlmTranslator(
         val responses = arrayOfNulls<String>(queries.size)
         val occurrences = IntArray(queries.size)
         for (i in headers.indices) {
-            val index = headers[i].groupValues[1].toIntOrNull()?.minus(1)
+            val groups = headers[i].groupValues
+            val index = groups[1].ifEmpty { groups[2] }.toIntOrNull()?.minus(1)
             if (index == null || index !in responses.indices) {
                 // Extra IDs can indicate shifted numbering even when some expected IDs are missing.
                 return TranslateResult(queries, usage, "API returned unexpected region markers",
@@ -58,5 +59,5 @@ class LlmTranslator(
     }
 
     private fun message(role: String, content: String) = JSONObject().put("role", role).put("content", content)
-    private val marker = Regex("<\\|?(\\d+)\\s*\\|?>\\|?[\\t ]*")
+    private val marker = Regex("<\\|(\\d+)>>[\\t ]*|<\\|?(\\d+)\\s*\\|?>\\|?[\\t ]*")
 }

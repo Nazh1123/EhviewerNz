@@ -277,6 +277,19 @@ class ApiTranslatorTest {
         }
     }
 
+    @Test fun doubledClosingMarkerIsRemovedBeforeTheApiCheckpoint() = runBlocking<Unit> {
+        MockWebServer().use { server ->
+            server.enqueue(sampleResponse("<|1>>你好。\n<|2|>> 引用"))
+            ApiTranslator(options(server)).use { translator ->
+                val checkpoints = mutableListOf<Map<Int, String>>()
+                val result = translator.translateDetailed(listOf("こんにちは", "> 引用")) { checkpoints.add(it) }
+                assertEquals(listOf("你好。", "> 引用"), result.translations)
+                assertEquals(listOf(mapOf(0 to "你好。", 1 to "> 引用")), checkpoints)
+                assertNull(result.error)
+            }
+        }
+    }
+
     @Test fun outputLimitSplitsThePageAndRejectsTheTruncatedText() = runBlocking<Unit> {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody("""{"choices":[{"finish_reason":"length","message":{"content":"<|1|>不完整译文"}}],"usage":{"prompt_tokens":100,"completion_tokens":1000}}"""))
