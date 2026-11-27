@@ -57,6 +57,26 @@ class NativeAdaptiveBatchTest {
         }
     }
 
+    @Test fun nestedContextRejectionsStayKnownUntilModelUnload() = runBlocking<Unit> {
+        val source = listOf("a", "b", "c", "d")
+        val sizes = mutableListOf<Int>()
+        NativeTranslator(TranslationOptions()) { messages ->
+            val count = Regex("<\\|\\d+\\|>").findAll(messages.getJSONObject(1).getString("content")).count()
+            sizes.add(count)
+            if (count > 1) null else "<|1|>译文" to null
+        }.use { translator ->
+            assertTrue(translator.translateDetailed(source).missingIndices.isEmpty())
+            assertEquals(listOf(4, 2, 1, 1, 2, 1, 1), sizes)
+            sizes.clear()
+            assertTrue(translator.translateDetailed(source).missingIndices.isEmpty())
+            assertEquals(listOf(1, 1, 1, 1), sizes)
+            translator.unloadModel()
+            sizes.clear()
+            assertTrue(translator.translateDetailed(source).missingIndices.isEmpty())
+            assertEquals(listOf(4, 2, 1, 1, 2, 1, 1), sizes)
+        }
+    }
+
     @Test fun largeRequestsCheckpointChunksWithOriginalOffsetsAndRepeatedSources() = runBlocking<Unit> {
         val sources = List(19) { "same" }.toMutableList().apply { add(5, "") }
         val sizes = mutableListOf<Int>()

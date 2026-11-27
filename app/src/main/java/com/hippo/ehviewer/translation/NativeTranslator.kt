@@ -42,7 +42,7 @@ class NativeTranslator private constructor(
     private val lock = Mutex()
     private var userOnlyTemplate = false
     private val batchPolicy = NativeBatchPolicy()
-    private var contextRejectedBatch: List<String>? = null
+    private val contextRejectedBatches = ArrayDeque<List<String>>()
     private val numberedInstruction by lazy { numberedInstruction(options) }
     private val userOnlyInstruction by lazy { numberedInstruction + "\n\n" }
     /** Explicit fixture diagnostics only; production never installs this observer. */
@@ -70,7 +70,7 @@ class NativeTranslator private constructor(
         native?.close()
         native = null
         pendingModelLoadMs = null
-        contextRejectedBatch = null
+        contextRejectedBatches.clear()
     }
 
     override suspend fun translateDetailed(queries: List<String>): LlmTranslator.TranslateResult =
@@ -128,14 +128,18 @@ class NativeTranslator private constructor(
 
     private suspend fun translateNumbered(queries: List<String>, learn: Boolean = true,
                                          onCompleted: suspend (Map<Int, String>) -> Unit): LlmTranslator.TranslateResult? {
-        if (queries == contextRejectedBatch) return null
+        if (queries in contextRejectedBatches) return null
         var interrupted = false
         var budgetExceeded = false
         val response = try {
             inferTranslation(queries) ?: run {
                 // The same prompt cannot fit on retry in this model session. Other pages
                 // still get their ordinary batch size.
-                if (queries.size > 1) contextRejectedBatch = queries.toList()
+                if (queries.size > 1) {
+                    if (contextRejectedBatches.size == NativeBatchPolicy.MAX_REGIONS - 1)
+                        contextRejectedBatches.removeFirst()
+                    contextRejectedBatches.addLast(queries.toList())
+                }
                 return null
             }
         } catch (error: NativeGenerationStopped) {

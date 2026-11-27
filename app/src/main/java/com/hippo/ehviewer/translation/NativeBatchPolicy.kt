@@ -35,8 +35,8 @@ internal class NativeBatchPolicy {
         }
     }
 
-    private companion object {
+    companion object {
         const val MAX_REGIONS = 8
-        const val SOURCE_TOKENS = 512
+        private const val SOURCE_TOKENS = 512
     }
 }
