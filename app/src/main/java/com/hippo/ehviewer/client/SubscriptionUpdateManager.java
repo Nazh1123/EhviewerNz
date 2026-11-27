@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
 
 /**
  * Tracks unread subscription galleries and incrementally checks subscription sources.
@@ -422,14 +421,11 @@ public final class SubscriptionUpdateManager {
         @Nullable final BookmarkSubscriptionPlanner.Source plan;
         final ListUrlBuilder builder = new ListUrlBuilder();
         SearchUpdateSession session;
-        String progressKey;
         long startedRealtime;
         int retries;
 
         int pageIndex;
         @Nullable String nextHref;
-        boolean queued;
-        boolean loading;
         boolean complete;
         boolean successful;
         @Nullable EhRequest request;
@@ -452,7 +448,6 @@ public final class SubscriptionUpdateManager {
     }
 
     private final EhClient mClient;
-    private final ExecutorService mExecutor;
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
     private final ArrayDeque<Source> mQueue = new ArrayDeque<>();
     private final ArrayList<Source> mSources = new ArrayList<>();
@@ -460,6 +455,7 @@ public final class SubscriptionUpdateManager {
     private String mSearchContext;
     @Nullable private String mUnreadScope;
     private int mUnreadGeneration;
+    private int mAppliedUnreadGeneration;
 
     private record Unread(Set<Long> eh, Set<Long> bookmarks, Set<Long> global) {
         private static final Unread EMPTY = new Unread(Set.of(), Set.of(), Set.of());
@@ -481,13 +477,9 @@ public final class SubscriptionUpdateManager {
     private final SubscriptionResultStore mResultStore;
     private String mCheckDisplayKey;
     private String mRatingPolicy;
-    private int mGeneration;
+    private volatile int mGeneration;
     private int mActiveRequests;
     private int mCompletedSources;
-    private int mEhSourceCount;
-    private int mBookmarkSourceCount;
-    private int mEhFailureCount;
-    private int mBookmarkFailureCount;
     private boolean mChecking;
     private boolean mManual;
     private boolean mEhEnabled;
@@ -500,15 +492,18 @@ public final class SubscriptionUpdateManager {
         mResultStore = new SubscriptionResultStore(applicationContext.getFilesDir());
         SearchUpdateStore.initialize(applicationContext);
         mClient = EhApplication.getEhClient(applicationContext);
-        mExecutor = EhApplication.getExecutorService(applicationContext);
         Set<Long> legacyEh = parseGids(Settings.getString(KEY_UNREAD_EH_GIDS, ""));
         Set<Long> legacyBookmarks = parseGids(Settings.getString(KEY_UNREAD_BOOKMARK_GIDS, ""));
         String scope = SubscriptionSearchContext.key();
         String owner = Settings.getString("search_updates_legacy_owner", "");
         if (owner.isEmpty()) { Settings.putString("search_updates_legacy_owner", scope); owner = scope; }
-        if (owner.equals(scope)) try (SearchUpdateStore store = SearchUpdateStore.open()) {
-            store.migrateUnread(scope, "eh", legacyEh);
-            store.migrateUnread(scope, "bookmark", legacyBookmarks);
+        if (owner.equals(scope)) {
+            SearchUpdateStore.saveBrowsingInBackground(() -> {
+                try (SearchUpdateStore store = SearchUpdateStore.open()) {
+                    store.migrateUnread(scope, "eh", legacyEh);
+                    store.migrateUnread(scope, "bookmark", legacyBookmarks);
+                }
+            });
         }
         mUnread = new Unread(legacyEh, legacyBookmarks, Set.of());
         mRatingPolicy = Settings.getString(KEY_UNREAD_RATING_POLICY, "true:0");
@@ -532,18 +527,16 @@ public final class SubscriptionUpdateManager {
 
     public void setListener(@Nullable Listener listener) {
         mListener = listener;
-        dispatchPendingCheckResult(null);
         if (listener != null) onSearchStatesChanged();
     }
 
-    private void dispatchPendingCheckResult(@Nullable Snapshot currentSnapshot) {
+    private void dispatchPendingCheckResult(Snapshot snapshot) {
         Listener listener = mListener;
         CheckResult result = mPendingCheckResult;
         if (listener == null || result == null) return;
         mPendingCheckResult = null;
         if (!SubscriptionSearchContext.key().equals(mPendingCheckContext)) return;
         // A subscription may have been opened while this activity was stopped.
-        Snapshot snapshot = currentSnapshot == null ? getSnapshot() : currentSnapshot;
         listener.onSubscriptionUpdateCheckFinished(new CheckResult(result.manual, result.failed,
                 Math.min(result.newEhCount, snapshot.ehCount),
                 Math.min(result.newBookmarkCount, snapshot.bookmarkCount), snapshot));
@@ -738,34 +731,16 @@ public final class SubscriptionUpdateManager {
         mGeneration++;
         mActiveRequests = 0;
         mCompletedSources = 0;
-        mEhSourceCount = 0;
-        mBookmarkSourceCount = 0;
-        mEhFailureCount = 0;
-        mBookmarkFailureCount = 0;
         mBookmarkPreparationFailed = false;
         mQueue.clear();
         mSources.clear();
         Settings.putLong(KEY_CANCEL_RETRY_NOT_BEFORE_TIME, 0L);
-
-
-        notifyStateChanged();
         final int generation = mGeneration;
-        if (mBookmarkEnabled) {
-            mExecutor.execute(() -> {
-                List<QuickSearch> quickSearches = null;
-                Exception error = null;
-                try {
-                    quickSearches = EhDB.getSubscribedQuickSearch();
-                } catch (Exception e) {
-                    error = e;
-                }
-                List<QuickSearch> result = quickSearches;
-                Exception failure = error;
-                mMainHandler.post(() -> prepareSources(generation, result, failure));
-            });
-        } else {
-            prepareSources(generation, null, null);
-        }
+        String scope = mSearchContext;
+        boolean ehEnabled = mEhEnabled, bookmarkEnabled = mBookmarkEnabled;
+        notifyStateChanged();
+        EhApplication.getSearchHistoryExecutor().execute(
+                () -> prepareSources(generation, scope, ehEnabled, bookmarkEnabled));
         return true;
     }
 
@@ -816,15 +791,15 @@ public final class SubscriptionUpdateManager {
         }
     }
 
-    private void applyUnread(String scope, Unread unread) {
+    private void applyUnread(int generation, String scope, Unread unread) {
+        mAppliedUnreadGeneration = generation;
         mUnreadScope = scope;
         mUnread = unread;
     }
 
     private void reloadUnread() {
-        mUnreadGeneration++;
         String scope = SubscriptionSearchContext.key();
-        applyUnread(scope, readUnread(scope));
+        applyUnread(++mUnreadGeneration, scope, readUnread(scope));
     }
 
     public void onSearchStatesChanged() {
@@ -833,10 +808,11 @@ public final class SubscriptionUpdateManager {
         EhApplication.getSearchHistoryExecutor().execute(() -> {
             try {
                 Unread unread = readUnread(scope);
-                mMainHandler.post(() -> {
+                onMain(() -> {
                     if (generation != mUnreadGeneration || !scope.equals(SubscriptionSearchContext.key())) return;
-                    applyUnread(scope, unread);
+                    applyUnread(generation, scope, unread);
                     notifyStateChanged();
+                    dispatchPendingCheckResult(getCachedSnapshot());
                 });
             } catch (RuntimeException error) {
                 android.util.Log.w("SubscriptionResults", "Unable to load unread subscription state", error);
@@ -851,60 +827,59 @@ public final class SubscriptionUpdateManager {
         }
     }
 
-    private void prepareSources(int generation, @Nullable List<QuickSearch> quickSearches,
-                                @Nullable Exception preparationFailure) {
-        if (!mChecking || generation != mGeneration) {
-            return;
-        }
+    private void onMain(Runnable action) {
+        if (Looper.myLooper() == Looper.getMainLooper()) action.run();
+        else mMainHandler.post(action);
+    }
 
-        if (mEhEnabled) {
-            addSource(new Source());
-            mEhSourceCount++;
-        }
+    private boolean canContinueCheck(int generation) {
+        if (!mChecking || generation != mGeneration) return false;
+        if (mSearchContext.equals(SubscriptionSearchContext.key())) return true;
+        cancelCheck();
+        return false;
+    }
 
-        if (mBookmarkEnabled) {
-            if (preparationFailure != null) {
-                mBookmarkPreparationFailed = true;
-            } else if (quickSearches != null) {
-                List<Source> nativeSources = new ArrayList<>();
-                for (BookmarkSubscriptionPlanner.Source plan : SearchUpdateSession.plan(quickSearches)) {
-                    Source source = new Source(plan);
-                    restoreSourceProgress(source);
-                    nativeSources.add(source);
+    private void prepareSources(int generation, String scope, boolean ehEnabled, boolean bookmarkEnabled) {
+        if (generation != mGeneration) return;
+        List<Source> sources = new ArrayList<>();
+        if (ehEnabled) sources.add(new Source());
+        boolean bookmarkPreparationFailed = false;
+        if (bookmarkEnabled) {
+            try {
+                for (BookmarkSubscriptionPlanner.Source plan :
+                        SearchUpdateSession.plan(EhDB.getSubscribedQuickSearch(), scope)) {
+                    sources.add(new Source(plan));
                 }
-                for (Source source : nativeSources) {
-                    addSource(source);
-                    mBookmarkSourceCount++;
-                }
+            } catch (RuntimeException error) {
+                bookmarkPreparationFailed = true;
+                android.util.Log.w("SubscriptionResults", "Unable to plan bookmark checks", error);
             }
         }
-
-        if (mSources.isEmpty()) {
-            finishCheck();
-            return;
+        for (Source source : sources) {
+            if (generation != mGeneration) return;
+            try {
+                source.session = new SearchUpdateSession(source.builder, source.plan, true, scope);
+            } catch (RuntimeException error) {
+                android.util.Log.w("SubscriptionResults", "Unable to read subscription checkpoint", error);
+            }
         }
-        pumpRequests(generation);
-    }
-
-    private void addSource(@NonNull Source source) {
-        if (source.progressKey == null) restoreSourceProgress(source);
-        source.queued = true;
-        mSources.add(source);
-        mQueue.addLast(source);
-    }
-
-    private void restoreSourceProgress(@NonNull Source source) {
-        source.progressKey = SubscriptionProgressStore.key(mSearchContext,
-                source.plan == null ? "eh-subscription" : source.plan.getCacheKey());
-        source.session = new SearchUpdateSession(source.builder, source.plan);
+        boolean preparationFailed = bookmarkPreparationFailed;
+        onMain(() -> {
+            if (!canContinueCheck(generation)) return;
+            mBookmarkPreparationFailed = preparationFailed;
+            mSources.addAll(sources);
+            for (Source source : sources) {
+                if (source.session != null) mQueue.addLast(source);
+                else completeSource(source, false);
+            }
+            pumpRequests(generation);
+        });
     }
 
     private void pumpRequests(int generation) {
         while (mChecking && generation == mGeneration
                 && mActiveRequests < MAX_CONCURRENT_REQUESTS && !mQueue.isEmpty()) {
             Source source = mQueue.removeFirst();
-            source.queued = false;
-            source.loading = true;
             if (source.pageIndex == 0 && source.retries == 0) source.startedRealtime = SystemClock.elapsedRealtime();
 
             String url;
@@ -961,13 +936,12 @@ public final class SubscriptionUpdateManager {
 
     private void onPageSuccess(int generation, @NonNull Source source,
                                @NonNull GalleryListParser.Result result) {
-        if (!mChecking || generation != mGeneration || source.complete) {
-            return;
-        }
-        finishRequest(source);
+        if (!canContinueCheck(generation) || source.complete) return;
+        source.request = null;
         source.retries = 0;
 
         if (result.customErrorString != null) {
+            finishRequest(source);
             completeSource(source, false);
             pumpRequests(generation);
             return;
@@ -980,31 +954,48 @@ public final class SubscriptionUpdateManager {
         boolean hasHref = !TextUtils.isEmpty(result.nextHref);
         boolean hasIndexedPage = result.pages > 0
                 && source.pageIndex + 1 < result.pages;
-        boolean hasMore = hasHref || hasIndexedPage;
-        source.session.observe(result, hasMore);
-        boolean shouldContinue = hasMore && !source.session.complete();
+        // Keep the source's slot until history is processed so queued pages stay bounded.
+        EhApplication.getSearchHistoryExecutor().execute(
+                () -> processPageHistory(generation, source, result, hasHref || hasIndexedPage));
+    }
 
+    private void processPageHistory(int generation, Source source, GalleryListParser.Result result, boolean hasMore) {
+        if (generation != mGeneration) return;
+        boolean shouldContinue = false, success = false;
+        try {
+            source.session.observe(result, hasMore);
+            shouldContinue = hasMore && !source.session.complete();
+            if (generation != mGeneration) return;
+            if (!shouldContinue) source.session.commit(false);
+            success = true;
+        } catch (RuntimeException error) {
+            android.util.Log.w("SubscriptionResults", "Unable to process subscription page history", error);
+        }
+        boolean loadNextPage = shouldContinue && success;
+        boolean historySaved = success;
+        onMain(() -> onPageHistoryProcessed(generation, source, loadNextPage, historySaved));
+    }
+
+    private void onPageHistoryProcessed(int generation, Source source, boolean shouldContinue, boolean success) {
+        if (!canContinueCheck(generation)) return;
+        finishRequest(source);
         if (shouldContinue) {
             source.pageIndex++;
-            source.queued = true;
             mQueue.addLast(source);
         } else {
-            completeSource(source, true);
+            completeSource(source, success);
         }
         pumpRequests(generation);
     }
 
     private void onPageFailure(int generation, @NonNull Source source, Exception error) {
-        if (!mChecking || generation != mGeneration || source.complete) {
-            return;
-        }
+        if (!canContinueCheck(generation) || source.complete) return;
         finishRequest(source);
         long delay = SubscriptionRetry.delayMillis(error, source.retries);
         if (delay >= 0) {
             source.retries++;
-            source.queued = true;
             mMainHandler.postDelayed(() -> {
-                if (!mChecking || generation != mGeneration) return;
+                if (!canContinueCheck(generation)) return;
                 mQueue.addLast(source);
                 pumpRequests(generation);
             }, delay);
@@ -1016,7 +1007,6 @@ public final class SubscriptionUpdateManager {
     }
 
     private void finishRequest(@NonNull Source source) {
-        source.loading = false;
         source.request = null;
         mActiveRequests = Math.max(0, mActiveRequests - 1);
     }
@@ -1027,16 +1017,7 @@ public final class SubscriptionUpdateManager {
         }
         source.complete = true;
         source.successful = success;
-        source.loading = false;
-        source.queued = false;
-        if (success && mSearchContext.equals(SubscriptionSearchContext.key())) {
-            source.session.commit(false);
-        }
         mCompletedSources++;
-        if (!success) {
-            if (source.group == Group.EH) mEhFailureCount++;
-            else mBookmarkFailureCount++;
-        }
     }
 
     private void maybeFinishCheck() {
@@ -1044,79 +1025,87 @@ public final class SubscriptionUpdateManager {
                 || mCompletedSources != mSources.size()) {
             return;
         }
-        finishCheck();
+        int generation = mGeneration;
+        int unreadGeneration = ++mUnreadGeneration;
+        String scope = mSearchContext, displayKey = mCheckDisplayKey;
+        boolean ehEnabled = mEhEnabled, bookmarkEnabled = mBookmarkEnabled;
+        boolean failed = mBookmarkPreparationFailed || mSources.stream().anyMatch(source -> !source.successful);
+        List<Source> sources = List.copyOf(mSources);
+        // The worker owns the completed scan until it has built the smaller result.
+        mSources.clear();
+        EhApplication.getSearchHistoryExecutor().execute(() -> finishCheckInBackground(
+                generation, unreadGeneration, scope, displayKey, ehEnabled, bookmarkEnabled, failed, sources));
     }
 
-    private void finishCheck() {
-        if (!mChecking) {
-            return;
+    private void finishCheckInBackground(int generation, int unreadGeneration, String scope, String displayKey,
+            boolean ehEnabled, boolean bookmarkEnabled, boolean sourceFailed, List<Source> sources) {
+        if (generation != mGeneration) return;
+        Set<Long> newEh = new HashSet<>(), newBookmark = new HashSet<>();
+        RecentCheckResult completedRound = null;
+        Unread unread = null;
+        boolean failed = sourceFailed;
+        try {
+            for (Source source : sources) if (source.successful) {
+                (source.group == Group.EH ? newEh : newBookmark).addAll(source.session.newGids());
+            }
+            if (!failed) completedRound = buildRecentCheckResult(sources, scope, displayKey, ehEnabled, bookmarkEnabled);
+            unread = readUnread(scope);
+        } catch (RuntimeException error) {
+            failed = true;
+            android.util.Log.w("SubscriptionResults", "Unable to finish subscription check", error);
         }
+        RecentCheckResult recent = completedRound;
+        Unread refreshed = unread;
+        boolean checkFailed = failed;
+        onMain(() -> finishCheck(generation, unreadGeneration, refreshed, recent, checkFailed, newEh, newBookmark));
+    }
 
-        boolean sameContext = mSearchContext.equals(SubscriptionSearchContext.key());
-        boolean ehSuccess = sameContext && (!mEhEnabled
-                || (mEhFailureCount == 0 && mCompletedSourcesFor(Group.EH) == mEhSourceCount));
-        boolean bookmarkSuccess = sameContext && (!mBookmarkEnabled
-                || (!mBookmarkPreparationFailed && mBookmarkFailureCount == 0
-                && mCompletedSourcesFor(Group.BOOKMARK) == mBookmarkSourceCount));
-
-        RecentCheckResult completedRound = ehSuccess && bookmarkSuccess ? cacheRecentCheckResult() : null;
-
+    private void finishCheck(int generation, int unreadGeneration, @Nullable Unread unread,
+                             @Nullable RecentCheckResult completedRound, boolean failed,
+                             Set<Long> newEh, Set<Long> newBookmark) {
+        if (!canContinueCheck(generation)) return;
+        if (completedRound != null) {
+            mResultStore.recordSnapshots(mSearchContext, mCheckDisplayKey, completedRound.sources,
+                    new ArrayList<>(completedRound.displaySnapshots.values()));
+        }
+        // A newer unread refresh may already have updated the sidebar during this check.
+        if (unread != null && unreadGeneration > mAppliedUnreadGeneration) {
+            applyUnread(unreadGeneration, mSearchContext, unread);
+        }
         resetCheckTimer();
         mChecking = false;
         deliverCheckCompletions(completedRound);
-        reloadUnread();
-        Set<Long> newEh = new HashSet<>(), newBookmark = new HashSet<>();
-        for (Source source : mSources) if (source.successful) {
-            (source.group == Group.EH ? newEh : newBookmark).addAll(source.session.newGids());
-        }
-        newEh.retainAll(mUnread.eh);
-        newBookmark.retainAll(mUnread.bookmarks);
-        int newEhCount = newEh.size(), newBookmarkCount = newBookmark.size();
-        CheckResult result = new CheckResult(mManual,
-                !ehSuccess || !bookmarkSuccess, newEhCount, newBookmarkCount,
-                getCachedSnapshot());
-        notifyStateChanged();
+        Unread currentUnread = cachedUnread();
+        newEh.retainAll(currentUnread.eh);
+        newBookmark.retainAll(currentUnread.bookmarks);
+        CheckResult result = new CheckResult(mManual, failed, newEh.size(), newBookmark.size(), getCachedSnapshot());
         mPendingCheckResult = result;
         mPendingCheckContext = mSearchContext;
+        notifyStateChanged();
         dispatchPendingCheckResult(result.snapshot);
     }
 
-    private int mCompletedSourcesFor(@NonNull Group group) {
-        int count = 0;
-        for (Source source : mSources) {
-            if (source.group == group && source.complete) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    private RecentCheckResult cacheRecentCheckResult() {
+    private static RecentCheckResult buildRecentCheckResult(List<Source> checkedSources, String scope,
+            String displayKey, boolean ehEnabled, boolean bookmarkEnabled) {
         ArrayList<RecentCheckSource> sources = new ArrayList<>();
-        for (Source source : mSources) {
-            if (source.successful && source.firstPage != null) {
-                sources.add(source.firstPage);
-            }
-        }
         Set<Long> unread = new HashSet<>(), bookmarkUnread = new HashSet<>();
-        for (Source source : mSources) {
+        for (Source source : checkedSources) {
+            if (source.firstPage != null) sources.add(source.firstPage);
             Set<Long> sourceUnread = source.session.displayNewGids();
             unread.addAll(sourceUnread);
             if (source.plan != null) bookmarkUnread.addAll(sourceUnread);
         }
-        List<SubscriptionDisplaySnapshot> snapshots = new ArrayList<>();
-        if (mBookmarkEnabled) snapshots.add(SubscriptionDisplaySnapshot.merge(
-                ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION, sources, bookmarkUnread, mSearchContext));
-        // An unchecked source cannot silently disappear from a new global snapshot.
-        if (mEhEnabled && (mBookmarkEnabled || EhDB.getSubscribedQuickSearch().isEmpty())) {
-            snapshots.add(SubscriptionDisplaySnapshot.merge(
-                    ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION, sources, unread, mSearchContext));
-        }
-        mResultStore.recordSnapshots(mSearchContext, mCheckDisplayKey, sources, snapshots);
         // Waiting pages receive this round only. The store retains earlier snapshots for explicit reuse.
-        RecentCheckResult completedRound = new RecentCheckResult(sources, mSearchContext, mCheckDisplayKey, true);
-        for (SubscriptionDisplaySnapshot snapshot : snapshots) {
-            completedRound.displaySnapshots.put(snapshot.mode, snapshot);
+        RecentCheckResult completedRound = new RecentCheckResult(sources, scope, displayKey, true);
+        if (bookmarkEnabled) {
+            int mode = ListUrlBuilder.MODE_BOOKMARK_SUBSCRIPTION;
+            completedRound.displaySnapshots.put(mode,
+                    SubscriptionDisplaySnapshot.merge(mode, sources, bookmarkUnread, scope));
+        }
+        // An unchecked source cannot silently disappear from a new global snapshot.
+        if (ehEnabled && (bookmarkEnabled || EhDB.getSubscribedQuickSearch().isEmpty())) {
+            int mode = ListUrlBuilder.MODE_GLOBAL_SUBSCRIPTION;
+            completedRound.displaySnapshots.put(mode, SubscriptionDisplaySnapshot.merge(mode, sources, unread, scope));
         }
         return completedRound;
     }

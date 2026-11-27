@@ -36,13 +36,16 @@ import org.robolectric.shadows.ShadowSystemClock;
 import org.robolectric.util.ReflectionHelpers;
 
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.AbstractExecutorService;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.*;
@@ -59,12 +62,14 @@ public class SubscriptionCheckReuseTest {
     private static final List<QuickSearch> bookmarks = new ArrayList<>();
     private static String contextKey;
     private static EhClient client;
+    private static Executor historyExecutor;
     private SubscriptionUpdateManager manager;
 
     @Before public void setUp() throws Exception {
         flushResultWrites();
         requests.clear();
         bookmarks.clear();
+        historyExecutor = Runnable::run;
         contextKey = "account-a";
         Context context = RuntimeEnvironment.getApplication();
         context.deleteFile("subscription-results-v1.json");
@@ -118,6 +123,75 @@ public class SubscriptionCheckReuseTest {
         assertTrue(manager.checkForUpdates(false));
         assertFalse(requests.isEmpty());
         for (EhRequest request : requests) assertTrue(request.isBackground());
+    }
+
+    @Test public void backgroundHistoryFinishesBeforePublishingCountsAndReleasesTheSources() throws Exception {
+        seedEh(page(100, null).galleryInfoList);
+        List<SubscriptionUpdateManager.CheckResult> delivered = new ArrayList<>();
+        manager.setListener(listener(delivered));
+        ArrayDeque<Runnable> history = new ArrayDeque<>();
+        historyExecutor = history::addLast;
+
+        start(false);
+        assertTrue(requests.isEmpty());
+        runHistoryTask(history);
+        assertTrue(requests.isEmpty());
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, requests.size());
+
+        succeed(0, page(200, null));
+        assertTrue(manager.isChecking());
+        assertEquals(0, manager.getSnapshot().ehCount);
+        runHistoryTask(history);
+        assertTrue(manager.isChecking());
+        assertEquals(1, manager.getSnapshot().ehCount);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(((List<?>) ReflectionHelpers.getField(manager, "mSources")).isEmpty());
+        assertTrue(delivered.isEmpty());
+
+        runHistoryTask(history);
+        assertTrue(manager.isChecking());
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(manager.isChecking());
+        assertEquals(1, delivered.size());
+        assertEquals(1, delivered.get(0).snapshot.ehCount);
+        assertEquals(1, delivered.get(0).newEhCount);
+        assertTrue(history.isEmpty());
+    }
+
+    @Test public void cancellationDiscardsQueuedHistoryBeforeStartingAnotherCheck() throws Exception {
+        seedEh(page(100, null).galleryInfoList);
+        start(false);
+        ArrayDeque<Runnable> history = new ArrayDeque<>();
+        historyExecutor = history::addLast;
+        List<SubscriptionUpdateManager.RecentCheckResult> delivered = new ArrayList<>();
+        assertTrue(manager.awaitCurrentCheck(delivered::add));
+
+        succeed(0, page(200, null));
+        manager.cancelCheck();
+        start(true);
+        assertEquals(Collections.singletonList(null), delivered);
+        runHistoryTask(history); // Cancelled page.
+        runHistoryTask(history); // Refresh badges after cancelling.
+        runHistoryTask(history); // Prepare the new round.
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(2, requests.size());
+        assertTrue(manager.getUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION).isEmpty());
+
+        succeed(1, page(300, null));
+        runHistoryTask(history);
+        shadowOf(Looper.getMainLooper()).idle();
+        runHistoryTask(history);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(manager.isChecking());
+        assertEquals(Set.of(300L), manager.getCachedUnreadGalleryGids(ListUrlBuilder.MODE_SUBSCRIPTION));
+        assertTrue(history.isEmpty());
+    }
+
+    private static void runHistoryTask(ArrayDeque<Runnable> history) throws Exception {
+        FutureTask<Void> task = new FutureTask<>(history.removeFirst(), null);
+        new Thread(task, "TestSearchHistory").start();
+        task.get(5, TimeUnit.SECONDS);
     }
 
     @Test public void checkFinishedWithoutVisibleActivityIsDeliveredOnceOnReturn() {
@@ -1598,7 +1672,7 @@ public class SubscriptionCheckReuseTest {
     @Implements(EhApplication.class)
     public static class AppShadow {
         @Implementation protected static EhClient getEhClient(Context context) { return client; }
-        @Implementation protected static java.util.concurrent.Executor getSearchHistoryExecutor() { return Runnable::run; }
+        @Implementation protected static Executor getSearchHistoryExecutor() { return historyExecutor; }
         @Implementation protected static ExecutorService getExecutorService(Context context) {
             return new AbstractExecutorService() {
                 @Override public void execute(Runnable command) { command.run(); }
