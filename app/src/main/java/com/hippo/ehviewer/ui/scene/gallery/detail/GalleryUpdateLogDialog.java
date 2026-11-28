@@ -185,7 +185,7 @@ final class GalleryUpdateLogDialog {
         }
 
         void checking() {
-            update.setEnabled(false);
+            update.setEnabled(true);
             statusCard.setVisibility(View.VISIBLE);
             status.setText(R.string.gallery_update_preview_checking);
             statusAction.setText(R.string.gallery_update_preview_cancel);

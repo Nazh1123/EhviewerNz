@@ -81,7 +81,7 @@ public class GalleryUpdateLogDialogTest {
                 ReflectionHelpers.ClassParameter.from(boolean.class, localCoverage));
     }
 
-    @Test public void checkingRendersEmptyFieldsAndBlocksConfirmationUntilReady() {
+    @Test public void checkingRendersEmptyFieldsAndAllowsEarlyConfirmation() {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
         activity.setTheme(R.style.AppTheme);
         AtomicInteger confirms = new AtomicInteger();
@@ -95,13 +95,33 @@ public class GalleryUpdateLogDialogTest {
         assertNull(findText(root, "+0"));
         assertTrue(root.findViewById(R.id.gallery_update_log_history_action).isEnabled());
         assertTrue(preview.dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isEnabled());
-        assertFalse(root.findViewById(R.id.gallery_update_log_read_action).isEnabled());
+        assertTrue(root.findViewById(R.id.gallery_update_log_read_action).isEnabled());
         root.findViewById(R.id.gallery_update_log_read_action).performClick();
         ShadowLooper.idleMainLooper();
-        assertTrue(preview.dialog.isShowing());
+        assertFalse(preview.dialog.isShowing());
+        assertEquals(1, confirms.get());
+        assertEquals(1, dismisses.get());
+        activity.finish();
+    }
+
+    @Test public void failedPreviewAllowsConfirmationAgainAfterStartingRetry() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setTheme(R.style.AppTheme);
+        AtomicInteger confirms = new AtomicInteger();
+        var preview = new GalleryUpdateLogDialog.Preview(activity, 200, confirms::incrementAndGet,
+                () -> {}, () -> {}, () -> {});
+        preview.failed("Comparison failed", preview::checking);
+        View root = preview.dialog.getWindow().getDecorView();
+        View confirm = root.findViewById(R.id.gallery_update_log_read_action);
+        assertFalse(confirm.isEnabled());
+        confirm.performClick();
         assertEquals(0, confirms.get());
-        assertEquals(0, dismisses.get());
-        preview.dialog.dismiss();
+        findText(root, activity.getString(R.string.try_again)).performClick();
+        assertTrue(confirm.isEnabled());
+        confirm.performClick();
+        ShadowLooper.idleMainLooper();
+        assertEquals(1, confirms.get());
+        assertFalse(preview.dialog.isShowing());
         activity.finish();
     }
 
