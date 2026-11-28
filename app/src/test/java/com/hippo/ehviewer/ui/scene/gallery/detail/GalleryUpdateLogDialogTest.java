@@ -29,6 +29,7 @@ import org.robolectric.util.ReflectionHelpers;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -46,6 +47,17 @@ public class GalleryUpdateLogDialogTest {
     }
 
     private GalleryUpdateRecord record(boolean complete, boolean hasTokens, int[] additions) {
+        return record(complete, hasTokens, additions, List.of(), complete);
+    }
+
+    private GalleryUpdateRecord record(boolean complete, boolean hasTokens, int[] additions,
+                                       List<GalleryUpdateRecord.SourceDeletion> deletions, boolean additionsKnown) {
+        return record(complete, hasTokens, additions, deletions, additionsKnown, false);
+    }
+
+    private GalleryUpdateRecord record(boolean complete, boolean hasTokens, int[] additions,
+                                       List<GalleryUpdateRecord.SourceDeletion> deletions,
+                                       boolean additionsKnown, boolean localCoverage) {
         return ReflectionHelpers.callConstructor(GalleryUpdateRecord.class,
                 ReflectionHelpers.ClassParameter.from(long.class, 200L),
                 ReflectionHelpers.ClassParameter.from(long.class, 100L),
@@ -63,10 +75,13 @@ public class GalleryUpdateLogDialogTest {
                 ReflectionHelpers.ClassParameter.from(String[].class, hasTokens
                         ? IntStream.range(0, 121).mapToObj(i -> "token" + i).toArray(String[]::new)
                         : new String[0]),
-                ReflectionHelpers.ClassParameter.from(String.class, "gallery-token"));
+                ReflectionHelpers.ClassParameter.from(String.class, "gallery-token"),
+                ReflectionHelpers.ClassParameter.from(List.class, deletions),
+                ReflectionHelpers.ClassParameter.from(boolean.class, additionsKnown),
+                ReflectionHelpers.ClassParameter.from(boolean.class, localCoverage));
     }
 
-    @Test public void checkingRendersEmptyFieldsAndLetsUserConfirmImmediately() {
+    @Test public void checkingRendersEmptyFieldsAndBlocksConfirmationUntilReady() {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
         activity.setTheme(R.style.AppTheme);
         AtomicInteger confirms = new AtomicInteger();
@@ -74,17 +89,19 @@ public class GalleryUpdateLogDialogTest {
         var preview = new GalleryUpdateLogDialog.Preview(activity, 200, confirms::incrementAndGet,
                 () -> fail("History opened"), () -> fail("Versions opened"), dismisses::incrementAndGet);
         View root = preview.dialog.getWindow().getDecorView();
-        assertNotNull(findText(root, activity.getString(R.string.gallery_update_preview_added)));
-        assertNotNull(findText(root, activity.getString(R.string.gallery_update_preview_deleted)));
+        assertNotNull(findText(root, activity.getString(R.string.gallery_update_log_added)));
+        assertNotNull(findText(root, activity.getString(R.string.gallery_update_log_deleted)));
         assertNotNull(findText(root, activity.getString(R.string.gallery_update_preview_cancel)));
         assertNull(findText(root, "+0"));
         assertTrue(root.findViewById(R.id.gallery_update_log_history_action).isEnabled());
         assertTrue(preview.dialog.getButton(AlertDialog.BUTTON_NEUTRAL).isEnabled());
+        assertFalse(root.findViewById(R.id.gallery_update_log_read_action).isEnabled());
         root.findViewById(R.id.gallery_update_log_read_action).performClick();
         ShadowLooper.idleMainLooper();
-        assertFalse(preview.dialog.isShowing());
-        assertEquals(1, confirms.get());
-        assertEquals(1, dismisses.get());
+        assertTrue(preview.dialog.isShowing());
+        assertEquals(0, confirms.get());
+        assertEquals(0, dismisses.get());
+        preview.dialog.dismiss();
         activity.finish();
     }
 
@@ -105,11 +122,55 @@ public class GalleryUpdateLogDialogTest {
         View root = preview.dialog.getWindow().getDecorView();
         assertNotNull(findText(root, "+0"));
         assertNotNull(findText(root, "-2"));
-        assertNotNull(findText(root, "p1–2"));
+        assertNotNull(findText(root, "100[p100]:p1–2"));
+        assertNull(findText(root, activity.getString(R.string.gallery_update_preview_totals, 100, 121)));
         root.findViewById(R.id.gallery_update_log_read_action).performClick();
         ShadowLooper.idleMainLooper();
         assertEquals(1, confirms.get());
         assertEquals(2, dismisses.get());
+        activity.finish();
+    }
+
+    @Test public void previewAndLogRenderSameDeletionRowsAndKeepUnknownSeparateFromNone() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setTheme(R.style.AppTheme);
+        GalleryUpdateRecord record = record(true, true, new int[0], List.of(
+                new GalleryUpdateRecord.SourceDeletion(100, 4, 2, true, true, new int[]{0, 1}),
+                new GalleryUpdateRecord.SourceDeletion(90, 3, 3, false, true, new int[0]),
+                new GalleryUpdateRecord.SourceDeletion(80, 3, -1, true, false, new int[0])), false);
+        var preview = new GalleryUpdateLogDialog.Preview(activity, 200, () -> {}, () -> {}, () -> {}, () -> {});
+        preview.ready(record, "2026-11-26");
+        String rows = "100[p2]:p1–2\n90[p3]:" + activity.getString(R.string.gallery_update_log_none)
+                + "\n80[p—]:" + activity.getString(R.string.gallery_update_history_incomplete);
+        assertNotNull(findText(preview.dialog.getWindow().getDecorView(), rows));
+        assertNotNull(findText(preview.dialog.getWindow().getDecorView(), "+—"));
+        preview.dialog.dismiss();
+        AlertDialog log = GalleryUpdateLogDialog.show(activity, record, () -> fail("Cannot read"), () -> {}, () -> {});
+        assertNotNull(findText(log.getWindow().getDecorView(), rows));
+        assertFalse(log.findViewById(R.id.gallery_update_log_read_action).isEnabled());
+        log.dismiss();
+        activity.finish();
+    }
+
+    @Test public void rangeLogLabelsUncoveredPagesAndEnablesReadingThem() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        activity.setTheme(R.style.AppTheme);
+        GalleryUpdateRecord record = record(true, true, new int[]{8}, List.of(
+                new GalleryUpdateRecord.SourceDeletion(100, 1159, 100, true, true, new int[0])), true, true);
+        AtomicInteger reads = new AtomicInteger();
+        AlertDialog log = GalleryUpdateLogDialog.show(activity, record, reads::incrementAndGet, () -> {}, () -> {});
+        View decor = log.getWindow().getDecorView();
+        assertNotNull(findText(decor, activity.getString(R.string.gallery_update_log_added)));
+        assertNotNull(findText(decor, activity.getString(R.string.gallery_update_log_deleted)));
+        assertNotNull(findText(decor, "+1"));
+        assertNotNull(findText(decor, "p9"));
+        assertNotNull(findText(decor, "100[p100]:" + activity.getString(R.string.gallery_update_log_none)));
+        TextView read = log.findViewById(R.id.gallery_update_log_read_action);
+        assertEquals(activity.getString(R.string.gallery_update_read_uncovered), read.getText().toString());
+        assertTrue(read.isEnabled());
+        read.performClick();
+        assertEquals(1, reads.get());
+        log.dismiss();
         activity.finish();
     }
 

@@ -25,7 +25,6 @@ import org.robolectric.util.ReflectionHelpers;
 
 import java.io.File;
 import java.io.FileOutputStream;
-import java.lang.reflect.Constructor;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.List;
@@ -42,7 +41,7 @@ public class GalleryUpdateExamplesTest {
     private static final long TARGET = 200;
     private static final String A = "1111111111", B = "2222222222", C = "3333333333";
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
-    private final Map<String, UniFile> source = new HashMap<>();
+    private final Map<String, List<GalleryUpdateManager.SourcePage>> source = new HashMap<>();
     private File targetDir;
     private SpiderDen den;
 
@@ -51,13 +50,9 @@ public class GalleryUpdateExamplesTest {
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 context.getSharedPreferences("gallery-update-examples", Context.MODE_PRIVATE));
         cache("PLAN_CACHE").clear();
-        cache("SOURCE_CACHE").clear();
-        cache("PLAN_CACHE").put(TARGET,
-                new GalleryUpdateManager.UpdatePlan(TARGET, 100, List.of(100L)));
-        Class<?> type = Class.forName(GalleryUpdateManager.class.getName() + "$SourcePages");
-        Constructor<?> constructor = type.getDeclaredConstructor(Map.class);
-        constructor.setAccessible(true);
-        cache("SOURCE_CACHE").put(TARGET, constructor.newInstance(source));
+        var plan = new GalleryUpdateManager.UpdatePlan(TARGET, 100, List.of(100L));
+        ReflectionHelpers.setField(plan, "sourcePages", new GalleryUpdateManager.SourcePages(source));
+        cache("PLAN_CACHE").put(TARGET, plan);
         targetDir = temporary.newFolder("target");
         GalleryInfo gallery = new GalleryInfo();
         gallery.gid = TARGET;
@@ -81,7 +76,11 @@ public class GalleryUpdateExamplesTest {
             assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output));
         }
         bitmap.recycle();
-        source.put(token, UniFile.fromFile(file));
+        source.put(token, List.of(new GalleryUpdateManager.SourcePage(100, 0, UniFile.fromFile(file))));
+    }
+
+    private UniFile file(String token) {
+        return source.get(token).get(0).file();
     }
 
     private boolean reuse(int page, String token) {
@@ -90,7 +89,7 @@ public class GalleryUpdateExamplesTest {
 
     private void copied(int page, String token) throws Exception {
         assertTrue(reuse(page, token));
-        assertArrayEquals(Files.readAllBytes(new File(source.get(token).getUri().getPath()).toPath()),
+        assertArrayEquals(Files.readAllBytes(new File(file(token).getUri().getPath()).toPath()),
                 Files.readAllBytes(new File(targetDir,
                         SpiderDen.generateImageFilename(page, ".png")).toPath()));
     }
@@ -127,9 +126,9 @@ public class GalleryUpdateExamplesTest {
     }
 
     @Test public void missingEmptyAndNonImageSourcesRequireDownload() throws Exception {
-        assertTrue(source.get(A).delete());
-        Files.write(new File(source.get(B).getUri().getPath()).toPath(), new byte[0]);
-        Files.write(new File(source.get(C).getUri().getPath()).toPath(), "not an image".getBytes());
+        assertTrue(file(A).delete());
+        Files.write(new File(file(B).getUri().getPath()).toPath(), new byte[0]);
+        Files.write(new File(file(C).getUri().getPath()).toPath(), "not an image".getBytes());
         assertFalse(reuse(0, A)); assertFalse(reuse(1, B)); assertFalse(reuse(2, C));
     }
 

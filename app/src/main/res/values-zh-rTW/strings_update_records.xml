@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="gallery_update_uncovered_count">未涵蓋 %1$d 頁</string>
+    <string name="gallery_update_read_uncovered">閱讀未涵蓋頁面</string>
+    <string name="gallery_update_no_uncovered">當次更新的新版頁面都已由本機舊版本涵蓋。</string>
+    <string name="gallery_update_uncovered_notice">閱讀確認更新時記錄的未涵蓋頁面。仍可讀取的頁面依目前畫廊頁碼排序，每筆記錄的閱讀進度分開儲存。</string>
+    <string name="gallery_update_uncovered_no_pages">當次記錄的未涵蓋頁面目前沒有可讀取的本機圖片。</string>
+    <string name="gallery_update_uncovered_progress">未涵蓋 %1$d/%2$d · p%3$d/%4$d</string>
     <string name="gallery_updated">已更新</string>
     <string name="gallery_update_history_missing_gallery_title">GID: %1$d\n畫廊已被刪除或更新</string>
     <string name="gallery_update_history_title">畫廊更新歷史</string>
@@ -19,6 +25,7 @@
     <string name="gallery_update_log_target">目標畫廊：%1$d</string>
     <string name="gallery_update_log_legacy_notice">該舊記錄未保存頁面標識，無法閱讀當次新增頁。</string>
     <string name="gallery_update_log_no_added">當次更新沒有新增頁可供閱讀。</string>
+    <string name="gallery_update_log_additions_unknown">未能取得最近舊版的全部頁面識別資訊，暫時無法確認新增頁。</string>
     <string name="gallery_update_log_added">新增:</string>
     <string name="gallery_update_log_deleted">刪除:</string>
     <string name="gallery_update_log_none">無</string>

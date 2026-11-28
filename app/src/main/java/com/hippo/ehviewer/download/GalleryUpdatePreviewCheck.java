@@ -19,19 +19,30 @@ import com.hippo.ehviewer.spider.SpiderQueen;
 import com.hippo.util.ExceptionUtils;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.function.Consumer;
 
 import org.jsoup.Jsoup;
+import org.json.JSONArray;
 
 import okhttp3.Call;
 import okhttp3.Response;
 
 /** One cancellable metadata check. UI and service exchange ownership on the main thread. */
 public final class GalleryUpdatePreviewCheck {
-    public record Result(GalleryUpdateRecord record, String error) {}
+    public record Result(GalleryUpdateRecord record, String error, String scope, SpiderInfo sourceInfo) {
+        Result(GalleryUpdateRecord record, String error) { this(record, error, null, null); }
+    }
+
+    private record Source(GalleryInfo gallery, GalleryPageRange range, boolean editing) {
+        int totalPages() { return range != null ? range.totalPages : gallery.pages; }
+    }
     private static final Map<Long, GalleryUpdatePreviewCheck> confirmed = new HashMap<>();
     private final Context context;
     private final GalleryInfo source;
@@ -53,7 +64,7 @@ public final class GalleryUpdatePreviewCheck {
         EhApplication.getExecutorService(context).execute(() -> {
             Result loaded;
             try {
-                loaded = new Result(compare(), null);
+                loaded = compare();
             } catch (Exception e) {
                 if (cancelled) return;
                 loaded = new Result(null, context.getString(R.string.gallery_update_log_incomplete)
@@ -93,31 +104,116 @@ public final class GalleryUpdatePreviewCheck {
         if (active != null) active.cancel();
     }
 
-    private GalleryUpdateRecord compare() throws Exception {
-        GalleryUpdateRecordStore store = GalleryUpdateRecordStore.get(context);
-        GalleryUpdateRecord cached = store.findPreview(target.gid, target.token, source.gid, source.token);
-        if (cached != null && (source.pages <= 0 || source.pages == cached.oldPages)
-                && (target.pages <= 0 || target.pages == cached.newPages)) return cached;
-        SpiderInfo old = load(source);
-        SpiderInfo updated = load(target);
-        GalleryUpdateRecord record = GalleryUpdateRecord.compare(target.gid, source.gid, old, updated);
-        if (!record.complete) throw new IOException(context.getString(R.string.gallery_update_history_incomplete));
-        if (!cancelled) store.savePreview(record, old);
-        return record;
+    static boolean matchesCurrentSources(Context context, GalleryInfo source,
+                                         GalleryDetail target, Result checked) {
+        long firstGid = family(target);
+        return checked.scope == null || (checked.record.targetGid == target.gid
+                && checked.record.sourceGid == source.gid && checked.record.targetToken.equals(target.token)
+                && (target.pages <= 0 || checked.record.newPages == target.pages)
+                && checked.scope.equals(scope(firstGid, localSources(context, source, target))));
     }
 
-    private SpiderInfo load(GalleryInfo gallery) throws Exception {
+    private static long family(GalleryDetail target) { return target.firstGid != null ? target.firstGid : 0; }
+
+    private static List<Source> localSources(Context context, GalleryInfo source, GalleryDetail target) {
+        List<Source> sources = new ArrayList<>();
+        long firstGid = family(target);
+        if (firstGid > 0) {
+            DownloadManager manager = EhApplication.getDownloadManager(context);
+            List<Long> older = manager.getOlderGalleryVersionGids(firstGid, target.gid);
+            for (int i = older.size() - 1; i >= 0; i--) {
+                GalleryInfo gallery = manager.getDownloadInfo(older.get(i));
+                if (gallery != null) sources.add(readScope(gallery));
+            }
+        } else {
+            sources.add(readScope(source));
+        }
+        return sources;
+    }
+
+    private static Source readScope(GalleryInfo gallery) {
+        GalleryDownloadRangeStore.Entry entry = GalleryDownloadRangeStore.peek(gallery.gid);
+        return new Source(gallery, entry != null ? entry.range() : null,
+                GalleryDownloadRangeStore.isEditing(gallery.gid) || (entry != null && entry.pending()));
+    }
+
+    private static String scope(long firstGid, List<Source> sources) {
+        JSONArray signature = new JSONArray().put(firstGid);
+        for (Source item : sources) {
+            signature.put(new JSONArray().put(item.gallery.gid).put(item.gallery.token)
+                    .put(item.totalPages()).put(item.range != null ? item.range.toString() : "")
+                    .put(item.editing));
+        }
+        return signature.toString();
+    }
+
+    private Result compare() throws Exception {
+        GalleryUpdateRecordStore store = GalleryUpdateRecordStore.get(context);
+        long firstGid = family(target);
+        List<Source> sources = localSources(context, source, target);
+        if (sources.stream().noneMatch(item -> item.gallery.gid == source.gid)) {
+            throw new IOException(context.getString(R.string.gallery_update_preview_source_changed));
+        }
+        String signature = scope(firstGid, sources);
+        Set<String> covered = GalleryUpdateManager.findLocallyCoveredTokens(
+                sources.stream().map(item -> item.gallery.gid).collect(java.util.stream.Collectors.toList()),
+                () -> cancelled);
+        GalleryUpdateRecord cached = store.findPreview(target.gid, target.token, source.gid, source.token, signature);
+        if (cached != null && (target.pages <= 0 || target.pages == cached.newPages)) {
+            SpiderInfo old = new SpiderInfo();
+            old.gid = source.gid;
+            old.token = source.token;
+            old.pages = cached.oldPages;
+            old.pTokenMap = new SparseArray<>();
+            store.fillPreviewSource(target.gid, target.token, old);
+            return new Result(cached.withLocalCoverage(covered), null, signature, old);
+        }
+        SpiderInfo updated = load(target, 0, null, false);
+        if (!GalleryUpdateRecord.hasAllTokens(updated))
+            throw new IOException(context.getString(R.string.gallery_update_history_incomplete));
+        List<GalleryUpdateRecord.Source> inputs = new ArrayList<>();
+        SpiderInfo old = null;
+        for (Source item : sources) {
+            if (cancelled) throw new CancellationException();
+            boolean primary = item.gallery.gid == source.gid;
+            SpiderInfo info = null;
+            if (!item.editing && item.gallery.token != null) {
+                try {
+                    int expectedRangeTotal = item.range != null ? item.range.totalPages : 0;
+                    info = load(item.gallery, expectedRangeTotal, item.range, true);
+                } catch (CancellationException e) {
+                    throw e;
+                } catch (Exception e) {
+                    if (cancelled) throw new CancellationException();
+                    android.util.Log.w("GalleryUpdatePreview", "Unable to check source " + item.gallery.gid, e);
+                }
+            }
+            if (primary) old = info;
+            inputs.add(new GalleryUpdateRecord.Source(item.gallery.gid, item.totalPages(), item.range, info));
+        }
+        GalleryUpdateRecord record = GalleryUpdateRecord.compareSources(target.gid, source.gid, inputs, updated, covered)
+                .withFirstGid(firstGid);
+        if (!cancelled && record.hasKnownAdditions()
+                && record.sourceDeletions.stream().allMatch(GalleryUpdateRecord.SourceDeletion::complete)) {
+            store.savePreview(record, old, signature);
+        }
+        return new Result(record, null, signature, old);
+    }
+
+    private SpiderInfo load(GalleryInfo gallery, int expectedRangeTotal, GalleryPageRange range,
+                            boolean allowPartial) throws Exception {
         if (cancelled) throw new CancellationException();
+        int total = expectedRangeTotal > 0 ? expectedRangeTotal : gallery.pages;
         SpiderInfo info = GalleryUpdateManager.readDownloadedSpiderInfo(gallery.gid);
         if (info == null || !gallery.token.equals(info.token) || info.pTokenMap == null
-                || gallery.pages > 0 && gallery.pages != info.pages) {
+                || total > 0 && total != info.pages) {
             info = new SpiderInfo();
             info.gid = gallery.gid;
             info.token = gallery.token;
-            info.pages = gallery.pages;
+            info.pages = total;
             info.pTokenMap = new SparseArray<>();
         }
-        if (GalleryUpdateRecord.hasAllTokens(info)) return info;
+        if (GalleryUpdateRecord.hasTokens(info, range)) return info;
         SpiderInfo browsing = SpiderQueen.readSpiderInfoFromCache(context, gallery.gid);
         if (browsing != null && browsing.gid == gallery.gid && gallery.token.equals(browsing.token)
                 && browsing.pTokenMap != null && (info.pages <= 0 || info.pages == browsing.pages)) {
@@ -128,39 +224,57 @@ public final class GalleryUpdatePreviewCheck {
                 if (known == null || known.isEmpty() || "failed".equals(known))
                     info.pTokenMap.put(page, browsing.pTokenMap.valueAt(i));
             }
-            if (GalleryUpdateRecord.hasAllTokens(info)) return info;
+            if (GalleryUpdateRecord.hasTokens(info, range)) return info;
         }
 
+        int[] selected = range != null ? range.pages() : null;
         int next = 0;
         if (gallery instanceof GalleryDetail detail && detail.SpiderInfoPreviewSet != null
                 && detail.SpiderInfoPages > 0 && detail.SpiderInfoPreviewPages > 0) {
             merge(info, detail.SpiderInfoPages, detail.SpiderInfoPreviewPages, 0, detail.SpiderInfoPreviewSet);
-            if (GalleryUpdateRecord.hasAllTokens(info)) return info;
-            if (covered(info, 0)) next = 1;
+            if (GalleryUpdateRecord.hasTokens(info, range)) return info;
+            if (covered(info, 0, selected)) next = 1;
         }
         // Older local metadata can be missing an entire preview page. The site can also
         // change its page size, so only skip a request when all its positions are known.
         while (next == 0 || next < info.previewPages) {
             if (cancelled) throw new CancellationException();
-            if (next == 0 || !covered(info, next)) fetch(info, next);
+            if (next == 0 || !covered(info, next, selected)) {
+                try {
+                    fetch(info, next, expectedRangeTotal);
+                } catch (Exception e) {
+                    if (cancelled || e instanceof CancellationException) throw new CancellationException();
+                    if (!allowPartial) throw e;
+                    android.util.Log.w("GalleryUpdatePreview",
+                            "Unable to check preview page " + next + " of source " + gallery.gid, e);
+                    if (next == 0 && (info.previewPages <= 0 || info.previewPerPage <= 0)) break;
+                }
+                if (selected != null && GalleryUpdateRecord.hasTokens(info, range)) break;
+            }
             next++;
         }
         return info;
     }
 
-    private static boolean covered(SpiderInfo info, int index) {
+    private static boolean covered(SpiderInfo info, int index, int[] selected) {
         if (info.previewPerPage <= 0) return false;
         int start = index * info.previewPerPage;
         int end = Math.min(info.pages, start + info.previewPerPage);
         if (start >= end) return false;
-        for (int i = start; i < end; i++) {
-            String token = info.pTokenMap.get(i);
-            if (token == null || token.isEmpty() || "failed".equals(token)) return false;
+        if (selected == null) {
+            for (int i = start; i < end; i++) {
+                if (!GalleryUpdateRecord.usableToken(info.pTokenMap.get(i))) return false;
+            }
+        } else {
+            int offset = Arrays.binarySearch(selected, start);
+            for (int i = offset >= 0 ? offset : -offset - 1; i < selected.length && selected[i] < end; i++) {
+                if (!GalleryUpdateRecord.usableToken(info.pTokenMap.get(selected[i]))) return false;
+            }
         }
         return true;
     }
 
-    private void fetch(SpiderInfo info, int page) throws Exception {
+    private void fetch(SpiderInfo info, int page, int expectedRangeTotal) throws Exception {
         String url = EhUrl.getGalleryDetailUrl(info.gid, info.token, page, false);
         Call request = EhApplication.getBrowsingOkHttpClient(context).newCall(
                 new EhRequestBuilder(url, EhUrl.getReferer()).build());
@@ -171,7 +285,7 @@ public final class GalleryUpdatePreviewCheck {
                 if (!response.isSuccessful() || response.body() == null) throw new IOException("HTTP " + response.code());
                 String html = response.body().string();
                 int pages = GalleryDetailParser.parsePages(html);
-                if (page > 0 && pages != info.pages) {
+                if ((page > 0 && pages != info.pages) || (expectedRangeTotal > 0 && pages != expectedRangeTotal)) {
                     throw new IOException(context.getString(R.string.gallery_update_log_incomplete));
                 }
                 var document = Jsoup.parse(html);

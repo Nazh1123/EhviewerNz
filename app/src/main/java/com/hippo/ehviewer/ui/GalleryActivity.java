@@ -1863,8 +1863,11 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
             mProgress.setText(null);
         } else {
             if ((mUpdateRecordTime > 0 || mRangeReaderMode) && mGalleryProvider != null) {
+                int format = mRangeReaderMode ? R.string.range_reader_progress
+                        : mReaderUpdateRecord != null && mReaderUpdateRecord.showsLocalCoverage()
+                            ? R.string.gallery_update_uncovered_progress : R.string.gallery_update_reader_progress;
                 mProgress.setText(com.hippo.ehviewer.widget.ReaderProgressText.centerSeparator(
-                        getString(mRangeReaderMode ? R.string.range_reader_progress : R.string.gallery_update_reader_progress,
+                        getString(format,
                         mCurrentIndex + 1, mSize,
                         mGalleryProvider.getSourcePage(mCurrentIndex) + 1,
                         mGalleryProvider.getSourcePageCount())));
@@ -3014,6 +3017,7 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
                 mReaderUpdateRecordLoaded = true;
                 mReaderUpdateRecord = record != null && (time <= 0 || record.completedAt == time)
                         ? record : null;
+                if (mUpdateRecordTime > 0) updateProgress();
                 // The first menu may already be open while the initial lookup finishes.
                 addReaderModeActions();
             });
@@ -3023,7 +3027,9 @@ public class GalleryActivity extends EhActivity implements SeekBar.OnSeekBarChan
     private void addReaderModeActions() {
         if (mPageDialogItems == null || !ACTION_EH.equals(mAction) || mGalleryInfo == null) return;
         if (canSwitchReaderMode()) {
-            String action = getString(mUpdateRecordTime > 0 ? R.string.gallery_read_full : R.string.gallery_read_updates);
+            String action = getString(mUpdateRecordTime > 0 ? R.string.gallery_read_full
+                    : mReaderUpdateRecord != null && mReaderUpdateRecord.showsLocalCoverage()
+                        ? R.string.gallery_update_read_uncovered : R.string.gallery_read_updates);
             if (mPageDialogItems.getPosition(action) < 0) mPageDialogItems.add(action);
         }
         if (mRangeReaderMode || GalleryDownloadRangeStore.isRange(mGalleryInfo.gid)) {

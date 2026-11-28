@@ -46,13 +46,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 /**
  * Persists gallery-update plans and reuses parent pages by pToken.
  *
  * <p>The old page number is deliberately not used as identity. A new gallery page is reused only
- * when its pToken exists in the selected parent gallery and the corresponding local image is still
- * present and readable.</p>
+ * when a suitable old version has a readable local image with the same pToken.</p>
  */
 public final class GalleryUpdateManager {
 
@@ -62,10 +63,10 @@ public final class GalleryUpdateManager {
     private static final String JSON_SOURCE_GID = "source_gid";
     private static final String JSON_PARENT_GIDS = "parent_gids";
     private static final String JSON_PROGRESS_MIGRATED = "progress_migrated";
+    private static final String JSON_CONFIRMED_PREVIEW = "confirmed_preview";
     private static final String FAILED_PTOKEN = "failed";
 
     private static final Map<Long, UpdatePlan> PLAN_CACHE = new ConcurrentHashMap<>();
-    private static final Map<Long, SourcePages> SOURCE_CACHE = new ConcurrentHashMap<>();
     private static final Map<Long, Integer> UPDATE_STATE_CACHE = new ConcurrentHashMap<>();
     private static final Map<Long, Object> FAILURE_REQUESTS = new ConcurrentHashMap<>();
     private static final Set<Long> CLEANUP_IN_PROGRESS =
@@ -150,6 +151,8 @@ public final class GalleryUpdateManager {
         public final long sourceGid;
         @NonNull
         public final List<Long> parentGids;
+        final boolean confirmedPreview;
+        private volatile SourcePages sourcePages;
         public volatile boolean progressMigrated;
         @NonNull
         public volatile String sourceTitle;
@@ -159,21 +162,22 @@ public final class GalleryUpdateManager {
         }
 
         UpdatePlan(long targetGid, long sourceGid, @NonNull List<Long> parentGids, String sourceTitle) {
+            this(targetGid, sourceGid, parentGids, sourceTitle, false);
+        }
+
+        private UpdatePlan(long targetGid, long sourceGid, List<Long> parentGids, String sourceTitle,
+                           boolean confirmedPreview) {
             this.targetGid = targetGid;
             this.sourceGid = sourceGid;
             this.parentGids = Collections.unmodifiableList(parentGids);
             this.sourceTitle = sourceTitle != null ? sourceTitle : "";
+            this.confirmedPreview = confirmedPreview;
         }
     }
 
-    private static final class SourcePages {
-        @NonNull
-        final Map<String, UniFile> filesByPToken;
+    record SourcePage(long gid, int index, UniFile file) {}
 
-        SourcePages(@NonNull Map<String, UniFile> filesByPToken) {
-            this.filesByPToken = filesByPToken;
-        }
-    }
+    record SourcePages(Map<String, List<SourcePage>> filesByPToken) {}
 
     @Nullable
     private static SharedPreferences preferences() {
@@ -187,11 +191,27 @@ public final class GalleryUpdateManager {
         register(targetGid, sourceGid, parentGids, "");
     }
 
+    static synchronized boolean registerConfirmed(Context context, long targetGid, long sourceGid,
+                                                   List<Long> parentGids, String sourceTitle,
+                                                   @Nullable GalleryUpdatePreviewCheck.Result checked) {
+        boolean confirmed = checked != null && !checked.record().sourceDeletions.isEmpty();
+        if (confirmed
+                && !GalleryUpdateRecordStore.get(context).saveConfirmed(checked.record(), checked.sourceInfo())) {
+            return false;
+        }
+        return register(targetGid, sourceGid, parentGids, sourceTitle, confirmed);
+    }
+
     public static synchronized void register(long targetGid, long sourceGid,
                                              @NonNull List<Long> parentGids, String sourceTitle) {
+        register(targetGid, sourceGid, parentGids, sourceTitle, false);
+    }
+
+    private static boolean register(long targetGid, long sourceGid, List<Long> parentGids,
+                                    String sourceTitle, boolean confirmedPreview) {
         SharedPreferences preferences = preferences();
         if (preferences == null || targetGid <= 0L || sourceGid <= 0L) {
-            return;
+            return false;
         }
 
         JSONArray parents = new JSONArray();
@@ -213,14 +233,21 @@ public final class GalleryUpdateManager {
             json.put(JSON_SOURCE_GID, sourceGid);
             json.put(JSON_PARENT_GIDS, parents);
             json.put("source_title", sourceTitle != null ? sourceTitle : "");
-            preferences.edit().putString(KEY_PREFIX + targetGid, json.toString()).apply();
-            UpdatePlan plan = new UpdatePlan(targetGid, sourceGid, normalizedParents, sourceTitle);
+            if (confirmedPreview) json.put(JSON_CONFIRMED_PREVIEW, true);
+            SharedPreferences.Editor edit = preferences.edit().putString(KEY_PREFIX + targetGid, json.toString());
+            if (confirmedPreview) {
+                if (!edit.commit()) return false;
+            } else {
+                edit.apply();
+            }
+            UpdatePlan plan = new UpdatePlan(targetGid, sourceGid, normalizedParents, sourceTitle, confirmedPreview);
             PLAN_CACHE.put(targetGid, plan);
             CLEANUP_IN_PROGRESS.remove(targetGid);
-            SOURCE_CACHE.remove(targetGid);
             notifyUpdateStateChanged(targetGid, UPDATE_STATE_UPDATING);
+            return true;
         } catch (JSONException e) {
             Log.w(TAG, "Unable to persist gallery update plan", e);
+            return false;
         }
     }
 
@@ -256,7 +283,7 @@ public final class GalleryUpdateManager {
                 return null;
             }
             UpdatePlan plan = new UpdatePlan(targetGid, sourceGid, parentGids,
-                    json.optString("source_title", ""));
+                    json.optString("source_title", ""), json.optBoolean(JSON_CONFIRMED_PREVIEW));
             plan.progressMigrated = json.optBoolean(JSON_PROGRESS_MIGRATED, false);
             PLAN_CACHE.put(targetGid, plan);
             return plan;
@@ -296,69 +323,110 @@ public final class GalleryUpdateManager {
             return false;
         }
 
-        SourcePages source = SOURCE_CACHE.get(targetGid);
+        SourcePages source = plan.sourcePages;
         if (source == null) {
-            synchronized (SOURCE_CACHE) {
-                source = SOURCE_CACHE.get(targetGid);
+            synchronized (plan) {
+                source = plan.sourcePages;
                 if (source == null) {
-                    source = loadSourcePages(plan.sourceGid);
-                    if (source == null) {
-                        return false;
-                    }
-                    SOURCE_CACHE.put(targetGid, source);
+                    source = loadSourcePages(plan.parentGids, () -> false);
+                    if (getPlan(targetGid) != plan) return false;
+                    plan.sourcePages = source;
                 }
             }
         }
 
-        UniFile oldFile = source.filesByPToken.get(pToken);
-        boolean copied = oldFile != null && oldFile.exists() && oldFile.length() > 0L
-                && SpiderDen.isReadableImage(oldFile) && targetDen.copyImageFrom(oldFile, targetIndex);
-        if (copied && EhApplication.getInstance() != null) {
+        List<SourcePage> matches = source.filesByPToken.get(pToken);
+        if (matches == null) return false;
+        for (SourcePage page : matches) {
+            if (getPlan(targetGid) != plan) return false;
+            UniFile file = page.file;
+            var read = GalleryDownloadRangeStore.lock(page.gid).readLock();
+            read.lock();
             try {
-                DownloadInfo parent = EhApplication.getDownloadManager().getDownloadInfo(plan.sourceGid);
-                UniFile parentDir = parent != null ? SpiderDen.getExistingGalleryDownloadDir(parent) : null;
-                UniFile targetDir = targetDen.getDownloadDir();
-                if (parentDir != null && targetDir != null) {
-                    com.hippo.ehviewer.gallery.GalleryResultIndex.copyPage(EhApplication.getInstance(),
-                            plan.sourceGid, targetGid, oldFile.getName().substring(0, 8),
-                            SpiderDen.generateImageFilename(targetIndex, ""), parentDir, targetDir);
-                }
-            } catch (Exception error) {
-                Log.w(TAG, "Cannot copy indexed results for updated page " + targetIndex, error);
+                if (!GalleryDownloadRangeStore.canPersist(page.gid, page.index)
+                        || !file.exists() || file.length() <= 0L || !SpiderDen.isReadableImage(file)
+                        || !targetDen.copyImageFrom(file, targetIndex)) continue;
+            } finally {
+                read.unlock();
             }
+            copyIndexedResults(targetGid, targetIndex, targetDen, page);
+            return true;
         }
-        return copied;
+        return false;
     }
 
-    @Nullable
-    private static SourcePages loadSourcePages(long sourceGid) {
-        DownloadInfo sourceInfo = EhApplication.getDownloadManager().getDownloadInfo(sourceGid);
-        if (sourceInfo == null) {
-            return null;
+    private static void copyIndexedResults(long targetGid, int targetIndex, SpiderDen targetDen, SourcePage page) {
+        if (EhApplication.getInstance() == null) return;
+        try {
+            DownloadInfo parent = EhApplication.getDownloadManager().getDownloadInfo(page.gid);
+            UniFile parentDir = parent != null ? SpiderDen.getExistingGalleryDownloadDir(parent) : null;
+            UniFile targetDir = targetDen.getDownloadDir();
+            if (parentDir != null && targetDir != null) {
+                com.hippo.ehviewer.gallery.GalleryResultIndex.copyPage(EhApplication.getInstance(),
+                        page.gid, targetGid, SpiderDen.generateImageFilename(page.index, ""),
+                        SpiderDen.generateImageFilename(targetIndex, ""), parentDir, targetDir);
+            }
+        } catch (Exception error) {
+            Log.w(TAG, "Cannot copy indexed results for updated page " + targetIndex, error);
         }
-        UniFile sourceDir = SpiderDen.getExistingGalleryDownloadDir(sourceInfo);
-        if (sourceDir == null || !sourceDir.isDirectory()) {
-            return null;
-        }
-        SpiderInfo spiderInfo = readDownloadedSpiderInfo(sourceGid);
-        if (spiderInfo == null || spiderInfo.gid != sourceGid || spiderInfo.pTokenMap == null) {
-            return null;
-        }
+    }
 
-        HashMap<String, UniFile> filesByPToken = new HashMap<>();
-        for (int i = 0; i < spiderInfo.pTokenMap.size(); i++) {
-            int oldIndex = spiderInfo.pTokenMap.keyAt(i);
-            String pToken = spiderInfo.pTokenMap.valueAt(i);
-            if (TextUtils.isEmpty(pToken) || FAILED_PTOKEN.equals(pToken)
-                    || filesByPToken.containsKey(pToken)) {
+    static Set<String> findLocallyCoveredTokens(List<Long> parentGids, BooleanSupplier cancelled) {
+        return loadSourcePages(parentGids, cancelled).filesByPToken.keySet();
+    }
+
+    private static SourcePages loadSourcePages(List<Long> parentGids, BooleanSupplier cancelled) {
+        DownloadManager manager = EhApplication.getDownloadManager();
+        Map<String, List<SourcePage>> pages = new HashMap<>();
+        List<Long> gids = new ArrayList<>(parentGids);
+        gids.sort(Collections.reverseOrder());
+        for (long gid : gids) {
+            if (cancelled.getAsBoolean()) throw new CancellationException();
+            DownloadInfo source = manager.getDownloadInfo(gid);
+            if (source == null || source.state == DownloadInfo.STATE_WAIT
+                    || source.state == DownloadInfo.STATE_DOWNLOAD || source.state == DownloadInfo.STATE_UPDATE) continue;
+            var read = GalleryDownloadRangeStore.lock(gid).readLock();
+            read.lock();
+            try {
+                if (indexSourcePages(source, pages, cancelled)) break;
+            } finally {
+                read.unlock();
+            }
+        }
+        return new SourcePages(pages);
+    }
+
+    private static boolean indexSourcePages(DownloadInfo source, Map<String, List<SourcePage>> pages,
+                                            BooleanSupplier cancelled) {
+        long gid = source.gid;
+        GalleryDownloadRangeStore.Entry range = GalleryDownloadRangeStore.peek(gid);
+        if (GalleryDownloadRangeStore.isEditing(gid) || (range != null && range.pending())) return false;
+        UniFile sourceDir = SpiderDen.getExistingGalleryDownloadDir(source);
+        if (sourceDir == null || !sourceDir.isDirectory()) return false;
+        SpiderInfo info = SpiderInfo.read(sourceDir.findFile(SpiderQueen.SPIDER_INFO_FILENAME));
+        if (info == null || info.gid != gid || !TextUtils.equals(info.token, source.token)
+                || info.pTokenMap == null || info.pages <= 0) return false;
+
+        boolean complete = range == null && source.state == DownloadInfo.STATE_FINISH
+                && source.legacy == 0 && info.pTokenMap.size() == info.pages;
+        for (int i = 0; i < info.pTokenMap.size(); i++) {
+            if (cancelled.getAsBoolean()) throw new CancellationException();
+            int oldIndex = info.pTokenMap.keyAt(i);
+            String pToken = info.pTokenMap.valueAt(i);
+            if (oldIndex < 0 || oldIndex >= info.pages || !GalleryUpdateRecord.usableToken(pToken)
+                    || (range != null && !range.range().contains(oldIndex))) {
+                complete = false;
                 continue;
             }
             UniFile image = SpiderDen.findImageFile(sourceDir, oldIndex);
-            if (image != null && image.exists() && image.length() > 0L) {
-                filesByPToken.put(pToken, image);
+            if (image == null || !image.exists() || image.length() <= 0L
+                    || !SpiderDen.isReadableImage(image)) {
+                complete = false;
+                continue;
             }
+            pages.computeIfAbsent(pToken, ignored -> new ArrayList<>()).add(new SourcePage(gid, oldIndex, image));
         }
-        return new SourcePages(filesByPToken);
+        return complete;
     }
 
     /**
@@ -403,26 +471,33 @@ public final class GalleryUpdateManager {
 
         // Reading progress is also kept in the spider-info cache. Merge only startPage here:
         // page identities are obtained from the download and the checked preview above.
-        source.startPage = Math.max(source.startPage,
-                readCachedStartPage(context, sourceGid));
+        GalleryDownloadRangeStore.Entry rangeEntry = GalleryDownloadRangeStore.peek(sourceGid);
+        GalleryPageRange range = rangeEntry != null ? rangeEntry.range() : null;
+        if (range != null) {
+            source.startPage = range.contains(rangeEntry.readingPage())
+                    ? rangeEntry.readingPage() : range.pages()[0];
+        } else {
+            source.startPage = Math.max(source.startPage, readCachedStartPage(context, sourceGid));
+        }
         target.startPage = Math.max(target.startPage,
                 readCachedStartPage(context, targetInfo.gid));
 
         // A non-zero target page means the user has already read the new gallery. Never replace
         // that newer, gallery-specific choice with progress inherited from its parent.
-        if (target.startPage > 0 || source.startPage <= 0) {
+        if (target.startPage > 0 || (range == null && source.startPage <= 0)) {
             return null;
         }
 
-        int mappedPage = findMappedStartPage(source, target);
+        int mappedPage = findMappedStartPage(source, target, range);
         if (mappedPage < 0) {
             // The target's pToken table can still be incomplete after a failed download. Leave
             // the plan intact so a later continuation can retry the migration.
             // A fully replaced gallery has no surviving anchor. There is nothing to
             // migrate once both token tables are complete; partial tables must retry.
-            return hasCompletePTokenMap(source) && hasCompletePTokenMap(target) ? null
+            boolean sourceComplete = GalleryUpdateRecord.hasTokens(source, range);
+            return sourceComplete && GalleryUpdateRecord.hasAllTokens(target) ? null
                     : context.getString(R.string.gallery_update_error_tokens,
-                            !hasCompletePTokenMap(source) ? sourceGid : targetInfo.gid);
+                            !sourceComplete ? sourceGid : targetInfo.gid);
         }
 
         // Re-read before writing to narrow the race with a reader opened while the background
@@ -459,14 +534,6 @@ public final class GalleryUpdateManager {
         return null;
     }
 
-    private static boolean hasCompletePTokenMap(@NonNull SpiderInfo info) {
-        if (info.pages <= 0 || info.pTokenMap == null) return false;
-        for (int page = 0; page < info.pages; page++) {
-            if (!isUsablePToken(info.pTokenMap.get(page))) return false;
-        }
-        return true;
-    }
-
     /** Worker-thread checkpoint: retries must not need an already removed source folder. */
     public static synchronized boolean markProgressMigrated(@NonNull UpdatePlan plan) {
         SharedPreferences prefs = preferences();
@@ -489,6 +556,10 @@ public final class GalleryUpdateManager {
 
     /** Returns -1 until a source progress anchor can be matched to the target pToken table. */
     static int findMappedStartPage(@NonNull SpiderInfo source, @NonNull SpiderInfo target) {
+        return findMappedStartPage(source, target, null);
+    }
+
+    private static int findMappedStartPage(SpiderInfo source, SpiderInfo target, GalleryPageRange range) {
         if (source.pages <= 0 || target.pages <= 0 || source.pTokenMap == null
                 || target.pTokenMap == null || target.pTokenMap.size() == 0) {
             return -1;
@@ -515,13 +586,14 @@ public final class GalleryUpdateManager {
         int sourcePage = Math.max(0, Math.min(source.startPage, source.pages - 1));
         for (int distance = 0; distance < source.pages; distance++) {
             int forward = sourcePage + distance;
-            int mapped = findTargetIndex(source, target, targetIndexes, forward);
+            int mapped = range == null || range.contains(forward)
+                    ? findTargetIndex(source, target, targetIndexes, forward) : -1;
             if (mapped >= 0) {
                 return mapped;
             }
             // Prefer the following surviving page for an exact tie. It is the least surprising
             // continuation when the page being read was deleted by the update.
-            if (distance > 0) {
+            if (distance > 0 && (range == null || range.contains(sourcePage - distance))) {
                 int backward = sourcePage - distance;
                 mapped = findTargetIndex(source, target, targetIndexes, backward);
                 if (mapped >= 0) {
@@ -742,15 +814,22 @@ public final class GalleryUpdateManager {
     }
 
     @Nullable public static GalleryUpdateRecord getPlanPreview(Context context, UpdatePlan plan, String token) {
+        GalleryUpdateRecordStore store = GalleryUpdateRecordStore.get(context);
+        if (plan.confirmedPreview) {
+            GalleryUpdateRecord confirmed = store.findConfirmed(plan.targetGid, plan.sourceGid);
+            return confirmed != null && confirmed.targetToken.equals(token) ? confirmed : null;
+        }
         DownloadInfo source = EhApplication.getDownloadManager(context).getDownloadInfo(plan.sourceGid);
-        return source == null || source.token == null ? null : GalleryUpdateRecordStore.get(context)
-                .findPreview(plan.targetGid, token, plan.sourceGid, source.token);
+        return source == null || source.token == null ? null
+                : store.findPreview(plan.targetGid, token, plan.sourceGid, source.token);
     }
 
     private static void fillPreviewSource(Context context, long targetGid, String targetToken, SpiderInfo source) {
         if (source != null && source.token != null && source.pTokenMap != null && targetToken != null
                 && !GalleryUpdateRecord.hasAllTokens(source)) {
-            GalleryUpdateRecordStore.get(context).fillPreviewSource(targetGid, targetToken, source);
+            GalleryUpdateRecordStore store = GalleryUpdateRecordStore.get(context);
+            if (!store.fillConfirmedSource(targetGid, targetToken, source))
+                store.fillPreviewSource(targetGid, targetToken, source);
         }
     }
 
@@ -758,6 +837,11 @@ public final class GalleryUpdateManager {
     public static boolean stageUpdateRecord(Context context, UpdatePlan plan) {
         if (getPlan(plan.targetGid) != plan) return false;
         SpiderInfo target = readDownloadedSpiderInfo(plan.targetGid);
+        GalleryUpdateRecordStore store = GalleryUpdateRecordStore.get(context);
+        if (plan.confirmedPreview) {
+            GalleryUpdateRecord confirmed = store.findConfirmed(plan.targetGid, plan.sourceGid);
+            return confirmed != null && getPlan(plan.targetGid) == plan && confirmed.matchesTarget(target);
+        }
         SpiderInfo sourcePages = readDownloadedSpiderInfo(plan.sourceGid);
         if (target != null) fillPreviewSource(context, plan.targetGid, target.token, sourcePages);
         GalleryUpdateRecord snapshot = GalleryUpdateRecord.compare(plan.targetGid, plan.sourceGid,
@@ -780,7 +864,7 @@ public final class GalleryUpdateManager {
                     } catch (JSONException e) { return false; }
                 }
             }
-            return GalleryUpdateRecordStore.get(context).stage(plan, () -> snapshot);
+            return store.stage(plan, () -> snapshot);
         }
     }
 
@@ -802,7 +886,6 @@ public final class GalleryUpdateManager {
             preferences.edit().remove(KEY_PREFIX + targetGid).apply();
         }
         PLAN_CACHE.remove(targetGid);
-        SOURCE_CACHE.remove(targetGid);
         CLEANUP_IN_PROGRESS.remove(targetGid);
         EhApplication application = EhApplication.getInstance();
         if (application != null) {

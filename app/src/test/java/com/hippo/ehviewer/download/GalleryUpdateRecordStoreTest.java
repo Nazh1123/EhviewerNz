@@ -4,6 +4,7 @@ import android.app.Application;
 import android.content.Context;
 
 import com.hippo.ehviewer.Settings;
+import com.hippo.ehviewer.spider.SpiderInfo;
 
 import org.junit.After;
 import org.junit.Before;
@@ -77,6 +78,35 @@ public class GalleryUpdateRecordStoreTest {
         assertEquals(1, store.listSummaries().size());
         assertTrue(store.find(200).completedAt >= cached.completedAt);
         assertNull(store.findPreview(200, "target", 100, "source"));
+    }
+
+    @Test public void versionFiveUpgradeClearsOldPreviewsButKeepsHistoryAndConfirmedDrafts() throws Exception {
+        SpiderInfo source = new SpiderInfo();
+        source.gid = 100;
+        source.token = "source";
+        source.pages = 2;
+        source.pTokenMap = new android.util.SparseArray<>();
+        source.pTokenMap.put(0, "old");
+        SpiderInfo target = new SpiderInfo();
+        target.pages = 1;
+        target.token = "target";
+        target.pTokenMap = new android.util.SparseArray<>();
+        target.pTokenMap.put(0, "new");
+        var oldRangePreview = GalleryUpdateRecord.compareSources(200, 100, List.of(
+                new GalleryUpdateRecord.Source(100, 2, GalleryPageRange.parse("1", 2), source)), target);
+        assertFalse(oldRangePreview.hasKnownAdditions());
+        assertTrue(store.saveConfirmed(oldRangePreview, source));
+        stage(300, 100);
+        assertTrue(store.complete(300, 100));
+        store.savePreview(oldRangePreview, source, "range");
+        assertNotNull(store.findPreview(200, "target", 100, "source", "range"));
+        store.getWritableDatabase().setVersion(5);
+        store.close();
+        store = new GalleryUpdateRecordStore(context);
+
+        assertNull(store.findPreview(200, "target", 100, "source", "range"));
+        assertEquals(oldRangePreview.toJson(), store.findConfirmed(200, 100).toJson());
+        assertArrayEquals(new int[]{1, 3, 4}, store.find(300).addedPages);
     }
 
     @Test public void actionMetadataIsPublishedAtCompletionButNotForDrafts() {
@@ -208,7 +238,7 @@ public class GalleryUpdateRecordStoreTest {
             db.setVersion(1);
         }
         store = new GalleryUpdateRecordStore(context);
-        assertEquals(3, store.getReadableDatabase().getVersion());
+        assertEquals(6, store.getReadableDatabase().getVersion());
         assertEquals(123, store.find(200).completedAt);
         assertEquals(2, store.find(200).readingPage);
         assertEquals(0, store.find(200).firstGid);

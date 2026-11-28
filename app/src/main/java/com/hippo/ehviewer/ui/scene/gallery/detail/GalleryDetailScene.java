@@ -1517,7 +1517,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         GalleryUpdateRecordStore.ActionSnapshot snapshot = getCompletedUpdateSnapshot(context, info);
         if (snapshot == null) return false;
         DownloadInfo local = EhApplication.getDownloadManager(context).getDownloadInfo(info.gid);
-        mUpdateGallery.setText(R.string.gallery_read_updates);
+        mUpdateGallery.setText(snapshot.summary().localCoverage()
+                ? R.string.gallery_update_read_uncovered : R.string.gallery_read_updates);
         mUpdateGallery.setEnabled(snapshot.readable() && local != null && local.state == DownloadInfo.STATE_FINISH);
         mGalleryHistory.setText(R.string.gallery_update_log);
         mGalleryHistory.setEnabled(true);
@@ -3432,7 +3433,8 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             mVersionProgressTargetGid = -1L;
             mVersionProgressSourceGid = -1L;
             mVersionProgressGeneration++;
-            mUpdateGallery.setText(R.string.gallery_read_updates);
+            mUpdateGallery.setText(mGalleryUpdateRecord.showsLocalCoverage()
+                    ? R.string.gallery_update_read_uncovered : R.string.gallery_read_updates);
             mUpdateGallery.setEnabled(mGalleryUpdateRecord.complete
                     && mGalleryUpdateRecord.hasTokenSnapshot()
                     && mGalleryUpdateRecord.addedPages.length > 0
@@ -3644,7 +3646,6 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
         private final GalleryUpdateLogDialog.Preview window;
         private GalleryUpdatePreviewCheck task;
         private DownloadInfo source;
-        private boolean checkFailed;
 
         UpdatePreview(GalleryDetail target) {
             this.target = target;
@@ -3655,11 +3656,9 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
 
         void check() {
             if (task != null) task.cancel();
-            checkFailed = false;
             window.checking();
             source = findLocalUpdateSource(EhApplication.getDownloadManager(getEHContext()), target);
             if (source == null || source.token == null) {
-                checkFailed = true;
                 window.failed(getString(R.string.gallery_update_no_downloaded_parent), this::check);
                 return;
             }
@@ -3667,20 +3666,15 @@ public class GalleryDetailScene extends BaseScene implements View.OnClickListene
             task.start(result -> {
                 if (!window.dialog.isShowing()) return;
                 if (result.record() != null) window.ready(result.record(), GalleryTimeFormatter.format(target.posted));
-                else {
-                    checkFailed = true;
-                    window.failed(result.error(), this::check);
-                }
+                else window.failed(result.error(), this::check);
             });
         }
 
         private void confirm() {
-            boolean wait = !checkFailed && task != null;
-            if (wait) {
-                task.handOff();
-                task = null;
-            }
-            startConfirmedUpdate(target, source != null ? source.gid : 0, wait);
+            if (task == null || source == null) return;
+            task.handOff();
+            task = null;
+            startConfirmedUpdate(target, source.gid, true);
         }
 
         void close() {

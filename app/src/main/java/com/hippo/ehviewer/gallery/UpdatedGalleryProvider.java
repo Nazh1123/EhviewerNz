@@ -84,7 +84,8 @@ public final class UpdatedGalleryProvider extends DirGalleryProvider {
                 }
             }
             if (files.isEmpty()) {
-                error = context.getString(R.string.gallery_update_history_no_pages);
+                error = context.getString(record.showsLocalCoverage()
+                        ? R.string.gallery_update_uncovered_no_pages : R.string.gallery_update_history_no_pages);
                 return null;
             }
             sourcePages = pages.stream().mapToInt(Integer::intValue).toArray();

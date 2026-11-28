@@ -450,7 +450,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
         check.observe { result ->
             if (previewChecks.remove(target.gid) !== check) return@observe
             refreshGalleryUpdateNotification()
-            if (result.record() != null) startGalleryUpdate(target, sourceGid)
+            if (result.record() != null) startGalleryUpdate(target, sourceGid, result)
             else previewFailed(target, result.error())
             checkStopSelf()
         }
@@ -469,7 +469,9 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
         previewChecks.clear()
     }
 
-    private fun startGalleryUpdate(target: GalleryDetail, expectedSource: Long) {
+    private fun startGalleryUpdate(
+        target: GalleryDetail, expectedSource: Long, checked: GalleryUpdatePreviewCheck.Result? = null
+    ) {
         if (expectedSource > 0 && findGalleryUpdateSource(target)?.gid != expectedSource) {
             previewFailed(target, getString(R.string.gallery_update_preview_source_changed))
             return
@@ -478,7 +480,7 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
         if (GalleryDownloadRangeStore.isRange(target.gid)) {
             mDownloadManager?.changePageRange(target, null,
                 { error -> showGalleryUpdateFailure(target, error) },
-                { startGalleryUpdate(target, expectedSource) })
+                { startGalleryUpdate(target, expectedSource, checked) })
             return
         }
         if (mGalleryUpdateTasks.containsKey(target.gid)) {
@@ -568,9 +570,22 @@ class DownloadService : Service(), DownloadManager.DownloadListener,
                 return
             }
             target.firstGid = firstGid
+            if (checked != null && !GalleryUpdatePreviewCheck.matchesCurrentSources(
+                    this, source, target, checked
+                )) {
+                previewFailed(target, getString(R.string.gallery_update_preview_source_changed))
+                refreshGalleryUpdateNotification()
+                checkStopSelf()
+                return
+            }
             refreshGalleryUpdateNotification()
             mActiveGalleryUpdateGids.add(target.gid)
-            downloadManager.startGalleryUpdate(target, source.gid, olderGids)
+            val parents = checked?.record()?.sourceDeletions?.takeIf { it.isNotEmpty() }
+                ?.map { it.gid() } ?: olderGids
+            if (!downloadManager.startGalleryUpdate(target, source.gid, parents, checked)) {
+                mActiveGalleryUpdateGids.remove(target.gid)
+                previewFailed(target, getString(R.string.gallery_update_error_record_stage))
+            }
             checkStopSelf()
         }
 

@@ -37,6 +37,7 @@ import org.robolectric.util.ReflectionHelpers;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -77,7 +78,7 @@ public class GalleryUpdateCleanupTest {
         ReflectionHelpers.setStaticField(Settings.class, "sContext", context);
         ReflectionHelpers.setStaticField(Settings.class, "sSettingsPre",
                 context.getSharedPreferences("cleanup-tests", Context.MODE_PRIVATE));
-        for (String field : List.of("PLAN_CACHE", "SOURCE_CACHE", "UPDATE_STATE_CACHE", "FAILURE_REQUESTS")) {
+        for (String field : List.of("PLAN_CACHE", "UPDATE_STATE_CACHE", "FAILURE_REQUESTS")) {
             ((Map<?, ?>) ReflectionHelpers.getStaticField(GalleryUpdateManager.class, field)).clear();
         }
         ((Set<?>) ReflectionHelpers.getStaticField(GalleryUpdateManager.class, "CLEANUP_IN_PROGRESS")).clear();
@@ -125,7 +126,9 @@ public class GalleryUpdateCleanupTest {
         info.gid = gid; info.token = "0123456789"; info.startPage = startPage;
         info.pages = tokens.length; info.previewPages = 1; info.previewPerPage = tokens.length;
         info.pTokenMap = new SparseArray<>();
-        for (int i = 0; i < tokens.length; i++) info.pTokenMap.put(i, tokens[i]);
+        for (int i = 0; i < tokens.length; i++) {
+            if (tokens[i] != null) info.pTokenMap.put(i, tokens[i]);
+        }
         return info;
     }
 
@@ -140,11 +143,43 @@ public class GalleryUpdateCleanupTest {
     }
 
     private void image(File dir, int index) throws Exception {
+        image(dir, index, 0xff000000);
+    }
+
+    private void image(File dir, int index, int color) throws Exception {
         Bitmap bitmap = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888);
+        bitmap.eraseColor(color);
         try (FileOutputStream out = new FileOutputStream(new File(dir,
                 SpiderDen.generateImageFilename(index, ".png")))) {
             assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, out));
         } finally { bitmap.recycle(); }
+    }
+
+    private File addSource(long gid, String... tokens) throws Exception {
+        File dir = new File(sourceDir.getParentFile(), gid + "-source");
+        assertTrue(dir.mkdir());
+        EhDB.putDownloadDirname(gid, dir.getName());
+        manager.addDownload(List.of(download(gid, tokens.length)));
+        disk(dir, metadata(gid, 0, tokens));
+        for (int i = 0; i < tokens.length; i++) image(dir, i);
+        return dir;
+    }
+
+    private void limitSource(long gid, String pages, int total) throws Exception {
+        GalleryDownloadRangeStore.get(context).apply(manager.getDownloadInfo(gid), GalleryPageRange.parse(pages, total));
+    }
+
+    private GalleryUpdatePreviewCheck.Result checkPreview(GalleryUpdatePreviewCheck check) throws Exception {
+        var result = new AtomicReference<GalleryUpdatePreviewCheck.Result>();
+        check.start(result::set);
+        long deadline = System.nanoTime() + 10_000_000_000L;
+        while (result.get() == null && System.nanoTime() < deadline) {
+            ShadowLooper.idleMainLooper();
+            Thread.sleep(10);
+        }
+        assertNotNull(result.get());
+        assertNull(result.get().error());
+        return result.get();
     }
 
     private void awaitState(int state) throws Exception {
@@ -182,6 +217,191 @@ public class GalleryUpdateCleanupTest {
         awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
         assertNotNull(manager.getDownloadInfo(100));
         assertTrue(sourceDir.isDirectory());
+    }
+
+    @Test public void confirmedComparisonKeepsEveryGroupAfterOlderMetadataChanges() throws Exception {
+        disk(sourceDir, metadata(100, 0, "6666666666", "5555555555"));
+        File middle = addSource(120, "1111111111", "7777777777");
+        File latest = addSource(140, "8888888888", "3333333333");
+        limitSource(120, "1", 2);
+        limitSource(140, "2", 2);
+        disk(latest, metadata(140, 0, null, "3333333333"));
+        cache(metadata(140, 0, "1111111111", null));
+        ReflectionHelpers.setField(context, "mBrowsingOkHttpClient",
+                new okhttp3.OkHttpClient.Builder().addInterceptor(chain -> {
+                    throw new AssertionError("The disk and browsing cache should cover all required pages");
+                }).build());
+        SpiderInfo updated = metadata(200, 0, "1111111111", "4444444444", "5555555555");
+        disk(targetDir, updated);
+        var target = new com.hippo.ehviewer.client.data.GalleryDetail();
+        target.gid = 200;
+        target.token = updated.token;
+        target.pages = updated.pages;
+        target.firstGid = 100L;
+        DownloadInfo source = manager.getDownloadInfo(140);
+
+        var checked = checkPreview(new GalleryUpdatePreviewCheck(context, source, target));
+        var groups = checked.record().sourceDeletions;
+        assertEquals(List.of(140L, 120L, 100L), groups.stream().map(GalleryUpdateRecord.SourceDeletion::gid).toList());
+        assertArrayEquals(new int[]{1}, groups.get(0).pages());
+        assertArrayEquals(new int[0], groups.get(1).pages());
+        assertArrayEquals(new int[]{0}, groups.get(2).pages());
+        assertTrue(checked.record().hasKnownAdditions());
+        assertTrue(checked.record().showsLocalCoverage());
+        assertArrayEquals(new int[]{1}, checked.record().addedPages);
+        assertTrue(GalleryUpdatePreviewCheck.matchesCurrentSources(context, source, target, checked));
+        limitSource(120, "1-2", 2);
+        assertFalse(GalleryUpdatePreviewCheck.matchesCurrentSources(context, source, target, checked));
+        limitSource(120, "1", 2);
+        checked = checkPreview(new GalleryUpdatePreviewCheck(context, source, target));
+        assertEquals(checked.record().toJson(), checkPreview(new GalleryUpdatePreviewCheck(context, source, target))
+                .record().toJson());
+        assertTrue(GalleryUpdateManager.registerConfirmed(context, 200, 140, List.of(100L, 120L, 140L), "", checked));
+        GalleryUpdateRecordStore store = GalleryUpdateRecordStore.get(context);
+        assertNull(store.find(200));
+        store.getWritableDatabase().delete("previews", null, null);
+        ((Map<?, ?>) ReflectionHelpers.getStaticField(GalleryUpdateManager.class, "PLAN_CACHE")).clear();
+        assertEquals(checked.record().toJson(), GalleryUpdateManager.getPlanPreview(
+                context, GalleryUpdateManager.getPlan(200), target.token).toJson());
+        disk(sourceDir, metadata(100, 0, "1111111111", "5555555555"));
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_UPDATED);
+        assertEquals(checked.record().toJson(), GalleryUpdateRecordStore.get(context).find(200).toJson());
+        assertEquals(1, GalleryUpdateRecordStore.get(context).listSummaries().get(0).addedPages());
+        assertTrue(latest.exists());
+        assertTrue(middle.exists());
+        assertFalse(sourceDir.exists());
+    }
+
+    @Test public void reuseTriesRangeSourcesAndStopsAtFirstReadableCompleteVersion() throws Exception {
+        disk(sourceDir, metadata(100, 0, "9999999999", "9999999999"));
+        File complete = addSource(110, "1111111111", "4444444444");
+        File damaged = addSource(120, "2222222222", "3333333333");
+        damageFirstPage(damaged);
+        File middle = addSource(130, "1111111111", "2222222222", "7777777777");
+        File latest = addSource(140, "1111111111", "4444444444");
+        limitSource(130, "1-2", 3);
+        limitSource(140, "1", 2);
+        image(latest, 0, 0xff112233);
+        image(latest, 1, 0xff445566);
+        image(middle, 0, 0xff778899);
+        GalleryUpdateManager.register(200, 140, List.of(100L, 110L, 120L, 130L, 140L));
+        assertEquals(Set.of("1111111111", "2222222222", "3333333333", "4444444444"),
+                GalleryUpdateManager.findLocallyCoveredTokens(List.of(100L, 110L, 120L, 130L, 140L), () -> false));
+        var den = new SpiderDen(manager.getDownloadInfo(200));
+        den.setMode(SpiderQueen.MODE_DOWNLOAD);
+        assertTrue(GalleryUpdateManager.tryReuse(200, 0, "1111111111", den));
+        assertSameImage(latest, 0, 0);
+        assertTrue(GalleryUpdateManager.tryReuse(200, 1, "2222222222", den));
+        assertSameImage(middle, 1, 1);
+        assertTrue(GalleryUpdateManager.tryReuse(200, 2, "3333333333", den));
+        assertSameImage(damaged, 1, 2);
+        assertTrue(GalleryUpdateManager.tryReuse(200, 3, "4444444444", den));
+        assertSameImage(complete, 1, 3);
+        assertFalse(GalleryUpdateManager.tryReuse(200, 4, "9999999999", den));
+        damageFirstPage(latest);
+        assertTrue(GalleryUpdateManager.tryReuse(200, 4, "1111111111", den));
+        assertSameImage(middle, 0, 4);
+        // No intact complete source remains. The remaining older local files are still candidates.
+        damageFirstPage(complete);
+        damageFirstPage(sourceDir);
+        GalleryUpdateManager.register(200, 140, List.of(100L, 110L, 120L, 130L, 140L));
+        assertTrue(GalleryUpdateManager.tryReuse(200, 5, "9999999999", den));
+        assertSameImage(sourceDir, 1, 5);
+    }
+
+    @Test public void confirmedLogCannotBeRecomputedWhenItsDraftIsMissing() throws Exception {
+        disk(sourceDir, metadata(100, 0, "1111111111", "2222222222"));
+        SpiderInfo updated = metadata(200, 0, "1111111111", "2222222222", "3333333333");
+        disk(targetDir, updated);
+        var target = new com.hippo.ehviewer.client.data.GalleryDetail();
+        target.gid = 200;
+        target.token = updated.token;
+        target.pages = updated.pages;
+        target.firstGid = 100L;
+        var checked = checkPreview(new GalleryUpdatePreviewCheck(context, manager.getDownloadInfo(100), target));
+        assertTrue(GalleryUpdateManager.registerConfirmed(context, 200, 100, List.of(100L), "", checked));
+        GalleryUpdateRecordStore.get(context).discardPending(200);
+        assertTrue(manager.retryGalleryUpdateCleanup(200));
+        awaitState(GalleryUpdateManager.UPDATE_STATE_FAILED);
+        assertTrue(sourceDir.isDirectory());
+        assertTrue(GalleryUpdateRecordStore.get(context).find(200).isFailure());
+    }
+
+    private void damageFirstPage(File dir) throws Exception {
+        Files.write(new File(dir, "00000001.png").toPath(), new byte[]{1, 2, 3});
+    }
+
+    private void assertSameImage(File source, int sourcePage, int targetPage) throws Exception {
+        var oldFile = new File(source, SpiderDen.generateImageFilename(sourcePage, ".png"));
+        var newFile = new File(targetDir, SpiderDen.generateImageFilename(targetPage, ".png"));
+        assertArrayEquals(Files.readAllBytes(oldFile.toPath()), Files.readAllBytes(newFile.toPath()));
+    }
+
+    @Test public void earlierRangePreviewFetchesOnlyMetadataCoveringSelectedMissingPages() throws Exception {
+        disk(sourceDir, metadata(100, 0, "1111111111", "2222222222"));
+        addSource(140, new String[8]);
+        limitSource(140, "5", 8);
+        addSource(160, "1111111111", "2222222222");
+        SpiderInfo updated = metadata(200, 0, "1111111111", "2222222222", "3333333333");
+        disk(targetDir, updated);
+        var target = new com.hippo.ehviewer.client.data.GalleryDetail();
+        target.gid = 200;
+        target.token = updated.token;
+        target.pages = updated.pages;
+        target.firstGid = 100L;
+        var requests = new java.util.concurrent.CopyOnWriteArrayList<Integer>();
+        var client = new okhttp3.OkHttpClient.Builder().addInterceptor(chain -> {
+            var request = chain.request();
+            assertTrue(request.url().encodedPath().contains("/140/"));
+            String value = request.url().queryParameter("p");
+            int previewPage = value != null ? Integer.parseInt(value) : 0;
+            requests.add(previewPage);
+            return sourcePageResponse(request, previewPage, 200);
+        }).build();
+        ReflectionHelpers.setField(context, "mBrowsingOkHttpClient", client);
+        var checked = checkPreview(new GalleryUpdatePreviewCheck(context, manager.getDownloadInfo(160), target));
+        assertEquals(List.of(0, 2), requests);
+        assertTrue(checked.record().sourceDeletions.get(1).complete());
+        assertArrayEquals(new int[]{4}, checked.record().sourceDeletions.get(1).pages());
+    }
+
+    @Test public void latestRangePreviewListsUncoveredPagesAndRefreshesCoverageFromDisk() throws Exception {
+        disk(sourceDir, metadata(100, 0, "1111111111", "2222222222", null));
+        limitSource(100, "2", 3);
+        SpiderInfo updated = metadata(200, 0, "3333333333", "1111111111", "2222222222");
+        disk(targetDir, updated);
+        var target = new com.hippo.ehviewer.client.data.GalleryDetail();
+        target.gid = 200;
+        target.token = updated.token;
+        target.pages = updated.pages;
+        target.firstGid = 100L;
+        var client = new okhttp3.OkHttpClient.Builder().addInterceptor(chain -> {
+            throw new AssertionError("Missing old metadata outside the user's range must not be fetched");
+        }).build();
+        ReflectionHelpers.setField(context, "mBrowsingOkHttpClient", client);
+        DownloadInfo latest = manager.getDownloadInfo(100);
+        var preview = checkPreview(new GalleryUpdatePreviewCheck(context, latest, target));
+        assertTrue(preview.record().showsLocalCoverage());
+        assertArrayEquals(new int[]{0, 1}, preview.record().addedPages);
+        assertArrayEquals(new int[0], preview.record().sourceDeletions.get(0).pages());
+
+        assertTrue(new File(sourceDir, "00000002.png").delete());
+        var refreshed = checkPreview(new GalleryUpdatePreviewCheck(context, latest, target)).record();
+        assertArrayEquals(new int[]{0, 1, 2}, refreshed.addedPages);
+        assertArrayEquals(new int[0], refreshed.sourceDeletions.get(0).pages());
+    }
+
+    private okhttp3.Response sourcePageResponse(okhttp3.Request request, int previewPage, int code) {
+        StringBuilder html = new StringBuilder("<table><tr><td>Length:</td><td>8 pages</td></tr></table>"
+                + "<table class=\"ptt\"><tr><td>1</td><td>2</td><td>3</td><td>4</td><td>&gt;</td></tr></table>");
+        for (int page = previewPage * 2 + 1; page <= previewPage * 2 + 2; page++) {
+            html.append("<a href=\"https://e-hentai.org/s/000000000").append(page).append("/140-").append(page)
+                    .append("\"><div title=\"Page ").append(page)
+                    .append(": test\" style=\"background:url(https://example.com/3.jpg) 0 0\"></div></a>");
+        }
+        return new okhttp3.Response.Builder().request(request).protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(code).message("Preview").body(okhttp3.ResponseBody.create(null, html.toString())).build();
     }
 
     @Test public void diskMetadataMigratesProgressDeletesSourceAndPublishesAddedPagesWithoutCache() throws Exception {

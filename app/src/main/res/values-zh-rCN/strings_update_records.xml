@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="gallery_update_uncovered_count">未覆盖 %1$d 页</string>
+    <string name="gallery_update_read_uncovered">阅读未覆盖页</string>
+    <string name="gallery_update_no_uncovered">当次更新的新版页面均已被本地旧版本覆盖。</string>
+    <string name="gallery_update_uncovered_notice">阅读确认更新时记录的未覆盖页。仍可读取的页按当前画廊页码排序，每条记录的阅读进度单独保存。</string>
+    <string name="gallery_update_uncovered_no_pages">当次记录的未覆盖页目前没有可读取的本地图片。</string>
+    <string name="gallery_update_uncovered_progress">未覆盖 %1$d/%2$d · p%3$d/%4$d</string>
     <string name="gallery_updated">已更新</string>
     <string name="gallery_update_history_missing_gallery_title">GID: %1$d\n画廊已被删除或更新</string>
     <string name="gallery_update_history_title">画廊更新历史</string>
@@ -20,6 +26,7 @@
     <string name="gallery_update_log_target">目标画廊：%1$d</string>
     <string name="gallery_update_log_legacy_notice">该旧记录未保存页面标识，无法阅读当次新增页。</string>
     <string name="gallery_update_log_no_added">当次更新没有新增页可供阅读。</string>
+    <string name="gallery_update_log_additions_unknown">未能取得最近旧版的全部页面标识，暂时无法确定新增页。</string>
     <string name="gallery_update_log_added">新增:</string>
     <string name="gallery_update_log_deleted">删除:</string>
     <string name="gallery_update_log_none">无</string>

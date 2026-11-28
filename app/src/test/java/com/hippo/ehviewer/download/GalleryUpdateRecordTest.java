@@ -10,6 +10,8 @@ import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 
+import java.util.List;
+
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
@@ -101,6 +103,78 @@ public class GalleryUpdateRecordTest {
                 info("A", "A", "B"), info("A", "B", "B"));
         assertArrayEquals(new int[]{2}, record.addedPages);
         assertArrayEquals(new int[]{1}, record.deletedPages);
+    }
+
+    @Test public void groupedDeletionsCountCopiesIndependentlyAndKeepOriginalIndexes() throws Exception {
+        var compared = GalleryUpdateRecord.compareSources(200, 150, List.of(
+                new GalleryUpdateRecord.Source(150, 5, GalleryPageRange.parse("2,4-5", 5),
+                        info(null, "A", null, "A", "X")),
+                new GalleryUpdateRecord.Source(120, 3, null, info("A", "X", "A")),
+                new GalleryUpdateRecord.Source(100, 2, null, info("A", null))), info("A", "B"));
+        var saved = GalleryUpdateRecord.fromJson(200, 150, 123, 0, compared.toJson());
+        assertTrue(saved.hasTokenSnapshot());
+        assertFalse(saved.hasKnownAdditions());
+        assertArrayEquals(new int[0], saved.addedPages);
+        assertArrayEquals(new int[]{3, 4}, saved.deletedPages);
+        assertArrayEquals(new int[]{3, 4}, saved.sourceDeletions.get(0).pages());
+        assertArrayEquals(new int[]{1, 2}, saved.sourceDeletions.get(1).pages());
+        assertFalse(saved.sourceDeletions.get(2).complete());
+        assertArrayEquals(new int[0], saved.sourceDeletions.get(2).pages());
+    }
+
+    @Test public void latestRangeUsesWholeGalleryForAdditionsAndItsSelectionForDeletions() throws Exception {
+        var compared = GalleryUpdateRecord.compareSources(200, 150, List.of(
+                new GalleryUpdateRecord.Source(150, 6, GalleryPageRange.parse("2,4", 6),
+                        info("A", "A", "B", "X", "Y", "Z")),
+                new GalleryUpdateRecord.Source(120, 2, null, info("N", "M"))),
+                info("A", "A", "A", "B", "Y", "N"));
+        var saved = GalleryUpdateRecord.fromJson(200, 150, 123, 0, compared.toJson());
+        assertTrue(saved.hasKnownAdditions());
+        assertArrayEquals(new int[]{2, 5}, saved.addedPages);
+        assertArrayEquals(new int[]{2, 5}, saved.resolveAddedPages(info("A", "A", "A", "B", "Y", "N")));
+        assertArrayEquals(new int[]{3}, saved.sourceDeletions.get(0).pages());
+        assertArrayEquals(new int[]{1}, saved.sourceDeletions.get(1).pages());
+    }
+
+    @Test public void localCoverageListsPagesOutsideFirstHundredAndPersistsTheirMeaning() throws Exception {
+        String[] older = java.util.stream.IntStream.range(0, 1159).mapToObj(i -> "old" + i).toArray(String[]::new);
+        String[] newer = new String[1165];
+        for (int i = 0; i < 6; i++) newer[i] = "new" + i;
+        System.arraycopy(older, 0, newer, 6, older.length);
+        var covered = new java.util.HashSet<>(java.util.Arrays.asList(older).subList(0, 100));
+        var record = GalleryUpdateRecord.compareSources(200, 150, List.of(
+                new GalleryUpdateRecord.Source(150, older.length, GalleryPageRange.parse("1-100", older.length),
+                        info(older))), info(newer), covered);
+        var saved = GalleryUpdateRecord.fromJson(200, 150, 123, 0, record.toJson());
+        assertTrue(saved.showsLocalCoverage());
+        assertEquals(1065, saved.addedPages.length);
+        assertEquals("p1–6, p107–1165", GalleryUpdateRecord.formatPages(saved.addedPages));
+        assertEquals(0, saved.sourceDeletions.get(0).pages().length);
+        assertEquals(1159, saved.sourceDeletions.get(0).totalPages());
+        assertEquals(100, saved.sourceDeletions.get(0).comparisonPages());
+    }
+
+    @Test public void olderGroupedRecordsKeepFullCountsAndMarkUnsavedRangeCountsUnknown() throws Exception {
+        var record = GalleryUpdateRecord.compareSources(200, 150, List.of(
+                new GalleryUpdateRecord.Source(150, 3, GalleryPageRange.parse("2", 3), info("A", "B", "C")),
+                new GalleryUpdateRecord.Source(120, 2, null, info("A", "B"))), info("A"));
+        var payload = record.toPayload();
+        var groups = payload.getJSONArray("source_deletions");
+        for (int i = 0; i < groups.length(); i++) groups.getJSONObject(i).remove("comparison_pages");
+        var saved = GalleryUpdateRecord.fromPayload(200, 150, 123, 0, payload);
+        assertEquals(-1, saved.sourceDeletions.get(0).comparisonPages());
+        assertEquals(2, saved.sourceDeletions.get(1).comparisonPages());
+        assertArrayEquals(new int[]{1}, saved.sourceDeletions.get(0).pages());
+    }
+
+    @Test public void localCoverageIsAvailableEvenWhenAnOldDeletionGroupIsUnknown() throws Exception {
+        var record = GalleryUpdateRecord.compareSources(200, 150, List.of(
+                new GalleryUpdateRecord.Source(150, 2, GalleryPageRange.parse("1", 2), info(null, "A"))),
+                info("B", "B", "A"), java.util.Set.of("B"));
+        var saved = GalleryUpdateRecord.fromJson(200, 150, 123, 0, record.toJson());
+        assertTrue(saved.hasKnownAdditions());
+        assertFalse(saved.hasKnownDeletions());
+        assertArrayEquals(new int[]{2}, saved.addedPages);
     }
 
     @Test public void replacementIsOneAddedPageAndOneDeletedPage() {

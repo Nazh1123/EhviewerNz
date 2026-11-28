@@ -188,7 +188,8 @@ public class GalleryUpdateHistoryScene extends ToolbarScene implements GalleryUp
                 } else if (!loaded.hasTokenSnapshot()) {
                     failure = R.string.gallery_update_log_legacy_notice;
                 } else if (loaded.addedPages.length == 0) {
-                    failure = R.string.gallery_update_log_no_added;
+                    failure = loaded.showsLocalCoverage()
+                            ? R.string.gallery_update_no_uncovered : R.string.gallery_update_log_no_added;
                 }
             } catch (RuntimeException e) {
                 Log.w("GalleryUpdateHistory", "Unable to load update for reading", e);
@@ -352,17 +353,22 @@ public class GalleryUpdateHistoryScene extends ToolbarScene implements GalleryUp
             holder.category.setBackground(new ColorDrawable(EhUtils.getCategoryColor(category)));
             holder.time.setText(time.format(new Date(entry.completedAt())));
             boolean known = entry.complete() && !entry.failure();
+            boolean additionsKnown = known && entry.addedPages() >= 0;
             SpannableStringBuilder counts = new SpannableStringBuilder();
-            appendCount(counts, "+" + (known ? entry.addedPages() : "—"), context.getColor(R.color.deep_green_600));
+            String added = entry.localCoverage()
+                    ? context.getString(R.string.gallery_update_uncovered_count, entry.addedPages())
+                    : "+" + (additionsKnown ? entry.addedPages() : "—");
+            appendCount(counts, added, context.getColor(R.color.deep_green_600));
             counts.append("  ");
-            appendCount(counts, "-" + (known ? entry.deletedPages() : "—"), context.getColor(R.color.red_500));
+            appendCount(counts, "-" + (known && entry.deletedPages() >= 0 ? entry.deletedPages() : "—"),
+                    context.getColor(R.color.red_500));
             holder.counts.setText(counts);
             holder.state.setText(entry.failure() ? R.string.gallery_update_history_failed
                     : entry.complete() ? R.string.gallery_update_history_updated
                     : R.string.gallery_update_history_updated_incomplete);
             holder.state.setTextColor(entry.failure() ? context.getColor(R.color.red_500)
                     : AttrResources.getAttrColor(context, R.attr.textColorThemeAccent));
-            holder.progress.setText(known ? context.getString(R.string.gallery_update_history_read_progress,
+            holder.progress.setText(additionsKnown ? context.getString(R.string.gallery_update_history_read_progress,
                     entry.addedPages() > 0 ? entry.readingPage() + 1 : 0, entry.addedPages()) : "—");
             holder.itemView.setOnClickListener(view -> readUpdates(entry));
             holder.cover.setOnClickListener(view -> openDetail(entry));

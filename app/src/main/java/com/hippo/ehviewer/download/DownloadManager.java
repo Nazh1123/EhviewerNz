@@ -1769,6 +1769,12 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
 
     public void startGalleryUpdate(@NonNull GalleryInfo target, long sourceGid,
                                    @NonNull List<Long> parentGids) {
+        startGalleryUpdate(target, sourceGid, parentGids, null);
+    }
+
+    boolean startGalleryUpdate(@NonNull GalleryInfo target, long sourceGid,
+                               @NonNull List<Long> parentGids,
+                               @Nullable GalleryUpdatePreviewCheck.Result checked) {
         DownloadInfo source = getDownloadInfo(sourceGid);
         String label = source != null ? source.label : null;
         DownloadInfo existingTarget = getDownloadInfo(target.gid);
@@ -1776,14 +1782,18 @@ public class DownloadManager implements SpiderQueen.OnSpiderListener {
                 && !target.firstGid.equals(existingTarget.firstGid)) {
             updateGalleryVersionInfo(existingTarget, target.firstGid);
         }
-        GalleryUpdateManager.register(target.gid, sourceGid, parentGids,
-                source != null ? EhUtils.getSuitableTitle(source) : "");
+        if (GalleryUpdateManager.getPlan(target.gid) == null && !GalleryUpdateManager.registerConfirmed(
+                mContext, target.gid, sourceGid, parentGids,
+                source != null ? EhUtils.getSuitableTitle(source) : "", checked)) {
+            return false;
+        }
         startDownload(target, label);
 
         DownloadInfo targetInfo = getDownloadInfo(target.gid);
         if (targetInfo != null && targetInfo.state == DownloadInfo.STATE_FINISH) {
             completeGalleryUpdate(target.gid);
         }
+        return true;
     }
 
     private void resumeGalleryUpdateCleanup() {
